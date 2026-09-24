@@ -1,6 +1,13 @@
 import pgvector from '@prisma/orm-extension-pgvector/pack';
 import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
-import { defineContract, enumType, member, rel, sql } from '@prisma/orm-postgres/contract-builder';
+import {
+  defineContract,
+  enumType,
+  fullTextIndex,
+  member,
+  rel,
+  sql,
+} from '@prisma/orm-postgres/contract-builder';
 
 const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
 
@@ -62,6 +69,7 @@ export const contract = defineContract(
           user: rel.belongsTo(User, { from: 'userId', to: 'id' }),
         }).sql(({ cols, constraints }) => ({
           table: 'post',
+          indexes: [fullTextIndex(cols.title, { name: 'post_title_search' })],
           foreignKeys: [
             constraints.foreignKey(cols.userId, User.refs.id, {
               name: 'post_userId_fkey',

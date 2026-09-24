@@ -73,7 +73,7 @@ function retriedWarning(failure: CliStructuredError): string {
  */
 /**
  * The engine dependency spec a fresh scaffold installs. The scaffolded
- * `prisma.config.ts` imports `defineConfig` from `@prisma/cli-engine`, and the
+ * `prisma.config.ts` imports `definePrismaConfig` from `@prisma/cli-engine`, and the
  * installed `prisma` names the exact engine version it runs against — so
  * the spec is read from the manifest the install just placed, never guessed
  * from a dist-tag (whose `latest` has lagged that version before and broken
@@ -110,21 +110,24 @@ export async function installProjectDependencies(ctx: {
   readonly catalogWarnings: readonly string[];
 }): Promise<InstallOutcome> {
   const pair = async (manager?: PackageManagerId): Promise<CliStructuredError | undefined> => {
-    const runtimeDeps = await ctx.packages.install({
-      packages: ctx.deps,
-      cwd: ctx.cwd,
-      ...ifDefined('manager', manager),
-    });
-    if (!runtimeDeps.ok) {
-      return runtimeDeps.failure;
+    for (const [packages, dev] of [
+      [ctx.deps, false],
+      [ctx.devDeps, true],
+    ] as const) {
+      if (packages.length === 0) {
+        continue;
+      }
+      const installed = await ctx.packages.install({
+        packages,
+        cwd: ctx.cwd,
+        ...(dev ? { dev } : {}),
+        ...ifDefined('manager', manager),
+      });
+      if (!installed.ok) {
+        return installed.failure;
+      }
     }
-    const developmentDeps = await ctx.packages.install({
-      packages: ctx.devDeps,
-      dev: true,
-      cwd: ctx.cwd,
-      ...ifDefined('manager', manager),
-    });
-    return developmentDeps.ok ? undefined : developmentDeps.failure;
+    return undefined;
   };
 
   const failure = await pair();

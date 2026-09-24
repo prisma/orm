@@ -17,7 +17,7 @@ function projectDir(): string {
  * Written without importing the workspace, so what the loader reads is exactly
  * what these tests write and nothing resolves out of the fixture package. The
  * version marker is the same enumerable `$prismaConfig` key the engine's
- * defineConfig stamps, with the whole config nested as the orm section.
+ * definePrismaConfig stamps, with the whole config nested as the orm section.
  */
 function configModule(body: string): string {
   return [`const config = ${body};`, 'export default { $prismaConfig: 1, orm: config };'].join(

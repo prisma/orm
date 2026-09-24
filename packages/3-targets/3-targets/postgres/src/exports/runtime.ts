@@ -3,8 +3,10 @@ import type {
   RuntimeTargetDescriptor,
   RuntimeTargetInstance,
 } from '@internal/framework-components/execution';
+import type { SqlOperationDescriptors } from '@internal/sql-operations';
 import { postgresTargetDescriptorMetaRuntime } from '../core/descriptor-meta-runtime';
 import { decodePostgresListText } from '../core/list-decoder';
+import { postgresQueryOperations } from '../core/query-operations';
 
 export { INSTANT_NOW_GENERATOR_ID, instantNow } from '../core/instant-now-generator';
 export { decodePostgresListText } from '../core/list-decoder';
@@ -35,10 +37,12 @@ const postgresRuntimeTargetDescriptor: RuntimeTargetDescriptor<
 > & {
   readonly codecs: () => readonly AnyCodecDescriptor[];
   readonly listDecoder: () => PostgresListDecoder;
+  readonly queryOperations: () => SqlOperationDescriptors;
 } = {
   ...postgresTargetDescriptorMetaRuntime,
   codecs: () => [],
   listDecoder: () => decodePostgresListText,
+  queryOperations: () => postgresQueryOperations(),
   create(): PostgresRuntimeTargetInstance {
     return {
       familyId: 'sql',

@@ -133,6 +133,7 @@
     "./target/contract-free": "./dist/target__contract-free.mjs",
     "./target/control": "./dist/target__control.mjs",
     "./target/control-tables": "./dist/target__control-tables.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/migration": "./dist/target__migration.mjs",

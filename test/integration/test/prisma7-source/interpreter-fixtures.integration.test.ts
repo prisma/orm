@@ -109,6 +109,7 @@ async function interpret(fixture: string): Promise<Contract<SqlStorage>> {
       composedExtensionContracts: stack.extensionContracts,
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
+      dataTypeLookup: stack.dataTypeLookup,
       controlMutationDefaults: stack.controlMutationDefaults,
       resolvedInputs: [schemaPath],
       capabilities: stack.capabilities,

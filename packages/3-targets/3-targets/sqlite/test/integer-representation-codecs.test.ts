@@ -177,31 +177,31 @@ describe('sqlite/bigintnumber@1', () => {
   });
 
   describe('encodeJson / decodeJson', () => {
-    it('uses a JSON number as the canonical form at both safe-range boundaries', () => {
-      expect(codec.encodeJson(9007199254740991)).toBe(9007199254740991);
-      expect(codec.decodeJson(9007199254740991)).toBe(9007199254740991);
-      expect(codec.encodeJson(-9007199254740991)).toBe(-9007199254740991);
-      expect(codec.decodeJson(-9007199254740991)).toBe(-9007199254740991);
+    it('uses decimal text as the canonical form at both safe-range boundaries', () => {
+      expect(codec.encodeJson(9007199254740991)).toBe('9007199254740991');
+      expect(codec.decodeJson('9007199254740991')).toBe(9007199254740991);
+      expect(codec.encodeJson(-9007199254740991)).toBe('-9007199254740991');
+      expect(codec.decodeJson('-9007199254740991')).toBe(-9007199254740991);
     });
 
-    it('rejects a JSON string', () => {
-      expect(() => codec.decodeJson('42')).toThrow(
-        'sqlite/bigintnumber@1 database JSON value must be a number',
-      );
-    });
-
-    it('rejects parsed numbers at 2^53 and -(2^53)', () => {
-      expect(() => codec.decodeJson(9007199254740992)).toThrow(
+    it('rejects decimal text past the safe integer range', () => {
+      expect(() => codec.decodeJson('9007199254740992')).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
-      expect(() => codec.decodeJson(-9007199254740992)).toThrow(
+      expect(() => codec.decodeJson('-9007199254740992')).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
     });
 
-    it('rejects a non-integral parsed number', () => {
-      expect(() => codec.decodeJson(1.5)).toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+    it('rejects a JSON string that is not a decimal integer', () => {
+      expect(() => codec.decodeJson('1.5')).toThrow(
+        'sqlite/bigintnumber@1 database JSON value must be decimal text',
+      );
+    });
+
+    it('rejects a JSON number, whose digits a wide value has already lost', () => {
+      expect(() => codec.decodeJson(42)).toThrow(
+        'sqlite/bigintnumber@1 database JSON value must be decimal text',
       );
     });
 
@@ -215,26 +215,26 @@ describe('sqlite/bigintnumber@1', () => {
     });
   });
 
-  it('projects through an INTEGER cast, so the database emits a JSON number', () => {
+  it('projects through a TEXT cast, the canonical form its data type carries', () => {
     const expression = ColumnRef.of('records', 'value');
     expect(
       sqliteBigintNumberDescriptor.projectJson(expression, {
         codecId: SQLITE_BIGINT_NUMBER_CODEC_ID,
       }),
-    ).toEqual(CastExpr.as(expression, 'INTEGER'));
+    ).toEqual(CastExpr.as(expression, 'TEXT'));
   });
 
   // An aggregate whose result this codec carries reaches the projection already
   // cast to text, so the driver never reads a wide integer off the wire. The
-  // projection is what puts such a value back into the codec's canonical JSON
-  // form, and it has to do so whatever expression it is handed.
-  it('projects a text-cast aggregate back to a JSON number', () => {
+  // projection has to answer with the codec's canonical JSON form whatever
+  // expression it is handed.
+  it('projects a text-cast aggregate as text', () => {
     const lowered = CastExpr.as(new AggregateExpr('count', undefined), 'text');
     expect(
       sqliteBigintNumberDescriptor.projectJson(lowered, {
         codecId: SQLITE_BIGINT_NUMBER_CODEC_ID,
       }),
-    ).toEqual(CastExpr.as(lowered, 'INTEGER'));
+    ).toEqual(CastExpr.as(lowered, 'TEXT'));
   });
 
   it('claims no target type, so integer in type position keeps its current codecs', () => {
@@ -250,7 +250,7 @@ describe('sqlite/bigintnumber@1', () => {
   });
 
   it('renders a default as a number literal', () => {
-    expect(sqliteBigintNumberDescriptor.renderValueLiteral?.(42)).toBe('42');
+    expect(sqliteBigintNumberDescriptor.renderValueLiteral?.('42')).toBe('42');
   });
 
   it('resolves from both registries by codec id', () => {

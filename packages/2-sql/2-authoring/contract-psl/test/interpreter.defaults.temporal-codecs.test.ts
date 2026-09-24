@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   sqliteScalarColumnDescriptors,
@@ -132,6 +133,7 @@ stamped ${field}
       controlMutationDefaults: builtinControlMutationDefaults,
       authoringContributions: sqliteTemporalContributions,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 

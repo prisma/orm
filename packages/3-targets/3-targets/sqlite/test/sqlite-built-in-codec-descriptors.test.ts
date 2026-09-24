@@ -1,5 +1,5 @@
 import type {
-  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
   CodecInstanceContext,
   CodecRef,
 } from '@internal/framework-components/codec';
@@ -81,7 +81,7 @@ describe('SQLite built-in codec descriptors', () => {
     const expression = ColumnRef.of('records', 'value');
     const cases: ReadonlyArray<{
       descriptor: AnySqliteCodecDescriptor;
-      rawDescriptor: AnyCodecDescriptor;
+      rawDescriptor: AnyCodecDescriptorTemplate;
       typeParams?: CodecRef['typeParams'];
     }> = [
       {
@@ -148,12 +148,11 @@ describe('SQLite built-in codec descriptors', () => {
     expect(sqliteJsonDescriptor.projectJson(expression, refFor(sqliteJsonDescriptor))).toEqual(
       FunctionCallExpr.of('json', [expression]),
     );
-    // The canonical JSON is a number, and the JSON constructor renders the
-    // storage class it is handed — which for an aggregate is the text its
-    // lowering cast to. The cast names the class the canonical form needs.
+    // The canonical JSON is the decimal text every codec of sqlite/bigint
+    // carries, whichever storage class the projected expression holds.
     expect(
       sqliteBigintNumberDescriptor.projectJson(expression, refFor(sqliteBigintNumberDescriptor)),
-    ).toEqual(CastExpr.as(expression, 'INTEGER'));
+    ).toEqual(CastExpr.as(expression, 'TEXT'));
   });
 
   it('keeps authored registries complete while preserving the control metadata filter boundary', () => {

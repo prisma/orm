@@ -71,6 +71,7 @@ async function authorSqliteContractFromPsl(pslSchema: string) {
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
+    dataTypeLookup: sqliteStack.dataTypeLookup,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,
@@ -212,16 +213,32 @@ describe('PSL number defaults keep every digit', () => {
   );
 });
 
-describe('PSL number defaults on codecs that do not hold numbers', () => {
-  it('fail emit on a Postgres bytea column, as before', async () => {
+describe('PSL number defaults on columns whose data type casts from no number', () => {
+  it('refuse a number on a Postgres bytea column, naming the cast it would need', async () => {
     await expect(
       authorSqlContractFromPsl('model Payload {\n  id Int @id\n  data Bytes @default(1234)\n}'),
-    ).rejects.toThrow('The first argument must be of type string');
+    ).resolves.toMatchObject({
+      ok: false,
+      diagnostics: [
+        expect.objectContaining({
+          code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+          message: 'Field "Payload.data": pg/bytea has no cast from pg/int2; it casts from pg/text',
+        }),
+      ],
+    });
   });
 
-  it('fail emit on a SQLite datetime column, as before', async () => {
-    await expect(
-      authorSqliteContractFromPsl('model Event {\n  id Int @id\n  at DateTime @default(0)\n}'),
-    ).rejects.toThrow('toISOString is not a function');
+  it('refuse a number on a SQLite datetime column, naming the cast it would need', async () => {
+    const result = await authorSqliteContractFromPsl(
+      'model Event {\n  id Int @id\n  at DateTime @default(0)\n}',
+    );
+    expect(result.ok).toBe(false);
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+        message:
+          'Field "Event.at": sqlite/datetime has no cast from sqlite/integer; it casts from sqlite/text',
+      }),
+    ]);
   });
 });

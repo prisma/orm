@@ -170,6 +170,7 @@ export function prisma7Contract(
             controlMutationDefaults: context.controlMutationDefaults,
             authoringContributions: context.authoringContributions,
             codecLookup: context.codecLookup,
+            dataTypeLookup: context.dataTypeLookup,
             composedExtensions: context.composedExtensions,
           });
           if (!interpreted.ok) return interpreted;

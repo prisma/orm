@@ -40,6 +40,7 @@ function sourceContext() {
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: stack.capabilities,

@@ -370,8 +370,8 @@ describe('parsePostgresDefault unparseable expressions', () => {
 
 describe('postgresResolveDefault', () => {
   // The contract-derived (expected) side's `resolveDefault` hook, called at
-  // `SchemaIR` construction so the expected side normalizes a `dbgenerated`
-  // literal-shaped function default the same way introspection does. If this
+  // `SchemaIR` construction so the expected side normalizes a raw sql`...`
+  // default whose body is a literal the same way introspection does. If this
   // ever passes the contract default through unnormalized, `db verify`
   // reports permanent drift for a jsonb/text[] literal default that matches
   // the live database exactly.
@@ -381,12 +381,12 @@ describe('postgresResolveDefault', () => {
     expect(postgresResolveDefault(literal, 'text')).toEqual(literal);
   });
 
-  it('resolves a dbgenerated jsonb literal to a literal object, matching introspection', () => {
+  it('resolves a raw jsonb literal default to a literal object, matching introspection', () => {
     const result = postgresResolveDefault({ kind: 'function', expression: "'{}'::jsonb" }, 'jsonb');
     expect(result).toEqual({ kind: 'literal', value: {} });
   });
 
-  it('resolves a dbgenerated text[] literal to a literal array, matching introspection', () => {
+  it('resolves a raw text[] literal default to a literal array, matching introspection', () => {
     const result = postgresResolveDefault(
       { kind: 'function', expression: "'{}'::text[]" },
       'text[]',
@@ -394,7 +394,7 @@ describe('postgresResolveDefault', () => {
     expect(result).toEqual({ kind: 'literal', value: [] });
   });
 
-  it('normalizes a dbgenerated nextval(...) to autoincrement(), matching a serial/identity column', () => {
+  it('normalizes a raw nextval(...) default to autoincrement(), matching a serial/identity column', () => {
     const result = postgresResolveDefault(
       { kind: 'function', expression: "nextval('my_seq'::regclass)" },
       'int4',

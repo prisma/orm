@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
@@ -43,6 +43,8 @@ export interface ContractSourceContext {
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookup;
+  /** The stack's data types, so a written default can be cast into a column's type. ADR 254. */
+  readonly dataTypeLookup: DataTypeLookup;
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly resolvedInputs: readonly string[];
   readonly capabilities: CapabilityMatrix;

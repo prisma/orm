@@ -164,7 +164,7 @@ describe('a native enum outside public verifies clean', { concurrent: false }, (
   it('reports zero findings for an enum default declared as a raw cast expression', {
     timeout: testTimeout,
   }, async () => {
-    // The spelling an older inferred contract carries (dbgenerated("'x'::sch.t")).
+    // A raw default written as sql`'x'::sch.t`, the form infer prints for an enum cast.
     const paths = await verifyEnumTable(driver!, {
       schema: 'audit',
       table: 'audit_log',

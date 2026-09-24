@@ -11,6 +11,7 @@ import {
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
 import type { CodecLookup } from '@internal/framework-components/codec';
+import { materializeCodec } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -1863,7 +1864,14 @@ async function pgRenderDdlColumnDefault(
     return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
   }
   if (codecRef !== undefined) {
-    const codec = codecLookup.get(codecRef.codecId);
+    // Built with the column's own `typeParams`: a parameterized codec answers for them when it
+    // reads a default back — `pg/vector@1` checks the length its column declares — and the lookup's
+    // representative instance carries none.
+    const descriptor = codecLookup.descriptorFor?.(codecRef.codecId);
+    const codec =
+      descriptor === undefined
+        ? codecLookup.get(codecRef.codecId)
+        : materializeCodec(descriptor, codecRef, { name: codecRef.codecId });
     if (codec !== undefined) {
       // A literal default reaches here either as the canonical JSON a
       // contract stores or as the value an authoring surface built, and only

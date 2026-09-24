@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import { detect } from 'package-manager-detector/detect';
 import { basename, dirname, isAbsolute, join } from 'pathe';
@@ -7,6 +8,7 @@ import { formatRunCommand } from '../commands/init/detect-package-manager';
 import {
   errorInitInvalidManifest,
   errorInitInvalidTsconfig,
+  errorInitPrisma7ConfigCollision,
   errorInitWriteFailed,
 } from '../commands/init/errors';
 import {
@@ -14,17 +16,29 @@ import {
   requiredGitattributesLines,
 } from '../commands/init/hygiene-gitattributes';
 import { mergeGitignore } from '../commands/init/hygiene-gitignore';
-import { ensureEsmModuleType, mergePackageScripts } from '../commands/init/hygiene-package-scripts';
+import {
+  ensureEsmModuleType,
+  mergePackageScripts,
+  REQUIRED_SCRIPTS,
+} from '../commands/init/hygiene-package-scripts';
+import {
+  rewritePrisma7ConfigImport,
+  rewritePrismaScripts,
+} from '../commands/init/prisma7-side-by-side';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
 import {
   configFile,
   dbFile,
+  prisma7ConfigFile,
   scaffoldSpecifierResolverFor,
   starterSchema,
 } from '../commands/init/templates/code-templates';
 import { envExampleContent, envFileContent } from '../commands/init/templates/env';
-import { quickReferenceMd } from '../commands/init/templates/quick-reference';
+import {
+  prisma7QuickReferenceMd,
+  quickReferenceMd,
+} from '../commands/init/templates/quick-reference';
 import { minimalProjectReadmeMd } from '../commands/init/templates/readme';
 import {
   defaultTsConfig,
@@ -40,7 +54,14 @@ interface FileEntry {
   readonly note?: string;
 }
 
-const CONFIG_FILE = 'prisma.config.ts';
+interface RenameEntry {
+  readonly from: string;
+  readonly to: string;
+  /** The file's content after the rename, with its imports rewritten. */
+  readonly content: string;
+}
+
+export const CONFIG_FILE = 'prisma.config.ts';
 const QUICK_REFERENCE_FILE = 'prisma-8.md';
 const ENV_EXAMPLE_FILE = '.env.example';
 
@@ -57,6 +78,14 @@ const ENV_EXAMPLE_FILE = '.env.example';
  */
 export function generatedFilesInitReplaces(schemaPath: string): readonly string[] {
   return [schemaPath, CONFIG_FILE, join(dirname(schemaPath), 'db.ts'), QUICK_REFERENCE_FILE];
+}
+
+/**
+ * The same list for the Prisma 7 path, where the schema is the user's and
+ * init's files live under Prisma 8's own directory.
+ */
+export function generatedFilesPrisma7PathReplaces(): readonly string[] {
+  return [CONFIG_FILE, join(DEFAULT_CONTRACT_SOURCE_DIR, 'db.ts'), QUICK_REFERENCE_FILE];
 }
 
 const MANAGERS: ReadonlySet<string> = new Set<PackageManager>([
@@ -95,6 +124,10 @@ export async function resolveScaffoldPackageManager(ctx: {
 export interface ScaffoldOutcome {
   readonly filesWritten: string[];
   readonly filesDeleted: string[];
+  /** The Prisma 7 config moved out of Prisma 8's way, when the side-by-side plan asked for it. */
+  readonly filesRenamed: { readonly from: string; readonly to: string }[];
+  /** `package.json` scripts now invoking `prisma7` instead of `prisma`. */
+  readonly scriptsRewritten: readonly string[];
   readonly warnings: readonly string[];
   readonly notes: readonly string[];
   /** The project already pins `@types/node` itself, so the install leaves it alone. */
@@ -150,6 +183,8 @@ function hasProjectManifest(cwd: string): boolean {
 }
 
 interface ScaffoldPlan {
+  readonly renames: readonly RenameEntry[];
+  readonly scriptsRewritten: readonly string[];
   readonly files: readonly FileEntry[];
   readonly filesToDelete: readonly string[];
   readonly dirsToDelete: readonly string[];
@@ -170,34 +205,71 @@ function planScaffold(ctx: {
 }): ScaffoldPlan {
   const { cwd, inputs, packageManager, resolveImportSpecifier } = ctx;
   const warnings: string[] = [];
-  const schemaDir = dirname(inputs.schemaPath);
+  const source = inputs.contractSource;
+  // Prisma 8's files never go under the Prisma 7 schema's directory: that
+  // directory is Prisma 7's, and nothing in it is written or deleted.
+  const outputDir =
+    source.kind === 'prisma7-schema' ? DEFAULT_CONTRACT_SOURCE_DIR : dirname(inputs.schemaPath);
   const configContractPath = isAbsolute(inputs.schemaPath)
     ? inputs.schemaPath
     : `./${inputs.schemaPath}`;
   const runPrefix = formatRunCommand(packageManager, 'prisma', '').trimEnd();
 
-  const files: FileEntry[] = [
-    {
-      path: inputs.schemaPath,
-      content: starterSchema(inputs.target, inputs.authoring, resolveImportSpecifier),
-    },
-    {
-      path: CONFIG_FILE,
-      content: configFile(inputs.target, configContractPath, resolveImportSpecifier),
-    },
-    { path: join(schemaDir, 'db.ts'), content: dbFile(inputs.target, resolveImportSpecifier) },
-    {
-      path: QUICK_REFERENCE_FILE,
-      content: quickReferenceMd(
-        inputs.target,
-        inputs.authoring,
-        inputs.schemaPath,
-        runPrefix,
-        resolveImportSpecifier,
-      ),
-    },
-    { path: ENV_EXAMPLE_FILE, content: envExampleContent(inputs.target) },
-  ];
+  const renames = planConfigRename(cwd, inputs, warnings);
+
+  const files: FileEntry[] =
+    source.kind === 'starter'
+      ? [
+          {
+            path: inputs.schemaPath,
+            content: starterSchema(inputs.target, source.authoring, resolveImportSpecifier),
+          },
+          {
+            path: CONFIG_FILE,
+            content: configFile(inputs.target, configContractPath, resolveImportSpecifier),
+          },
+          {
+            path: join(outputDir, 'db.ts'),
+            content: dbFile(inputs.target, resolveImportSpecifier),
+          },
+          {
+            path: QUICK_REFERENCE_FILE,
+            content: quickReferenceMd(
+              inputs.target,
+              source.authoring,
+              inputs.schemaPath,
+              runPrefix,
+              resolveImportSpecifier,
+            ),
+          },
+        ]
+      : [
+          {
+            path: CONFIG_FILE,
+            content: prisma7ConfigFile(
+              inputs.target,
+              source.schemaPath,
+              outputDir,
+              resolveImportSpecifier,
+            ),
+          },
+          {
+            path: join(outputDir, 'db.ts'),
+            content: dbFile(inputs.target, resolveImportSpecifier),
+          },
+          {
+            path: QUICK_REFERENCE_FILE,
+            content: prisma7QuickReferenceMd(
+              inputs.target,
+              source.schemaPath,
+              outputDir,
+              runPrefix,
+              source.prisma7Config,
+              resolveImportSpecifier,
+            ),
+          },
+        ];
+  files.push({ path: ENV_EXAMPLE_FILE, content: envExampleContent(inputs.target) });
 
   if (existsSync(join(cwd, ENV_EXAMPLE_FILE))) {
     warnings.push(
@@ -205,7 +277,7 @@ function planScaffold(ctx: {
     );
   }
 
-  const filesToDelete = inputs.reinit ? [...findStaleArtifacts(cwd, schemaDir)] : [];
+  const filesToDelete = inputs.reinit ? [...findStaleArtifacts(cwd, outputDir)] : [];
   const dirsToDelete = legacySkillDirs().filter((rel) => existsSync(join(cwd, rel)));
 
   if (inputs.writeEnv) {
@@ -250,7 +322,7 @@ function planScaffold(ctx: {
   const gitattributesPath = join(cwd, '.gitattributes');
   const nextGitattributes = mergeGitattributes(
     existsSync(gitattributesPath) ? readFileSync(gitattributesPath, 'utf-8') : undefined,
-    requiredGitattributesLines(schemaDir, inputs.target),
+    requiredGitattributesLines(outputDir, inputs.target),
   );
   if (nextGitattributes !== null) {
     files.push({ path: '.gitattributes', content: nextGitattributes });
@@ -260,6 +332,7 @@ function planScaffold(ctx: {
   const manifestExisted = existsSync(manifestPath);
   const synthesiseManifest = !manifestExisted && !hasProjectManifest(cwd);
   let parsedManifest: Record<string, unknown> | null = null;
+  let scriptsRewritten: readonly string[] = [];
   if (manifestExisted || synthesiseManifest) {
     const raw = manifestExisted
       ? readFileSync(manifestPath, 'utf-8')
@@ -279,6 +352,17 @@ function planScaffold(ctx: {
       const next = removeDependency(working, inputs.removePreviousFacade);
       if (next !== null) {
         working = next;
+        changed = true;
+      }
+    }
+    if (inputs.sideBySide !== null) {
+      const next = rewritePrismaScripts(
+        working,
+        REQUIRED_SCRIPTS.map((script) => script.name),
+      );
+      if (next !== null) {
+        working = next.content;
+        scriptsRewritten = next.names;
         changed = true;
       }
     }
@@ -306,7 +390,8 @@ function planScaffold(ctx: {
     }
   }
 
-  if (existsSync(join(cwd, 'src/index.ts'))) {
+  // The README describes a fresh scaffold; a Prisma 7 project has its own.
+  if (source.kind === 'starter' && existsSync(join(cwd, 'src/index.ts'))) {
     if (existsSync(join(cwd, 'README.md'))) {
       warnings.push('README.md already exists; leaving it untouched.');
     } else {
@@ -327,12 +412,42 @@ function planScaffold(ctx: {
   }
 
   return {
+    renames,
+    scriptsRewritten,
     files,
     filesToDelete,
     dirsToDelete,
     warnings,
     hasTypesNode: parsedManifest !== null && hasDirectDep(parsedManifest, '@types/node'),
   };
+}
+
+/**
+ * The Prisma 7 config moves to `prisma7.config.<same extension>` with its
+ * `prisma/config` import pointed at the Prisma 7 package. Planned like every
+ * other write: a target that already exists fails here, before anything
+ * lands on disk.
+ */
+function planConfigRename(
+  cwd: string,
+  inputs: ResolvedInitInputs,
+  warnings: string[],
+): RenameEntry[] {
+  const rename = inputs.sideBySide?.renameConfig ?? null;
+  if (rename === null) {
+    return [];
+  }
+  const to = `prisma7.config.${rename.extension}`;
+  if (existsSync(join(cwd, to))) {
+    throw errorInitPrisma7ConfigCollision({ prismaConfigPath: rename.from, prisma7ConfigPath: to });
+  }
+  const rewritten = rewritePrisma7ConfigImport(readFileSync(join(cwd, rename.from), 'utf-8'));
+  if (!rewritten.found) {
+    warnings.push(
+      `${rename.from} does not import 'prisma/config', so it was renamed to ${to} with its imports unchanged. If it imports the Prisma 7 config helper another way, point that import at '@prisma/prisma7/config'.`,
+    );
+  }
+  return [{ from: rename.from, to, content: rewritten.content }];
 }
 
 /**
@@ -351,7 +466,24 @@ export function scaffoldProject(ctx: {
 
   const filesWritten: string[] = [];
   const filesDeleted: string[] = [];
+  const filesRenamed: { readonly from: string; readonly to: string }[] = [];
   const notes: string[] = [];
+
+  // The rename comes first so the config written below lands on a free name.
+  for (const rename of plan.renames) {
+    try {
+      writeFileSync(join(ctx.cwd, rename.to), rename.content, 'utf-8');
+      unlinkSync(join(ctx.cwd, rename.from));
+    } catch (error) {
+      throw errorInitWriteFailed({
+        path: rename.to,
+        cause: error instanceof Error ? error.message : String(error),
+        filesWritten,
+        filesRenamed,
+      });
+    }
+    filesRenamed.push({ from: rename.from, to: rename.to });
+  }
 
   for (const file of plan.files) {
     const target = join(ctx.cwd, file.path);
@@ -363,6 +495,7 @@ export function scaffoldProject(ctx: {
         path: file.path,
         cause: error instanceof Error ? error.message : String(error),
         filesWritten,
+        filesRenamed,
       });
     }
     filesWritten.push(file.path);
@@ -397,6 +530,8 @@ export function scaffoldProject(ctx: {
   return {
     filesWritten,
     filesDeleted,
+    filesRenamed,
+    scriptsRewritten: plan.scriptsRewritten,
     warnings: plan.warnings,
     notes,
     hasTypesNode: plan.hasTypesNode,

@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecDescriptor } from './codec-descriptor';
+import type { CodecDescriptor, CodecDescriptorTemplate } from './codec-descriptor';
 import type { CodecCallContext, CodecTrait } from './codec-types';
 
 /**
@@ -67,7 +67,7 @@ export abstract class CodecImpl<
    * Variance-erased descriptor reference. Concrete codec subclasses receive the typed descriptor in their own constructors and forward it via `super(descriptor)`; the variance erasure lives at this base because the abstract surface can't carry the concrete `TParams`.
    */
   // biome-ignore lint/suspicious/noExplicitAny: variance-erased descriptor reference; subclasses retain typed access via their own state
-  constructor(public readonly descriptor: CodecDescriptor<any>) {}
+  constructor(public readonly descriptor: CodecDescriptorTemplate<any>) {}
 
   get id(): Id {
     return this.descriptor.codecId as Id;

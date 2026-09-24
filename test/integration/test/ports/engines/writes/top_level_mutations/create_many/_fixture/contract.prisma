@@ -1,0 +1,8 @@
+model Test {
+  id   Int     @id
+  str1 String
+  str2 String?
+  str3 String? @default("SOME_DEFAULT")
+
+  @@map("Test")
+}

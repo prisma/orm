@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresNativeScalarTypeDescriptors,
@@ -12,7 +13,11 @@ import {
 const baseInput = {
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-  authoringContributions: { type: postgresScalarAuthoringTypes },
+  authoringContributions: {
+    type: postgresScalarAuthoringTypes,
+    dataTypes: fixtureDataTypeSupport.entries,
+  },
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },

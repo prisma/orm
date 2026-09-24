@@ -88,6 +88,7 @@ describe(
         composedExtensionContracts: new Map(),
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
+        dataTypeLookup: stack.dataTypeLookup,
         controlMutationDefaults: stack.controlMutationDefaults,
         resolvedInputs: [schemaPath],
         capabilities: stack.capabilities,

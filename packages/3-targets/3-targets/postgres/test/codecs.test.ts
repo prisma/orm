@@ -1,5 +1,5 @@
 import type {
-  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
   CodecInstanceContext,
 } from '@internal/framework-components/codec';
 import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
@@ -30,6 +30,7 @@ import {
   pgNumericDescriptor,
   pgTextDescriptor,
   pgTimetzDescriptor,
+  pgTsqueryDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
   pgVarcharDescriptor,
@@ -65,7 +66,7 @@ const descriptorByScalar = {
   jsonb: pgJsonbDescriptor,
   uuid: pgUuidDescriptor,
   inet: pgInetDescriptor,
-} as const satisfies Record<string, AnyCodecDescriptor>;
+} as const satisfies Record<string, AnyCodecDescriptorTemplate>;
 
 type ScalarName = keyof typeof descriptorByScalar;
 
@@ -438,6 +439,18 @@ describe('adapter-postgres codecs', () => {
     it('resolves pgInetDescriptor by codec id from the registry', () => {
       const resolved = postgresCodecRegistry.descriptorFor('pg/inet@1');
       expect(resolved).toBe(pgInetDescriptor);
+    });
+  });
+
+  describe('pg/tsquery@1 registry resolution', () => {
+    it('resolves pgTsqueryDescriptor by codec id, so a bound tsquery parameter renders', () => {
+      const resolved = postgresCodecRegistry.descriptorFor('pg/tsquery@1');
+      expect(resolved).toBe(pgTsqueryDescriptor);
+      expect(resolved?.targetTypes).toEqual(['tsquery']);
+    });
+
+    it('claims no traits, so no comparison, ordering or text operation applies to a tsquery', () => {
+      expect(postgresCodecRegistry.descriptorFor('pg/tsquery@1')?.traits).toEqual([]);
     });
   });
 });

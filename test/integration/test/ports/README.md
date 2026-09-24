@@ -35,7 +35,7 @@ ports/
 
 ## Adding a suite
 
-Each suite is its own directory. Author the schema as **PSL** in `prisma/functional/<suite>/_fixture/contract.prisma` (faithful translation of the upstream `schema.prisma`) plus a `prisma.config.ts` (`defineConfig` from `@prisma/cli-engine` with an `orm` section built by `defineConfig` from `@internal/postgres/config`: `contract: './contract.prisma'`, `output: 'generated'` — copy an existing suite's). Then emit:
+Each suite is its own directory. Author the schema as **PSL** in `prisma/functional/<suite>/_fixture/contract.prisma` (faithful translation of the upstream `schema.prisma`) plus a `prisma.config.ts` (`definePrismaConfig` from `@prisma/cli-engine` with an `orm` section built by `defineConfig` from `@internal/postgres/config`: `contract: './contract.prisma'`, `output: 'generated'` — copy an existing suite's). Then emit:
 
 ```bash
 node packages/1-framework/3-tooling/cli/dist/bin.mjs contract emit \

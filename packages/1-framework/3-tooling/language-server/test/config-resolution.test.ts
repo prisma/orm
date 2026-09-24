@@ -65,7 +65,6 @@ function stubStackWithContext(): ControlStack {
     },
     codecLookup: { get: () => undefined },
     controlMutationDefaults: {
-      defaultLiteralTagRegistry: new Map(),
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },
@@ -131,7 +130,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     expect(result.controlStack).toEqual({ scalarTypes: [], pslBlockDescriptors: {} });
   });
 
-  it('rejects a config that was not created by defineConfig', async () => {
+  it('rejects a config that was not created by definePrismaConfig', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pn-lsp-unmarked-'));
     const configPath = join(root, 'prisma.config.ts');
     await writeFile(configPath, 'export default { family: {} };\n');

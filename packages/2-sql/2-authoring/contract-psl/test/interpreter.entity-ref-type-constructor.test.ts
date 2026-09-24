@@ -26,6 +26,7 @@ import type {
   PslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
@@ -33,6 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -109,6 +111,7 @@ function makeCodecDescriptor(options: {
 }): AnyCodecDescriptor {
   return {
     codecId: options.codecId,
+    dataType: dataTypeId('demo/fixture'),
     traits: ['equality'],
     targetTypes: ['text'],
     paramsSchema: {
@@ -195,6 +198,7 @@ const authoringContributions: AuthoringContributions = {
 };
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),

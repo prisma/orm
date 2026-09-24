@@ -131,10 +131,8 @@ export function findPath(
  *
  * Algorithm: BFS over `(node, coveredSubset)` states with state-level dedup.
  * The covered subset is a `Set<string>` of invariant ids; the state's dedup
- * key is `${node}\0${[...covered].sort().join('\0')}`. State keys distinguish
- * distinct `(node, covered)` tuples regardless of node-name length because
- * `\0` cannot appear in any invariant id (validation rejects whitespace and
- * control chars at authoring time).
+ * key is the JSON encoding of `[node, sortedCoveredIds]`, which distinguishes
+ * distinct `(node, covered)` tuples for any node name or invariant id.
  *
  * Neighbour ordering when `required ≠ ∅`: edges covering ≥1 still-needed
  * invariant come first, with `createdAt → to → migrationHash` as the
@@ -155,15 +153,7 @@ export function findPathWithInvariants(
     readonly node: string;
     readonly covered: ReadonlySet<string>;
   }
-  // `\0` is a safe segment separator: `validateInvariantId` rejects any id
-  // containing whitespace or control characters (NUL is U+0000), and node
-  // hashes are hex strings. Distinct `(node, covered)` tuples therefore
-  // map to distinct strings. If `validateInvariantId` is ever relaxed,
-  // re-confirm dedup correctness here.
-  const stateKey = (s: InvState): string => {
-    if (s.covered.size === 0) return `${s.node}\0`;
-    return `${s.node}\0${[...s.covered].sort().join('\0')}`;
-  };
+  const stateKey = (s: InvState): string => JSON.stringify([s.node, [...s.covered].sort()]);
 
   const neighbours = (s: InvState): Iterable<{ next: InvState; edge: MigrationEdge }> => {
     const outgoing = graph.forwardChain.get(s.node) ?? [];

@@ -51,7 +51,8 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
       defaultLiteralTagRegistry: new Map(),
     },
   });
-  return { sources, selfModel, field, binder };
+  return { sources,
+    symbols: symbolTable, selfModel, field, binder };
 }
 
 function schemaArg(schema: string, attribute: string, argName?: string) {
@@ -750,19 +751,34 @@ describe('fieldRef', () => {
 });
 
 describe('entityRef', () => {
-  it('parses a bare identifier into its model name', () => {
-    const { expr, ctx } = argOf('Task');
+  function referenceArg(value: string) {
+    const { document, sources } = parse(`model M {\n id Int @x(${value})\n}`, 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      pslBlockDescriptors: {},
+    });
+    const selfModel = symbolTable.topLevel.models['M'];
+    const field = selfModel?.fields['id'];
+    const attribute = field?.node.attributes()[Symbol.iterator]().next().value;
+    const expr = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
+    if (!selfModel || !expr) throw new Error('Missing reference argument');
+    return { expr, ctx: { sources, symbols: symbolTable, selfModel } };
+  }
 
-    const result = entityRef().parse(expr, ctx);
+  it('parses a bare identifier into its resolved model', () => {
+    const { expr, ctx } = referenceArg('M');
+    const reference = { declaration: ctx.selfModel, namespace: undefined };
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('Task');
+    if (result.ok) expect(result.value).toEqual(reference);
   });
 
   it('rejects a quoted string literal', () => {
-    const { expr, ctx } = argOf('"Task"');
+    const { expr, ctx } = referenceArg('"Task"');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -772,18 +788,18 @@ describe('entityRef', () => {
   });
 
   it('rejects a number token', () => {
-    const { expr, ctx } = argOf('42');
+    const { expr, ctx } = referenceArg('42');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
   });
 
   it('rejects an array literal', () => {
-    const { expr, ctx } = argOf('[Task]');
+    const { expr, ctx } = referenceArg('[Task]');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);

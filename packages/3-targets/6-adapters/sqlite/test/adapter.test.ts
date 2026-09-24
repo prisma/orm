@@ -421,6 +421,34 @@ describe('SQLite adapter', () => {
       expect(sql).toContain('ON CONFLICT ("email") DO NOTHING');
     });
 
+    it('renders a targetless ON CONFLICT DO NOTHING without a column list', () => {
+      const ast = InsertAst.into(TableSource.named('user'))
+        .withRows([{ id: ParamRef.of(1), email: ParamRef.of('a@example.com') }])
+        .withOnConflict(InsertOnConflict.doNothing());
+
+      const { sql } = adapter.lower(ast, { contract });
+      expect(sql).toBe('INSERT INTO "user" ("id", "email") VALUES (?, ?) ON CONFLICT DO NOTHING');
+    });
+
+    it('throws when a targetless conflict clause carries DO UPDATE SET', () => {
+      const ast = InsertAst.into(TableSource.named('user'))
+        .withRows([{ id: ParamRef.of(1), email: ParamRef.of('a@example.com') }])
+        .withOnConflict(
+          InsertOnConflict.doNothing().doUpdateSet({
+            email: ColumnRef.of('excluded', 'email'),
+          }),
+        );
+
+      expect(() => adapter.lower(ast, { contract })).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.AST_INVALID',
+          message: expect.stringContaining(
+            'INSERT onConflict requires at least one conflict column',
+          ),
+        }),
+      );
+    });
+
     it('renders ON CONFLICT DO UPDATE SET', () => {
       const ast = InsertAst.into(TableSource.named('user'))
         .withRows([{ id: ParamRef.of(1), email: ParamRef.of('a@example.com') }])

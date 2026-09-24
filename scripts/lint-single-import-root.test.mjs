@@ -34,6 +34,10 @@ before(() => {
   });
   pkg('examples/parent', { 'src/app.ts': "import x from '@prisma/orm-mongo/runtime';" });
   pkg('examples/parent/nested', { 'src/app.ts': "import y from '@internal/mongo-orm';" });
+  pkg('test/integration', {
+    'test/query.ts': "import { budgets } from '@internal/sql-runtime';",
+    'test/packaging/tarball.test.ts': "await import('@prisma/orm-postgres/runtime');",
+  });
 });
 
 after(() => {
@@ -65,6 +69,16 @@ describe('findMixedPackages', () => {
     const [entry] = findMixedPackages(base, ['examples']).filter((e) => e.pkg === 'examples/mixed');
     assert.deepEqual([...entry.published.keys()], ['@prisma/orm-postgres/runtime']);
     assert.deepEqual([...entry.internal.keys()], ['@internal/sql-runtime']);
+  });
+
+  test('skips the packaging suites when attributing specifiers', () => {
+    const mixed = findMixedPackages(base, ['test']).map((entry) => entry.pkg);
+    assert.ok(!mixed.includes('test/integration'));
+  });
+
+  test('still reports the package when the same specifiers sit outside the exempt subtree', () => {
+    const mixed = findMixedPackages(base, ['test'], []).map((entry) => entry.pkg);
+    assert.ok(mixed.includes('test/integration'));
   });
 });
 

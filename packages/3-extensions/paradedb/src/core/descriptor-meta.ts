@@ -29,7 +29,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: BOOL, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} @@@ {{arg0}}',
           },
         }),
@@ -43,7 +42,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: BOOL, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} ||| {{arg0}}',
           },
         }),
@@ -57,7 +55,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: BOOL, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} &&& {{arg0}}',
           },
         }),
@@ -72,7 +69,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: BOOL, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} === {{arg0}}',
           },
         }),
@@ -87,7 +83,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: BOOL, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} ### {{arg0}}',
           },
         }),
@@ -102,7 +97,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: FLOAT4, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'pdb.score({{self}})',
           },
         }),
@@ -125,7 +119,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: TEXT, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}}::pdb.fuzzy({{arg0}})',
           },
         });
@@ -148,7 +141,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: TEXT, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}}::pdb.boost({{arg0}})',
           },
         });
@@ -170,7 +162,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: TEXT, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}}::pdb.const({{arg0}})',
           },
         });
@@ -192,7 +183,6 @@ export function paradedbQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: TEXT, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}}::pdb.slop({{arg0}})',
           },
         });

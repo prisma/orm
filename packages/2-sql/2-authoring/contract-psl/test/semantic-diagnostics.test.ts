@@ -3,6 +3,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { expect, it, vi } from 'vitest';
 import { lowerDefaultForField } from '../src/psl-column-resolution';
 import { createSqlBinder } from '../src/sql-attribute-specs';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import { createPostgresTestContext } from './fixtures';
 
 it('pushes owned default diagnostics with filename and range rather than a provider envelope', () => {
@@ -37,7 +38,7 @@ it('pushes owned default diagnostics with filename and range rather than a provi
     columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
     generatorDescriptorById: new Map(),
     defaultFunctionRegistry: new Map(),
-    defaultLiteralTagRegistry: new Map(),
+    dataTypeSupport: fixtureDataTypeSupport,
     codecLookup: context.codecLookup,
     diagnostics,
   });

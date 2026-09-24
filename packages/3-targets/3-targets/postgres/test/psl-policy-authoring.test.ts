@@ -13,10 +13,12 @@
  *     factory chain (no test-side hand-lowering).
  */
 
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -28,6 +30,8 @@ import { PostgresContractSerializer } from '../src/core/postgres-contract-serial
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 import { computeContentHash } from '../src/core/rls/canonicalize';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -231,6 +235,7 @@ namespace public {
     expect(diagnostics).toEqual([]);
 
     const result = interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
       document,
       symbolTable,
       sources,

@@ -33,6 +33,7 @@ import {
   looksLikePath,
   resolveAppTargetPath,
 } from '../../utils/migration-path-target';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -278,6 +279,7 @@ export const migrationShowCommand = defineOrmCommand({
       appContract,
       extensions: [],
       deserializeContract: (json) => familyInstance.deserializeContract(json),
+      ...ifDefined('verifySnapshotContent', snapshotVerifierFor(ctx.config)),
     });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

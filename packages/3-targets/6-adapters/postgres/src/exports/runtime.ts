@@ -14,7 +14,7 @@ import {
 } from '@internal/target-postgres/runtime';
 import { createPostgresAdapterWithCodecRegistry, postgresRawCodecInferer } from '../core/adapter';
 import { assemblePostgresCodecRegistry } from '../core/codec-lookup';
-import { postgresAdapterDescriptorMeta, postgresQueryOperations } from '../core/descriptor-meta';
+import { postgresAdapterDescriptorMeta } from '../core/descriptor-meta';
 import type { PostgresContract, PostgresLoweredStatement } from '../core/types';
 
 export interface SqlRuntimeAdapter
@@ -49,7 +49,6 @@ const postgresRuntimeAdapterDescriptor: SqlRuntimeAdapterDescriptor<'postgres', 
   {
     ...postgresAdapterDescriptorMeta,
     codecs: () => Array.from(postgresCodecRegistry.values()),
-    queryOperations: () => postgresQueryOperations(),
     mutationDefaultGenerators: createPostgresMutationDefaultGenerators,
     rawCodecInferer: postgresRawCodecInferer,
     create(stack): SqlRuntimeAdapter {

@@ -61,8 +61,10 @@ import type {
   ModelAttributeAst,
   PslSources,
 } from '@internal/psl-parser/syntax';
+import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
+import { removedDbgeneratedMessage } from './default-function-registry';
 
 export function findModelAttributeNode(
   model: ModelSymbol,
@@ -85,6 +87,7 @@ export function findFieldAttributeNode(
 }
 
 function buildModelAttributeCtx(input: {
+  readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
   readonly sources: PslSources;
   readonly binder: Binder;
@@ -93,10 +96,12 @@ function buildModelAttributeCtx(input: {
     sources: input.sources,
     selfModel: input.selfModel,
     binder: input.binder,
+    symbols: input.symbols,
   };
 }
 
 function buildFieldAttributeCtx(input: {
+  readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
@@ -107,6 +112,7 @@ function buildFieldAttributeCtx(input: {
     selfModel: input.selfModel,
     field: input.field,
     binder: input.binder,
+    symbols: input.symbols,
   };
 }
 
@@ -179,6 +185,7 @@ export function createSqlBinder(input: {
 // failures into `diagnostics`. Returns the typed value, or `undefined` on
 // failure so the caller can apply its own default/absence handling.
 export function interpretModelAttribute<Out>(input: {
+  readonly symbols: SymbolTable;
   readonly node: ModelAttributeAst;
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
@@ -190,6 +197,7 @@ export function interpretModelAttribute<Out>(input: {
     input.node,
     input.spec,
     buildModelAttributeCtx({
+      symbols: input.symbols,
       selfModel: input.model,
       sources: input.sources,
       binder: input.binder,
@@ -206,6 +214,7 @@ export function interpretModelAttribute<Out>(input: {
 // failures into `diagnostics`. Returns the typed value, or `undefined` on
 // failure so the caller can apply its own default/absence handling.
 export function interpretFieldAttribute<Out>(input: {
+  readonly symbols: SymbolTable;
   readonly node: FieldAttributeAst;
   readonly spec: AttributeSpec<Out, FieldAttributeCtx>;
   readonly model: ModelSymbol;
@@ -218,6 +227,7 @@ export function interpretFieldAttribute<Out>(input: {
     input.node,
     input.spec,
     buildFieldAttributeCtx({
+      symbols: input.symbols,
       selfModel: input.model,
       field: input.field,
       sources: input.sources,
@@ -252,33 +262,28 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultArgValue =
-  | string
-  | NumLiteral
-  | boolean
-  | (string | NumLiteral | boolean)[]
-  | TypedFuncCall
-  | ParsedTaggedLiteral;
+type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral;
+
+type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFuncCall;
 
 function scalarDefaultArms(
   isList: boolean,
   registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
-  const literal = () => oneOf(str(), numLiteral(), bool());
-  const tagEntries = [...registries.defaultLiteralTagRegistry];
-  const tagArms =
-    tagEntries.length > 0
-      ? [
-          taggedLiteral(
-            tagEntries.map(([tag]) => tag),
-            {
-              documentation: [...new Set(tagEntries.map(([, entry]) => entry.documentation))].join(
-                ' ',
-              ),
-            },
-          ),
-        ]
-      : [];
+  // One arm per distinct documentation, so each tag's completion and signature help carries the
+  // text of the tag it names rather than every registered tag's text run together.
+  const tagsByDocumentation = new Map<string, string[]>();
+  for (const entry of Object.values(registries.dataTypeEntries)) {
+    if (entry.written.kind !== 'tag') continue;
+    const tags = tagsByDocumentation.get(entry.documentation);
+    if (tags === undefined) tagsByDocumentation.set(entry.documentation, [entry.written.tag]);
+    else tags.push(entry.written.tag);
+  }
+  const tagArms = () =>
+    [...tagsByDocumentation].map(([documentation, tags]) => taggedLiteral(tags, { documentation }));
+  // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses.
+  const literal = () => oneOf(str(), numLiteral(), bool(), ...tagArms());
+  const listArm = () => list(literal(), { label: `list of (${literal().label})` });
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
       name,
@@ -288,9 +293,39 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
+  // A scalar column takes a list literal too: a codec such as `pg/vector@1` declares a list of
+  // element types, and its value is written as a PSL list on a column that is not a list.
   return isList
-    ? [list(literal()), ...funcArms, ...tagArms]
-    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms];
+    ? [listArm(), ...funcArms, ...tagArms()]
+    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms(), listArm()];
+}
+
+/**
+ * The `@default` value arms, with a `dbgenerated(...)` call reported as removed before the arms
+ * are tried, so the author is told what replaced it instead of being shown the list of arms.
+ */
+function defaultValueArm(
+  arms: readonly [
+    ArgType<DefaultArgValue, AttributeCtx>,
+    ...ArgType<DefaultArgValue, AttributeCtx>[],
+  ],
+  registry: ControlDefaultRegistries['defaultFunctionRegistry'],
+) {
+  const value = oneOf(...arms);
+  return {
+    ...value,
+    parse: (arg: Parameters<typeof value.parse>[0], ctx: AttributeCtx) =>
+      FunctionCallAst.cast(arg.syntax)?.path().join('.') === 'dbgenerated'
+        ? notOk<readonly PslDiagnostic[]>([
+            leafDiagnostic(
+              ctx,
+              arg,
+              removedDbgeneratedMessage(registry),
+              'PSL_UNKNOWN_DEFAULT_FUNCTION',
+            ),
+          ])
+        : value.parse(arg, ctx),
+  };
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {
@@ -334,7 +369,7 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
     positional: [
       {
         key: 'value',
-        type: oneOf(...valueArms),
+        type: defaultValueArm(valueArms, ctx.controlMutationDefaults.defaultFunctionRegistry),
         documentation:
           'A literal, enum member, or registered default function compatible with this field.',
       },
@@ -603,17 +638,23 @@ const discriminatorModelSpec = modelAttribute('discriminator', {
     { key: 'field', type: fieldRef(), documentation: 'The discriminator field on this model.' },
   ],
 });
-const baseModelSpec = modelAttribute('base', {
-  documentation: 'Declares this model as a variant of a base model.',
-  positional: [
-    { key: 'base', type: entityRef(), documentation: 'The base model to inherit from.' },
-    {
-      key: 'value',
-      type: str(),
-      documentation: 'The discriminator value identifying this variant.',
-    },
-  ],
-});
+function baseModelSpec() {
+  return modelAttribute('base', {
+    documentation: 'Declares this model as a variant of a base model.',
+    positional: [
+      {
+        key: 'base',
+        type: entityRef({ kind: 'model' }),
+        documentation: 'The base model to inherit from.',
+      },
+      {
+        key: 'value',
+        type: str(),
+        documentation: 'The discriminator value identifying this variant.',
+      },
+    ],
+  });
+}
 
 function relationAttributeSpan(ctx: FieldAttributeCtx): PslSpan {
   const node = findFieldAttributeNode(ctx.field, 'relation');
@@ -745,7 +786,7 @@ export const sqlAttributeSpecs = {
     check: () => checkModelSpec,
     control: () => controlModelSpec,
     discriminator: () => discriminatorModelSpec,
-    base: () => baseModelSpec,
+    base: baseModelSpec,
   },
   field: {
     map: () => mapFieldSpec,

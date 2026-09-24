@@ -49,6 +49,7 @@ import {
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './constants';
+import { postgisGeometry } from './data-types';
 import { postgisError } from './errors';
 import { decodeEWKBHex, encodeEWKBHex, encodeEWKT } from './ewkb';
 import type { Geometry } from './geojson';
@@ -151,6 +152,7 @@ export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryP
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
+  override readonly dataType = postgisGeometry.id;
   override readonly codecId = POSTGIS_GEOMETRY_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['geometry'] as const;

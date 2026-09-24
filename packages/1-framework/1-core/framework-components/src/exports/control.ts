@@ -95,13 +95,17 @@ export type {
   AssembledAuthoringContributions,
   ControlStack,
   CreateControlStackInput,
+  DataTypeInvariantInput,
 } from '../control/control-stack';
 export {
   assembleAuthoringContributions,
+  assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
+  assembleDataTypes,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,
+  enforceDataTypeInvariants,
   extractCodecLookup,
   extractCodecTypeImports,
   extractComponentIds,
@@ -127,8 +131,6 @@ export type {
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
 export type {
-  ControlDefaultLiteralTagEntry,
-  ControlDefaultLiteralTagRegistry,
   ControlDefaultRegistries,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,

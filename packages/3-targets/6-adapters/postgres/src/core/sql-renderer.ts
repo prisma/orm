@@ -938,19 +938,20 @@ function renderInsert(ast: InsertAst, contract: PostgresContract, pim: ParamInde
   const onConflictClause = ast.onConflict
     ? (() => {
         const conflictColumns = ast.onConflict.columns.map((col) => quoteIdentifier(col.column));
-        if (conflictColumns.length === 0) {
-          throw adapterError(
-            'RUNTIME.AST_INVALID',
-            'INSERT onConflict requires at least one conflict column',
-            { meta: { node: 'insert-on-conflict' } },
-          );
-        }
+        const target = conflictColumns.length === 0 ? '' : ` (${conflictColumns.join(', ')})`;
 
         const action = ast.onConflict.action;
         switch (action.kind) {
           case 'do-nothing':
-            return ` ON CONFLICT (${conflictColumns.join(', ')}) DO NOTHING`;
+            return ` ON CONFLICT${target} DO NOTHING`;
           case 'do-update-set': {
+            if (conflictColumns.length === 0) {
+              throw adapterError(
+                'RUNTIME.AST_INVALID',
+                'INSERT onConflict requires at least one conflict column',
+                { meta: { node: 'insert-on-conflict' } },
+              );
+            }
             const updateEntries = Object.entries(action.set);
             if (updateEntries.length === 0) {
               throw adapterError(
@@ -962,7 +963,7 @@ function renderInsert(ast: InsertAst, contract: PostgresContract, pim: ParamInde
             const updates = updateEntries.map(([colName, value]) => {
               return `${quoteIdentifier(colName)} = ${renderExpr(value, contract, pim)}`;
             });
-            return ` ON CONFLICT (${conflictColumns.join(', ')}) DO UPDATE SET ${updates.join(', ')}`;
+            return ` ON CONFLICT${target} DO UPDATE SET ${updates.join(', ')}`;
           }
           // v8 ignore next 4
           default:

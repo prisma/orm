@@ -5,14 +5,18 @@ import {
   collectScalarTypeConstructors,
   type ScalarTypeConstructorOutput,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import postgres from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const stack = createControlStack({
   family: sql,
@@ -45,6 +49,7 @@ function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructor
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
     document,
     symbolTable,
     sources,

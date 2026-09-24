@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AnyCodecDescriptor } from '../../src/ast/codec-types';
+import type { AnyCodecDescriptorTemplate } from '../../src/ast/codec-types';
 import {
   SQL_CHAR_CODEC_ID,
   SQL_FLOAT_CODEC_ID,
@@ -21,7 +21,7 @@ const descriptorsByScalar = {
   int: sqlIntDescriptor,
   float: sqlFloatDescriptor,
   text: sqlTextDescriptor,
-} as const satisfies Record<string, AnyCodecDescriptor>;
+} as const satisfies Record<string, AnyCodecDescriptorTemplate>;
 
 describe('sql-codec-helpers', () => {
   it('exports expected codec IDs', () => {
@@ -89,7 +89,7 @@ describe('sql-codec-helpers', () => {
   it.each(codecRoundTripCases)(
     'encodes and decodes $scalar values',
     async ({ scalar, input, expectedEncoded, expectedDecoded }) => {
-      const descriptor = descriptorsByScalar[scalar] as AnyCodecDescriptor;
+      const descriptor = descriptorsByScalar[scalar] as AnyCodecDescriptorTemplate;
       const codec = descriptor.factory(undefined as never)({ name: 'test' });
       expect(await codec.encode(input, {})).toBe(expectedEncoded);
       expect(await codec.decode(input, {})).toBe(expectedDecoded);

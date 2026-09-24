@@ -1,5 +1,6 @@
 import { sqliteAggregateDescriptors } from '@internal/target-sqlite/aggregates';
 import { sqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 
 // Exclude codecs that carry a renderOutputType: those emit named TypeScript types (e.g.
 // Char<N>, Varchar<N>) that are not listed in this adapter's typeImports and would
@@ -25,8 +26,11 @@ export const sqliteAdapterDescriptorMeta = {
       returning: true,
       foreignKeys: true,
       enums: false,
+      insertOnConflictSkip: true,
+      insertOnConflictWithoutTarget: true,
     },
   },
+  dataTypes: sqliteDataTypes,
   types: {
     aggregateDescriptors: sqliteAggregateDescriptors,
     codecTypes: {

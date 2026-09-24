@@ -4,6 +4,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
@@ -27,6 +28,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
+      | 'dataTypeLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -39,6 +41,7 @@ describe('interpretPslDocumentToSqlContract value objects and list fields', () =
       },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });
@@ -406,6 +409,7 @@ model User {
       },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: {} },
       ...document,
       controlMutationDefaults: builtinControlMutationDefaults,

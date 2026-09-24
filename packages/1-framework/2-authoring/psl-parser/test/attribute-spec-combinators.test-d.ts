@@ -3,10 +3,15 @@ import { expectTypeOf, test } from 'vitest';
 import type {
   ArgType,
   AttributeCtx,
+  BlockSymbol,
+  CompositeTypeSymbol,
   FieldAttributeCtx,
   InspectableArgType,
   ModelAttributeCtx,
+  ModelSymbol,
+  NamedTypeSymbol,
   OutOf,
+  ResolvedEntityReference,
   TypedFuncCall,
 } from '../src/exports';
 import {
@@ -33,6 +38,36 @@ test('inspectable lists and records expose ArgType children', () => {
   type RecordMetadata = Extract<InspectableArgType<never>, { kind: 'record' }>;
   expectTypeOf<ListMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
   expectTypeOf<RecordMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
+});
+
+test('checked reference selectors and wrappers preserve inferred outputs', () => {
+  const model = entityRef({ kind: 'model' });
+  const composite = entityRef({ kind: 'compositeType' });
+  const named = entityRef({ kind: 'namedType' });
+  const block = entityRef({ kind: 'block', keyword: 'permission' });
+  const names = identifier();
+  const optionalModel = optional(model);
+  const models = list(model);
+  const alternative = oneOf(model, names);
+  expectTypeOf<OutOf<typeof model>>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>>();
+  expectTypeOf<OutOf<typeof composite>>().toEqualTypeOf<
+    ResolvedEntityReference<CompositeTypeSymbol>
+  >();
+  expectTypeOf<OutOf<typeof named>>().toEqualTypeOf<ResolvedEntityReference<NamedTypeSymbol>>();
+  expectTypeOf<OutOf<typeof block>>().toEqualTypeOf<ResolvedEntityReference<BlockSymbol>>();
+  expectTypeOf<OutOf<typeof names>>().toEqualTypeOf<string>();
+  expectTypeOf(names.name).toEqualTypeOf<undefined>();
+  expectTypeOf<OutOf<typeof optionalModel>>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>>();
+  expectTypeOf<OutOf<typeof models>>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>[]>();
+  expectTypeOf<OutOf<typeof alternative>>().toEqualTypeOf<
+    ResolvedEntityReference<ModelSymbol> | string
+  >();
+  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<AttributeCtx>();
+  expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sources' | 'symbols'>();
+  // @ts-expect-error checked references require an expected selector
+  entityRef();
+  // @ts-expect-error checked references do not accept injected resolvers
+  entityRef({ kind: 'model' }, () => undefined);
 });
 
 test('identifier requires semantic value documentation', () => {
@@ -415,7 +450,7 @@ test('optional wrappers retain child metadata and optional markers', () => {
 test('field references have distinct inspectable kinds', () => {
   expectTypeOf(fieldRef().kind).toEqualTypeOf<'fieldRef'>();
   expectTypeOf(referencedFieldRef().kind).toEqualTypeOf<'referencedFieldRef'>();
-  expectTypeOf(entityRef().kind).toEqualTypeOf<'entityRef'>();
+  expectTypeOf(entityRef({ kind: 'model' }).kind).toEqualTypeOf<'entityRef'>();
 });
 
 test('runtime context metadata is rejected from arg types', () => {

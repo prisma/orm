@@ -1,4 +1,12 @@
 import type { ComparisonMethods, ModelAccessor } from '@internal/sql-orm-client';
+import type { CodecTypes } from '@internal/target-postgres/codec-types';
+import {
+  phrasetoTsquery,
+  plaintoTsquery,
+  toTsquery,
+  tsquery,
+  websearchToTsquery,
+} from '@internal/target-postgres/full-text';
 import { describe, expectTypeOf, test } from 'vitest';
 import type { Contract } from './fixtures/generated/contract';
 
@@ -141,5 +149,78 @@ describe('vector field itself: only equality trait', () => {
 
   test('vector field does not expose asc (no order trait)', () => {
     expectTypeOf<PostAccessor['embedding']>().not.toHaveProperty('asc');
+  });
+});
+
+describe('full-text search operations on text fields', () => {
+  test('text field exposes the full-text operations', () => {
+    expectTypeOf<PostAccessor['title']>().toHaveProperty('fullTextMatches');
+    expectTypeOf<PostAccessor['title']>().toHaveProperty('fullTextRank');
+    expectTypeOf<PostAccessor['title']>().toHaveProperty('fullTextHeadline');
+  });
+
+  test('numeric and vector fields do not', () => {
+    expectTypeOf<PostAccessor['views']>().not.toHaveProperty('fullTextMatches');
+    expectTypeOf<PostAccessor['embedding']>().not.toHaveProperty('fullTextMatches');
+  });
+
+  test('the tsquery parsers are not field methods', () => {
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('websearchToTsquery');
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('toTsquery');
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('plaintoTsquery');
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('phrasetoTsquery');
+  });
+
+  test('fullTextMatches returns a predicate expression', () => {
+    type Fn = PostAccessor['title']['fullTextMatches'];
+    expectTypeOf<Fn>().toBeFunction();
+    expectTypeOf<ReturnType<Fn>>().toExtend<
+      import('@internal/sql-relational-core/ast').AnyExpression
+    >();
+  });
+
+  test('fullTextRank returns numeric comparison methods, so it can order results', () => {
+    type RankResult = ReturnType<PostAccessor['title']['fullTextRank']>;
+    expectTypeOf<RankResult>().toEqualTypeOf<
+      ComparisonMethods<number, 'equality' | 'order' | 'numeric'>
+    >();
+    expectTypeOf<RankResult>().toHaveProperty('desc');
+  });
+
+  test('fullTextHeadline returns textual comparison methods', () => {
+    type HeadlineResult = ReturnType<PostAccessor['title']['fullTextHeadline']>;
+    expectTypeOf<HeadlineResult>().toHaveProperty('like');
+  });
+
+  test('the query is a tsquery from a parser or the tsquery tag, never a bare string', () => {
+    const title = null as unknown as PostAccessor['title'];
+    title.fullTextMatches(websearchToTsquery('alice'));
+    title.fullTextMatches(toTsquery('alice & !bob'));
+    title.fullTextMatches(plaintoTsquery('alice bob'));
+    title.fullTextMatches(phrasetoTsquery('alice wrote'));
+    title.fullTextRank(websearchToTsquery('alice', { language: 'german' }), { language: 'german' });
+    title.fullTextMatches(tsquery`${'ali'}:*`);
+    title.fullTextRank(tsquery({ language: 'german' })`${'ali'}:*`, { language: 'german' });
+    title.fullTextHeadline(tsquery`${'ali'}:*`);
+    const readBack = null as unknown as CodecTypes['pg/tsquery@1']['output'];
+    title.fullTextMatches(readBack);
+    // @ts-expect-error a bare string is not a tsquery; parse it first
+    title.fullTextMatches('alice');
+    // @ts-expect-error the same holds for rank
+    title.fullTextRank('alice');
+    // @ts-expect-error a number is neither a tsquery expression nor tsquery text
+    title.fullTextMatches(42);
+    // @ts-expect-error a text column is not a tsquery; parse it first
+    title.fullTextMatches(title);
+  });
+
+  test('the language argument is one of the configurations Postgres ships with', () => {
+    const title = null as unknown as PostAccessor['title'];
+    const query = websearchToTsquery('alice');
+    title.fullTextMatches(query, { language: 'german' });
+    // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
+    title.fullTextMatches(query, { language: 'klingon' });
+    // @ts-expect-error the parser checks its language the same way
+    websearchToTsquery('alice', { language: 'klingon' });
   });
 });

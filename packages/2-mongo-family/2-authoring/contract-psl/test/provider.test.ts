@@ -4,7 +4,11 @@ import type { ContractSourceContext } from '@internal/config/config-types';
 import type { JsonValue } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
 import type { PslExtensionBlock } from '@internal/framework-components/authoring';
-import { type Codec, emptyCodecLookup } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  createDataTypeLookup,
+  emptyCodecLookup,
+} from '@internal/framework-components/codec';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
@@ -54,7 +58,9 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
   return {
     composedExtensions: [],
     composedExtensionContracts: new Map(),
+    dataTypeLookup: createDataTypeLookup([]),
     authoringContributions: {
+      dataTypes: {},
       field: {},
       type: mongoScalarAuthoringTypes,
       entityTypes: {},
@@ -64,7 +70,6 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
     },
     codecLookup: emptyCodecLookup,
     controlMutationDefaults: {
-      defaultLiteralTagRegistry: new Map(),
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },

@@ -4,9 +4,11 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -19,8 +21,13 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 
 const baseInput = {
   target: postgresTarget,
+  codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-  authoringContributions: { type: postgresScalarAuthoringTypes },
+  authoringContributions: {
+    type: postgresScalarAuthoringTypes,
+    dataTypes: fixtureDataTypeSupport.entries,
+  },
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },
@@ -1165,6 +1172,7 @@ namespace auth {}`,
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         capabilities: { sql: { scalarList: true } },
       });
 
@@ -1202,6 +1210,7 @@ namespace auth {}`,
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         capabilities: { sql: { scalarList: true } },
       });
 

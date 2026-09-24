@@ -50,6 +50,7 @@ type ModelLike = {
   };
   readonly __attributes: ModelAttributesSpec | undefined;
   readonly __sql: SqlStageSpec | undefined;
+  readonly __duplicateNames: undefined;
   buildAttributesSpec(): ModelAttributesSpec | undefined;
   buildSqlSpec(): SqlStageSpec | undefined;
 };

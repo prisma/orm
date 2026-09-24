@@ -1,6 +1,11 @@
 import type { Block, Presentations, TreeNode } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
-import type { InitOutput } from '../commands/init/output';
+import {
+  DB_SIGN_STEP,
+  type InitOutput,
+  PRISMA7_LOOP_STEP,
+  PRISMA7_QUICK_REFERENCE_STEP,
+} from '../commands/init/output';
 import { chooseAction, runCommandAction } from '../utils/next-actions';
 import { EMIT_COMMAND } from './init-diagnostics';
 
@@ -19,15 +24,31 @@ function scaffoldTree(document: InitOutput): Block {
       children: fileNodes(document.filesDeleted),
     });
   }
+  if (document.filesRenamed.length > 0) {
+    roots.push({
+      label: 'renamed',
+      tone: 'heading',
+      children: document.filesRenamed.map(
+        (entry): TreeNode => ({ label: `${entry.from} → ${entry.to}`, tone: 'identifier' }),
+      ),
+    });
+  }
   const installed = document.packagesInstalled;
   if (installed.status === 'installed') {
+    const moved = new Set(document.prisma7?.packagesMoved ?? []);
+    const suffix = (dep: string, dev: boolean): string => {
+      const notes = [...(dev ? ['dev'] : []), ...(moved.has(dep) ? ['Prisma 7'] : [])];
+      return notes.length === 0 ? dep : `${dep} (${notes.join(', ')})`;
+    };
     roots.push({
       label: 'installed',
       tone: 'heading',
       children: [
-        ...fileNodes(installed.deps),
+        ...installed.deps.map(
+          (dep): TreeNode => ({ label: suffix(dep, false), tone: 'identifier' }),
+        ),
         ...installed.devDeps.map(
-          (dep): TreeNode => ({ label: `${dep} (dev)`, tone: 'identifier' }),
+          (dep): TreeNode => ({ label: suffix(dep, true), tone: 'identifier' }),
         ),
       ],
     });
@@ -43,12 +64,31 @@ function scaffoldTree(document: InitOutput): Block {
 export function buildInitNextActions(inputs: {
   readonly contractEmitted: boolean;
   readonly schemaPath: string;
+  readonly prisma7: { readonly clientMoved: boolean } | null;
 }): readonly NextAction[] {
   const actions: NextAction[] = [
     chooseAction('Set DATABASE_URL in your environment (export it or add it to .env)'),
   ];
   if (!inputs.contractEmitted) {
     actions.push(runCommandAction('Emit the contract', EMIT_COMMAND));
+  }
+  if (inputs.prisma7 !== null) {
+    actions.push(runCommandAction(DB_SIGN_STEP, 'prisma db sign'));
+    actions.push({
+      kind: 'edit-file',
+      label: 'Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts',
+    });
+    actions.push(chooseAction(PRISMA7_LOOP_STEP));
+    if (inputs.prisma7.clientMoved) {
+      actions.push(
+        runCommandAction('Regenerate the Prisma 7 client to match its CLI', 'prisma7 generate'),
+      );
+    }
+    actions.push(chooseAction(PRISMA7_QUICK_REFERENCE_STEP));
+    actions.push(
+      runCommandAction('Set up the Prisma agent skills for your coding agent', 'prisma init'),
+    );
+    return actions;
   }
   actions.push({
     kind: 'edit-file',

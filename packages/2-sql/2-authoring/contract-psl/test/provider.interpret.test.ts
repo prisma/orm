@@ -11,6 +11,7 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { prismaContract } from '../src/exports/provider';
 import { lowerDefaultForField } from '../src/psl-column-resolution';
 import { createSqlBinder } from '../src/sql-attribute-specs';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import { createPostgresTestContext, postgresTarget, testEnumPslBlockDescriptor } from './fixtures';
 
 const baseOptions = {
@@ -207,7 +208,7 @@ model Other {
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
       generatorDescriptorById: new Map(),
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeSupport: fixtureDataTypeSupport,
       codecLookup: context.codecLookup,
       diagnostics,
     });
