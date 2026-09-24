@@ -30,6 +30,7 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   if (!field) throw new Error('expected field id on model M');
   return {
     sources,
+    symbols: symbolTable,
     selfModel,
     field,
     resolveReferencedModel: () => undefined,

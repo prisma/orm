@@ -1163,7 +1163,6 @@ describe('providePslCompletionItems', () => {
       'cuid',
       'ulid',
       'nanoid',
-      'dbgenerated',
     ]);
     expect(
       completeWithActualStack(source('uuid(|)'), stack, options).items.map((item) => item.label),
@@ -1172,7 +1171,6 @@ describe('providePslCompletionItems', () => {
       completeWithActualStack(source('cuid(|)'), stack, options).items.map((item) => item.label),
     ).toEqual(['2']);
     expect(completeWithActualStack(source('nanoid(|)'), stack, options).items).toEqual([]);
-    expect(completeWithActualStack(source('dbgenerated(|)'), stack, options).items).toEqual([]);
     const snippetItems = completeWithActualStack(source('|'), stack, {
       ...options,
       clientSupportsSnippets: true,
@@ -1182,9 +1180,6 @@ describe('providePslCompletionItems', () => {
     );
     expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
       'cuid($' + '{1:version})',
-    );
-    expect(completionItemByLabel(snippetItems, 'dbgenerated').textEdit?.newText).toBe(
-      `dbgenerated("\${1:expression}")`,
     );
   }, 5_000);
 

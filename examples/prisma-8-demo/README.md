@@ -125,6 +125,7 @@ The demo includes ORM client examples under `src/orm-client/`:
 - `ormClientUpsertUser(data, runtime)` — `upsert()` for create-or-update by primary key
 - `ormClientFindUserByIdCached(id, runtime, options?)` — opt-in cached `first({ id })` lookup via `cacheAnnotation({ ttl })` from `@internal/middleware-cache`
 - `ormClientGetUsersCached(limit, runtime, options?)` — opt-in cached `User.all()` listing, with optional explicit cache-key override
+- `ormClientSearchPostsByTitle(query, limit, runtime)` — **full-text search**: `p.title.fullTextMatches(query)` filtered and `p.title.fullTextRank(query).desc()` ordered, over the GIN index `@@fullTextIndex([title])` declares
 
 Run from the CLI:
 
@@ -438,9 +439,11 @@ Run `pnpm dev` for the Vite app that visualizes the contract. It renders directl
 - `scripts/stamp-marker.ts` - Contract marker management
 - `scripts/seed.ts` - Database seeding (includes vector embeddings)
 - `src/queries/similarity-search.ts` - Example vector similarity search query
+- `src/queries/full-text-search.ts` - Example full-text search with `fullTextRank` and `fullTextHeadline`
 - `test/` - Integration tests demonstrating Prisma 8 usage
 
 ## Features Demonstrated
 
 - **Vector Similarity Search**: The demo includes a `similarity-search.ts` query that demonstrates cosine distance operations using the pgvector extension pack.
+- **Full-Text Search**: `Post` declares `@@fullTextIndex([title], name: "post_title_search")` (the TypeScript twin is `fullTextIndex(cols.title, { name: 'post_title_search' })`), which emits a GIN index over `to_tsvector('english', "title")`. `src/orm-client/search-posts-by-title.ts` searches through the ORM with `fullTextMatches` and `fullTextRank`; `src/queries/full-text-search.ts` adds the rank and a `<mark>`-highlighted `fullTextHeadline` through the SQL DSL. The search string is a bound parameter lowered to `websearch_to_tsquery`, so `"an exact phrase"`, `-excluded` and `or` work as in a search box. Try `pnpm start -- repo-search-posts-text second` and `pnpm start -- full-text-search "first or second"`.
 - **Extension Packs**: Shows how to configure and use extension packs (pgvector) in `prisma.config.ts`.

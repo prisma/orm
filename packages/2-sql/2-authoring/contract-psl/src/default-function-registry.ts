@@ -32,6 +32,11 @@ function formatSupportedFunctionList(registry: ControlMutationDefaultRegistry): 
   return signatures.length > 0 ? signatures.join(', ') : 'none';
 }
 
+/** The diagnostic message for a `dbgenerated(...)` call, which raw SQL tagged literals replaced. */
+export function removedDbgeneratedMessage(registry: ControlMutationDefaultRegistry): string {
+  return `Default function "dbgenerated" was removed. Write the SQL as a tagged literal: @default(sql\`<expression>\`). Supported functions: ${formatSupportedFunctionList(registry)}.`;
+}
+
 export function lowerDefaultFunctionWithRegistry(input: {
   readonly call: TypedDefaultFunctionCall;
   readonly registry: ControlMutationDefaultRegistry;

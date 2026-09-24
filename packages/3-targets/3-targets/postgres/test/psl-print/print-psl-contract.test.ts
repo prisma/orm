@@ -270,7 +270,7 @@ describe('column defaults', () => {
     ).toBe('@default(now())');
   });
 
-  it('prints every other function default as dbgenerated', () => {
+  it('prints every other function default as a sql tagged literal', () => {
     expect(
       defaultOf({
         nativeType: 'uuid',
@@ -278,7 +278,7 @@ describe('column defaults', () => {
         nullable: false,
         default: { kind: 'function', expression: 'gen_random_uuid()' },
       }),
-    ).toBe('@default(dbgenerated("gen_random_uuid()"))');
+    ).toBe('@default(sql`gen_random_uuid()`)');
   });
 
   it('refuses a literal default that cannot be written in PSL for the column type', () => {

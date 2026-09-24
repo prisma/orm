@@ -149,7 +149,7 @@ describe('Collection', () => {
         self: ColumnRef.of('posts', 'embedding'),
         args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
         returns: { codecId: 'builtin/float8', nullable: false },
-        lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+        lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
       });
 
       const ordered = postCollection.orderBy(() => OrderByItem.asc(opExpr));
@@ -164,7 +164,7 @@ describe('Collection', () => {
         self: ColumnRef.of('posts', 'embedding'),
         args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
         returns: { codecId: 'builtin/float8', nullable: false },
-        lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+        lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
       });
 
       const ordered = postCollection

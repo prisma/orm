@@ -41,7 +41,7 @@ type FullTextIndexOptions = FullTextIndexNameOptions | FullTextIndexMapOptions;
  * rather than guessed. Pass the same `language` here and to the operation: a
  * mismatch is not an error, the query simply stops using the index.
  */
-export function fullTextIndex<Name extends string>(
+export function fullTextIndex<const Name extends string>(
   column: ColumnRef,
   options: FullTextIndexNameOptions<Name>,
 ): IndexConstraint<never, Name>;

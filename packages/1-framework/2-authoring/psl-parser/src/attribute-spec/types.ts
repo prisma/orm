@@ -3,8 +3,13 @@ import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
 import type { PslDiagnostic } from '../diagnostic';
+import type {
+  EntityDeclaration,
+  EntitySelector,
+  ResolvedEntityReference,
+} from '../entity-reference';
 import type { PslSources } from '../source-file';
-import type { FieldSymbol, ModelSymbol } from '../symbol-table';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 
@@ -12,6 +17,7 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 
 export interface AttributeCtx {
   readonly sources: PslSources;
+  readonly symbols: SymbolTable;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
@@ -53,9 +59,12 @@ export interface BoolArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly kind: 'bool';
 }
 
-export interface EntityRefArgType<Ctx extends AttributeCtx = AttributeCtx>
-  extends ArgTypeOutput<string, Ctx> {
+export interface EntityRefArgType<
+  D extends EntityDeclaration = EntityDeclaration,
+  Ctx extends AttributeCtx = AttributeCtx,
+> extends ArgTypeOutput<ResolvedEntityReference<D>, Ctx> {
   readonly kind: 'entityRef';
+  readonly expected: EntitySelector;
 }
 
 export interface FieldRefArgType<Ctx extends ModelAttributeCtx = ModelAttributeCtx>
@@ -90,7 +99,7 @@ export interface FuncCallArgType<
   readonly signature: Signature;
 }
 
-export interface IdentifierArgType<
+export interface FixedIdentifierArgType<
   Name extends string = string,
   Ctx extends AttributeCtx = AttributeCtx,
 > extends ArgTypeOutput<Name, Ctx> {
@@ -98,6 +107,17 @@ export interface IdentifierArgType<
   readonly name: Name;
   readonly documentation: string;
 }
+
+export interface UnrestrictedIdentifierArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<string, Ctx> {
+  readonly kind: 'identifier';
+  readonly name: undefined;
+}
+
+export type IdentifierArgType<
+  Name extends string = string,
+  Ctx extends AttributeCtx = AttributeCtx,
+> = FixedIdentifierArgType<Name, Ctx> | UnrestrictedIdentifierArgType<Ctx>;
 
 export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<number, Ctx> {
@@ -227,7 +247,7 @@ export type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'fie
 
 export type InspectableArgType<Ctx extends AttributeCtx> =
   | BoolArgType<Ctx>
-  | EntityRefArgType<Ctx>
+  | EntityRefArgType<EntityDeclaration, Ctx>
   | FieldRefArgType<ModelAttributeCtx & Ctx>
   | FuncCallArgType<string, Ctx>
   | IdentifierArgType<string, Ctx>

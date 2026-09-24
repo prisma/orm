@@ -93,7 +93,7 @@ Each default is now printed in the form `contract emit` reads back, so an inferr
 - a `Decimal` or `Numeric` default is quoted decimal text (`@default("1.5")`), the only form that keeps every digit and survives `db init`;
 - a `BigInt` default beyond ±(2^53 − 1) is printed as its digits instead of `dbgenerated(...)`;
 - `NaN` and `Infinity` are printed as quoted text, which the float and numeric codecs accept;
-- a list default holding a `NULL` element is printed as `dbgenerated(...)`, because no PSL list literal spells a null element. Earlier the default was dropped in silence and the column was emitted without it. `contract emit` stops at such a field with a diagnostic; edit the field or drop the default from the inferred file.
+- a list default holding a `NULL` element is printed as `` @default(sql`<expression>`) `` (`dbgenerated(...)` is removed in this release; see the `remove-dbgenerated` fragment), because no PSL list literal spells a null element. Earlier the default was dropped in silence and the column was emitted without it. `contract emit` stops at such a field with a diagnostic; edit the field or drop the default from the inferred file.
 
 If you keep an inferred contract in version control, re-run `contract infer`, review the diff for these spellings, and re-emit. The stored defaults in the database do not change.
 

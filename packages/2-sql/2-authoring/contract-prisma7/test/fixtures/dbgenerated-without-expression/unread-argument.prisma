@@ -1,0 +1,12 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model T {
+  id     Int    @id
+  number String @default(dbgenerated(1))
+  two    String @default(dbgenerated("a", "b"))
+  named  String @default(dbgenerated(expression: "a"))
+  blank  String @default(dbgenerated(""))
+  spaces String @default(dbgenerated("  "))
+}

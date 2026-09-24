@@ -330,7 +330,7 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Item {
-        id Uuid @id @default(dbgenerated("gen_random_uuid()"))
+        id Uuid @id @default(sql\`gen_random_uuid()\`)
 
         @@map("item")
       }
@@ -392,7 +392,7 @@ describe('printPsl', () => {
     `);
   });
 
-  it('preserves raw Postgres defaults via dbgenerated attributes', () => {
+  it('preserves raw Postgres defaults as sql tagged literals', () => {
     const schemaIR = new SqlSchemaIR({
       tables: {
         data: {
@@ -432,9 +432,9 @@ describe('printPsl', () => {
 
       model Data {
         id        Int         @id
-        computed  String      @default(dbgenerated("my_custom_func()"))
+        computed  String      @default(sql\`my_custom_func()\`)
         payload   Jsonb       @default(json\`{}\`)
-        touchedAt Timestamptz @default(dbgenerated("clock_timestamp()")) @map("touched_at")
+        touchedAt Timestamptz @default(sql\`clock_timestamp()\`) @map("touched_at")
 
         @@map("data")
       }

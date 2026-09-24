@@ -20,7 +20,7 @@ const defaultMapping = createPostgresDefaultMapping();
  * A literal prints as the PSL literal the column's data type reads back, the
  * same mapping `contract infer` uses; a domain enum's literal prints as the
  * member name that carries it; `now()` and `autoincrement()` print by name;
- * every other function default prints as `dbgenerated("…")`.
+ * every other function default prints as a `sql` tagged literal.
  *
  * A literal no data type of the column writes is refused, because every
  * literal that would parse reads back as a different value.
@@ -64,7 +64,7 @@ export function printColumnDefault(input: {
     columnDataType: dataTypeForPrintedType(input.pslTypeName, input.isEnum),
     list: input.column.many === true,
   });
-  if ('comment' in result) {
+  if (result === undefined) {
     throw postgresError(
       'CONTRACT.PRINT_UNSUPPORTED',
       `contract print: column ${coordinate} has a default that cannot be written in Prisma 8 PSL: no data type the ${input.pslTypeName} type takes writes ${columnDefault.kind === 'literal' ? JSON.stringify(columnDefault.value) : columnDefault.expression}.`,

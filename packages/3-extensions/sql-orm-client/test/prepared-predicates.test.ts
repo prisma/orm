@@ -133,7 +133,7 @@ const wrappers: ReadonlyArray<readonly [string, (expr: AnyExpression) => AnyExpr
         self: expr,
         args: undefined,
         returns: { codecId: 'pg/bool@1', nullable: false },
-        lowering: { targetFamily: 'sql', strategy: 'function', template: 'identity({0})' },
+        lowering: { targetFamily: 'sql', template: 'identity({0})' },
       }),
   ],
   ['aggregate', (expr) => AggregateExpr.max(expr)],

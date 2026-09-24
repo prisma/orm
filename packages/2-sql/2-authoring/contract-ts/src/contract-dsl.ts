@@ -1090,11 +1090,14 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function index<FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  function index<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: IndexInput<Name, IndexTypes>,
   ): IndexConstraint<FieldNames, Name>;
-  function index<Name extends string | undefined = undefined>(
+  function index<const Name extends string | undefined = undefined>(
     options: ExpressionIndexInput<Name, IndexTypes>,
   ): IndexConstraint<never, Name>;
   function index(
@@ -1149,7 +1152,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     SourceFieldName extends string,
     TargetModelName extends string,
     TargetFieldName extends string,
-    Name extends string | undefined = undefined,
+    const Name extends string | undefined = undefined,
   >(
     field: ColumnRef<SourceFieldName>,
     target: TargetFieldRef<TargetModelName, TargetFieldName>,
@@ -1164,7 +1167,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     SourceFieldNames extends readonly string[],
     TargetModelName extends string,
     TargetFieldNames extends readonly string[],
-    Name extends string | undefined = undefined,
+    const Name extends string | undefined = undefined,
   >(
     fields: { readonly [K in keyof SourceFieldNames]: ColumnRef<SourceFieldNames[K] & string> },
     target: {
@@ -1257,11 +1260,11 @@ type AttributeContext<Fields extends Record<string, ScalarFieldBuilder>> = {
 };
 
 type PackAwareIndex<IndexTypes extends IndexTypeMap> = {
-  <FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  <FieldNames extends readonly string[], const Name extends string | undefined = undefined>(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: IndexInput<Name, IndexTypes>,
   ): IndexConstraint<FieldNames, Name>;
-  <Name extends string | undefined = undefined>(
+  <const Name extends string | undefined = undefined>(
     options: ExpressionIndexInput<Name, IndexTypes>,
   ): IndexConstraint<never, Name>;
 };

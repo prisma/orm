@@ -62,7 +62,7 @@ test('Expression from buildOperation typechecks as an interpolation', () => {
     method: 'lower',
     args: [ColumnRef.of('t', 'name')],
     returns: { codecId: 'pg/text', nullable: false },
-    lowering: { targetFamily: 'sql', strategy: 'function', template: 'lower({{self}})' },
+    lowering: { targetFamily: 'sql', template: 'lower({{self}})' },
   });
   assertType<Expression<{ codecId: string; nullable: boolean }>>(inner);
   const outer = rawSql`result = ${inner}`.returns('pg/text');

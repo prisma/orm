@@ -87,11 +87,8 @@ export interface DiffableNode {
   children(): readonly DiffableNode[];
 }
 
-/** Delimiter joining `nodeKind` and `id` into one sibling-map key. Every `nodeKind` is a code-defined literal (kebab-case-style), so a null character can never appear in one. */
-const SIBLING_KEY_DELIMITER = '\u0000';
-
 function siblingKey(node: DiffableNode): string {
-  return `${node.nodeKind}${SIBLING_KEY_DELIMITER}${node.id}`;
+  return JSON.stringify([node.nodeKind, node.id]);
 }
 
 function insertNode(map: Map<string, DiffableNode>, node: DiffableNode): void {
@@ -143,11 +140,11 @@ export function diffSchemas(
 }
 
 function schemaNodeRefKey(ref: SchemaNodeRef): string {
-  return ref.map((step) => step.id).join(SIBLING_KEY_DELIMITER);
+  return JSON.stringify(ref.map((step) => step.id));
 }
 
 function issuePathKey(path: readonly string[]): string {
-  return path.join(SIBLING_KEY_DELIMITER);
+  return JSON.stringify(path);
 }
 
 function terminalNodeKind(issue: SchemaDiffIssue): string | undefined {

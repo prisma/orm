@@ -95,7 +95,7 @@ describe('printPsl literal defaults', () => {
       `);
     });
 
-    it('prints a default that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
+    it('prints a default that has no PSL literal as a sql tagged literal holding the expression Postgres printed', () => {
       const output = printTable('raw_defaults', [
         introspected('stamp', 'timestamp(3)', "'2024-01-01 00:00:00'::timestamp without time zone"),
         introspected('day', 'date', "'2024-01-01'::date"),
@@ -114,7 +114,7 @@ describe('printPsl literal defaults', () => {
           stamp    Timestamp(3) @default("2024-01-01 00:00:00")
           day      Date         @default("2024-01-01")
           jsonNull Jsonb?       @default(json\`null\`)
-          textNull VarChar(32)? @default(dbgenerated("NULL::character varying"))
+          textNull VarChar(32)? @default(sql\`NULL::character varying\`)
 
           @@map("raw_defaults")
         }
@@ -219,7 +219,7 @@ describe('printPsl literal defaults', () => {
       `);
     });
 
-    it('prints a default with an element that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
+    it('prints a default with an element that has no PSL literal as a sql tagged literal holding the expression Postgres printed', () => {
       const output = printTable('raw_list_defaults', [
         introspected(
           'timestamps',

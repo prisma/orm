@@ -3,7 +3,6 @@ import {
   loweringEntryKey,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { createSqliteDefaultFunctionRegistry } from '../src/core/control-mutation-defaults';
 import { createSqliteDataTypeEntries } from '../src/core/data-type-authoring';
 import sqliteAdapterDescriptor from '../src/exports/control';
 
@@ -17,65 +16,6 @@ const stubContext = {
   modelName: 'TestModel',
   fieldName: 'testField',
 } as const;
-
-function makeCall(fn: string, args: Record<string, unknown> = {}) {
-  return { fn, span: stubSpan, args };
-}
-
-describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization', () => {
-  const registry = createSqliteDefaultFunctionRegistry();
-  const dbgenerated = registry.get('dbgenerated');
-  if (!dbgenerated) throw new Error('expected `dbgenerated` registry entry');
-
-  // Symmetric with `parseSqliteDefault` on the introspection side: SQLite's
-  // synonyms for "current wall-clock time" all canonicalize to `now()` so
-  // the verifier compares canonical-vs-canonical and a contract using
-  // `dbgenerated("CURRENT_TIMESTAMP")` doesn't drift against the schema it
-  // just produced.
-  it('canonicalizes dbgenerated("CURRENT_TIMESTAMP") to { function "now()" }', () => {
-    const result = dbgenerated.lower({
-      call: makeCall('dbgenerated', { expression: 'CURRENT_TIMESTAMP' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: { kind: 'storage', defaultValue: { kind: 'function', expression: 'now()' } },
-    });
-  });
-
-  it('canonicalizes dbgenerated("current_timestamp") (lowercase) to { function "now()" }', () => {
-    const result = dbgenerated.lower({
-      call: makeCall('dbgenerated', { expression: 'current_timestamp' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: { kind: 'storage', defaultValue: { kind: 'function', expression: 'now()' } },
-    });
-  });
-
-  it('canonicalizes dbgenerated("datetime(\'now\')") to { function "now()" }', () => {
-    const result = dbgenerated.lower({
-      call: makeCall('dbgenerated', { expression: "datetime('now')" }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: { kind: 'storage', defaultValue: { kind: 'function', expression: 'now()' } },
-    });
-  });
-
-  it('preserves unknown expressions verbatim', () => {
-    const result = dbgenerated.lower({
-      call: makeCall('dbgenerated', { expression: 'random()' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: { kind: 'storage', defaultValue: { kind: 'function', expression: 'random()' } },
-    });
-  });
-});
 
 describe('createSqliteDataTypeEntries', () => {
   const entries = createSqliteDataTypeEntries();

@@ -15,7 +15,9 @@ import { describe, expect, it } from 'vitest';
 import {
   fieldSpecContext,
   findFieldAttributeNode,
+  findModelAttributeNode,
   interpretFieldAttribute,
+  interpretModelAttribute,
   modelSpecContext,
   sqlAttributeSpecs,
 } from '../src/sql-attribute-specs';
@@ -106,6 +108,7 @@ function interpretDefault(schema: string, fieldName: string) {
   if (node === undefined) throw new Error('no @default on field');
   const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
+    symbols: symbolTable,
     node,
     spec: sqlAttributeSpecs.field.default(
       fieldSpecContext({ symbols: symbolTable, model, field: target, controlMutationDefaults }),
@@ -117,6 +120,34 @@ function interpretDefault(schema: string, fieldName: string) {
   });
   return { value, diagnostics: diagnostics.toExternal() };
 }
+
+describe('checked base factory', () => {
+  it('returns the forward-declared local base identity', () => {
+    const input = buildSymbolTableInput(`model Base { id Int @id }
+namespace scoped {
+  model Variant { @@base(Base, "variant") }
+  model Base { id String @id }
+}`);
+    const namespace = input.symbolTable.topLevel.namespaces['scoped'];
+    const model = namespace?.models['Variant'];
+    if (!namespace || !model) throw new Error('missing variant');
+    const node = findModelAttributeNode(model, 'base');
+    if (!node) throw new Error('missing base attribute');
+    const diagnostics = createPslDiagnosticCollector(input.sources);
+    const value = interpretModelAttribute({
+      node,
+      symbols: input.symbolTable,
+      spec: sqlAttributeSpecs.model.base(),
+      model,
+      sources: input.sources,
+      diagnostics,
+    });
+    expect(diagnostics.toExternal()).toEqual([]);
+    expect(value?.base.declaration).toBe(namespace.models['Base']);
+    expect(value?.base.namespace).toBe(namespace);
+    expect(value?.value).toBe('variant');
+  });
+});
 
 describe('sqlAttributeSpecs', () => {
   const { symbolTable, model } = project(
@@ -252,7 +283,6 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
-      'funcCall',
       // One tagged-literal arm per distinct tag documentation: the sql tags, then json.
       'taggedLiteral',
       'taggedLiteral',
@@ -306,7 +336,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       value.alternatives
         .filter((alt) => alt.kind === 'funcCall')
         .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
-    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
+    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']);
     expect(value.alternatives.filter((alt) => alt.kind === 'taggedLiteral')).toMatchObject([
       {
         label: 'json`...`',

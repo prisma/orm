@@ -242,7 +242,7 @@ export function flushAuthoringWarnings(warnings: readonly AuthoringWarning[]): v
   // warnings sharing a code but differing in summary never share a batch.
   const groups = new Map<string, AuthoringWarning[]>();
   for (const warning of warnings) {
-    const key = `${warning.code}\u0000${warning.summary}`;
+    const key = JSON.stringify([warning.code, warning.summary]);
     const group = groups.get(key) ?? [];
     group.push(warning);
     groups.set(key, group);

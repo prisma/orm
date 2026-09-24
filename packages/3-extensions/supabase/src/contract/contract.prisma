@@ -86,7 +86,7 @@ namespace auth {
   }
 
   model AuthIdentity {
-    id           Id           @id(map: "identities_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id           Id           @id(map: "identities_pkey") @default(sql`gen_random_uuid()`)
     providerId   String       @map("provider_id")
     userId       Id           @map("user_id")
     identityData Jsonb        @map("identity_data")
@@ -161,7 +161,7 @@ namespace auth {
   }
 
   model CustomOauthProviders {
-    id                  Id           @id(map: "custom_oauth_providers_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id                  Id           @id(map: "custom_oauth_providers_pkey") @default(sql`gen_random_uuid()`)
     providerType        String       @map("provider_type")
     identifier          String       @unique(map: "custom_oauth_providers_identifier_key")
     name                String
@@ -170,8 +170,8 @@ namespace auth {
     acceptableClientIds String[]     @default([]) @noCheck(elementNotNull) @map("acceptable_client_ids")
     scopes              String[]     @default([]) @noCheck(elementNotNull)
     pkceEnabled         Boolean      @default(true) @map("pkce_enabled")
-    attributeMapping    Jsonb        @default(dbgenerated("'{}'::jsonb")) @map("attribute_mapping")
-    authorizationParams Jsonb        @default(dbgenerated("'{}'::jsonb")) @map("authorization_params")
+    attributeMapping    Jsonb        @default(json`{}`) @map("attribute_mapping")
+    authorizationParams Jsonb        @default(json`{}`) @map("authorization_params")
     enabled             Boolean      @default(true)
     emailOptional       Boolean      @default(false) @map("email_optional")
     issuer              String?
@@ -317,7 +317,7 @@ namespace auth {
     status              pg.enum(OauthAuthorizationStatus) @default("pending")
     authorizationCode   String?                           @unique(map: "oauth_authorizations_authorization_code_key") @map("authorization_code")
     createdAt           Timestamptz                       @default(now()) @map("created_at")
-    expiresAt           Timestamptz                       @default(dbgenerated("(now() + '00:03:00'::interval)")) @map("expires_at")
+    expiresAt           Timestamptz                       @default(sql`(now() + '00:03:00'::interval)`) @map("expires_at")
     approvedAt          Timestamptz?                      @map("approved_at")
     nonce               String?
     client              OauthClients                      @relation(fields: [clientId], references: [id], onDelete: Cascade, map: "oauth_authorizations_client_id_fkey", index: false)
@@ -484,7 +484,7 @@ namespace auth {
   }
 
   model WebauthnChallenges {
-    id            Id          @id(map: "webauthn_challenges_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id            Id          @id(map: "webauthn_challenges_pkey") @default(sql`gen_random_uuid()`)
     userId        Id?         @map("user_id")
     challengeType String      @map("challenge_type")
     sessionData   Jsonb       @map("session_data")
@@ -499,14 +499,14 @@ namespace auth {
   }
 
   model WebauthnCredentials {
-    id              Id           @id(map: "webauthn_credentials_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id              Id           @id(map: "webauthn_credentials_pkey") @default(sql`gen_random_uuid()`)
     userId          Id           @map("user_id")
     credentialId    Bytes        @map("credential_id")
     publicKey       Bytes        @map("public_key")
     attestationType String       @default("") @map("attestation_type")
     aaguid          Id?
     signCount       BigInt       @default(0) @map("sign_count")
-    transports      Jsonb        @default(dbgenerated("'[]'::jsonb"))
+    transports      Jsonb        @default(json`[]`)
     backupEligible  Boolean      @default(false) @map("backup_eligible")
     backedUp        Boolean      @default(false) @map("backed_up")
     friendlyName    String       @default("") @map("friendly_name")
@@ -584,7 +584,7 @@ namespace auth {
 
 namespace storage {
   model BucketsAnalytics {
-    id                Id                  @id(map: "buckets_analytics_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id                Id                  @id(map: "buckets_analytics_pkey") @default(sql`gen_random_uuid()`)
     name              String
     _type             pg.enum(Buckettype) @default("ANALYTICS") @map("type")
     format            String              @default("ICEBERG")
@@ -611,12 +611,12 @@ namespace storage {
   }
 
   model IcebergNamespaces {
-    id            Id               @id(map: "iceberg_namespaces_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id            Id               @id(map: "iceberg_namespaces_pkey") @default(sql`gen_random_uuid()`)
     bucketName    String           @map("bucket_name")
     name          String
     createdAt     Timestamptz      @default(now()) @map("created_at")
     updatedAt     Timestamptz      @default(now()) @map("updated_at")
-    metadata      Jsonb            @default(dbgenerated("'{}'::jsonb"))
+    metadata      Jsonb            @default(json`{}`)
     catalogId     Id               @map("catalog_id")
     icebergTables IcebergTables[]
     catalog       BucketsAnalytics @relation(fields: [catalogId], references: [id], onDelete: Cascade, map: "iceberg_namespaces_catalog_id_fkey", index: false)
@@ -627,7 +627,7 @@ namespace storage {
   }
 
   model IcebergTables {
-    id            Id                @id(map: "iceberg_tables_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id            Id                @id(map: "iceberg_tables_pkey") @default(sql`gen_random_uuid()`)
     namespaceId   Id                @map("namespace_id")
     bucketName    String            @map("bucket_name")
     name          String
@@ -698,7 +698,7 @@ namespace storage {
   }
 
   model S3MultipartUploadsParts {
-    id         Id                 @id(map: "s3_multipart_uploads_parts_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id         Id                 @id(map: "s3_multipart_uploads_parts_pkey") @default(sql`gen_random_uuid()`)
     uploadId   String             @map("upload_id")
     size       BigInt             @default(0)
     partNumber Int                @map("part_number")
@@ -716,7 +716,7 @@ namespace storage {
   }
 
   model StorageObject {
-    id             Id             @id(map: "objects_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id             Id             @id(map: "objects_pkey") @default(sql`gen_random_uuid()`)
     bucketId       String?        @map("bucket_id")
     name           String?
     owner          Id?
@@ -739,7 +739,7 @@ namespace storage {
   }
 
   model VectorIndexes {
-    id                    String         @id(map: "vector_indexes_pkey") @default(dbgenerated("gen_random_uuid()"))
+    id                    String         @id(map: "vector_indexes_pkey") @default(sql`gen_random_uuid()`)
     name                  String
     bucketId              String         @map("bucket_id")
     dataType              String         @map("data_type")

@@ -3,7 +3,7 @@
  * the index's name and refuse a duplicate exactly as it does for
  * `constraints.index`. A `map:` index carries no wire name and so never collides.
  */
-import type { ColumnRef } from '@internal/sql-contract-ts/contract-builder';
+import type { ColumnRef, ContractModelBuilder } from '@internal/sql-contract-ts/contract-builder';
 import { expectTypeOf, test } from 'vitest';
 import { field, fullTextIndex, model } from '../../src/exports/contract-builder';
 
@@ -25,22 +25,52 @@ test('a map: index carries no wire name', () => {
   expectTypeOf(index.name).toEqualTypeOf<undefined>();
 });
 
-/**
- * Duplicate-name detection does not currently fire for indexes from either
- * helper: `constraints.index` is reachable only inside `sql(callback)`, which
- * widens the returned tuple, and `IndexConstraint.name` is optional, so
- * `NamedConstraintLiteralName` sees `Name | undefined` rather than a literal.
- * Keeping `Name` literal here is the half this helper owns; the day the check
- * starts biting, it bites this helper too.
- */
-test('two indexes with distinct names are accepted in the object form', () => {
-  const text: ColumnRef<'text'> = { kind: 'columnRef', fieldName: 'text' };
+type SqlSpecOf<Builder> =
+  Builder extends ContractModelBuilder<
+    infer _ModelName,
+    infer _Fields,
+    infer _Relations,
+    infer _Attributes,
+    infer SqlSpec,
+    infer _IndexTypes,
+    infer _SpaceId
+  >
+    ? SqlSpec
+    : never;
 
-  model('Message', { fields }).sql({
+type IsNever<T> = [T] extends [never] ? true : false;
+
+const text: ColumnRef<'text'> = { kind: 'columnRef', fieldName: 'text' };
+
+test('two indexes with distinct names are accepted', () => {
+  const message = model('Message', { fields }).sql({
     table: 'message',
     indexes: [
       fullTextIndex(text, { name: 'message_search' }),
       fullTextIndex(text, { language: 'german', name: 'message_search_de' }),
     ],
   });
+  expectTypeOf<IsNever<SqlSpecOf<typeof message>>>().toEqualTypeOf<false>();
+});
+
+test('two indexes with the same name are rejected by the sql() stage', () => {
+  const message = model('Message', { fields }).sql({
+    table: 'message',
+    indexes: [
+      fullTextIndex(text, { name: 'message_search' }),
+      fullTextIndex(text, { language: 'german', name: 'message_search' }),
+    ],
+  });
+  expectTypeOf<IsNever<SqlSpecOf<typeof message>>>().toEqualTypeOf<true>();
+});
+
+test('a fullTextIndex and a constraints.index with the same name are rejected', () => {
+  const message = model('Message', { fields }).sql(({ cols, constraints }) => ({
+    table: 'message',
+    indexes: [
+      fullTextIndex(cols.text, { name: 'message_search' }),
+      constraints.index([cols.id], { name: 'message_search' }),
+    ],
+  }));
+  expectTypeOf<IsNever<SqlSpecOf<typeof message>>>().toEqualTypeOf<true>();
 });

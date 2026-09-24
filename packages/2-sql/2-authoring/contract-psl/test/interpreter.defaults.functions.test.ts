@@ -17,7 +17,7 @@ describe('interpretPslDocumentToSqlContract default function lowering', () => {
   idUlid String @default(ulid())
   idNanoidDefault String @default(nanoid())
   idNanoidSized String @default(nanoid(16))
-  dbExpr String @default(dbgenerated("gen_random_uuid()"))
+  dbExpr String @default(sql\`gen_random_uuid()\`)
   createdAt DateTime @default(now())
 }`,
       sourceId: 'schema.prisma',
@@ -228,7 +228,6 @@ model UuidNativeBad {
   cuidValue String @default(cuid())
   badUuid String @default(uuid(5))
   badNanoid String @default(nanoid(1))
-  emptyDbExpr String @default(dbgenerated(""))
 }`,
       sourceId: 'schema.prisma',
     });
@@ -247,13 +246,40 @@ model UuidNativeBad {
           code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
           sourceId: 'schema.prisma',
         }),
-        expect.objectContaining({
-          code: 'PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT',
-          sourceId: 'schema.prisma',
-          message: expect.stringContaining('dbgenerated'),
-        }),
       ]),
     );
+  });
+
+  it('reports dbgenerated as removed and names the tagged literal that replaces it', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Removed {
+  id Int @id
+  token String @default(dbgenerated("gen_random_uuid()"))
+  bare String @default(dbgenerated())
+}`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+
+    const message =
+      'Default function "dbgenerated" was removed. Write the SQL as a tagged literal: @default(sql`<expression>`). Supported functions: autoincrement(), cuid(2), nanoid(), nanoid(<2-255>), now(), ulid(), uuid(), uuid(4), uuid(7).';
+    expect(
+      result.failure.diagnostics.map(({ code, message, span }) => ({
+        code,
+        message,
+        line: span?.start.line,
+      })),
+    ).toEqual([
+      { code: 'PSL_UNKNOWN_DEFAULT_FUNCTION', message, line: 3 },
+      { code: 'PSL_UNKNOWN_DEFAULT_FUNCTION', message, line: 4 },
+    ]);
   });
 
   it('returns diagnostics for optional fields with execution defaults', () => {
@@ -286,12 +312,11 @@ model UuidNativeBad {
     );
   });
 
-  it('preserves raw dbgenerated defaults for timestamp and json columns', () => {
+  it('preserves raw sql defaults for timestamp columns', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Defaults {
   id Int @id
-  touchedAt DateTime @default(dbgenerated("clock_timestamp()"))
-  payload Jsonb @default(dbgenerated("'{}'::jsonb"))
+  touchedAt DateTime @default(sql\`clock_timestamp()\`)
 }`,
       sourceId: 'schema.prisma',
     });
@@ -315,12 +340,6 @@ model UuidNativeBad {
                     default: {
                       kind: 'function',
                       expression: 'clock_timestamp()',
-                    },
-                  },
-                  payload: {
-                    default: {
-                      kind: 'function',
-                      expression: "'{}'::jsonb",
                     },
                   },
                 },

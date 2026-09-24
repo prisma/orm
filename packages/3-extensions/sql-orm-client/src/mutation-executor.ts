@@ -1275,7 +1275,7 @@ function getRelationDefinitions(
     perContract = new Map();
     relationDefsCache.set(contract, perContract);
   }
-  const cacheKey = `${namespaceId}\u0000${modelName}`;
+  const cacheKey = JSON.stringify([namespaceId, modelName]);
   const cached = perContract.get(cacheKey);
   if (cached) return cached;
 

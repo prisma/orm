@@ -944,6 +944,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.control(),
         model,
+        symbols: input.symbolTable,
         sources: input.sources,
         diagnostics,
       });
@@ -979,6 +980,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.id(),
         model,
+        symbols: input.symbolTable,
         sources: input.sources,
         diagnostics,
       });
@@ -1023,6 +1025,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.unique(),
         model,
+        symbols: input.symbolTable,
         sources: input.sources,
         diagnostics,
       });
@@ -1056,6 +1059,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.index(),
         model,
+        symbols: input.symbolTable,
         sources: input.sources,
         diagnostics,
       });
@@ -1115,6 +1119,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.check(),
         model,
+        symbols: input.symbolTable,
         sources: input.sources,
         diagnostics,
       });
@@ -1164,6 +1169,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           },
         }),
         model,
+        symbols: input.symbolTable,
         sources: input.sources,
         diagnostics,
       });
@@ -1703,15 +1709,22 @@ type DiscriminatorDeclaration = {
   readonly span: ContractSourceDiagnosticSpan;
 };
 
+type ModelIdentity = {
+  readonly model: ModelSymbol;
+  readonly namespaceId: string;
+  readonly key: string;
+};
+
 type BaseDeclaration = {
   readonly source: DiagnosticSource;
-  readonly baseName: string;
+  readonly base: ModelIdentity;
   readonly value: string;
   readonly span: ContractSourceDiagnosticSpan;
 };
 
 function collectPolymorphismDeclarations(
-  models: readonly ModelSymbol[],
+  identities: ReadonlyMap<ModelSymbol, ModelIdentity>,
+  symbols: SymbolTable,
   sources: PslSources,
   diagnostics: PslDiagnosticCollector,
 ): {
@@ -1721,12 +1734,13 @@ function collectPolymorphismDeclarations(
   const discriminatorDeclarations = new Map<string, DiscriminatorDeclaration>();
   const baseDeclarations = new Map<string, BaseDeclaration>();
 
-  for (const model of models) {
+  for (const { model, key } of identities.values()) {
     const source = diagnosticSource(sources, model.node.syntax);
     const discriminatorNode = findModelAttributeNode(model, 'discriminator');
     if (discriminatorNode !== undefined) {
       const parsed = interpretModelAttribute({
         node: discriminatorNode,
+        symbols,
         spec: sqlAttributeSpecs.model.discriminator(),
         model,
         sources,
@@ -1742,7 +1756,7 @@ function collectPolymorphismDeclarations(
             ...source.at(span),
           });
         } else {
-          discriminatorDeclarations.set(model.name, { fieldName: parsed.field, span, source });
+          discriminatorDeclarations.set(key, { fieldName: parsed.field, span, source });
         }
       }
     }
@@ -1751,15 +1765,21 @@ function collectPolymorphismDeclarations(
     if (baseNode !== undefined) {
       const parsed = interpretModelAttribute({
         node: baseNode,
+        symbols,
         spec: sqlAttributeSpecs.model.base(),
         model,
         sources,
         diagnostics,
       });
       if (parsed !== undefined) {
-        baseDeclarations.set(model.name, {
+        const base = identities.get(parsed.base.declaration);
+        invariant(
+          base !== undefined,
+          `Resolved base model "${parsed.base.declaration.name}" is missing from the collected model identities`,
+        );
+        baseDeclarations.set(key, {
           source,
-          baseName: parsed.base,
+          base,
           value: parsed.value,
           span: nodePslSpan(baseNode.syntax, sources),
         });
@@ -1774,25 +1794,18 @@ function resolvePolymorphism(
   models: Record<string, ContractModel>,
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>,
   baseDeclarations: Map<string, BaseDeclaration>,
-  modelNames: Set<string>,
   modelMappings: ReadonlyMap<string, ModelNameMapping>,
-  modelNamespaceIds: ReadonlyMap<string, string>,
-  defaultNamespaceId: string,
   syntheticPkFieldsByVariant: ReadonlyMap<string, readonly string[]>,
   stiBaseFieldsByBase: ReadonlyMap<string, readonly string[]>,
   diagnostics: PslDiagnosticCollector,
 ): Record<string, ContractModel> {
   let patched = models;
 
-  const coordinateFor = (modelName: string): string =>
-    modelCoordinateKey(modelNamespaceIds.get(modelName) ?? defaultNamespaceId, modelName);
-
   // STI variant columns were materialised onto the base storage table so the
   // variants' `storage.fields` resolve. They are storage-only on the base — the
   // domain field belongs to the variant — so strip them from the base model's
   // domain + storage field maps (the table column, built upstream, stays).
-  for (const [baseName, fieldNames] of stiBaseFieldsByBase) {
-    const baseKey = coordinateFor(baseName);
+  for (const [baseKey, fieldNames] of stiBaseFieldsByBase) {
     const baseModel = patched[baseKey];
     if (!baseModel || fieldNames.length === 0) continue;
     patched = {
@@ -1801,8 +1814,9 @@ function resolvePolymorphism(
     };
   }
 
-  for (const [modelName, decl] of discriminatorDeclarations) {
-    if (baseDeclarations.has(modelName)) {
+  for (const [modelKey, decl] of discriminatorDeclarations) {
+    const modelName = modelMappings.get(modelKey)?.model.name;
+    if (baseDeclarations.has(modelKey)) {
       diagnostics.push({
         code: 'PSL_DISCRIMINATOR_AND_BASE',
         message: `Model "${modelName}" cannot have both @@discriminator and @@base`,
@@ -1811,14 +1825,19 @@ function resolvePolymorphism(
       continue;
     }
 
-    const model = patched[coordinateFor(modelName)];
+    const model = patched[modelKey];
     if (!model) continue;
 
     const variants: Record<string, { readonly value: string }> = {};
     const seenValues = new Map<string, string>();
 
-    for (const [variantName, baseDecl] of baseDeclarations) {
-      if (baseDecl.baseName !== modelName) continue;
+    for (const [variantKey, baseDecl] of baseDeclarations) {
+      if (baseDecl.base.key !== modelKey) continue;
+      const variantName = modelMappings.get(variantKey)?.model.name;
+      invariant(
+        variantName !== undefined,
+        `Variant "${variantKey}" is missing from the model mappings`,
+      );
 
       const existingVariant = seenValues.get(baseDecl.value);
       if (existingVariant) {
@@ -1844,56 +1863,46 @@ function resolvePolymorphism(
 
     patched = {
       ...patched,
-      [coordinateFor(modelName)]: { ...model, discriminator: { field: decl.fieldName }, variants },
+      [modelKey]: { ...model, discriminator: { field: decl.fieldName }, variants },
     };
   }
 
-  for (const [variantName, baseDecl] of baseDeclarations) {
-    if (!modelNames.has(baseDecl.baseName)) {
-      diagnostics.push({
-        code: 'PSL_BASE_TARGET_NOT_FOUND',
-        message: `Model "${variantName}" @@base references non-existent model "${baseDecl.baseName}"`,
-        ...baseDecl.source.at(baseDecl.span),
-      });
-      continue;
-    }
-
-    if (!discriminatorDeclarations.has(baseDecl.baseName)) {
+  for (const [variantKey, baseDecl] of baseDeclarations) {
+    const variantMapping = modelMappings.get(variantKey);
+    const variantName = variantMapping?.model.name;
+    const baseName = baseDecl.base.model.name;
+    if (!discriminatorDeclarations.has(baseDecl.base.key)) {
       diagnostics.push({
         code: 'PSL_ORPHANED_BASE',
-        message: `Model "${variantName}" declares @@base(${baseDecl.baseName}, ...) but "${baseDecl.baseName}" has no @@discriminator`,
+        message: `Model "${variantName}" declares @@base(${baseName}, ...) but "${baseName}" has no @@discriminator`,
         ...baseDecl.source.at(baseDecl.span),
       });
       continue;
     }
 
-    if (discriminatorDeclarations.has(variantName)) {
+    if (discriminatorDeclarations.has(variantKey)) {
       continue;
     }
 
-    const variantModel = patched[coordinateFor(variantName)];
+    const variantModel = patched[variantKey];
     if (!variantModel) continue;
 
-    const baseMapping = modelMappings.get(baseDecl.baseName);
-    const variantMapping = modelMappings.get(variantName);
+    const baseMapping = modelMappings.get(baseDecl.base.key);
     const hasExplicitMap =
       variantMapping?.model.attributes.some((attr) => attr.name === 'map') ?? false;
     const resolvedTable = hasExplicitMap ? variantMapping?.tableName : baseMapping?.tableName;
 
     const patchedVariant: ContractModel = {
       ...variantModel,
-      base: crossRef(
-        baseDecl.baseName,
-        modelNamespaceIds.get(baseDecl.baseName) ?? defaultNamespaceId,
-      ),
+      base: crossRef(baseName, baseDecl.base.namespaceId),
       ...(resolvedTable ? { storage: { ...variantModel.storage, table: resolvedTable } } : {}),
     };
 
     patched = {
       ...patched,
-      [coordinateFor(variantName)]: stripStorageOnlyDomainFields(
+      [variantKey]: stripStorageOnlyDomainFields(
         patchedVariant,
-        syntheticPkFieldsByVariant.get(variantName) ?? [],
+        syntheticPkFieldsByVariant.get(variantKey) ?? [],
       ),
     };
   }
@@ -1918,20 +1927,24 @@ function resolvePolymorphism(
 function materializeMtiVariantStorageLinks(
   modelNodes: readonly ModelNode[],
   baseDeclarations: ReadonlyMap<string, BaseDeclaration>,
-  stiVariantNames: ReadonlySet<string>,
+  stiVariantKeys: ReadonlySet<string>,
+  defaultNamespaceId: string,
 ): { modelNodes: ModelNode[]; syntheticPkFieldsByVariant: Map<string, readonly string[]> } {
-  const nodeByModel = new Map(modelNodes.map((node) => [node.modelName, node]));
+  const keyOf = (node: ModelNode) =>
+    modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName);
+  const nodeByModel = new Map(modelNodes.map((node) => [keyOf(node), node]));
   const syntheticPkFieldsByVariant = new Map<string, readonly string[]>();
 
   const enriched = modelNodes.map((node): ModelNode => {
-    const baseDecl = baseDeclarations.get(node.modelName);
+    const variantKey = keyOf(node);
+    const baseDecl = baseDeclarations.get(variantKey);
     if (!baseDecl) return node;
-    const baseNode = nodeByModel.get(baseDecl.baseName);
+    const baseNode = nodeByModel.get(baseDecl.base.key);
     if (!baseNode) return node;
     // Single-table inheritance (no own `@@map`) shares the base table; it gets
     // its columns materialised onto the base instead (see
     // {@link materializeStiVariantStorageColumns}), never a link column.
-    if (stiVariantNames.has(node.modelName)) return node;
+    if (stiVariantKeys.has(variantKey)) return node;
     const basePrimaryKey = baseNode.id;
     if (!basePrimaryKey || basePrimaryKey.columns.length === 0) return node;
 
@@ -1953,7 +1966,7 @@ function materializeMtiVariantStorageLinks(
     if (linkFields.length === 0) return node;
 
     syntheticPkFieldsByVariant.set(
-      node.modelName,
+      variantKey,
       linkFields.map((field) => field.fieldName),
     );
 
@@ -2007,25 +2020,28 @@ function materializeMtiVariantStorageLinks(
 function materializeStiVariantStorageColumns(
   modelNodes: readonly ModelNode[],
   baseDeclarations: ReadonlyMap<string, BaseDeclaration>,
-  stiVariantNames: ReadonlySet<string>,
+  stiVariantKeys: ReadonlySet<string>,
+  defaultNamespaceId: string,
 ): { modelNodes: ModelNode[]; stiBaseFieldsByBase: Map<string, readonly string[]> } {
-  if (stiVariantNames.size === 0) {
+  if (stiVariantKeys.size === 0) {
     return { modelNodes: [...modelNodes], stiBaseFieldsByBase: new Map() };
   }
 
-  const nodeByModel = new Map(modelNodes.map((node) => [node.modelName, node]));
+  const keyOf = (node: ModelNode) =>
+    modelCoordinateKey(node.namespaceId ?? defaultNamespaceId, node.modelName);
+  const nodeByModel = new Map(modelNodes.map((node) => [keyOf(node), node]));
   type StiColumn = ModelNode['fields'][number];
   const stiColumnsByBase = new Map<string, StiColumn[]>();
 
-  for (const variantName of stiVariantNames) {
-    const variantNode = nodeByModel.get(variantName);
-    const baseDecl = baseDeclarations.get(variantName);
+  for (const variantKey of stiVariantKeys) {
+    const variantNode = nodeByModel.get(variantKey);
+    const baseDecl = baseDeclarations.get(variantKey);
     if (!variantNode || !baseDecl) continue;
-    const baseNode = nodeByModel.get(baseDecl.baseName);
+    const baseNode = nodeByModel.get(baseDecl.base.key);
     if (!baseNode) continue;
 
     const baseColumns = new Set(baseNode.fields.map((field) => field.columnName));
-    const claimed = stiColumnsByBase.get(baseDecl.baseName) ?? [];
+    const claimed = stiColumnsByBase.get(baseDecl.base.key) ?? [];
     const claimedColumns = new Set(claimed.map((field) => field.columnName));
 
     for (const field of variantNode.fields) {
@@ -2035,7 +2051,7 @@ function materializeStiVariantStorageColumns(
       claimedColumns.add(field.columnName);
       claimed.push({ ...field, nullable: true });
     }
-    stiColumnsByBase.set(baseDecl.baseName, claimed);
+    stiColumnsByBase.set(baseDecl.base.key, claimed);
   }
 
   // The materialised columns exist on the base STORAGE table so the variants'
@@ -2053,10 +2069,10 @@ function materializeStiVariantStorageColumns(
 
   const enriched = modelNodes.map((node): ModelNode => {
     // STI variant: contributes a domain model but no storage table of its own.
-    if (stiVariantNames.has(node.modelName)) {
+    if (stiVariantKeys.has(keyOf(node))) {
       return { ...node, sharesBaseTable: true };
     }
-    const stiColumns = stiColumnsByBase.get(node.modelName);
+    const stiColumns = stiColumnsByBase.get(keyOf(node));
     if (!stiColumns || stiColumns.length === 0) return node;
     return { ...node, fields: [...node.fields, ...stiColumns] };
   });
@@ -2302,6 +2318,7 @@ export function interpretPslDocumentToSqlContract(
   // `modelMappingsByCoordinate` further down; this call discards its own
   // diagnostics so nothing is reported twice.
   const earlyModelMappingsByCoordinate = buildModelMappings(
+    input.symbolTable,
     modelEntries,
     defaultNamespaceId,
     createPslDiagnosticCollector(input.sources),
@@ -2452,12 +2469,13 @@ export function interpretPslDocumentToSqlContract(
   const storageTypes = { ...namedTypeResult.storageTypes };
 
   const modelMappingsByCoordinate = buildModelMappings(
+    input.symbolTable,
     modelEntries,
     defaultNamespaceId,
     diagnostics,
     input.sources,
   );
-  // Bare-name view for unqualified relation targets and polymorphism, where
+  // Bare-name view for unqualified relation targets, where
   // resolution is by bare model name. When a bare name is shared across
   // namespaces this collapses to the last entry; qualified relation targets
   // and per-model lowering use the coordinate-keyed map above instead.
@@ -2585,8 +2603,22 @@ export function interpretPslDocumentToSqlContract(
     }
   }
 
+  const modelIdentities = new Map<ModelSymbol, ModelIdentity>(
+    modelEntries.map(({ model, namespaceId }) => {
+      const resolvedNamespaceId = namespaceId ?? defaultNamespaceId;
+      return [
+        model,
+        {
+          model,
+          namespaceId: resolvedNamespaceId,
+          key: modelCoordinateKey(resolvedNamespaceId, model.name),
+        },
+      ];
+    }),
+  );
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
-    models,
+    modelIdentities,
+    input.symbolTable,
     input.sources,
     diagnostics,
   );
@@ -2597,13 +2629,13 @@ export function interpretPslDocumentToSqlContract(
   // because a no-`@@map` STI variant still gets its own verbatim default table
   // name (`defaultTableName`) that differs from the base before
   // `resolvePolymorphism` rewrites it onto the base table.
-  const stiVariantNames = new Set<string>();
-  for (const variantName of baseDeclarations.keys()) {
-    const variantMapping = modelMappings.get(variantName);
+  const stiVariantKeys = new Set<string>();
+  for (const variantKey of baseDeclarations.keys()) {
+    const variantMapping = modelMappingsByCoordinate.get(variantKey);
     const hasExplicitMap =
       variantMapping?.model.attributes.some((attr) => attr.name === 'map') ?? false;
     if (!hasExplicitMap) {
-      stiVariantNames.add(variantName);
+      stiVariantKeys.add(variantKey);
     }
   }
 
@@ -2613,19 +2645,20 @@ export function interpretPslDocumentToSqlContract(
   // dropping it at build time would defeat the whole point of `@@check`.
   // Catch it here, while the PSL source still has the `@@check` attribute's
   // span and the base model's name in hand.
-  for (const variantName of stiVariantNames) {
-    const variantMapping = modelMappings.get(variantName);
+  for (const variantKey of stiVariantKeys) {
+    const variantMapping = modelMappingsByCoordinate.get(variantKey);
     if (variantMapping === undefined) continue;
-    const baseDecl = baseDeclarations.get(variantName);
+    const variantName = variantMapping.model.name;
+    const baseDecl = baseDeclarations.get(variantKey);
     invariant(
       baseDecl !== undefined,
-      `stiVariantNames is derived from baseDeclarations.keys(), so "${variantName}" must have a base declaration`,
+      `stiVariantKeys is derived from baseDeclarations.keys(), so "${variantName}" must have a base declaration`,
     );
     for (const attribute of variantMapping.model.node.attributes()) {
       if (attribute.name()?.isSimpleName('check') !== true) continue;
       diagnostics.push({
         code: PSL_CHECK_ON_STI_VARIANT,
-        message: `Model "${variantName}" declares "@@check", but it shares its base model "${baseDecl.baseName}"'s storage table (single-table inheritance via @@base) and has no table of its own to declare a check constraint on. Declare the check on "${baseDecl.baseName}" instead.`,
+        message: `Model "${variantName}" declares "@@check", but it shares its base model "${baseDecl.base.model.name}"'s storage table (single-table inheritance via @@base) and has no table of its own to declare a check constraint on. Declare the check on "${baseDecl.base.model.name}" instead.`,
         ...diagnosticSource(input.sources, attribute.syntax).at(
           nodePslSpan(attribute.syntax, input.sources),
         ),
@@ -2634,9 +2667,19 @@ export function interpretPslDocumentToSqlContract(
   }
 
   const { modelNodes: mtiLinkedModelNodes, syntheticPkFieldsByVariant } =
-    materializeMtiVariantStorageLinks(modelNodes, baseDeclarations, stiVariantNames);
+    materializeMtiVariantStorageLinks(
+      modelNodes,
+      baseDeclarations,
+      stiVariantKeys,
+      defaultNamespaceId,
+    );
   const { modelNodes: stiColumnModelNodes, stiBaseFieldsByBase } =
-    materializeStiVariantStorageColumns(mtiLinkedModelNodes, baseDeclarations, stiVariantNames);
+    materializeStiVariantStorageColumns(
+      mtiLinkedModelNodes,
+      baseDeclarations,
+      stiVariantKeys,
+      defaultNamespaceId,
+    );
 
   const valueObjects = buildValueObjects({
     compositeTypes,
@@ -2755,10 +2798,7 @@ export function interpretPslDocumentToSqlContract(
     patchedModels,
     discriminatorDeclarations,
     baseDeclarations,
-    modelNames,
-    modelMappings,
-    modelNamespaceIds,
-    input.target.defaultNamespaceId,
+    modelMappingsByCoordinate,
     syntheticPkFieldsByVariant,
     stiBaseFieldsByBase,
     polyDiagnostics,
@@ -2771,10 +2811,10 @@ export function interpretPslDocumentToSqlContract(
     });
   }
 
-  const variantModelNames = new Set(baseDeclarations.keys());
   const filteredRoots = Object.fromEntries(
     Object.entries(contract.roots).filter(
-      ([, crossReference]) => !variantModelNames.has(crossReference.model),
+      ([, crossReference]) =>
+        !baseDeclarations.has(modelCoordinateKey(crossReference.namespace, crossReference.model)),
     ),
   );
 

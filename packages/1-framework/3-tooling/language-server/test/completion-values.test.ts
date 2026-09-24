@@ -45,6 +45,8 @@ const rejecting: RejectingArgType<never, AttributeCtx> = {
   message: 'No available values',
   parse: rejectedParse,
 };
+const unchecked = { ...identifier(), parse: rejectedParse };
+const checked = { ...entityRef({ kind: 'model' }), parse: rejectedParse };
 const direction = oneOf(
   identifier('Asc', { documentation: 'An accepted identifier in this test grammar.' }),
   identifier('Desc', { documentation: 'An accepted identifier in this test grammar.' }),
@@ -135,6 +137,8 @@ const signature = {
     all: {
       type: oneOf(
         str(),
+        unchecked,
+        checked,
         identifier('Alpha', { documentation: 'An accepted identifier in this test grammar.' }),
         bool(),
         num(),
@@ -143,13 +147,15 @@ const signature = {
       documentation: 'A scalar value with enumerated completion candidates.',
     },
     none: {
-      type: oneOf(str(), num(), int(), json(), entityRef(), rejecting),
+      type: oneOf(str(), num(), int(), json(), checked, unchecked, rejecting),
       documentation: 'A free-form value without enumerated candidates.',
     },
     rejected: { type: rejecting, documentation: 'A value that always fails interpretation.' },
     recordValues: { type: record(bool()), documentation: 'Boolean values keyed by name.' },
     unionLists: {
       type: oneOf(
+        list(unchecked),
+        list(checked),
         list(identifier('A', { documentation: 'An accepted identifier in this test grammar.' })),
         list(identifier('B', { documentation: 'An accepted identifier in this test grammar.' })),
         list(identifier('A', { documentation: 'An accepted identifier in this test grammar.' })),
@@ -473,6 +479,12 @@ describe('recursive attribute values', () => {
     expect(complete(source).labels).toEqual(
       source.includes('mode:') ? ['Asc', 'Desc'] : ['true', 'false'],
     );
+  });
+
+  it('offers only pinned names when unchecked names and checked references are nested alternatives', () => {
+    expect(field('none: |').items).toEqual([]);
+    expect(field('unionLists: [|]').items.map((item) => item.label)).toEqual(['A', 'B']);
+    expect(rejectedParse).not.toHaveBeenCalled();
   });
 
   it('never invokes combinator parsing to select alternatives', () => {

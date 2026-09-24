@@ -28,7 +28,7 @@ import type {
 } from './types';
 
 function contractAtMemoKey(hash: string, refName: string | undefined): string {
-  return `${hash}\0${refName ?? ''}`;
+  return JSON.stringify([hash, refName ?? '']);
 }
 
 function deserializeContractAtPath(

@@ -157,7 +157,7 @@ describe('adapter-postgres structured error codes', () => {
       self: ColumnRef.of('user', 'email'),
       args: [],
       returns: { codecId: 'pg/bool@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'f({{self}}, {{arg0}})' },
+      lowering: { targetFamily: 'sql', template: 'f({{self}}, {{arg0}})' },
     });
     const ast = SelectAst.from(TableSource.named('user', undefined, 'public'))
       .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
