@@ -14,6 +14,10 @@ const mongoTargetTypes: Record<string, readonly string[]> = {
   'mongo/date@1': ['date'],
   'mongo/objectId@1': ['objectId'],
   'mongo/double@1': ['double'],
+  'mongo/int64@1': ['long'],
+  'mongo/decimal128@1': ['decimal'],
+  'mongo/binary@1': ['binData'],
+  'mongo/json@1': [],
 };
 
 const mongoCodecLookup: CodecLookup = {
@@ -76,6 +80,47 @@ function voArrayField(name: string, nullable = false): ContractField {
 }
 
 describe('deriveJsonSchema', () => {
+  it('maps Int64, Decimal128 and Binary to long, decimal and binData', () => {
+    const result = deriveJsonSchema(
+      {
+        views: scalarField('mongo/int64@1'),
+        price: scalarField('mongo/decimal128@1'),
+        thumbnail: scalarField('mongo/binary@1'),
+      },
+      undefined,
+      mongoCodecLookup,
+    );
+
+    expect(result.jsonSchema['properties']).toEqual({
+      views: { bsonType: 'long' },
+      price: { bsonType: 'decimal' },
+      thumbnail: { bsonType: 'binData' },
+    });
+  });
+
+  it('admits any value in a field whose codec has no BSON type, such as Json', () => {
+    const result = deriveJsonSchema(
+      {
+        _id: scalarField('mongo/objectId@1'),
+        meta: scalarField('mongo/json@1'),
+        notes: scalarField('mongo/json@1', true),
+      },
+      undefined,
+      mongoCodecLookup,
+    );
+
+    expect(result.jsonSchema).toEqual({
+      bsonType: 'object',
+      required: ['_id', 'meta'],
+      properties: {
+        _id: { bsonType: 'objectId' },
+        meta: {},
+        notes: {},
+      },
+      additionalProperties: false,
+    });
+  });
+
   it('maps String, Int, Boolean, DateTime, ObjectId to correct BSON types', () => {
     const result = deriveJsonSchema(
       {
