@@ -20,11 +20,13 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { assertDefined } from '@internal/utils/assertions';
+import { InternalError } from '@internal/utils/internal-error';
 import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumn,
 } from './collection-contract';
+import { assertCursorKeyable } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
@@ -91,9 +93,12 @@ function buildCursorWhere(
     return undefined;
   }
 
+  assertCursorKeyable(orderBy);
   const entries: CursorOrderEntry[] = [];
   for (const order of orderBy) {
-    if (order.expr.kind !== 'column-ref') continue;
+    if (order.expr.kind !== 'column-ref') {
+      throw new InternalError('assertCursorKeyable admits only column orders');
+    }
     const column = order.expr.column;
     const value = cursor[column];
     if (value === undefined) {

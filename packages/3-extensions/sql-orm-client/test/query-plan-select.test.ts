@@ -233,7 +233,7 @@ describe('compileSelectWithIncludes', () => {
     expect(params[0]).toMatchObject({ name: 'searchVec', codec: { codecId: 'pg/vector@1' } });
   });
 
-  it('cursor pagination ignores expression-based orders', () => {
+  it('cursor pagination rejects an expression-based order instead of dropping it from the keyset', () => {
     const opExpr = new OperationExpr({
       method: 'cosineDistance',
       self: ColumnRef.of('posts', 'embedding'),
@@ -249,16 +249,11 @@ describe('compileSelectWithIncludes', () => {
       cursor: { id: 5 },
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
-    expectSelectAst(plan.ast);
-
-    expect(plan.ast.orderBy).toEqual([
-      new OrderByItem(ColumnRef.of('posts', 'id'), 'asc', undefined),
-      new OrderByItem(opExpr, 'desc', undefined),
-    ]);
-
-    expect(plan.ast.where).toEqual(
-      bindWhereExpr(baseContract, BinaryExpr.gt(ColumnRef.of('posts', 'id'), LiteralExpr.of(5))),
+    expect(() => compileSelect(baseContract, 'public', 'posts', state)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: expect.stringContaining('orderBy item 2'),
+      }),
     );
   });
 
