@@ -26,7 +26,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '\b(?:MongoRunnerDependencies|MarkerOperations)\b'
+        - '\b(?:MongoRunnerDependencies|MarkerOperations)\b[^;]*?from\s*[''"]@prisma/orm-(?:target-)?mongo/(?:adapter|target)/control[''"]'
   - id: mongo-create-runner-needs-adapter-on-stack
     summary: |
       `mongoTargetDescriptor.migrations.createRunner(family)` now reaches the database through the

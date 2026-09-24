@@ -27,7 +27,8 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '\b(?:MongoRunnerDependencies|MarkerOperations)\b'
+        - '\b(?:MongoRunnerDependencies|MarkerOperations)\b[^;]*?from\s*[''"]@internal/(?:adapter|target)-mongo/control[''"]'
+        - '\b(?:MongoRunnerDependencies|MarkerOperations)\b[^;]*?from\s*[''"]@prisma/orm-(?:target-)?mongo/(?:adapter|target)/control[''"]'
   - id: mongo-control-adapter-creates-runner-dependencies
     summary: |
       The `MongoControlAdapter` SPI gains `createRunnerDependencies(driver)`, and
