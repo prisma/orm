@@ -57,26 +57,34 @@ const pslSemanticThemeExtension = {
 
 registerExtension(pslSemanticThemeExtension, undefined, { system: true });
 
+interface RuntimeMember {
+  readonly uri: string;
+  readonly text: string;
+}
+
 interface RuntimeConfig {
   readonly wsPath: string;
-  readonly documentUri: string;
   readonly rootUri: string;
-  readonly schemaPath: string;
-  readonly schemaText: string;
+  readonly scratchRootUri: string;
+  readonly members: readonly RuntimeMember[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function isRuntimeMember(value: unknown): value is RuntimeMember {
+  return isRecord(value) && typeof value['uri'] === 'string' && typeof value['text'] === 'string';
+}
+
 function isRuntimeConfig(value: unknown): value is RuntimeConfig {
   return (
     isRecord(value) &&
     typeof value['wsPath'] === 'string' &&
-    typeof value['documentUri'] === 'string' &&
     typeof value['rootUri'] === 'string' &&
-    typeof value['schemaPath'] === 'string' &&
-    typeof value['schemaText'] === 'string'
+    typeof value['scratchRootUri'] === 'string' &&
+    Array.isArray(value['members']) &&
+    value['members'].every(isRuntimeMember)
   );
 }
 
@@ -111,9 +119,12 @@ function buildWebSocketUrl(wsPath: string): string {
 async function main(): Promise<void> {
   const runtimeConfig = await loadRuntimeConfig();
 
-  const pathEl = document.getElementById('schema-path');
-  if (pathEl !== null) {
-    pathEl.textContent = runtimeConfig.schemaPath;
+  // Temporary shim (multifile-psl-playground S2-D1): render only the first
+  // scratch-project member. The tab strip that opens every member — the
+  // first eagerly, the rest lazily on first click — lands in dispatch 2.
+  const firstMember = runtimeConfig.members[0];
+  if (firstMember === undefined) {
+    throw new Error('Playground runtime config carries no scratch-project members');
   }
 
   const htmlContainer = document.getElementById('editor');
@@ -126,9 +137,16 @@ async function main(): Promise<void> {
     throw new Error('#format-document button not found');
   }
 
-  const fileUri = vscode.Uri.parse(runtimeConfig.documentUri);
+  const fileUri = vscode.Uri.parse(firstMember.uri);
+  const schemaText = firstMember.text;
+
+  const pathEl = document.getElementById('schema-path');
+  if (pathEl !== null) {
+    pathEl.textContent = fileUri.fsPath;
+  }
+
   const fileSystemProvider = new RegisteredFileSystemProvider(false);
-  fileSystemProvider.registerFile(new RegisteredMemoryFile(fileUri, runtimeConfig.schemaText));
+  fileSystemProvider.registerFile(new RegisteredMemoryFile(fileUri, schemaText));
   registerFileSystemOverlay(1, fileSystemProvider);
 
   const vscodeApiConfig: MonacoVscodeApiConfig = {
@@ -192,7 +210,7 @@ async function main(): Promise<void> {
   const editorAppConfig: EditorAppConfig = {
     codeResources: {
       modified: {
-        text: runtimeConfig.schemaText,
+        text: schemaText,
         uri: fileUri.path,
       },
     },
