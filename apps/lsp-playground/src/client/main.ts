@@ -22,7 +22,6 @@ import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-
 import type { ILogger } from '@codingame/monaco-vscode-log-service-override';
 import '@codingame/monaco-vscode-theme-defaults-default-extension';
 import getThemeServiceOverride from '@codingame/monaco-vscode-theme-service-override';
-import { InternalError } from '@internal/utils/internal-error';
 import { EditorApp, type EditorAppConfig } from 'monaco-languageclient/editorApp';
 import { type LanguageClientConfig, LanguageClientWrapper } from 'monaco-languageclient/lcwrapper';
 import {
@@ -34,6 +33,13 @@ import * as vscode from 'vscode';
 
 const LANGUAGE_ID = 'prisma';
 const RUNTIME_CONFIG_PATH = '/__psl_playground_runtime.json';
+
+class InternalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InternalError';
+  }
+}
 
 const pslSemanticThemeExtension = {
   name: 'prisma-psl-semantic-theme-bridge',
