@@ -36,7 +36,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'d3f95a150d399e4a6bcc77a9b9efd8a1e1d2df2a99338dc1630fa5b420c41b1e'>;
 export type ExecutionHash =
-  ExecutionHashBase<'08cb57fc09b1864b51c6f891de7b82a1259231c25c6a8761b8542d622cc7ac54'>;
+  ExecutionHashBase<'eb490836e5a3423a0aac6b6c5ad1ef94e470c3cf6281e2200399d2dc6a9fd121'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -473,35 +473,35 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'createdAt';
+            readonly entry: 'reading';
+            readonly field: 'createdAt';
             readonly namespace: 'public';
-            readonly table: 'reading';
           };
         },
         {
           readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'createdAtText';
+            readonly entry: 'reading';
+            readonly field: 'createdAtText';
             readonly namespace: 'public';
-            readonly table: 'reading';
           };
         },
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'updatedAt';
+            readonly entry: 'reading';
+            readonly field: 'updatedAt';
             readonly namespace: 'public';
-            readonly table: 'reading';
           };
         },
         {
           readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'updatedAtText';
+            readonly entry: 'reading';
+            readonly field: 'updatedAtText';
             readonly namespace: 'public';
-            readonly table: 'reading';
           };
         },
       ];

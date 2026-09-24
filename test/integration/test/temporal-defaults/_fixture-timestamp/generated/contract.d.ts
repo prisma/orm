@@ -36,7 +36,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'a2ace90303c53e51b8dfcc934ec89027d15993a98c8d4df21155125d0ea5386f'>;
 export type ExecutionHash =
-  ExecutionHashBase<'c3a6b763da0e37c7d7ee546a57d793c3b6f773c687842d094581adf24e157f06'>;
+  ExecutionHashBase<'75fabf32f466f30de3808c2f1f8b7a60d87724063dfb332b032468a6621ad80a'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -442,18 +442,18 @@ type ContractBase = Omit<
           readonly onCreate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'plainDateTimeNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'updatedAt';
+            readonly entry: 'stamp';
+            readonly field: 'updatedAt';
             readonly namespace: 'public';
-            readonly table: 'stamp';
           };
         },
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'updatedAtTz';
+            readonly entry: 'stamp';
+            readonly field: 'updatedAtTz';
             readonly namespace: 'public';
-            readonly table: 'stamp';
           };
         },
       ];
