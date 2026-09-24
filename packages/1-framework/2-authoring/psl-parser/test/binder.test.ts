@@ -870,6 +870,55 @@ describe('createBinder — entityRef arguments', () => {
   });
 });
 
+describe('createBinder — the scope stack the walk pushes and pops', () => {
+  const TWO_NAMESPACES = [
+    'model Shared {',
+    '  id Int',
+    '}',
+    'namespace first {',
+    '  model Local {',
+    '    id Int',
+    '  }',
+    '  model UsesLocal {',
+    '    slot Local',
+    '  }',
+    '  model UsesShared {',
+    '    slot Shared',
+    '  }',
+    '}',
+    'namespace second {',
+    '  model UsesLeak {',
+    '    slot Local',
+    '  }',
+    '}',
+  ].join('\n');
+
+  it('pops one namespace before entering the next, so no name leaks sideways', () => {
+    const { symbolTable, binder, diagnostics } = bind(TWO_NAMESPACES);
+    const first = symbolTable.topLevel.namespaces['first']!;
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'first.UsesLocal', 'slot'))).toEqual({
+      kind: 'model',
+      symbol: first.models['Local'],
+      namespace: first,
+    });
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'second.UsesLeak', 'slot'))).toEqual({
+      kind: 'unresolved',
+      name: 'Local',
+    });
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find type "Local"']);
+  });
+
+  it('keeps the document scope beneath every pushed namespace', () => {
+    const { symbolTable, binder } = bind(TWO_NAMESPACES);
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'first.UsesShared', 'slot'))).toEqual({
+      kind: 'model',
+      symbol: symbolTable.topLevel.models['Shared'],
+    });
+  });
+});
+
 describe('createBinder — one kind-blind scope chain', () => {
   const SHADOWING_SCHEMA = [
     'model Foo {',

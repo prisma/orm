@@ -115,9 +115,42 @@ class PslBinder implements Binder {
   }
 }
 
-interface ScopedEntity {
-  readonly scope: Scope;
-  readonly entity: ModelSymbol | CompositeTypeSymbol;
+class ScopeStack {
+  readonly #base: Scope;
+  readonly #scopes: Scope[];
+
+  constructor(base: Scope) {
+    this.#base = base;
+    this.#scopes = [base];
+  }
+
+  current(): Scope {
+    return this.#scopes[this.#scopes.length - 1] ?? this.#base;
+  }
+
+  push(scope: Scope): void {
+    this.#scopes.push(scope);
+  }
+
+  pop(): void {
+    this.#scopes.pop();
+  }
+}
+
+function walkEntities(
+  symbolTable: SymbolTable,
+  stack: ScopeStack,
+  visit: (entity: ModelSymbol | CompositeTypeSymbol) => void,
+): void {
+  const { topLevel } = symbolTable;
+  for (const entity of Object.values(topLevel.models)) visit(entity);
+  for (const entity of Object.values(topLevel.compositeTypes)) visit(entity);
+  for (const namespace of Object.values(topLevel.namespaces)) {
+    stack.push(namespaceScope(namespace, stack.current()));
+    for (const entity of Object.values(namespace.models)) visit(entity);
+    for (const entity of Object.values(namespace.compositeTypes)) visit(entity);
+    stack.pop();
+  }
 }
 
 export function createBinder(options: CreateBinderOptions): BinderResult {
@@ -129,9 +162,8 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     controlMutationDefaults,
     describeUnsupportedAttribute,
   } = options;
-  const document = documentScope(
-    symbolTable.topLevel,
-    contributedScope(contributedTypeScope(typeConstructors)),
+  const stack = new ScopeStack(
+    documentScope(symbolTable.topLevel, contributedScope(contributedTypeScope(typeConstructors))),
   );
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
@@ -152,13 +184,13 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
-  for (const { scope, entity } of entities(symbolTable, document)) {
+  walkEntities(symbolTable, stack, (entity) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const outcome = resolveTypeReference(field, scope);
+      const outcome = resolveTypeReference(field, stack.current());
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
       if (outcome.message !== undefined) {
@@ -170,12 +202,12 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         });
       }
     }
-  }
+  });
 
-  for (const { scope, entity } of entities(symbolTable, document)) {
+  walkEntities(symbolTable, stack, (entity) => {
     const context = {
       owner: entity,
-      scope,
+      scope: stack.current(),
       references,
       diagnostics,
       symbolTable,
@@ -202,7 +234,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         { ...context, field },
       );
     }
-  }
+  });
 
   return { binder: new PslBinder(declarations, references), diagnostics };
 }
@@ -367,17 +399,6 @@ function referenceNodes(expression: ExpressionAst): readonly SyntaxNode[] {
   const array = ArrayLiteralAst.cast(expression.syntax);
   if (array === undefined) return [expression.syntax];
   return Array.from(array.elements(), (element) => element.syntax);
-}
-
-function* entities(symbolTable: SymbolTable, document: Scope): Iterable<ScopedEntity> {
-  const { topLevel } = symbolTable;
-  for (const entity of Object.values(topLevel.models)) yield { scope: document, entity };
-  for (const entity of Object.values(topLevel.compositeTypes)) yield { scope: document, entity };
-  for (const namespace of Object.values(topLevel.namespaces)) {
-    const scope = namespaceScope(namespace, document);
-    for (const entity of Object.values(namespace.models)) yield { scope, entity };
-    for (const entity of Object.values(namespace.compositeTypes)) yield { scope, entity };
-  }
 }
 
 interface TypeReferenceOutcome {

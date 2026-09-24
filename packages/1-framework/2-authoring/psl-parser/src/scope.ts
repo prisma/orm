@@ -1,4 +1,5 @@
 import type {
+  ContributedMember,
   ContributedNamespaceSymbol,
   ContributedTypeScope,
   ContributedTypeSymbol,
@@ -33,6 +34,23 @@ export interface Scope {
   lookup(name: string): ScopeResolution | undefined;
 }
 
+function contributedResolution(member: ContributedMember): ScopeResolution {
+  return member.kind === 'contributedType'
+    ? { kind: 'contributedType', symbol: member }
+    : { kind: 'contributedNamespace', symbol: member };
+}
+
+function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolution | undefined {
+  const model = namespace.models[name];
+  if (model !== undefined) return { kind: 'model', symbol: model, namespace };
+  const compositeType = namespace.compositeTypes[name];
+  if (compositeType !== undefined)
+    return { kind: 'compositeType', symbol: compositeType, namespace };
+  const block = namespace.blocks[name];
+  if (block !== undefined) return { kind: 'block', symbol: block, namespace };
+  return undefined;
+}
+
 class ContributedScope implements Scope {
   readonly #registry: ContributedTypeScope;
 
@@ -42,10 +60,7 @@ class ContributedScope implements Scope {
 
   lookup(name: string): ScopeResolution | undefined {
     const member = this.#registry.lookup(name);
-    if (member === undefined) return undefined;
-    return member.kind === 'contributedType'
-      ? { kind: 'contributedType', symbol: member }
-      : { kind: 'contributedNamespace', symbol: member };
+    return member === undefined ? undefined : contributedResolution(member);
   }
 }
 
@@ -84,15 +99,7 @@ class NamespaceScope implements Scope {
   }
 
   lookup(name: string): ScopeResolution | undefined {
-    const namespace = this.#namespace;
-    const model = namespace.models[name];
-    if (model !== undefined) return { kind: 'model', symbol: model, namespace };
-    const compositeType = namespace.compositeTypes[name];
-    if (compositeType !== undefined)
-      return { kind: 'compositeType', symbol: compositeType, namespace };
-    const block = namespace.blocks[name];
-    if (block !== undefined) return { kind: 'block', symbol: block, namespace };
-    return this.#parent.lookup(name);
+    return namespaceMember(this.#namespace, name) ?? this.#parent.lookup(name);
   }
 }
 
@@ -120,18 +127,7 @@ export function lookupMember(
 ): ScopeResolution | undefined {
   if (qualifier.kind === 'contributedNamespace') {
     const member = qualifier.symbol.members.get(name);
-    if (member === undefined) return undefined;
-    return member.kind === 'contributedType'
-      ? { kind: 'contributedType', symbol: member }
-      : { kind: 'contributedNamespace', symbol: member };
+    return member === undefined ? undefined : contributedResolution(member);
   }
-  const namespace = qualifier.symbol;
-  const model = namespace.models[name];
-  if (model !== undefined) return { kind: 'model', symbol: model, namespace };
-  const compositeType = namespace.compositeTypes[name];
-  if (compositeType !== undefined)
-    return { kind: 'compositeType', symbol: compositeType, namespace };
-  const block = namespace.blocks[name];
-  if (block !== undefined) return { kind: 'block', symbol: block, namespace };
-  return undefined;
+  return namespaceMember(qualifier.symbol, name);
 }
