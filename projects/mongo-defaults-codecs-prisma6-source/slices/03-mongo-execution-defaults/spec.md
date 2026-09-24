@@ -1,4 +1,4 @@
-# Slice 2: Mongo execution defaults end to end
+# Slice 3: Mongo execution defaults end to end
 
 _Parent: `projects/mongo-defaults-codecs-prisma6-source/`. Builds on slice 1 (PR #30396) and slice 2 (framework ref rename). Outcome: a Mongo author writes `temporal.createdAt()` / `temporal.updatedAt()` and the ORM fills the timestamps on create and on non-empty update, with the same contract, runtime, and error semantics as Postgres._
 
@@ -42,7 +42,7 @@ const Post = model('Post', {
 
 **Shared authoring primitives move to the framework.** `packages/2-sql/9-family/src/core/timestamp-now-generator.ts` imports only `@internal/framework-components`; its `TIMESTAMP_NOW_GENERATOR_ID`, `timestampNowControlDescriptor`, `temporalAuthoringPresets`, `temporalCodecPreset`, and the `onCreate`/`onUpdate` option arg specs move to `framework-components/src/shared/` (exported through the existing authoring/control export paths). SQL imports them from there; the precision variant `temporalCodecPresetWithPrecision` and the string presets stay in the SQL family. The SQL PSL helpers for preset resolution (`getAuthoringFieldPreset`, the registered-namespace exemption, unknown-preset reporting) move too where they import only framework code; the implementer prefers hoisting over copying and keeps SQL behaviour identical.
 
-**Contract.** The Mongo arktype schema gains `execution?` with the framework ref shape `{ namespace, entry, field }` (slice 2) and the SQL generator-id rule, `'+': 'reject'`. `MongoContract<S>` stays `Contract<S>`; the `entry` is the collection name and `field` the stored field name. `executionHash` is `computeExecutionHash({ target, targetFamily, execution })` from the framework, computed by both authoring paths, sorted by namespace, entry, field. Absent section means no generators; no existing fixture changes.
+**Contract.** The arktype schema for the execution section is defined once in the framework contract package (`@internal/contract`), and both the SQL and Mongo validators wire it as `'execution?'`. The ref shape is the framework's `{ namespace, entry, field }` (slice 2). `MongoContract<S>` stays `Contract<S>`; the `entry` is the collection name and `field` the stored field name. `executionHash` is `computeExecutionHash({ target, targetFamily, execution })` from the framework, computed by both authoring paths, sorted by namespace, entry, field. Absent section means no generators; no existing fixture changes.
 
 **Emitter.** The framework emitter already writes `execution` and `executionHash` with the shared ref shape, so nothing changes there. Mongo ORM `CreateInput` makes a field optional when its `ref` has `onCreate`, mirroring `IsOptionalCreateField` in `sql-orm-client/src/types.ts:1265-1304`.
 

@@ -1,4 +1,4 @@
-# Slice 2 plan
+# Slice 3 plan
 
 Spec: `spec.md`. Branch `mongo-execution-defaults` stacked on `mongo-target-owns-codecs` (PR #30396). Opus for implementer and reviewer; persistent subagents continue from slice 1.
 
@@ -8,7 +8,7 @@ Standard gate: `pnpm build`, `pnpm typecheck`, `pnpm lint:deps`, `pnpm fixtures:
 
 ### D1. Framework hoist of temporal preset primitives; Mongo contract accepts `execution`
 
-Outcome: `TIMESTAMP_NOW_GENERATOR_ID`, `timestampNowControlDescriptor`, `temporalAuthoringPresets`, `temporalCodecPreset`, the on-create/on-update arg specs, and the reusable PSL preset-resolution helpers live in `framework-components`; SQL imports them, SQL tests green and unchanged in intent. The Mongo contract schema accepts an optional `execution` section with `{ namespace, model, field }` refs; `MongoContract` types it; `computeExecutionHash` is wired for Mongo in the serializer path; existing fixtures unchanged (`fixtures:check` clean).
+Outcome: `TIMESTAMP_NOW_GENERATOR_ID`, `timestampNowControlDescriptor`, `temporalAuthoringPresets`, `temporalCodecPreset`, the on-create/on-update arg specs, and the reusable PSL preset-resolution helpers live in `framework-components`; SQL imports them, SQL tests green and unchanged in intent. The framework contract package exports the arktype execution-section schema once and both SQL and Mongo validators use it; the Mongo contract accepts an optional `execution` section with the framework ref `{ namespace, entry, field }`; `MongoContract` stays `Contract<S>`; a Mongo execution hash is pinned by test; existing fixtures unchanged (`fixtures:check` clean).
 
 Builds on: slice 1. Hands to: primitives both Mongo authoring surfaces can import, and a contract that can carry the section.
 
