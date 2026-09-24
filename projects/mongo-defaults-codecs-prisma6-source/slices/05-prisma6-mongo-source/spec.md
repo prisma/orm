@@ -54,6 +54,7 @@ model Post {
 | id field without `@db.ObjectId`, or `@@id` | `PSL.PRISMA6_MONGO_ID_NOT_OBJECTID`, `PSL.PRISMA6_MONGO_COMPOSITE_ID_UNSUPPORTED`. |
 | `String @db.ObjectId` on any other field | ObjectId codec. |
 | Any other `@db.*` | `PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED`. |
+| `Unsupported("...")`, or any type name the binding does not map | `PSL.PRISMA6_MONGO_UNSUPPORTED_TYPE` (one code for both, as the Postgres reader's `PSL.PRISMA7_UNSUPPORTED_TYPE`). |
 | `String`, `Int`, `Float`, `Boolean`, `DateTime` | `mongo/string@1`, `mongo/int32@1`, `mongo/double@1`, `mongo/bool@1`, `mongo/date@1`. |
 | `BigInt`, `Decimal`, `Bytes`, `Json` | `mongo/int64@1`, `mongo/decimal128@1`, `mongo/binary@1`, `mongo/json@1`. |
 | Lists of scalars, composites, enums | `many: true`. |
@@ -71,7 +72,7 @@ model Post {
 | `@unique`, `@@unique([...])`, `@@index([...])` with `sort:` | Indexes; `map:`/`name:` dropped (Mongo verify never compares index names); `length:` → `PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED`. |
 | `@@fulltext([...])` | `@@textIndex` shape (one per model; a second → `PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT`). |
 | `@map`, `@@map` | Field and collection names. Default collection name is the model name verbatim. |
-| `@ignore`, `@@ignore` | Omitted; an ignored field referenced by an index or relation → `PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED`. |
+| `@ignore`, `@@ignore` | Omitted; an ignored field referenced by an index, a relation, or carrying `@unique` → `PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED` (Prisma 6 still creates the unique index, which strict verify would then report as extra). |
 | `@@schema`, `view` | `PSL.PRISMA6_MONGO_SCHEMA_UNSUPPORTED`, `PSL.PRISMA6_MONGO_VIEW_UNSUPPORTED`. |
 | Any other attribute or top-level block | `PSL.PRISMA6_MONGO_UNKNOWN_ATTRIBUTE`, `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK`. |
 
