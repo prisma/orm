@@ -757,6 +757,18 @@ function readModelField(
   const isRelationField = modelNames.has(field.typeName) && field.typeConstructor === undefined;
   if (field.attributes.some((attribute) => attribute.name === 'ignore')) {
     build.ignoredFields.add(field.name);
+    const unique = field.attributes.find((attribute) => attribute.name === 'unique');
+    if (unique !== undefined) {
+      diagnostics.push(
+        ignoredFieldReferenced(
+          symbol.name,
+          [field.name],
+          `@unique on field "${symbol.name}.${field.name}"`,
+          sourceId,
+          unique.span,
+        ),
+      );
+    }
     return;
   }
   if (isRelationField) {
