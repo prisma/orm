@@ -9,6 +9,8 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   AsyncIterableResult,
+  type MutationDefaults,
+  type MutationDefaultsOp,
   type RuntimeStatementStats,
 } from '@internal/framework-components/runtime';
 import type {
@@ -17,8 +19,6 @@ import type {
   MongoContractWithTypeMaps,
   MongoModelDefinition,
   MongoModelsMap,
-  MongoMutationDefaults,
-  MongoMutationDefaultsOp,
 } from '@internal/mongo-contract';
 import type {
   AnyMongoCommand,
@@ -199,7 +199,7 @@ class MongoCollectionImpl<
   readonly #contract: TContract;
   readonly #modelName: ModelName;
   readonly #executor: MongoQueryExecutor;
-  readonly #mutationDefaults: MongoMutationDefaults | undefined;
+  readonly #mutationDefaults: MutationDefaults | undefined;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantName: string | undefined;
@@ -208,7 +208,7 @@ class MongoCollectionImpl<
     contract: TContract,
     modelName: ModelName,
     executor: MongoQueryExecutor,
-    mutationDefaults: MongoMutationDefaults | undefined,
+    mutationDefaults: MutationDefaults | undefined,
   ) {
     this.#contract = contract;
     this.#modelName = modelName;
@@ -850,7 +850,7 @@ class MongoCollectionImpl<
   }
 
   #appliedDefaults(
-    op: MongoMutationDefaultsOp,
+    op: MutationDefaultsOp,
     values: Readonly<Record<string, unknown>>,
     defaultValueCache: Map<string, unknown>,
   ): Record<string, unknown> {
@@ -1092,7 +1092,7 @@ export function createMongoCollection<
   contract: TContract,
   modelName: ModelName,
   executor: MongoQueryExecutor,
-  mutationDefaults?: MongoMutationDefaults,
+  mutationDefaults?: MutationDefaults,
 ): MongoCollection<TContract, ModelName> {
   return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults);
 }

@@ -4,12 +4,10 @@ export type {
   MongoCodecLookup,
   MongoExecutionContext,
   MongoExecutionStack,
-  MongoGeneratorStability,
   MongoRuntimeAdapterDescriptor,
   MongoRuntimeAdapterInstance,
   MongoRuntimeExtensionDescriptor,
   MongoRuntimeExtensionInstance,
-  MongoRuntimeMutationDefaultGenerator,
   MongoRuntimeTargetDescriptor,
   MongoStaticContributions,
 } from '../mongo-execution-stack';

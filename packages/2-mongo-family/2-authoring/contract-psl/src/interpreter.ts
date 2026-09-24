@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { computeProfileHash } from '@internal/contract/hashing';
+import { buildExecutionSection, computeProfileHash } from '@internal/contract/hashing';
 import {
   type Contract,
   type ContractEnum,
@@ -31,7 +31,6 @@ import type { ControlDefaultRegistries } from '@internal/framework-components/co
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
-  buildMongoExecutionSection,
   buildMongoStorage,
   encodeMongoValueSets,
   type MongoCollectionInput,
@@ -1438,7 +1437,11 @@ export function interpretPslDocumentToMongoContract(
       executionDefaults.push({ ref: { namespace: UNBOUND_NAMESPACE_ID, entry, field }, ...phases });
     }
   }
-  const execution = buildMongoExecutionSection(executionDefaults);
+  const execution = buildExecutionSection({
+    target: 'mongo',
+    targetFamily: 'mongo',
+    defaults: executionDefaults,
+  });
 
   // The storage value set is the source of truth for both the emit typing and the validator's
   // `enum` keyword. Built once, ahead of validator derivation, from each enum's codec-encoded member

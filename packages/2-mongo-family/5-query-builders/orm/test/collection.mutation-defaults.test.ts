@@ -1,9 +1,12 @@
-import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type {
-  MongoAppliedMutationDefault,
-  MongoMutationDefaults,
-  MongoMutationDefaultsOptions,
-} from '@internal/mongo-contract';
+import { buildExecutionSection } from '@internal/contract/hashing';
+import {
+  type AppliedMutationDefault,
+  AsyncIterableResult,
+  applyMutationDefaults,
+  collectMutationDefaultGenerators,
+  type MutationDefaults,
+  type MutationDefaultsOptions,
+} from '@internal/framework-components/runtime';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
@@ -28,23 +31,39 @@ function input(data: Record<string, unknown>): never {
   return data as never;
 }
 
+const loginCountDefaults = buildExecutionSection({
+  target: 'mongo',
+  targetFamily: 'mongo',
+  defaults: [
+    {
+      ref: { namespace: '__unbound__', entry: 'users', field: 'loginCount' },
+      onCreate: { kind: 'generator', id: 'seven' },
+      onUpdate: { kind: 'generator', id: 'nine' },
+    },
+  ],
+});
+const loginCountGenerators = collectMutationDefaultGenerators([
+  {
+    id: 'test',
+    mutationDefaultGenerators: () => [
+      { id: 'seven', generate: () => 7, stability: 'field' },
+      { id: 'nine', generate: () => 9, stability: 'field' },
+    ],
+  },
+]);
+
 /**
- * Stands in for the execution context: `loginCount` gets 7 on create and 9 on a non-empty update, unless the write sets it.
+ * Stands in for the execution context with the framework's apply rule: `loginCount` gets 7 on create and 9 on an update with keys, unless the write carries it as a key.
  */
-function fakeMutationDefaults(): MongoMutationDefaults & {
-  readonly calls: MongoMutationDefaultsOptions[];
+function fakeMutationDefaults(): MutationDefaults & {
+  readonly calls: MutationDefaultsOptions[];
 } {
-  const calls: MongoMutationDefaultsOptions[] = [];
+  const calls: MutationDefaultsOptions[] = [];
   return {
     calls,
-    applyMutationDefaults(options): ReadonlyArray<MongoAppliedMutationDefault> {
+    applyMutationDefaults(options): ReadonlyArray<AppliedMutationDefault> {
       calls.push(options);
-      const explicit = Object.keys(options.values).filter((k) => options.values[k] !== undefined);
-      if (explicit.includes('loginCount')) return [];
-      if (options.op === 'update') {
-        return explicit.length === 0 ? [] : [{ field: 'loginCount', value: 9 }];
-      }
-      return [{ field: 'loginCount', value: 7 }];
+      return applyMutationDefaults(loginCountDefaults, loginCountGenerators, options);
     },
   };
 }
@@ -84,7 +103,7 @@ function commandOf(plans: readonly MongoQueryPlan[], kind: string) {
   return plan.command as unknown as Record<string, unknown>;
 }
 
-function users(executor: MongoQueryExecutor, defaults: MongoMutationDefaults) {
+function users(executor: MongoQueryExecutor, defaults: MutationDefaults) {
   return createMongoCollection(contract, 'User', executor, defaults);
 }
 
@@ -132,6 +151,17 @@ describe('ORM create paths apply onCreate defaults', () => {
     expect(defaults.calls[1]?.defaultValueCache).toBe(defaults.calls[0]?.defaultValueCache);
   });
 
+  it('create drops an explicit undefined before applying defaults, so the default fills it', async () => {
+    const defaults = fakeMutationDefaults();
+    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }]);
+    await users(executor, defaults).create(input({ ...userData, loginCount: undefined }));
+    expect(unwrap(commandOf(plans, 'insertOne')['document'])).toEqual({
+      ...userData,
+      loginCount: 7,
+    });
+    expect(defaults.calls[0]?.values).not.toHaveProperty('loginCount');
+  });
+
   it('createAndCount treats an explicit undefined as absent', async () => {
     const defaults = fakeMutationDefaults();
     const { executor, plans } = recordingExecutor([{ insertedCount: 1 }]);
@@ -153,6 +183,14 @@ describe('ORM update paths apply onUpdate defaults', () => {
     });
     expect(defaults.calls).toEqual([expect.objectContaining({ op: 'update', entry: 'users' })]);
     expect(Object.keys(defaults.calls[0]?.values ?? {})).toEqual(['name']);
+  });
+
+  it('update whose only field is undefined adds nothing', async () => {
+    const defaults = fakeMutationDefaults();
+    const { executor, plans } = recordingExecutor([]);
+    await users(executor, defaults).where(byEmail).update({ name: undefined });
+    expect(unwrap(commandOf(plans, 'findOneAndUpdate')['update'])).toEqual({ $set: {} });
+    expect(defaults.calls[0]?.values).toEqual({});
   });
 
   it('update with an empty payload adds nothing', async () => {
