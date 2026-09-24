@@ -119,6 +119,7 @@ import {
   createSqlBinder,
   findModelAttributeNode,
   interpretModelAttribute,
+  modelAttributeSpecsFrom,
   PSL_CHECK_ON_STI_VARIANT,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
@@ -664,6 +665,7 @@ interface BuildModelNodeInput {
   readonly codecLookup?: CodecLookup;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
+  readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
   /** The target's default namespace id — the lowering context's `namespaceId` fallback for a model with no explicit PSL namespace. */
   readonly defaultNamespaceId: string;
 }
@@ -1120,10 +1122,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (node === undefined) {
         continue;
       }
-      const specFactory = blindCast<
-        ModelAttributeSpecFactory,
-        'contributed model-attribute descriptors carry an ADR-231 attribute-spec factory by construction'
-      >(contributedModelAttribute.spec);
+      const specFactory = input.contributedModelAttributeSpecs[contributedModelAttribute.attribute];
+      if (specFactory === undefined) {
+        continue;
+      }
       const parsed = interpretModelAttribute({
         node,
         spec: specFactory({
@@ -2059,19 +2061,20 @@ export function interpretPslDocumentToSqlContract(
   const diagnostics = createPslDiagnosticCollector(input.sources);
   const composedExtensionNames = new Set(input.composedExtensions ?? []);
   const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
+  const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
   const { binder, diagnostics: binderDiagnostics } = createSqlBinder({
     symbolTable: input.symbolTable,
     sources: input.sources,
     authoringContributions: input.authoringContributions,
     controlMutationDefaults: input.controlMutationDefaults,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
+    contributedModelAttributeSpecs: contributedModelSpecs,
     describeUnsupportedAttribute: describeUnsupportedSqlAttribute({
       composedExtensions: composedExtensionNames,
       authoringContributions: input.authoringContributions,
       sources: input.sources,
       familyId: input.target?.familyId,
       targetId: input.target?.targetId,
-      contributedModelAttributeNames: new Set(modelAttributesByName.keys()),
     }),
   });
   diagnostics.push(
@@ -2510,6 +2513,7 @@ export function interpretPslDocumentToSqlContract(
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       ...ifDefined('codecLookup', input.codecLookup),
       modelAttributesByName,
+      contributedModelAttributeSpecs: contributedModelSpecs,
       defaultNamespaceId,
     });
     modelNodes.push(

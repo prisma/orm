@@ -1,6 +1,7 @@
 import type {
   AuthoringContributions,
   AuthoringFieldNamespace,
+  AuthoringModelAttributeDescriptor,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
@@ -21,6 +22,7 @@ import type {
   FuncCallSig,
   InferAttr,
   ModelAttributeCtx,
+  ModelAttributeSpecFactory,
   ModelSymbol,
   NumLiteral,
   ParsedTaggedLiteral,
@@ -121,6 +123,19 @@ function fieldPresetsAsTypeNames(
   return result;
 }
 
+export function modelAttributeSpecsFrom(
+  modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>,
+): Readonly<Record<string, ModelAttributeSpecFactory>> {
+  const result: Record<string, ModelAttributeSpecFactory> = Object.create(null);
+  for (const [name, descriptor] of modelAttributesByName) {
+    result[name] = blindCast<
+      ModelAttributeSpecFactory,
+      'contributed model-attribute descriptors carry an ADR-231 attribute-spec factory by construction'
+    >(descriptor.spec);
+  }
+  return result;
+}
+
 export function createSqlBinder(input: {
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
@@ -128,6 +143,9 @@ export function createSqlBinder(input: {
   readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
   readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
+  readonly contributedModelAttributeSpecs?:
+    | Readonly<Record<string, ModelAttributeSpecFactory>>
+    | undefined;
 }): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
   const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
   for (const [name, descriptor] of input.scalarColumnDescriptors ?? []) {
@@ -141,7 +159,14 @@ export function createSqlBinder(input: {
       ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
       ...(input.authoringContributions?.type ?? {}),
     },
-    attributeSpecs: sqlAttributeSpecs,
+    attributeSpecs: {
+      model: Object.assign(
+        Object.create(null),
+        sqlAttributeSpecs.model,
+        input.contributedModelAttributeSpecs,
+      ),
+      field: sqlAttributeSpecs.field,
+    },
     controlMutationDefaults: input.controlMutationDefaults ?? {
       defaultFunctionRegistry: new Map(),
       defaultLiteralTagRegistry: new Map(),

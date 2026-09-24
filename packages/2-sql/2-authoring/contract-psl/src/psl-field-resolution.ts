@@ -225,7 +225,6 @@ export function describeUnsupportedSqlAttribute(input: {
   readonly sources: PslSources;
   readonly familyId: string | undefined;
   readonly targetId: string | undefined;
-  readonly contributedModelAttributeNames: ReadonlySet<string>;
 }): DescribeUnsupportedAttribute {
   const namespaceContext = {
     ...ifDefined('familyId', input.familyId),
@@ -234,7 +233,6 @@ export function describeUnsupportedSqlAttribute(input: {
   };
   return ({ attribute, level, owner, field }) => {
     if (level === 'model') {
-      if (input.contributedModelAttributeNames.has(attribute.name)) return undefined;
       const source = diagnosticSource(input.sources, owner.node.syntax);
       const uncomposedNamespace = checkUncomposedNamespace(
         attribute.name,
