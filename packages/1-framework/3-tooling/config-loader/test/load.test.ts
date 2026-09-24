@@ -279,6 +279,20 @@ describe('loadConfig', () => {
   );
 
   it(
+    'refuses a config whose default export is not an object',
+    async () => {
+      writeFileSync(join(tempDir, 'prisma.config.ts'), 'export default [1];\n');
+      process.chdir(tempDir);
+
+      const result = await loadConfig();
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.failure.code).toBe('CONFIG.VERSION_MARKER_MISSING');
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
     'reads an empty orm section from a config that declares none',
     async () => {
       writeFileSync(join(tempDir, 'prisma.config.ts'), 'export default { $prismaConfig: 1 };\n');

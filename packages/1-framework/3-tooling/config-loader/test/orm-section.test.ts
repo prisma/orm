@@ -1,6 +1,10 @@
 import type { SectionProvenance } from '@prisma/cli-engine';
 import { describe, expect, it } from 'vitest';
-import { ormConfigSection, validateOrmSection } from '../src/orm-section';
+import {
+  descriptorRelationshipProblems,
+  ormConfigSection,
+  validateOrmSection,
+} from '../src/orm-section';
 
 const FILE = '/project/prisma.config.ts';
 
@@ -149,6 +153,29 @@ describe('the orm section', () => {
         }),
       ),
     ).toEqual(['extensions.1.targetId']);
+  });
+
+  it('checks a relationship only between subsections the caller accepts', () => {
+    const mismatched = { familyId: 'mongo', targetId: 'mysql' };
+    const config = {
+      family: { familyId: 'sql' },
+      target: { familyId: 'sql', targetId: 'postgres' },
+      driver: mismatched,
+      extensions: [mismatched],
+    };
+
+    expect(descriptorRelationshipProblems(config, () => true).map((p) => p.path)).toEqual([
+      ['driver', 'familyId'],
+      ['driver', 'targetId'],
+      ['extensions', 0, 'familyId'],
+      ['extensions', 0, 'targetId'],
+    ]);
+    expect(
+      descriptorRelationshipProblems(
+        config,
+        (section) => section !== 'driver' && section !== 'extensions',
+      ),
+    ).toEqual([]);
   });
 
   it('reports the removed extensionPacks key', () => {
