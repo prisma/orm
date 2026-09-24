@@ -2219,6 +2219,9 @@ importers:
       '@internal/mongo-codec':
         specifier: workspace:8.0.0-rc.12
         version: link:../1-foundation/mongo-codec
+      '@internal/mongo-contract':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../1-foundation/mongo-contract
       '@internal/mongo-lowering':
         specifier: workspace:8.0.0-rc.12
         version: link:../6-transport/mongo-lowering
@@ -2244,9 +2247,6 @@ importers:
       '@internal/family-mongo':
         specifier: workspace:8.0.0-rc.12
         version: link:../9-family
-      '@internal/mongo-contract':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../1-foundation/mongo-contract
       '@internal/mongo-query-builder':
         specifier: workspace:8.0.0-rc.12
         version: link:../5-query-builders/query-builder

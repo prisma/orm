@@ -6,6 +6,7 @@ import type {
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
+import { timestampNowRuntimeGenerator } from '../core/timestamp-now-runtime-generator';
 import { createMongoAdapter } from '../mongo-adapter';
 
 /**
@@ -23,6 +24,9 @@ const mongoRuntimeAdapterDescriptor: RuntimeAdapterDescriptor<
   MongoRuntimeAdapterInstance
 > & {
   readonly codecs: () => MongoCodecRegistry;
+  readonly mutationDefaultGenerators: () => ReadonlyArray<
+    ReturnType<typeof timestampNowRuntimeGenerator>
+  >;
 } = {
   kind: 'adapter',
   id: 'mongo',
@@ -30,6 +34,7 @@ const mongoRuntimeAdapterDescriptor: RuntimeAdapterDescriptor<
   targetId: 'mongo',
   version: '0.0.1',
   codecs: buildStandardCodecRegistry,
+  mutationDefaultGenerators: () => [timestampNowRuntimeGenerator()],
   create(_stack: ExecutionStack<'mongo', 'mongo'>): MongoRuntimeAdapterInstance {
     const adapter = createMongoAdapter();
     return {

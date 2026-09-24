@@ -94,6 +94,12 @@ export { MongoValidator } from '../ir/mongo-validator';
 export type { MongoValueSetInput } from '../ir/mongo-value-set';
 export { MongoValueSet } from '../ir/mongo-value-set';
 export type {
+  MongoAppliedMutationDefault,
+  MongoMutationDefaults,
+  MongoMutationDefaultsOp,
+  MongoMutationDefaultsOptions,
+} from '../mutation-defaults';
+export type {
   ApplyScopeResult,
   PolymorphicIndexScope,
 } from '../polymorphic-index-scope';
