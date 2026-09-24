@@ -32,6 +32,7 @@ export type MutationDefaultsOp = 'create' | 'update';
 
 export interface MutationDefaultsOptions {
   readonly op: MutationDefaultsOp;
+  /** Required: refs are namespace-scoped, so only defaults of `(namespace, entry)` apply, which tells same-named entries in different namespaces apart. */
   readonly namespace: string;
   readonly entry: string;
   /** The values the caller writes. A key present here is explicit, whatever its value, and gets no default. */
