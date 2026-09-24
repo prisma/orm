@@ -19,7 +19,6 @@
         gap: 12px;
       }
       #header .actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
-      #header .path { opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #format-document {
         border: 1px solid #45475a;
         border-radius: 4px;
@@ -30,6 +29,35 @@
         padding: 3px 8px;
       }
       #format-document:hover { background: #45475a; }
+      /* Tab strip: one tab per scratch-project member. A tab's document opens
+         (and sends didOpen) only the first time it is clicked. */
+      #tab-strip {
+        display: flex;
+        align-items: stretch;
+        gap: 2px;
+        padding: 4px 8px 0;
+        background: #181825;
+        border-bottom: 1px solid #313244;
+        overflow-x: auto;
+      }
+      #tab-strip .tab {
+        border: 1px solid #313244;
+        border-bottom: none;
+        border-radius: 4px 4px 0 0;
+        background: #1e1e2e;
+        color: #a6adc8;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        padding: 6px 12px;
+        white-space: nowrap;
+      }
+      #tab-strip .tab:hover { background: #313244; color: #cdd6f4; }
+      #tab-strip .tab.active {
+        background: #313244;
+        color: #cdd6f4;
+        border-color: #45475a;
+      }
       /* Monaco editor container */
       #editor {
         flex: 1;
@@ -44,9 +72,9 @@
       <span>PSL Playground — live diagnostics from <code>prisma lsp</code></span>
       <div class="actions">
         <button type="button" id="format-document">Format</button>
-        <span class="path" id="schema-path"></span>
       </div>
     </div>
+    <div id="tab-strip"></div>
     <div id="editor"></div>
     <script type="module" src="/src/client/main.ts"></script>
   </body>

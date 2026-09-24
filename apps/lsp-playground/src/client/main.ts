@@ -5,6 +5,11 @@ import {
   type IExtensionManifest,
   registerExtension,
 } from '@codingame/monaco-vscode-api/extensions';
+import {
+  createModelReference,
+  type IReference,
+  type ITextFileEditorModel,
+} from '@codingame/monaco-vscode-api/monaco';
 import { SnippetController2 } from '@codingame/monaco-vscode-api/vscode/vs/editor/contrib/snippet/browser/snippetController2';
 import { KeyCode } from '@codingame/monaco-vscode-editor-api';
 import editorWorkerUrl from '@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker?worker&url';
@@ -116,14 +121,41 @@ function buildWebSocketUrl(wsPath: string): string {
   return window.location.protocol === 'https:' ? `wss://${host}` : `ws://${host}`;
 }
 
+function basename(path: string): string {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+/**
+ * One scratch-project member as the client tracks it: its Monaco-facing
+ * identity (`uri`/`path`), the text last known for it (the seed text until
+ * the tab is opened and edited, then whatever the editor model held when the
+ * user last switched away), and whether `didOpen` has been sent for it yet.
+ *
+ * A tab's document opens — and `didOpen` fires — only the first time it is
+ * activated; re-activating an already-opened tab only swaps the visible
+ * model, never re-opens it.
+ */
+interface Tab {
+  readonly uri: string;
+  readonly path: string;
+  readonly button: HTMLButtonElement;
+  text: string;
+  opened: boolean;
+  /**
+   * A model reference held for the lifetime of the page once opened, never
+   * disposed. `EditorApp.updateCodeResources` disposes its *own* transient
+   * reference to whichever model the editor stops showing; without a second,
+   * independently-held reference keeping the ref count above zero, the
+   * underlying document closes (and its `didOpen` re-fires) every time its
+   * tab is switched away from and back to, defeating "switching back only
+   * swaps the visible model".
+   */
+  pin: IReference<ITextFileEditorModel> | undefined;
+}
+
 async function main(): Promise<void> {
   const runtimeConfig = await loadRuntimeConfig();
-
-  // Temporary shim (multifile-psl-playground S2-D1): render only the first
-  // scratch-project member. The tab strip that opens every member — the
-  // first eagerly, the rest lazily on first click — lands in dispatch 2.
-  const firstMember = runtimeConfig.members[0];
-  if (firstMember === undefined) {
+  if (runtimeConfig.members.length === 0) {
     throw new Error('Playground runtime config carries no scratch-project members');
   }
 
@@ -137,17 +169,35 @@ async function main(): Promise<void> {
     throw new Error('#format-document button not found');
   }
 
-  const fileUri = vscode.Uri.parse(firstMember.uri);
-  const schemaText = firstMember.text;
-
-  const pathEl = document.getElementById('schema-path');
-  if (pathEl !== null) {
-    pathEl.textContent = fileUri.fsPath;
+  const tabStrip = document.getElementById('tab-strip');
+  if (tabStrip === null) {
+    throw new Error('#tab-strip mount point not found');
   }
 
   const fileSystemProvider = new RegisteredFileSystemProvider(false);
-  fileSystemProvider.registerFile(new RegisteredMemoryFile(fileUri, schemaText));
+  const tabs: Tab[] = runtimeConfig.members.map((member) => {
+    const uri = vscode.Uri.parse(member.uri);
+    fileSystemProvider.registerFile(new RegisteredMemoryFile(uri, member.text));
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tab';
+    button.textContent = basename(uri.path);
+    tabStrip.appendChild(button);
+    return {
+      uri: member.uri,
+      path: uri.path,
+      button,
+      text: member.text,
+      opened: false,
+      pin: undefined,
+    };
+  });
   registerFileSystemOverlay(1, fileSystemProvider);
+
+  const firstTab = tabs[0];
+  if (firstTab === undefined) {
+    throw new Error('Playground runtime config carries no scratch-project members');
+  }
 
   const vscodeApiConfig: MonacoVscodeApiConfig = {
     $type: 'extended',
@@ -210,8 +260,8 @@ async function main(): Promise<void> {
   const editorAppConfig: EditorAppConfig = {
     codeResources: {
       modified: {
-        text: schemaText,
-        uri: fileUri.path,
+        text: firstTab.text,
+        uri: firstTab.path,
       },
     },
     editorOptions: {
@@ -253,7 +303,53 @@ async function main(): Promise<void> {
   const languageClientWrapper = new LanguageClientWrapper(languageClientConfig);
   await languageClientWrapper.start();
 
-  await vscode.workspace.openTextDocument(fileUri);
+  let activeTab = firstTab;
+  const setActiveStyling = (): void => {
+    for (const tab of tabs) {
+      tab.button.classList.toggle('active', tab === activeTab);
+    }
+  };
+
+  async function openTab(tab: Tab): Promise<void> {
+    // First activation only: this is the one `didOpen` a never-clicked tab
+    // never sends. `openTextDocument` — via vscode-languageclient's
+    // document-sync feature — is what notifies the language server.
+    await vscode.workspace.openTextDocument(vscode.Uri.parse(tab.uri));
+    // Pin a second, independently-held model reference so the document stays
+    // open server-side even after `updateCodeResources` later disposes its
+    // own reference while switching to a different tab (see the `pin` field
+    // doc on `Tab`).
+    tab.pin = await createModelReference(vscode.Uri.parse(tab.uri));
+    tab.opened = true;
+  }
+
+  async function activateTab(tab: Tab): Promise<void> {
+    if (tab === activeTab) {
+      return;
+    }
+    // Capture the outgoing tab's live edits so switching back later restores
+    // them instead of the stale seed text (updateCodeResources below writes
+    // whatever text it is given back into the file-system overlay).
+    const outgoingModel = editorApp.getEditor()?.getModel();
+    if (outgoingModel !== null && outgoingModel !== undefined) {
+      activeTab.text = outgoingModel.getValue();
+    }
+    if (!tab.opened) {
+      await openTab(tab);
+    }
+    await editorApp.updateCodeResources({ modified: { text: tab.text, uri: tab.path } });
+    activeTab = tab;
+    setActiveStyling();
+  }
+
+  for (const tab of tabs) {
+    tab.button.addEventListener('click', () => void activateTab(tab));
+  }
+
+  // The first tab opens on startup exactly as the single-schema playground
+  // always has; every other tab stays unmanaged until its own first click.
+  await openTab(firstTab);
+  setActiveStyling();
 
   formatButton.addEventListener('click', async () => {
     await vscode.commands.executeCommand('editor.action.formatDocument');

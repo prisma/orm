@@ -1,6 +1,6 @@
 # lsp-playground (private)
 
-A throwaway dev playground that opens a `.psl` file in a browser Monaco editor wired to the Prisma 8 language server (`prisma lsp --stdio`) for live PSL diagnostics, folding ranges, whole-document formatting, and server-driven semantic tokens.
+A throwaway dev playground that opens a multi-file PSL scratch project in a browser Monaco editor wired to the Prisma 8 language server (`prisma lsp --stdio`) for live diagnostics, folding ranges, whole-document formatting, and server-driven semantic tokens.
 
 It is a private, unpublished `apps/` package — not part of the framework build graph and exempt from `lint:deps` layering.
 
@@ -10,28 +10,26 @@ It is a private, unpublished `apps/` package — not part of the framework build
 # 1. Build the playground dependency closure once so the bridge can spawn the built CLI and generated configs can import workspace packages:
 pnpm --filter lsp-playground... run --if-present build
 
-# 2a. Open a scratch schema (no file needed):
+# 2. Open the scratch project (no arguments — a schema path is a hard error, see below):
 psl-playground
 
-# 2b. Or open an existing PSL file:
-psl-playground path/to/schema.psl
-
 # During repository development, the package script is equivalent:
-pnpm --filter lsp-playground start path/to/schema.psl
+pnpm --filter lsp-playground start
 ```
 
-The PSL file is **optional**. With no argument — or a path that does not yet exist — the playground opens a writable scratch schema under `.playground/` so you can start authoring immediately. New scratch schemas start with `// use prisma-8` to enable language-server features; existing files are preserved. Then open the printed `http://localhost:5295/` URL; parse diagnostics update live as you edit, folding controls are available in the editor gutter, semantic highlighting is requested through the language client, and the header's **Format** button sends `textDocument/formatting` to the language server.
+`psl-playground` takes **no arguments**. It always opens the gitignored scratch project under `.playground/scratch/`, seeding it on first creation with three `.prisma` files — two directive-carrying files (`customer.prisma`, `order.prisma`) forming a cross-file relation and a namespace reopened across both, plus one directive-less file (`draft.prisma`) that demonstrates membership exclusion. An **existing** scratch directory is never re-seeded or overwritten; edit the files under `.playground/scratch/` directly and your changes persist across restarts. Passing a schema path as a positional argument exits non-zero with a message pointing at this workflow instead.
+
+Then open the printed `http://localhost:5295/` URL. A tab strip above the editor shows one tab per scratch-project file, labeled by filename; parse diagnostics update live as you edit, folding controls are available in the editor gutter, semantic highlighting is requested through the language client, and the header's **Format** button sends `textDocument/formatting` for the active document.
 
 Everything (editor + LSP) is served on the single port `5295`.
 
-### Config resolution
+### Tabs and lazy opening — the managed/unmanaged demo
 
-The language server identifies schema documents from `prisma.config.ts` (`contract.source.inputs`), discovering a document's config by walking up from the document's own path. The playground resolves what the editor opens, and the config that sits above it, as follows:
+The first tab opens on startup exactly as before. Every other tab stays **unopened** — no `textDocument/didOpen` is sent, and the language server has no knowledge of that file — until you click it for the first time; from then on, switching back to it only swaps the visible editor model (no re-open). This is a deliberate, minimal reproduction of the disk/overlay split the real language server implements (`design-decisions.md` entry 4): an opened document lives in the client's in-memory overlay, while everything else is only known by whatever the server reads from disk.
 
-1. An **existing** file already inside a project (a `prisma.config.ts` is found walking up from it): open it in place under that config.
-2. Otherwise (no file, a non-existent path, or an existing file with no project config): **stage a copy** of the schema under `.playground/` and generate a **default-postgres** config beside it — the "without a config, assume default postgres" path. Staging is required because the server resolves the generated config's `@prisma/orm-postgres` import and discovers the config by walking up from the staged file.
+**Interim limitation, until the language-server slice lands:** a never-clicked tab's file is not yet part of the symbol table, so a cross-file reference into it does not resolve and its own declarations do not appear elsewhere. Click through both `customer.prisma` and `order.prisma` at least once each to see their cross-file relation and reopened `catalog` namespace resolve. `draft.prisma` carries no `// use prisma-8` directive, so it is excluded from the schema regardless of whether its tab is opened — clicking it demonstrates directive-based membership exclusion, not the lazy-open gap. This is the demonstration the slice stages, not a bug to fix here.
 
-There is no `--config` flag: the language server discovers config purely by walking up from each document, so it cannot be pointed at an arbitrary config path.
+Browser edits stay in the in-memory overlay; nothing writes them back to the scratch files on disk.
 
 ## How it works
 
@@ -40,9 +38,10 @@ Monaco editor + VS Code API shim  --LSP/WebSocket-->  ws bridge  --spawn+stdio--
 (monaco-languageclient + vscode-languageclient)       (vscode-ws-jsonrpc/server)   (prisma lsp)
 ```
 
-- `src/bridge.ts` — `ws` + `vscode-ws-jsonrpc/server` (`createServerProcess` + `forward`), adapted from the TypeFox example (MIT). Each browser WebSocket connection spawns `node <built-cli> lsp --stdio` and forwards JSON-RPC between the browser and the language server process.
-- `src/cli.ts` — arg parsing, config resolution, startup for the shared HTTP server that hosts Vite plus the LSP WebSocket bridge, and serving launch-time client config as same-origin JSON at `/__psl_playground_runtime.json` without rewriting tracked source files.
-- `src/client/main.ts` — Monaco editor setup via `EditorApp`, VS Code API service overrides, runtime config fetch/validation, and `LanguageClientWrapper` startup for the `prisma` language id.
+- `src/bridge.ts` — `ws` + `vscode-ws-jsonrpc/server` (`createServerProcess` + `forward`), adapted from the TypeFox example (MIT). Each browser WebSocket connection spawns `node <built-cli> lsp --stdio` and forwards JSON-RPC between the browser and the language server process. File-count-agnostic; unaffected by the scratch project being multi-file.
+- `src/default-config.ts` — ensures the scratch project exists (seeding it once, on first creation only) and (re)generates its `prisma.config.ts`, whose `contract` is the glob `./scratch/**/*.prisma`.
+- `src/cli.ts` — arg parsing (no schema path accepted), startup for the shared HTTP server that hosts Vite plus the LSP WebSocket bridge, and serving launch-time client config — the scratch project's root URI and every member's `{ uri, text }` — as same-origin JSON at `/__psl_playground_runtime.json` without rewriting tracked source files.
+- `src/client/main.ts` — Monaco editor setup via `EditorApp`, the tab strip and lazy-open bookkeeping, VS Code API service overrides, runtime config fetch/validation, and `LanguageClientWrapper` startup for the `prisma` language id.
 
 ## Semantic tokens
 
@@ -57,7 +56,7 @@ Keep PSL meaning in the language server the `prisma lsp` command runs. If semant
 Use this path when changing the language server, playground wiring, or docs for editor features. The visual checks require a browser; a headless JSON-RPC smoke can prove the bridge returns token data, but it cannot prove Monaco theme rendering.
 
 1. Build the dependency closure with `pnpm --filter lsp-playground... run --if-present build`.
-2. Create or choose a representative PSL file that includes a namespace, models, a composite type, a `types` block, attributes, strings, numbers, booleans, and a comment. For example:
+2. Edit `.playground/scratch/customer.prisma` (or any scratch file) to a representative PSL document that includes a namespace, models, a composite type, a `types` block, attributes, strings, numbers, booleans, and a comment — for example, replace its content with:
 
 ```psl
 // use prisma-8
@@ -87,7 +86,7 @@ types {
 }
 ```
 
-3. Start the playground with `pnpm --filter lsp-playground start path/to/schema.psl` (or `psl-playground path/to/schema.psl` when using the package binary) and open the printed `http://localhost:5295/` URL.
+3. Start the playground with `pnpm --filter lsp-playground start` (or `psl-playground` when using the package binary), open the printed `http://localhost:5295/` URL, and click the edited file's tab.
 4. Confirm the browser console logs `Connected to language server` and the Network tab shows the `/psl` WebSocket connected.
 5. Confirm semantic highlighting is server-driven: declarations, field names, attributes, literals, comments, and type references receive semantic styling after the LSP connection initializes. In the Network/WebSocket frames or language-server logs, confirm `textDocument/semanticTokens/full` or `textDocument/semanticTokens/range` requests are sent; there should be no playground-local PSL tokenization code involved.
 6. Edit the document by adding a field such as `enabled Boolean @default(false)` or renaming a model/type reference. Confirm semantic highlighting refreshes after the edit and diagnostics still update live.
