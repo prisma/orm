@@ -22,6 +22,7 @@ const fixtureRoots = [
   'test/enum-order-by',
   'test/sql-builder/fixtures',
   'test/mongo/bson-scalars',
+  'test/mongo/temporal-presets',
 ];
 
 function findConfigs(dir) {

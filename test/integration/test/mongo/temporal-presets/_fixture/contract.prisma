@@ -1,0 +1,11 @@
+// use prisma-8
+
+model Post {
+  id        ObjectId             @id @map("_id")
+  title     String
+  createdAt temporal.createdAt()
+  updatedAt temporal.updatedAt() @map("updated_at")
+  touchedAt temporal.timestamp(onUpdate: now)
+
+  @@map("posts")
+}
