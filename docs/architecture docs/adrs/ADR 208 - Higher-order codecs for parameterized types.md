@@ -39,8 +39,8 @@ export interface CodecDescriptor<P = void> {
   readonly traits: readonly CodecTrait[];
   readonly targetTypes: readonly string[];
   readonly meta?: CodecMeta;
-  readonly paramsSchema: StandardSchemaV1<P>;
-  readonly isParameterized: boolean;
+  readonly paramsSchema: StandardSchemaV1<P> | undefined; // undefined when P = void
+  readonly isParameterized: boolean; // paramsSchema !== undefined
   readonly renderOutputType?: (params: P) => string | undefined;
   readonly factory: (params: P) => (ctx: CodecInstanceContext) => Codec;
 }
