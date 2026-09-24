@@ -11,6 +11,8 @@ import {
   type ContractValueObject,
   type CrossReference,
   crossRef,
+  type ExecutionMutationDefault,
+  type ExecutionMutationDefaultPhases,
   type JsonValue,
   type ValueSetRef,
 } from '@internal/contract/types';
@@ -29,6 +31,7 @@ import type { ControlDefaultRegistries } from '@internal/framework-components/co
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
+  buildMongoExecutionSection,
   buildMongoNamespace,
   type MongoCollectionInput,
   MongoIndex,
@@ -70,6 +73,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
+import { type FieldPresetContext, resolveFieldPreset } from './field-presets';
 import {
   findFieldAttributeNode,
   findModelAttributeNode,
@@ -103,6 +107,7 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly codecLookup?: CodecLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
+  readonly composedExtensions?: readonly string[];
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
 }
@@ -130,7 +135,7 @@ function validateNamespaceBlocksForMongoTarget(input: {
 const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
   [
     'updatedAt',
-    'Mongo lowers no automatic timestamp updates; delete the attribute and set the timestamp in application code.',
+    'To fill the timestamp on create and update, use `temporal.updatedAt()` as the field type.',
   ],
 ]);
 
@@ -968,21 +973,27 @@ function resolveFieldCodecId(
   return scalarTypeCodecIds.get(field.typeName);
 }
 
+interface ResolvedNonRelationField {
+  readonly field: ContractField;
+  readonly executionDefaults?: ExecutionMutationDefaultPhases;
+}
+
 function resolveNonRelationField(
   field: FieldSymbol,
-  ownerName: string,
+  owner: { readonly name: string; readonly kind: 'model' | 'compositeType' },
   compositeTypeNames: ReadonlySet<string>,
   scalarTypeCodecIds: ReadonlyMap<string, string>,
   codecIdByEnumName: ReadonlyMap<string, string>,
-  sources: PslSources,
-  diagnostics: PslDiagnosticCollector,
-): ContractField | undefined {
+  presetContext: FieldPresetContext,
+): ResolvedNonRelationField | undefined {
+  const { sources, diagnostics } = presetContext;
+  const ownerName = owner.name;
   if (compositeTypeNames.has(field.typeName)) {
     const result: ContractField = {
       type: { kind: 'valueObject', name: field.typeName },
       nullable: field.optional,
     };
-    return field.list ? { ...result, many: true } : result;
+    return { field: field.list ? { ...result, many: true } : result };
   }
 
   // If this field's declared type is a known enum name, treat the field as a scalar
@@ -1000,12 +1011,28 @@ function resolveNonRelationField(
       nullable: field.optional,
       valueSet,
     };
-    return field.list ? { ...result, many: true } : result;
+    return { field: field.list ? { ...result, many: true } : result };
   }
 
   // Avoid cascading unsupported-type diagnostics after invalid qualification.
   if (field.malformedType) {
     return undefined;
+  }
+
+  const preset = resolveFieldPreset({
+    field,
+    ownerName,
+    ownerKind: owner.kind,
+    context: presetContext,
+  });
+  if (preset.kind === 'invalid') {
+    return undefined;
+  }
+  if (preset.kind === 'preset') {
+    return {
+      field: preset.field,
+      ...ifDefined('executionDefaults', preset.executionDefaults),
+    };
   }
 
   const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
@@ -1022,7 +1049,7 @@ function resolveNonRelationField(
     type: { kind: 'scalar', codecId },
     nullable: field.optional,
   };
-  return field.list ? { ...result, many: true } : result;
+  return { field: field.list ? { ...result, many: true } : result };
 }
 
 function processEnumDeclarations(input: {
@@ -1085,6 +1112,16 @@ export function interpretPslDocumentToMongoContract(
 ): Result<Contract, ContractSourceDiagnostics> {
   const { symbolTable, sources, scalarTypeCodecIds, codecLookup } = input;
   const diagnostics = createPslDiagnosticCollector(sources);
+  const presetContext: FieldPresetContext = {
+    authoringContributions: input.authoringContributions,
+    composedExtensions: new Set(input.composedExtensions ?? []),
+    sources,
+    diagnostics,
+  };
+  const executionDefaultsByModel = new Map<
+    string,
+    { readonly field: string; readonly phases: ExecutionMutationDefaultPhases }[]
+  >();
   const topLevel = symbolTable.topLevel;
   validateNamespaceBlocksForMongoTarget({
     namespaces: Object.values(topLevel.namespaces),
@@ -1255,17 +1292,21 @@ export function interpretPslDocumentToMongoContract(
 
       const resolved = resolveNonRelationField(
         field,
-        pslModel.name,
+        { name: pslModel.name, kind: 'model' },
         compositeTypeNames,
         scalarTypeCodecIds,
         codecIdByEnumName,
-        sources,
-        diagnostics,
+        presetContext,
       );
       if (!resolved) continue;
 
       const mappedName = fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
-      fields[mappedName] = resolved;
+      fields[mappedName] = resolved.field;
+      if (resolved.executionDefaults) {
+        const modelDefaults = executionDefaultsByModel.get(pslModel.name) ?? [];
+        modelDefaults.push({ field: mappedName, phases: resolved.executionDefaults });
+        executionDefaultsByModel.set(pslModel.name, modelDefaults);
+      }
     }
 
     const isVariantModel = pslModel.attributes.some((attr) => attr.name === 'base');
@@ -1344,15 +1385,14 @@ export function interpretPslDocumentToMongoContract(
     for (const field of Object.values(compositeType.fields)) {
       const resolved = resolveNonRelationField(
         field,
-        compositeType.name,
+        { name: compositeType.name, kind: 'compositeType' },
         compositeTypeNames,
         scalarTypeCodecIds,
         codecIdByEnumName,
-        sources,
-        diagnostics,
+        presetContext,
       );
       if (!resolved) continue;
-      fields[field.name] = resolved;
+      fields[field.name] = resolved.field;
     }
     valueObjects[compositeType.name] = { fields };
   }
@@ -1460,6 +1500,16 @@ export function interpretPslDocumentToMongoContract(
 
   const resolvedModels = polyResult.models;
   const resolvedCollections = polyResult.collections;
+
+  const executionDefaults: ExecutionMutationDefault[] = [];
+  for (const [modelName, modelDefaults] of executionDefaultsByModel) {
+    const entry = resolvedModels[modelName]?.storage.collection;
+    if (entry === undefined) continue;
+    for (const { field, phases } of modelDefaults) {
+      executionDefaults.push({ ref: { namespace: UNBOUND_NAMESPACE_ID, entry, field }, ...phases });
+    }
+  }
+  const execution = buildMongoExecutionSection(executionDefaults);
 
   // The storage value set is the source of truth for both the emit typing and the validator's
   // `enum` keyword. Built once, ahead of validator derivation, from each enum's codec-encoded member
@@ -1591,5 +1641,6 @@ export function interpretPslDocumentToMongoContract(
     capabilities,
     profileHash: computeProfileHash({ target, targetFamily, capabilities }),
     meta: {},
+    ...ifDefined('execution', execution),
   });
 }

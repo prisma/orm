@@ -41,6 +41,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         },
         codecLookup: context.codecLookup,
         authoringContributions: context.authoringContributions,
+        composedExtensions: context.composedExtensions,
         ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),
       });
     },
