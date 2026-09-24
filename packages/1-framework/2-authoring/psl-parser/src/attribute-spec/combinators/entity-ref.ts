@@ -8,7 +8,7 @@ import type {
 } from '../../entity-reference';
 import { describeResolution, entityReference, matchesSelector } from '../../entity-reference';
 import { IdentifierAst } from '../../syntax/ast/identifier';
-import type { AttributeCtx, EntityRefArgType } from '../types';
+import type { EntityRefArgType, ModelAttributeCtx } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
 function unbound(name: string): never {
@@ -19,7 +19,7 @@ function unbound(name: string): never {
 
 export function entityRef<const S extends EntitySelector>(
   expected: S,
-): EntityRefArgType<DeclarationFor<S>, AttributeCtx> {
+): EntityRefArgType<DeclarationFor<S>, ModelAttributeCtx> {
   const label = `${expected.kind === 'block' ? expected.keyword : expected.kind} reference`;
   return {
     kind: 'entityRef',
@@ -33,13 +33,7 @@ export function entityRef<const S extends EntitySelector>(
       if (name === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Expected ${label}`)]);
       }
-      const binder = ctx.binder;
-      if (binder === undefined) {
-        throw new InternalError(
-          `No binder on this attribute context, so "${name}" cannot be resolved: block attributes carry no entity references, and any that are added must be resolved by the binder over block symbols rather than while their arguments parse.`,
-        );
-      }
-      const resolution = binder.symbolForNode(arg.syntax) ?? unbound(name);
+      const resolution = ctx.binder.symbolForNode(arg.syntax) ?? unbound(name);
       if (resolution.kind === 'unresolved') return notOk([]);
       const reference = entityReference(resolution);
       if (reference === undefined || !matchesSelector(reference, expected)) {

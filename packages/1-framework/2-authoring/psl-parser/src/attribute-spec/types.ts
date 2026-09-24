@@ -19,7 +19,6 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 export interface AttributeCtx {
   readonly sources: PslSources;
   readonly symbols: SymbolTable;
-  readonly binder?: Binder | undefined;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
