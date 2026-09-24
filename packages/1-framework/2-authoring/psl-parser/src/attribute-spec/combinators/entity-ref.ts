@@ -6,7 +6,7 @@ import type {
   EntitySelector,
   ResolvedEntityReference,
 } from '../../entity-reference';
-import { lookupEntityReference, lookupEntityReferenceInTable } from '../../entity-reference';
+import { lookupEntityReference, lookupEntityReferenceInSymbols } from '../../entity-reference';
 import { IdentifierAst } from '../../syntax/ast/identifier';
 import type { AttributeCtx, EntityRefArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
@@ -29,7 +29,7 @@ export function entityRef<const S extends EntitySelector>(
       }
       const lookup: EntityLookup =
         ctx.binder === undefined
-          ? lookupEntityReferenceInTable(arg, name, ctx.symbols)
+          ? lookupEntityReferenceInSymbols(arg, name, ctx.symbols)
           : lookupEntityReference(arg, ctx.binder);
       if (lookup.kind === 'unresolved') {
         return lookup.voiced

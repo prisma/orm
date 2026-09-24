@@ -136,7 +136,7 @@ export type {
   EntitySelector,
   ResolvedEntityReference,
 } from '../entity-reference';
-export { lookupEntityReference, lookupEntityReferenceInTable } from '../entity-reference';
+export { lookupEntityReference, lookupEntityReferenceInSymbols } from '../entity-reference';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,

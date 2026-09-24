@@ -47,7 +47,7 @@ export function lookupEntityReference(expression: ExpressionAst, binder: Binder)
   return classify(resolution, true);
 }
 
-export function lookupEntityReferenceInTable(
+export function lookupEntityReferenceInSymbols(
   expression: ExpressionAst,
   name: string,
   symbols: SymbolTable,
