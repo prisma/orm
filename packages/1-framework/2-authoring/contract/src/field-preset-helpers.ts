@@ -1,9 +1,12 @@
 import {
+  type AuthoringEntityTypeNamespace,
   type AuthoringFieldNamespace,
   type AuthoringFieldPresetDescriptor,
+  type AuthoringTypeNamespace,
   isAuthoringFieldPresetDescriptor,
   mergeAuthoringNamespaces,
 } from '@internal/framework-components/authoring';
+import { blindCast } from '@internal/utils/casts';
 import type { AuthoringNamespaceKey } from './composed-helpers-scaffolding';
 import { contractError } from './contract-errors';
 
@@ -63,12 +66,18 @@ const descriptorKindByNamespace = {
 /**
  * Merges one authoring namespace (`type`, `field` or `entityTypes`) across the family, target and extension packs, in order. A duplicate helper path across packs throws.
  */
-export function composePackAuthoringNamespace(
+interface AuthoringNamespaceByKey {
+  readonly type: AuthoringTypeNamespace;
+  readonly field: AuthoringFieldNamespace;
+  readonly entityTypes: AuthoringEntityTypeNamespace;
+}
+
+export function composePackAuthoringNamespace<Key extends AuthoringNamespaceKey>(
   components: readonly {
     readonly authoring?: { readonly [K in AuthoringNamespaceKey]?: unknown };
   }[],
-  key: AuthoringNamespaceKey,
-): Record<string, unknown> {
+  key: Key,
+): AuthoringNamespaceByKey[Key] {
   const { descriptorKind, label } = descriptorKindByNamespace[key];
   const merged: Record<string, unknown> = {};
   for (const component of components) {
@@ -77,5 +86,8 @@ export function composePackAuthoringNamespace(
       mergeAuthoringNamespaces(merged, namespace, [], descriptorKind, label);
     }
   }
-  return merged;
+  return blindCast<
+    AuthoringNamespaceByKey[Key],
+    'mergeAuthoringNamespaces checks every leaf against the descriptor kind for this key while merging'
+  >(merged);
 }

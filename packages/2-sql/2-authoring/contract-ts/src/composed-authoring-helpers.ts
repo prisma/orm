@@ -158,17 +158,17 @@ type AuthoringComponent = {
 };
 
 function composeTypeNamespace(components: readonly AuthoringComponent[]): AuthoringTypeNamespace {
-  return composePackAuthoringNamespace(components, 'type') as AuthoringTypeNamespace;
+  return composePackAuthoringNamespace(components, 'type');
 }
 
 function composeFieldNamespace(components: readonly AuthoringComponent[]): AuthoringFieldNamespace {
-  return composePackAuthoringNamespace(components, 'field') as AuthoringFieldNamespace;
+  return composePackAuthoringNamespace(components, 'field');
 }
 
 function composeEntityNamespace(
   components: readonly AuthoringComponent[],
 ): AuthoringEntityTypeNamespace {
-  return composePackAuthoringNamespace(components, 'entityTypes') as AuthoringEntityTypeNamespace;
+  return composePackAuthoringNamespace(components, 'entityTypes');
 }
 
 /**
