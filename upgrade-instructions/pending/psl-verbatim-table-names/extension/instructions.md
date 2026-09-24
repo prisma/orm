@@ -37,11 +37,33 @@ If you plan a migration (`prisma migration plan`, `prisma db update`, `prisma mi
 ```text
 ✘ [MIGRATION.PLANNING_FAILED] Migration planning failed
   why: MIGRATION.TABLE_NAME_CASE_CHANGED: table "UserProfile" would be created and table "userProfile" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model UserProfile points at "UserProfile" instead of "userProfile".
-→ To keep table "userProfile" and its rows, add @@map("userProfile") to model UserProfile (or run the add-model-map codemod over the schema) and plan again. Prisma 8 has no rename-table operation, so a deliberate rename is done by hand: run ALTER TABLE "userProfile" RENAME TO "UserProfile" (schema-qualified where applicable), after which the plan is empty.
+→ To keep table "userProfile" and its rows, add @@map("userProfile") to model UserProfile (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, make the rename its own schema change, create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration's operations, which renames the table and the objects named after it; in a project that uses db update, rename it by hand with ALTER TABLE "public"."userProfile" RENAME TO "UserProfile", then run db update again.
 ```
 
-The conflict fires for each pair where the table to drop equals the table to create with its first letter lowered, in the same namespace, whatever the columns. It does not fire on an empty database or on tables the contract's control policy marks `external` or `observed`. Mongo has no planner and gives no error: an unmapped model silently reads and writes an empty `UserProfile` collection while the documents stay in `userProfile`, so run the codemod before deploying.
+That is the Postgres output for a model in the default `public` schema. On SQLite the last clause gives the two statements SQLite needs for a rename that only changes case: `in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.`
 
-To adopt the verbatim names on purpose instead of mapping, rename the storage by hand and skip the codemod for those models. Postgres and SQLite: `ALTER TABLE "userProfile" RENAME TO "UserProfile"` (`ALTER TABLE "auth"."userProfile" RENAME TO "UserProfile"` inside a schema). Mongo: `db.userProfile.renameCollection("UserProfile")`. After the rename the migration plan is empty and `db verify` is clean.
+The conflict fires for each pair where the table to drop equals the table to create with its first letter lowered, in the same namespace, whatever the columns. It does not fire on an empty database or on tables the contract's control policy marks `external` or `observed`. Mongo has no such check. A migration planned without the codemod drops the `userProfile` collection, and an application running the unmapped model reads and writes an empty `UserProfile` collection while the documents stay in `userProfile`, so run the codemod before planning or deploying.
+
+To adopt the verbatim names on purpose instead of mapping, skip the codemod for those models and ship the rename as a migration of your contract space. Applications change your tables only by running the migrations your descriptor lists in `contractSpace.migrations`: their `prisma migration plan` copies each one into `migrations/<space-id>/`, and `prisma db migrate` applies it. If you rename the table by hand in your own database and run `db update`, only that database changes. Every application keeps the old table.
+
+**Postgres or SQLite.** Make the rename its own schema change: remove the `@@map` from the models you rename, change nothing else, and run the package's contract-space build. From the extension package root, create a migration for the change:
+
+```bash
+prisma migration new --name rename-user-profile
+```
+
+In the new `migration.ts`, spread one `renameTable` call per renamed table into the operations:
+
+```ts
+override get operations() {
+  return [...this.renameTable({ table: 'userProfile', to: 'UserProfile' })];
+}
+```
+
+On Postgres, add `schema: 'auth'` when the table is not in the default schema or another schema has a table with the same name. The call renames the table and the constraints and indexes named after it, and the rows stay. Run `node migrations/app/<dir>/migration.ts` to write the operations. Add the new migration's `migration.json` and `ops.json` to `contractSpace.migrations` in the descriptor. In the head ref the descriptor passes as `headRef`, set `hash` to the new migration's `to` hash and keep `invariants` as they are. Applications get the rename when they upgrade the extension and run `prisma migration plan` and `prisma db migrate`, and their rows stay.
+
+This works only if the package's migration history is in `migrations/app/`, where `migration new` reads and writes it. If the package keeps its migration directories directly under `migrations/`, as Prisma's own extension packages do, `migration new` does not see that history, the new migration has no start contract, and `renameTable` refuses with `MIGRATION.TABLE_RENAME_UNMATCHED`. A deliberate rename is not supported for that layout yet, so keep the `@@map`.
+
+**MongoDB.** A Mongo contract space has no rename operation, so a deliberate rename is not supported there yet. Keep the `@@map`.
 
 `contract infer` follows the same rule: a table whose name already equals the model name (`"UserProfile"`, `"User"`) infers to a model with no `@@map` and verifies clean, where the previous output pointed the model at a lowercase table that did not exist. A snake_case table still infers with `@@map("user_profile")`. There is nothing to detect for this: the inferred text for such a table is the same as before, it is now correct.

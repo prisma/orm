@@ -1,0 +1,27 @@
+// use prisma-8
+
+namespace public {
+  model Account {
+    id       Int           @id
+    profiles UserProfile[]
+  }
+
+  model UserProfile {
+    id        Int     @id
+    email     String  @unique
+    handle    String
+    tenantId  Int     @map("tenant_id")
+    accountId Int
+    account   Account @relation(fields: [accountId], references: [id])
+
+    @@index([handle])
+    @@map("userProfile")
+    @@rls
+  }
+
+  policy_select tenant_read {
+    target = UserProfile
+    roles  = [app_user]
+    using  = "(tenant_id = 1)"
+  }
+}

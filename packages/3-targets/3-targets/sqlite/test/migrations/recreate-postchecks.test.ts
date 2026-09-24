@@ -205,7 +205,7 @@ describe('buildRecreatePostchecks — constraints', () => {
       }),
     ];
     const checks = buildRecreatePostchecks('users', issues, spec);
-    const uniqueChecks = checks.filter((c) => c.description.includes('unique constraint'));
+    const uniqueChecks = checks.filter((c) => c.description.startsWith('verify unique constraint'));
     expect(uniqueChecks).toHaveLength(2);
     expect(uniqueChecks[0]!.sql).toContain("pragma_index_list('users')");
     expect(uniqueChecks[0]!.sql).toContain('l."unique" = 1');
@@ -236,7 +236,7 @@ describe('buildRecreatePostchecks — constraints', () => {
       }),
     ];
     const checks = buildRecreatePostchecks('posts', issues, spec);
-    const fkChecks = checks.filter((c) => c.description.includes('foreign key'));
+    const fkChecks = checks.filter((c) => c.description.startsWith('verify foreign key'));
     expect(fkChecks).toHaveLength(2);
 
     expect(fkChecks[0]!.sql).toContain("pragma_foreign_key_list('posts')");
@@ -246,6 +246,41 @@ describe('buildRecreatePostchecks — constraints', () => {
 
     expect(fkChecks[1]!.sql).toContain("('tenant_id', 'tenant_id'), ('user_id', 'user_id')");
     expect(fkChecks[1]!.sql).toContain('HAVING COUNT(*) = 2');
+  });
+
+  it('checks that no unexpected unique remains, so removing the last unique is not already satisfied', () => {
+    const spec = tableSpec({ columns: [colSpec({ name: 'email' })], uniques: [] });
+    const issues = [
+      issue({ path: ['database', 'users', 'unique:email'], actual: unique(['email']) }),
+    ];
+
+    expect(buildRecreatePostchecks('users', issues, spec)).toEqual([
+      {
+        description: 'verify "users" has no unique constraint besides the expected ones',
+        sql: `SELECT NOT EXISTS (SELECT 1 FROM pragma_index_list('users') l WHERE l.origin = 'u' AND NOT (0))`,
+      },
+    ]);
+  });
+
+  it('checks the foreign key count, so removing the last foreign key is not already satisfied', () => {
+    const spec = tableSpec({ columns: [colSpec({ name: 'user_id' })], foreignKeys: [] });
+    const issues = [
+      issue({
+        path: ['database', 'posts', 'foreign-key:user_id->.users(id)'],
+        actual: foreignKey({
+          columns: ['user_id'],
+          referencedTable: 'users',
+          referencedColumns: ['id'],
+        }),
+      }),
+    ];
+
+    expect(buildRecreatePostchecks('posts', issues, spec)).toEqual([
+      {
+        description: 'verify "posts" has exactly 0 foreign keys',
+        sql: `SELECT (SELECT COUNT(DISTINCT id) FROM pragma_foreign_key_list('posts')) = 0`,
+      },
+    ]);
   });
 
   it('does not emit constraint postchecks when only column-level issues are present', () => {

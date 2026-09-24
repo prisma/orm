@@ -137,7 +137,20 @@ describe('SQLite planner table-name case guard', () => {
       }),
     ]);
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
-    expect(result.conflicts[0]?.why).toContain('ALTER TABLE "userProfile" RENAME TO "UserProfile"');
+    expect(result.conflicts[0]?.why).toContain(
+      'in a project with migration history, make the rename its own schema change, create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration\'s operations, which renames the table and the objects named after it;',
+    );
+    expect(result.conflicts[0]?.why).not.toContain('--rename');
+  });
+
+  it('gives a by-hand rename through a temporary name, because SQLite refuses a case-only rename in one statement', () => {
+    const result = planFromLive(['userProfile'], 'UserProfile')();
+
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
+    expect(result.conflicts[0]?.why).toContain(
+      'in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.',
+    );
   });
 
   it('still refuses when UserProfile also gained a column', () => {

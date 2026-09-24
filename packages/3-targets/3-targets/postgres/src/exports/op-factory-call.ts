@@ -26,9 +26,10 @@ export {
   DropTableCall,
   EnableRowLevelSecurityCall,
   RawSqlCall,
-  RenameCheckConstraintCall,
+  RenameConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
+  RenameTableCall,
   SetDefaultCall,
   SetNotNullCall,
 } from '../core/migrations/op-factory-call';
