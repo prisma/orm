@@ -337,7 +337,7 @@ function createModelAccessorInScope<
     },
   );
   return blindCast<
-    VariantAwareModelAccessor<TContract, ModelName, VariantName>,
+    VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId>,
     'model accessor proxy resolves declared model fields and the selected variant fields dynamically'
   >(accessor);
 }

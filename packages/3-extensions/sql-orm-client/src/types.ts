@@ -17,6 +17,7 @@ import {
   ListExpression,
   NullCheckExpr,
   OrderByItem,
+  type OrderByNulls,
   ParamRef,
   type AggregateFn as SqlAggregateFn,
 } from '@internal/sql-relational-core/ast';
@@ -205,8 +206,18 @@ export type ComparisonMethodFns<T, CodecId extends string = never> = {
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
   isNotNull(): AnyExpression;
-  asc(): OrderByItem;
-  desc(): OrderByItem;
+  asc: OrderingExpression['asc'];
+  desc: OrderingExpression['desc'];
+};
+
+export type OrderingOptions = {
+  readonly nulls?: OrderByNulls;
+};
+
+/** A value the collection can order by: `asc`/`desc`, optionally placing nulls first or last. */
+export type OrderingExpression = {
+  asc(options?: OrderingOptions): OrderByItem;
+  desc(options?: OrderingOptions): OrderByItem;
 };
 
 /**
@@ -406,11 +417,11 @@ export const COMPARISON_METHODS_META = {
   },
   asc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.asc(left),
+    create: (left) => (options?: OrderingOptions) => OrderByItem.asc(left, options),
   },
   desc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.desc(left),
+    create: (left) => (options?: OrderingOptions) => OrderByItem.desc(left, options),
   },
   isNull: {
     traits: [],
@@ -449,6 +460,53 @@ export type RelationFilterAccessor<
   none(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): AnyExpression;
 };
 
+type RelationAccessorMethodName =
+  | keyof RelationFilterAccessor<Contract<SqlStorage>, never, string>
+  | 'count';
+
+type IsOrderable<Traits> = ['order'] extends [Traits] ? true : false;
+
+type OrderableFieldOrderings<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = {
+  [K in keyof FieldsOf<TContract, ModelName, NsId> & string as IsOrderable<
+    FieldTraits<TContract, ModelName, K, NsId>
+  > extends true
+    ? K
+    : never]: OrderingExpression;
+};
+
+/**
+ * A to-one relation inside `where`/`orderBy`: the relation filters plus each orderable scalar field of the related model. A related field named like a relation method is not exposed.
+ */
+export type ToOneRelationAccessor<
+  TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
+  RelatedModelName extends string,
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> &
+  Omit<
+    OrderableFieldOrderings<TContract, RelatedModelName, RelatedNsId>,
+    RelationAccessorMethodName
+  >;
+
+/**
+ * A to-many relation inside `where`/`orderBy`: the relation filters plus `count`, which orders by the number of related rows matching an optional predicate.
+ */
+export type ToManyRelationAccessor<
+  TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
+  RelatedModelName extends string,
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> &
+  (IsOrderable<AggregateOutputTraits<TContract, 'count'>> extends true
+    ? {
+        count(
+          predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>,
+        ): OrderingExpression;
+      }
+    : unknown);
+
 type ScalarModelAccessor<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -471,11 +529,22 @@ type RelationModelAccessor<
   ModelName extends string,
   NsId extends string = never,
 > = {
-  [K in RelationNames<TContract, ModelName, NsId>]: RelationFilterAccessor<
+  [K in RelationNames<TContract, ModelName, NsId>]: RelationCardinality<
     TContract,
-    RelationTargetNamespace<TContract, ModelName, K, NsId>,
-    RelatedModelName<TContract, ModelName, K, NsId> & string
-  >;
+    ModelName,
+    K,
+    NsId
+  > extends '1:1' | 'N:1'
+    ? ToOneRelationAccessor<
+        TContract,
+        RelationTargetNamespace<TContract, ModelName, K, NsId>,
+        RelatedModelName<TContract, ModelName, K, NsId> & string
+      >
+    : ToManyRelationAccessor<
+        TContract,
+        RelationTargetNamespace<TContract, ModelName, K, NsId>,
+        RelatedModelName<TContract, ModelName, K, NsId> & string
+      >;
 };
 
 export type ModelAccessor<
@@ -612,6 +681,21 @@ type AggregateRowFor<TContract extends Contract<SqlStorage>, Op extends string, 
   : InputCodecId extends keyof OperationRows<AggregateOperationOf<TContract, Op>>
     ? OperationRows<AggregateOperationOf<TContract, Op>>[InputCodecId]
     : AnyInputRow<AggregateOperationOf<TContract, Op>>;
+
+type AggregateOutputTraits<
+  TContract extends Contract<SqlStorage>,
+  Op extends string,
+  InputCodecId = never,
+> =
+  AggregateRowFor<TContract, Op, InputCodecId> extends {
+    readonly output: infer Output extends string;
+  }
+    ? Output extends keyof ExtractCodecTypes<TContract>
+      ? ExtractCodecTypes<TContract>[Output] extends { readonly traits: infer Traits }
+        ? Traits
+        : never
+      : never
+    : never;
 
 type OperationRows<Operation> = Operation extends { readonly byCodec: infer Rows } ? Rows : never;
 type AnyInputRow<Operation> = Operation extends { readonly anyInput: infer Row } ? Row : never;
