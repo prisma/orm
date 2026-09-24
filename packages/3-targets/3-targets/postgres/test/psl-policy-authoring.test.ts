@@ -224,6 +224,41 @@ namespace public {
     ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],
   ]);
 
+  function interpret(text: string) {
+    const { document, sources } = parse(text, 'psl-policy-authoring.test.psl');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      pslBlockDescriptors: assembled.pslBlockDescriptors,
+    });
+    return interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
+      document,
+      symbolTable,
+      sources,
+      target: postgresTarget,
+      scalarColumnDescriptors,
+      authoringContributions: assembled,
+      composedExtensionContracts: new Map(),
+      createNamespace: postgresCreateNamespace,
+      capabilities: { sql: { scalarList: true } },
+    });
+  }
+
+  it('reads a policy expression as a JSON string, and keeps any other backslash sequence as written', () => {
+    const result = interpret(
+      source.replace(
+        `using  = "owner_id = current_setting('app.uid')::int"`,
+        String.raw`using  = "a\tb\u0041 \"q\" \\ \/ \d"`,
+      ),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+    expect(Object.values(ns.policy).map((policy) => policy.using)).toEqual(['a\tbA "q" \\ / \\d']);
+  });
+
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
     const { symbolTable, diagnostics } = buildSymbolTable({

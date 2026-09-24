@@ -3,6 +3,7 @@ import type { PslModel } from '@internal/framework-components/psl-ast';
 import type { SqlTableIR } from '@internal/sql-schema-ir/types';
 import { assertDefined } from '@internal/utils/assertions';
 import { postgresError } from '../errors';
+import { createUniqueFieldName } from '../psl-ast/unique-name';
 
 export type ResolvedColumnFieldName = {
   readonly fieldName: string;
@@ -67,21 +68,6 @@ export function resolveColumnFieldName(
   return (
     fieldNamesByTable.get(tableName)?.get(columnName)?.fieldName ?? toFieldName(columnName).name
   );
-}
-
-export function createUniqueFieldName(
-  desiredName: string,
-  usedFieldNames: ReadonlySet<string>,
-): string {
-  if (!usedFieldNames.has(desiredName)) {
-    return desiredName;
-  }
-
-  let counter = 2;
-  while (usedFieldNames.has(`${desiredName}${counter}`)) {
-    counter++;
-  }
-  return `${desiredName}${counter}`;
 }
 
 export function buildTopLevelNameMap(

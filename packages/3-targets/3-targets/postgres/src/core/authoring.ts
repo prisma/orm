@@ -149,17 +149,28 @@ export interface RoleExtensionBlock extends PslExtensionBlock {
 }
 
 /**
- * Maps a `policy_<op>` keyword to the RLS operation it authors. The keyword
- * IS the operation (per the project's rejection of a `policy { operation = … }`
- * conditional block).
+ * The block keyword that authors each row-level security operation. The keyword is the operation, so
+ * a policy block has no `operation` parameter. The reader looks a block's operation up here, and
+ * `contract infer` and `contract print` look up the keyword to write.
  */
-const POLICY_KEYWORD_OPERATION: Readonly<Record<string, RlsPolicyOperation>> = {
-  policy_select: 'select',
-  policy_insert: 'insert',
-  policy_update: 'update',
-  policy_delete: 'delete',
-  policy_all: 'all',
-};
+export const POLICY_BLOCK_KEYWORDS = {
+  select: 'policy_select',
+  insert: 'policy_insert',
+  update: 'policy_update',
+  delete: 'policy_delete',
+  all: 'policy_all',
+} as const satisfies Readonly<Record<RlsPolicyOperation, string>>;
+
+function isRlsPolicyOperation(value: string): value is RlsPolicyOperation {
+  return Object.hasOwn(POLICY_BLOCK_KEYWORDS, value);
+}
+
+/** The operation a `policy_<operation>` block keyword authors, or `undefined` for another keyword. */
+function policyOperationOfKeyword(keyword: string): RlsPolicyOperation | undefined {
+  return Object.keys(POLICY_BLOCK_KEYWORDS)
+    .filter(isRlsPolicyOperation)
+    .find((operation) => POLICY_BLOCK_KEYWORDS[operation] === keyword);
+}
 
 function readValueParam(block: PslExtensionBlock, key: string): string | undefined {
   const param = block.parameters[key];
@@ -172,11 +183,21 @@ function readListRefParams(block: PslExtensionBlock, key: string): string[] {
   return param.items.flatMap((item) => (item.kind === 'ref' ? [item.identifier] : []));
 }
 
+const JSON_STRING_ESCAPES: ReadonlyMap<string, string> = new Map([
+  ['"', '"'],
+  ['\\', '\\'],
+  ['/', '/'],
+  ['b', '\b'],
+  ['f', '\f'],
+  ['n', '\n'],
+  ['r', '\r'],
+  ['t', '\t'],
+]);
+
 /**
- * Unwraps a quoted PSL string argument, inverting the printer's
- * `escapePslString` escapes (`\\`, `\"`, `\n`, `\r`). An unknown escape
- * sequence is kept verbatim, matching the printer-side `unescapePslString`
- * convention.
+ * Unwraps a quoted policy expression. The PSL printer writes a block value as a JSON string, so
+ * each JSON escape is decoded, `\uXXXX` included. The PSL tokenizer lets a backslash escape any
+ * character; a backslash sequence that is not a JSON escape is kept as written.
  */
 function unwrapQuotedString(raw: string): string {
   if (!(raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2)) {
@@ -189,18 +210,19 @@ function unwrapQuotedString(raw: string): string {
       result += inner[i];
       continue;
     }
-    const next = inner[i + 1];
-    if (next === '\\' || next === '"') {
-      result += next;
-    } else if (next === 'n') {
-      result += '\n';
-    } else if (next === 'r') {
-      result += '\r';
+    const next = inner.charAt(i + 1);
+    const escaped = JSON_STRING_ESCAPES.get(next);
+    const hex = inner.slice(i + 2, i + 6);
+    if (escaped !== undefined) {
+      result += escaped;
+      i++;
+    } else if (next === 'u' && /^[0-9a-fA-F]{4}$/.test(hex)) {
+      result += String.fromCharCode(Number.parseInt(hex, 16));
+      i += 5;
     } else {
-      result += '\\';
-      result += next;
+      result += `\\${next}`;
+      i++;
     }
-    i++;
   }
   return result;
 }
@@ -252,7 +274,7 @@ function lowerRlsPolicyFromBlock(
   ctx: AuthoringEntityContext,
 ): PostgresRlsPolicy | undefined {
   const prefix = block.name;
-  const operation = POLICY_KEYWORD_OPERATION[block.keyword] ?? 'select';
+  const operation = policyOperationOfKeyword(block.keyword) ?? 'select';
   // The interpreter resolves the descriptor-declared `target` model ref to
   // its storage table name before invoking this factory (an unresolved or
   // missing required ref is the interpreter's diagnostic), so a lookup miss
@@ -591,9 +613,9 @@ export const postgresAuthoringPslBlockDescriptors = {
   // (a wrong predicate for the operation is a load-time diagnostic there),
   // since the generic descriptor validator is not wired into the SQL-family
   // interpreter.
-  policy_select: {
+  [POLICY_BLOCK_KEYWORDS.select]: {
     kind: 'pslBlock',
-    keyword: 'policy_select',
+    keyword: POLICY_BLOCK_KEYWORDS.select,
     documentation: 'Defines a row-level security policy controlling which rows can be selected.',
     discriminator: 'policy',
     name: { required: true },
@@ -606,9 +628,9 @@ export const postgresAuthoringPslBlockDescriptors = {
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
   },
-  policy_delete: {
+  [POLICY_BLOCK_KEYWORDS.delete]: {
     kind: 'pslBlock',
-    keyword: 'policy_delete',
+    keyword: POLICY_BLOCK_KEYWORDS.delete,
     documentation: 'Defines a row-level security policy controlling which rows can be deleted.',
     discriminator: 'policy',
     name: { required: true },
@@ -621,9 +643,9 @@ export const postgresAuthoringPslBlockDescriptors = {
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
   },
-  policy_insert: {
+  [POLICY_BLOCK_KEYWORDS.insert]: {
     kind: 'pslBlock',
-    keyword: 'policy_insert',
+    keyword: POLICY_BLOCK_KEYWORDS.insert,
     documentation: 'Defines a row-level security policy checking rows being inserted.',
     discriminator: 'policy',
     name: { required: true },
@@ -636,9 +658,9 @@ export const postgresAuthoringPslBlockDescriptors = {
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
   },
-  policy_update: {
+  [POLICY_BLOCK_KEYWORDS.update]: {
     kind: 'pslBlock',
-    keyword: 'policy_update',
+    keyword: POLICY_BLOCK_KEYWORDS.update,
     documentation:
       'Defines a row-level security policy controlling row visibility and checks for updates.',
     discriminator: 'policy',
@@ -653,9 +675,9 @@ export const postgresAuthoringPslBlockDescriptors = {
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
   },
-  policy_all: {
+  [POLICY_BLOCK_KEYWORDS.all]: {
     kind: 'pslBlock',
-    keyword: 'policy_all',
+    keyword: POLICY_BLOCK_KEYWORDS.all,
     documentation: 'Defines a row-level security policy applying to all operations.',
     discriminator: 'policy',
     name: { required: true },

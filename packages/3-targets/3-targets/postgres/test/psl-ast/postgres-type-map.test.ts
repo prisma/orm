@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPostgresTypeMap } from '../../src/core/psl-infer/postgres-type-map';
+import { createPostgresTypeMap } from '../../src/core/psl-ast/postgres-type-map';
 
 describe('createPostgresTypeMap', () => {
   const typeMap = createPostgresTypeMap();

@@ -1,22 +1,17 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver from '@internal/driver-postgres/control';
-import sql from '@internal/family-sql/control';
-import { createControlStack } from '@internal/framework-components/control';
-import { printPsl } from '@internal/psl-printer';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
-import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
-import postgres from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { blindCast } from '@internal/utils/casts';
+import { timeouts } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import postgresAdapter from '../src/exports/control';
+import {
+  printAndReadBack,
+  printContract,
+  readPsl,
+  serializedWithoutCapabilities,
+} from './helpers/psl-print';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 
@@ -45,73 +40,9 @@ const cases: ReadonlyArray<{ readonly name: string; readonly contractJson: strin
   },
 ];
 
-type SourceContext = Parameters<ReturnType<typeof prismaContract>['source']['load']>[0];
-
-function sourceContext(resolvedInputs: readonly string[]): SourceContext {
-  const stack = createControlStack({
-    family: sql,
-    target: postgres,
-    adapter: postgresAdapter,
-    driver: postgresDriver,
-    extensions: [],
-  });
-  return {
-    composedExtensions: stack.extensions.map((extension) => extension.id),
-    composedExtensionContracts: stack.extensionContracts,
-    authoringContributions: stack.authoringContributions,
-    codecLookup: stack.codecLookup,
-    controlMutationDefaults: stack.controlMutationDefaults,
-    dataTypeLookup: stack.dataTypeLookup,
-    resolvedInputs,
-    capabilities: stack.capabilities,
-  };
-}
-
 function loadContract(relativePath: string): Contract<SqlStorage> {
   const json: unknown = JSON.parse(readFileSync(join(repoRoot, relativePath), 'utf-8'));
   return new PostgresContractSerializer().deserializeContract(json);
-}
-
-function printAsPsl(contract: Contract<SqlStorage>): string {
-  const context = sourceContext([]);
-  const ast = postgres.printPslContract?.(contract, {
-    authoringTypes: context.authoringContributions.type,
-  });
-  if (ast === undefined) throw new Error('the Postgres target has no printPslContract hook');
-  return printPsl(ast, {
-    pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
-    codecLookup: context.codecLookup,
-  });
-}
-
-async function readBack(
-  text: string,
-  defaultControlPolicy?: Contract<SqlStorage>['defaultControlPolicy'],
-): Promise<Contract<SqlStorage>> {
-  const printedPath = join(mkdtempSync(join(tmpdir(), 'psl-print-')), 'contract.prisma');
-  writeFileSync(printedPath, text);
-  const result = await prismaContract(printedPath, {
-    target: postgresPackRef,
-    createNamespace: postgresCreateNamespace,
-    enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
-    ...(defaultControlPolicy === undefined ? {} : { defaultControlPolicy }),
-  }).source.load(sourceContext([printedPath]));
-  if (!result.ok) {
-    throw new Error(
-      `the printed PSL did not load: ${JSON.stringify(result.failure.diagnostics)}\n${text}`,
-    );
-  }
-  return blindCast<Contract<SqlStorage>, 'the Postgres PSL source yields a SQL contract'>(
-    result.value,
-  );
-}
-
-/** The serialized contract without `capabilities`, which the composed stack reports rather than the source. */
-function serialize(contract: Contract<SqlStorage>): unknown {
-  const { capabilities: _, ...authored } = JSON.parse(
-    JSON.stringify(new PostgresContractSerializer().serializeContract(contract)),
-  );
-  return authored;
 }
 
 /**
@@ -234,6 +165,87 @@ policy_all p_admin {
 `,
   },
   {
+    name: 'a check written with a name prefix',
+    schema: `model Widget {
+  id    Int    @id
+  email String
+
+  @@check(expression: "length(email) > 0", name: "widget_email_not_blank")
+  @@check(expression: "id > 0", map: "widget_id_positive")
+}
+`,
+  },
+  {
+    name: 'a list of value objects',
+    schema: `type Address {
+  street String
+  city   String?
+}
+
+model Person {
+  id    Int       @id
+  home  Address
+  addrs Address[]
+}
+`,
+  },
+  {
+    name: 'a policy expression holding a quote, a backslash and a line break',
+    schema: `namespace unbound {
+  role app_user {
+  }
+}
+
+model Note {
+  id    Int    @id
+  owner String
+
+  @@rls
+}
+
+policy_select p_read {
+  target = Note
+  roles  = [app_user]
+  using  = "owner = 'a\\"b' OR owner ~ '\\\\d'\\nOR owner = 'c'"
+}
+`,
+  },
+  {
+    name: 'a policy expression holding a tab and another control character',
+    schema: `namespace unbound {
+  role app_user {
+  }
+}
+
+model Note {
+  id    Int    @id
+  owner String
+
+  @@rls
+}
+
+policy_select p_read {
+  target = Note
+  roles  = [app_user]
+  using  = "owner = 'a\tb\u0001'"
+}
+`,
+  },
+  {
+    name: 'enum member values holding a tab and a quote',
+    schema: `enum Label {
+  @@type("pg/text@1")
+  Tabbed = "a\\tb"
+  Quoted = "say \\"hi\\""
+}
+
+model Tagged {
+  id    Int   @id
+  label Label
+}
+`,
+  },
+  {
     name: 'a model in the unbound namespace',
     schema: `namespace unbound {
   model Setting {
@@ -245,13 +257,19 @@ policy_all p_admin {
 ];
 
 describe('a printed PSL contract reads back as the same contract', () => {
-  it.each(pslCases)('$name', async ({ schema }) => {
-    const authored = await readBack(`// use prisma-8\n${schema}`);
-    const printed = await readBack(printAsPsl(authored));
+  it.each(pslCases)(
+    '$name',
+    async ({ schema }) => {
+      const authored = await readPsl(`// use prisma-8\n${schema}`);
+      const printed = await printAndReadBack(authored);
 
-    expect(serialize(printed)).toEqual(serialize(authored));
-    expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
-  });
+      expect(serializedWithoutCapabilities(printed)).toEqual(
+        serializedWithoutCapabilities(authored),
+      );
+      expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
+    },
+    timeouts.pslRoundTrip,
+  );
 });
 
 describe('a contract the language cannot carry is refused by name', () => {
@@ -259,21 +277,48 @@ describe('a contract the language cannot carry is refused by name', () => {
     const authored = loadContract(
       'test/integration/test/sql-orm-client/fixtures/generated/contract.json',
     );
-    expect(() => printAsPsl(authored)).toThrow(
+    expect(() => printContract(authored)).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.PRINT_UNSUPPORTED',
-        message: expect.stringContaining('"Article.reviewer"'),
+        meta: { model: 'Article', field: 'reviewer' },
+      }),
+    );
+  });
+
+  it('refuses a relation to a Supabase model, which lives in another contract space', () => {
+    expect(() => printContract(loadContract('examples/supabase/src/contract.json'))).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        meta: { model: 'Profile', field: 'user', space: 'supabase' },
+      }),
+    );
+  });
+
+  it('refuses a many-to-many relation whose junction model has no relation back to it', () => {
+    const authored = loadContract(
+      'test/integration/test/sql-orm-client/fixtures/junction-namespaces/generated/contract.json',
+    );
+    expect(() => printContract(authored)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        meta: { model: 'User', field: 'roles' },
       }),
     );
   });
 });
 
 describe('a printed emitted contract reads back as the same contract', () => {
-  it.each(cases)('$name', async ({ contractJson }) => {
-    const authored = loadContract(contractJson);
-    const printed = await readBack(printAsPsl(authored), authored.defaultControlPolicy);
+  it.each(cases)(
+    '$name',
+    async ({ contractJson }) => {
+      const authored = loadContract(contractJson);
+      const printed = await printAndReadBack(authored);
 
-    expect(serialize(printed)).toEqual(serialize(authored));
-    expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
-  });
+      expect(serializedWithoutCapabilities(printed)).toEqual(
+        serializedWithoutCapabilities(authored),
+      );
+      expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
+    },
+    timeouts.pslRoundTrip,
+  );
 });

@@ -2,11 +2,11 @@ import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/type
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
+import { PRINTED_PSL_TYPE_NAMES } from '../../../src/core/psl-ast/postgres-type-map';
 import {
   CODEC_ID_BY_PRINTED_TYPE,
   dataTypeForPrintedType,
 } from '../../../src/core/psl-infer/infer-default-codec';
-import { PRINTED_PSL_TYPE_NAMES } from '../../../src/core/psl-infer/postgres-type-map';
 import { printPslFromFlat } from '../fixtures';
 
 /** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */

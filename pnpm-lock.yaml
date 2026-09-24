@@ -5402,6 +5402,9 @@ importers:
       '@internal/extension-pgvector':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/3-extensions/pgvector
+      '@internal/extension-postgis':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/3-extensions/postgis
       '@internal/extension-supabase':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/3-extensions/supabase

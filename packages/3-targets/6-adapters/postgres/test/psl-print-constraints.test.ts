@@ -8,9 +8,9 @@ import { asNamespaceId } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
-import { createSqlContract } from '@repo/test-utils';
+import { createSqlContract, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { loadPrintedPsl, printContractAsPsl, storageTable } from './support';
+import { printContract, readPsl } from './helpers/psl-print';
 
 const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
 const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
@@ -26,9 +26,26 @@ interface ModelInput {
   readonly relations?: Record<string, ContractRelation>;
 }
 
+interface ColumnShape {
+  readonly [key: string]: unknown;
+  readonly codecId: string;
+  readonly nullable: boolean;
+}
+
+interface TableShape {
+  readonly [key: string]: unknown;
+  readonly columns: Record<string, ColumnShape>;
+}
+
+/** The domain field the PSL source derives for a scalar column. */
+function domainFieldOf(column: ColumnShape | undefined): ContractField {
+  if (column === undefined) return INT_FIELD;
+  return { nullable: column.nullable, type: { kind: 'scalar', codecId: column.codecId } };
+}
+
 function contractOf(input: {
   readonly models: Record<string, ModelInput>;
-  readonly tables: Record<string, unknown>;
+  readonly tables: Record<string, TableShape>;
 }): Contract<SqlStorage> {
   const domainNamespace: ApplicationDomainNamespace = {
     models: Object.fromEntries(
@@ -37,7 +54,10 @@ function contractOf(input: {
         {
           storage: { table: model.table, namespaceId: 'public', fields: model.fields },
           fields: Object.fromEntries(
-            Object.keys(model.fields).map((fieldName) => [fieldName, INT_FIELD]),
+            Object.entries(model.fields).map(([fieldName, { column }]) => [
+              fieldName,
+              domainFieldOf(input.tables[model.table]?.columns[column]),
+            ]),
           ),
           relations: model.relations ?? {},
         },
@@ -45,6 +65,12 @@ function contractOf(input: {
     ),
   };
   const json = createSqlContract({
+    roots: Object.fromEntries(
+      Object.entries(input.models).map(([name, model]) => [
+        model.table,
+        { namespace: asNamespaceId('public'), model: name },
+      ]),
+    ),
     namespaces: { public: domainNamespace },
     storage: { namespaces: { public: { id: 'public', entries: { table: input.tables } } } },
   });
@@ -53,14 +79,23 @@ function contractOf(input: {
   );
 }
 
+/** The storage table of a loaded contract, or a thrown error naming what is missing. */
+function storageTable(contract: Contract<SqlStorage>, tableName: string) {
+  const table = contract.storage.namespaces['public']?.entries.table?.[tableName];
+  if (table === undefined) {
+    throw new Error(`the contract has no table "public"."${tableName}"`);
+  }
+  return table;
+}
+
 function table(input: {
-  readonly columns: Record<string, unknown>;
+  readonly columns: Record<string, ColumnShape>;
   readonly primaryKey?: { readonly columns: readonly string[] };
   readonly uniques?: readonly unknown[];
   readonly indexes?: readonly unknown[];
   readonly foreignKeys?: readonly unknown[];
   readonly checks?: readonly unknown[];
-}): unknown {
+}): TableShape {
   return {
     columns: input.columns,
     uniques: input.uniques ?? [],
@@ -85,19 +120,21 @@ function widget(overrides: Parameters<typeof table>[0]): Contract<SqlStorage> {
 
 const WIDGET_COLUMNS = { id: INT_COLUMN, email: TEXT_COLUMN };
 
-describe('table constraints survive the print and the read back', () => {
+describe('table constraints survive the print and the read back', {
+  timeout: timeouts.pslRoundTrip,
+}, () => {
   it('prints a check constraint the PSL source reads back with its name and expression', async () => {
     const contract = widget({
       columns: WIDGET_COLUMNS,
       checks: [{ name: 'widget_email_not_blank', expression: 'length(email) > 0' }],
     });
 
-    const text = printContractAsPsl(contract);
+    const text = printContract(contract).text;
     expect(text).toContain(
       '@@check(expression: "length(email) > 0", map: "widget_email_not_blank")',
     );
 
-    const readBack = storageTable(await loadPrintedPsl(text), 'widget');
+    const readBack = storageTable(await readPsl(text), 'widget');
     expect(readBack.checks?.map((check) => ({ ...check }))).toEqual([
       { name: 'widget_email_not_blank', expression: 'length(email) > 0' },
     ]);
@@ -109,10 +146,10 @@ describe('table constraints survive the print and the read back', () => {
       uniques: [{ columns: ['email'], name: 'widget_email_key' }],
     });
 
-    const text = printContractAsPsl(contract);
+    const text = printContract(contract).text;
     expect(text).toContain('@@unique([email], map: "widget_email_key")');
 
-    const readBack = storageTable(await loadPrintedPsl(text), 'widget');
+    const readBack = storageTable(await readPsl(text), 'widget');
     expect(readBack.uniques.map((unique) => ({ ...unique }))).toEqual([
       { columns: ['email'], name: 'widget_email_key' },
     ]);
@@ -125,10 +162,10 @@ describe('table constraints survive the print and the read back', () => {
       indexes: [{ name: 'widget_email_idx', unique: true, columns: ['email'] }],
     });
 
-    const text = printContractAsPsl(contract);
+    const text = printContract(contract).text;
     expect(text).toContain('unique: true');
 
-    const readBack = storageTable(await loadPrintedPsl(text), 'widget');
+    const readBack = storageTable(await readPsl(text), 'widget');
     expect(readBack.uniques).toEqual([]);
     expect(readBack.indexes.map((index) => ({ name: index.name, unique: index.unique }))).toEqual([
       { name: 'widget_email_idx', unique: true },
@@ -184,7 +221,9 @@ function postAndUser(input: {
   });
 }
 
-describe('relations survive the print and the read back', () => {
+describe('relations survive the print and the read back', {
+  timeout: timeouts.pslRoundTrip,
+}, () => {
   it('keeps a foreign key name the PSL source would not derive', async () => {
     const contract = postAndUser({
       userIdColumn: 'id',
@@ -206,10 +245,10 @@ describe('relations survive the print and the read back', () => {
       ],
     });
 
-    const text = printContractAsPsl(contract);
+    const text = printContract(contract).text;
     expect(text).toContain('map: "post_written_by_user"');
 
-    const readBack = storageTable(await loadPrintedPsl(text), 'post');
+    const readBack = storageTable(await readPsl(text), 'post');
     expect(readBack.foreignKeys.map((key) => key.name)).toEqual(['post_written_by_user']);
   });
 
@@ -246,7 +285,7 @@ describe('relations survive the print and the read back', () => {
       ],
     });
 
-    const readBack = storageTable(await loadPrintedPsl(printContractAsPsl(contract)), 'post');
+    const readBack = storageTable(await readPsl(printContract(contract).text), 'post');
     expect(
       readBack.foreignKeys.map((key) => ({
         source: [...key.source.columns],

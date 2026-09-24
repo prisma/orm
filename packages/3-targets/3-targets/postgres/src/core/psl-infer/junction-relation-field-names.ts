@@ -2,9 +2,9 @@ import { toModelName } from '@internal/family-sql/psl-infer';
 import { flatPslModels } from '@internal/framework-components/psl-ast';
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { parsePostgresDefault } from '../default-normalizer';
+import { createPostgresTypeMap } from '../psl-ast/postgres-type-map';
 import { buildPslDocumentAst } from './infer-psl-contract';
 import { createPostgresDefaultMapping } from './postgres-default-mapping';
-import { createPostgresTypeMap } from './postgres-type-map';
 
 const EMPTY_FOREIGN_KEY_EXTRAS = {
   extraRelationsByTable: new Map(),

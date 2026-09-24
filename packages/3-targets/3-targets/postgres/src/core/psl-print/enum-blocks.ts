@@ -1,5 +1,4 @@
 import type { ContractEnum } from '@internal/contract/types';
-import { toEnumName } from '@internal/family-sql/psl-infer';
 import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
@@ -7,17 +6,27 @@ import type {
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
-import { buildNativeEnumBlock } from '../psl-infer/infer-enum-blocks';
-import { createUniqueFieldName } from '../psl-infer/infer-names';
-import { SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
+import { buildNativeEnumBlock } from '../psl-ast/native-enum-block';
+import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import {
+  refuseNativeEnumControl,
+  refuseNativeEnumWithoutValueSet,
+  refuseNonIdentifier,
+} from './refusals';
 
-/** One `enum <name> { … }` block per domain enum, each member written as `Name = <value>` under `@@type`. */
+/**
+ * One `enum <name> { … }` block per domain enum, each member written as
+ * `Name = <value>` under `@@type`. The PSL source reads a member value as JSON,
+ * so the value is written as JSON text.
+ */
 export function buildDomainEnumBlocks(
   enums: Readonly<Record<string, ContractEnum>>,
 ): readonly PslExtensionBlock[] {
   return Object.entries(enums).map(([name, domainEnum]): PslExtensionBlock => {
+    refuseNonIdentifier('enum', name);
     const parameters: Record<string, PslExtensionBlockParamValue> = {};
     for (const member of domainEnum.members) {
+      refuseNonIdentifier('enum member', member.name);
       parameters[member.name] = {
         kind: 'value',
         raw: JSON.stringify(member.value),
@@ -52,6 +61,8 @@ export interface NativeEnumEmission {
   readonly blocks: readonly PslExtensionBlock[];
   /** Native type name, bare and schema-qualified, → the `native_enum` block that declares it. */
   readonly blockNamesByTypeName: ReadonlyMap<string, string>;
+  /** Block name → the members of the value set the PSL source derives from that block. */
+  readonly derivedValueSets: ReadonlyMap<string, readonly string[]>;
 }
 
 function sameValues(left: readonly unknown[], right: readonly unknown[]): boolean {
@@ -62,13 +73,13 @@ function sameValues(left: readonly unknown[], right: readonly unknown[]): boolea
  * Builds one `native_enum` block per enum type a namespace declares.
  *
  * A contract keys a native enum by its type name and keys the value set it
- * derives by the name the schema gave the enum, so the block is named after
- * that value set when one is found: the value set a column typed by the enum
- * names; else, for an enum no column refers to, the unclaimed value set with
- * the enum's own name that holds exactly its members, or the only such value
- * set. If none is found, the block name is derived from the type name the way
- * `contract infer` derives one, kept apart from every other block name in the
- * namespace. `@@map` carries the type name whenever the two differ.
+ * derives by the name the schema gave the enum, and the PSL source derives
+ * that value set from the block, named after the block. So the block is named
+ * after the enum's value set: the value set a column typed by the enum names;
+ * else, for an enum no column refers to, the unclaimed value set with the
+ * enum's own name that holds exactly its members, or else the first unclaimed
+ * one that does. An enum with no such value set is refused. `@@map` carries
+ * the type name whenever it differs from the block name.
  */
 export function buildNativeEnumBlocksForNamespace(input: {
   readonly namespaceId: string;
@@ -85,9 +96,9 @@ export function buildNativeEnumBlocksForNamespace(input: {
   const claimed = new Set(valueSetNamesByTypeName.values());
 
   const unreferenced: { entryName: string; nativeEnum: PostgresNativeEnum }[] = [];
-  const blockNamesByTypeName = new Map<string, string>();
   const nameByEntry = new Map<string, string>();
   for (const [entryName, nativeEnum] of input.nativeEnums) {
+    refuseNativeEnumControl(input.namespaceId, nativeEnum);
     const { typeName } = nativeEnum;
     const fromColumn =
       valueSetNamesByTypeName.get(typeName) ??
@@ -99,35 +110,27 @@ export function buildNativeEnumBlocksForNamespace(input: {
     nameByEntry.set(entryName, fromColumn);
   }
 
-  const unmatched: { entryName: string; nativeEnum: PostgresNativeEnum }[] = [];
   for (const { entryName, nativeEnum } of unreferenced) {
     const candidates = [...input.valueSets]
       .filter(([name, values]) => !claimed.has(name) && sameValues(values, nativeEnum.members))
       .map(([name]) => name);
-    const exact = candidates.find((name) => name === entryName);
-    const chosen = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
-    if (chosen === undefined) {
-      unmatched.push({ entryName, nativeEnum });
-      continue;
-    }
+    const chosen = candidates.find((name) => name === entryName) ?? candidates[0];
+    if (chosen === undefined) refuseNativeEnumWithoutValueSet(input.namespaceId, nativeEnum);
     claimed.add(chosen);
     nameByEntry.set(entryName, chosen);
   }
 
-  const blockNames = new Set(nameByEntry.values());
-  for (const { entryName, nativeEnum } of unmatched) {
-    const derived = createUniqueFieldName(toEnumName(nativeEnum.typeName).name, blockNames);
-    blockNames.add(derived);
-    nameByEntry.set(entryName, derived);
-  }
-
   const blocks: PslExtensionBlock[] = [];
+  const blockNamesByTypeName = new Map<string, string>();
+  const derivedValueSets = new Map<string, readonly string[]>();
   for (const [entryName, nativeEnum] of input.nativeEnums) {
     const { typeName } = nativeEnum;
     const blockName = nameByEntry.get(entryName) ?? typeName;
+    refuseNonIdentifier('native enum', blockName);
     blocks.push(buildNativeEnumBlock(blockName, typeName, nativeEnum.members));
     blockNamesByTypeName.set(typeName, blockName);
     blockNamesByTypeName.set(`${input.namespaceId}.${typeName}`, blockName);
+    derivedValueSets.set(blockName, nativeEnum.members);
   }
-  return { blocks, blockNamesByTypeName };
+  return { blocks, blockNamesByTypeName, derivedValueSets };
 }

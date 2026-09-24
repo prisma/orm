@@ -1,5 +1,3 @@
-import { type ColumnDefault, isColumnDefault } from '@internal/contract/types';
-import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
 import type {
   PslAttribute,
   PslAttributeArgument,
@@ -57,23 +55,4 @@ export function positionalArg(value: string): PslAttributeArgument {
 
 export function namedArg(name: string, value: string): PslAttributeArgument {
   return { kind: 'named', name, value, span: SYNTHETIC_SPAN };
-}
-
-/**
- * Resolves a `SqlColumnIR.default` value into a normalized {@link ColumnDefault}.
- *
- * `SqlSchemaIR` types the column default as `string` (a raw database default
- * expression). Some legacy fixtures and tests still pass already-normalized
- * `ColumnDefault` objects in the same slot, so we accept either shape
- * defensively at runtime.
- */
-export function parseColumnDefault(
-  value: unknown,
-  nativeType: string | undefined,
-  rawDefaultParser: PslPrinterOptions['parseRawDefault'],
-): ColumnDefault | undefined {
-  if (typeof value === 'string') {
-    return rawDefaultParser ? rawDefaultParser(value, nativeType) : undefined;
-  }
-  return isColumnDefault(value) ? value : undefined;
 }

@@ -10,11 +10,19 @@ import {
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from '../codec-ids';
-import { postgresError } from '../errors';
 import { postgresNowGeneratorIdFor } from '../now-generators';
-import { buildAttribute, namedArg, positionalArg } from '../psl-infer/psl-literals';
+import { buildAttribute, namedArg, positionalArg } from '../psl-ast/psl-literals';
+import {
+  refuseGeneratorOnUpdate,
+  refuseGeneratorWithoutPslFunction,
+  refuseNowGeneratorPairedWithAnother,
+} from './refusals';
 
-/** The `temporal.*` preset each codec with a "now" generator is authored through. */
+/**
+ * The `temporal.*` field preset each codec with a "now" generator is authored through. The target
+ * contributes the presets; `adapter-postgres/test/psl-print-generated-values.test.ts` writes and
+ * reads back every one the stack contributes, so this table cannot drift from them.
+ */
 const TEMPORAL_PRESET_NAMES: ReadonlyMap<string, string> = new Map([
   [PG_TIMESTAMP_TEMPORAL_CODEC_ID, 'timestamp'],
   [PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID, 'timestamptz'],
@@ -23,7 +31,11 @@ const TEMPORAL_PRESET_NAMES: ReadonlyMap<string, string> = new Map([
   [PG_TIMESTAMPTZ_DATE_CODEC_ID, 'timestamptzJsDate'],
 ]);
 
-/** The `@default(<fn>(…))` call each id-generator is authored through. */
+/**
+ * The `@default(<fn>(…))` call each id generator is authored through. The Postgres adapter registers
+ * the functions; `adapter-postgres/test/psl-print-generated-values.test.ts` writes and reads back
+ * every call the stack registers, so this table cannot drift from them.
+ */
 type GeneratorCall = (params: Record<string, unknown> | undefined) => string;
 
 const GENERATOR_CALLS: ReadonlyMap<string, GeneratorCall> = new Map<string, GeneratorCall>([
@@ -44,20 +56,20 @@ export interface TemporalPresetPhases {
   readonly onUpdate: boolean;
 }
 
-export type PrintedExecutionDefault =
+export type BuiltExecutionDefault =
   | { readonly kind: 'attribute'; readonly attribute: PslFieldAttribute }
   | { readonly kind: 'temporal'; readonly phases: TemporalPresetPhases };
 
 /**
- * How one column's execution generators are written in PSL: an id generator
- * prints as a `@default(<fn>())` attribute, and a wall-clock-now generator
- * prints as the `temporal.*` preset the column's codec is authored through.
+ * How one column's execution generators are written in PSL: an id generator as a `@default(<fn>())`
+ * attribute, and a wall-clock-now generator as the `temporal.*` preset the column's codec is
+ * authored through.
  */
-export function printExecutionDefault(input: {
+export function buildExecutionDefault(input: {
   readonly executionDefault: ExecutionMutationDefault;
   readonly codecId: string;
   readonly coordinate: string;
-}): PrintedExecutionDefault {
+}): BuiltExecutionDefault {
   const { executionDefault, codecId, coordinate } = input;
   const onCreateId = executionDefault.onCreate?.id;
   const onUpdateId = executionDefault.onUpdate?.id;
@@ -69,43 +81,21 @@ export function printExecutionDefault(input: {
     const onUpdate = onUpdateId === nowGeneratorId;
     if (onCreate || onUpdate) {
       if ((onCreateId !== undefined && !onCreate) || (onUpdateId !== undefined && !onUpdate)) {
-        throw postgresError(
-          'CONTRACT.PRINT_UNSUPPORTED',
-          `contract print: column ${coordinate} takes the wall-clock-now generator in one phase and "${onCreate ? onUpdateId : onCreateId}" in the other, which cannot be written in Prisma 8 PSL.`,
-          {
-            why: 'The temporal preset a now generator is authored through writes each phase as `now`, so the other generator would be dropped from the written file.',
-            fix: 'Keep authoring this contract in its current source.',
-            meta: { coordinate, onCreate: onCreateId, onUpdate: onUpdateId },
-          },
-        );
+        refuseNowGeneratorPairedWithAnother({
+          coordinate,
+          onCreate: onCreateId,
+          onUpdate: onUpdateId,
+          other: onCreate ? onUpdateId : onCreateId,
+        });
       }
       return { kind: 'temporal', phases: { presetName, onCreate, onUpdate } };
     }
   }
 
-  if (onUpdateId !== undefined) {
-    throw postgresError(
-      'CONTRACT.PRINT_UNSUPPORTED',
-      `contract print: column ${coordinate} generates a value on update ("${onUpdateId}"), which cannot be written in Prisma 8 PSL.`,
-      {
-        why: '`@default(…)` writes a generator for create only; a generator on update is written only through a temporal preset, which takes the wall-clock-now generator.',
-        fix: 'Keep authoring this contract in its current source.',
-        meta: { coordinate, onCreate: onCreateId, onUpdate: onUpdateId },
-      },
-    );
-  }
+  const phases = { coordinate, onCreate: onCreateId, onUpdate: onUpdateId };
+  if (onUpdateId !== undefined) refuseGeneratorOnUpdate(phases);
   const call = onCreateId === undefined ? undefined : GENERATOR_CALLS.get(onCreateId);
-  if (call === undefined) {
-    throw postgresError(
-      'CONTRACT.PRINT_UNSUPPORTED',
-      `contract print: column ${coordinate} is generated by "${onCreateId}", which has no PSL default function.`,
-      {
-        why: 'The printer writes each generator as the PSL default function that produces it, and this generator has none.',
-        fix: 'Keep authoring this contract in its current source.',
-        meta: { coordinate, onCreate: onCreateId, onUpdate: onUpdateId },
-      },
-    );
-  }
+  if (call === undefined) refuseGeneratorWithoutPslFunction(phases);
   return {
     kind: 'attribute',
     attribute: buildAttribute('field', 'default', [

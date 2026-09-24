@@ -17,9 +17,9 @@ import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../../../src/core/authoring';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
+import { createPostgresTypeMap } from '../../../src/core/psl-ast/postgres-type-map';
 import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
-import { createPostgresTypeMap } from '../../../src/core/psl-infer/postgres-type-map';
 
 function enumInfoOf(definitions: Record<string, readonly string[]>): EnumInfo {
   return {

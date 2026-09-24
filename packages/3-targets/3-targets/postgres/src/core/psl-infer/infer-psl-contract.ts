@@ -16,6 +16,8 @@ import {
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { parsePostgresDefault } from '../default-normalizer';
 import { postgresError } from '../errors';
+import { createPostgresTypeMap } from '../psl-ast/postgres-type-map';
+import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
 import { buildNativeEnumBlocks, PSL_SCALAR_TYPE_NAMES } from './infer-enum-blocks';
@@ -26,10 +28,8 @@ import {
 } from './infer-foreign-keys';
 import { buildModel } from './infer-model-blocks';
 import { buildFieldNamesByTable, buildTopLevelNameMap, topologicalSort } from './infer-names';
-import { buildPolicyBlocks } from './infer-policy-blocks';
+import { buildIntrospectedPolicyBlocks } from './infer-policy-blocks';
 import { createPostgresDefaultMapping } from './postgres-default-mapping';
-import { createPostgresTypeMap } from './postgres-type-map';
-import { SYNTHETIC_SPAN } from './psl-literals';
 
 /**
  * Infers a PSL AST (for `printPsl`) from an introspected Postgres schema tree.
@@ -310,7 +310,7 @@ export function buildPslDocumentAst(
   ]);
   const { relationsByTable } = inferRelations(schemaIR.tables, modelNameMap);
 
-  const policyEmission = buildPolicyBlocks(
+  const policyEmission = buildIntrospectedPolicyBlocks(
     rlsExtras?.policiesByTable ?? new Map(),
     modelNameMap,
     new Set([

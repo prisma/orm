@@ -10,8 +10,10 @@ export type {
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
   OperationPreviewCapable,
+  PrintedPslContract,
   PslContractInferCapable,
   PslContractPrintCapable,
+  PslSourceSettings,
   SchemaSubjectClassifierCapable,
   SchemaViewCapable,
 } from '../control/control-capabilities';

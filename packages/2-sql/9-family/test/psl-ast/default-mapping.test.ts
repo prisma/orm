@@ -15,7 +15,7 @@ import {
   type DefaultMappingOptions,
   type DefaultMappingResult,
   mapDefault,
-} from '../../src/core/psl-contract-infer/default-mapping';
+} from '../../src/core/psl-ast/default-mapping';
 
 /** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */
 const BACKTICK = '\u0060';
