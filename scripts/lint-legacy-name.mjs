@@ -40,12 +40,18 @@ const RETIREMENT_PROOFS = new Set([
 
 /** Files that read the retired name so projects and shells set up by earlier releases keep working. */
 const COMPATIBILITY_SITES = new Set([
-  'packages/1-framework/3-tooling/language-server/src/schema-directive.ts',
-  'packages/1-framework/3-tooling/language-server/test/schema-directive.test.ts',
+  'packages/1-framework/2-authoring/psl-parser/src/schema-directive.ts',
+  'packages/1-framework/2-authoring/psl-parser/test/schema-directive.test.ts',
   'packages/1-framework/3-tooling/language-server/test/server.test.ts',
   'packages/1-framework/3-tooling/cli-telemetry/src/gating.ts',
   'packages/1-framework/3-tooling/cli-telemetry/test/gating.test.ts',
   'docs/Telemetry.md',
+]);
+
+/** Files that name the retired directive spelling because they rename it into the current one. */
+const DIRECTIVE_RENAME_CODEMODS = new Set([
+  'upgrade-instructions/pending/multifile-psl/app/instructions.md',
+  'upgrade-instructions/pending/multifile-psl/app/scripts/add-use-prisma-8-directive.mjs',
 ]);
 
 /**
@@ -89,6 +95,10 @@ const ALLOWED = [
   {
     why: 'compatibility with what earlier releases wrote into user projects and shells — the language server still serves a schema headed `// use prisma-next` (and formatting renames it), and the telemetry opt-out still honours `PRISMA_NEXT_DISABLE_TELEMETRY`',
     matches: (relPath) => COMPATIBILITY_SITES.has(relPath),
+  },
+  {
+    why: 'the codemod that renames a schema headed `// use prisma-next` to the current directive, and its instructions — both must name the retired spelling to find it',
+    matches: (relPath) => DIRECTIVE_RENAME_CODEMODS.has(relPath),
   },
 ];
 
