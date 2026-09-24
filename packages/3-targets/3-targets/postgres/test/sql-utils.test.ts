@@ -93,13 +93,31 @@ describe('quoteIdentifier', () => {
     warnSpy.mockRestore();
   });
 
-  it('stays silent for a multibyte identifier that is exactly 63 bytes', () => {
+  it('warns for the shortest identifier that can exceed 63 bytes', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // '€' (U+20AC) is 3 UTF-8 bytes: 21 characters = 63 bytes, exactly at the limit.
-    const identifier = '€'.repeat(21);
+    // '€' (U+20AC) is 3 UTF-8 bytes, the most one UTF-16 code unit can take.
+    const identifier = `${'€'.repeat(21)}a`;
 
     const result = quoteIdentifier(identifier);
 
+    expect(identifier.length).toBe(22);
+    expect(new TextEncoder().encode(identifier).length).toBe(64);
+    expect(result).toBe(`"${identifier}"`);
+    expect(warnSpy).toHaveBeenCalledWith(
+      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's 63-byte limit and will be truncated`,
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('stays silent for a multibyte identifier that is exactly 63 bytes', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Over 21 code units, so the length alone cannot rule out an overrun.
+    const identifier = `${'a'.repeat(42)}${'€'.repeat(7)}`;
+
+    const result = quoteIdentifier(identifier);
+
+    expect(identifier.length).toBe(49);
     expect(new TextEncoder().encode(identifier).length).toBe(63);
     expect(result).toBe(`"${identifier}"`);
     expect(warnSpy).not.toHaveBeenCalled();
