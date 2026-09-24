@@ -417,10 +417,13 @@ pgTextColumn satisfies ColumnHelperForStrict<PgTextDescriptor>;
  * column's `codecId` alone, without also inspecting `nativeType` — which
  * the managed (DDL) phase needs to target `CREATE TYPE`/`ALTER TYPE`
  * operations at exactly the columns that use one.
+ *
+ * Not `textual`, although its values are strings: Postgres has no `LIKE`,
+ * `ILIKE` or `to_tsvector` over an enum type.
  */
 export class PgEnumCodec extends CodecImpl<
   typeof PG_ENUM_CODEC_ID,
-  readonly ['equality', 'order', 'textual'],
+  readonly ['equality', 'order'],
   string,
   string
 > {
@@ -470,7 +473,7 @@ export class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams> {
   }
   override readonly dataType = pgEnum.id;
   override readonly codecId = PG_ENUM_CODEC_ID;
-  override readonly traits = ['equality', 'order', 'textual'] as const;
+  override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = pgEnumParamsSchema satisfies StandardSchemaV1<PgEnumParams>;
   override renderValueLiteral(value: JsonValue): string | undefined {

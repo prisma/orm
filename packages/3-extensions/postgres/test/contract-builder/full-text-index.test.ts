@@ -19,7 +19,14 @@ import {
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import { defineContract, field, fullTextIndex, model } from '../../src/exports/contract-builder';
+import {
+  defineContract,
+  field,
+  fullTextIndex,
+  model,
+  nativeEnum,
+  pg,
+} from '../../src/exports/contract-builder';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
@@ -155,6 +162,28 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
         },
       }),
     ).toThrow(expect.objectContaining({ code: 'CONTRACT.INDEX_INVALID' }));
+  });
+
+  it('refuses a native enum column, which Postgres has no to_tsvector for', () => {
+    const Mood = nativeEnum('Mood', 'happy', 'sad');
+
+    expect(() =>
+      defineContract({
+        models: {
+          Message: model('Message', {
+            fields: { id: field.column(intColumn).id(), mood: field.column(pg.enum(Mood)) },
+          }).sql(({ cols }) => ({
+            table: 'message',
+            indexes: [fullTextIndex(cols.mood, { name: 'message_mood_search' })],
+          })),
+        },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.INDEX_INVALID',
+        message: expect.stringContaining('pg/enum@1'),
+      }),
+    );
   });
 
   it('names the field and its codec when it refuses one', () => {

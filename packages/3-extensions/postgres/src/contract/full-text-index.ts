@@ -72,7 +72,7 @@ export function fullTextIndex(
             `fullTextIndex indexes a text column, but "${column.fieldName}" is stored as \`${resolved.codecId}\`.`,
             {
               why: 'to_tsvector takes text; Postgres rejects the CREATE INDEX for any other column type.',
-              fix: 'Index a text, varchar, char or enum column, or drop the index.',
+              fix: 'Index a text, varchar or char column, or drop the index.',
               meta: {
                 helper: 'fullTextIndex',
                 fieldName: column.fieldName,
