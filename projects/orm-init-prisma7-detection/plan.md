@@ -5,13 +5,13 @@
 
 ## At a glance
 
-Two slices, one per family. Slice 1 delivers the whole Postgres path: detection, the side-by-side setup with consent, the scaffold variant, the next steps, the fixture, and the docs. Slice 2 reuses everything and turns the Mongo refusal into support once the parallel project's Mongo source exists.
+Two slices, one per family. Slice 1 delivers the whole Postgres path: detection, the side-by-side setup with consent, the scaffold variant, the next steps, the fixture, and the docs. Slice 2 needs no change to init's logic: init checks the schema with whatever `prisma7Schema` the chosen target package exports (design notes D10), so the Mongo path works once the parallel project's Mongo source ships.
 
 ## Composition
 
 ### Stack
 
-1. **Slice `01-postgres`** — `slices/01-postgres/` — **all five dispatches built; end-to-end proof green after #30287 merged; PR https://github.com/prisma/orm/pull/30291**
+1. **Slice `01-postgres`** — `slices/01-postgres/` — **all five dispatches built; end-to-end proof green after #30287 merged; dispatches 6 and 7 replaced by the target selection and schema check recorded in D10; PR https://github.com/prisma/orm/pull/30291**
    - **Outcome:** a Prisma 7 Postgres project run through `orm init` ends up as § At a glance in the spec, and `db sign` succeeds against the database its Prisma 7 migrations built.
    - **Builds on:** [PR #30287](https://github.com/prisma/orm/pull/30287) merged (`prisma7Schema` in `@prisma/orm-postgres/config`).
    - **Hands to:** the detection, consent, config-evaluation, and scaffold code paths parameterised by target; the fixture project layout; the next-steps text.
@@ -21,7 +21,7 @@ Two slices, one per family. Slice 1 delivers the whole Postgres path: detection,
    - **Outcome:** the same for a Prisma 6 Mongo schema, through `@prisma/orm-mongo/config`'s `prisma7Schema`.
    - **Builds on:** slice 1; `projects/prisma7-contract-source/` slice 2 merged.
    - **Hands to:** project close-out.
-   - **Focus:** the target branch in the config template and the provider check; a Mongo fixture; the Mongo next steps (`db update --advance-ref db` instead of `db sign`, per the parallel project).
+   - **Focus:** no init logic changes. A Mongo fixture and an end-to-end case; a Mongo variant of the Prisma 7 quick reference (`quick-reference-prisma7.md` shows Postgres examples); checking the next steps against the Mongo source's adoption flow.
 
 ## Dependencies (external)
 

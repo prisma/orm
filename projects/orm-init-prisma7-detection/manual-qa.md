@@ -2,7 +2,7 @@
 
 Audience: an end user with a Prisma 7 Postgres project who follows the public upgrade guide and runs `prisma orm init` from this branch instead of the guide's hand edits. Runs against the CLI built from this branch, real Prisma 7 packages from npm, and an in-process Postgres from `@prisma/dev`.
 
-Known limitation to record, not a finding: the published `@prisma/orm-postgres` does not yet export `prisma7Schema` (PR #30287), so `contract emit` is expected to fail after the scaffold. Record the exact message and exit code; judge whether a user would understand what to do.
+Known limitation to record, not a finding: the `latest` release of `@prisma/orm-postgres` (8.0.0-rc.11, published 2026-09-13) predates `prisma7Schema` (PR #30287, merged 2026-09-16). Init's schema check therefore finds no Prisma 7 source in the package it installs, and S4 expects `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`. S4b exercises the success path with the package's `dev` build installed beforehand and `--skip-install`.
 
 ## Setup
 
@@ -12,7 +12,7 @@ Known limitation to record, not a finding: the published `@prisma/orm-postgres` 
    - `prisma.config.ts`: `import 'dotenv/config'; import { defineConfig } from 'prisma/config'; export default defineConfig({ schema: 'prisma/schema.prisma', migrations: { path: 'prisma/migrations' }, datasource: { url: process.env['DATABASE_URL']! } });`
    - `prisma/schema.prisma`: `generator client { provider = "prisma-client"; output = "../generated/prisma" }`, `datasource db { provider = "postgresql" }`, the guide's `User` (id autoincrement, email unique, name optional, posts) and `Post` (id, title, content optional, published default false, author relation) models.
    - `src/index.ts`: constructs `PrismaClient` from `../generated/prisma/client` with `PrismaPg`, inserts one user if none exist, prints `user count: N`.
-   - `scripts/db-start.ts`: copy the approach from `examples/prisma7-adoption/scripts/db-start.ts` on branch `bot/prisma7-contract-source` (`git show bot/prisma7-contract-source:examples/prisma7-adoption/scripts/db-start.ts`): start `@prisma/dev` in-process Postgres and write `DATABASE_URL` to `.env`.
+   - `scripts/db-start.ts`: copy `examples/prisma7-adoption/scripts/db-start.ts` from `main`. It imports `createDevDatabase` from `@repo/test-utils`, which is not installable outside the workspace; replace that call with `startPrismaDevServer` from `@prisma/dev`, as `test/utils/src/exports/index.ts` does. It starts an in-process Postgres and writes `DATABASE_URL` to `.env`.
    - `tsconfig.json`: `module: nodenext`, `moduleResolution: nodenext`, `strict`, `types: ["node"]`, include `src`, `scripts`, `prisma.config.ts`.
 3. `pnpm install --ignore-workspace`. Start the database in the background (`pnpm db:start &`, keep it running for the whole QA), then `pnpm migrate --name init`, `pnpm generate`, `pnpm dev` (expect `user count: 1`).
 4. `git init` inside the project and commit everything except `node_modules`, `generated`, `.env`, so `git status` shows exactly what init changes. Also record `find prisma -type f | sort | xargs shasum` to `wip/qa/prisma-before.txt`.
@@ -37,11 +37,18 @@ Record for each: the exact command, exit code, stdout and stderr (save to `wip/q
 
 `node <bin> orm init --from-prisma7-schema prisma/schema.prisma --confirm prisma7-app --json`. This installs from npm and spawns the project's `prisma` for emit. Expected:
 
-- `prisma.config.ts` renamed to `prisma7.config.ts` with the import now `@prisma/prisma7/config`; the new `prisma.config.ts` has the `prisma7Schema('prisma/schema.prisma', { output: 'src/prisma/contract.json' })` line.
-- `package.json`: scripts `generate`, `migrate`, `migrate:deploy`, `studio` now call `prisma7`; `dev` and `db:start` untouched; `contract:emit` added; devDependencies gain `@prisma/prisma7` and `prisma` is at an 8.x version; `@prisma/client` unchanged.
+- With the `latest` `@prisma/orm-postgres`: exit 2, `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE` naming `@prisma/orm-postgres`; the project is unchanged apart from `@prisma/orm-postgres` and `dotenv` in `package.json`, and the printed remove command removes them. Stop S4 here and continue with S4b.
+
+### S4b. The check passes, JSON
+
+On a fresh pre-init copy, install the `dev` build of the target package first: `pnpm add @prisma/orm-postgres@dev dotenv --ignore-workspace`. Then `node <bin> orm init --from-prisma7-schema prisma/schema.prisma --confirm prisma7-app --skip-install --json`. Then install what init lists and run `pnpm prisma contract emit`. Expected:
+
+- `prisma.config.ts` renamed to `prisma7.config.ts` with the import now `@prisma/prisma7/config`; the new `prisma.config.ts` has `contract: prisma7Schema('prisma/schema.prisma')` and `output: 'src/prisma'`.
+- `package.json`: scripts `generate`, `migrate`, `migrate:deploy`, `studio` now call `prisma7`; `dev` and `db:start` untouched; `contract:emit` added.
 - `src/prisma/db.ts`, `prisma-8.md`, `.env.example` written; `tsconfig.json` merged; `.gitignore` and `.gitattributes` merged.
 - `prisma/` identical: `find prisma -type f | sort | xargs shasum` matches `wip/qa/prisma-before.txt`; `generated/` untouched.
-- The JSON document: `authoring: "prisma7"`, `filesRenamed` lists the config, `prisma7` block filled, `nextSteps` in the transition order, `warnings` sensible. Emit is expected to fail (exit 5, finding `CLI.INIT_EMIT_FAILED`); record the cause text.
+- The JSON document: `authoring: "prisma7"`, `filesRenamed` lists the config, `prisma7` block filled, `nextSteps` in the transition order with no cutover step, no warning about an unchecked schema.
+- After the installs, `contract emit` writes `src/prisma/contract.json` and `contract.d.ts`.
 
 ### S5. Prisma 7 still works after the run
 
@@ -53,16 +60,31 @@ Record for each: the exact command, exit code, stdout and stderr (save to `wip/q
 
 ### S7. Human output
 
-Re-run S4's command in a pseudo-terminal without `--json` on a fresh copy of the pre-init project (restore with `git stash` is forbidden; instead `git checkout -- . && git clean -fd -e node_modules -e generated -e .env` inside `wip/qa/prisma7-app`, which is the QA project's own throwaway repository, then re-run). Use `script -q /dev/null node <bin> orm init ...` so the CLI sees a TTY. Judge the prose: is every file written and renamed named, is the `db sign` step clear, is anything misleading.
+Re-run S4b's command in a pseudo-terminal without `--json` on a fresh copy of the pre-init project (restore with `git stash` is forbidden; instead `git checkout -- . && git clean -fd -e node_modules -e generated -e .env` inside `wip/qa/prisma7-app`, which is the QA project's own throwaway repository, then re-run). Use `script -q /dev/null node <bin> orm init ...` so the CLI sees a TTY. Judge the prose: is every file written and renamed named, is the `db sign` step clear, is anything misleading.
 
 ### S8. Re-run on the initialised project
 
-Run S4's command again on the initialised project. Expected: re-init consent for init's own files only (never the Prisma 7 schema, never `prisma7.config.ts`), no second rename, no duplicate scripts, `prisma/` still identical.
+Run S4b's command again on the initialised project. Expected: re-init consent for init's own files only (never the Prisma 7 schema, never `prisma7.config.ts`), no second rename, no duplicate scripts, `prisma/` still identical.
 
 ### S9. Interactive question path
 
-On a fresh pre-init copy, in a pseudo-terminal, `script -q /dev/null node <bin> orm init --skip-install` and answer the prompts by hand through `expect` or by piping timed answers: yes to the Prisma 7 question, the consent token, no to `.env`. Expected: same files as S4 minus installs. If driving the prompts is not feasible in the time box, record that and skip.
+On a fresh pre-init copy with the `dev` target package installed as in S4b, in a pseudo-terminal, `script -q /dev/null node <bin> orm init --skip-install` and answer the prompts by hand through `expect` or by piping timed answers: yes to the Prisma 7 question, the consent token, no to `.env`. Expected: same files as S4b. If driving the prompts is not feasible in the time box, record that and skip.
+
+### S10. A schema the source refuses
+
+On a fresh pre-init copy with the `dev` target package installed as in S4b, add a `view UserInfo { id Int @unique  email String }` block to `prisma/schema.prisma` and commit it in the QA repository. Run it twice:
+
+- `node <bin> orm init --from-prisma7-schema prisma/schema.prisma --confirm prisma7-app --skip-install`. The check runs against the installed `dev` package. Expected: `CLI.INIT_PRISMA7_SCHEMA_REFUSED` naming the view with its line and column; `prisma.config.ts` unchanged; scripts unchanged; no `prisma7.config.ts`; `package.json` unchanged.
+- The same without `--skip-install`. Init installs the `latest` release over the `dev` one, so until a release carries `prisma7Schema` the expected result is `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`. Expected either way: the project unchanged apart from `@prisma/orm-postgres` and `dotenv` in `package.json`, and the printed remove command removes them.
+
+### S11. A target with no Prisma 7 source
+
+The S4 project with `--target mongodb`. Expected: `CLI.INIT_PRISMA7_TARGET_MISMATCH`, exit 2, before anything is installed. This replaces the brief's expectation of `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`, because Will ruled on 2026-09-24 that a mismatched `--target` fails early. To see the no-source outcome for a target, the Prisma 7 question path of S4 with the `latest` package is the case: answer yes, and init warns and runs as a fresh init.
+
+### S12. Exit after "Done" in a real terminal
+
+In a real terminal, not a pseudo-terminal, run the S4b command without `--json` on a fresh copy and record whether the process exits after printing "Done". Report the result to Will.
 
 ## Report
 
-Write `projects/orm-init-prisma7-detection/manual-qa-reports/2026-09-15-<runner>.md`: setup facts (versions installed, database), one section per scenario with command, exit code, verdict, and a plain-English description of anything surprising, then a findings list with severity (🛑 blocker, ⚠ should fix, ℹ note) and the log path for each. Do not fix anything in `packages/`; the report is the deliverable. Leave `wip/qa/` in place for the orchestrator to inspect; do not commit it.
+Write `projects/orm-init-prisma7-detection/manual-qa-reports/<YYYY-MM-DD>-<runner>.md`: setup facts (versions installed, database), one section per scenario with command, exit code, verdict, and a plain-English description of anything surprising, then a findings list with severity (🛑 blocker, ⚠ should fix, ℹ note) and the log path for each. Do not fix anything in `packages/`; the report is the deliverable. Leave `wip/qa/` in place for the orchestrator to inspect; do not commit it.

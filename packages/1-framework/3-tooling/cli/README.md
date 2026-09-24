@@ -80,19 +80,30 @@ prisma orm init [--target postgres|mongodb] [--authoring psl|typescript] [--sche
 ? Prisma 7 is installed as `prisma`. Keep it as @prisma/prisma7 (binary prisma7) and move `prisma` to Prisma 8, and rename prisma.config.ts to prisma7.config.ts? Type <dir> to confirm.
 ```
 
-A no, `--yes`, or a session that cannot ask runs init as today. The second question is the consent token; `--confirm <dir>` answers it non-interactively. Under it init:
+A no, `--yes`, or a session that cannot ask runs init as today.
+
+The target comes from the schema's `datasource` provider: `postgresql` or `mongodb`. `--target` may only agree with it, or name the database when the provider is not a string literal. A mismatch fails with `CLI.INIT_PRISMA7_TARGET_MISMATCH`, and a provider with no target with `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, before anything is asked or installed.
+
+Before any consent question or file change, init checks that Prisma 8 can read the schema. It installs the target package and `dotenv`, loads the package's `/config` entrypoint from the project, and runs its `prisma7Schema` source in memory. The CLI carries no target code, so the installed package is the only one that can answer. Outcomes:
+
+- The source reads the schema: init continues.
+- The source refuses the schema, for example a `view` block: `CLI.INIT_PRISMA7_SCHEMA_REFUSED` with the source's diagnostics. The project is unchanged apart from the two packages, and the error gives the command that removes them.
+- The package has no `prisma7Schema`: after a yes to the question, init warns and runs as a fresh init for that target. With `--from-prisma7-schema` it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`.
+- `--skip-install` and the package is not installed: init warns that it could not check and continues.
+
+The second question is the consent token; `--confirm <dir>` answers it non-interactively. Under it init:
 
 - renames the Prisma 7 config to `prisma7.config.<same extension>` and points its `prisma/config` import at `@prisma/prisma7/config`;
 - rewrites every `package.json` script that invokes `prisma` to invoke `prisma7` (scripts init adds keep `prisma`);
 - installs `@prisma/prisma7@7` as a development dependency alongside `prisma@latest`, and `@prisma/client@7` when the project declares a client below the 7 line.
 
-It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")` and `output: "src/prisma"`, `src/prisma/db.ts`, and a `prisma-8.md` that describes the transition loop; no starter schema is written and `prisma/` stays byte-identical. The target comes from the schema's `datasource.provider` unless `--target` is given; `postgresql` is the provider supported today (`CLI.INIT_PRISMA7_MONGO_UNSUPPORTED`, `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`). The next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, re-run `prisma contract emit` then `prisma db sign` after each `prisma7 migrate dev`, and follow the upgrade guide's cutover section when the last route has moved.
+It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")` and `output: "src/prisma"`, `src/prisma/db.ts`, and a `prisma-8.md` that describes the transition loop; no starter schema is written and `prisma/` stays byte-identical. The next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, and re-run `prisma contract emit` then `prisma db sign` after each `prisma7 migrate dev`.
 
 **Exit codes:**
 - `0`: set up (and, unless skipped, installed and emitted)
-- `2`: precondition — an invalid flag, a refusal on the Prisma 7 path (`CLI.INIT_FLAG_CONFLICT`, `CLI.INIT_PRISMA7_SCHEMA_INVALID`, `CLI.INIT_PRISMA7_CONFIG_COLLISION`, `CLI.INIT_PRISMA7_CONFIG_UNREADABLE`, the provider codes above), a consent not granted, or a write that failed; nothing is written before a refusal
+- `2`: precondition — an invalid flag, a refusal on the Prisma 7 path (`CLI.INIT_FLAG_CONFLICT`, `CLI.INIT_PRISMA7_SCHEMA_INVALID`, `CLI.INIT_PRISMA7_CONFIG_COLLISION`, `CLI.INIT_PRISMA7_CONFIG_UNREADABLE`, `CLI.INIT_PRISMA7_TARGET_MISMATCH`, `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, `CLI.INIT_PRISMA7_SCHEMA_REFUSED`, `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`), a consent not granted, or a write that failed; nothing is written before a refusal, and the schema check's install is the only change before one
 - `3`: an interactive prompt was cancelled
-- `4`: scaffold written; dependency install failed
+- `4`: dependency install failed; on the Prisma 7 path this can be the install before the schema check, in which case nothing is written
 - `5`: scaffold written and installed; contract emit failed
 
 **`--json`:** the success document names every file written, deleted, or renamed, every package installed, and the next steps. On the Prisma 7 path `authoring` is `prisma7`, `schemaPath` is the Prisma 7 schema, and `prisma7` records the adoption; on a normal run `filesRenamed` is `[]` and `prisma7` is `null`.
