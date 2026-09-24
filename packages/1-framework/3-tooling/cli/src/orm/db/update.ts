@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -25,10 +26,9 @@ import {
 import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { projectConfigPathFor } from '../migration/paths';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -191,7 +191,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: snapshotContractPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          projectDir: baseDirFor(ctx.config),
           client,
         });
         if (!preflight.ok) {

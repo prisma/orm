@@ -68,7 +68,7 @@ function interpret(
     pslBlockDescriptors: descriptors ?? {},
   });
   return interpretPslDocumentToMongoContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,

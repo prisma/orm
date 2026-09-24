@@ -23,7 +23,8 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pathe": "^2.0.3",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
     "@internal/postgres": "workspace:8.0.0-rc.11",

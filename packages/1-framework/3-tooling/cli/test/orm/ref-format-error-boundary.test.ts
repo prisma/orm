@@ -1,6 +1,5 @@
 import { CliStructuredError } from '@internal/errors/control';
 import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import type { Mock } from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { executeFormat } from '../../src/control-api/operations/format';
@@ -14,6 +13,7 @@ import { createFormatCommand } from '../../src/orm/format';
 import { createRefDeleteCommand } from '../../src/orm/ref/delete';
 import { createRefListCommand } from '../../src/orm/ref/list';
 import { createRefSetCommand } from '../../src/orm/ref/set';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 const operations = {
   executeFormat: vi.fn<typeof executeFormat>(),
@@ -43,22 +43,20 @@ const DESCRIPTOR = {
 };
 
 function harness() {
-  return createTestCli({
+  return createOrmTestCli({
     commands,
     groups: BIN_GROUPS,
-    config: {
-      orm: {
-        family: {
-          kind: 'family',
-          id: 'sql',
-          familyId: 'sql',
-          version: '1.0.0',
-          emission: {},
-          create: () => ({}),
-        },
-        target: { ...DESCRIPTOR, kind: 'target', id: 'postgres' },
-        adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
+    orm: {
+      family: {
+        kind: 'family',
+        id: 'sql',
+        familyId: 'sql',
+        version: '1.0.0',
+        emission: {},
+        create: () => ({}),
       },
+      target: { ...DESCRIPTOR, kind: 'target', id: 'postgres' },
+      adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
     },
   });
 }

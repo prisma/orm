@@ -13,6 +13,7 @@ import {
   ormConfig,
   refPointerPath,
   refsDirIn,
+  seedForkedRefProject,
   seedProjectMissingSnapshot,
   seedRefProject,
 } from './ref-fixtures';
@@ -153,6 +154,41 @@ describe('ref set', () => {
       envelope: { ok: false, error: { code: 'MIGRATION.HASH_NOT_IN_GRAPH' } },
     });
     expect(existsSync(refPointerPath(dir, 'staging'))).toBe(false);
+  });
+
+  it('refuses a hash outside a forked graph with the same code, not a fork error', async () => {
+    const dir = await seedForkedRefProject();
+
+    const run = await harness().run(['migration', 'ref', 'set', 'staging', HASH_ABSENT, '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'MIGRATION.HASH_NOT_IN_GRAPH',
+          meta: { reachableHashes: [HASH_A, HASH_B, EMPTY_CONTRACT_HASH].sort() },
+        },
+      },
+    });
+    expect(existsSync(refPointerPath(dir, 'staging'))).toBe(false);
+  });
+
+  it('sets a ref to either tip of a forked graph', async () => {
+    const dir = await seedForkedRefProject();
+
+    const run = await harness().run(['migration', 'ref', 'set', 'staging', HASH_B, '--json'], {
+      cwd: dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(JSON.parse(await readFile(refPointerPath(dir, 'staging'), 'utf-8'))).toEqual({
+      hash: HASH_B,
+      invariants: [],
+    });
   });
 
   it('names the empty graph and offers planning when the project has no migrations', async () => {

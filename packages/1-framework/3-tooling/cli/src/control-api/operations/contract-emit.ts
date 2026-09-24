@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
+import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { type ControlStack, createControlStack } from '@internal/framework-components/control';
@@ -276,7 +277,7 @@ async function resolveContractSource(
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     dataTypeLookup: stack.dataTypeLookup,
-    resolvedInputs: contractConfig.source.inputs ?? [],
+    resolvedInputs: await abortable(signal)(expandContractInputs(contractConfig.source.inputs)),
     capabilities: stack.capabilities,
   };
 
@@ -351,7 +352,7 @@ export async function executeContractEmit(
 ): Promise<ContractEmitResult> {
   const {
     config,
-    configPath,
+    projectDir,
     outputPath,
     signal = new AbortController().signal,
     onProgress,
@@ -442,9 +443,11 @@ export async function executeContractEmit(
           // Which package names the generated files may import is decided by
           // the nearest manifest above the file being written — the package
           // that will import it, and the same directory `validateContractDeps`
-          // resolves against below. A caller holding the config file's path
-          // may name it instead.
-          resolveImportSpecifier: createProjectSpecifierResolver(configPath ?? outputJsonPath),
+          // resolves against below. A caller that knows the project directory
+          // names it instead.
+          resolveImportSpecifier: createProjectSpecifierResolver(
+            projectDir ?? dirname(outputJsonPath),
+          ),
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),

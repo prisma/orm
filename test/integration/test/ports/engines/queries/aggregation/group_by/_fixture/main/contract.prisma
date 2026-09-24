@@ -1,3 +1,5 @@
+// use prisma-8
+
 model A {
   id     Int    @id
   float  Float

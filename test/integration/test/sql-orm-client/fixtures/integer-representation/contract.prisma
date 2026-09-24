@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Real emitted fixture for the integer-representation type round-trips.
 //
 // `Meter.peak` uses bare `BigIntNumber` — `pg/int8number@1`: int8 storage

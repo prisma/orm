@@ -46,7 +46,7 @@ afterEach(() => {
 
 describe('loadOrmConfig', () => {
   it(
-    'nests the whole configuration under the orm section',
+    'hands the engine the requested file with the whole configuration under the orm section',
     async () => {
       const dir = projectDir();
       writeConfig(dir, VALID_BODY);
@@ -54,23 +54,24 @@ describe('loadOrmConfig', () => {
       const loaded = await loadOrmConfig({ cwd: dir });
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(Object.keys(loaded.sections)).toEqual(['orm']);
+      expect(loaded.files.map((file) => file.path)).toEqual([join(dir, 'prisma.config.ts')]);
+      expect(Object.keys(loaded.files[0]?.sections ?? {})).toEqual(['orm']);
     },
     // The first load pays jiti's cold transform for the config module.
     timeouts.coldTransformImport,
   );
 
-  it('finalizes contract paths against the config file directory', async () => {
+  it('leaves paths as written: the engine resolves them against the file that declared them', async () => {
     const dir = projectDir();
     writeConfig(dir, VALID_BODY);
 
     const loaded = await loadOrmConfig({ cwd: dir });
-    const orm = loaded.sections['orm'] as {
+    const orm = loaded.files[0]?.sections['orm'] as {
       contract?: { output?: string; source?: { inputs?: readonly string[] } };
     };
 
-    expect(orm.contract?.output).toBe(join(dir, 'output/contract.json'));
-    expect(orm.contract?.source?.inputs).toEqual([join(dir, 'contract.prisma')]);
+    expect(orm.contract?.output).toBe('output/contract.json');
+    expect(orm.contract?.source?.inputs).toEqual(['contract.prisma']);
   });
 
   it('discovers the config in the supplied cwd rather than the process cwd', async () => {
@@ -78,7 +79,7 @@ describe('loadOrmConfig', () => {
     writeConfig(dir, VALID_BODY);
 
     expect(dir).not.toBe(process.cwd());
-    expect((await loadOrmConfig({ cwd: dir })).sections['orm']).toBeDefined();
+    expect((await loadOrmConfig({ cwd: dir })).files[0]?.sections['orm']).toBeDefined();
   });
 
   it('reads an explicit config path relative to the cwd', async () => {
@@ -88,14 +89,15 @@ describe('loadOrmConfig', () => {
     const loaded = await loadOrmConfig({ cwd: dir, configPath: 'custom.config.ts' });
 
     expect(loaded.diagnostics).toEqual([]);
-    expect(loaded.sections['orm']).toBeDefined();
+    expect(loaded.files[0]?.path).toBe(join(dir, 'custom.config.ts'));
+    expect(loaded.files[0]?.sections['orm']).toBeDefined();
   });
 
   describe('a config that cannot be evaluated', () => {
     it('reports a file-level diagnostic and no sections', async () => {
       const loaded = await loadOrmConfig({ cwd: projectDir() });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics).toHaveLength(1);
       expect(loaded.diagnostics[0]?.section).toBeNull();
       expect(loaded.diagnostics[0]?.diagnostic).toMatchObject({
@@ -122,7 +124,7 @@ describe('loadOrmConfig', () => {
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics).toHaveLength(1);
       expect(loaded.diagnostics[0]).toMatchObject({ section: null });
       expect(loaded.diagnostics[0]?.diagnostic.code).toMatch(/^[A-Z][A-Z0-9]*\.[A-Z][A-Z0-9_]*$/);
@@ -134,7 +136,7 @@ describe('loadOrmConfig', () => {
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics[0]).toMatchObject({
         section: null,
         diagnostic: { code: 'CONFIG.VERSION_MARKER_MISSING' },
@@ -143,14 +145,14 @@ describe('loadOrmConfig', () => {
   });
 
   describe('a structurally invalid config that still evaluates', () => {
-    it('leaves the structural verdict to the section validator', async () => {
+    it('leaves the structural verdict to the section schema', async () => {
       const dir = projectDir();
       writeConfig(dir, '{ migrations: { dir: 42 } }');
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.sections['orm']).toMatchObject({ migrations: { dir: 42 } });
+      expect(loaded.files[0]?.sections['orm']).toMatchObject({ migrations: { dir: 42 } });
     });
   });
 });

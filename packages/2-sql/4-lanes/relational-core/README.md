@@ -105,7 +105,6 @@ SQL codec authors extend the framework `CodecImpl` base (and pair the codec with
 import {
   CodecDescriptorImpl,
   CodecImpl,
-  voidParamsSchema,
   type CodecCallContext,
   type CodecInstanceContext,
 } from '@internal/framework-components/codec';
@@ -123,7 +122,7 @@ class PgTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'pg/text@1';
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override readonly factory = () => (_ctx: CodecInstanceContext) => new PgTextCodec();
 }
 ```

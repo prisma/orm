@@ -145,6 +145,7 @@ export {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from '../resolve';
+export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
 export type { Scope, ScopeResolution } from '../scope-chain';
 export { lookupIn, qualifiedChain, unqualifiedChain } from '../scope-chain';
 export type {

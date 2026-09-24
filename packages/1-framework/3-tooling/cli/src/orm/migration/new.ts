@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
@@ -9,10 +10,9 @@ import type { MigrationNewResult } from '../../control-api/operations/migration-
 import { executeMigrationNewCommand } from '../../control-api/operations/migration-new';
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import { appMigrationsDirFor, contractPathFor, displayPath, projectConfigPathFor } from './paths';
+import { appMigrationsDirFor, baseDirFor, contractPathFor, displayPath } from './paths';
 
 function newPresentations(inputs: {
   readonly document: MigrationNewResult;
@@ -90,7 +90,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
-        configPath: projectConfigPathFor(ctx.cwd),
+        projectDir: baseDirFor(ctx.config),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({
@@ -105,7 +105,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(scaffolded.failure));
       }
 
-      const contractPath = contractPathFor(ctx.config, ctx.cwd);
+      const contractPath = contractPathFor(ctx.config);
       return ok(
         ctx.present(
           { data: scaffolded.value },
@@ -113,7 +113,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
             document: scaffolded.value,
             contractPath:
               contractPath === undefined ? '(unset)' : displayPath(contractPath, ctx.cwd),
-            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
+            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config), ctx.cwd),
           }),
         ),
       );

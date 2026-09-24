@@ -15,7 +15,6 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -36,14 +35,15 @@ import { createProjectSpecifierResolver } from '../../utils/project-import-root'
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
+import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 export interface MigrationNewOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate project paths and for display. */
-  readonly configPath?: string;
+  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
+  readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
@@ -64,7 +64,6 @@ export async function executeMigrationNewCommand(
   const config = options.config;
   const cwd = options.cwd;
   const { migrationsDir, appMigrationsDir, appMigrationsRelative } = resolveMigrationPaths(
-    options.configPath,
     config,
     cwd,
   );
@@ -131,7 +130,6 @@ export async function executeMigrationNewCommand(
   }
 
   const packages = aggregate.app.packages;
-  const graph = aggregate.app.graph();
 
   let fromHash: string | null = null;
 
@@ -169,11 +167,21 @@ export async function executeMigrationNewCommand(
       );
     }
     fromHash = matchedHashes[0] ?? null;
-  } else if (packages.length > 0) {
-    const latestMigration = findLatestMigration(graph);
-    if (latestMigration) {
-      fromHash = latestMigration.to;
+  } else {
+    const origin = resolveDefaultOriginHash(aggregate.app);
+    if (!origin.ok) {
+      return notOk(origin.failure);
     }
+    if (origin.value.kind === 'ref-needs-baseline') {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'The db ref is not a graph node yet', {
+          why: `The db ref points at ${origin.value.fromHash}, but ${appMigrationsRelative} contains no migrations, so that contract is not a graph node and nothing can chain from it.`,
+          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref alongside the delta, after which `migration new` can chain from it.',
+          meta: { refName: origin.value.refName, resolvedHash: origin.value.fromHash },
+        }),
+      );
+    }
+    fromHash = origin.value.fromHash;
   }
 
   if (fromHash === toStorageHash && !options.from) {
@@ -224,7 +232,7 @@ export async function executeMigrationNewCommand(
     // Before any write: an unreadable or contradictory project manifest fails
     // the command outright rather than after a half-scaffolded migration
     // directory is already on disk.
-    const resolveSpecifier = createProjectSpecifierResolver(options.configPath);
+    const resolveSpecifier = createProjectSpecifierResolver(options.projectDir);
     const declarations = await renderSnapshotDeclarations({
       client: options.client,
       contractJson: parsedContract,

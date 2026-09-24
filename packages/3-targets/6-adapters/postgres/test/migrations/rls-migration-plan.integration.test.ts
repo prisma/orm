@@ -87,8 +87,8 @@ function buildPslContract(psl: string = PSL) {
   });
 
   return interpretPslDocumentToSqlContract({
+    documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
-    document,
     symbolTable,
     sources,
     target: {

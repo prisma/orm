@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `decimal/scalar`
 // (packages/client/tests/functional/decimal/scalar, postgres matrix entry):
 //

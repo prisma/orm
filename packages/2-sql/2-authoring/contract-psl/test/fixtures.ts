@@ -446,7 +446,7 @@ export function buildSymbolTableInput(
     readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
   },
 ): {
-  document: DocumentAst;
+  documents: readonly DocumentAst[];
   symbolTable: SymbolTable;
   sources: PslSources;
   sourceFile: SourceFile;
@@ -470,7 +470,7 @@ export function buildSymbolTableInput(
     span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
   return {
-    document,
+    documents: [document],
     symbolTable,
     sources,
     sourceFile,
@@ -485,7 +485,7 @@ export function symbolTableInputFromParseArgs(args: {
   readonly sourceId?: string;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
 }): {
-  document: DocumentAst;
+  documents: readonly DocumentAst[];
   symbolTable: SymbolTable;
   sources: PslSources;
   sourceFile: SourceFile;

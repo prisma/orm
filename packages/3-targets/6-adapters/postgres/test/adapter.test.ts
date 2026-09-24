@@ -629,8 +629,12 @@ describe('Postgres adapter', () => {
       expect(descriptors.length).toBeGreaterThan(0);
       const ids = descriptors.map((d: { codecId: string }) => d.codecId);
       expect(ids).toEqual(expect.arrayContaining(['pg/numeric@1', 'pg/timestamptz-temporal@1']));
+      const parameterized = descriptors.filter((d) => d.isParameterized).map((d) => d.codecId);
+      expect(parameterized).toEqual(
+        expect.arrayContaining(['pg/numeric@1', 'pg/timestamptz-temporal@1']),
+      );
       for (const descriptor of descriptors) {
-        expect(descriptor.paramsSchema).toBeDefined();
+        expect(descriptor.isParameterized).toBe(descriptor.paramsSchema !== undefined);
       }
     },
     timeouts.coldTransformImport,

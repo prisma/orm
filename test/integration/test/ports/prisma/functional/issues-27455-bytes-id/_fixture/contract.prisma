@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/27455-bytes-id (postgres matrix entry;
 // sqlserver opted-out upstream — does not support Bytes IDs).

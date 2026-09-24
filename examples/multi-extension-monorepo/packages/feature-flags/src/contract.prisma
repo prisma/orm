@@ -1,3 +1,5 @@
+// use prisma-8
+
 // PSL contract source for the internal `feature-flags` contract-space package.
 // See ../audit/src/contract.prisma for the rationale; same shape, distinct
 // table + identifiers (each "internal package" owns its own emit pipeline).

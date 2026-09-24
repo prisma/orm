@@ -75,7 +75,7 @@ describe(
 
     async function emitPgvectorContract(schemaText: string): Promise<Record<string, unknown>> {
       const schemaPath = join(testDir, 'schema.prisma');
-      writeFileSync(schemaPath, schemaText, 'utf-8');
+      writeFileSync(schemaPath, `// use prisma-8\n\n${schemaText}`, 'utf-8');
 
       process.chdir(testDir);
       const contractConfig = prismaContract('./schema.prisma', {

@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type {
   SignDatabaseResult,
   VerifyDatabaseSchemaResult,
@@ -19,15 +20,9 @@ import {
 import { errorAdvanceRefArgConflict, errorContractArgConflict } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { runCommandAction } from '../../utils/next-actions';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import {
-  appRefsDirFor,
-  displayPath,
-  migrationsDirFor,
-  projectConfigPathFor,
-} from '../migration/paths';
+import { appRefsDirFor, baseDirFor, displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -267,7 +262,7 @@ export function createDbSignCommand(
         return notOk(emitted.failure);
       }
 
-      const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+      const migrationsDir = migrationsDirFor(ctx.config);
       let contractInput: unknown = emitted.value.contract;
       let signedSource: SignedContractSource;
       if (contractRef !== undefined) {
@@ -307,7 +302,7 @@ export function createDbSignCommand(
           name: refName,
           contractJson: signedSource.json,
           contractJsonPath: signedSource.jsonPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          projectDir: baseDirFor(ctx.config),
           client,
         });
         if (!preflight.ok) {
@@ -389,7 +384,7 @@ export function createDbSignCommand(
           );
         }
 
-        const refsDir = appRefsDirFor(ctx.config, ctx.cwd);
+        const refsDir = appRefsDirFor(ctx.config);
         const previousHash = await previousRefHash(refsDir, advancement.name);
         const advanced = await advanceRefSafely({
           refsDir,

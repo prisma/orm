@@ -1,3 +1,5 @@
+// use prisma-8
+
 native_enum Color {
   blue  = "blue"
   red   = "red"

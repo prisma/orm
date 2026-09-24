@@ -1,5 +1,5 @@
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MongoContractSchema } from '@internal/mongo-contract';
@@ -20,7 +20,7 @@ const identityDescriptor = (id: string): AnyCodecDescriptor => ({
   dataType: dataTypeId('demo/fixture'),
   traits: ['equality'],
   targetTypes: ['string'],
-  paramsSchema: voidParamsSchema,
+  paramsSchema: undefined,
   isParameterized: false,
   factory: () => () =>
     ({
@@ -269,7 +269,7 @@ describe('defineContract() — codec-encoded value set', () => {
     dataType: dataTypeId('test/upper'),
     traits: ['equality'],
     targetTypes: ['string'],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () =>
       ({

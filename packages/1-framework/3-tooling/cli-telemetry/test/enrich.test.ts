@@ -199,7 +199,7 @@ describe('buildTelemetryEvent', () => {
 
 /**
  * Build a `prisma.config.mjs` source string that satisfies
- * `validateConfig` from `@internal/config/config-validation`.
+ * the `orm` config schema (`ormConfigSchema` in `@internal/config-loader`).
  * `target.targetId` is the only structurally-significant variable
  * the telemetry projection cares about; `extensions` defaults to
  * empty. Caller can override either via the parameters; pass a

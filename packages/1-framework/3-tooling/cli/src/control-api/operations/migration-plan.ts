@@ -68,8 +68,8 @@ export interface MigrationPlanOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate project paths and for display. */
-  readonly configPath?: string;
+  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
+  readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;
   readonly to?: string;
@@ -373,7 +373,7 @@ async function executeMigrationPlanCommandInner(
   const config = options.config;
   const cwd = options.cwd;
   const { configPath, migrationsDir, appMigrationsDir, appMigrationsRelative } =
-    resolveMigrationPaths(options.configPath, config, cwd);
+    resolveMigrationPaths(config, cwd);
 
   const contractPathAbsolute = resolveContractPath(config);
   const contractPath = relative(cwd, contractPathAbsolute);
@@ -465,13 +465,13 @@ async function executeMigrationPlanCommandInner(
   }
 
   const warnings: string[] = [];
-  const warnBehindTip = (behind: {
+  const warnForks = (forks: {
     readonly refName: string;
     readonly refHash: string;
-    readonly tipHash: string;
+    readonly outgoingTo: readonly string[];
   }): void => {
     warnings.push(
-      `The default origin ref '${behind.refName}' points at ${behind.refHash}, which is not the latest migration (${behind.tipHash}). Planning from it forks the migration graph; pass --from to choose the origin explicitly.`,
+      `The default origin ref '${forks.refName}' points at ${forks.refHash}, which already has a migration leading to ${forks.outgoingTo.join(', ')}. Planning from it forks the migration graph; pass --from to choose the origin explicitly.`,
     );
   };
 
@@ -482,16 +482,16 @@ async function executeMigrationPlanCommandInner(
     case 'graph-node':
       fromHash = resolutionResult.value.fromHash;
       fromContract = resolutionResult.value.fromContract;
-      if (resolutionResult.value.defaultOriginBehindTip !== undefined) {
-        warnBehindTip(resolutionResult.value.defaultOriginBehindTip);
+      if (resolutionResult.value.defaultOriginForks !== undefined) {
+        warnForks(resolutionResult.value.defaultOriginForks);
       }
       break;
     case 'ref':
       fromHash = resolutionResult.value.fromHash;
       fromContract = resolutionResult.value.fromContract;
       fromContractInStore = true;
-      if (resolutionResult.value.defaultOriginBehindTip !== undefined) {
-        warnBehindTip(resolutionResult.value.defaultOriginBehindTip);
+      if (resolutionResult.value.defaultOriginForks !== undefined) {
+        warnForks(resolutionResult.value.defaultOriginForks);
       }
       break;
     case 'auto-baseline':
@@ -521,7 +521,7 @@ async function executeMigrationPlanCommandInner(
   // Before the seed phase, which is the first thing here that writes: an
   // unreadable or contradictory project manifest fails the command outright
   // rather than after artifacts are already on disk.
-  const resolveImportSpecifier = createProjectSpecifierResolver(options.configPath);
+  const resolveImportSpecifier = createProjectSpecifierResolver(options.projectDir);
 
   // Likewise the destination snapshot's declarations: rendered now, written
   // with the planned package later. A plan whose source already is the

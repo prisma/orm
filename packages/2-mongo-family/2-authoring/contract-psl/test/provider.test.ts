@@ -102,12 +102,20 @@ describe('mongoContract provider helper', () => {
     expect(config.source.format).toBe('psl');
   });
 
-  it('throws InternalError when resolvedInputs is empty', async () => {
+  it('errors naming the configured pattern when resolvedInputs is empty', async () => {
     const contract = mongoContract('./schema.prisma');
+    const result = await contract.source.load(createMongoTestContext());
 
-    await expect(contract.source.load(createMongoTestContext())).rejects.toMatchObject({
-      isPrismaInternalError: true,
-    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_NO_SCHEMA_FILES_MATCHED',
+          message: expect.stringContaining('./schema.prisma'),
+        }),
+      ]),
+    );
   });
 
   it('resolves relative schema paths from configDir when cwd differs', async () => {
@@ -117,7 +125,8 @@ describe('mongoContract provider helper', () => {
     const schemaPath = join(configDir, 'schema.prisma');
     await writeFile(
       schemaPath,
-      `model User {
+      `// use prisma-8
+model User {
   id ObjectId @id @map("_id")
   email String
 }
@@ -152,27 +161,23 @@ describe('mongoContract provider helper', () => {
   it('returns read failure diagnostics with the resolved absolute schema path', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-'));
     tempDirs.push(tempDir);
+    const missingSchemaPath = join(tempDir, 'missing.prisma');
     const contract = mongoContract('./missing.prisma');
     const result = await contract.source.load(
-      createMongoTestContext({ resolvedInputs: [join(tempDir, 'missing.prisma')] }),
+      createMongoTestContext({ resolvedInputs: [missingSchemaPath] }),
     );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
 
     expect(result.failure).toMatchObject({
-      summary: 'Failed to read Prisma schema at "./missing.prisma"',
+      summary: 'Failed to read Prisma schema files',
       diagnostics: [
         expect.objectContaining({
           code: 'PSL_SCHEMA_READ_FAILED',
-          sourceId: './missing.prisma',
+          sourceId: missingSchemaPath,
         }),
       ],
-      meta: {
-        schemaPath: './missing.prisma',
-        absoluteSchemaPath: expect.stringMatching(/missing\.prisma$/),
-        cause: expect.any(String),
-      },
     });
   });
 
@@ -182,7 +187,8 @@ describe('mongoContract provider helper', () => {
     const schemaPath = join(tempDir, 'schema.prisma');
     await writeFile(
       schemaPath,
-      `enum Role {
+      `// use prisma-8
+enum Role {
   USER  @map("user")
   ADMIN
 }
@@ -220,13 +226,93 @@ model User {
         {
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
-          sourceId: './schema.prisma',
+          sourceId: schemaPath,
           span: {
-            start: { offset: 20, line: 2, column: 9 },
-            end: { offset: 21, line: 2, column: 10 },
+            start: { offset: 36, line: 3, column: 9 },
+            end: { offset: 37, line: 3, column: 10 },
           },
         },
       ],
+    });
+  });
+
+  describe('membership set', () => {
+    async function writeMultiFileFixture(dir: string): Promise<{
+      readonly user: string;
+      readonly post: string;
+      readonly excluded: string;
+    }> {
+      const user = join(dir, 'user.prisma');
+      const post = join(dir, 'post.prisma');
+      const excluded = join(dir, 'draft.prisma');
+      await writeFile(
+        user,
+        '// use prisma-8\nmodel User {\n  id ObjectId @id @map("_id")\n}\n',
+        'utf-8',
+      );
+      await writeFile(
+        post,
+        '// use prisma-8\nmodel Post {\n  id ObjectId @id @map("_id")\n  authorId ObjectId\n  author User @relation(fields: [authorId], references: [id])\n}\n',
+        'utf-8',
+      );
+      await writeFile(excluded, 'model Draft {\n  id ObjectId @id @map("_id")\n}\n', 'utf-8');
+      return { user, post, excluded };
+    }
+
+    it('emits one contract from every member and excludes a matched file without the directive', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-membership-'));
+      tempDirs.push(dir);
+      const { user, post, excluded } = await writeMultiFileFixture(dir);
+
+      const contract = mongoContract('./schema.prisma');
+      const result = await contract.source.load(
+        createMongoTestContext({ resolvedInputs: [user, post, excluded] }),
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const models = result.value.domain.namespaces['__unbound__']?.models ?? {};
+      expect(Object.keys(models).sort()).toEqual(['Post', 'User']);
+    });
+
+    it('emits a byte-identical contract regardless of resolvedInputs order', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-membership-'));
+      tempDirs.push(dir);
+      const { user, post } = await writeMultiFileFixture(dir);
+      const contract = mongoContract('./schema.prisma');
+
+      const forward = await contract.source.load(
+        createMongoTestContext({ resolvedInputs: [user, post] }),
+      );
+      const reversed = await contract.source.load(
+        createMongoTestContext({ resolvedInputs: [post, user] }),
+      );
+
+      expect(forward.ok).toBe(true);
+      expect(reversed.ok).toBe(true);
+      if (!forward.ok || !reversed.ok) return;
+      expect(JSON.stringify(reversed.value)).toBe(JSON.stringify(forward.value));
+    });
+
+    it('errors listing the candidates when none carries the directive', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-membership-'));
+      tempDirs.push(dir);
+      const a = join(dir, 'a.prisma');
+      await writeFile(a, 'model A {\n  id ObjectId @id @map("_id")\n}\n', 'utf-8');
+
+      const contract = mongoContract('./schema.prisma');
+      const result = await contract.source.load(createMongoTestContext({ resolvedInputs: [a] }));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_NO_OPTED_IN_SCHEMA_FILES',
+            message: expect.stringContaining(a),
+          }),
+        ]),
+      );
     });
   });
 });

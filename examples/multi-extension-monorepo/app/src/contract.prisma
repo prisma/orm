@@ -1,3 +1,5 @@
+// use prisma-8
+
 // PSL contract source for the multi-extension-monorepo aggregate app.
 //
 // Declares one user-owned `User` table. The two internal extension

@@ -22,6 +22,15 @@ function pslConfig(
   });
 }
 
+function pslConfigMulti(inputPaths: readonly string[]) {
+  return mockConfig({
+    contract: {
+      source: { format: 'psl', inputs: [...inputPaths], load: () => {} },
+      output: join(inputPaths[0] ?? '.', '..', 'contract.json'),
+    },
+  });
+}
+
 const MESSY_PSL = 'model    User{id Int @id\nname String}\n';
 const FORMATTED_PSL = `model User {
   id   Int    @id
@@ -126,6 +135,48 @@ describe('executeFormat', () => {
 
     expect(result.ok).toBe(false);
     expect(await readFile(inputPath, 'utf-8')).toBe(broken);
+  });
+
+  it('formats every resolvedInputs member, not just the first', async () => {
+    const a = join(tmpDir, 'a.prisma');
+    const b = join(tmpDir, 'b.prisma');
+    await writeFile(a, MESSY_PSL, 'utf-8');
+    await writeFile(b, MESSY_PSL, 'utf-8');
+
+    const result = await executeFormat({
+      config: pslConfigMulti([a, b]),
+      cwd: tmpDir,
+      eol: '\n',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ formatted: true, paths: [a, b] });
+    }
+    expect(await readFile(a, 'utf-8')).toBe(FORMATTED_PSL);
+    expect(await readFile(b, 'utf-8')).toBe(FORMATTED_PSL);
+  });
+
+  it('keeps formatting remaining members after one fails to read', async () => {
+    const a = join(tmpDir, 'a.prisma');
+    const missing = join(tmpDir, 'missing.prisma');
+    const c = join(tmpDir, 'c.prisma');
+    await writeFile(a, MESSY_PSL, 'utf-8');
+    await writeFile(c, MESSY_PSL, 'utf-8');
+
+    const result = await executeFormat({
+      config: pslConfigMulti([a, missing, c]),
+      cwd: tmpDir,
+      eol: '\n',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.code).toBe('CONTRACT.SOURCE_LOAD_FAILED');
+      expect(result.failure.fix).toContain(missing);
+    }
+    expect(await readFile(a, 'utf-8')).toBe(FORMATTED_PSL);
+    expect(await readFile(c, 'utf-8')).toBe(FORMATTED_PSL);
   });
 
   it('returns a structured error when write-back fails', async () => {

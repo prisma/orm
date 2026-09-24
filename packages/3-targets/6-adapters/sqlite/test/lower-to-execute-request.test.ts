@@ -1,9 +1,5 @@
 import type { Codec } from '@internal/framework-components/codec';
-import {
-  CodecDescriptorImpl,
-  dataTypeId,
-  voidParamsSchema,
-} from '@internal/framework-components/codec';
+import { CodecDescriptorImpl, dataTypeId } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry } from '@internal/sql-relational-core/ast';
@@ -47,7 +43,7 @@ const transformingDescriptor: AnySqliteCodecDescriptor = {
   dataType: dataTypeId('test/transform'),
   traits: [],
   targetTypes: ['TEXT'],
-  paramsSchema: voidParamsSchema,
+  paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => transformingCodec,
   projectJson: (expression) => expression,
@@ -284,7 +280,7 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = EXT_CODEC_ID;
   override readonly traits = [] as const;
   override readonly targetTypes = ['TEXT'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: object) => Codec {
     return () =>
       ({

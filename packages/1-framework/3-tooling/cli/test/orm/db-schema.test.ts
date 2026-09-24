@@ -1,9 +1,9 @@
 import type { StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import stripAnsi from 'strip-ansi';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 const mocks = {
   introspect: vi.fn(),
@@ -83,7 +83,7 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: config });
 }
 
 function envelopeOf(json: readonly StreamEvent[]): unknown {

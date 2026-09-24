@@ -4,11 +4,12 @@ import type {
   CodecDescriptor,
   CodecRef,
 } from '@internal/framework-components/codec';
-import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import type { Codec, SqlCodecInstanceContext } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { describe, expect, it, vi } from 'vitest';
 import { createAstCodecResolver } from '../src/codecs/ast-codec-resolver';
+import type { RuntimeParameterizedCodecDescriptor } from '../src/sql-context';
 import { defineTestCodec } from './test-codec';
 
 function instanceContextFactory(): SqlCodecInstanceContext {
@@ -20,7 +21,7 @@ interface VectorParams {
   readonly [key: string]: JsonValue | undefined;
 }
 
-function makeVectorDescriptor(): CodecDescriptor<VectorParams> {
+function makeVectorDescriptor(): RuntimeParameterizedCodecDescriptor<VectorParams> {
   return {
     codecId: 'pg/vector@1',
     dataType: dataTypeId('pg/vector'),
@@ -59,7 +60,7 @@ function makeScalarDescriptor(): CodecDescriptor {
     dataType: dataTypeId('test/scalar'),
     traits: [],
     targetTypes: ['scalar'],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () =>
       defineTestCodec({

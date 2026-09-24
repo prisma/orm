@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { findNearestConfigPathForFile, loadConfig, loadConfigForFile } from '../src/load';
+import {
+  findNearestConfigPathForFile,
+  loadConfig,
+  loadConfigForFile,
+  requireConfigSections,
+} from '../src/load';
 
 vi.mock('@internal/emitter', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@internal/emitter')>();
@@ -201,6 +206,88 @@ describe('loadConfig', () => {
       expect(diagnostics).toEqual([]);
       expect(config.contract?.source.inputs).toEqual([join(tempDir, 'schema.prisma')]);
       expect(config.contract?.output).toBe(join(tempDir, 'generated', 'contract.json'));
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'resolves the paths of healthy subsections when another subsection is invalid',
+    async () => {
+      writeFileSync(
+        join(tempDir, 'prisma.config.ts'),
+        `${CONFIG_BODY}\nObject.assign(config, { formatter: { indent: 0 } });\n${NEW_SHAPE_STAMP}`,
+      );
+      process.chdir(tempDir);
+
+      const loaded = (await loadConfig()).assertOk();
+      const config = requireConfigSections(loaded, ['contract', 'migrations']).assertOk();
+
+      expect(loaded.diagnostics).toContainEqual(
+        expect.objectContaining({ meta: { field: 'formatter.indent', section: 'formatter' } }),
+      );
+      expect(config.contract?.output).toBe(join(tempDir, 'generated', 'contract.json'));
+      expect(config.contract?.source.inputs).toEqual([join(tempDir, 'schema.prisma')]);
+      expect(config.migrations?.dir).toBe(join(tempDir, 'migrations'));
+      expect(config.formatter).toEqual({ indent: 0 });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'checks the contract artifacts when another subsection is invalid',
+    async () => {
+      const colliding = CONFIG_BODY.replace(
+        "inputs: ['./schema.prisma']",
+        "inputs: ['./generated/contract.json']",
+      );
+      writeFileSync(
+        join(tempDir, 'prisma.config.ts'),
+        `${colliding}\nObject.assign(config, { formatter: { indent: 0 } });\n${NEW_SHAPE_STAMP}`,
+      );
+      process.chdir(tempDir);
+
+      const loaded = (await loadConfig()).assertOk();
+
+      expect(loaded.diagnostics).toContainEqual(
+        expect.objectContaining({
+          meta: { field: 'contract.source.inputs[]', section: 'contract' },
+        }),
+      );
+      expect(requireConfigSections(loaded, ['contract']).ok).toBe(false);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'checks how descriptors relate when another subsection is invalid',
+    async () => {
+      writeFileSync(
+        join(tempDir, 'prisma.config.ts'),
+        `${CONFIG_BODY}\nObject.assign(config.target, { familyId: 'mongo' });\nObject.assign(config, { formatter: { indent: 0 } });\n${NEW_SHAPE_STAMP}`,
+      );
+      process.chdir(tempDir);
+
+      const loaded = (await loadConfig()).assertOk();
+
+      expect(loaded.diagnostics).toContainEqual(
+        expect.objectContaining({ meta: { field: 'target.familyId', section: 'target' } }),
+      );
+      expect(requireConfigSections(loaded, ['target']).ok).toBe(false);
+      expect(requireConfigSections(loaded, ['contract']).ok).toBe(true);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'refuses a config whose default export is not an object',
+    async () => {
+      writeFileSync(join(tempDir, 'prisma.config.ts'), 'export default [1];\n');
+      process.chdir(tempDir);
+
+      const result = await loadConfig();
+
+      expect(result.ok).toBe(false);
+      expect(!result.ok && result.failure.code).toBe('CONFIG.VERSION_MARKER_MISSING');
     },
     timeouts.typeScriptCompilation,
   );

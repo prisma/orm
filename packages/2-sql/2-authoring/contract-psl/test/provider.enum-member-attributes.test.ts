@@ -60,7 +60,8 @@ describe('prismaContract given an attribute on an enum member', () => {
     const schemaPath = join(tempDir, 'schema.prisma');
     await writeFile(
       schemaPath,
-      `enum Role {
+      `// use prisma-8
+enum Role {
   @@type("pg/text@1")
   USER  @map("user")
   ADMIN
@@ -84,10 +85,10 @@ model User {
         {
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
-          sourceId: './schema.prisma',
+          sourceId: schemaPath,
           span: {
-            start: { offset: 42, line: 3, column: 9 },
-            end: { offset: 43, line: 3, column: 10 },
+            start: { offset: 58, line: 4, column: 9 },
+            end: { offset: 59, line: 4, column: 10 },
           },
         },
       ],

@@ -742,6 +742,16 @@ export function latestMigrationDirName(ctx: JourneyContext): string {
   return latest;
 }
 
+/**
+ * The destination contract hash of the newest migration — what `migration new
+ * --from` takes when a journey has no `db` ref (plain `migrate` never writes one).
+ */
+export function latestMigrationToHash(ctx: JourneyContext): string {
+  const manifestPath = join(appMigrationsDir(ctx), latestMigrationDirName(ctx), 'migration.json');
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as { to: string };
+  return manifest.to;
+}
+
 export function getLatestMigrationDir(ctx: JourneyContext): string | undefined {
   const dirs = getMigrationDirs(ctx);
   if (dirs.length === 0) return undefined;

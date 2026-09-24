@@ -6,7 +6,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
@@ -60,7 +59,7 @@ export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_DATE_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgDateStringCodec {
     return () => new PgDateStringCodec(this);
   }

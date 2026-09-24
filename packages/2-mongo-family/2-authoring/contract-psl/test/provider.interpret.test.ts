@@ -59,7 +59,7 @@ function buildInterpretInput(
     sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
-  return { document, sources, symbolTable };
+  return { documents: [document], sources, symbolTable };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -91,7 +91,8 @@ describe('mongoContract interpret capability', () => {
   });
 
   it('returns the same failure diagnostics as load when parse and symbol table are clean', async () => {
-    const schema = `model User {
+    const schema = `// use prisma-8
+model User {
   id ObjectId @id @map("_id")
   bad Mystery
 }
@@ -108,7 +109,10 @@ describe('mongoContract interpret capability', () => {
     if (loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
@@ -117,9 +121,9 @@ describe('mongoContract interpret capability', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          sourceId: SOURCE_ID,
+          sourceId: schemaPath,
           span: expect.objectContaining({
-            start: expect.objectContaining({ line: 3 }),
+            start: expect.objectContaining({ line: 4 }),
           }),
         }),
       ]),
@@ -127,7 +131,8 @@ describe('mongoContract interpret capability', () => {
   });
 
   it('returns the same contract load returns for a clean schema', async () => {
-    const schema = `model User {
+    const schema = `// use prisma-8
+model User {
   id ObjectId @id @map("_id")
   email String
 }
@@ -144,7 +149,10 @@ describe('mongoContract interpret capability', () => {
     if (!loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(true);
     if (!interpretResult.ok) return;
@@ -268,7 +276,8 @@ model Post {
   });
 
   it('load merges parse and symbol-table seeds ahead of interpreter findings', async () => {
-    const schema = `model Dup {
+    const schema = `// use prisma-8
+model Dup {
   id ObjectId @id @map("_id")
 }
 model Dup {
@@ -291,7 +300,10 @@ model Other {
     if (loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
 
@@ -321,7 +333,7 @@ it('attributes multi-document semantic failures to the owning file, not the entr
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
   const result = interpretCapableSource('provider.prisma').interpret(
-    { document: entry.document, sources, symbolTable },
+    { documents: [entry.document], sources, symbolTable },
     context,
   );
   expect(result.ok).toBe(false);
@@ -379,10 +391,10 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
   const entry = parse('', 'entry.prisma');
   const sources = new PslSources([
     [entry.document.syntax, entry.sources.sourceFileFor(entry.document.syntax)],
-    [input.document.syntax, input.sources.sourceFileFor(input.document.syntax)],
+    [input.documents[0]!.syntax, input.sources.sourceFileFor(input.documents[0]!.syntax)],
   ]);
   const result = interpretCapableSource('provider.prisma').interpret(
-    { ...input, document: entry.document, sources },
+    { ...input, documents: [entry.document], sources },
     customContext,
   );
   expect(result.ok).toBe(false);
