@@ -6,15 +6,16 @@ The migration runner executes DDL commands, evaluates checks, and updates the ma
 
 ```ts
 export interface MongoRunnerDependencies {
-  readonly commandExecutor: MongoDdlCommandVisitor<Promise<void>>;
   readonly inspectionExecutor: MongoInspectionCommandVisitor<Promise<Record<string, unknown>[]>>;
   readonly adapter: MongoAdapter;
   readonly driver: MongoDriver;
+  readonly executeDdl: (command: AnyMongoDdlCommand) => Promise<void>;
   readonly markerOps: MarkerOperations;
+  readonly introspectSchema: () => Promise<MongoSchemaIR>;
 }
 ```
 
-Every dependency is an abstract interface. `MongoDdlCommandVisitor` and `MongoInspectionCommandVisitor` are the visitor SPIs from `@internal/mongo-query-ast`. `MongoAdapter` and `MongoDriver` are the runtime query-execution abstractions already used by the rest of the system. `MarkerOperations` is a small interface covering the four marker-ledger calls. The runner has zero imports from `mongodb`.
+Every dependency is an abstract interface or a function over family-layer types. `MongoInspectionCommandVisitor` is the visitor SPI from `@internal/mongo-query-ast`. `MongoAdapter` and `MongoDriver` are the runtime query-execution abstractions already used by the rest of the system. `executeDdl` runs one DDL command from the `@internal/mongo-query-ast` command union, and `introspectSchema` reads the live database as a `MongoSchemaIR`. `MarkerOperations` is a small interface covering the four marker-ledger calls. The runner has zero imports from `mongodb`.
 
 The concrete implementations live in the adapter (`@internal/adapter-mongo`). The `MongoControlAdapter` SPI in the family layer (`@internal/family-mongo/control-adapter`) declares the method that builds them for one control driver, and `MongoControlAdapterImpl` implements it:
 
