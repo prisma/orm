@@ -82,7 +82,7 @@ export const sqlFamilyPslBlockDescriptors = {
 
 ## Decision
 
-Top-level extension blocks have one value grammar: a **block spec** built from the shared argument combinators. The spec is a factory — `(ctx: BlockSpecContext) => BlockSpec` with `BlockSpecContext = { symbols: SymbolTable; block: BlockSymbol }` — registered on the block's `AuthoringPslBlockDescriptor` as the `spec` field. Symbol-table construction first collects every declaration, then binds each registered block's spec and interprets the block's member expressions and `@@` attributes directly against the expression AST. Only blocks whose values and attributes all interpret successfully publish a **typed envelope** (`ParsedPslExtensionBlock`), and lowering consumes envelopes exclusively. The ordered source text of a block's members survives only as a **source/print representation** (`PslExtensionBlock`) for the printer and for inference producers; no validator, classifier, or lowering path reads it.
+Top-level extension blocks have one value grammar: a **block spec** built from the shared argument combinators. The spec is a factory — `(ctx: BlockSpecContext) => BlockSpec` with `BlockSpecContext = { symbols: SymbolTable; block: BlockSymbol }` — registered on the block's `AuthoringPslBlockDescriptor` as the `spec` field. Symbol-table construction first collects every declaration, then binds each registered block's spec and interprets the block's member expressions and `@@` attributes directly against the expression AST. Only blocks whose values and attributes all interpret successfully publish a **typed envelope** (`ParsedPslExtensionBlock`), and lowering consumes envelopes exclusively. Parsed AST is never rendered back to text: `PslExtensionBlock` is a **producer-only print shape**, constructed by generators whose text is born from their own values (database inference among them) and consumed by the printer alone; no validator, classifier, or lowering path reads it.
 
 Two binders cover the block shapes PSL has:
 
@@ -109,7 +109,7 @@ export interface SymbolTableResult {
 }
 ```
 
-An invalid block has no `parsedBlocks` entry — its symbol keeps syntax and source provenance for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: `buildSymbolTable` reports every value and attribute failure once, anchored to the original expression and entry spans; downstream consumers never re-validate.
+An invalid block has no `parsedBlocks` entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: `buildSymbolTable` reports every value and attribute failure once, anchored to the original expression and entry spans; downstream consumers never re-validate.
 
 Interpreter providers thread `SymbolTableResult.parsedBlocks` through `PslInterpretInput.parsedBlocks`. A direct interpreter caller that holds only a symbol table re-derives the same envelopes with `deriveParsedBlocks(symbolTable, sources, pslBlockDescriptors)`, which runs the identical spec pipeline and keeps only successes.
 
@@ -129,9 +129,9 @@ export interface ParsedPslExtensionBlock<Values = Readonly<Record<string, unknow
 
 The envelope is parser-independent (it is declared in framework core's shared plane) and generic over `Values`, so a concrete consumer can carry parser-owned results — a resolved model reference, a decoded literal — through the type parameter without core depending on those types. `parameterSpans` lets consumers anchor semantic diagnostics without reparsing; `attributes` are the block's interpreted `@@` attributes, produced by the same lifecycle (`resolveEnumCodecId`, for example, reads `block.attributes['type']` and `block.values`).
 
-### Printing and inference use source provenance only
+### Printing consumes producer-built print shapes only
 
-`PslExtensionBlock` holds ordered `parameters: Record<string, PslExtensionBlockSourceEntry>` — expression text and span per entry, a missing `expression` rendering as a bare line — plus generically captured `@@` attribute lines. The printer renders this shape without consulting descriptors, codecs, or JSON re-encoding. Inference producers (Postgres policy and native-enum inference) construct the same shape when synthesizing blocks from a live database, and round-trip tests parse and validate those documents through the actual spec pipeline. The two representations never cross: inference does not manufacture resolved symbols, and lowering never accepts printable entries.
+`PslExtensionBlock` holds ordered `parameters: Record<string, PslExtensionBlockSourceEntry>` — expression text and span per entry, a missing `expression` rendering as a bare line — plus generically captured `@@` attribute lines. Only producers without an AST construct it: inference producers (Postgres policy and native-enum inference) synthesize blocks whose text is born from a live database's values, and the printer renders that shape without consulting descriptors, codecs, or JSON re-encoding. Parsed source is never converted into this shape — a consumer needing the authored text of a parsed block reads the syntax tree or the source file at its own boundary. Round-trip tests parse and validate inferred documents through the actual spec pipeline; inference does not manufacture resolved symbols, and lowering never accepts printable entries.
 
 ### SQL files placement rows through an opt-in hook
 
@@ -177,7 +177,7 @@ The hook picks only the destination namespace — entity kind and key stay fixed
 
 **Carry block values through the codec JSON medium.** A `value` parameter naming a `codecId`, decoded during parsing. Rejected: codec choice for enum members is a family lowering concern over the decoded literal (an integer member may store through `int4` or `int8` depending on the target), and parsing must not depend on codec registries. The grammar recognizes native JSON literals (`jsonValue()`); codecs interpret them afterwards.
 
-**Validate blocks from flattened source text.** Keeping raw expression strings on the parsed block and reparsing them in each consumer. Rejected: it duplicates the expression grammar in every consumer, loses spans, and makes diagnostics inconsistent. Source text survives strictly as print provenance.
+**Validate blocks from flattened source text.** Keeping raw expression strings on the parsed block and reparsing them in each consumer. Rejected: it duplicates the expression grammar in every consumer, loses spans, and makes diagnostics inconsistent. Parsed AST is never stringified at all; only producers without an AST write print text.
 
 **A variadic flag on fixed parameter tables.** Marking a descriptor as accepting arbitrary extra keys next to declared ones. Rejected: arbitrary-key blocks and closed-key blocks are different shapes with different output types; `entriesBlock` gives the former its own binder and inferred `Record` output instead of weakening unknown-key rejection for the latter.
 
