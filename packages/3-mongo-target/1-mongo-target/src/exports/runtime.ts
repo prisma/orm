@@ -3,7 +3,7 @@ import type {
   RuntimeTargetInstance,
 } from '@internal/framework-components/execution';
 import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
-import { mongoTargetDescriptorMeta } from '../core/descriptor-meta';
+import { mongoTargetDescriptorMetaRuntime } from '../core/descriptor-meta-runtime';
 
 export interface MongoRuntimeTargetInstance extends RuntimeTargetInstance<'mongo', 'mongo'> {}
 
@@ -18,7 +18,7 @@ const mongoRuntimeTargetDescriptor: RuntimeTargetDescriptor<
 > & {
   readonly codecs: () => MongoCodecRegistry;
 } = {
-  ...mongoTargetDescriptorMeta,
+  ...mongoTargetDescriptorMetaRuntime,
   // The target owns the codecs; the adapter's runtime descriptor registers them, as the Postgres adapter does.
   codecs: () => newMongoCodecRegistry(),
   create(): MongoRuntimeTargetInstance {
