@@ -156,7 +156,7 @@ describe('the orm section', () => {
     expect(fields(validRaw({ formatter: { indent: 'tab', newline: 'LF' } }))).toEqual([]);
   });
 
-  it('keeps what a descriptor was built from, so closures, prototypes and this survive', () => {
+  it('keeps every descriptor and the connection as the config file built them', () => {
     class Serializer {
       deserializeContract(json: unknown): unknown {
         return json;
@@ -172,15 +172,17 @@ describe('the orm section', () => {
       },
     };
     const source = { format: 'psl', inputs: ['./schema.prisma'], load: () => ({}) };
-    const raw = validRaw({ target, contract: { source } });
+    const connection = { pool: new Serializer() };
+    const raw = validRaw({ target, contract: { source }, db: { connection } });
 
     const result = validateOrmSection(raw, provenanceFor(raw));
 
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    const validatedTarget = result.value.target as unknown as typeof target;
-    expect(validatedTarget.contractSerializer).toBe(target.contractSerializer);
-    expect(validatedTarget.create()).toBe('postgres');
-    expect(result.value.family.create).toBe((raw['family'] as { create: unknown }).create);
+    expect(result.value.target).toBe(target);
+    expect(result.value.family).toBe(raw['family']);
+    expect(result.value.adapter).toBe(raw['adapter']);
+    expect(result.value.db?.connection).toBe(connection);
+    expect((result.value.target as unknown as typeof target).create()).toBe('postgres');
     expect(result.value.contract?.source.load).toBe(source.load);
     expect(result.value.contract?.source.inputs).toEqual(['/project/schema.prisma']);
   });

@@ -64,7 +64,7 @@ Reference: [Arktype Declare API](https://arktype.io/docs/declare)
 
 Read the arktype docs (https://arktype.io/docs) before you write code that walks a schema, copies values around validation, or repairs arktype's output afterwards. The Configuration, Morphs and Scopes pages cover most of the problems that look like they need bespoke code. Do not read arktype's compiled node tree (`schema.internal`, `.structure`, `.branches`, `.in`): it is not a public API, and code built on it breaks on shapes you did not anticipate (unions, tuples, a root `.narrow()` combined with defaults).
 
-An example of what goes wrong otherwise: the CLI engine's config schemas once copied the input along the schema's declared shape before validation and put the config file's objects back afterwards, by walking the compiled node tree twice. arktype's documented `clone` option does the same job in about twenty lines.
+An example of what goes wrong otherwise: the CLI engine's config schemas once copied the input along the schema's declared shape before validation and put the config file's objects back afterwards, by walking the compiled node tree twice. arktype's documented `clone` option, with the objects to keep declared in the schema, does the same job without reading arktype's internals.
 
 ## What a Transformation Does to Its Input
 
@@ -91,11 +91,11 @@ The option can be set globally, per scope, or per type:
 ```typescript
 const configScope = scope(
   { path: type('string').pipe((value, ctx) => resolveAgainstConfigFile(value, ctx.path)) },
-  { clone: (original) => copyPlainObjectsAndArrays(original) },
+  { clone: (original) => copyExceptDeclaredReferences(original) },
 );
 ```
 
-- A custom function replaces the clone. The CLI engine's config scope copies only plain objects and arrays, where arktype writes results, and returns everything else as it is.
+- A custom function replaces the clone. The CLI engine's config scope copies every value except the ones a section schema declares with `reference(schema)`: the config file's own objects, such as descriptors and clients. A `reference` check runs during validation, before arktype clones, and records the value it accepted; the clone keeps recorded values as they are. The schema says which values are references, rather than the clone guessing from a value's type.
 - `clone: false` writes results into the caller's input. That mutates the caller's objects and throws on frozen input.
 - `structuredClone` is not a safe substitute: it throws on functions and drops prototypes.
 

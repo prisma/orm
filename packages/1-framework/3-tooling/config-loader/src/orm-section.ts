@@ -1,7 +1,12 @@
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { blindCast } from '@internal/utils/casts';
 import type { ConfigSection as EngineConfigSection, SectionProvenance } from '@prisma/cli-engine';
-import { configSchema, defineConfigSection, validateSectionWithSchema } from '@prisma/cli-engine';
+import {
+  configSchema,
+  defineConfigSection,
+  reference,
+  validateSectionWithSchema,
+} from '@prisma/cli-engine';
 
 /** The single config section the `orm` command family owns. */
 export const ORM_CONFIG_SECTION_NAME = 'orm';
@@ -41,8 +46,9 @@ export function isConfigSection(value: string): value is ConfigSection {
 /**
  * The fields that identify a control descriptor. Only these are declared: a
  * descriptor is a runtime object the family builds, and its other members
- * (codec tables, the contract serializer, migration hooks) pass through as
- * the config file constructed them.
+ * (codec tables, the contract serializer, migration hooks) pass through. Each
+ * descriptor is declared a reference, so the command receives the object the
+ * config file built.
  */
 const descriptorFields = {
   id: 'string',
@@ -66,12 +72,12 @@ const contractSource = {
 
 /** Each subsection's own shape, without the rules that relate subsections to one another. */
 const ormSubsectionsSchema = configSchema({
-  family: { kind: "'family'", ...descriptorFields, emission: 'object' },
-  target: { kind: "'target'", ...targetLikeFields },
-  adapter: { kind: "'adapter'", ...targetLikeFields },
-  'driver?': { kind: "'driver'", ...targetLikeFields },
-  'extensions?': [{ kind: "'extension'", ...targetLikeFields }, '[]'],
-  'db?': { 'connection?': 'unknown' },
+  family: reference(configSchema({ kind: "'family'", ...descriptorFields, emission: 'object' })),
+  target: reference(configSchema({ kind: "'target'", ...targetLikeFields })),
+  adapter: reference(configSchema({ kind: "'adapter'", ...targetLikeFields })),
+  'driver?': reference(configSchema({ kind: "'driver'", ...targetLikeFields })),
+  'extensions?': [reference(configSchema({ kind: "'extension'", ...targetLikeFields })), '[]'],
+  'db?': { 'connection?': reference(configSchema('unknown')) },
   'contract?': {
     source: contractSource,
     output: ['path', '=', () => 'src/prisma/contract.json'],
