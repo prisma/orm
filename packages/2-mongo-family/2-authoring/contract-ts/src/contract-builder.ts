@@ -2,6 +2,7 @@ import { computeProfileHash, computeStorageHash } from '@internal/contract/hashi
 import {
   type ContractEmbedRelation,
   type ContractEnum,
+  type ContractExecutionSection,
   type ContractField,
   type ContractFieldType,
   type ContractModelBase,
@@ -10,23 +11,34 @@ import {
   type ControlPolicy,
   type CrossReference,
   crossRef,
+  type ExecutionMutationDefault,
+  type ExecutionMutationDefaultPhases,
   type JsonValue,
   type ProfileHashBase,
   type StorageHashBase,
   type ValueSetRef,
 } from '@internal/contract/types';
 import {
+  composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
+  createFieldHelpersFromNamespace,
   type EntityHelpersFromNamespace,
   type ExtractAuthoringNamespaceFromPack,
   type MergeExtensionAuthoringNamespaces,
+  type ResolveTemplateValue,
   resolveToOneRelationNullable,
+  type TupleFromArgumentDescriptors,
 } from '@internal/contract-authoring';
 import { errorEnumCodecNotInPackStack } from '@internal/errors/control';
-import type { AuthoringEntityTypeNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringArgumentDescriptor,
+  AuthoringFieldNamespace,
+  AuthoringFieldPresetDescriptor,
+} from '@internal/framework-components/authoring';
 import {
   assertNoCrossRegistryCollisions,
-  mergeAuthoringNamespaces,
+  instantiateAuthoringFieldPreset,
+  validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type {
@@ -38,6 +50,7 @@ import { extractCodecLookup } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
+  buildMongoExecutionSection,
   buildMongoNamespace,
   type MongoCollection,
   type MongoCollectionInput,
@@ -175,6 +188,7 @@ export interface FieldBuilder<
   readonly __nullable: Nullable;
   readonly __many: Many;
   readonly __enumHandle: Handle;
+  readonly __executionDefaults?: ExecutionMutationDefaultPhases;
   optional(): FieldBuilder<Type, true, Many, Handle>;
   many(): FieldBuilder<Type, Nullable, true, Handle>;
 }
@@ -603,6 +617,12 @@ type DefinitionExtensions<Definition> = Definition extends {
   ? Extensions
   : Record<never, never>;
 
+type ScaffoldExtensions<Definition> = Definition extends {
+  readonly extensions?: infer Extensions extends Record<string, ExtensionPackRef<string, string>>;
+}
+  ? Extensions
+  : undefined;
+
 type DefinitionFamilyId<Definition> = Definition extends {
   readonly family: FamilyPackRef<infer FamilyId>;
 }
@@ -675,6 +695,7 @@ type MongoContractBaseFromDefinition<Definition> = Simplify<{
   readonly meta: Record<string, never>;
   readonly defaultControlPolicy?: ControlPolicy;
   readonly enumAccessors?: BuiltEnumAccessors<Definition>;
+  readonly execution?: ContractExecutionSection;
 }>;
 
 type CodecTypesFromDefinition<Definition> = MongoCodecTypes &
@@ -814,6 +835,47 @@ type MergeExtensionEntityNamespaces<Extensions> = MergeExtensionAuthoringNamespa
   'entityTypes'
 >;
 
+type ExtractFieldNamespaceFromPack<Pack> = ExtractAuthoringNamespaceFromPack<
+  Pack,
+  'field',
+  Record<never, never>
+>;
+
+type MergeExtensionFieldNamespaces<Extensions> = MergeExtensionAuthoringNamespaces<
+  Extensions,
+  'field'
+>;
+
+export type FieldBuilderFromPresetDescriptor<
+  Descriptor extends AuthoringFieldPresetDescriptor,
+  Args extends readonly unknown[],
+> = FieldBuilder<
+  {
+    readonly kind: 'scalar';
+    readonly codecId: ResolveTemplateValue<Descriptor['output']['codecId'], Args> extends string
+      ? ResolveTemplateValue<Descriptor['output']['codecId'], Args>
+      : string;
+  },
+  ResolveTemplateValue<Descriptor['output']['nullable'], Args> extends true ? true : false,
+  false
+>;
+
+type FieldPresetHelper<Descriptor extends AuthoringFieldPresetDescriptor> = Descriptor extends {
+  readonly args: infer Args extends readonly AuthoringArgumentDescriptor[];
+}
+  ? <const Params extends TupleFromArgumentDescriptors<Args>>(
+      ...args: Params
+    ) => FieldBuilderFromPresetDescriptor<Descriptor, Params>
+  : () => FieldBuilderFromPresetDescriptor<Descriptor, readonly []>;
+
+type FieldPresetHelpersFromNamespace<Namespace> = {
+  readonly [K in keyof Namespace]: Namespace[K] extends AuthoringFieldPresetDescriptor
+    ? FieldPresetHelper<Namespace[K]>
+    : Namespace[K] extends Record<string, unknown>
+      ? FieldPresetHelpersFromNamespace<Namespace[K]>
+      : never;
+};
+
 export type ContractAuthoringHelpers<
   Family extends FamilyPackRef<string> = FamilyPackRef<string>,
   Target extends TargetPackRef<string, string> = TargetPackRef<string, string>,
@@ -823,20 +885,17 @@ export type ContractAuthoringHelpers<
     ExtractEntitiesNamespaceFromPack<Target> &
     MergeExtensionEntityNamespaces<Extensions>
 > & {
-  readonly field: typeof field;
+  readonly field: typeof field &
+    FieldPresetHelpersFromNamespace<
+      ExtractFieldNamespaceFromPack<Family> &
+        ExtractFieldNamespaceFromPack<Target> &
+        MergeExtensionFieldNamespaces<Extensions>
+    >;
   readonly index: typeof index;
   readonly model: typeof model;
   readonly rel: typeof rel;
   readonly valueObject: typeof valueObject;
 };
-
-type AuthoringComponent = {
-  readonly authoring?: { readonly entityTypes?: unknown };
-};
-
-function extractEntitiesNamespace(component: AuthoringComponent): AuthoringEntityTypeNamespace {
-  return (component.authoring?.entityTypes ?? {}) as AuthoringEntityTypeNamespace;
-}
 
 const MONGO_RESERVED_HELPER_KEYS: readonly string[] = [
   'field',
@@ -846,33 +905,76 @@ const MONGO_RESERVED_HELPER_KEYS: readonly string[] = [
   'valueObject',
 ];
 
-function composeMongoEntityHelpers(
+function buildFieldPreset(
+  helperPath: string,
+  descriptor: AuthoringFieldPresetDescriptor,
+  args: readonly unknown[],
+): AnyFieldBuilder {
+  validateAuthoringHelperArguments(helperPath, descriptor.args, args);
+  const preset = instantiateAuthoringFieldPreset(descriptor, args);
+  const unsupported = [
+    ...(preset.default !== undefined ? ['default'] : []),
+    ...(preset.id ? ['id'] : []),
+    ...(preset.unique ? ['unique'] : []),
+  ];
+  if (unsupported.length > 0) {
+    throw contractError(
+      'CONTRACT.PACK_CONTRIBUTION_INVALID',
+      `Field preset "${helperPath}" contributes ${unsupported.join(', ')}, which Mongo does not support. Mongo supports presets that set a codec and execution defaults only.`,
+      {
+        meta: { helperPath, reason: 'preset-contribution-unsupported', contribution: unsupported },
+      },
+    );
+  }
+  return createFieldBuilder(
+    {
+      type: {
+        kind: 'scalar',
+        codecId: preset.descriptor.codecId,
+        ...normalizeOptionalTypeParams(preset.descriptor.typeParams),
+      },
+      nullable: preset.nullable,
+      many: false,
+    },
+    undefined,
+    preset.executionDefaults,
+  );
+}
+
+function composeMongoFieldHelpers(
+  fieldNamespace: AuthoringFieldNamespace,
+): Record<string, unknown> {
+  const presetHelpers = createFieldHelpersFromNamespace(
+    fieldNamespace,
+    ({ helperPath, descriptor }) =>
+      (...args: readonly unknown[]) =>
+        buildFieldPreset(helperPath, descriptor, args),
+  );
+  const collisions = Object.keys(presetHelpers).filter((name) => Object.hasOwn(field, name));
+  if (collisions.length > 0) {
+    throw contractError(
+      'CONTRACT.PACK_CONTRIBUTION_INVALID',
+      `Pack-contributed field preset(s) ${collisions.map((c) => `"${c}"`).join(', ')} collide with the built-in Mongo field helper(s) of the same name.`,
+      { meta: { reason: 'core-field-helper-collision', contribution: collisions } },
+    );
+  }
+  return { ...field, ...presetHelpers };
+}
+
+function composeMongoAuthoringHelpers(
   family: FamilyPackRef<string>,
   target: TargetPackRef<string, string>,
   extensions: Record<string, ExtensionPackRef<string, string>> | undefined,
 ): Record<string, unknown> {
-  const components: readonly AuthoringComponent[] = [
-    family,
-    target,
-    ...Object.values(extensions ?? {}),
-  ];
-  const merged: Record<string, unknown> = {};
-  for (const component of components) {
-    const ns = extractEntitiesNamespace(component);
-    if (Object.keys(ns).length > 0) {
-      mergeAuthoringNamespaces(merged, ns, [], 'entity', 'entity');
-    }
-  }
-  // Mongo authoring does not yet ship contributed field / type namespaces in
-  // the TS DSL surface, but the cross-registry guard mirrors SQL's call so
-  // any future field / type contributions surface a structurally identical
-  // collision error.
-  assertNoCrossRegistryCollisions({}, {}, merged as AuthoringEntityTypeNamespace);
+  const components = [family, target, ...Object.values(extensions ?? {})];
+  const entityNamespace = composePackAuthoringNamespace(components, 'entityTypes');
+  const fieldNamespace = composePackAuthoringNamespace(components, 'field');
+  assertNoCrossRegistryCollisions({}, fieldNamespace, entityNamespace);
   // Pack-contributed entity types flatten onto the same top-level shape
   // as the built-in helpers (`model`, `rel`, `field`, `index`,
   // `valueObject`). Detect collisions explicitly so a contributed name
   // can't silently overwrite a built-in at runtime.
-  const collisions = Object.keys(merged).filter((name) =>
+  const collisions = Object.keys(entityNamespace).filter((name) =>
     MONGO_RESERVED_HELPER_KEYS.includes(name),
   );
   if (collisions.length > 0) {
@@ -882,9 +984,16 @@ function composeMongoEntityHelpers(
       { meta: { reason: 'reserved-helper-key-collision', contribution: collisions } },
     );
   }
-  return createEntityHelpersFromNamespace(merged as AuthoringEntityTypeNamespace, {
-    ctx: { family: family.familyId, target: target.targetId },
-  });
+  return {
+    ...createEntityHelpersFromNamespace(entityNamespace, {
+      ctx: { family: family.familyId, target: target.targetId },
+    }),
+    field: composeMongoFieldHelpers(fieldNamespace),
+    index,
+    model,
+    rel,
+    valueObject,
+  };
 }
 
 export type ContractScaffold<
@@ -944,9 +1053,11 @@ function createFieldBuilder<
 >(
   spec: FieldBuilderSpec<Type, Nullable, Many>,
   enumHandle?: Handle,
+  executionDefaults?: ExecutionMutationDefaultPhases,
 ): FieldBuilder<Type, Nullable, Many, Handle> {
   return {
     __kind: 'field',
+    ...ifDefined('__executionDefaults', executionDefaults),
     __type: spec.type,
     __nullable: spec.nullable,
     __many: spec.many,
@@ -958,12 +1069,14 @@ function createFieldBuilder<
       return createFieldBuilder<Type, true, Many, Handle>(
         { type: spec.type, nullable: true, many: spec.many },
         enumHandle,
+        executionDefaults,
       );
     },
     many() {
       return createFieldBuilder<Type, Nullable, true, Handle>(
         { type: spec.type, nullable: spec.nullable, many: true },
         enumHandle,
+        executionDefaults,
       );
     },
   };
@@ -1995,6 +2108,60 @@ function buildCollections(
   return intermediate;
 }
 
+function executionDefaultError(
+  modelName: string,
+  fieldName: string,
+  reason: string,
+  message: string,
+): Error {
+  return contractError('CONTRACT.DEFAULT_INVALID', `Field "${modelName}.${fieldName}" ${message}`, {
+    meta: { modelName, fieldName, reason },
+  });
+}
+
+function buildExecutionDefaults(
+  models: Record<string, AnyModelBuilder> | undefined,
+): ExecutionMutationDefault[] {
+  const defaults: ExecutionMutationDefault[] = [];
+  for (const modelBuilder of Object.values(models ?? {})) {
+    for (const [fieldName, fieldBuilder] of Object.entries(modelBuilder.__fields)) {
+      const phases = fieldBuilder.__executionDefaults;
+      if (!phases?.onCreate && !phases?.onUpdate) continue;
+      const modelName = modelBuilder.__name;
+      if (fieldBuilder.__nullable) {
+        throw executionDefaultError(
+          modelName,
+          fieldName,
+          'nullable-with-executionDefaults',
+          'cannot be nullable when executionDefaults are present.',
+        );
+      }
+      if (fieldBuilder.__many) {
+        throw executionDefaultError(
+          modelName,
+          fieldName,
+          'many-with-executionDefaults',
+          'cannot be a list when executionDefaults are present.',
+        );
+      }
+      const entry = modelBuilder.__collection;
+      if (entry === undefined) {
+        throw executionDefaultError(
+          modelName,
+          fieldName,
+          'executionDefaults-without-collection',
+          'has executionDefaults, but its model has no collection. Generated values are only supported on fields of a model stored in a collection.',
+        );
+      }
+      defaults.push({
+        ref: { namespace: UNBOUND_NAMESPACE_ID, entry, field: fieldName },
+        ...phases,
+      });
+    }
+  }
+  return defaults;
+}
+
 function buildContractFromDefinition<
   const Definition extends ContractDefinition<
     FamilyPackRef<string>,
@@ -2020,6 +2187,7 @@ function buildContractFromDefinition<
   // at `hash({})`.
   const capabilities: Record<string, Record<string, boolean>> = {};
   const collections = buildCollections(definition.models);
+  const execution = buildMongoExecutionSection(buildExecutionDefaults(definition.models));
 
   // Resolve the target's codecs by id from the pack the contract binds, then encode each enum's
   // member values through `codec.encodeJson` — the same real codecs the runtime/control stacks use.
@@ -2129,6 +2297,7 @@ function buildContractFromDefinition<
       capabilities,
     }),
     meta: {},
+    ...ifDefined('execution', execution),
   } satisfies MongoContract;
 
   return blindCast<
@@ -2233,18 +2402,14 @@ export function buildBoundContract<
   const full = { ...definition, family, target };
 
   if (factory !== undefined) {
-    const entities = composeMongoEntityHelpers(family, target, definition.extensions);
-    // composeMongoEntityHelpers returns Record<string, unknown> via an opaque runtime
+    // composeMongoAuthoringHelpers returns Record<string, unknown> via an opaque runtime
     // namespace walk; there is no way to reconstruct ContractAuthoringHelpers<F,T,Ext>
     // structurally from that return type, so this single cast is irreducible.
-    const helpers = {
-      ...entities,
-      field,
-      index,
-      model,
-      rel,
-      valueObject,
-    } as unknown as ContractAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>;
+    const helpers = composeMongoAuthoringHelpers(
+      family,
+      target,
+      definition.extensions,
+    ) as unknown as ContractAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>;
     const built = factory(helpers);
     return buildContractFromDefinition({
       ...full,
@@ -2269,9 +2434,9 @@ export function defineContract<
 >(definition: Definition): MongoContractResult<Definition>;
 export function defineContract<
   const Definition extends ContractScaffold<
-    Family,
-    Target,
-    Extensions,
+    FamilyPackRef<string>,
+    TargetPackRef<string, string>,
+    Record<string, ExtensionPackRef<string, string>> | undefined,
     Record<string, ModelNameInput> | undefined
   >,
   const Built extends {
@@ -2279,12 +2444,15 @@ export function defineContract<
     readonly valueObjects?: Record<string, AnyValueObjectBuilder>;
     readonly roots?: Record<string, ModelNameInput> | undefined;
   },
-  const Family extends FamilyPackRef<string> = FamilyPackRef<string>,
-  const Target extends TargetPackRef<string, string> = TargetPackRef<string, string>,
-  const Extensions extends Record<string, ExtensionPackRef<string, string>> | undefined = undefined,
 >(
   definition: Definition,
-  factory: (helpers: ContractAuthoringHelpers<Family, Target, Extensions>) => Built,
+  factory: (
+    helpers: ContractAuthoringHelpers<
+      Definition['family'],
+      Definition['target'],
+      ScaffoldExtensions<Definition>
+    >,
+  ) => Built,
 ): MongoContractResult<Definition & Built>;
 export function defineContract(
   definition: ContractScaffold<
