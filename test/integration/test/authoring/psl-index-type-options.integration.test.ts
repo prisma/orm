@@ -23,8 +23,8 @@ function interpret(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
+    documents: [document],
     dataTypeLookup: createDataTypeLookup(postgresDataTypes),
-    document,
     symbolTable,
     sources,
     target: postgresPack,

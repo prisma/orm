@@ -46,7 +46,7 @@ export async function readEmittedContract(inputs: {
   readonly cwd: string;
   readonly commandName: string;
 }): Promise<Result<EmittedContract, CliStructuredError>> {
-  const path = contractPathFor(inputs.config, inputs.cwd);
+  const path = contractPathFor(inputs.config);
   if (path === undefined) {
     return notOk(
       normalizeError(

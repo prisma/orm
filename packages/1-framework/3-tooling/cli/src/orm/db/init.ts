@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -20,10 +21,9 @@ import {
 import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { projectConfigPathFor } from '../migration/paths';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
@@ -156,7 +156,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: contractPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          projectDir: baseDirFor(ctx.config),
           client,
         });
         if (!preflight.ok) {

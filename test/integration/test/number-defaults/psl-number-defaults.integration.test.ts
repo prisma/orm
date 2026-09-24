@@ -62,7 +62,7 @@ const sqliteStack = createControlStack({ family: sql, target: sqlite, adapter: s
 
 async function authorSqliteContractFromPsl(pslSchema: string) {
   const schemaPath = join(mkdtempSync(join(tmpdir(), 'psl-number-defaults-')), 'schema.prisma');
-  writeFileSync(schemaPath, pslSchema, 'utf-8');
+  writeFileSync(schemaPath, `// use prisma-8\n\n${pslSchema}`, 'utf-8');
   return prismaContract(schemaPath, {
     target: sqlitePackRef,
     createNamespace: sqliteCreateNamespace,

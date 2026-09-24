@@ -32,6 +32,7 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationToHash,
   planMigrationAndSelfEmit,
   runContractEmit,
   runMigrate,
@@ -102,7 +103,13 @@ withTempDir(({ createTempDir }) => {
         const emit1 = await runContractEmit(ctx);
         expect(emit1.exitCode, `emit additive-required: ${emit1.stderr}`).toBe(0);
 
-        const newResult = await runMigrationNew(ctx, ['--name', 'add-required-name']);
+        // Plain `migrate` never advances the `db` ref, so name the origin.
+        const newResult = await runMigrationNew(ctx, [
+          '--name',
+          'add-required-name',
+          '--from',
+          latestMigrationToHash(ctx),
+        ]);
         expect(newResult.exitCode, `migration new: ${newResult.stderr}`).toBe(0);
 
         const migrationsDir = join(ctx.testDir, 'migrations', 'app');

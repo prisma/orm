@@ -55,7 +55,7 @@ Every code is a dotted `NAMESPACE.SUBCODE`; the namespace is the prefix (`CONFIG
 
 ### Wrapped errors
 
-`db migrate`, `db init`, and `db update` map an apply failure the runner did not classify into `MIGRATION.RUNNER_FAILED`, passing the failure's own `meta` through unchanged and its detail into `why`. Migration-tools failures that *are* classified (`MIGRATION.HASH_MISMATCH`, `MIGRATION.AMBIGUOUS_TARGET`, `MIGRATION.PATH_UNREACHABLE`, …) arrive under their own code. **When `code` is `MIGRATION.RUNNER_FAILED`, read `why` and `meta`** — that is where the routing-quality information lives (`meta.runnerErrorCode` at the legacy-marker-shape site).
+`db migrate`, `db init`, and `db update` map an apply failure the runner did not classify into `MIGRATION.RUNNER_FAILED`, passing the failure's own `meta` through unchanged and its detail into `why`. Migration-tools failures that *are* classified (`MIGRATION.HASH_MISMATCH`, `MIGRATION.PATH_UNREACHABLE`, …) arrive under their own code. **When `code` is `MIGRATION.RUNNER_FAILED`, read `why` and `meta`** — that is where the routing-quality information lives (`meta.runnerErrorCode` at the legacy-marker-shape site).
 
 ### How to ask for the full envelope
 
@@ -97,9 +97,9 @@ The single source of truth: read the envelope, find the row by `code`, follow th
 | `CONTRACT.SCHEMA_VERIFICATION_FAILED` | `db verify`, `db sign` (both exit 4 with the finding) | Live schema does not satisfy the contract; `meta.issues` lists the drifted paths per `meta.space`. Run `db update` to reconcile, or adjust the contract. |
 | `MIGRATION.RUNNER_FAILED` | `db migrate`, `db update`, `db init` | Wrapper for an unclassified apply failure; `why` and `meta` carry the detail. Reconcile the reported failure, then re-run. Previously applied migrations are preserved. |
 | `MIGRATION.DESTRUCTIVE_CHANGES` | `db update` when run with nobody to ask (`--no-interactive`, CI) | Consent is the database name: interactively you type it; non-interactively pass `--confirm <database>`. `--yes` does **not** grant it. `--dry-run` previews. **Only `db update` has this flow** — `db migrate` does not gate destructive ops on a flag. |
-| `MIGRATION.AMBIGUOUS_TARGET` / `MIGRATION.NO_INVARIANT_PATH` / `MIGRATION.UNKNOWN_INVARIANT` | `db migrate` | Concurrent-migration and invariant flows — `references/migration-review.md`. |
+| `MIGRATION.NO_INVARIANT_PATH` / `MIGRATION.UNKNOWN_INVARIANT` | `db migrate` | Concurrent-migration and invariant flows — `references/migration-review.md`. |
 | `MIGRATION.PATH_UNREACHABLE` / `MIGRATION.MARKER_MISMATCH` | `db migrate` | Run `db migrate --show --db $URL` to inspect the path, then `migration plan --from <from> --to <target>` or `migration list` to audit the graph — see `references/migration-review.md`. |
-| `MIGRATION.PLAN_ORIGIN_UNKNOWN` / `MIGRATION.HASH_NOT_IN_GRAPH` / `MIGRATION.SNAPSHOT_MISSING` | `migration plan` | Origin resolution — `references/migration-model.md` § *The trap* and `references/migrations.md` § *Dev → ship transition*. |
+| `MIGRATION.PLAN_ORIGIN_UNKNOWN` / `MIGRATION.HASH_NOT_IN_GRAPH` / `MIGRATION.SNAPSHOT_MISSING` | `migration plan`, `migration new` | Origin resolution — `references/migration-model.md` § *The trap* and `references/migrations.md` § *Dev → ship transition*. |
 | `MIGRATION.MISSING_INVARIANTS` | `migration status` `warn` diagnostic (exit 0) | The live marker reached the destination hash structurally but doesn't carry all invariants the target ref requires. Run `db migrate --to <name> --db $URL` to take a path that covers the missing invariants. See `references/migration-review.md`. |
 | `MIGRATION.MARKER_NOT_IN_HISTORY` / `CONTRACT.UNREADABLE` | `migration status` `warn` diagnostics (exit 0) | Read `severity` *and* `code`. Up-to-date / pending / no-marker states are not codes — read `spaces[].currentContract` and `migrations[].status` in the `--json` document. `references/migration-review.md` covers the marker-out-of-history flow. |
 | `BUDGET.ROWS_EXCEEDED` / `BUDGET.TIME_EXCEEDED` | Runtime, when the `budgets` middleware is active | Tune `budgets({ maxRows, maxLatencyMs, ... })` or rewrite the query. See `references/runtime.md`. |

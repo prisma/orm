@@ -67,7 +67,7 @@ Reserved: `db verify` needs `db.queryRunnerFactory` in `prisma.config.ts` and it
 
 ### CONFIG.VALIDATION_FAILED
 
-`prisma.config.ts` loaded but a config section is missing or malformed. The config loader validates the evaluated config and returns one diagnostic per problem, each tagged with the top-level config section it concerns (`meta.section`: `family`, `target`, `adapter`, `driver`, `extensions`, `db`, `contract`, `migrations`, or `formatter`); a command fails with the diagnostic (exit `2`) only when it reads that section. Also raised by framework-component resolution for fields like `frameworkComponents[]`, `frameworkComponents[].kind`/`familyId`/`targetId`, `contract.targetFamily`, and `contract.target`, and by contract-path resolution when `config.contract.output` is absent (those sites carry no `section`). Payload: `field` (loader diagnostics), `section` (loader diagnostics; optional elsewhere).
+`prisma.config.ts` loaded but a config section is missing or malformed, as seen by the ORM's own config loader (the language server, the vite plugin, and any tool that calls `loadConfig` outside a command run). The loader validates the `orm` section against its schema and returns one diagnostic per problem, each tagged with the top-level subsection it concerns (`meta.section`: `family`, `target`, `adapter`, `driver`, `extensions`, `db`, `contract`, `migrations`, or `formatter`); a command fails with the diagnostic (exit `2`) only when it reads that section. Under the `prisma` CLI the same problems are reported by the engine instead, as `CLI.CONFIG_FIELD_INVALID` diagnostics (one per field, `meta.section: 'orm'`, `meta.field` the dotted path, `where.path` the config file that declared the field) accompanying `CLI.CONFIG_SECTION_INVALID`. Also raised by framework-component resolution for fields like `frameworkComponents[]`, `frameworkComponents[].kind`/`familyId`/`targetId`, `contract.targetFamily`, and `contract.target`, and by contract-path resolution when `config.contract.output` is absent (those sites carry no `section`). Payload: `field` (loader diagnostics), `section` (loader diagnostics; optional elsewhere).
 
 ### CONFIG.VERSION_MARKER_MISSING
 
@@ -111,9 +111,13 @@ During `prisma orm init`, `--authoring` and `--schema-path` disagree on file ext
 
 During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
 
+### CLI.INIT_FLAG_CONFLICT
+
+`prisma orm init --from-prisma7-schema <path>` was combined with `--schema-path` or `--authoring`. The first names an existing Prisma 7 schema as the contract source; the other two describe a starter schema to write, so the pair contradicts itself. Raised before anything is read or written. Maps to init exit code 2 (PRECONDITION). Payload: `flags` (the two kebab-case flag names).
+
 ### CLI.INIT_INSTALL_FAILED
 
-During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. Files scaffolded before the install step are already on disk; the next actions carry the install command that was attempted and the emit that was waiting on it. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
+During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `init` again once the dependencies install. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
@@ -133,7 +137,35 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 ### CLI.INIT_MISSING_FLAGS
 
-`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`.
+`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. When detection found a Prisma 7 project, the message also names `--from-prisma7-schema <path>` as the alternative. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`, `prisma7SchemaPath` (`null` when nothing Prisma 7 was found).
+
+### CLI.INIT_PRISMA7_CONFIG_COLLISION
+
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` evaluated as a Prisma 7 config (no `$prismaConfig` marker) while a `prisma7.config.*` also exists. Init renames the Prisma 7 config to `prisma7.config.*` so Prisma 8 can write its own, and cannot rename onto an existing file. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `prismaConfigPath`, `prisma7ConfigPath`.
+
+### CLI.INIT_PRISMA7_CONFIG_UNREADABLE
+
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` exists but failed to evaluate (typically a Prisma 7 config importing `prisma/config` in a checkout whose dependencies are not installed). Init cannot tell whether the file is Prisma 7's, to rename, or its own, to replace, so it refuses rather than overwrite it. The fix is to install the project's dependencies so the config evaluates, or rename it to `prisma7.config.<ext>` by hand; when a `prisma7.config.*` already exists, init leaves `prisma.config.*` alone and the fix is to install the dependencies and fix the error in it instead. The normal path is unaffected: without the flag or a yes to the Prisma 7 question, the file is treated as it is today. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `why`, `prisma7ConfigPath` (`null` when none exists).
+
+### CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED
+
+On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares a provider Prisma 8 has no target for, or no string provider at all. The supported list is in the payload. When the provider is not a string literal, passing `--target` names the database instead; a string provider with no target is refused whatever `--target` says. Nothing is written or installed. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider` (`null` when not a string literal), `supported`.
+
+### CLI.INIT_PRISMA7_SCHEMA_INVALID
+
+The path `prisma orm init` was asked to use as a Prisma 7 schema (`--from-prisma7-schema`, or the path the interactive question named) does not exist, or neither it nor any `.prisma` file under it has a `datasource` block. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `reason` (`absent` or `no-datasource`).
+
+### CLI.INIT_PRISMA7_SCHEMA_REFUSED
+
+On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contract source refused the schema, for example because it contains a `view` block or an `Unsupported(...)` field. Init runs the source after installing the target package and `dotenv` and before any consent question or file change, so the project is unchanged apart from those two packages. The `why` lists each diagnostic as `<sourceId>:<line>:<column> <code> <message>`. The next actions say to edit the schema as each finding says (the target package's README lists every refusal and its fix) or to run init without `--from-prisma7-schema`, and give the command that removes the two packages. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `summary`, `diagnostics`, `packagesAdded` (the packages the project did not declare before the check; the remove command names only these).
+
+### CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE
+
+On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or it could not be loaded from the project after init installed it (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without `prisma7Schema` is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
+
+### CLI.INIT_PRISMA7_TARGET_MISMATCH
+
+On the Prisma 7 path of `prisma orm init`, `--target` names a different database than the schema's `datasource` provider, for example `--target mongodb` for a schema that declares `provider = "postgresql"`. With `--from-prisma7-schema` it is refused before anything is asked, installed, or written. Without the flag init does not ask its Prisma 7 question and runs as a fresh init, so this code is not raised. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`, `target` (as passed).
 
 ### CLI.INIT_PROBE_FAILED
 
@@ -161,7 +193,7 @@ Raised by the commander `init` (deleted in the S5 cutover). On the engine-hosted
 
 ### CLI.INIT_WRITE_FAILED
 
-`prisma orm init` could not write one of the files it scaffolds: a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`.
+`prisma orm init` could not write one of the files it scaffolds: a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. On the Prisma 7 path the config rename happens before the first write, so a completed rename is listed too (`filesRenamed`, `from` and `to`); it stays in place and a re-run writes the missing files beside it. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`, `filesRenamed`.
 
 ### CLI.INVALID_OUTPUT_FORMAT
 
@@ -850,7 +882,7 @@ A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annota
 
 ### RUNTIME.ARGUMENT_INVALID
 
-A built-in Postgres query operation received an argument it cannot use. Today the only such argument is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
+A built-in Postgres query operation or full-text helper received an argument it cannot use. One case is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. The other case is a literal part of a `tsquery` template with an invalid JavaScript escape, such as `\u`: JavaScript gives the tag no text for that part, so the tag refuses it rather than drop it. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
 
 ### RUNTIME.AST_INVALID
 
@@ -1071,10 +1103,6 @@ A prepared statement failed again after the PostgreSQL driver discarded a stale 
 
 A migration reference (directory name or hash prefix) passed to a CLI command matches migrations in more than one contract space, so the command cannot tell which one you mean. Re-run with `--space <id>` to pick a space. Payload: `ref`, `spaceIds`.
 
-### MIGRATION.AMBIGUOUS_TARGET
-
-The on-disk migration history has diverged into multiple branch tips (typically two developers planned migrations from the same starting point), so commands that auto-resolve a target cannot choose one. Fix by targeting a branch with `ref set`, deleting one of the conflicting migration directories, or passing `--from <hash>`. Payload: `branchTips`, and when divergence context is known `divergencePoint`, `branches`.
-
 ### MIGRATION.BUNDLE_NOT_FOUND_FOR_GRAPH_NODE
 
 A hash resolves to a node in the migration graph, but no on-disk migration package has that hash as its destination (`to`), so there is no bundle to read for it. Hit when resolving a ref or hash to a migration bundle (e.g. `migration show`, contract-at resolution). Payload: `hash`, `explicitLabel` (when the user supplied a named reference).
@@ -1241,7 +1269,7 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 ### MIGRATION.HASH_NOT_IN_GRAPH
 
-A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`, sometimes `graphTipHash`; none at the `migration new` sites.
+A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -1305,7 +1333,7 @@ While finalizing an apply, the compare-and-swap update of the database's contrac
 
 ### MIGRATION.MARKER_MISMATCH
 
-The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan --from <tip>` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`, `graphTip` (when the graph has a tip).
+The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`.
 
 ### MIGRATION.MARKER_NOT_IN_HISTORY
 
@@ -1323,10 +1351,6 @@ A diagnostic in `migration status`: the active ref requires data invariants that
 
 `migration new` found the from and to contract hashes identical: there is nothing to migrate. Change the contract and re-run `prisma contract emit` first, or pass `--from <hash>` explicitly to author a data-only migration on the current contract hash. Payload: none.
 
-### MIGRATION.NO_INITIAL_MIGRATION
-
-While reconstructing the migration graph, no migration starts from the empty contract state, so the history has no entry point. Usually indicates corrupted `migration.json` files. Payload: `nodes` (known hashes).
-
 ### MIGRATION.NO_INVARIANT_PATH
 
 The target (or named ref) requires data invariants, and no path through the migration graph from the current state covers all of them. Add a migration on the path that runs a `dataTransform` with each missing `invariantId`, or retarget the ref. Payload: `required`, `missing`, `structuralPath` (edges: `dirName`, `migrationHash`, `from`, `to`, `invariants`), `refName` (when applicable). Also raised per space by `migrate` in show/plan mode when a space's path requires invariants not available on disk; that site's meta is `spaceId`, `missing`.
@@ -1334,10 +1358,6 @@ The target (or named ref) requires data invariants, and no path through the migr
 ### MIGRATION.NO_MIGRATIONS
 
 `migration show` was given a non-path reference but the app space has no migration packages at all, so there is nothing to resolve against. Create a migration with `prisma migration plan` first. Payload: none.
-
-### MIGRATION.NO_TARGET
-
-The migration history contains cycles (e.g. after a rollback migration C1→C2→C1) and no target can be resolved automatically. Pass `--from <hash>` to specify the planning origin explicitly. Payload: `reachableHashes`.
 
 ### MIGRATION.OPERATION_UNSUPPORTED
 
@@ -1361,7 +1381,7 @@ An authored migration's `operations` getter returned something other than an arr
 
 ### MIGRATION.PLAN_ORIGIN_UNKNOWN
 
-`migration plan` was run without `--from` and without a `db` ref while migrations already exist on disk. Planning would silently fall back to an empty-database origin and produce a migration that recreates everything the existing history already creates, so the command refuses. Set the `db` ref (`migration ref set db <contract>` or `db update`), pass `--from <contract>`, or pass `--from @empty` to deliberately plan from an empty database. Payload: `reachableRefs`, `graphTipHash` (when the graph has a tip).
+`migration plan` or `migration new` was run without `--from` and without a `db` ref while migrations already exist on disk. Planning would silently fall back to an empty-database origin and produce a migration that recreates everything the existing history already creates, so the command refuses. Set the `db` ref (`migration ref set db <contract>` or `db update`), pass `--from <contract>`, or (for `migration plan`) pass `--from @empty` to deliberately plan from an empty database. Payload: `reachableRefs`.
 
 ### MIGRATION.POLICY_VIOLATION
 

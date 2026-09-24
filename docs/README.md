@@ -27,6 +27,7 @@ This directory contains the primary documentation for the repository.
 - [Codec authoring guide](./reference/codec-authoring-guide.md) — class-based codecs (`CodecImpl`, `CodecDescriptorImpl`) and column helpers
 - [Integer representation types](./reference/integer-representation-types.md) — choosing `BigInt`, `BigIntNumber`, or `UnboundedInt` by target, storage, application value, and aggregate behavior
 - [Aggregate descriptor guide](./reference/aggregate-descriptor-guide.md) — how a target or extension declares aggregate operations and their result codecs (`SqlAggregateDescriptor` on `types.aggregateDescriptors`)
+- [PSL editor tooling for tagged literal defaults](./reference/psl-editor-tooling-tagged-literals.md) — what the language server, formatter and highlighting need for `` sql`...` `` and `` json`...` `` defaults, and what is not done yet
 - [Naming model and result types](./reference/model-and-result-types.md) — `Models`, `Scalars`, `Shape`, and `ResultType` on ORM queries
 - [Mongo Pipeline Builder](./reference/Mongo%20Pipeline%20Builder.md) — typed builder for MongoDB aggregation pipelines, reads, writes, and find-and-modify
 - [`migration graph --tree` rendering](./reference/migration-graph-rendering.md) — condensed annotated-tree rendering for offline migration topology

@@ -1,3 +1,5 @@
+// use prisma-8
+
 enum Color {
   Red
   Green

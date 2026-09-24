@@ -20,9 +20,7 @@ import {
   type CodecInstanceContext,
   type CodecTrait,
   dataTypeId,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { expectTypeOf, test } from 'vitest';
 import type {
   SqlIntCodec,
@@ -73,7 +71,7 @@ class TestVectorDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'test/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => TestVectorCodec {
     return () => new TestVectorCodec(this);
   }

@@ -80,6 +80,31 @@ describe('contract print output path', () => {
     expect(await readFile(join(dir, 'prisma', 'schema.prisma'), 'utf-8')).toBe(schema);
   });
 
+  it('refuses to write over a file a glob input of the contract source matches', async () => {
+    const dir = await projectDir();
+    const schema = 'model User {\n  id Int @id\n}\n';
+    await mkdir(join(dir, 'prisma', 'models'), { recursive: true });
+    await writeFile(join(dir, 'prisma', 'models', 'user.prisma'), schema, 'utf-8');
+    const config = ormConfig(dir, {
+      contract: {
+        source: { format: 'psl', inputs: ['./prisma/**/*.prisma'], load: mocks.load },
+        output: join(dir, 'generated', 'contract.json'),
+      },
+    });
+
+    const run = await harness(config).run(
+      ['contract', 'print', '--output', 'prisma/models/user.prisma', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(erroredEnvelope(run).error).toMatchObject({
+      code: 'CONTRACT.PRINT_OUTPUT_IS_SOURCE',
+      meta: { output: 'prisma/models/user.prisma', source: 'prisma/models/user.prisma' },
+    });
+    expect(await readFile(join(dir, 'prisma', 'models', 'user.prisma'), 'utf-8')).toBe(schema);
+  });
+
   it('refuses to write over the config file', async () => {
     const dir = await projectDir();
     const configText = 'export default {};\n';

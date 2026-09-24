@@ -17,7 +17,11 @@ import type {
   ControlActionName,
   OnControlProgress,
 } from '../types';
-import { loadContractSource } from './load-contract-source';
+import {
+  requireContractConfig,
+  requireSourceProvider,
+  resolveContractSource,
+} from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
 const EMIT_ACTION: ControlActionName = 'emit';
@@ -66,20 +70,13 @@ export async function executeContractEmit(
 ): Promise<ContractEmitResult> {
   const {
     config,
-    configPath,
+    projectDir,
     outputPath,
     signal = new AbortController().signal,
     onProgress,
   } = options;
   const unlessAborted = abortable(signal);
-
-  if (!config.contract) {
-    throw errorContractConfigMissing({
-      why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
-    });
-  }
-
-  const contractConfig = config.contract;
+  const contractConfig = requireContractConfig(config);
 
   const effectiveOutput =
     outputPath !== undefined ? join(outputPath, 'contract.json') : contractConfig.output;
@@ -90,11 +87,7 @@ export async function executeContractEmit(
     });
   }
 
-  if (typeof contractConfig.source?.load !== 'function') {
-    throw errorContractConfigMissing({
-      why: 'Contract config must include a valid source provider object',
-    });
-  }
+  requireSourceProvider(contractConfig);
 
   let outputPaths: ReturnType<typeof getEmittedArtifactPaths>;
   try {
@@ -112,7 +105,7 @@ export async function executeContractEmit(
     let contract: Contract;
     try {
       stack = createControlStack(config);
-      const loaded = await loadContractSource({ stack, source: contractConfig.source, signal });
+      const loaded = await resolveContractSource({ stack, source: contractConfig.source, signal });
       if (!loaded.ok) throw loaded.failure.error;
       contract = loaded.value;
     } catch (error) {
@@ -145,9 +138,11 @@ export async function executeContractEmit(
           // Which package names the generated files may import is decided by
           // the nearest manifest above the file being written — the package
           // that will import it, and the same directory `validateContractDeps`
-          // resolves against below. A caller holding the config file's path
-          // may name it instead.
-          resolveImportSpecifier: createProjectSpecifierResolver(configPath ?? outputJsonPath),
+          // resolves against below. A caller that knows the project directory
+          // names it instead.
+          resolveImportSpecifier: createProjectSpecifierResolver(
+            projectDir ?? dirname(outputJsonPath),
+          ),
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),

@@ -1,10 +1,10 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import { ok } from '@prisma/cli-engine/protocol';
 import { dirname, relative, resolve } from 'pathe';
 import { executeContractEmit as executeContractEmitOperation } from '../../control-api/operations/contract-emit';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { controlProgressReporter } from '../progress';
 

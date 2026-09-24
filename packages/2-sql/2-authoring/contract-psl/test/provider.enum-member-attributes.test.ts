@@ -60,7 +60,8 @@ describe('prismaContract given an attribute on an enum member', () => {
     const schemaPath = join(tempDir, 'schema.prisma');
     await writeFile(
       schemaPath,
-      `enum Role {
+      `// use prisma-8
+enum Role {
   @@type("pg/text@1")
   USER  @map("user")
   ADMIN
@@ -85,10 +86,10 @@ model User {
           code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
           message:
             'enum "Role": member "USER" carries @map, but an enum member takes no attributes',
-          sourceId: './schema.prisma',
+          sourceId: schemaPath,
           span: {
-            start: { offset: 42, line: 3, column: 9 },
-            end: { offset: 54, line: 3, column: 21 },
+            start: { offset: 58, line: 4, column: 9 },
+            end: { offset: 70, line: 4, column: 21 },
           },
         },
       ],

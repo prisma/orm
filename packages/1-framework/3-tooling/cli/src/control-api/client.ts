@@ -40,7 +40,7 @@ import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
 import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
-import { loadContractSource } from './operations/load-contract-source';
+import { resolveContractSource } from './operations/load-contract-source';
 import { executeMigrate } from './operations/migrate';
 
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
@@ -638,7 +638,7 @@ class ControlClientImpl implements ControlClient {
       label: 'Resolving contract source...',
     });
 
-    const loaded = await loadContractSource({
+    const loaded = await resolveContractSource({
       stack: this.stack!,
       source: contractConfig.source,
     });

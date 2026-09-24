@@ -49,8 +49,8 @@ function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructor
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
-    document,
     symbolTable,
     sources,
     target: postgresPackRef,

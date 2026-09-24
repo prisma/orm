@@ -4,7 +4,7 @@ import { createControlStack, hasPslContractPrint } from '@internal/framework-com
 import { printPsl } from '@internal/psl-printer';
 import { ifDefined } from '@internal/utils/defined';
 import { errorRuntime } from '../../utils/cli-errors';
-import { loadContractSource } from './load-contract-source';
+import { resolveContractSource } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
 type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
@@ -45,7 +45,7 @@ export async function executeContractPrint(
 ): Promise<ContractPrintResult> {
   const { config, contractConfig, description, signal } = options;
   const stack = createControlStack(config);
-  const loaded = await loadContractSource({
+  const loaded = await resolveContractSource({
     stack,
     source: contractConfig.source,
     ...ifDefined('signal', signal),

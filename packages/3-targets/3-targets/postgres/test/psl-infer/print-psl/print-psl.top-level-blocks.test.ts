@@ -120,8 +120,8 @@ function parseAndInterpret(source: string) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
+    documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
-    document,
     symbolTable,
     sources,
     capabilities: {},

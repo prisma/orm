@@ -80,7 +80,9 @@ describe(
         const schemaPath = join(testDir, 'schema.prisma');
         writeFileSync(
           schemaPath,
-          `model Document {
+          `// use prisma-8
+
+model Document {
   id Int @id @default(autoincrement())
   embedding pgvector.Vector(3) @default([0.5, 0.25, 0.125])
 }

@@ -46,6 +46,7 @@ const EXPECTED: Readonly<Record<string, string>> = {
   'pg/bool@1': 'pg/bool',
   'pg/json@1': 'pg/json',
   'pg/jsonb@1': 'pg/jsonb',
+  'pg/tsquery@1': 'pg/tsquery',
 };
 
 describe('postgres data type inventory', () => {

@@ -1,17 +1,19 @@
 import type {
   ContractSourceDiagnostics,
   ContractSourceProvider,
+  PrismaNextConfig,
 } from '@internal/config/config-types';
+import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import type { CliStructuredError } from '@internal/errors/control';
-import type { ControlStack } from '@internal/framework-components/control';
+import { type ControlStack, createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
 import type { Diagnostic } from '@internal/utils/structured-error';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
-import { errorRuntime } from '../../utils/cli-errors';
+import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 
 /**
  * Why the configured source produced no contract: the error to report, and
@@ -63,6 +65,15 @@ function formatLocation({ sourceId, line, character }: DiagnosticLocation): stri
   return line !== undefined && character !== undefined
     ? `${sourceId}:${line}:${character}`
     : sourceId;
+}
+
+/** One source diagnostic as a line of text: `<sourceId>:<line>:<column> <code> <message>`. */
+export function formatSourceDiagnostic(raw: unknown): string {
+  if (!isRecord(raw)) return String(raw);
+  const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
+  const message = typeof raw['message'] === 'string' ? raw['message'] : '';
+  const location = formatLocation(diagnosticLocation(raw));
+  return [location, code, message].filter((part) => part !== undefined && part !== '').join(' ');
 }
 
 /**
@@ -211,7 +222,7 @@ function validateProviderResult(
  *
  * @throws {DOMException} `AbortError` if cancelled via `signal`
  */
-export async function loadContractSource(inputs: {
+export async function resolveContractSource(inputs: {
   readonly stack: ControlStack;
   readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
@@ -227,7 +238,7 @@ export async function loadContractSource(inputs: {
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     dataTypeLookup: stack.dataTypeLookup,
-    resolvedInputs: source.inputs ?? [],
+    resolvedInputs: await unlessAborted(expandContractInputs(source.inputs)),
     capabilities: stack.capabilities,
   };
 
@@ -249,4 +260,61 @@ export async function loadContractSource(inputs: {
   }
 
   return validateProviderResult(providerResult);
+}
+
+type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
+
+/** @throws {CliStructuredError} `CONFIG.CONTRACT_MISSING` when the config has no contract section */
+export function requireContractConfig(config: PrismaNextConfig): ContractConfig {
+  if (!config.contract) {
+    throw errorContractConfigMissing({
+      why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
+    });
+  }
+  return config.contract;
+}
+
+/** @throws {CliStructuredError} `CONFIG.CONTRACT_MISSING` when the contract source has no `load` function */
+export function requireSourceProvider(contractConfig: ContractConfig): void {
+  if (typeof contractConfig.source?.load !== 'function') {
+    throw errorContractConfigMissing({
+      why: 'Contract config must include a valid source provider object',
+    });
+  }
+}
+
+/** What a contract source reported when it could not produce a contract. */
+export interface ContractSourceFailure {
+  readonly summary: string;
+  readonly diagnostics: readonly unknown[];
+  readonly meta: unknown;
+}
+
+/**
+ * Runs the config's contract source and stops there: nothing is emitted or
+ * written. A source that reports diagnostics is a `notOk` carrying them.
+ *
+ * @throws {CliStructuredError} the error `contract emit` raises, when the
+ * config has no contract source or the source is malformed or throws
+ * @throws {DOMException} `AbortError` if cancelled via `signal`
+ */
+export async function loadContractSource(
+  config: PrismaNextConfig,
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<Result<Contract, ContractSourceFailure>> {
+  const contractConfig = requireContractConfig(config);
+  requireSourceProvider(contractConfig);
+  const loaded = await resolveContractSource({
+    stack: createControlStack(config),
+    source: contractConfig.source,
+    ...ifDefined('signal', options.signal),
+  });
+  if (loaded.ok) return loaded;
+  const { error, sourceDiagnostics } = loaded.failure;
+  if (sourceDiagnostics === undefined) throw error;
+  return notOk({
+    summary: sourceDiagnostics.summary,
+    diagnostics: sourceDiagnostics.diagnostics,
+    meta: sourceDiagnostics.meta,
+  });
 }

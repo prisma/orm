@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
@@ -17,7 +18,6 @@ import {
 import { errorMigrationPackageNotFound } from '../../utils/cli-errors';
 import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, displayPath, migrationsDirFor } from './paths';
@@ -126,8 +126,8 @@ export const migrationCheckCommand = defineOrmCommand({
   handler: async (args, ctx) => {
     const { target } = args.positionals;
     const spaceFilter = args.flags.space;
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
-    const appMigrationsDir = appMigrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
+    const appMigrationsDir = appMigrationsDirFor(ctx.config);
     const appMigrationsRelative = displayPath(appMigrationsDir, ctx.cwd);
 
     const verifySnapshotContent = snapshotVerifierFor(ctx.config);

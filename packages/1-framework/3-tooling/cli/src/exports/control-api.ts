@@ -70,6 +70,10 @@ export {
   refuseUnknownInvariants,
 } from '../control-api/operations/invariants';
 export {
+  type ContractSourceFailure,
+  loadContractSource,
+} from '../control-api/operations/load-contract-source';
+export {
   type ExecuteMigrateShowPlanOptions,
   executeMigrateShowPlan,
   type MigrateShowMigration,

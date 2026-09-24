@@ -20,7 +20,6 @@ import {
   type ColumnHelperForStrict,
   column,
   renderTsLiteral,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -101,6 +100,7 @@ import {
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
+  PG_TSQUERY_CODEC_ID,
   PG_UNBOUNDED_INT_CODEC_ID,
   PG_UUID_CODEC_ID,
   PG_VARBIT_CODEC_ID,
@@ -125,6 +125,7 @@ import {
   pgText,
   pgTextArray,
   pgTimetz,
+  pgTsquery,
   pgUuid,
   pgVarbit,
   pgVarchar,
@@ -383,7 +384,7 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
@@ -415,10 +416,13 @@ pgTextColumn satisfies ColumnHelperForStrict<PgTextDescriptor>;
  * column's `codecId` alone, without also inspecting `nativeType` — which
  * the managed (DDL) phase needs to target `CREATE TYPE`/`ALTER TYPE`
  * operations at exactly the columns that use one.
+ *
+ * Not `textual`, although its values are strings: Postgres has no `LIKE`,
+ * `ILIKE` or `to_tsvector` over an enum type.
  */
 export class PgEnumCodec extends CodecImpl<
   typeof PG_ENUM_CODEC_ID,
-  readonly ['equality', 'order', 'textual'],
+  readonly ['equality', 'order'],
   string,
   string
 > {
@@ -468,7 +472,7 @@ export class PgEnumDescriptor extends PostgresCodecDescriptor<PgEnumParams> {
   }
   override readonly dataType = pgEnum.id;
   override readonly codecId = PG_ENUM_CODEC_ID;
-  override readonly traits = ['equality', 'order', 'textual'] as const;
+  override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = pgEnumParamsSchema satisfies StandardSchemaV1<PgEnumParams>;
   override renderValueLiteral(value: JsonValue): string | undefined {
@@ -585,7 +589,7 @@ export class PgTextArrayDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_TEXT_ARRAY_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text[]'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgTextArrayCodec {
     return () => new PgTextArrayCodec(this);
   }
@@ -626,7 +630,7 @@ export class PgInt4Descriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_INT4_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['int4'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
@@ -676,7 +680,7 @@ export class PgInt2Descriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_INT2_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['int2'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
@@ -737,7 +741,7 @@ export class PgInt8Descriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_INT8_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['int8'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return decimalTextBigintLiteral(value);
   }
@@ -793,7 +797,7 @@ export class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_INT8_NUMBER_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = [] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return decimalTextNumberLiteral(value);
   }
@@ -841,7 +845,7 @@ export class PgFloat4Descriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_FLOAT4_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['float4'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
@@ -889,7 +893,7 @@ export class PgFloat8Descriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_FLOAT8_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['float8'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
@@ -937,7 +941,7 @@ export class PgBoolDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_BOOL_CODEC_ID;
   override readonly traits = ['equality', 'boolean'] as const;
   override readonly targetTypes = ['bool'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
@@ -1060,7 +1064,7 @@ export class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_UNBOUNDED_INT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = [] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return decimalTextBigintLiteral(value);
   }
@@ -1264,7 +1268,7 @@ export class PgByteaDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_BYTEA_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['bytea'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgByteaCodec {
     return () => new PgByteaCodec(this);
   }
@@ -1311,7 +1315,7 @@ export class PgUuidDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_UUID_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['uuid'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgUuidCodec {
     return () => new PgUuidCodec(this);
   }
@@ -1358,7 +1362,7 @@ export class PgInetDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_INET_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['inet'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgInetCodec {
     return () => new PgInetCodec(this);
   }
@@ -1371,6 +1375,63 @@ export const pgInetColumn = () =>
 
 pgInetColumn satisfies ColumnHelperFor<PgInetDescriptor>;
 pgInetColumn satisfies ColumnHelperForStrict<PgInetDescriptor>;
+
+const PG_TSQUERY_NATIVE_TYPE = 'tsquery';
+
+/**
+ * A `tsquery` value as the application holds it: text that only Postgres produces, when a query
+ * selects one. The brand keeps a bare string from being passed where a full-text query is expected,
+ * while a value read back can be passed straight back. It is not exported, so reading one back from
+ * Postgres is the only way to get one.
+ */
+type TsqueryValue = string & { readonly __tsquery: true };
+
+export class PgTsqueryCodec extends CodecImpl<
+  typeof PG_TSQUERY_CODEC_ID,
+  readonly [],
+  string,
+  TsqueryValue
+> {
+  async encode(value: TsqueryValue, _ctx: CodecCallContext): Promise<string> {
+    return value;
+  }
+  async decode(wire: string, _ctx: CodecCallContext): Promise<TsqueryValue> {
+    return blindCast<TsqueryValue, 'Postgres produced this text as a tsquery value'>(wire);
+  }
+  encodeJson(value: TsqueryValue): JsonValue {
+    return value;
+  }
+  decodeJson(json: JsonValue): TsqueryValue {
+    return blindCast<TsqueryValue, 'tsquery values serialize to JSON as their wire string form'>(
+      json,
+    );
+  }
+}
+
+/**
+ * The type of a full-text query: what the parsers and the tag in `full-text` return, and what a
+ * `tsquery` value read back from a query binds as when passed to `fullTextMatches`, `fullTextRank`
+ * or `fullTextHeadline`. It has no column helper, because a contract cannot author a `tsquery`
+ * column, and no traits, because comparing or ordering queries means nothing to an application.
+ */
+export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
+  protected override nativeType(): string {
+    return PG_TSQUERY_NATIVE_TYPE;
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return expression;
+  }
+  override readonly dataType = pgTsquery.id;
+  override readonly codecId = PG_TSQUERY_CODEC_ID;
+  override readonly traits = [] as const;
+  override readonly targetTypes = ['tsquery'] as const;
+  override readonly paramsSchema = undefined;
+  override factory(): (ctx: CodecInstanceContext) => PgTsqueryCodec {
+    return () => new PgTsqueryCodec(this);
+  }
+}
+
+export const pgTsqueryDescriptor = new PgTsqueryDescriptor();
 
 /**
  * An application value is a {@link PgInterval} — the three fields PostgreSQL
@@ -1474,7 +1535,7 @@ export class PgJsonDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_JSON_CODEC_ID;
   override readonly traits = [] as const;
   override readonly targetTypes = ['json'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgJsonCodec {
     return () => new PgJsonCodec(this);
   }
@@ -1519,7 +1580,7 @@ export class PgJsonbDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = PG_JSONB_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['jsonb'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgJsonbCodec {
     return () => new PgJsonbCodec(this);
   }
@@ -1719,4 +1780,5 @@ export const codecDescriptors = definePostgresCodecs([
   pgJsonDescriptor,
   pgJsonbDescriptor,
   pgTextArrayDescriptor,
+  pgTsqueryDescriptor,
 ]);

@@ -1,3 +1,5 @@
+// use prisma-8
+
 model User {
   id      ObjectId @id @map("_id")
   name    String

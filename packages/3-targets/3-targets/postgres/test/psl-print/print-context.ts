@@ -3,7 +3,6 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import {
   type CodecDescriptorTemplate,
   createDataTypeLookup,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { type AnyPostgresCodecDescriptor, postgresCodec } from '../../src/core/codec-descriptor';
@@ -48,7 +47,7 @@ const citextTemplate: CodecDescriptorTemplate = {
   codecId: 'ext/citext@1',
   traits: [],
   targetTypes: ['citext'],
-  paramsSchema: voidParamsSchema,
+  paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => {
     throw new Error('the printer never builds a codec');

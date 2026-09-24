@@ -2,11 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import type { AggregateContractSpace } from '@internal/migration-tools/aggregate';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
-import {
-  assertHashIsGraphNode,
-  findLatestMigration,
-  isGraphNode,
-} from '@internal/migration-tools/migration-graph';
+import { assertHashIsGraphNode, isGraphNode } from '@internal/migration-tools/migration-graph';
 import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
 import type { Refs } from '@internal/migration-tools/refs';
@@ -28,13 +24,13 @@ export function looksLikeFullHash(input: string): boolean {
 
 /**
  * Set when the origin was derived from the `db` ref by default (no `--from`)
- * and that ref sits on an in-graph node that is not the graph tip. Planning
- * from it forks the graph, so the caller must surface it to the user.
+ * and that node already has outgoing edges. Planning from it forks the
+ * graph, so the caller must surface it to the user.
  */
-export interface DefaultOriginBehindTip {
+export interface DefaultOriginForks {
   readonly refName: string;
   readonly refHash: string;
-  readonly tipHash: string;
+  readonly outgoingTo: readonly string[];
 }
 
 export type FromResolution =
@@ -43,13 +39,13 @@ export type FromResolution =
       kind: 'graph-node';
       fromHash: string;
       fromContract: Contract;
-      defaultOriginBehindTip?: DefaultOriginBehindTip;
+      defaultOriginForks?: DefaultOriginForks;
     }
   | {
       kind: 'ref';
       fromHash: string;
       fromContract: Contract;
-      defaultOriginBehindTip?: DefaultOriginBehindTip;
+      defaultOriginForks?: DefaultOriginForks;
     }
   | { kind: 'auto-baseline'; fromHash: string; fromContract: Contract };
 
@@ -62,23 +58,8 @@ function graphIsEmpty(space: AggregateContractSpace): boolean {
   return space.packages.length === 0;
 }
 
-/**
- * The graph tip, or `null` when the graph is empty or already forked —
- * a forked graph has no single tip to compare the default ref against.
- */
-function findUnambiguousTip(graph: MigrationGraph): string | null {
-  try {
-    return findLatestMigration(graph)?.to ?? null;
-  } catch (error) {
-    // Any graph-shape error (AMBIGUOUS_TARGET, NO_INITIAL_MIGRATION,
-    // NO_TARGET) means there is no single tip to compare the default ref
-    // against; the warning is skipped rather than failing a plan that never
-    // consulted the tip before.
-    if (MigrationToolsError.is(error)) {
-      return null;
-    }
-    throw error;
-  }
+function outgoingDestinations(graph: MigrationGraph, hash: string): readonly string[] {
+  return [...new Set((graph.forwardChain.get(hash) ?? []).map((edge) => edge.to))].sort();
 }
 
 function getReachableRefs(
@@ -92,22 +73,56 @@ function getReachableRefs(
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function assertFromIsGraphNode(
-  fromHash: string,
-  graph: MigrationGraph,
-  refs: Refs,
-  graphTipHash: string | null,
-): void {
+export function assertFromIsGraphNode(fromHash: string, graph: MigrationGraph, refs: Refs): void {
   try {
     assertHashIsGraphNode(fromHash, graph);
   } catch (error) {
     if (MigrationToolsError.is(error) && error.code === 'MIGRATION.HASH_NOT_IN_GRAPH') {
-      throw errorPlanForgotTheFlag(fromHash, getReachableRefs(refs, graph), graphTipHash, {
-        cause: error,
-      });
+      throw errorPlanForgotTheFlag(fromHash, getReachableRefs(refs, graph), { cause: error });
     }
     throw error;
   }
+}
+
+export type DefaultOriginHash =
+  | { kind: 'greenfield'; fromHash: null }
+  | { kind: 'ref'; refName: 'db'; fromHash: string }
+  | { kind: 'ref-needs-baseline'; refName: 'db'; fromHash: string };
+
+/**
+ * The origin a command uses when `--from` is omitted, as a hash only. An empty
+ * graph with no `db` ref plans from the empty database. An empty graph with a
+ * `db` ref is `ref-needs-baseline`: the ref names a real contract that is not
+ * a graph node yet (`migration plan` handles this by writing a baseline first).
+ * Otherwise the `db` ref must exist and point at a graph node. `migration
+ * plan` materialises the contract on top of this; `migration new` needs only
+ * the hash.
+ */
+export function resolveDefaultOriginHash(
+  space: AggregateContractSpace,
+): Result<DefaultOriginHash, CliStructuredError> {
+  const refs = space.refs;
+  const dbRef = refs['db'];
+  if (graphIsEmpty(space)) {
+    return ok(
+      dbRef
+        ? { kind: 'ref-needs-baseline', refName: 'db', fromHash: dbRef.hash }
+        : { kind: 'greenfield', fromHash: null },
+    );
+  }
+  const graph = space.graph();
+  if (!dbRef) {
+    return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph)));
+  }
+  try {
+    assertFromIsGraphNode(dbRef.hash, graph, refs);
+  } catch (error) {
+    if (CliStructuredError.is(error)) {
+      return notOk(error);
+    }
+    throw error;
+  }
+  return ok({ kind: 'ref', refName: 'db', fromHash: dbRef.hash });
 }
 
 type RefContractResolution =
@@ -178,9 +193,8 @@ async function resolveFromPolicy(
   }
 
   const graph = input.space.graph();
-  const graphTip = findLatestMigration(graph)?.to ?? null;
   try {
-    assertFromIsGraphNode(hash, graph, refs, graphTip);
+    assertFromIsGraphNode(hash, graph, refs);
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
@@ -207,12 +221,7 @@ export async function resolveFromForPlan(
       if (graphIsEmpty(space)) {
         return ok({ kind: 'greenfield', fromHash: null, fromContract: null, defaulted: true });
       }
-      return notOk(
-        errorPlanOriginUnknown(
-          getReachableRefs(refs, graph),
-          findLatestMigration(graph)?.to ?? null,
-        ),
-      );
+      return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph)));
     }
     const resolved = await resolveFromPolicy(
       { hash: dbRef.hash, provenance: { kind: 'ref', refName: 'db' } },
@@ -224,11 +233,11 @@ export async function resolveFromForPlan(
     }
     const value = resolved.value;
     if (value.kind === 'ref' || value.kind === 'graph-node') {
-      const tipHash = findUnambiguousTip(graph);
-      if (tipHash !== null && tipHash !== value.fromHash) {
+      const outgoingTo = outgoingDestinations(graph, value.fromHash);
+      if (outgoingTo.length > 0) {
         return ok({
           ...value,
-          defaultOriginBehindTip: { refName: 'db', refHash: value.fromHash, tipHash },
+          defaultOriginForks: { refName: 'db', refHash: value.fromHash, outgoingTo },
         });
       }
     }
@@ -238,12 +247,10 @@ export async function resolveFromForPlan(
   const refResult = parseContractRef(optionsFrom, { graph, refs });
   if (!refResult.ok) {
     if (looksLikeFullHash(optionsFrom)) {
-      const empty = graphIsEmpty(space);
-      const graphTip = findLatestMigration(graph)?.to ?? null;
-      if (empty) {
+      if (graphIsEmpty(space)) {
         return notOk(errorSnapshotMissing(optionsFrom, { viaRef: false }));
       }
-      return notOk(errorPlanForgotTheFlag(optionsFrom, getReachableRefs(refs, graph), graphTip));
+      return notOk(errorPlanForgotTheFlag(optionsFrom, getReachableRefs(refs, graph)));
     }
     return notOk(mapRefResolutionError(refResult.failure));
   }

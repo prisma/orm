@@ -1,7 +1,6 @@
 import { CliStructuredError } from '@internal/errors/control';
 import { describe, expect, it } from 'vitest';
 import {
-  errorAmbiguousTarget,
   errorBundleNotFoundForGraphNode,
   errorContractDeserializationFailed,
   errorContractSnapshotHashMismatch,
@@ -28,9 +27,7 @@ import {
   errorMigrationContractViewMissing,
   errorMigrationHashMismatch,
   errorMissingFile,
-  errorNoInitialMigration,
   errorNoInvariantPath,
-  errorNoTarget,
   errorOperationsNotArray,
   errorProvidedInvariantsMismatch,
   errorRefNotResolvable,
@@ -227,12 +224,9 @@ describe('MigrationToolsError base type', () => {
     }),
     errorDuplicateSpaceId('app'),
     errorSameSourceAndTarget('/tmp/m/20260101_init', 'a'.repeat(64)),
-    errorAmbiguousTarget(['aaa', 'bbb']),
-    errorNoInitialMigration(['aaa']),
     errorInvalidRefs('/tmp/m/refs.json', 'not an object'),
     errorInvalidRefFile('/tmp/m/refs/prod.json', 'not an object'),
     errorInvalidRefName('BAD NAME'),
-    errorNoTarget(['aaa']),
     errorInvalidRefValue('not-a-hash'),
     errorDuplicateMigrationHash('mh:abc'),
     errorInvalidInvariantId('has a space'),

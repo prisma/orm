@@ -18,7 +18,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
@@ -74,7 +73,7 @@ export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlTextCodec {
     return () => new SqlTextCodec(this);
   }
@@ -112,7 +111,7 @@ export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_INT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['int'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlIntCodec {
     return () => new SqlIntCodec(this);
   }
@@ -150,7 +149,7 @@ export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_FLOAT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['float'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlFloatCodec {
     return () => new SqlFloatCodec(this);
   }

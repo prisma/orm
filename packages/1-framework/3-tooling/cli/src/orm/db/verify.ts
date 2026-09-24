@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { VerifyDatabaseResult } from '@internal/framework-components/control';
 import {
   VERIFY_CODE_HASH_MISMATCH,
@@ -25,7 +26,6 @@ import {
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import type { DbVerifyReport } from '../../utils/formatters/verify';
 import { runCommandAction } from '../../utils/next-actions';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { migrationsDirFor } from '../migration/paths';
@@ -438,7 +438,7 @@ export function createDbVerifyCommand(
         strict,
         database: maskConnectionUrl(dbConnection),
       });
-      const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+      const migrationsDir = migrationsDirFor(ctx.config);
       const client = createClient({
         family: ctx.config.family,
         target: ctx.config.target,

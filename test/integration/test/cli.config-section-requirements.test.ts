@@ -77,8 +77,11 @@ describe('commands declare the config sections they read', () => {
           ok: false,
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'CONFIG.VALIDATION_FAILED',
-              meta: expect.objectContaining({ section: 'contract' }),
+              code: 'CLI.CONFIG_FIELD_INVALID',
+              meta: expect.objectContaining({
+                section: 'orm',
+                field: expect.stringMatching(/^contract(\.|$)/),
+              }),
             }),
           ]),
         },
@@ -102,8 +105,11 @@ describe('commands declare the config sections they read', () => {
           ok: false,
           diagnostics: expect.arrayContaining([
             expect.objectContaining({
-              code: 'CONFIG.VALIDATION_FAILED',
-              meta: expect.objectContaining({ section: 'migrations' }),
+              code: 'CLI.CONFIG_FIELD_INVALID',
+              meta: expect.objectContaining({
+                section: 'orm',
+                field: expect.stringMatching(/^migrations(\.|$)/),
+              }),
             }),
           ]),
         },

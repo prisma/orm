@@ -233,7 +233,7 @@ namespace public {
     });
     return interpretPslDocumentToSqlContract({
       dataTypeLookup: postgresDataTypeLookup,
-      document,
+      documents: [document],
       symbolTable,
       sources,
       target: postgresTarget,
@@ -270,8 +270,8 @@ namespace public {
     expect(diagnostics).toEqual([]);
 
     const result = interpretPslDocumentToSqlContract({
+      documents: [document],
       dataTypeLookup: postgresDataTypeLookup,
-      document,
       symbolTable,
       sources,
       target: postgresTarget,

@@ -121,7 +121,6 @@ NAMESPACE.SUBCODE where NAMESPACE ∈ { PLAN, RUNTIME, ADAPTER, BUDGET, LINT, MI
 - **MIGRATION.INVALID_MANIFEST**: migration manifest missing required fields or has invalid values
 - **MIGRATION.INVALID_NAME**: migration name/slug empty after sanitization
 - **MIGRATION.SAME_SOURCE_AND_TARGET**: migration edge has from === to (graph invariant violation)
-- **MIGRATION.AMBIGUOUS_TARGET**: multiple branch tips in migration graph (diverged branches)
 
 #### PN-MIG (Migration Authoring)
 

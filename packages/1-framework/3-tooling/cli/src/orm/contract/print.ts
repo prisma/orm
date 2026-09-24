@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { expandContractInputs, ormConfigSection } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import type { CliStructuredError } from '@internal/errors/control';
 import { printPsl as printPslFromAst } from '@internal/psl-printer';
@@ -15,9 +16,8 @@ import {
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
-import { projectConfigPathFor } from '../migration/paths';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { emittedJsonPathFor, filePathKey, pslOutputPathFor } from './paths';
 
@@ -114,13 +114,14 @@ async function outputPathRefusal(inputs: {
   readonly cwd: string;
   readonly outputPath: string;
   readonly sourceInputs: readonly string[];
+  readonly configPath: string;
   readonly emittedJsonPath: string | undefined;
 }): Promise<CliStructuredError | undefined> {
   const { cwd } = inputs;
   const output = relative(cwd, inputs.outputPath);
   const outputKey = await filePathKey(inputs.outputPath);
 
-  for (const input of inputs.sourceInputs) {
+  for (const input of await expandContractInputs(inputs.sourceInputs)) {
     if (await isSameFileOrInside(outputKey, resolve(cwd, input))) {
       const source = relative(cwd, resolve(cwd, input));
       return errorRuntime(
@@ -135,7 +136,7 @@ async function outputPathRefusal(inputs: {
     }
   }
 
-  const configPath = projectConfigPathFor(cwd);
+  const { configPath } = inputs;
   if (await isSameFile(outputKey, configPath)) {
     const file = relative(cwd, configPath);
     return errorRuntime(
@@ -246,6 +247,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
         cwd: ctx.cwd,
         outputPath,
         sourceInputs,
+        configPath: resolve(baseDirFor(ctx.config), 'prisma.config.ts'),
         emittedJsonPath,
       });
       if (refusal !== undefined) {

@@ -141,6 +141,19 @@ export class PslSources {
     }
   }
 
+  /**
+   * A new registry uniting this one with `others` — e.g. the per-document
+   * `PslSources` registries `parse()` returns for each member of a
+   * multi-file schema, united into the one registry `buildSymbolTable` and
+   * the interpreters expect.
+   */
+  merge(...others: readonly PslSources[]): PslSources {
+    return new PslSources([
+      ...this.#sourcesByRoot,
+      ...others.flatMap((other) => [...other.#sourcesByRoot]),
+    ]);
+  }
+
   sourceFileNamed(filename: string): SourceFile {
     let match: SourceFile | undefined;
     for (const sourceFile of this.#sourcesByRoot.values()) {

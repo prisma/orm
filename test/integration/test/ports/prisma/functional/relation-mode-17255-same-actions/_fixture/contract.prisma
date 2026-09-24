@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/relationMode-17255-same-actions
 // (`prisma/_schema_same_actions.ts`), Cascade / relationMode=foreignKeys entry.

@@ -43,8 +43,7 @@ export function resolveContractPath(config: { contract?: { output?: string } }):
  * the result is computed against it.
  */
 export function resolveMigrationPaths(
-  configOption: string | undefined,
-  config: { migrations?: { dir?: string } },
+  config: { baseDir?: string; migrations?: { dir?: string } },
   cwd: string,
 ): {
   configPath: string;
@@ -54,12 +53,10 @@ export function resolveMigrationPaths(
   appMigrationsRelative: string;
   refsDir: string;
 } {
-  const resolvedConfigPath = configOption ? resolve(cwd, configOption) : undefined;
-  const configPath = resolvedConfigPath ? relative(cwd, resolvedConfigPath) : 'prisma.config.ts';
-  const migrationsDir = resolve(
-    resolvedConfigPath ? resolve(resolvedConfigPath, '..') : cwd,
-    config.migrations?.dir ?? 'migrations',
-  );
+  const configPath = 'prisma.config.ts';
+  // A validated config carries the directory absolute; a config handed in
+  // raw by a programmatic caller is anchored on its baseDir, else on cwd.
+  const migrationsDir = resolve(config.baseDir ?? cwd, config.migrations?.dir ?? 'migrations');
   const migrationsRelative = relative(cwd, migrationsDir);
   const appMigrationsDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
   const appMigrationsRelative = relative(cwd, appMigrationsDir);

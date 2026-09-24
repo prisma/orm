@@ -71,6 +71,10 @@ pnpm prisma migration ref delete <name>
 
 It is **offline** — it never consults a database, never reads a marker (which is why `--from @db` is not an option here). Whatever the refs on disk say is what it believes. The destination defaults to the emitted `contract.json` (`--to` overrides).
 
+When the origin came from the `db` ref by default and that node **already has an outgoing migration**, the plan still succeeds but warns: planning from there forks the graph. Pass `--from` to name the origin deliberately if that is what you want.
+
+**`migration new` picks its origin the same way, with one difference.** With `--from <hash-or-prefix>` it uses that migration's `to` hash. Without `--from`: the `db` ref (which must be a graph node), else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`. The difference: on an empty graph that has a `db` ref, `migration plan` writes the baseline (auto-baseline above) while `migration new` refuses with `MIGRATION.HASH_NOT_IN_GRAPH` and tells you to run `migration plan` first. Neither command ever chains from "the newest migration on disk" — there is no such node.
+
 The human output names the resolved origin on its `from:` line. **`from: (baseline)` means the origin resolved to nothing — the plan starts from an empty database** and will contain a create for every object in the contract.
 
 **Auto-baseline.** When the graph is *empty* and the origin resolved through a ref to a real hash (the typical first plan after `db update` cycles), the planner emits **two** bundles in one invocation — a baseline `null → ref-hash` plus the delta `ref-hash → contract` — so the ref's hash becomes a graph node and the plan can be applied. Expect two new directories in `git status`. Details and the related refusals (`MIGRATION.HASH_NOT_IN_GRAPH`, `MIGRATION.SNAPSHOT_MISSING`) are in `references/migrations.md` § *Dev → ship transition*.
@@ -152,7 +156,7 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 
 ## Common Pitfalls
 
-1. **Assuming `migration plan` chains from the newest migration on disk.** It never does. The origin is `--from`, else the `db` ref, else empty. If neither exists, you get a from-scratch plan; on an empty graph the only warning is the muted `No db ref set` notice.
+1. **Assuming `migration plan` or `migration new` chains from the newest migration on disk.** Neither does. The origin is `--from`, else the `db` ref. With neither, only an empty graph plans from scratch (with the muted `No db ref set` notice); once migrations exist, both commands refuse with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
 2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` / `db sign` advance implicitly, and only `--advance-ref` advances at apply time.
 3. **Expecting a deploy to update refs.** Deploys write the database's marker; the files under `migrations/app/refs/` only change when you change them.
 4. **Reading `from: (baseline)` as informational.** Over a non-empty migrations directory it is the trap announcing itself. Stop and pick an exit before applying or committing.

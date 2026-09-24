@@ -2,6 +2,12 @@ import { createSqlOperationRegistry } from '@internal/sql-operations';
 import { LiteralExpr, OperationExpr, ParamRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { POSTGRES_TEXT_SEARCH_LANGUAGES } from '../src/core/text-search-languages';
+import {
+  phrasetoTsquery,
+  plaintoTsquery,
+  toTsquery,
+  websearchToTsquery,
+} from '../src/exports/full-text';
 import postgresTargetDescriptor from '../src/exports/runtime';
 
 const TEXT_COLUMN_AST = ParamRef.of('body', { codec: { codecId: 'pg/text@1' } });
@@ -12,6 +18,12 @@ const TEXT_COLUMN = {
   returnType: { codecId: 'pg/text@1', nullable: false },
   buildAst: () => TEXT_COLUMN_AST,
 };
+
+const TSQUERY = toTsquery("'zebra' & !'graze'");
+const TSQUERY_AST = TSQUERY.buildAst();
+
+const PARSER_HELPERS = { phrasetoTsquery, plaintoTsquery, toTsquery, websearchToTsquery };
+const PARSERS = Object.keys(PARSER_HELPERS).sort();
 
 function operations() {
   return postgresTargetDescriptor.queryOperations?.() ?? {};
@@ -43,21 +55,9 @@ describe('postgres target query operations', () => {
   });
 
   const fullTextOps: ReadonlyArray<readonly [string, string, string]> = [
-    [
-      'fullTextMatches',
-      'pg/bool@1',
-      'to_tsvector({{arg1}}, {{self}}) @@ websearch_to_tsquery({{arg1}}, {{arg0}})',
-    ],
-    [
-      'fullTextRank',
-      'pg/float4@1',
-      'ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))',
-    ],
-    [
-      'fullTextHeadline',
-      'pg/text@1',
-      'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}))',
-    ],
+    ['fullTextMatches', 'pg/bool@1', 'to_tsvector({{arg1}}, {{self}}) @@ {{arg0}}'],
+    ['fullTextRank', 'pg/float4@1', 'ts_rank(to_tsvector({{arg1}}, {{self}}), {{arg0}})'],
+    ['fullTextHeadline', 'pg/text@1', 'ts_headline({{arg1}}, {{self}}, {{arg0}})'],
   ];
 
   describe.each(fullTextOps)('%s', (method, returnCodecId, template) => {
@@ -69,12 +69,24 @@ describe('postgres target query operations', () => {
       expect(ast.returns).toEqual({ codecId: returnCodecId, nullable: false });
     });
 
-    it('binds the query as a pg/text@1 parameter', () => {
-      const queryArg = buildOpAst(method, TEXT_COLUMN, 'prisma').args[0];
+    it('binds a tsquery value read back from a query as a pg/tsquery@1 parameter, unchanged', () => {
+      const queryArg = buildOpAst(method, TEXT_COLUMN, "'zeb':*").args[0];
 
-      expect(queryArg).toBeInstanceOf(ParamRef);
-      expect((queryArg as ParamRef).value).toBe('prisma');
-      expect((queryArg as ParamRef).codec?.codecId).toBe('pg/text@1');
+      expect(queryArg).toEqual(ParamRef.of("'zeb':*", { codec: { codecId: 'pg/tsquery@1' } }));
+    });
+
+    it('embeds a tsquery expression as the query argument without binding a parameter', () => {
+      const ast = buildOpAst(method, TEXT_COLUMN, TSQUERY);
+
+      expect(ast.args[0]).toBe(TSQUERY_AST);
+      expect(ast.args[0]).toBeInstanceOf(OperationExpr);
+      expect(ast.args.filter((arg) => arg instanceof ParamRef)).toEqual([]);
+    });
+
+    it('leaves the query unparsed on the SQL side', () => {
+      expect(buildOpAst(method, TEXT_COLUMN, 'prisma').lowering?.template).not.toContain(
+        'websearch_to_tsquery',
+      );
     });
 
     it('embeds the language as a literal, defaulting to english', () => {
@@ -105,7 +117,7 @@ describe('postgres target query operations', () => {
 
     it('renders ts_rank with no normalization argument when none is given', () => {
       expect(rankTemplate(buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', {}))).toBe(
-        'ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))',
+        'ts_rank(to_tsvector({{arg1}}, {{self}}), {{arg0}})',
       );
     });
 
@@ -113,7 +125,7 @@ describe('postgres target query operations', () => {
       const ast = buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { normalization: 32 });
 
       expect(rankTemplate(ast)).toBe(
-        'ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}), {{arg2}})',
+        'ts_rank(to_tsvector({{arg1}}, {{self}}), {{arg0}}, {{arg2}})',
       );
       expect(ast.args[2]).toBeInstanceOf(LiteralExpr);
       expect((ast.args[2] as LiteralExpr).value).toBe(32);
@@ -122,12 +134,10 @@ describe('postgres target query operations', () => {
     it('renders ts_rank_cd when coverDensity is set', () => {
       expect(
         rankTemplate(buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { coverDensity: true })),
-      ).toBe(
-        'ts_rank_cd(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))',
-      );
+      ).toBe('ts_rank_cd(to_tsvector({{arg1}}, {{self}}), {{arg0}})');
       expect(
         rankTemplate(buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { coverDensity: false })),
-      ).toBe('ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))');
+      ).toBe('ts_rank(to_tsvector({{arg1}}, {{self}}), {{arg0}})');
     });
 
     it.each([-1, 64, 1.5])('rejects a normalization of %s', (normalization) => {
@@ -143,9 +153,7 @@ describe('postgres target query operations', () => {
     it('omits the options argument when only the language is given', () => {
       const ast = buildOpAst('fullTextHeadline', TEXT_COLUMN, 'prisma', { language: 'german' });
 
-      expect(ast.lowering?.template).toBe(
-        'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}))',
-      );
+      expect(ast.lowering?.template).toBe('ts_headline({{arg1}}, {{self}}, {{arg0}})');
       // query, language — and no third argument.
       expect(ast.args).toHaveLength(2);
     });
@@ -159,9 +167,7 @@ describe('postgres target query operations', () => {
         highlightAll: false,
       });
 
-      expect(ast.lowering?.template).toBe(
-        'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}), {{arg2}})',
-      );
+      expect(ast.lowering?.template).toBe('ts_headline({{arg1}}, {{self}}, {{arg0}}, {{arg2}})');
       expect(optionsLiteral(ast)).toBe(
         'StartSel=<mark>, StopSel=</mark>, MaxWords=20, MinWords=5, HighlightAll=false',
       );
@@ -217,18 +223,37 @@ describe('postgres target query operations', () => {
     }
 
     const entries = registry.entries();
-    for (const method of ['ilike', 'fullTextMatches', 'fullTextRank', 'fullTextHeadline']) {
+    for (const method of [
+      'ilike',
+      'fullTextMatches',
+      'fullTextRank',
+      'fullTextHeadline',
+      ...PARSERS,
+    ]) {
       expect(entries[method]).toBeDefined();
     }
   });
 
-  it('the runtime target descriptor contributes exactly these four operations', () => {
+  it('the runtime target descriptor contributes exactly these eight operations', () => {
     expect(Object.keys(operations()).sort()).toEqual([
       'fullTextHeadline',
       'fullTextMatches',
       'fullTextRank',
       'ilike',
+      ...PARSERS,
     ]);
+  });
+
+  describe.each(PARSERS)('%s as a query operation', (method) => {
+    it('has no self, so it attaches to no column and the builder exposes it as a function', () => {
+      expect(findOperation(method).self).toBeUndefined();
+    });
+
+    it('is the exported helper itself', () => {
+      expect(findOperation(method).impl).toBe(
+        PARSER_HELPERS[method as keyof typeof PARSER_HELPERS],
+      );
+    });
   });
 });
 

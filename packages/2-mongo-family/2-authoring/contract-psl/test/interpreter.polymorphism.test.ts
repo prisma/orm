@@ -56,7 +56,7 @@ function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, u
 }
 
 function buildSymbolTableInput(schema: string): {
-  document: DocumentAst;
+  documents: readonly DocumentAst[];
   symbolTable: SymbolTable;
   sources: PslSources;
 } {
@@ -66,7 +66,7 @@ function buildSymbolTableInput(schema: string): {
     sources,
     pslBlockDescriptors: {},
   });
-  return { document, symbolTable, sources };
+  return { documents: [document], symbolTable, sources };
 }
 
 function interpret(schema: string) {

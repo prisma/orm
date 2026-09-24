@@ -7,7 +7,9 @@
  * PostgreSQL; the resolution suite asks the same registry the same questions
  * without one. Keeping the fixtures here is what lets both ask about the same
  * codecs — a codec added to the target shows up in both suites at once, and the
- * coverage test that enforces it lives beside the data it enforces.
+ * coverage test that enforces it lives beside the data it enforces. The
+ * textual-trait suite reuses the fixtures to build a column of each codec's
+ * native type.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -176,6 +178,7 @@ export const FIXTURES: readonly AggregateFixture[] = [
     samples: ["'11111111-1111-1111-1111-111111111111'", "'22222222-2222-2222-2222-222222222222'"],
   },
   { codecId: 'pg/inet@1', samples: ["'10.0.0.1'", "'10.0.0.2'"] },
+  { codecId: 'pg/tsquery@1', samples: ["'graze'", "'zebra'"] },
   { codecId: 'pg/interval@1', samples: ["'1 day'", "'2 days'"] },
   { codecId: 'pg/json@1', samples: ['\'{"a":1}\'', '\'{"b":2}\''] },
   { codecId: 'pg/jsonb@1', samples: ['\'{"a":1}\'', '\'{"b":2}\''] },

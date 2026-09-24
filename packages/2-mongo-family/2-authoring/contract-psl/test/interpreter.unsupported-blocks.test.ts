@@ -12,7 +12,7 @@ function interpret(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     scalarTypeCodecIds: new Map([

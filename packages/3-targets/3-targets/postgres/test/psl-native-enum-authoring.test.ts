@@ -72,8 +72,8 @@ function interpret(source: string) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
-    document,
     symbolTable,
     sources,
     capabilities: {},
@@ -431,8 +431,8 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
       pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,
     });
     return interpretPslDocumentToSqlContract({
+      documents: [document],
       dataTypeLookup: postgresDataTypeLookup,
-      document,
       symbolTable,
       sources,
       capabilities: {},

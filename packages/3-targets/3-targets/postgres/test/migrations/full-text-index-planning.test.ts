@@ -73,7 +73,7 @@ function authoredContract(schema: string): Contract<SqlStorage> {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const result = interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     capabilities: {},

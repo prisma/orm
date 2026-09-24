@@ -17,7 +17,6 @@ The framework imports live at `@internal/framework-components/codec`:
 - `dataType(id, spec)` — declares a data type with its casts; `DataType`, `DataTypeId`, `Cast`.
 - `ColumnHelperFor<D>` / `ColumnHelperForStrict<D>` — `satisfies` shapes for per-codec helpers.
 - `column(codecFactory, codecId, typeParams, nativeType)` — column-spec packager (`nativeType` is the database spelling for migrations and contract meta).
-- `voidParamsSchema` — Standard Schema validator for `P = void` (non-parameterized codecs).
 - `Codec<...>`, `CodecDescriptor<P>`, `AnyCodecDescriptor` — consumer-facing interfaces (consumers depend on these; target-neutral authors extend the `*Impl` classes, while target-bound SQL authors use target-owned bases).
 
 SQL codecs use the same framework `CodecImpl` base. Their `encodeJson` and `decodeJson` methods define the codec's JSON-safe contract representation; `decode` remains responsible for the driver's ordinary column wire value. Keep that representation stable and mutually consistent, and keep `decodeJson` compatible with the values the current SQL JSON renderer returns for the codec. This distinction matters for types such as PostgreSQL `bytea` and extension-defined types whose values inside database-produced JSON may differ from their normal driver representation.
@@ -57,7 +56,6 @@ import {
   CodecImpl,
   type ColumnHelperFor,
   column,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { PostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
@@ -91,7 +89,7 @@ class PgTextDescriptor extends PostgresCodecDescriptor<void> {
   override readonly codecId = 'pg/text@1' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgTextCodec {
     const shared = new PgTextCodec(this);
     return () => shared;
@@ -500,7 +498,7 @@ export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly codecId = SQL_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqlTextCodec {
     return () => new SqlTextCodec(this);
   }

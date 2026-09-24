@@ -37,7 +37,7 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
     );
 
     const result = await executeMigrationPlanCommand(
-      { config, cwd: '/project', configPath: '/project/prisma.config.ts', client: stubClient },
+      { config, cwd: '/project', projectDir: '/project', client: stubClient },
       Date.now(),
     );
 
@@ -59,7 +59,7 @@ describe('executeMigrationPlanCommand — mutation-prologue guard', () => {
     );
 
     const result = await executeMigrationPlanCommand(
-      { config, cwd: '/project', configPath: '/project/prisma.config.ts', client: stubClient },
+      { config, cwd: '/project', projectDir: '/project', client: stubClient },
       Date.now(),
     );
 

@@ -20,6 +20,7 @@
     "arktype": "catalog:",
     "pathe": "^2.0.3",
     "pluralize": "^8.0.0",
+    "tinyglobby": "catalog:",
     "ts-toolbelt": "^9.6.0"
   },
   "devDependencies": {

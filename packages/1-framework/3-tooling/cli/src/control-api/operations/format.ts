@@ -1,10 +1,10 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { EOL } from 'node:os';
 import type { PrismaNextConfig } from '@internal/config/config-types';
+import { expandContractInputs } from '@internal/config-loader';
 import { type FormatOptions, format } from '@internal/psl-parser/format';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { resolve } from 'pathe';
 import { type CliStructuredError, errorRuntime, errorUnexpected } from '../../utils/cli-errors';
 
 export interface FormatOperationOptions {
@@ -16,7 +16,7 @@ export interface FormatOperationOptions {
 
 export interface FormatOperationResult {
   readonly formatted: boolean;
-  readonly path?: string;
+  readonly paths: readonly string[];
 }
 
 export function resolveNewline(
@@ -29,23 +29,10 @@ export function resolveNewline(
   return eol === '\r\n' ? 'CRLF' : 'LF';
 }
 
-export async function executeFormat(
-  options: FormatOperationOptions,
-): Promise<Result<FormatOperationResult, CliStructuredError>> {
-  const eol = options.eol ?? EOL;
-  const config = options.config;
-
-  const source = config.contract?.source;
-  if (source?.format !== 'psl') {
-    return ok({ formatted: false });
-  }
-
-  const declaredPath = source.inputs?.[0];
-  if (declaredPath === undefined) {
-    return ok({ formatted: false });
-  }
-  const inputPath = resolve(options.cwd, declaredPath);
-
+async function formatOneFile(
+  inputPath: string,
+  formatOptions: FormatOptions,
+): Promise<Result<string, CliStructuredError>> {
   let contents: string;
   try {
     contents = await readFile(inputPath, 'utf-8');
@@ -58,11 +45,6 @@ export async function executeFormat(
       }),
     );
   }
-
-  const formatOptions: FormatOptions = {
-    indent: config.formatter?.indent ?? 2,
-    newline: resolveNewline(config.formatter?.newline, eol),
-  };
 
   let formatted: string;
   try {
@@ -93,5 +75,45 @@ export async function executeFormat(
     );
   }
 
-  return ok({ formatted: true, path: inputPath });
+  return ok(inputPath);
+}
+
+export async function executeFormat(
+  options: FormatOperationOptions,
+): Promise<Result<FormatOperationResult, CliStructuredError>> {
+  const eol = options.eol ?? EOL;
+  const config = options.config;
+
+  const source = config.contract?.source;
+  if (source?.format !== 'psl') {
+    return ok({ formatted: false, paths: [] });
+  }
+
+  const resolvedInputs = await expandContractInputs(source.inputs);
+  if (resolvedInputs.length === 0) {
+    return ok({ formatted: false, paths: [] });
+  }
+
+  const formatOptions: FormatOptions = {
+    indent: config.formatter?.indent ?? 2,
+    newline: resolveNewline(config.formatter?.newline, eol),
+  };
+
+  const paths: string[] = [];
+  const failures: CliStructuredError[] = [];
+  for (const inputPath of resolvedInputs) {
+    const outcome = await formatOneFile(inputPath, formatOptions);
+    if (outcome.ok) {
+      paths.push(outcome.value);
+    } else {
+      failures.push(outcome.failure);
+    }
+  }
+
+  const [firstFailure] = failures;
+  if (firstFailure !== undefined) {
+    return notOk(firstFailure);
+  }
+
+  return ok({ formatted: paths.length > 0, paths });
 }

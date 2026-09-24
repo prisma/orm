@@ -17,7 +17,7 @@ import type { DocumentAst } from './syntax/ast/declarations';
  * disk re-parse.
  */
 export interface PslInterpretInput {
-  readonly document: DocumentAst;
+  readonly documents: readonly DocumentAst[];
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
 }

@@ -19,6 +19,7 @@ When a retro lesson could land in multiple surfaces, the team's preference:
 
 Patterns the team has seen multiple times. Each entry: pattern → severity → mitigation surface (where it landed).
 
+- **2026-09-23 — Final remove-dbgenerated retro:** A design that the operator has not settled is not implemented on an assumption; slice B's first PR built codec methods that took PSL text, was withdrawn after review, and was rebuilt on ADR 254 with one blocked decision named in the brief and asked before the code that depended on it. Name every unsettled decision in the brief as a stop, and write the answer into the slice spec before re-delegating. Also: order regeneration of committed generated artefacts before the deletion of the form they use (F30), and rebuild `dist` before trusting a journey failure (F31).
 - **2026-09-15 — Final editor-project retro:** Editor acceptance must verify the rendered editor, not just HTTP or LSP transport. Record invocation and acceptance separately; verify the applied edit, caret, and visible follow-up suggestions, including required client opt-ins.
 
 ## Mandatory-final-retro template
