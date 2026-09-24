@@ -248,11 +248,7 @@ function renderSelect(ast: SelectAst, ctx: SqliteRenderContext): string {
     ? `GROUP BY ${ast.groupBy.map((expr) => renderExpr(expr, ctx)).join(', ')}`
     : '';
   const havingClause = ast.having ? `HAVING ${renderExpr(ast.having, ctx)}` : '';
-  const orderClause = ast.orderBy?.length
-    ? `ORDER BY ${ast.orderBy
-        .map((order) => `${renderExpr(order.expr, ctx)} ${order.dir.toUpperCase()}`)
-        .join(', ')}`
-    : '';
+  const orderClause = ast.orderBy?.length ? `ORDER BY ${renderOrderByItems(ast.orderBy, ctx)}` : '';
   // SQLite has no standalone OFFSET clause, so an offset with no limit needs an explicit LIMIT -1.
   const limitClause =
     ast.limit === undefined && ast.offset !== undefined
@@ -689,7 +685,16 @@ function renderJsonObjectExpr(expr: JsonObjectExpr, ctx: SqliteRenderContext): s
 }
 
 function renderOrderByItems(items: ReadonlyArray<OrderByItem>, ctx: SqliteRenderContext): string {
-  return items.map((item) => `${renderExpr(item.expr, ctx)} ${item.dir.toUpperCase()}`).join(', ');
+  return items
+    .map(
+      (item) =>
+        `${renderExpr(item.expr, ctx)} ${item.dir.toUpperCase()}${renderNullsPlacement(item)}`,
+    )
+    .join(', ');
+}
+
+function renderNullsPlacement(item: OrderByItem): string {
+  return item.nulls === undefined ? '' : ` NULLS ${item.nulls.toUpperCase()}`;
 }
 
 function renderJsonArrayAggExpr(expr: JsonArrayAggExpr, ctx: SqliteRenderContext): string {
