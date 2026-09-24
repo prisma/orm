@@ -3712,9 +3712,6 @@ importers:
 
   packages/3-mongo-target/1-mongo-target:
     dependencies:
-      '@internal/adapter-mongo':
-        specifier: workspace:8.0.0-rc.11
-        version: link:../2-mongo-adapter
       '@internal/cli':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/3-tooling/cli
@@ -3763,10 +3760,10 @@ importers:
       arktype:
         specifier: 'catalog:'
         version: 2.2.3
+      bson:
+        specifier: ^7.3.1
+        version: 7.3.1
     devDependencies:
-      '@internal/driver-mongo':
-        specifier: workspace:8.0.0-rc.11
-        version: link:../3-mongo-driver
       '@internal/mongo-contract-psl':
         specifier: workspace:8.0.0-rc.11
         version: link:../../2-mongo-family/2-authoring/contract-psl
@@ -3788,12 +3785,6 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.11
         version: link:../../0-config/tsdown
-      mongodb:
-        specifier: 'catalog:'
-        version: 7.5.0(socks@2.8.9)
-      mongodb-memory-server:
-        specifier: 'catalog:'
-        version: 11.2.0(socks@2.8.9)
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -3854,15 +3845,15 @@ importers:
       '@internal/operations':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/1-core/operations
+      '@internal/target-mongo':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../1-mongo-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
         version: 2.2.3
-      bson:
-        specifier: ^7.3.1
-        version: 7.3.1
     devDependencies:
       '@internal/driver-mongo':
         specifier: workspace:8.0.0-rc.11
@@ -5441,6 +5432,9 @@ importers:
       '@internal/mongo-runtime':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/2-mongo-family/7-runtime
+      '@internal/mongo-schema-ir':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/2-mongo-family/3-tooling/mongo-schema-ir
       '@internal/mongo-value':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/2-mongo-family/1-foundation/mongo-value

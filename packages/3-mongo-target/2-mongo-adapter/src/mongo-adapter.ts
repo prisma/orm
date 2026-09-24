@@ -29,9 +29,9 @@ import {
   UpdateManyWireCommand,
   UpdateOneWireCommand,
 } from '@internal/mongo-wire';
+import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { blindCast } from '@internal/utils/casts';
 import { assertNever } from '@internal/utils/internal-error';
-import { buildStandardCodecRegistry } from './core/codecs';
 import { structuralLowerFilter, structuralLowerPipeline } from './lowering';
 import { resolveDraftDoc } from './resolve-value';
 

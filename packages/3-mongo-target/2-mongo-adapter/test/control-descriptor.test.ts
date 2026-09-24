@@ -1,5 +1,5 @@
+import { mongoDescriptorById } from '@internal/target-mongo/codecs';
 import { describe, expect, it } from 'vitest';
-import { mongoDescriptorById } from '../src/core/codecs';
 import mongoAdapterDescriptor, { mongoScalarAuthoringTypes } from '../src/exports/control';
 
 // The legacy scalar-type map channel (name-to-codecId, retired in TML-2985) is gone; the pinned
@@ -29,5 +29,13 @@ describe('mongoScalarAuthoringTypes', () => {
 
   it('is wired as the adapter descriptor authoring type contribution', () => {
     expect(mongoAdapterDescriptor.authoring?.type).toBe(mongoScalarAuthoringTypes);
+  });
+
+  it('points emitted contracts at the target codec types', () => {
+    expect(mongoAdapterDescriptor.types?.codecTypes?.import).toEqual({
+      package: '@internal/target-mongo/codec-types',
+      named: 'CodecTypes',
+      alias: 'MongoCodecTypes',
+    });
   });
 });

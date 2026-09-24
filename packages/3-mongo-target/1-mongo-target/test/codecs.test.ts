@@ -1,4 +1,3 @@
-import { createOperationRegistry } from '@internal/operations';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'bson';
 import { describe, expect, it } from 'vitest';
@@ -13,7 +12,6 @@ import {
   mongoStringCodec,
   mongoVectorCodec,
 } from '../src/core/codecs';
-import { mongoVectorNearOperation, mongoVectorOperationDescriptors } from '../src/core/operations';
 
 describe('mongoObjectIdCodec', () => {
   it('decodes ObjectId to hex string', async () => {
@@ -240,37 +238,5 @@ describe('mongo descriptor factory', () => {
       expect(typeof make).toBe('function');
       expect(make()).toBeDefined();
     }
-  });
-});
-
-describe('vector operation descriptors (production-defined)', () => {
-  it('mongoVectorNearOperation targets the vector codec', () => {
-    expect(mongoVectorNearOperation.self?.codecId).toBe(MONGO_VECTOR_CODEC_ID);
-  });
-
-  it('mongoVectorNearOperation.impl returns undefined as a placeholder', () => {
-    // Mongo does not yet lower the vector `near` operation; the impl is a placeholder so the descriptor satisfies the shared shape.
-    expect((mongoVectorNearOperation.impl as () => unknown)()).toBeUndefined();
-  });
-
-  it('mongoVectorOperationDescriptors includes near', () => {
-    expect(Object.keys(mongoVectorOperationDescriptors)).toEqual(['near']);
-    expect(mongoVectorOperationDescriptors['near']).toBe(mongoVectorNearOperation);
-  });
-
-  it('registers production-defined operations in registry', () => {
-    const registry = createOperationRegistry();
-    for (const [name, op] of Object.entries(mongoVectorOperationDescriptors)) {
-      registry.register(name, op);
-    }
-
-    const entries = registry.entries();
-    expect(entries['near']).toBeDefined();
-    expect(entries['near']?.self?.codecId).toBe(MONGO_VECTOR_CODEC_ID);
-  });
-
-  it('returns empty entries for fresh registry', () => {
-    const registry = createOperationRegistry();
-    expect(Object.keys(registry.entries())).toHaveLength(0);
   });
 });

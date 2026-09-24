@@ -26,7 +26,7 @@ import {
   mongoString,
   mongoVector,
 } from './data-types';
-import { mongoAdapterError } from './errors';
+import { mongoTargetError } from './mongo-target-errors';
 
 export const mongoObjectIdCodec = mongoCodec({
   typeId: MONGO_OBJECTID_CODEC_ID,
@@ -65,7 +65,7 @@ export const mongoDateCodec = mongoCodec({
   encodeJson: (value: Date) => value.toISOString(),
   decodeJson: (json) => {
     if (typeof json !== 'string') {
-      throw mongoAdapterError('RUNTIME.DECODE_FAILED', 'expected ISO date string', {
+      throw mongoTargetError('RUNTIME.DECODE_FAILED', 'expected ISO date string', {
         meta: { codecId: MONGO_DATE_CODEC_ID, received: typeof json },
       });
     }
@@ -135,7 +135,7 @@ const renderVectorOutputType = (typeParams: Record<string, unknown>): string | u
     !Number.isInteger(length) ||
     length <= 0
   ) {
-    throw mongoAdapterError(
+    throw mongoTargetError(
       'RUNTIME.TYPE_PARAMS_INVALID',
       'renderOutputType: expected positive integer "length" for Vector',
       { meta: { nativeType: 'Vector', param: 'length', received: length } },

@@ -14,14 +14,17 @@ import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoSchemaCollection, MongoSchemaIndex, MongoSchemaIR } from '@internal/mongo-schema-ir';
+import {
+  MongoMigrationPlanner,
+  MongoMigrationRunner,
+  mongoTargetDescriptor,
+  serializeMongoOps,
+} from '@internal/target-mongo/control';
+import { createCollection } from '@internal/target-mongo/migration';
+import { timeouts } from '@repo/test-utils';
 import { type Db, MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { mongoTargetDescriptor } from '../src/core/control-target';
-import { createCollection } from '../src/core/migration-factories';
-import { serializeMongoOps } from '../src/core/mongo-ops-serializer';
-import { MongoMigrationPlanner } from '../src/core/mongo-planner';
-import { MongoMigrationRunner } from '../src/core/mongo-runner';
 
 const controlAdapter = new MongoControlAdapterImpl();
 
@@ -37,12 +40,12 @@ beforeAll(async () => {
   client = new MongoClient(replSet.getUri());
   await client.connect();
   db = client.db(dbName);
-});
+}, timeouts.spinUpMongoMemoryServer);
 
 afterAll(async () => {
   await client?.close();
   await replSet?.stop();
-});
+}, timeouts.spinUpMongoMemoryServer);
 
 beforeEach(async () => {
   const collections = await db.listCollections().toArray();
@@ -726,7 +729,7 @@ describe('MongoMigrationRunner - data transforms', () => {
 
 describe('MongoMigrationRunner - E2E round-trip', () => {
   it('serialize → deserialize → execute mixed DDL + data transform', async () => {
-    const { dataTransform } = await import('../src/exports/migration');
+    const { dataTransform } = await import('@internal/target-mongo/migration');
     const { RawUpdateManyCommand, RawAggregateCommand } = await import(
       '@internal/mongo-query-ast/execution'
     );

@@ -1,3 +1,7 @@
+export type Vector<N extends number = number> = readonly number[] & {
+  readonly __vectorLength?: N;
+};
+
 export type CodecTypes = {
   readonly 'mongo/objectId@1': { readonly input: string; readonly output: string };
   readonly 'mongo/string@1': { readonly input: string; readonly output: string };

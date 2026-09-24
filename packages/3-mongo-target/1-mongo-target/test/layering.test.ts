@@ -26,10 +26,7 @@ describe('target package layering (ADR 198)', () => {
     expect(importsMatching(/^@internal\/family-mongo\//)).not.toEqual([]);
   });
 
-  it('imports no adapter or driver package except the codec metadata', () => {
-    expect(importsMatching(/^@internal\/(adapter|driver)-mongo(\/|$)/)).toEqual([
-      'core/descriptor-meta.ts -> @internal/adapter-mongo/codecs',
-      'core/descriptor-meta.ts -> @internal/adapter-mongo/data-types',
-    ]);
+  it('imports no adapter or driver package', () => {
+    expect(importsMatching(/^@internal\/(adapter|driver)-mongo(\/|$)/)).toEqual([]);
   });
 });

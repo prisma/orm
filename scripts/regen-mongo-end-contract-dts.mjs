@@ -61,7 +61,7 @@ for (const jsonPath of args) {
 
   const codecTypeImports = [
     {
-      package: '@internal/adapter-mongo/codec-types',
+      package: '@internal/target-mongo/codec-types',
       named: 'CodecTypes',
       alias: 'MongoCodecTypes',
     },

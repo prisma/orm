@@ -1,4 +1,3 @@
-import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/adapter-mongo/codec-ids';
 import mongoAdapter from '@internal/adapter-mongo/control';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
@@ -7,6 +6,7 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-types';
+import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';

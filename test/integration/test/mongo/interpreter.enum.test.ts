@@ -1,4 +1,3 @@
-import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/adapter-mongo/codec-ids';
 import {
   mongoFamilyEntityTypes,
   mongoFamilyPslBlockDescriptors,
@@ -11,6 +10,7 @@ import {
 } from '@internal/mongo-contract-psl';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
+import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 

@@ -19,7 +19,7 @@ const mongoRuntimeTargetDescriptor: RuntimeTargetDescriptor<
   readonly codecs: () => MongoCodecRegistry;
 } = {
   ...mongoTargetDescriptorMeta,
-  // The target descriptor itself contributes no codecs — the standard set lives on the adapter descriptor (see `@internal/adapter-mongo/runtime`).
+  // The target owns the codecs; the adapter's runtime descriptor registers them, as the Postgres adapter does.
   codecs: () => newMongoCodecRegistry(),
   create(): MongoRuntimeTargetInstance {
     return {

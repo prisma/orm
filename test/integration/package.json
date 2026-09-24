@@ -48,6 +48,7 @@
     "@internal/mongo-query-ast": "workspace:8.0.0-rc.11",
     "@internal/mongo-query-builder": "workspace:8.0.0-rc.11",
     "@internal/mongo-runtime": "workspace:8.0.0-rc.11",
+    "@internal/mongo-schema-ir": "workspace:8.0.0-rc.11",
     "@internal/mongo-value": "workspace:8.0.0-rc.11",
     "@internal/operations": "workspace:8.0.0-rc.11",
     "@internal/postgres": "workspace:8.0.0-rc.11",
