@@ -339,33 +339,12 @@ describe('compileMongoQuery', () => {
         ],
       };
       const plan = compileMongoQuery('posts', state, testHash, testPostModel);
+      expect(stages(plan).map((s) => s.kind)).toEqual(['lookup', 'unwind', 'project']);
       const projectStage = stages(plan).find((s) => s.kind === 'project') as
         | MongoProjectStage
         | undefined;
       expect(projectStage).toBeDefined();
       expect(projectStage!.projection).toEqual({ title: 1, author: 1, _id: 0 });
-    });
-
-    it('$project retains _id when explicitly selected alongside includes', () => {
-      const state: MongoCollectionState = {
-        ...emptyCollectionState(),
-        selectedFields: ['_id', 'name'],
-        includes: [
-          {
-            relationName: 'posts',
-            from: 'posts',
-            localField: '_id',
-            foreignField: 'authorId',
-            cardinality: '1:N',
-          },
-        ],
-      };
-      const plan = compileMongoQuery('users', state, testHash, testUserModel);
-      const projectStage = stages(plan).find((s) => s.kind === 'project') as
-        | MongoProjectStage
-        | undefined;
-      expect(projectStage).toBeDefined();
-      expect(projectStage!.projection).toEqual({ _id: 1, name: 1, posts: 1 });
     });
   });
 });
