@@ -27,7 +27,7 @@ Application types: `Int64` is `bigint`, `Decimal128` is canonical decimal text (
 **Layering fix first.** ADR 198 states that a target-layer module must not import adapter or driver code, and that the runner receives its dependencies through abstract interfaces. Today `packages/3-mongo-target/1-mongo-target` imports `@internal/adapter-mongo` in `core/control-target.ts`, `core/mongo-runner.ts`, and `core/descriptor-meta.ts`. The fix follows the Postgres runner, which reaches every wire operation through `this.family.*` and never names the adapter package:
 
 - `MongoRunnerDependencies` and `MarkerOperations` move into the family's control-adapter SPI (`packages/2-mongo-family/9-family/src/core/control-adapter.ts`). They already depend only on family-layer types (`@internal/mongo-query-ast`, `@internal/mongo-lowering`, `@internal/contract/types`).
-- The `MongoControlAdapter` SPI gains the operation the runner needs to obtain those dependencies for a control driver. The adapter package implements it with today's `createMongoRunnerDeps` and `extractDb` logic.
+- The `MongoControlAdapter` SPI gains the operation the runner needs to obtain those dependencies for a control driver. The adapter package implements it in `MongoControlAdapterImpl`; the old free function `createMongoRunnerDeps` is deleted.
 - The target's `createRunner(family)` obtains the dependencies through the family instance (which resolves the adapter from the control stack), so `1-mongo-target` has no `@internal/adapter-mongo` import and no dependency on it in `package.json`.
 - Docs: `docs/architecture docs/subsystems/10. MongoDB Family.md` § Control-plane layering is corrected to describe the shipped shape.
 

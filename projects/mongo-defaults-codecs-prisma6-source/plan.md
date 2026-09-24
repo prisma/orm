@@ -44,3 +44,7 @@ Stack: 1 → 2. Then parallel: 3 and 4 (independent of each other; 4 does not to
 - [ ] Delete or update `projects/prisma7-contract-source/slices/02-mongo-source/` and the filled "Deferred gaps" entries.
 - [ ] Strip repo-wide references to `projects/mongo-defaults-codecs-prisma6-source/**`.
 - [ ] Delete `projects/mongo-defaults-codecs-prisma6-source/`.
+
+## Open items
+
+- ADR 198 describes a `MongoCommandExecutor` DDL visitor and a `MarkerOperations` without a `space` parameter; neither matches the code, and the drift predates this project. Slice 1 corrected only the composition-site example. Rewriting the DDL dispatch text is its own change; do it at close-out or as a separate direct change.
