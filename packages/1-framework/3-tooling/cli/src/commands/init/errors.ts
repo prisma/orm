@@ -311,51 +311,53 @@ export function errorInitFlagConflict(options: {
   });
 }
 
-// biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the supported list a user-facing error shows
-const PRISMA7_SUPPORTED_PROVIDERS = ['postgresql'] as const;
+// biome-ignore lint/plugin/no-family-vocabulary: names the providers on purpose — the supported list a user-facing error shows
+const PRISMA7_SUPPORTED_PROVIDERS = ['postgresql', 'mongodb'] as const;
 
-/** The Prisma 7 schema's provider is `mongodb`, which the Prisma 7 path does not support yet. */
-// biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the user-facing refusal of a MongoDB Prisma 7 schema
-export function errorInitPrisma7MongoUnsupported(options: {
-  readonly schemaPath: string;
-}): CliStructuredError {
-  return new CliStructuredError(
-    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the refusal's public error code
-    'CLI.INIT_PRISMA7_MONGO_UNSUPPORTED',
-    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error about the schema's datasource
-    'MongoDB Prisma 7 schemas are not supported yet',
-    {
-      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error text
-      why: `\`${options.schemaPath}\` declares \`provider = "mongodb"\`. Using a Prisma 7 schema as the Prisma 8 contract source is available for PostgreSQL first; MongoDB support is coming.`,
-      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error text
-      fix: 'Run `prisma orm init` without `--from-prisma7-schema` to start a fresh Prisma 8 contract, or wait for the MongoDB Prisma 7 source.',
-      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the refusal's public error code
-      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_MONGO_UNSUPPORTED'),
-      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the provider in the error payload
-      meta: { schemaPath: options.schemaPath, provider: 'mongodb' },
-    },
-  );
-}
-
-/** The Prisma 7 schema's provider is one Prisma 8 has no target for. */
+/**
+ * The Prisma 7 schema's provider is one Prisma 8 has no target for, or is not
+ * a string literal and no `--target` names the database instead.
+ */
 export function errorInitPrisma7ProviderUnsupported(options: {
   readonly schemaPath: string;
   readonly provider: string | undefined;
 }): CliStructuredError {
   const declared =
     options.provider === undefined ? 'no string provider' : `\`provider = "${options.provider}"\``;
+  const fix =
+    options.provider === undefined
+      ? 'Pass `--target` to name the database, or run `prisma orm init` without `--from-prisma7-schema` to start a fresh Prisma 8 contract.'
+      : 'Run `prisma orm init` without `--from-prisma7-schema` to start a fresh Prisma 8 contract.';
   return new CliStructuredError(
     'CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED',
     'Unsupported Prisma 7 datasource provider',
     {
-      why: `\`${options.schemaPath}\` declares ${declared}. The Prisma 7 path supports: ${PRISMA7_SUPPORTED_PROVIDERS.join(', ')}.`,
-      fix: 'Pass `--target` to choose the Prisma 8 target yourself, or run `prisma orm init` without `--from-prisma7-schema`.',
+      why: `\`${options.schemaPath}\` declares ${declared}. Prisma 8 supports: ${PRISMA7_SUPPORTED_PROVIDERS.join(', ')}.`,
+      fix,
       docsUrl: docsUrlFor('CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED'),
       meta: {
         schemaPath: options.schemaPath,
         provider: options.provider ?? null,
         supported: [...PRISMA7_SUPPORTED_PROVIDERS],
       },
+    },
+  );
+}
+
+/** `--target` names a different database than the Prisma 7 schema's provider. */
+export function errorInitPrisma7TargetMismatch(options: {
+  readonly schemaPath: string;
+  readonly provider: string;
+  readonly target: string;
+}): CliStructuredError {
+  return new CliStructuredError(
+    'CLI.INIT_PRISMA7_TARGET_MISMATCH',
+    '--target does not match the Prisma 7 schema',
+    {
+      why: `\`--target ${options.target}\` does not match \`${options.schemaPath}\`, which declares \`provider = "${options.provider}"\`.`,
+      fix: 'Drop `--target` to use the database the schema declares, or run `prisma orm init` without `--from-prisma7-schema` to start a fresh Prisma 8 contract.',
+      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_TARGET_MISMATCH'),
+      meta: { schemaPath: options.schemaPath, provider: options.provider, target: options.target },
     },
   );
 }

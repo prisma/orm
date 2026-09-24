@@ -78,22 +78,6 @@ describe('init on a Prisma 7 project', () => {
     );
 
     it(
-      'lets --target override the provider',
-      async () => {
-        writePrisma7Project('mongodb');
-
-        const run = await harness().run(
-          ['orm', 'init', ...FROM_PRISMA7, '--target', 'postgres', ...NO_PACKAGE_WORK],
-          { cwd: projectDir },
-        );
-
-        expect(run.exitCode).toBe(0);
-        expect(run.presented?.data).toMatchObject({ target: 'postgres' });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
       'refuses --schema-path beside it before anything is written',
       async () => {
         writePrisma7Project();
@@ -116,16 +100,22 @@ describe('init on a Prisma 7 project', () => {
 
   describe('refusals write nothing', () => {
     it.each([
-      ['a mongodb provider', 'mongodb', 'CLI.INIT_PRISMA7_MONGO_UNSUPPORTED'],
-      ['an unsupported provider', 'sqlite', 'CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED'],
+      [
+        'a --target that disagrees with the provider',
+        'postgresql',
+        ['--target', 'mongodb'],
+        'CLI.INIT_PRISMA7_TARGET_MISMATCH',
+      ],
+      ['an unsupported provider', 'sqlite', [], 'CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED'],
     ])(
       '%s',
-      async (_case, provider, code) => {
+      async (_case, provider, extraArgs, code) => {
         writePrisma7Project(provider);
 
-        const run = await harness().run(['orm', 'init', ...FROM_PRISMA7, ...NO_PACKAGE_WORK], {
-          cwd: projectDir,
-        });
+        const run = await harness().run(
+          ['orm', 'init', ...FROM_PRISMA7, ...extraArgs, ...NO_PACKAGE_WORK],
+          { cwd: projectDir },
+        );
 
         expect(run.exitCode).toBe(2);
         expect(envelopeOf(run)).toMatchObject({ ok: false, error: { code } });

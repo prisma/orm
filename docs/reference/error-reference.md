@@ -147,17 +147,17 @@ On the Prisma 7 path of `prisma orm init`, `prisma.config.*` evaluated as a Pris
 
 On the Prisma 7 path of `prisma orm init`, `prisma.config.*` exists but failed to evaluate (typically a Prisma 7 config importing `prisma/config` in a checkout whose dependencies are not installed). Init cannot tell whether the file is Prisma 7's, to rename, or its own, to replace, so it refuses rather than overwrite it. The fix is to install the project's dependencies so the config evaluates, or rename it to `prisma7.config.<ext>` by hand; when a `prisma7.config.*` already exists, init leaves `prisma.config.*` alone and the fix is to install the dependencies and fix the error in it instead. The normal path is unaffected: without the flag or a yes to the Prisma 7 question, the file is treated as it is today. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `why`, `prisma7ConfigPath` (`null` when none exists).
 
-### CLI.INIT_PRISMA7_MONGO_UNSUPPORTED
-
-On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares `provider = "mongodb"`. Using a Prisma 7 schema as the contract source is available for PostgreSQL first; MongoDB support follows. The provider is checked only when `--target` is absent; passing `--target` skips this check. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`.
-
 ### CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED
 
-On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares a provider Prisma 8 has no target for (or no string provider at all). The supported list is in the payload. Passing `--target` skips this check. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider` (`null` when not a string literal), `supported`.
+On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares a provider Prisma 8 has no target for, or no string provider at all. The supported list is in the payload. When the provider is not a string literal, passing `--target` names the database instead; a string provider with no target is refused whatever `--target` says. Nothing is written or installed. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider` (`null` when not a string literal), `supported`.
 
 ### CLI.INIT_PRISMA7_SCHEMA_INVALID
 
 The path `prisma orm init` was asked to use as a Prisma 7 schema (`--from-prisma7-schema`, or the path the interactive question named) does not exist, or neither it nor any `.prisma` file under it has a `datasource` block. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `reason` (`absent` or `no-datasource`).
+
+### CLI.INIT_PRISMA7_TARGET_MISMATCH
+
+On the Prisma 7 path of `prisma orm init`, `--target` names a different database than the schema's `datasource` provider, for example `--target mongodb` for a schema that declares `provider = "postgresql"`. Refused before anything is asked, installed, or written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`, `target` (as passed).
 
 ### CLI.INIT_PROBE_FAILED
 

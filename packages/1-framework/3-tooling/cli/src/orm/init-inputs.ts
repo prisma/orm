@@ -6,10 +6,9 @@ import {
   errorInitMissingFlags,
   errorInitPrisma7ConfigCollision,
   errorInitPrisma7ConfigUnreadable,
-  // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the user-facing refusal of a MongoDB Prisma 7 schema
-  errorInitPrisma7MongoUnsupported,
   errorInitPrisma7ProviderUnsupported,
   errorInitPrisma7SchemaInvalid,
+  errorInitPrisma7TargetMismatch,
   errorInitStrictProbeWithoutProbe,
   errorInitUserAborted,
 } from '../commands/init/errors';
@@ -53,8 +52,7 @@ export interface InitFlagValues {
 
 /**
  * Where the contract comes from: a starter schema init writes, or an existing
- * Prisma 7 schema init points the config at. `targetSource` records whether
- * the target came from `--target` or from the schema's `datasource` provider.
+ * Prisma 7 schema init points the config at.
  */
 export type InitContractSource =
   | { readonly kind: 'starter'; readonly authoring: AuthoringId; readonly schemaPath: string }
@@ -62,7 +60,6 @@ export type InitContractSource =
       readonly kind: 'prisma7-schema';
       readonly schemaPath: string;
       readonly provider: string | undefined;
-      readonly targetSource: 'flag' | 'provider';
     };
 
 /**
@@ -289,19 +286,34 @@ async function choosePrisma7Path(ctx: {
   }
 }
 
-function targetFromProvider(
+/**
+ * The schema's provider names the target; `--target` may only agree with it,
+ * or name the database when the provider is not a string literal.
+ */
+function prisma7Target(
   schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>,
+  flagTarget: TargetId | undefined,
+  rawFlagTarget: string | undefined,
 ): TargetId {
-  const target =
+  const providerTarget =
     schema.provider === undefined ? undefined : targetFromProviderName(schema.provider);
-  if (target === undefined) {
+  if (schema.provider !== undefined && providerTarget === undefined) {
     throw errorInitPrisma7ProviderUnsupported({
       schemaPath: schema.path,
       provider: schema.provider,
     });
   }
-  // biome-ignore lint/plugin/no-family-vocabulary: names the target on purpose — the Prisma 7 path refuses a MongoDB schema with its own user-facing error
-  if (target === 'mongo') throw errorInitPrisma7MongoUnsupported({ schemaPath: schema.path });
+  if (schema.provider !== undefined && flagTarget !== undefined && flagTarget !== providerTarget) {
+    throw errorInitPrisma7TargetMismatch({
+      schemaPath: schema.path,
+      provider: schema.provider,
+      target: rawFlagTarget ?? flagTarget,
+    });
+  }
+  const target = flagTarget ?? providerTarget;
+  if (target === undefined) {
+    throw errorInitPrisma7ProviderUnsupported({ schemaPath: schema.path, provider: undefined });
+  }
   return target;
 }
 
@@ -384,7 +396,7 @@ async function resolvePrisma7Inputs(ctx: {
   if (schema.kind !== 'datasource') {
     throw errorInitPrisma7SchemaInvalid({ schemaPath: schema.path, reason: schema.kind });
   }
-  const target = flagTarget ?? targetFromProvider(schema);
+  const target = prisma7Target(schema, flagTarget, flags.target);
 
   const replaced = generatedFilesPrisma7PathReplaces().filter(
     (relative) =>
@@ -419,7 +431,6 @@ async function resolvePrisma7Inputs(ctx: {
       kind: 'prisma7-schema',
       schemaPath: schema.path,
       provider: schema.provider,
-      targetSource: flagTarget === undefined ? 'provider' : 'flag',
     },
     sideBySide,
     warnings: detection.warnings,
