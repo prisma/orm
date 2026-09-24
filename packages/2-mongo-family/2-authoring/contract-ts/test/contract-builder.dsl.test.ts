@@ -353,6 +353,38 @@ describe('mongo contract builder', () => {
     });
   });
 
+  it('supports the int64, decimal128, binary and json scalar helpers', () => {
+    const Post = model('Post', {
+      collection: 'posts',
+      fields: {
+        _id: field.objectId(),
+        views: field.int64(),
+        price: field.decimal128(),
+        thumbnail: field.binary(),
+        meta: field.json(),
+      },
+    });
+
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { Post },
+    });
+
+    const fields = domainModelsAtDefaultNamespace(contract.domain)['Post']?.fields;
+    expect({
+      views: fields?.['views'],
+      price: fields?.['price'],
+      thumbnail: fields?.['thumbnail'],
+      meta: fields?.['meta'],
+    }).toEqual({
+      views: { type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
+      price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' }, nullable: false },
+      thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' }, nullable: false },
+      meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
+    });
+  });
+
   it('merges indexes from multiple models sharing the same collection', () => {
     const TaskBase = model('TaskBase', {
       collection: 'tasks',

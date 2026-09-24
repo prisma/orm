@@ -145,6 +145,10 @@ type MongoCodecTypes = {
     readonly input: readonly number[];
     readonly output: readonly number[];
   };
+  readonly 'mongo/int64@1': { readonly input: bigint; readonly output: bigint };
+  readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
+  readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
+  readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
 };
 
 type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection<
@@ -1022,6 +1026,18 @@ export const field = {
   },
   date() {
     return createScalarFieldBuilder('mongo/date@1');
+  },
+  int64() {
+    return createScalarFieldBuilder('mongo/int64@1');
+  },
+  decimal128() {
+    return createScalarFieldBuilder('mongo/decimal128@1');
+  },
+  binary() {
+    return createScalarFieldBuilder('mongo/binary@1');
+  },
+  json() {
+    return createScalarFieldBuilder('mongo/json@1');
   },
   vector<const TypeParams extends Record<string, unknown> | undefined = undefined>(options?: {
     readonly typeParams?: TypeParams;

@@ -35,8 +35,20 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 }
 `;
 
-function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
-  const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'representative-schema.prisma');
+const BSON_SCALARS_SCHEMA = `model post {
+  id        ObjectId   @id @map("_id")
+  views     Int64
+  price     Decimal128
+  thumbnail Binary
+  meta      Json
+}
+`;
+
+function emit(
+  scalarTypeCodecIds: ReadonlyMap<string, string>,
+  schema: string = REPRESENTATIVE_SCHEMA,
+) {
+  const { document, sources } = parse(schema, 'representative-schema.prisma');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
@@ -70,15 +82,23 @@ describe('mongo scalar types derived from the unified namespace', () => {
       DateTime: { codecId: 'mongo/date@1', nativeType: 'date' },
       ObjectId: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
       Float: { codecId: 'mongo/double@1', nativeType: 'double' },
+      Int64: { codecId: 'mongo/int64@1', nativeType: 'long' },
+      Decimal128: { codecId: 'mongo/decimal128@1', nativeType: 'decimal' },
+      Binary: { codecId: 'mongo/binary@1', nativeType: 'binData' },
+      Json: { codecId: 'mongo/json@1', nativeType: 'json' },
     });
   });
 
   it('exposes the derived scalar names as controlStack.scalarTypes', () => {
     expect([...stack.scalarTypes].sort()).toEqual([
+      'Binary',
       'Boolean',
       'DateTime',
+      'Decimal128',
       'Float',
       'Int',
+      'Int64',
+      'Json',
       'ObjectId',
       'String',
     ]);
@@ -98,6 +118,53 @@ describe('mongo scalar types derived from the unified namespace', () => {
                 fields: {
                   _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
                   parentRef: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('resolves Int64, Decimal128, Binary and Json to their codecs and BSON validator types', () => {
+    const result = emit(namespaceScalarTypeCodecIds(), BSON_SCALARS_SCHEMA);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toMatchObject({
+      domain: {
+        namespaces: {
+          __unbound__: {
+            models: {
+              post: {
+                fields: {
+                  views: { type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
+                  price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' } },
+                  thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' } },
+                  meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+                },
+              },
+            },
+          },
+        },
+      },
+      storage: {
+        namespaces: {
+          __unbound__: {
+            entries: {
+              collection: {
+                post: {
+                  validator: {
+                    jsonSchema: {
+                      properties: {
+                        views: { bsonType: 'long' },
+                        price: { bsonType: 'decimal' },
+                        thumbnail: { bsonType: 'binData' },
+                        meta: {},
+                      },
+                    },
+                  },
                 },
               },
             },

@@ -11,12 +11,15 @@ const expectedScalars = [
   ['DateTime', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
   ['Float', 'mongo/double@1'],
+  ['Int64', 'mongo/int64@1'],
+  ['Decimal128', 'mongo/decimal128@1'],
+  ['Binary', 'mongo/binary@1'],
 ] as const;
 
 describe('mongoScalarAuthoringTypes', () => {
   it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
     expect(Object.keys(mongoScalarAuthoringTypes).sort()).toEqual(
-      expectedScalars.map(([name]) => name).sort(),
+      [...expectedScalars.map(([name]) => name), 'Json'].sort(),
     );
     for (const [name, codecId] of expectedScalars) {
       expect(mongoScalarAuthoringTypes[name]).toEqual({
@@ -25,6 +28,15 @@ describe('mongoScalarAuthoringTypes', () => {
         output: { codecId, nativeType: mongoDescriptorById(codecId)?.targetTypes?.[0] },
       });
     }
+  });
+
+  it('pins Json, whose codec has no BSON type, to the json native type', () => {
+    expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([]);
+    expect(mongoScalarAuthoringTypes.Json).toEqual({
+      kind: 'typeConstructor',
+      documentation: expect.stringMatching(/\S/),
+      output: { codecId: 'mongo/json@1', nativeType: 'json' },
+    });
   });
 
   it('is wired as the adapter descriptor authoring type contribution', () => {

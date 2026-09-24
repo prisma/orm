@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   InferModelRow,
@@ -136,6 +137,32 @@ test('double helper infers numeric row values', () => {
   type MeasurementRow = InferModelRow<typeof measurementContract, 'Measurement'>;
 
   expectTypeOf<MeasurementRow['reading']>().toEqualTypeOf<number>();
+});
+
+test('BSON scalar helpers infer their application types', () => {
+  const Post = model('Post', {
+    collection: 'posts',
+    fields: {
+      _id: field.objectId(),
+      views: field.int64(),
+      price: field.decimal128(),
+      thumbnail: field.binary(),
+      meta: field.json(),
+    },
+  });
+
+  const postContract = defineContract({
+    family: mongoFamilyPack,
+    target: mongoTargetPack,
+    models: { Post },
+  });
+
+  type PostRow = InferModelRow<typeof postContract, 'Post'>;
+
+  expectTypeOf<PostRow['views']>().toEqualTypeOf<bigint>();
+  expectTypeOf<PostRow['price']>().toEqualTypeOf<string>();
+  expectTypeOf<PostRow['thumbnail']>().toEqualTypeOf<Uint8Array>();
+  expectTypeOf<PostRow['meta']>().toEqualTypeOf<JsonValue>();
 });
 
 test('index helper preserves literal Mongo index authoring', () => {

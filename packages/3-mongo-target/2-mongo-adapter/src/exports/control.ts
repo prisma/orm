@@ -2,10 +2,14 @@ import type { MongoControlAdapterDescriptor } from '@internal/family-mongo/contr
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 import {
+  MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
   MONGO_DATE_CODEC_ID,
+  MONGO_DECIMAL128_CODEC_ID,
   MONGO_DOUBLE_CODEC_ID,
   MONGO_INT32_CODEC_ID,
+  MONGO_INT64_CODEC_ID,
+  MONGO_JSON_CODEC_ID,
   MONGO_OBJECTID_CODEC_ID,
   MONGO_STRING_CODEC_ID,
 } from '@internal/target-mongo/codec-ids';
@@ -22,7 +26,9 @@ import { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 /**
  * The base PSL scalars as zero-arg type constructors in the unified authoring
  * channel, with explicit `nativeType` values pinned to the codec manifests
- * (`codecLookup.targetTypesFor(codecId)[0]`).
+ * (`codecLookup.targetTypesFor(codecId)[0]`). `Json` has no BSON type; its
+ * `nativeType` names the codec, and the validator reads the codec's empty
+ * `targetTypes`, not this value.
  */
 export const mongoScalarAuthoringTypes = {
   String: {
@@ -54,6 +60,28 @@ export const mongoScalarAuthoringTypes = {
     kind: 'typeConstructor',
     documentation: 'A double-precision floating-point number stored as BSON double.',
     output: { codecId: MONGO_DOUBLE_CODEC_ID, nativeType: 'double' },
+  },
+  Int64: {
+    kind: 'typeConstructor',
+    documentation: 'A signed 64-bit integer stored as BSON long, read as a bigint.',
+    output: { codecId: MONGO_INT64_CODEC_ID, nativeType: 'long' },
+  },
+  Decimal128: {
+    kind: 'typeConstructor',
+    documentation:
+      'A 128-bit decimal stored as BSON decimal, read as decimal text without an exponent.',
+    output: { codecId: MONGO_DECIMAL128_CODEC_ID, nativeType: 'decimal' },
+  },
+  Binary: {
+    kind: 'typeConstructor',
+    documentation: 'Bytes stored as BSON binData, read as a Uint8Array.',
+    output: { codecId: MONGO_BINARY_CODEC_ID, nativeType: 'binData' },
+  },
+  Json: {
+    kind: 'typeConstructor',
+    documentation:
+      'Any JSON value, stored as the BSON document, array or scalar it maps to. The collection validator does not constrain its type.',
+    output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
   },
 } as const satisfies AuthoringTypeNamespace;
 
