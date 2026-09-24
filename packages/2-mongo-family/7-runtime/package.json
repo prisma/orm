@@ -27,16 +27,11 @@
     "@internal/utils": "workspace:8.0.0-rc.12"
   },
   "devDependencies": {
-    "@internal/adapter-mongo": "workspace:8.0.0-rc.12",
-    "@internal/driver-mongo": "workspace:8.0.0-rc.12",
-    "@internal/family-mongo": "workspace:8.0.0-rc.12",
     "@internal/mongo-query-builder": "workspace:8.0.0-rc.12",
-    "@internal/target-mongo": "workspace:8.0.0-rc.12",
     "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@repo/tsconfig": "workspace:8.0.0-rc.12",
     "@repo/tsdown": "workspace:8.0.0-rc.12",
     "mongodb": "catalog:",
-    "mongodb-memory-server": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

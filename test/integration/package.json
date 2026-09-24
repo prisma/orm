@@ -50,6 +50,7 @@
     "@internal/mongo-runtime": "workspace:8.0.0-rc.12",
     "@internal/mongo-schema-ir": "workspace:8.0.0-rc.12",
     "@internal/mongo-value": "workspace:8.0.0-rc.12",
+    "@internal/mongo-wire": "workspace:8.0.0-rc.12",
     "@internal/operations": "workspace:8.0.0-rc.12",
     "@internal/postgres": "workspace:8.0.0-rc.12",
     "@internal/psl-parser": "workspace:8.0.0-rc.12",

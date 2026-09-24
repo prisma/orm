@@ -1,9 +1,10 @@
 import { FindOneAndUpdateCommand, MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('findOneAndUpdate integration', () => {
+describe('findOneAndUpdate integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'find_update_test';
 
   it('updates and returns the modified document', async () => {

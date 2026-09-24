@@ -14,6 +14,7 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
 import { acc, mongoQuery } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { ObjectId } from 'mongodb';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
@@ -24,7 +25,9 @@ import { withMongod } from './setup';
 
 const q = mongoQuery<TDecodeFixtureContract>({ contractJson: decodeFixtureContractJson });
 
-describe('Mongo runtime decode integration via query-builder', () => {
+describe('Mongo runtime decode integration via query-builder', {
+  timeout: timeouts.spinUpMongoMemoryServer,
+}, () => {
   it('typed read: contract → query-builder → runtime decode end-to-end', async () => {
     await withMongod(async (ctx) => {
       const contract = new MongoContractSerializer().deserializeContract(

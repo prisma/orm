@@ -3,10 +3,11 @@ import {
   MongoFieldFilter,
   MongoMatchStage,
 } from '@internal/mongo-query-ast/execution';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('execute (read plan)', () => {
+describe('execute (read plan)', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'read_plan_test';
 
   it('executes a read plan and returns matching rows', async () => {

@@ -1,9 +1,10 @@
 import { MongoFieldFilter, UpdateOneCommand } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('updateOne integration', () => {
+describe('updateOne integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'update_test_users';
 
   it('updates a matching document', async () => {

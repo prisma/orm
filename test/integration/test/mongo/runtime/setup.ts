@@ -2,16 +2,16 @@ import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { PlanMeta } from '@internal/contract/types';
 import { createMongoDriver } from '@internal/driver-mongo';
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
-import mongoRuntimeTarget from '@internal/target-mongo/runtime';
-import { timeouts } from '@repo/test-utils';
-import { MongoClient } from 'mongodb';
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   createMongoRuntime,
   type MongoRuntime,
-} from '../src/exports/index';
+} from '@internal/mongo-runtime';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
+import { timeouts } from '@repo/test-utils';
+import { MongoClient } from 'mongodb';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
 export interface MongodContext {
   readonly connectionUri: string;

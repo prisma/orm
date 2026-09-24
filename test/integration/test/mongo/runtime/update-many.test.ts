@@ -1,9 +1,10 @@
 import { MongoFieldFilter, UpdateManyCommand } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('updateMany integration', () => {
+describe('updateMany integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'update_many_test';
 
   it('updates multiple documents and returns counts', async () => {

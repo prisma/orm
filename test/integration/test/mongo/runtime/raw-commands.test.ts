@@ -11,6 +11,7 @@ import {
   RawUpdateManyCommand,
   RawUpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
@@ -24,7 +25,7 @@ function rawPlan(collection: string, command: MongoQueryPlan['command']): MongoQ
   return { collection, command, meta: rawMeta };
 }
 
-describe('raw command integration', () => {
+describe('raw command integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const col = 'raw_test_items';
 
   it('aggregate: $group + $sort pipeline', async () => {

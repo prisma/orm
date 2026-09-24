@@ -1,9 +1,10 @@
 import { FindOneAndDeleteCommand, MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('findOneAndDelete integration', () => {
+describe('findOneAndDelete integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'find_delete_test';
 
   it('deletes and returns the removed document', async () => {

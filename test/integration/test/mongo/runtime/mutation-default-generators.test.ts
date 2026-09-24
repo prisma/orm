@@ -1,14 +1,14 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { ExecutionMutationDefault } from '@internal/contract/types';
 import { newMongoCodecRegistry } from '@internal/mongo-codec';
-import mongoRuntimeTarget from '@internal/target-mongo/runtime';
-import { describe, expect, it } from 'vitest';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   type MongoRuntimeExtensionDescriptor,
   type MongoRuntimeMutationDefaultGenerator,
-} from '../src/mongo-execution-stack';
+} from '@internal/mongo-runtime';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
+import { describe, expect, it } from 'vitest';
 
 const NS = '__unbound__';
 

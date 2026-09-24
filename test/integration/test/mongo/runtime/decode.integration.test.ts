@@ -10,6 +10,7 @@ import {
 } from '@internal/mongo-query-ast/execution';
 import { mongoQuery } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
   decodeFixtureContractJson,
@@ -17,7 +18,7 @@ import {
 } from './fixtures/decode-fixture-contract';
 import { withMongod } from './setup';
 
-describe('Mongo runtime decode integration', () => {
+describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   it('typed read returns decoded _id, dates, and vector array', async () => {
     await withMongod(async (ctx) => {
       const contract = new MongoContractSerializer().deserializeContract(

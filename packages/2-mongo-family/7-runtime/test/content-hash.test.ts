@@ -178,3 +178,13 @@ describe('computeMongoContentHash', () => {
     });
   });
 });
+
+describe('computeMongoContentHash with resolved wire commands', () => {
+  it('hashes resolved document values, not MongoParamRef instances', async () => {
+    const resolved: MongoExecutionPlan = {
+      meta: makeMeta(),
+      command: new InsertOneWireCommand('users', { token: 'wire-value' }),
+    };
+    await expect(computeMongoContentHash(resolved)).resolves.toMatch(/^sha512:[0-9a-f]{128}$/);
+  });
+});

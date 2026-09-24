@@ -11,9 +11,9 @@ import {
   UpdateManyCommand,
   UpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
+import { flattenMongoParamRefs } from '@internal/mongo-runtime';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
-import { flattenMongoParamRefs } from '../src/param-ref-mutator';
 
 const stubMeta = { target: 'mongo', storageHash: 'test-hash', lane: 'mongo-orm' };
 

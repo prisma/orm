@@ -1,14 +1,14 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
-import mongoRuntimeTarget from '@internal/target-mongo/runtime';
-import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   type MongoExecutionContext,
   type MongoRuntimeExtensionDescriptor,
-} from '../src/mongo-execution-stack';
+} from '@internal/mongo-runtime';
+import mongoRuntimeTarget from '@internal/target-mongo/runtime';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 const STANDARD_CODEC_IDS = [
   'mongo/objectId@1',

@@ -1,9 +1,10 @@
 import { DeleteOneCommand, MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('deleteOne integration', () => {
+describe('deleteOne integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'delete_test_users';
 
   it('deletes a matching document', async () => {

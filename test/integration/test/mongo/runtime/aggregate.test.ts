@@ -7,10 +7,11 @@ import {
   MongoMatchStage,
   MongoSortStage,
 } from '@internal/mongo-query-ast/execution';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('aggregate integration', () => {
+describe('aggregate integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'aggregate_test_orders';
 
   it('runs a typed $group aggregation pipeline', async () => {

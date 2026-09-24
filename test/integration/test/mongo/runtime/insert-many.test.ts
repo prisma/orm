@@ -1,9 +1,10 @@
 import { InsertManyCommand } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('insertMany integration', () => {
+describe('insertMany integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'insert_many_test';
 
   it('inserts multiple documents and returns insertedIds', async () => {

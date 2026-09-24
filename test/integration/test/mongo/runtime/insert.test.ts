@@ -1,9 +1,10 @@
 import { InsertOneCommand } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { withMongod } from './setup';
 
-describe('insertOne integration', () => {
+describe('insertOne integration', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
   const collectionName = 'insert_test_users';
 
   it('inserts a document and returns insertedId', async () => {

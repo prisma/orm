@@ -3,20 +3,18 @@ import type { PlanMeta } from '@internal/contract/types';
 import type { CodecCallContext } from '@internal/framework-components/codec';
 import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import { InsertOneCommand } from '@internal/mongo-query-ast/execution';
+import type { MongoMiddleware } from '@internal/mongo-runtime';
+import {
+  createMongoExecutionContext,
+  createMongoExecutionStack,
+  createMongoRuntime,
+  type MongoExecutionContext,
+} from '@internal/mongo-runtime';
 import { MongoParamRef } from '@internal/mongo-value';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
 import { InsertOneWireCommand } from '@internal/mongo-wire';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it, vi } from 'vitest';
-import { computeMongoContentHash } from '../src/content-hash';
-import type { MongoExecutionPlan } from '../src/mongo-execution-plan';
-import {
-  createMongoExecutionContext,
-  createMongoExecutionStack,
-  type MongoExecutionContext,
-} from '../src/mongo-execution-stack';
-import type { MongoMiddleware } from '../src/mongo-middleware';
-import { createMongoRuntime } from '../src/mongo-runtime';
 
 const BULK_CODEC_ID = 'test/bulk-transform';
 
@@ -221,15 +219,5 @@ describe('MongoRuntime execute param-mutator wiring', () => {
     const hashMutated = await hashAfterExecute(mutating);
     const hashIdentity = await hashAfterExecute(identity);
     expect(hashMutated).not.toBe(hashIdentity);
-  });
-});
-
-describe('computeMongoContentHash with resolved wire commands', () => {
-  it('hashes resolved document values, not MongoParamRef instances', async () => {
-    const resolved: MongoExecutionPlan = {
-      meta: baseMeta,
-      command: new InsertOneWireCommand('users', { token: 'wire-value' }),
-    };
-    await expect(computeMongoContentHash(resolved)).resolves.toMatch(/^sha512:[0-9a-f]{128}$/);
   });
 });
