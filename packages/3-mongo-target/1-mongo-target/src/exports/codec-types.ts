@@ -1,3 +1,5 @@
+import type { JsonValue } from '@internal/contract/types';
+
 export type Vector<N extends number = number> = readonly number[] & {
   readonly __vectorLength?: N;
 };
@@ -13,4 +15,8 @@ export type CodecTypes = {
     readonly input: readonly number[];
     readonly output: readonly number[];
   };
+  readonly 'mongo/int64@1': { readonly input: bigint; readonly output: bigint };
+  readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
+  readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
+  readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
 };

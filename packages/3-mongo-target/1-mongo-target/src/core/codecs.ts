@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
 import { renderTsLiteral, voidParamsSchema } from '@internal/framework-components/codec';
 import {
@@ -7,21 +8,44 @@ import {
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
 import { ifDefined } from '@internal/utils/defined';
-import { ObjectId } from 'bson';
+import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
 import {
+  binaryDecode,
+  binaryDecodeJson,
+  binaryEncode,
+  binaryEncodeJson,
+  decimal128Decode,
+  decimal128DecodeJson,
+  decimal128Encode,
+  decimal128EncodeJson,
+  decimalTextBigintLiteral,
+  int64Decode,
+  int64DecodeJson,
+  int64Encode,
+  int64EncodeJson,
+} from './bson-scalar-helpers';
+import {
+  MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
   MONGO_DATE_CODEC_ID,
+  MONGO_DECIMAL128_CODEC_ID,
   MONGO_DOUBLE_CODEC_ID,
   MONGO_INT32_CODEC_ID,
+  MONGO_INT64_CODEC_ID,
+  MONGO_JSON_CODEC_ID,
   MONGO_OBJECTID_CODEC_ID,
   MONGO_STRING_CODEC_ID,
   MONGO_VECTOR_CODEC_ID,
 } from './codec-ids';
 import {
+  mongoBinary,
   mongoBool,
   mongoDate,
+  mongoDecimal128,
   mongoDouble,
   mongoInt32,
+  mongoInt64,
+  mongoJson,
   mongoObjectId,
   mongoString,
   mongoVector,
@@ -80,6 +104,48 @@ export const mongoVectorCodec = mongoCodec({
 });
 
 /**
+ * A BSON `long`. The application value is a `bigint`, because a `number` cannot hold the full 64-bit range; its JSON form is decimal text.
+ */
+export const mongoInt64Codec = mongoCodec({
+  typeId: MONGO_INT64_CODEC_ID,
+  decode: (wire: Long | number | bigint) => int64Decode(MONGO_INT64_CODEC_ID, wire),
+  encode: (value: bigint): Long | number | bigint => int64Encode(MONGO_INT64_CODEC_ID, value),
+  encodeJson: (value: bigint) => int64EncodeJson(MONGO_INT64_CODEC_ID, value),
+  decodeJson: (json) => int64DecodeJson(MONGO_INT64_CODEC_ID, json),
+});
+
+/**
+ * A BSON `decimal`. The application value and its JSON form are the same decimal text, written without an exponent.
+ */
+export const mongoDecimal128Codec = mongoCodec({
+  typeId: MONGO_DECIMAL128_CODEC_ID,
+  decode: (wire: Decimal128) => decimal128Decode(MONGO_DECIMAL128_CODEC_ID, wire),
+  encode: (value: string) => decimal128Encode(MONGO_DECIMAL128_CODEC_ID, value),
+  encodeJson: (value: string) => decimal128EncodeJson(MONGO_DECIMAL128_CODEC_ID, value),
+  decodeJson: (json) => decimal128DecodeJson(MONGO_DECIMAL128_CODEC_ID, json),
+});
+
+/**
+ * BSON `binData`. The application value is a `Uint8Array`; its JSON form is unwrapped base64.
+ */
+export const mongoBinaryCodec = mongoCodec({
+  typeId: MONGO_BINARY_CODEC_ID,
+  decode: (wire: Binary) => binaryDecode(MONGO_BINARY_CODEC_ID, wire),
+  encode: (value: Uint8Array) => binaryEncode(MONGO_BINARY_CODEC_ID, value),
+  encodeJson: binaryEncodeJson,
+  decodeJson: (json) => binaryDecodeJson(MONGO_BINARY_CODEC_ID, json),
+});
+
+/**
+ * Any JSON value, stored as the BSON document, array or scalar it maps to.
+ */
+export const mongoJsonCodec = mongoCodec({
+  typeId: MONGO_JSON_CODEC_ID,
+  decode: (wire: JsonValue) => wire,
+  encode: (value: JsonValue) => value,
+});
+
+/**
  * The canonical set of Mongo wire-type codecs.
  *
  * Single source of truth for both control- and runtime-plane adapter descriptors. Don't duplicate this list — import it.
@@ -92,6 +158,10 @@ export const mongoStandardCodecs = [
   mongoBooleanCodec,
   mongoDateCodec,
   mongoVectorCodec,
+  mongoInt64Codec,
+  mongoDecimal128Codec,
+  mongoBinaryCodec,
+  mongoJsonCodec,
 ] as const;
 
 /**
@@ -187,6 +257,27 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
     traits: ['equality'],
     targetTypes: ['vector'],
     renderOutputType: renderVectorOutputType,
+  }),
+  descriptorFor(mongoInt64Codec, {
+    dataType: mongoInt64.id,
+    traits: ['equality', 'order', 'numeric'],
+    targetTypes: ['long'],
+    renderValueLiteral: decimalTextBigintLiteral,
+  }),
+  descriptorFor(mongoDecimal128Codec, {
+    dataType: mongoDecimal128.id,
+    traits: ['equality', 'order', 'numeric'],
+    targetTypes: ['decimal'],
+  }),
+  descriptorFor(mongoBinaryCodec, {
+    dataType: mongoBinary.id,
+    traits: ['equality'],
+    targetTypes: ['binData'],
+  }),
+  descriptorFor(mongoJsonCodec, {
+    dataType: mongoJson.id,
+    traits: [],
+    targetTypes: [],
   }),
 ];
 

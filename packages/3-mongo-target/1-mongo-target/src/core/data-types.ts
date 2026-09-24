@@ -13,6 +13,10 @@ export const mongoInt32: DataType = dataType('mongo/int32', {});
 export const mongoBool: DataType = dataType('mongo/bool', {});
 export const mongoDate: DataType = dataType('mongo/date', {});
 export const mongoVector: DataType = dataType('mongo/vector', {});
+export const mongoInt64: DataType = dataType('mongo/int64', {});
+export const mongoDecimal128: DataType = dataType('mongo/decimal128', {});
+export const mongoBinary: DataType = dataType('mongo/binary', {});
+export const mongoJson: DataType = dataType('mongo/json', {});
 
 export const mongoDataTypes: readonly DataType[] = [
   mongoObjectId,
@@ -22,4 +26,8 @@ export const mongoDataTypes: readonly DataType[] = [
   mongoBool,
   mongoDate,
   mongoVector,
+  mongoInt64,
+  mongoDecimal128,
+  mongoBinary,
+  mongoJson,
 ];

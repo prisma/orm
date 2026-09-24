@@ -18,6 +18,10 @@ const STANDARD_CODEC_IDS = [
   'mongo/bool@1',
   'mongo/date@1',
   'mongo/vector@1',
+  'mongo/int64@1',
+  'mongo/decimal128@1',
+  'mongo/binary@1',
+  'mongo/json@1',
 ];
 
 describe('createMongoExecutionStack', () => {
@@ -52,7 +56,7 @@ describe('createMongoExecutionStack', () => {
 });
 
 describe('createMongoExecutionContext', () => {
-  it('aggregates the seven standard wire-type codecs from the adapter descriptor', () => {
+  it('aggregates the standard wire-type codecs from the adapter descriptor', () => {
     const stack = createMongoExecutionStack({
       target: mongoRuntimeTarget,
       adapter: mongoRuntimeAdapter,
@@ -161,7 +165,7 @@ describe('createMongoExecutionContext', () => {
 });
 
 describe('runtime adapter descriptor', () => {
-  it('surfaces the seven standard Mongo codecs through its codecs() registry', () => {
+  it('surfaces the standard Mongo codecs through its codecs() registry', () => {
     const codecIds = [...mongoRuntimeAdapter.codecs()].map((codec) => codec.id).sort();
     expect(codecIds).toEqual([...STANDARD_CODEC_IDS].sort());
   });

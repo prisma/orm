@@ -10,6 +10,10 @@ const EXPECTED: Readonly<Record<string, string>> = {
   'mongo/bool@1': 'mongo/bool',
   'mongo/date@1': 'mongo/date',
   'mongo/vector@1': 'mongo/vector',
+  'mongo/int64@1': 'mongo/int64',
+  'mongo/decimal128@1': 'mongo/decimal128',
+  'mongo/binary@1': 'mongo/binary',
+  'mongo/json@1': 'mongo/json',
 };
 
 describe('Mongo data type inventory', () => {
