@@ -1,3 +1,4 @@
+import { rawTsquery, tsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
@@ -119,11 +120,11 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
     expect(await idsMatching('alice', 'german')).toEqual([101, 102, 106]);
   });
 
-  it('a raw string is tsquery syntax, so a word:* prefix matches every word it starts', async () => {
+  it('a raw tsquery is tsquery syntax, so a word:* prefix matches every word it starts', async () => {
     const rows = await runtime().query(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, 'manu:*'))
+        .where((f, fns) => fns.fullTextMatches(f.body, rawTsquery('manu:*')))
         .build(),
     );
     expect(rows.map((row) => row.id)).toEqual([106]);
@@ -139,15 +140,69 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
     expect(rows.map((row) => row.id).sort((a, b) => a - b)).toEqual([101, 102]);
   });
 
-  it('a malformed raw query fails at execution with the Postgres error', async () => {
+  it('a malformed raw tsquery fails at execution with the Postgres error', async () => {
     await expect(
       runtime().query(
         db()
           .public.comments.select('id')
-          .where((f, fns) => fns.fullTextMatches(f.body, 'alice &'))
+          .where((f, fns) => fns.fullTextMatches(f.body, rawTsquery('alice &')))
           .build(),
       ),
     ).rejects.toThrow(/tsquery/);
+  });
+
+  describe('the tsquery tag', () => {
+    const idsMatchingPrefix = async (term: string) => {
+      const rows = await runtime().query(
+        db()
+          .public.comments.select('id')
+          .where((f, fns) => fns.fullTextMatches(f.body, tsquery`${term}:*`))
+          .build(),
+      );
+      return rows.map((row) => row.id).sort((a, b) => a - b);
+    };
+
+    it.each([
+      ['Rep', [101, 103]],
+      ['Alice', [101, 102, 106]],
+      ['new y', []],
+      ["zebra's", []],
+      ['a&', []],
+      ['re:port', []],
+      ["x' | 'secret", []],
+      ['', []],
+      ['the', []],
+    ])('runs the typed term %o as one normalized prefix term, without error', async (term, ids) => {
+      expect(await idsMatchingPrefix(term)).toEqual(ids);
+    });
+
+    it("keeps the application's operators when the value carries its own", async () => {
+      const idsFor = async (term: string) => {
+        const rows = await runtime().query(
+          db()
+            .public.comments.select('id')
+            .where((f, fns) => fns.fullTextMatches(f.body, tsquery`${term}:* & 'report'`))
+            .build(),
+        );
+        return rows.map((row) => row.id);
+      };
+
+      expect(await idsFor('bob')).toEqual([103]);
+      expect(await idsFor("bob' | 'alice")).toEqual([]);
+    });
+  });
+
+  it('a selected parser expression reads back as the normalized tsquery text', async () => {
+    const row = await runtime()
+      .query(
+        db()
+          .public.comments.select('id')
+          .select('query', (_f, fns) => fns.websearchToTsquery('The zebras grazed'))
+          .where((f, fns) => fns.eq(f.id, 101))
+          .build(),
+      )
+      .firstOrThrow();
+    expect(row).toEqual({ id: 101, query: "'zebra' & 'graze'" });
   });
 
   it('fullTextRank ranks the row with more occurrences first', async () => {

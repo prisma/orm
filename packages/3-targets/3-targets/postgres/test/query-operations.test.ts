@@ -5,6 +5,7 @@ import { POSTGRES_TEXT_SEARCH_LANGUAGES } from '../src/core/text-search-language
 import {
   phrasetoTsquery,
   plaintoTsquery,
+  rawTsquery,
   toTsquery,
   websearchToTsquery,
 } from '../src/exports/full-text';
@@ -69,12 +70,10 @@ describe('postgres target query operations', () => {
       expect(ast.returns).toEqual({ codecId: returnCodecId, nullable: false });
     });
 
-    it('binds a raw string as a pg/tsquery@1 parameter, unchanged', () => {
-      const queryArg = buildOpAst(method, TEXT_COLUMN, 'zeb:*').args[0];
+    it('binds a raw tsquery as a pg/tsquery@1 parameter, unchanged', () => {
+      const queryArg = buildOpAst(method, TEXT_COLUMN, rawTsquery('zeb:*')).args[0];
 
-      expect(queryArg).toBeInstanceOf(ParamRef);
-      expect((queryArg as ParamRef).value).toBe('zeb:*');
-      expect((queryArg as ParamRef).codec?.codecId).toBe('pg/tsquery@1');
+      expect(queryArg).toEqual(ParamRef.of('zeb:*', { codec: { codecId: 'pg/tsquery@1' } }));
     });
 
     it('embeds a tsquery expression as the query argument without binding a parameter', () => {

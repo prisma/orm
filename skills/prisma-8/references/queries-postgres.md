@@ -62,12 +62,19 @@ db.orm.public.User.where({ kind: 'admin' });
 
 Operators on the field proxy include `.eq`, `.neq`, `.lt`, `.lte`, `.gt`, `.gte`, `.like`, `.ilike`, `.in([...])`, `.isNull()`, `.isNotNull()`. Extensions add target-specific operators on extension-typed columns (`pgvector`'s `.cosineDistance(...)`, `postgis`'s `.within(...)` / `.intersectsBbox(...)` / `.distanceSphere(...)`).
 
-**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The argument `q` is a `tsquery`: either an expression from one of the four Postgres parsers, or a raw string in Postgres `tsquery` syntax. The parsers live in `@prisma/orm-postgres/target/full-text` for the ORM and are `fns` members in the SQL builder; each takes the text (a string or a text column) and `{ language? }`, and binds the text as a parameter. `websearchToTsquery` is the one for a search box: `"an exact phrase"`, `-excluded` and `or` work and it never errors. `toTsquery` takes operator syntax (`'zebra' & !'graze'`, `zeb:*`) and errors on malformed input; `plaintoTsquery` requires every word; `phrasetoTsquery` requires the words in order. A raw string skips the parser: it binds as a `tsquery` parameter and Postgres reads it as `tsquery` syntax, and applies no language configuration to it, so it is neither lowercased nor stemmed; it is compared against the stems in the vector exactly as written. `fullTextMatches('reports')` finds nothing in a text containing "reports", because the vector holds the stem `report`. The caller lowercases and, for a prefix match, passes the beginning of the stemmed word: `rep:*` finds "report" and "reports", while `Rep:*` and `reports` find nothing. That is how to get a typeahead prefix match without a parser, `` fullTextMatches(`${term}:*`) ``, or to pass a query an in-app DSL built. If you want operators and stemming, `toTsquery` is the parser that normalizes operator syntax. Malformed raw input fails at execution with the Postgres error; nothing validates or rewrites it first.
+**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The argument `q` is a `tsquery`, built with a helper from `@prisma/orm-postgres/target/full-text`. A bare string is a type error, because Postgres would read it as `tsquery` syntax without lowercasing or stemming it. Pick the helper by where the text comes from:
 
-Each operation takes an options object as its second argument. `language` (default `'english'`) is the configuration for the column's `to_tsvector`, the expression the index covers; the parser's own `language` governs the query side, and the two normally match. It only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
+- A search box: `websearchToTsquery(input)`. `"an exact phrase"`, `-excluded` and `or` work, and it never errors. `plaintoTsquery` requires every word; `phrasetoTsquery` requires the words in order.
+- User input inside operator syntax, such as typeahead: the `tsquery` tag, `` tsquery`${term}:*` ``. The literal parts are trusted `tsquery` syntax you write. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax; an empty value adds no words, like a stop word. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
+- Operator syntax you write in full: `toTsquery("'zebra' & !'graze'")`. Malformed text fails at execution, so never pass user input to it.
+- Already-normalized `tsquery` text, such as the output of an in-app query builder: `rawTsquery(text)`. Postgres does not lowercase or stem it, so `rawTsquery('reports')` finds nothing in a text containing "reports" (the vector holds the stem `report`). Malformed text fails at execution, so never pass user input to it.
+
+The four parsers are also `fns` members in the SQL builder. Each takes the text (a string or a `text` column, not a `varchar` column) and `{ language? }`, and binds the text as a parameter. The `tsquery` tag and `rawTsquery` are imports in both the ORM and the SQL builder.
+
+Each operation takes an options object as its second argument. `language` (default `'english'`) is the configuration for the column's `to_tsvector`, the expression the index covers; the parser's or tag's own `language` governs the query side, and the two normally match. It only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
 
 ```typescript
-import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
+import { tsquery, websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 
 // ORM: filter by the search-box query, order by relevance.
 const hits = await db.orm.public.Message
@@ -77,10 +84,10 @@ const hits = await db.orm.public.Message
   .limit(20)
   .all();
 
-// ORM: typeahead, a raw prefix query.
+// ORM: typeahead, the typed text as a prefix term.
 const suggestions = await db.orm.public.Message
   .select('id', 'text')
-  .where((m) => m.text.fullTextMatches(`${term}:*`))
+  .where((m) => m.text.fullTextMatches(tsquery`${term}:*`))
   .all();
 
 // SQL builder: the parsers are fns; a snippet with your own markers.

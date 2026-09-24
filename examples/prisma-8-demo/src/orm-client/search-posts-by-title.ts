@@ -9,8 +9,8 @@ import { createOrmClient } from './client';
  * expression the `@@fullTextIndex` on `Post` indexes, so the search hits the
  * GIN index. `websearchToTsquery` turns the search-box string into the query:
  * a bound parameter, parsed by `websearch_to_tsquery`, so `"an exact phrase"`,
- * `-excluded` and `or` work. A raw string would be `tsquery` syntax instead,
- * e.g. `'zeb:*'` for a prefix match.
+ * `-excluded` and `or` work. For a typeahead prefix match, the `tsquery` tag
+ * quotes the typed text as one term: `` tsquery`${term}:*` ``.
  */
 export async function ormClientSearchPostsByTitle(query: string, limit: number, runtime: Runtime) {
   const db = createOrmClient(runtime);

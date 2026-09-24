@@ -22,14 +22,14 @@ import {
 } from '@internal/adapter-postgres/control';
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { websearchToTsquery } from '@internal/target-postgres/full-text';
+import { rawTsquery, tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
 const QUERY = 'zebra';
-const PREFIX_QUERY = 'zeb:*';
+const PREFIX_QUERY = rawTsquery('zeb:*');
 
 /** Every `Index Name` anywhere in an EXPLAIN plan tree. */
 function indexNames(node: unknown): readonly string[] {
@@ -158,7 +158,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(lowered.params).toEqual([QUERY]);
   });
 
-  it('lowers a raw string to a bound tsquery parameter over the same index expression', () => {
+  it('lowers a raw tsquery to a bound tsquery parameter over the same index expression', () => {
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
@@ -198,6 +198,28 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
         db()
           .public.comments.select('id')
           .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+          .build(),
+      ),
+    ).toHaveLength(6);
+  });
+
+  it('uses the index for a query built with the tsquery tag', async () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, tsquery`${'Zeb'}:*`))
+        .build(),
+    );
+
+    expect(lowered.sql).toContain(`to_tsvector('english', "body") @@ to_tsquery('english', $1)`);
+    expect(lowered.params).toEqual(["'Zeb':*"]);
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));
+    expect(
+      await runtime().query(
+        db()
+          .public.comments.select('id')
+          .where((f, fns) => fns.fullTextMatches(f.body, tsquery`${'Zeb'}:*`))
           .build(),
       ),
     ).toHaveLength(6);

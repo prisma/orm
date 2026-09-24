@@ -1,5 +1,6 @@
 import type { BooleanCodecType, Expression } from '@internal/sql-builder/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import { type RawTsquery, rawTsquery, tsquery } from '@internal/target-postgres/full-text';
 import { expectTypeOf, test } from 'vitest';
 import { db } from './preamble';
 
@@ -66,8 +67,17 @@ test('the parsers are fns returning a non-nullable tsquery expression', () => {
   });
 });
 
-test('the query is a parser expression or raw tsquery text, never another type', () => {
-  db.public.users.select('id').where((f, fns) => fns.fullTextMatches(f.name, 'ali:*'));
+test('the query is a tsquery from a parser, the tsquery tag or rawTsquery, never another type', () => {
+  db.public.users.select('id').where((f, fns) => fns.fullTextMatches(f.name, rawTsquery('ali:*')));
+  db.public.users
+    .select('id')
+    .select('rank', (f, fns) => fns.fullTextRank(f.name, tsquery`${'ali'}:*`))
+    .select('snippet', (f, fns) => fns.fullTextHeadline(f.name, tsquery`${'ali'}:*`))
+    .where((f, fns) => fns.fullTextMatches(f.name, tsquery`${'ali'}:*`));
+  db.public.users
+    .select('id')
+    // @ts-expect-error a bare string is not a tsquery; parse it or mark it with rawTsquery
+    .where((f, fns) => fns.fullTextMatches(f.name, 'ali:*'));
   db.public.users
     .select('id')
     // @ts-expect-error a number is neither a tsquery expression nor tsquery text
@@ -78,11 +88,19 @@ test('the query is a parser expression or raw tsquery text, never another type',
     .where((f, fns) => fns.fullTextMatches(f.name, f.name));
 });
 
+test('a selected parser expression reads back as a raw tsquery', () => {
+  const plan = db.public.users
+    .select('query', (_f, fns) => fns.websearchToTsquery('alice'))
+    .build();
+
+  expectTypeOf(plan).toEqualTypeOf<SqlQueryPlan<{ query: RawTsquery }>>();
+});
+
 test('fullTextRank returns a non-nullable float4 expression', () => {
   const ranked = db.public.users
     .select('id')
     .select('rank', (f, fns) => {
-      const result = fns.fullTextRank(f.name, 'alice');
+      const result = fns.fullTextRank(f.name, fns.websearchToTsquery('alice'));
       expectTypeOf(result).toEqualTypeOf<Expression<{ codecId: 'pg/float4@1'; nullable: false }>>();
       return result;
     })
@@ -95,7 +113,7 @@ test('fullTextHeadline returns a non-nullable text expression', () => {
   const headlined = db.public.users
     .select('id')
     .select('snippet', (f, fns) => {
-      const result = fns.fullTextHeadline(f.name, 'alice');
+      const result = fns.fullTextHeadline(f.name, fns.websearchToTsquery('alice'));
       expectTypeOf(result).toEqualTypeOf<Expression<{ codecId: 'pg/text@1'; nullable: false }>>();
       return result;
     })
@@ -107,27 +125,33 @@ test('fullTextHeadline returns a non-nullable text expression', () => {
 test('the language argument is one of the configurations Postgres ships with', () => {
   db.public.users
     .select('id')
-    .where((f, fns) => fns.fullTextMatches(f.name, 'alice', { language: 'german' }));
+    .where((f, fns) =>
+      fns.fullTextMatches(f.name, fns.websearchToTsquery('alice'), { language: 'german' }),
+    );
 
-  db.public.users
-    .select('id')
+  db.public.users.select('id').where((f, fns) =>
     // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
-    .where((f, fns) => fns.fullTextMatches(f.name, 'alice', { language: 'klingon' }));
+    fns.fullTextMatches(f.name, fns.websearchToTsquery('alice'), { language: 'klingon' }),
+  );
 });
 
 test('rank and headline options are typed', () => {
   db.public.users
     .select('id')
-    .select('rank', (f, fns) => fns.fullTextRank(f.name, 'alice', { normalization: 32 }))
-    .select('snippet', (f, fns) => fns.fullTextHeadline(f.name, 'alice', { startSel: '<mark>' }));
+    .select('rank', (f, fns) =>
+      fns.fullTextRank(f.name, fns.websearchToTsquery('alice'), { normalization: 32 }),
+    )
+    .select('snippet', (f, fns) =>
+      fns.fullTextHeadline(f.name, fns.websearchToTsquery('alice'), { startSel: '<mark>' }),
+    );
 
-  db.public.users
-    .select('id')
+  db.public.users.select('id').select('rank', (f, fns) =>
     // @ts-expect-error normalization is a number, not a word
-    .select('rank', (f, fns) => fns.fullTextRank(f.name, 'alice', { normalization: 'high' }));
+    fns.fullTextRank(f.name, fns.websearchToTsquery('alice'), { normalization: 'high' }),
+  );
 
-  db.public.users
-    .select('id')
+  db.public.users.select('id').select('snippet', (f, fns) =>
     // @ts-expect-error startSel is the marker text, not a number
-    .select('snippet', (f, fns) => fns.fullTextHeadline(f.name, 'alice', { startSel: 1 }));
+    fns.fullTextHeadline(f.name, fns.websearchToTsquery('alice'), { startSel: 1 }),
+  );
 });

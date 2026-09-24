@@ -135,6 +135,7 @@ import { pgTimestamptzDateDescriptor } from './date-codecs';
 import { postgresError } from './errors';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { PostgresNativeEnum } from './postgres-native-enum';
+import { rawTsquery } from './raw-tsquery';
 import {
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
@@ -1376,30 +1377,41 @@ pgInetColumn satisfies ColumnHelperForStrict<PgInetDescriptor>;
 
 const PG_TSQUERY_NATIVE_TYPE = 'tsquery';
 
+/**
+ * The same type as `RawTsquery`, declared again rather than imported: a named, exported type in
+ * `CodecTypes` makes every consumer declaration that expands `CodecTypes` reference a private
+ * build chunk (TS2742). `full-text.test-d.ts` checks that the two stay equal.
+ */
+type TsqueryText = string & { readonly __rawTsquery: true };
+
 export class PgTsqueryCodec extends CodecImpl<
   typeof PG_TSQUERY_CODEC_ID,
-  readonly ['equality', 'order'],
+  readonly [],
   string,
-  string
+  TsqueryText
 > {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+  async encode(value: TsqueryText, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
+  async decode(wire: string, _ctx: CodecCallContext): Promise<TsqueryText> {
+    return rawTsquery(wire);
   }
-  encodeJson(value: string): JsonValue {
+  encodeJson(value: TsqueryText): JsonValue {
     return value;
   }
-  decodeJson(json: JsonValue): string {
-    return blindCast<string, 'tsquery values serialize to JSON as their wire string form'>(json);
+  decodeJson(json: JsonValue): TsqueryText {
+    return blindCast<TsqueryText, 'tsquery values serialize to JSON as their wire string form'>(
+      json,
+    );
   }
 }
 
 /**
- * The type of a full-text query: what the parsers in `full-text` return and what a raw string
- * passed to `fullTextMatches`, `fullTextRank` or `fullTextHeadline` binds as. It has no column
- * helper, because a contract cannot author a `tsquery` column.
+ * The type of a full-text query: what the parsers in `full-text` return and what a `rawTsquery`
+ * passed to `fullTextMatches`, `fullTextRank` or `fullTextHeadline` binds as. Its application value
+ * is a branded string, so a bare string is not accepted where a query is expected. It has no column
+ * helper, because a contract cannot author a `tsquery` column, and no traits, because comparing or
+ * ordering queries means nothing to an application.
  */
 export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
   protected override nativeType(): string {
@@ -1410,7 +1422,7 @@ export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
   }
   override readonly dataType = pgTsquery.id;
   override readonly codecId = PG_TSQUERY_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
+  override readonly traits = [] as const;
   override readonly targetTypes = ['tsquery'] as const;
   override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
   override factory(): (ctx: CodecInstanceContext) => PgTsqueryCodec {

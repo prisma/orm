@@ -5,7 +5,7 @@ import {
   type ScopeField,
 } from '@internal/sql-relational-core/expression';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
-import { websearchToTsquery } from '@internal/target-postgres/full-text';
+import { rawTsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import postgresTargetDescriptor from '@internal/target-postgres/runtime';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -68,8 +68,8 @@ function lowerWhere(query: unknown) {
 }
 
 describe('full-text lowering', () => {
-  it('binds a raw string as a tsquery-cast parameter', () => {
-    const lowered = lowerWhere('zeb:*');
+  it('binds a raw tsquery as a tsquery-cast parameter', () => {
+    const lowered = lowerWhere(rawTsquery('zeb:*'));
 
     expect(lowered).toEqual({
       sql: `SELECT id FROM "post" WHERE to_tsvector('english', "post"."title") @@ $1::tsquery`,

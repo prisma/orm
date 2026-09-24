@@ -9,7 +9,7 @@ import type {
   FullTextMatchesOptions,
   FullTextRankOptions,
 } from '../core/full-text-options';
-import type { TextInput, TsqueryParserOptions } from '../core/full-text-parsers';
+import type { websearchToTsquery } from '../core/full-text-parsers';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
@@ -21,16 +21,12 @@ type TextArgument<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', fals
 
 /**
  * The query side of a full-text operation: a `tsquery` expression from one of the parsers in
- * `full-text`, or a raw string in Postgres `tsquery` syntax, bound as a `tsquery` parameter.
+ * `full-text`, or text marked with `rawTsquery`, bound as a `tsquery` parameter. A bare string is
+ * not accepted.
  */
 export type TsqueryArgument<CT extends CodecTypesBase> = CodecExpression<'pg/tsquery@1', false, CT>;
 
-type TsqueryParser = {
-  readonly impl: (
-    text: TextInput,
-    options?: TsqueryParserOptions,
-  ) => Expression<{ codecId: 'pg/tsquery@1'; nullable: false }>;
-};
+type TsqueryParser = { readonly impl: typeof websearchToTsquery };
 
 export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTypes<
   CT,

@@ -447,7 +447,10 @@ describe('adapter-postgres codecs', () => {
       const resolved = postgresCodecRegistry.descriptorFor('pg/tsquery@1');
       expect(resolved).toBe(pgTsqueryDescriptor);
       expect(resolved?.targetTypes).toEqual(['tsquery']);
-      expect(resolved?.traits).not.toContain('textual');
+    });
+
+    it('claims no traits, so no comparison, ordering or text operation applies to a tsquery', () => {
+      expect(postgresCodecRegistry.descriptorFor('pg/tsquery@1')?.traits).toEqual([]);
     });
   });
 });

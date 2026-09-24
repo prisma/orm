@@ -1,5 +1,12 @@
 import type { ComparisonMethods, ModelAccessor } from '@internal/sql-orm-client';
-import { websearchToTsquery } from '@internal/target-postgres/full-text';
+import {
+  phrasetoTsquery,
+  plaintoTsquery,
+  rawTsquery,
+  toTsquery,
+  tsquery,
+  websearchToTsquery,
+} from '@internal/target-postgres/full-text';
 import { describe, expectTypeOf, test } from 'vitest';
 import type { Contract } from './fixtures/generated/contract';
 
@@ -157,6 +164,13 @@ describe('full-text search operations on text fields', () => {
     expectTypeOf<PostAccessor['embedding']>().not.toHaveProperty('fullTextMatches');
   });
 
+  test('the tsquery parsers are not field methods', () => {
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('websearchToTsquery');
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('toTsquery');
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('plaintoTsquery');
+    expectTypeOf<PostAccessor['title']>().not.toHaveProperty('phrasetoTsquery');
+  });
+
   test('fullTextMatches returns a predicate expression', () => {
     type Fn = PostAccessor['title']['fullTextMatches'];
     expectTypeOf<Fn>().toBeFunction();
@@ -178,20 +192,33 @@ describe('full-text search operations on text fields', () => {
     expectTypeOf<HeadlineResult>().toHaveProperty('like');
   });
 
-  test('the query is a tsquery expression from a parser, or a raw tsquery string', () => {
+  test('the query is a tsquery from a parser, the tsquery tag or rawTsquery, never a bare string', () => {
     const title = null as unknown as PostAccessor['title'];
     title.fullTextMatches(websearchToTsquery('alice'));
+    title.fullTextMatches(toTsquery('alice & !bob'));
+    title.fullTextMatches(plaintoTsquery('alice bob'));
+    title.fullTextMatches(phrasetoTsquery('alice wrote'));
     title.fullTextRank(websearchToTsquery('alice', { language: 'german' }), { language: 'german' });
-    title.fullTextHeadline('ali:*');
+    title.fullTextHeadline(rawTsquery('ali:*'));
+    title.fullTextMatches(tsquery`${'ali'}:*`);
+    title.fullTextRank(tsquery({ language: 'german' })`${'ali'}:*`, { language: 'german' });
+    title.fullTextHeadline(tsquery`${'ali'}:*`);
+    // @ts-expect-error a bare string is not a tsquery; parse it or mark it with rawTsquery
+    title.fullTextMatches('alice');
+    // @ts-expect-error the same holds for rank
+    title.fullTextRank('alice');
     // @ts-expect-error a number is neither a tsquery expression nor tsquery text
     title.fullTextMatches(42);
+    // @ts-expect-error a text column is not a tsquery; parse it first
+    title.fullTextMatches(title);
   });
 
   test('the language argument is one of the configurations Postgres ships with', () => {
     const title = null as unknown as PostAccessor['title'];
-    title.fullTextMatches('alice', { language: 'german' });
+    const query = websearchToTsquery('alice');
+    title.fullTextMatches(query, { language: 'german' });
     // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
-    title.fullTextMatches('alice', { language: 'klingon' });
+    title.fullTextMatches(query, { language: 'klingon' });
     // @ts-expect-error the parser checks its language the same way
     websearchToTsquery('alice', { language: 'klingon' });
   });

@@ -119,9 +119,16 @@ Pack refs are pure JSON-friendly objects that make TypeScript contract authoring
 
 This package contributes the built-in Postgres query operations — `ilike`, and the three full-text search operations below — through `queryOperations` on its runtime descriptor, with their types on `./operation-types`. Emitted `contract.d.ts` files import them from there.
 
-`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take a `tsquery` as their first argument: an expression from one of the four parser helpers on `./full-text` (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`, each taking text and `{ language? }`, binding the text as a parameter and lowering to the Postgres function of the same name), or a raw string, which binds as a `pg/tsquery@1` parameter and is read by Postgres as `tsquery` syntax. Postgres applies no language configuration to a raw string, so it is neither lowercased nor stemmed: it is compared against the stems in the vector exactly as written. The caller lowercases and, for a prefix match, passes the beginning of the stemmed word, `` fullTextMatches(`${term}:*`) ``: `rep:*` finds "report" and "reports", while `Rep:*` and `reports` find nothing. `toTsquery` is the parser to use for operator syntax with stemming. Malformed raw input fails at execution with the Postgres error. The same four parsers are registered as self-less query operations, so the SQL builder's `fns` exposes them by name; the ORM reaches them through the import.
+`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take a `tsquery` as their first argument. A bare string is a type error: Postgres would read it as `tsquery` syntax without lowercasing or stemming it, so a search-box string would match nothing or fail. Build the query with a helper from `./full-text`:
 
-Each takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's `language` governs the query side); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
+- `websearchToTsquery(text)` for a search box: quotes, `or` and `-` work, and it never errors. `plaintoTsquery` requires every word, and `phrasetoTsquery` requires the words in order.
+- `` tsquery`${term}:*` `` for `tsquery` operator syntax around user input, such as a typeahead prefix match. The literal parts are trusted syntax the application writes. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax. An empty value adds no words, like a stop word. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
+- `toTsquery(text)` for operator syntax the application writes in full, such as `'zebra' & !'graze'`. Malformed text fails at execution, so never pass user input; use the `tsquery` tag instead.
+- `rawTsquery(text)` for `tsquery` text that is already normalized, such as the output of a query builder in the application. Postgres does not lowercase or stem it, and malformed text fails at execution, so never pass user input; use the `tsquery` tag instead.
+
+The four parsers take text (a string or a `pg/text@1` expression, not a `varchar` column) and `{ language? }`, bind the text as a parameter, and lower to the Postgres function of the same name. They are also registered as query operations that attach to no column, so the SQL builder's `fns` has them by name; the ORM reaches them, and the `tsquery` tag, through the import.
+
+Each operation takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's or tag's own `language` governs the query side, and a `rawTsquery` gets none); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
 
 ```typescript
 row.text.fullTextRank(websearchToTsquery(query, { language: 'german' }), {
@@ -141,7 +148,7 @@ Postgres takes no parameter in any of those positions, so every option is writte
 Through the ORM:
 
 ```typescript
-import { websearchToTsquery } from '@internal/target-postgres/full-text';
+import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 
 const hits = await db.orm.public.Message.select('id', 'text')
   .where((row) => row.text.fullTextMatches(websearchToTsquery(query)))
@@ -150,7 +157,7 @@ const hits = await db.orm.public.Message.select('id', 'text')
   .all();
 
 const suggestions = await db.orm.public.Message.select('id', 'text')
-  .where((row) => row.text.fullTextMatches(`${term}:*`))
+  .where((row) => row.text.fullTextMatches(tsquery`${term}:*`))
   .all();
 ```
 
@@ -223,7 +230,8 @@ Postgres prints a `timestamptz` value in the session's time zone, and dates and 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`
 - `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
-- `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, plus `FullTextSearchLanguage`
+- `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, and the types their signatures name (`TsqueryArgument`, the `FullText*Options` types, `FullTextSearchLanguage`)
+- `./full-text`: what an application calls to build a full-text query: the four parsers, the `tsquery` tag, `rawTsquery`, and their types
 - `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 
 ## Tests

@@ -21,8 +21,8 @@ export type TsqueryExpression = Expression<{
   nullable: false;
 }>;
 
-/** A string, or a text expression such as a column. */
-export type TextInput = CodecExpression<
+/** What a parser parses: a string, or a non-null `pg/text@1` expression such as a `text` column. */
+export type TextArgument = CodecExpression<
   typeof PG_TEXT_CODEC_ID,
   false,
   { readonly [PG_TEXT_CODEC_ID]: { readonly input: string } }
@@ -31,7 +31,7 @@ export type TextInput = CodecExpression<
 const TEXT_REF = { codecId: PG_TEXT_CODEC_ID } as const;
 
 function parser(method: string, fn: string) {
-  return (text: TextInput, options: TsqueryParserOptions = {}): TsqueryExpression =>
+  return (text: TextArgument, options: TsqueryParserOptions = {}): TsqueryExpression =>
     buildOperation({
       method,
       args: [
@@ -43,14 +43,29 @@ function parser(method: string, fn: string) {
     });
 }
 
-/** Postgres `websearch_to_tsquery`: search-box syntax with quotes, `or` and `-`. Never errors. */
+/**
+ * Postgres `websearch_to_tsquery`: search-box syntax with quotes, `or` and `-`. Never errors. The
+ * text is a string or a `pg/text@1` expression; other textual types, such as `varchar`, are not
+ * accepted.
+ */
 export const websearchToTsquery = parser('websearchToTsquery', 'websearch_to_tsquery');
 
-/** Postgres `to_tsquery`: operator syntax (`'zebra' & !'graze'`, `zeb:*`). Malformed input fails at execution. */
+/**
+ * Postgres `to_tsquery`: operator syntax (`'zebra' & !'graze'`, `zeb:*`), each word normalized.
+ * Malformed input fails at execution, so pass only text the application wrote, never user input;
+ * `tsquery` interpolates user input safely. The text is a string or a `pg/text@1` expression; other
+ * textual types, such as `varchar`, are not accepted.
+ */
 export const toTsquery = parser('toTsquery', 'to_tsquery');
 
-/** Postgres `plainto_tsquery`: every word must match. */
+/**
+ * Postgres `plainto_tsquery`: every word must match. The text is a string or a `pg/text@1`
+ * expression; other textual types, such as `varchar`, are not accepted.
+ */
 export const plaintoTsquery = parser('plaintoTsquery', 'plainto_tsquery');
 
-/** Postgres `phraseto_tsquery`: the words must match in order. */
+/**
+ * Postgres `phraseto_tsquery`: the words must match in order. The text is a string or a `pg/text@1`
+ * expression; other textual types, such as `varchar`, are not accepted.
+ */
 export const phrasetoTsquery = parser('phrasetoTsquery', 'phraseto_tsquery');

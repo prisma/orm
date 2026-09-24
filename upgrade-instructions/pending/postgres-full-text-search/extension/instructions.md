@@ -25,4 +25,4 @@ import type { QueryOperationTypes } from '@internal/target-postgres/operation-ty
 
 Under the published facade, `@prisma/orm-postgres/adapter/operation-types` becomes `@prisma/orm-postgres/target/operation-types`. Emitted contracts name the target import under the alias `PgTargetQueryOps` instead of `PgAdapterQueryOps`, so a snapshot or fixture that pins emitted contract text needs regenerating.
 
-The type's shape is unchanged apart from three added operations — `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, all on `textual` columns — so an extension that intersects its own `QueryOperationTypes` with the Postgres one needs no other edit.
+The type's shape is unchanged apart from added operations — `fullTextMatches`, `fullTextRank` and `fullTextHeadline` on `textual` columns, and the parsers `websearchToTsquery`, `toTsquery`, `plaintoTsquery` and `phrasetoTsquery`, which attach to no column — so an extension that intersects its own `QueryOperationTypes` with the Postgres one needs no other edit.

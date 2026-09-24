@@ -1,4 +1,9 @@
-import { websearchToTsquery } from '@internal/target-postgres/full-text';
+import {
+  rawTsquery,
+  toTsquery,
+  tsquery,
+  websearchToTsquery,
+} from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
 import { createPostsCollection, timeouts, withCollectionRuntime } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
@@ -136,14 +141,14 @@ describe('integration/full-text-search operations', () => {
   );
 
   it(
-    'a raw string is tsquery syntax, so a word:* prefix matches every word it starts',
+    'a raw tsquery is tsquery syntax, so a word:* prefix matches every word it starts',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seedSearchablePosts(runtime);
 
         const results = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches('rep:*'))
+          .where((p) => p.title.fullTextMatches(rawTsquery('rep:*')))
           .orderBy((p) => p.id.asc())
           .all();
 
@@ -151,6 +156,107 @@ describe('integration/full-text-search operations', () => {
           { id: 1, title: 'alice wrote the report' },
           { id: 3, title: 'bob wrote the report' },
         ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'toTsquery takes operator syntax and normalizes its words',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        const results = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches(toTsquery('Alice & !bob')))
+          .orderBy((p) => p.id.asc())
+          .all();
+
+        expect(results).toEqual([
+          { id: 1, title: 'alice wrote the report' },
+          { id: 2, title: 'alice met alice and alice again' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'the tsquery tag runs typed terms as one normalized prefix term each, without error',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+        const idsMatchingPrefix = async (term: string) =>
+          (
+            await createPostsCollection(runtime)
+              .select('id')
+              .where((p) => p.title.fullTextMatches(tsquery`${term}:*`))
+              .orderBy((p) => p.id.asc())
+              .all()
+          ).map((post) => post.id);
+
+        const results: Record<string, number[]> = {};
+        for (const term of [
+          'Rep',
+          'new y',
+          "zebra's",
+          'a&',
+          're:port',
+          "x' | 'secret",
+          '',
+          'the',
+        ]) {
+          results[term] = await idsMatchingPrefix(term);
+        }
+
+        expect(results).toEqual({
+          Rep: [1, 3],
+          'new y': [],
+          "zebra's": [],
+          'a&': [],
+          're:port': [],
+          "x' | 'secret": [],
+          '': [],
+          the: [],
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    "the tsquery tag keeps the application's operators when the value carries its own",
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+        const idsFor = async (term: string) =>
+          (
+            await createPostsCollection(runtime)
+              .select('id')
+              .where((p) => p.title.fullTextMatches(tsquery`${term}:* & 'report'`))
+              .all()
+          ).map((post) => post.id);
+
+        expect(await idsFor('bob')).toEqual([3]);
+        expect(await idsFor("bob' | 'alice")).toEqual([]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a malformed raw tsquery fails at execution with the Postgres error',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        await expect(
+          createPostsCollection(runtime)
+            .select('id')
+            .where((p) => p.title.fullTextMatches(rawTsquery('alice &')))
+            .all(),
+        ).rejects.toThrow(/tsquery/);
       });
     },
     timeouts.spinUpPpgDev,
