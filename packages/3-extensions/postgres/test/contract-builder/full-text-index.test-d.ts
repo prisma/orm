@@ -5,7 +5,7 @@
  */
 import type { ColumnRef, ContractModelBuilder } from '@internal/sql-contract-ts/contract-builder';
 import { expectTypeOf, test } from 'vitest';
-import { field, fullTextIndex, model } from '../../src/exports/contract-builder';
+import { defineContract, field, fullTextIndex, model } from '../../src/exports/contract-builder';
 
 const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
 const textColumn = { codecId: 'pg/text@1', nativeType: 'text' } as const;
@@ -73,4 +73,16 @@ test('a fullTextIndex and a constraints.index with the same name are rejected', 
     ],
   }));
   expectTypeOf<IsNever<SqlSpecOf<typeof message>>>().toEqualTypeOf<true>();
+});
+
+test('defineContract rejects a model whose sql() stage reuses an index name', () => {
+  const message = model('Message', { fields }).sql({
+    table: 'message',
+    indexes: [
+      fullTextIndex(text, { name: 'message_search' }),
+      fullTextIndex(text, { language: 'german', name: 'message_search' }),
+    ],
+  });
+  // @ts-expect-error the sql() stage resolved to never
+  defineContract({ models: { Message: message } });
 });

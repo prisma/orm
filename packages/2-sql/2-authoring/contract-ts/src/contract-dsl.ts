@@ -1444,32 +1444,91 @@ type ModelNamedObjects<
   SqlSpec extends SqlStageSpec | undefined,
 > = [...AttributeUniques<AttributesSpec>, ...SqlIndexes<SqlSpec>, ...SqlForeignKeys<SqlSpec>];
 
-type HasDuplicateModelNames<
+type InlineUniqueLiteralName<Field> =
+  FieldStateOf<Field> extends {
+    readonly unique: { readonly name?: infer Name };
+  }
+    ? StaticLiteralName<Name>
+    : never;
+
+type RelationForeignKeyLiteralName<Relation> =
+  RelationStateOf<Relation> extends {
+    readonly sql?: infer Spec;
+  }
+    ? Spec extends { readonly fk?: { readonly name?: infer Name } }
+      ? StaticLiteralName<Name>
+      : never
+    : never;
+
+type ModelLiteralNamesBySource<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   AttributesSpec extends ModelAttributesSpec | undefined,
   SqlSpec extends SqlStageSpec | undefined,
-> = [DuplicateLiteralNames<ModelNamedObjects<AttributesSpec, SqlSpec>>] extends [never]
-  ? [
-      Extract<
-        ModelIdLiteralName<Fields, AttributesSpec>,
-        NamedConstraintLiteralName<ModelNamedObjects<AttributesSpec, SqlSpec>[number]>
-      >,
-    ] extends [never]
-    ? false
-    : true
+> = {
+  readonly [FieldName in keyof Fields & string as `field:${FieldName}`]: InlineUniqueLiteralName<
+    Fields[FieldName]
+  >;
+} & {
+  readonly [RelationName in keyof Relations &
+    string as `relation:${RelationName}`]: RelationForeignKeyLiteralName<Relations[RelationName]>;
+} & {
+  readonly id: ModelIdLiteralName<Fields, AttributesSpec>;
+  readonly stages: NamedConstraintLiteralName<ModelNamedObjects<AttributesSpec, SqlSpec>[number]>;
+};
+
+type LiteralNamesInMoreThanOneSource<NamesBySource> = {
+  readonly [Source in keyof NamesBySource]: NamesBySource[Source] &
+    NamesBySource[Exclude<keyof NamesBySource, Source>];
+}[keyof NamesBySource];
+
+type HasDuplicateModelNames<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [
+  | DuplicateLiteralNames<ModelNamedObjects<AttributesSpec, SqlSpec>>
+  | LiteralNamesInMoreThanOneSource<
+      ModelLiteralNamesBySource<Fields, Relations, AttributesSpec, SqlSpec>
+    >,
+] extends [never]
+  ? false
   : true;
 
 type ValidateSqlStageSpec<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   AttributesSpec extends ModelAttributesSpec | undefined,
   SqlSpec extends SqlStageSpec,
-> = HasDuplicateModelNames<Fields, AttributesSpec, SqlSpec> extends true ? never : SqlSpec;
+> =
+  HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true ? never : SqlSpec;
 
 type ValidateAttributesStageSpec<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   SqlSpec extends SqlStageSpec | undefined,
   AttributesSpec extends ModelAttributesSpec,
-> = HasDuplicateModelNames<Fields, AttributesSpec, SqlSpec> extends true ? never : AttributesSpec;
+> =
+  HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true
+    ? never
+    : AttributesSpec;
+
+type DuplicateModelNamesError =
+  'Error: two ids, uniques, indexes or foreign keys on this model have the same name';
+
+type ModelDuplicateNames<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [AttributesSpec] extends [never]
+  ? DuplicateModelNamesError
+  : [SqlSpec] extends [never]
+    ? DuplicateModelNamesError
+    : HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true
+      ? DuplicateModelNamesError
+      : undefined;
 
 function findDuplicateRelationName(
   existingRelations: Record<string, AnyRelationBuilder>,
@@ -1496,6 +1555,12 @@ export class ContractModelBuilder<
   declare readonly __sql: SqlSpec;
   declare readonly __indexTypes: IndexTypes;
   declare readonly __spaceId: TSpaceId;
+  declare readonly __duplicateNames: ModelDuplicateNames<
+    Fields,
+    Relations,
+    AttributesSpec,
+    SqlSpec
+  >;
   readonly refs: ModelName extends string ? ModelTokenRefs<ModelName, Fields, TSpaceId> : never;
 
   constructor(
@@ -1593,7 +1658,7 @@ export class ContractModelBuilder<
 
   attributes<const NextAttributesSpec extends ModelAttributesSpec>(
     specOrFactory: StageInput<AttributeContext<Fields>, NextAttributesSpec>,
-  ): [ValidateAttributesStageSpec<Fields, SqlSpec, NextAttributesSpec>] extends [never]
+  ): [ValidateAttributesStageSpec<Fields, Relations, SqlSpec, NextAttributesSpec>] extends [never]
     ? ContractModelBuilder<ModelName, Fields, Relations, never, SqlSpec, IndexTypes, TSpaceId>
     : ContractModelBuilder<
         ModelName,
@@ -1620,7 +1685,7 @@ export class ContractModelBuilder<
 
   sql<const NextSqlSpec extends SqlStageSpec>(
     specOrFactory: StageInput<SqlContext<Fields, IndexTypes>, NextSqlSpec>,
-  ): [ValidateSqlStageSpec<Fields, AttributesSpec, NextSqlSpec>] extends [never]
+  ): [ValidateSqlStageSpec<Fields, Relations, AttributesSpec, NextSqlSpec>] extends [never]
     ? ContractModelBuilder<
         ModelName,
         Fields,
