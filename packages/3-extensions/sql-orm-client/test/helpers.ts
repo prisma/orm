@@ -11,6 +11,7 @@ import type {
   ColumnTypeDescriptor,
 } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
+import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
@@ -19,7 +20,6 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import {
   createExecutionContext,
   createSqlExecutionStack,
-  type RuntimeMutationDefaultGenerator,
   type RuntimeParameterizedCodecDescriptor,
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';

@@ -349,8 +349,8 @@ describe('contract/stack validation errors', () => {
     );
   });
 
-  it('lists all missing mutation default generator ids in a single error', () => {
-    const contractWithMissingGenerators: Contract<SqlStorage> = {
+  it('checks column codecs before mutation default generators', () => {
+    const contractWithBothProblems: Contract<SqlStorage> = {
       ...testContract,
       storage: new SqlStorage({
         storageHash: coreHash('test'),
@@ -361,8 +361,7 @@ describe('contract/stack validation errors', () => {
               table: {
                 user: {
                   columns: {
-                    id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                    slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    id: { nativeType: 'text', codecId: 'test/unregistered@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -379,11 +378,7 @@ describe('contract/stack validation errors', () => {
           defaults: [
             {
               ref: { namespace: '__unbound__', entry: 'user', field: 'id' },
-              onCreate: { kind: 'generator', id: 'gen-a' },
-            },
-            {
-              ref: { namespace: '__unbound__', entry: 'user', field: 'slug' },
-              onUpdate: { kind: 'generator', id: 'gen-b' },
+              onCreate: { kind: 'generator', id: 'unregistered' },
             },
           ],
         },
@@ -391,60 +386,12 @@ describe('contract/stack validation errors', () => {
     };
 
     expect(() =>
-      createExecutionContext({ contract: contractWithMissingGenerators, stack: createStack() }),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-        details: expect.objectContaining({
-          ids: expect.arrayContaining(['gen-a', 'gen-b']),
-        }),
-      }),
-    );
-  });
-
-  it('passes when all referenced mutation default generator ids are registered', () => {
-    const contractWithRegisteredGenerator: Contract<SqlStorage> = {
-      ...testContract,
-      storage: new SqlStorage({
-        storageHash: coreHash('test'),
-        namespaces: {
-          __unbound__: createTestSqlNamespace({
-            id: '__unbound__',
-            entries: {
-              table: {
-                user: {
-                  columns: {
-                    id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                  },
-                  uniques: [],
-                  indexes: [],
-                  foreignKeys: [],
-                },
-              },
-            },
-          }),
-        },
-      }),
-      execution: {
-        executionHash: executionHash('test'),
-        mutations: {
-          defaults: [
-            {
-              ref: { namespace: '__unbound__', entry: 'user', field: 'id' },
-              onCreate: { kind: 'generator', id: 'nanoid' },
-            },
-          ],
-        },
-      },
-    };
-
-    expect(() =>
-      createExecutionContext({ contract: contractWithRegisteredGenerator, stack: createStack() }),
-    ).not.toThrow();
+      createExecutionContext({ contract: contractWithBothProblems, stack: createStack() }),
+    ).toThrow(expect.objectContaining({ code: 'RUNTIME.CODEC_DESCRIPTOR_MISSING' }));
   });
 });
 
-describe('applyMutationDefaults', () => {
+describe('context.applyMutationDefaults', () => {
   const contractWithDefaults: Contract<SqlStorage> = {
     ...testContract,
     storage: new SqlStorage({
@@ -486,7 +433,7 @@ describe('applyMutationDefaults', () => {
     },
   };
 
-  it('applies create defaults with generator params', () => {
+  it('applies create defaults with the generators the stack contributes', () => {
     const context = createExecutionContext({
       contract: contractWithDefaults,
       stack: createStack(),
@@ -494,330 +441,18 @@ describe('applyMutationDefaults', () => {
 
     const applied = context.applyMutationDefaults({
       op: 'create',
-      table: 'user',
+      entry: 'user',
       namespace: '__unbound__',
       values: {},
     });
 
     expect(applied).toEqual([
       {
-        column: 'id',
+        field: 'id',
         value: expect.any(String),
       },
     ]);
     expect((applied[0]!.value as string).length).toBe(8);
-  });
-
-  it('applies update defaults from onUpdate', () => {
-    const context = createExecutionContext({
-      contract: contractWithDefaults,
-      stack: createStack(),
-    });
-
-    const applied = context.applyMutationDefaults({
-      op: 'update',
-      table: 'user',
-      namespace: '__unbound__',
-      values: { email: 'alice@example.com' },
-    });
-
-    expect(applied).toEqual([
-      {
-        column: 'slug',
-        value: expect.any(String),
-      },
-    ]);
-    expect((applied[0]!.value as string).length).toBe(6);
-  });
-
-  it('skips update defaults for empty update payloads', () => {
-    const context = createExecutionContext({
-      contract: contractWithDefaults,
-      stack: createStack(),
-    });
-
-    const applied = context.applyMutationDefaults({
-      op: 'update',
-      table: 'user',
-      namespace: '__unbound__',
-      values: {},
-    });
-
-    expect(applied).toEqual([]);
-  });
-
-  it('shares one query-stable generator value across rows when defaultValueCache is shared', () => {
-    const counterMarker = { invocations: 0 };
-    const counterGeneratorExtension: SqlRuntimeExtensionDescriptor<'postgres'> = {
-      kind: 'extension' as const,
-      id: 'counter-generator-extension',
-      version: '0.0.1',
-      familyId: 'sql' as const,
-      targetId: 'postgres' as const,
-      codecs: () => [],
-      mutationDefaultGenerators: () => [
-        {
-          id: 'counter',
-          generate: () => ++counterMarker.invocations,
-          stability: 'query',
-        },
-      ],
-      create() {
-        return { familyId: 'sql' as const, targetId: 'postgres' as const };
-      },
-    };
-
-    const contractWithCounter: Contract<SqlStorage> = {
-      ...testContract,
-      storage: new SqlStorage({
-        storageHash: coreHash('test'),
-        namespaces: {
-          __unbound__: createTestSqlNamespace({
-            id: '__unbound__',
-            entries: {
-              table: {
-                user: {
-                  columns: {
-                    id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                    touchedAt: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  },
-                  uniques: [],
-                  indexes: [],
-                  foreignKeys: [],
-                },
-              },
-            },
-          }),
-        },
-      }),
-      execution: {
-        executionHash: executionHash('test'),
-        mutations: {
-          defaults: [
-            {
-              ref: { namespace: '__unbound__', entry: 'user', field: 'touchedAt' },
-              onCreate: { kind: 'generator', id: 'counter' },
-            },
-          ],
-        },
-      },
-    };
-
-    const context = createExecutionContext({
-      contract: contractWithCounter,
-      stack: createStack({ extensions: [counterGeneratorExtension] }),
-    });
-
-    const defaultValueCache = new Map<string, unknown>();
-    const row1 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: { id: 'a' },
-      defaultValueCache,
-    });
-    const row2 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: { id: 'b' },
-      defaultValueCache,
-    });
-    const row3 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: { id: 'c' },
-      defaultValueCache,
-    });
-
-    expect(counterMarker.invocations).toBe(1);
-    expect(row1).toEqual([{ column: 'touchedAt', value: 1 }]);
-    expect(row2).toEqual([{ column: 'touchedAt', value: 1 }]);
-    expect(row3).toEqual([{ column: 'touchedAt', value: 1 }]);
-
-    // Without the shared cache, each call generates fresh.
-    const row4 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: { id: 'd' },
-    });
-    expect(counterMarker.invocations).toBe(2);
-    expect(row4).toEqual([{ column: 'touchedAt', value: 2 }]);
-  });
-
-  it('shares a row-stable generator value across columns of one call but not across calls', () => {
-    const counterMarker = { invocations: 0 };
-    const rowGeneratorExtension: SqlRuntimeExtensionDescriptor<'postgres'> = {
-      kind: 'extension' as const,
-      id: 'row-generator-extension',
-      version: '0.0.1',
-      familyId: 'sql' as const,
-      targetId: 'postgres' as const,
-      codecs: () => [],
-      mutationDefaultGenerators: () => [
-        {
-          id: 'correlationId',
-          generate: () => ++counterMarker.invocations,
-          stability: 'row',
-        },
-      ],
-      create() {
-        return { familyId: 'sql' as const, targetId: 'postgres' as const };
-      },
-    };
-
-    const contractWithCorrelationId: Contract<SqlStorage> = {
-      ...testContract,
-      storage: new SqlStorage({
-        storageHash: coreHash('test'),
-        namespaces: {
-          __unbound__: createTestSqlNamespace({
-            id: '__unbound__',
-            entries: {
-              table: {
-                event: {
-                  columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    causation: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                    correlation: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  },
-                  uniques: [],
-                  indexes: [],
-                  foreignKeys: [],
-                },
-              },
-            },
-          }),
-        },
-      }),
-      execution: {
-        executionHash: executionHash('test'),
-        mutations: {
-          defaults: [
-            {
-              ref: { namespace: '__unbound__', entry: 'event', field: 'causation' },
-              onCreate: { kind: 'generator', id: 'correlationId' },
-            },
-            {
-              ref: { namespace: '__unbound__', entry: 'event', field: 'correlation' },
-              onCreate: { kind: 'generator', id: 'correlationId' },
-            },
-          ],
-        },
-      },
-    };
-
-    const context = createExecutionContext({
-      contract: contractWithCorrelationId,
-      stack: createStack({ extensions: [rowGeneratorExtension] }),
-    });
-
-    const row1 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'event',
-      namespace: '__unbound__',
-      values: { id: 1 },
-    });
-    const row2 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'event',
-      namespace: '__unbound__',
-      values: { id: 2 },
-    });
-
-    expect(counterMarker.invocations).toBe(2);
-    expect(row1).toEqual([
-      { column: 'causation', value: 1 },
-      { column: 'correlation', value: 1 },
-    ]);
-    expect(row2).toEqual([
-      { column: 'causation', value: 2 },
-      { column: 'correlation', value: 2 },
-    ]);
-  });
-
-  it('does not consult defaultValueCache for field-stable generators', () => {
-    const counterMarker = { invocations: 0 };
-    const perFieldGeneratorExtension: SqlRuntimeExtensionDescriptor<'postgres'> = {
-      kind: 'extension' as const,
-      id: 'per-field-generator-extension',
-      version: '0.0.1',
-      familyId: 'sql' as const,
-      targetId: 'postgres' as const,
-      codecs: () => [],
-      mutationDefaultGenerators: () => [
-        {
-          id: 'perFieldCounter',
-          generate: () => ++counterMarker.invocations,
-          stability: 'field',
-        },
-      ],
-      create() {
-        return { familyId: 'sql' as const, targetId: 'postgres' as const };
-      },
-    };
-
-    const contractWithCounter: Contract<SqlStorage> = {
-      ...testContract,
-      storage: new SqlStorage({
-        storageHash: coreHash('test'),
-        namespaces: {
-          __unbound__: createTestSqlNamespace({
-            id: '__unbound__',
-            entries: {
-              table: {
-                user: {
-                  columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  },
-                  uniques: [],
-                  indexes: [],
-                  foreignKeys: [],
-                },
-              },
-            },
-          }),
-        },
-      }),
-      execution: {
-        executionHash: executionHash('test'),
-        mutations: {
-          defaults: [
-            {
-              ref: { namespace: '__unbound__', entry: 'user', field: 'id' },
-              onCreate: { kind: 'generator', id: 'perFieldCounter' },
-            },
-          ],
-        },
-      },
-    };
-
-    const context = createExecutionContext({
-      contract: contractWithCounter,
-      stack: createStack({ extensions: [perFieldGeneratorExtension] }),
-    });
-
-    const defaultValueCache = new Map<string, unknown>();
-    const row1 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: {},
-      defaultValueCache,
-    });
-    const row2 = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: {},
-      defaultValueCache,
-    });
-
-    expect(counterMarker.invocations).toBe(2);
-    expect(row1).toEqual([{ column: 'id', value: 1 }]);
-    expect(row2).toEqual([{ column: 'id', value: 2 }]);
   });
 });
 

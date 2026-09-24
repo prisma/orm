@@ -1,3 +1,9 @@
+import { type ContractExecutionSection, executionHash } from '@internal/contract/types';
+import {
+  applyMutationDefaults,
+  collectMutationDefaultGenerators,
+  type MutationDefaultsOptions,
+} from '@internal/framework-components/runtime';
 import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import {
   AndExpr,
@@ -500,7 +506,7 @@ describe('mutation defaults', () => {
     d.public.users.insert([{ id: 1, name: 'A', email: 'a@b.com' }]).build();
     expect(spy).toHaveBeenCalledWith({
       op: 'create',
-      table: 'users',
+      entry: 'users',
       namespace: 'public',
       values: { id: 1, name: 'A', email: 'a@b.com' },
     });
@@ -514,10 +520,60 @@ describe('mutation defaults', () => {
       .build();
     expect(spy).toHaveBeenCalledWith({
       op: 'update',
-      table: 'users',
+      entry: 'users',
       namespace: 'public',
       values: { name: 'B' },
     });
+  });
+  it('treats a key present with an undefined value as explicit, so no default fills it', () => {
+    const execution: ContractExecutionSection = {
+      executionHash: executionHash('test'),
+      mutations: {
+        defaults: [
+          {
+            ref: { namespace: 'public', entry: 'users', field: 'email' },
+            onCreate: { kind: 'generator', id: 'fill' },
+            onUpdate: { kind: 'generator', id: 'fill' },
+          },
+        ],
+      },
+    };
+    const generators = collectMutationDefaultGenerators([
+      {
+        id: 'test',
+        mutationDefaultGenerators: () => [
+          { id: 'fill', generate: () => 'filled@x.com', stability: 'field' },
+        ],
+      },
+    ]);
+    const d = sql({
+      context: {
+        ...stubBase,
+        contract: sqlContract,
+        applyMutationDefaults: (options: MutationDefaultsOptions) =>
+          applyMutationDefaults(execution, generators, options),
+      } as unknown as ExecutionContext<typeof sqlContract>,
+      rawCodecInferer: stubInferer,
+    });
+    const emailOf = (row: Readonly<Record<string, unknown>> | undefined) =>
+      (row?.['email'] as { readonly value: unknown } | undefined)?.value;
+
+    const inserted = d.public.users
+      .insert([
+        { id: 1, name: 'A', email: undefined },
+        { id: 2, name: 'B' },
+      ] as never)
+      .build().ast;
+    if (inserted.kind !== 'insert') throw new Error('expected insert');
+    expect(inserted.rows.map(emailOf)).toEqual([undefined, 'filled@x.com']);
+
+    const updated = d.public.users
+      .update({ name: 'C', email: undefined } as never)
+      .where((f, fns) => fns.eq(f.id, 1))
+      .build().ast;
+    if (updated.kind !== 'update') throw new Error('expected update');
+    expect(emailOf(updated.set)).toBeUndefined();
+    expect(updated.set).toHaveProperty('email');
   });
 });
 
@@ -542,14 +598,14 @@ describe('INSERT multi-row', () => {
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledWith({
       op: 'create',
-      table: 'users',
+      entry: 'users',
       namespace: 'public',
       values: { id: 1, name: 'A' },
     });
   });
 
   it('multi-row calls applyMutationDefaults once per row', () => {
-    const spy = vi.fn(() => [{ column: 'email', value: 'default@x.com' }]);
+    const spy = vi.fn(() => [{ field: 'email', value: 'default@x.com' }]);
     const d = sql({
       context: {
         ...stubBase,
@@ -589,7 +645,7 @@ describe('INSERT multi-row', () => {
   it('multi-row with defaults hook: each row gets its own defaults independently', () => {
     const spy = vi.fn((args: { values: Record<string, unknown> }) => {
       if ('id' in args.values && (args.values['id'] as number) === 1) {
-        return [{ column: 'email', value: 'default@x.com' }];
+        return [{ field: 'email', value: 'default@x.com' }];
       }
       return [];
     });
@@ -647,7 +703,7 @@ describe('UPDATE callback overload', () => {
       .where((f, fns) => fns.eq(f.id, 1))
       .build();
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ op: 'update', table: 'users' }));
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ op: 'update', entry: 'users' }));
   });
 
   it('where and returning clauses are identical between object and callback overloads', () => {

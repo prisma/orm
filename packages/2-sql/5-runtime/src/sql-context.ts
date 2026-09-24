@@ -1,4 +1,4 @@
-import type { Contract, ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
+import type { Contract, JsonValue } from '@internal/contract/types';
 import type {
   AnyCodecDescriptor,
   CodecDescriptor,
@@ -24,7 +24,13 @@ import {
   type RuntimeTargetDescriptor,
   type RuntimeTargetInstance,
 } from '@internal/framework-components/execution';
-import { runtimeError } from '@internal/framework-components/runtime';
+import {
+  applyMutationDefaults,
+  assertMutationDefaultGeneratorsAvailable,
+  collectMutationDefaultGenerators,
+  type RuntimeMutationDefaultGenerator,
+  runtimeError,
+} from '@internal/framework-components/runtime';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import type { SqlStorage, StorageTypeInstance } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
@@ -51,10 +57,8 @@ import type {
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type {
-  AppliedMutationDefault,
   CodecDescriptorRegistry,
   ExecutionContext,
-  MutationDefaultsOptions,
   TypeHelperRegistry,
 } from '@internal/sql-relational-core/query-lane-context';
 import { createAstCodecResolver } from './codecs/ast-codec-resolver';
@@ -78,24 +82,6 @@ export interface SqlStaticContributions {
   readonly codecs: () => ReadonlyArray<AnyCodecDescriptor>;
   readonly queryOperations?: () => SqlOperationDescriptors;
   readonly mutationDefaultGenerators?: () => ReadonlyArray<RuntimeMutationDefaultGenerator>;
-}
-
-/**
- * Scope across which a generator's value is constant.
- *
- * - `'field'` — one value per defaulting site (one column, one row). Cache strategy: no cache; call per defaulting site. Right for per-row identifiers (UUIDs, CUIDs, ULIDs, nanoid, ksuid).
- * - `'row'` — one value across all defaulting sites of one row of one operation. Cache strategy: per-call cache keyed by `generatorId`. Right for correlation ids stamped into multiple columns of one row.
- * - `'query'` — one value across all rows and columns of one ORM operation. Cache strategy: caller-provided cache keyed by `generatorId`. Right for `timestampNow` (a single timestamp per bulk insert/update).
- */
-export type GeneratorStability = 'field' | 'row' | 'query';
-
-export interface RuntimeMutationDefaultGenerator {
-  readonly id: string;
-  readonly generate: (params?: Record<string, unknown>) => unknown;
-  /**
-   * Scope across which the generator's value is constant. The framework derives the cache strategy from this declaration; generator authors never need to know about cache keys. See `GeneratorStability` for the per-value semantics.
-   */
-  readonly stability: GeneratorStability;
 }
 
 export interface SqlRuntimeTargetDescriptor<
@@ -261,7 +247,10 @@ function validateTypeParams(
       { ...context, codecId: descriptor.codecId, typeParams },
     );
   }
-  return result.value as Record<string, unknown>;
+  return blindCast<
+    Record<string, unknown>,
+    'a codec paramsSchema validates an object of type params'
+  >(result.value);
 }
 
 /**
@@ -290,10 +279,12 @@ function collectCodecDescriptors(contributors: ReadonlyArray<SqlStaticContributi
       all.push(descriptor);
 
       if (descriptor.isParameterized) {
-        // Cast widens the descriptor's heterogeneous `P` to the runtime alias surface; consumers narrow per codec id at the dispatch site, where the descriptor's own `paramsSchema` validates JSON-sourced params before the factory ever sees them.
         parameterized.set(
           descriptor.codecId,
-          descriptor as unknown as RuntimeParameterizedCodecDescriptor,
+          blindCast<
+            RuntimeParameterizedCodecDescriptor,
+            "widens the descriptor's own params type to the runtime alias; each consumer narrows per codec id, and the descriptor's paramsSchema validates params before its factory runs"
+          >(descriptor),
         );
       }
     }
@@ -517,7 +508,10 @@ function buildContractCodecRegistry(
     const ref: CodecRef = hasParamKeys
       ? {
           codecId: typeInstance.codecId,
-          typeParams: instanceTypeParams as JsonValue,
+          typeParams: blindCast<
+            JsonValue,
+            'storage.types typeParams come from contract JSON, validated by the contract schema'
+          >(instanceTypeParams),
         }
       : { codecId: typeInstance.codecId };
     const key = refKeyOf(ref);
@@ -587,178 +581,6 @@ function buildContractCodecRegistry(
   return registry;
 }
 
-function assertMutationDefaultGeneratorsAvailable(
-  contract: Contract<SqlStorage>,
-  generatorRegistry: ReadonlyMap<string, RuntimeMutationDefaultGenerator>,
-): void {
-  const defaults = contract.execution?.mutations.defaults ?? [];
-  if (defaults.length === 0) return;
-
-  const missing = new Set<string>();
-  for (const mutationDefault of defaults) {
-    for (const phase of [mutationDefault.onCreate, mutationDefault.onUpdate]) {
-      if (!phase) continue;
-      if (phase.kind === 'generator' && !generatorRegistry.has(phase.id)) {
-        missing.add(phase.id);
-      }
-    }
-  }
-
-  if (missing.size === 0) return;
-
-  const ids = Array.from(missing);
-  const idList = ids.map((id) => `'${id}'`).join(', ');
-  throw runtimeError(
-    'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-    `Contract requires mutation default generator(s) ${idList}, but no runtime component provides them.`,
-    { ids },
-  );
-}
-
-function collectMutationDefaultGenerators(
-  contributors: ReadonlyArray<SqlStaticContributions & { readonly id: string }>,
-): ReadonlyMap<string, RuntimeMutationDefaultGenerator> {
-  const generators = new Map<string, RuntimeMutationDefaultGenerator>();
-  const owners = new Map<string, string>();
-
-  for (const contributor of contributors) {
-    const nextGenerators = contributor.mutationDefaultGenerators?.() ?? [];
-    for (const generator of nextGenerators) {
-      const existingOwner = owners.get(generator.id);
-      if (existingOwner !== undefined) {
-        throw runtimeError(
-          'RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR',
-          `Duplicate mutation default generator '${generator.id}'.`,
-          {
-            id: generator.id,
-            existingOwner,
-            incomingOwner: contributor.id,
-          },
-        );
-      }
-      generators.set(generator.id, generator);
-      owners.set(generator.id, contributor.id);
-    }
-  }
-
-  return generators;
-}
-
-function computeExecutionDefaultValue(
-  spec: ExecutionMutationDefaultValue,
-  generatorRegistry: ReadonlyMap<string, RuntimeMutationDefaultGenerator>,
-): unknown {
-  switch (spec.kind) {
-    case 'generator': {
-      const generator = generatorRegistry.get(spec.id);
-      if (!generator) {
-        throw runtimeError(
-          'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-          `Contract references mutation default generator '${spec.id}' but no runtime component provides it.`,
-          {
-            id: spec.id,
-          },
-        );
-      }
-      // nosemgrep: javascript.express.security.express-wkhtml-injection.express-wkhtmltoimage-injection
-      return generator.generate(spec.params);
-    }
-  }
-}
-
-function applyMutationDefaults(
-  contract: Contract<SqlStorage>,
-  generatorRegistry: ReadonlyMap<string, RuntimeMutationDefaultGenerator>,
-  options: MutationDefaultsOptions,
-): ReadonlyArray<AppliedMutationDefault> {
-  const defaults = contract.execution?.mutations.defaults ?? [];
-  if (defaults.length === 0) {
-    return [];
-  }
-
-  const isEmptyUpdate = options.op === 'update' && Object.keys(options.values).length === 0;
-
-  const applied: AppliedMutationDefault[] = [];
-  const appliedColumns = new Set<string>();
-  // Fresh per-call cache for `stability: 'row'` generators — they share across columns of a single row but regenerate on the next call.
-  const rowCache = new Map<string, unknown>();
-
-  for (const mutationDefault of defaults) {
-    if (mutationDefault.ref.entry !== options.table) {
-      continue;
-    }
-    if (mutationDefault.ref.namespace !== options.namespace) {
-      continue;
-    }
-
-    const defaultSpec =
-      options.op === 'create' ? mutationDefault.onCreate : mutationDefault.onUpdate;
-    if (!defaultSpec) {
-      continue;
-    }
-
-    // RD2: empty update payloads skip onUpdate defaults — no write means no `@updatedAt` advance.
-    if (isEmptyUpdate) {
-      continue;
-    }
-
-    const columnName = mutationDefault.ref.field;
-    if (Object.hasOwn(options.values, columnName) || appliedColumns.has(columnName)) {
-      continue;
-    }
-
-    applied.push({
-      column: columnName,
-      value: resolveScopedValue(
-        defaultSpec,
-        generatorRegistry,
-        rowCache,
-        options.defaultValueCache,
-      ),
-    });
-    appliedColumns.add(columnName);
-  }
-
-  return applied;
-}
-
-function resolveScopedValue(
-  spec: ExecutionMutationDefaultValue,
-  generatorRegistry: ReadonlyMap<string, RuntimeMutationDefaultGenerator>,
-  rowCache: Map<string, unknown>,
-  queryCache: Map<string, unknown> | undefined,
-): unknown {
-  if (spec.kind !== 'generator') {
-    return computeExecutionDefaultValue(spec, generatorRegistry);
-  }
-  const generator = generatorRegistry.get(spec.id);
-  const cache = scopedCache(generator?.stability, rowCache, queryCache);
-  if (!cache) {
-    return computeExecutionDefaultValue(spec, generatorRegistry);
-  }
-  if (cache.has(spec.id)) {
-    return cache.get(spec.id);
-  }
-  const value = computeExecutionDefaultValue(spec, generatorRegistry);
-  cache.set(spec.id, value);
-  return value;
-}
-
-function scopedCache(
-  stability: GeneratorStability | undefined,
-  rowCache: Map<string, unknown>,
-  queryCache: Map<string, unknown> | undefined,
-): Map<string, unknown> | undefined {
-  switch (stability) {
-    case 'row':
-      return rowCache;
-    case 'query':
-      return queryCache;
-    default:
-      return undefined;
-  }
-}
-
 export function createExecutionContext<
   TContract extends Contract<SqlStorage> = Contract<SqlStorage>,
   TTargetId extends string = string,
@@ -818,7 +640,7 @@ export function createExecutionContext<
     codecDescriptors,
   );
   const mutationDefaultGeneratorRegistry = collectMutationDefaultGenerators(contributors);
-  assertMutationDefaultGeneratorsAvailable(contract, mutationDefaultGeneratorRegistry);
+  assertMutationDefaultGeneratorsAvailable(contract.execution, mutationDefaultGeneratorRegistry);
 
   if (parameterizedCodecDescriptors.size > 0) {
     validateColumnTypeParams(contract.storage, parameterizedCodecDescriptors);
@@ -840,6 +662,6 @@ export function createExecutionContext<
     queryOperations: queryOperationRegistry,
     types,
     applyMutationDefaults: (options) =>
-      applyMutationDefaults(contract, mutationDefaultGeneratorRegistry, options),
+      applyMutationDefaults(contract.execution, mutationDefaultGeneratorRegistry, options),
   };
 }

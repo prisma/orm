@@ -626,7 +626,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     await narrowed.createAll(input as never).toArray();
 
     const calls = applyMutationDefaults.mock.calls.map(([options]) => options);
-    expect(calls.map(({ table }) => table)).toEqual(input.flatMap(() => ['tasks', 'features']));
+    expect(calls.map(({ entry }) => entry)).toEqual(input.flatMap(() => ['tasks', 'features']));
     const cache = calls[0]!.defaultValueCache;
     expect(cache).toBeInstanceOf(Map);
     for (const call of calls) {
