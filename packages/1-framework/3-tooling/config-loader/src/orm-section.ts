@@ -64,14 +64,8 @@ const contractSource = {
   'format?': 'string',
 } as const;
 
-/**
- * The shape of the `orm` section of `prisma.config.ts`, declared once. The
- * CLI engine derives validation, the diagnostics naming a bad field and the
- * file to fix, and the resolution of every `path` field against the config
- * file that wrote it (prisma-cli ADR 0005). Relative paths are resolved
- * before any command sees the value, and the value carries `baseDir`.
- */
-export const ormConfigSchema = configSchema({
+/** Each subsection's own shape, without the rules that relate subsections to one another. */
+const ormSubsectionsSchema = configSchema({
   family: { kind: "'family'", ...descriptorFields, emission: 'object' },
   target: { kind: "'target'", ...targetLikeFields },
   adapter: { kind: "'adapter'", ...targetLikeFields },
@@ -84,7 +78,16 @@ export const ormConfigSchema = configSchema({
   },
   migrations: [{ dir: ['path', '=', () => './migrations'] }, '=', () => ({})],
   'formatter?': { 'indent?': "number.integer >= 1 | 'tab'", 'newline?': "'LF' | 'CRLF'" },
-}).narrow((config, ctx) => {
+});
+
+/**
+ * The shape of the `orm` section of `prisma.config.ts`, declared once. The
+ * CLI engine derives validation, the diagnostics naming a bad field and the
+ * file to fix, and the resolution of every `path` field against the config
+ * file that wrote it (prisma-cli ADR 0005). Relative paths are resolved
+ * before any command sees the value, and the value carries `baseDir`.
+ */
+export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
   if ('extensionPacks' in config) {
     return ctx.reject({
       path: ['extensionPacks'],
@@ -150,4 +153,23 @@ export function validateOrmSection(
     ReturnType<typeof ormConfigSection.validate>,
     'the schema declares the shape PrismaNextConfig describes; descriptor generics are erased by validation'
   >(validateSectionWithSchema(ORM_CONFIG_SECTION_NAME, ormConfigSchema, raw, provenance));
+}
+
+/**
+ * Validates every subsection except `failing`, which comes back as authored.
+ * A loader uses it when some subsections have diagnostics, so a caller that
+ * reads only the others still gets their paths resolved and defaults applied.
+ */
+export function validateOrmSectionExcept(
+  raw: unknown,
+  provenance: SectionProvenance,
+  failing: ReadonlySet<string>,
+): ReturnType<typeof validateSectionWithSchema> {
+  const healthy = CONFIG_SECTIONS.filter((section) => !failing.has(section));
+  return validateSectionWithSchema(
+    ORM_CONFIG_SECTION_NAME,
+    ormSubsectionsSchema.pick(...healthy),
+    raw,
+    provenance,
+  );
 }

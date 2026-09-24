@@ -13,22 +13,24 @@ validation for readers outside a command run and turns a `prisma.config.ts` on d
 resolved `PrismaNextConfig`. It also
 performs the emitter-derived artifact-collision check (`getEmittedArtifactPaths`).
 
-`loadConfig(configPath?)` returns a `Result`. It fails with a `CliStructuredError` only when the file cannot serve at all: `CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED` when evaluating it throws, or `CONFIG.VERSION_MARKER_MISSING` when it does not export a `definePrismaConfig` value. A file that loads but breaks the `orm` schema succeeds with `diagnostics`, one `CONFIG.VALIDATION_FAILED` per bad field, each naming the subsection it concerns. `requireConfigSections` then fails only when a subsection the caller reads has a diagnostic, so a tool that needs `contract` keeps working when `migrations` is malformed.
+`loadConfig(configPath?)` returns a `Result`. It fails with a `CliStructuredError` only when the file cannot serve at all: `CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED` when evaluating it throws, or `CONFIG.VERSION_MARKER_MISSING` when it does not export a `definePrismaConfig` value. A file that loads but breaks the `orm` schema succeeds with `diagnostics`, one `CONFIG.VALIDATION_FAILED` per bad field, each naming the subsection it concerns. `requireConfigSections` then fails only when a subsection the caller reads has a diagnostic, so a tool that needs `contract` keeps working, with its paths resolved, when `migrations` is malformed.
 
 ## Usage
 
 ```ts
 import { loadConfig, requireConfigSections } from '@internal/config-loader';
 
-const loaded = await loadConfig('prisma.config.ts');
-if (!loaded.ok) {
-  // the file is missing, throws when evaluated, or is not a Prisma config: loaded.failure.code says which
-  return;
+async function loadContractConfig() {
+  const loaded = await loadConfig('prisma.config.ts');
+  if (!loaded.ok) {
+    // the file is missing, throws when evaluated, or is not a Prisma config: loaded.failure.code says which
+    return undefined;
+  }
+  const sections = requireConfigSections(loaded.value, ['contract', 'formatter']);
+  if (!sections.ok) {
+    // a subsection this caller reads failed validation
+    return undefined;
+  }
+  return sections.value;
 }
-const sections = requireConfigSections(loaded.value, ['contract', 'formatter']);
-if (!sections.ok) {
-  // a subsection this caller reads failed validation
-  return;
-}
-const config = sections.value;
 ```

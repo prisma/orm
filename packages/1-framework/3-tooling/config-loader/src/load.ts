@@ -17,7 +17,12 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { SectionProvenance } from '@prisma/cli-engine';
 import { dirname, join, resolve } from 'pathe';
-import { type ConfigSection, isConfigSection, validateOrmSection } from './orm-section';
+import {
+  type ConfigSection,
+  isConfigSection,
+  validateOrmSection,
+  validateOrmSectionExcept,
+} from './orm-section';
 
 const CONFIG_FILENAME = 'prisma.config.ts';
 
@@ -112,12 +117,16 @@ function buildLoadedConfig(
         ...(isConfigSection(section) ? { section } : {}),
       });
     });
-    // A section that failed validation is left exactly as authored, for the
-    // commands that read only its valid subsections.
+    // Subsections that failed stay exactly as authored; the rest are validated
+    // on their own, so a command that reads only them sees resolved paths.
+    const failing = new Set(
+      diagnostics.map((diagnostic) => String(diagnostic.meta?.['section'] ?? '')),
+    );
+    const partial = validateOrmSectionExcept(rawConfig, provenance, failing);
     const config = blindCast<
       PrismaNextConfig,
       'a config with diagnostics is guarded by requireConfigSections before any subsection is read'
-    >(rawConfig);
+    >(partial.ok ? partial.value : rawConfig);
     return { config, diagnostics };
   }
   const config = validation.value;
