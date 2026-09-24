@@ -12,18 +12,13 @@
 
 import { postgresError } from './errors';
 
-const MAX_IDENTIFIER_LENGTH = 63;
+const MAX_IDENTIFIER_BYTES = 63;
 
 const MAX_UTF8_BYTES_PER_UTF16_UNIT = 3;
 
 const utf8 = new TextEncoder();
 
-/**
- * UTF-8 byte length — the unit PostgreSQL measures identifiers and enum labels
- * in. `NAMEDATALEN - 1` is 63 *bytes*, so a name written in non-ASCII
- * characters can sit well under 63 characters and still overrun. Both length
- * checks in this module read through here so they cannot drift apart.
- */
+/** UTF-8 byte length — the unit PostgreSQL measures identifiers and enum labels in. */
 function byteLength(value: string): number {
   return utf8.encode(value).length;
 }
@@ -50,11 +45,11 @@ export function quoteIdentifier(identifier: string): string {
     });
   }
   if (
-    identifier.length * MAX_UTF8_BYTES_PER_UTF16_UNIT > MAX_IDENTIFIER_LENGTH &&
-    byteLength(identifier) > MAX_IDENTIFIER_LENGTH
+    identifier.length * MAX_UTF8_BYTES_PER_UTF16_UNIT > MAX_IDENTIFIER_BYTES &&
+    byteLength(identifier) > MAX_IDENTIFIER_BYTES
   ) {
     console.warn(
-      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's ${MAX_IDENTIFIER_LENGTH}-byte limit and will be truncated`,
+      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's ${MAX_IDENTIFIER_BYTES}-byte limit and will be truncated`,
     );
   }
   return `"${identifier.replace(/"/g, '""')}"`;
@@ -112,11 +107,11 @@ export function quoteQualifiedName(name: string): string {
  * @throws `CONTRACT.IDENTIFIER_INVALID` structured error If the value exceeds the maximum length
  */
 export function validateEnumValueLength(value: string, enumTypeName: string): void {
-  if (byteLength(value) > MAX_IDENTIFIER_LENGTH) {
+  if (byteLength(value) > MAX_IDENTIFIER_BYTES) {
     throw postgresError(
       'CONTRACT.IDENTIFIER_INVALID',
       `Enum value "${value.slice(0, 20)}..." for type "${enumTypeName}" exceeds PostgreSQL's ` +
-        `${MAX_IDENTIFIER_LENGTH}-byte label limit`,
+        `${MAX_IDENTIFIER_BYTES}-byte label limit`,
       { meta: { value, context: 'enum-label' } },
     );
   }
