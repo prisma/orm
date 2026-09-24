@@ -422,7 +422,9 @@ type ContractFieldFromBuilder<TBuilder> =
   TBuilder extends FieldBuilder<
     infer Type extends ContractFieldType,
     infer Nullable extends boolean,
-    infer Many extends boolean
+    infer Many extends boolean,
+    EnumTypeHandle | undefined,
+    ExecutionMutationDefaultPhases | undefined
   >
     ? Simplify<
         {
@@ -455,7 +457,13 @@ type AnyFieldNullable<
   FieldNames extends readonly string[],
 > = FieldNames[number] extends infer Name
   ? Name extends keyof Fields
-    ? Fields[Name] extends FieldBuilder<ContractFieldType, true, boolean>
+    ? Fields[Name] extends FieldBuilder<
+        ContractFieldType,
+        true,
+        boolean,
+        EnumTypeHandle | undefined,
+        ExecutionMutationDefaultPhases | undefined
+      >
       ? true
       : never
     : never
@@ -735,7 +743,9 @@ type ExecutionSectionFromDefinition<Definition> = [
   : {
       readonly executionHash: ExecutionHashBase<string>;
       readonly mutations: {
-        readonly defaults: ReadonlyArray<Flatten<ExecutionDefaultsFromDefinition<Definition>>>;
+        readonly defaults: ReadonlyArray<
+          Extract<Flatten<ExecutionDefaultsFromDefinition<Definition>>, ExecutionMutationDefault>
+        >;
       };
     };
 
@@ -749,7 +759,8 @@ type BuilderEnumValueUnion<TBuilder> =
     ContractFieldType,
     boolean,
     boolean,
-    infer Handle extends EnumTypeHandle | undefined
+    infer Handle extends EnumTypeHandle | undefined,
+    ExecutionMutationDefaultPhases | undefined
   >
     ? [Handle] extends [EnumTypeHandle<string, infer Values>]
       ? readonly unknown[] extends Values
@@ -771,7 +782,8 @@ type BuilderBaseChannelType<
     infer Type extends ContractFieldType,
     boolean,
     boolean,
-    EnumTypeHandle | undefined
+    EnumTypeHandle | undefined,
+    ExecutionMutationDefaultPhases | undefined
   >
     ? [BuilderEnumValueUnion<TBuilder>] extends [never]
       ? Type extends {
@@ -817,7 +829,8 @@ type BuilderFieldChannelType<
     ContractFieldType,
     infer Nullable extends boolean,
     infer Many extends boolean,
-    EnumTypeHandle | undefined
+    EnumTypeHandle | undefined,
+    ExecutionMutationDefaultPhases | undefined
   >
     ?
         | (Many extends true
