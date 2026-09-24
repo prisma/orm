@@ -63,15 +63,15 @@ const descriptorKindByNamespace = {
   entityTypes: { descriptorKind: 'entity', label: 'entity' },
 } as const satisfies Record<AuthoringNamespaceKey, { descriptorKind: string; label: string }>;
 
-/**
- * Merges one authoring namespace (`type`, `field` or `entityTypes`) across the family, target and extension packs, in order. A duplicate helper path across packs throws.
- */
 interface AuthoringNamespaceByKey {
   readonly type: AuthoringTypeNamespace;
   readonly field: AuthoringFieldNamespace;
   readonly entityTypes: AuthoringEntityTypeNamespace;
 }
 
+/**
+ * Merges one authoring namespace (`type`, `field` or `entityTypes`) across the family, target and extension packs, in order. A duplicate helper path across packs throws.
+ */
 export function composePackAuthoringNamespace<Key extends AuthoringNamespaceKey>(
   components: readonly {
     readonly authoring?: { readonly [K in AuthoringNamespaceKey]?: unknown };
