@@ -454,14 +454,23 @@ describe('lint-framework-vocabulary — exclusions', () => {
 });
 
 describe('lint-framework-vocabulary — product versions', () => {
-  it('counts names of Prisma versions before 8 in any framework package, including the PSL parser', () => {
+  it('counts names of Prisma versions before 8 in framework packages, including the PSL parser', () => {
     writeConfig(8);
-    writeRepoFile(`${SCOPE}/3-tooling/cli/src/versions.ts`, FILE_EARLIER_PRODUCT_VERSIONS);
+    writeRepoFile(`${SCOPE}/1-core/config/src/versions.ts`, FILE_EARLIER_PRODUCT_VERSIONS);
     writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/versions.ts`, FILE_EARLIER_PRODUCT_VERSIONS);
 
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
     assert.match(result.stdout, /count=8 threshold=8/);
+  });
+
+  it('does not count names of Prisma versions in the CLI, which talks to users about their projects', () => {
+    writeConfig(0);
+    writeRepoFile(`${SCOPE}/3-tooling/cli/src/versions.ts`, FILE_EARLIER_PRODUCT_VERSIONS);
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=0 threshold=0/);
   });
 
   it('does not count Prisma 8 or the prisma package scope', () => {

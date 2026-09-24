@@ -1,5 +1,5 @@
 ---
-description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and no name of a Prisma version before 8. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
+description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and, outside the CLI, no name of a Prisma version before 8. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
 globs: ["packages/1-framework/**"]
 alwaysApply: false
 ---
@@ -10,11 +10,11 @@ alwaysApply: false
 
 **The test for every new framework export, field, hook, or member:** *would Mongo populate or consume this meaningfully?* If not, it belongs in the family layer (e.g. `@internal/sql-contract`), behind a structural interface + type predicate at the boundary.
 
-The framework also must not know which Prisma version wrote a document. It reads every PSL document the same way, and each family or target reader decides what it accepts. Code that exists for an earlier version's schema belongs in the package that reads that schema (e.g. `@internal/sql-contract-prisma7`).
+The framework also must not know which Prisma version wrote a document. It reads every PSL document the same way, and each family or target reader decides what it accepts. Code that exists for an earlier version's schema belongs in the package that reads that schema (e.g. `@internal/sql-contract-prisma7`). The CLI (`packages/1-framework/3-tooling/cli`) is exempt from this part: it talks to users about their projects, and `orm init` sets Prisma 8 up beside a Prisma 7 project, so it must name the version.
 
 ## How it is enforced
 
-The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabulary.grit) matches syntax nodes — identifiers, string literals, template chunks, import paths — carrying family/target terms (`table`, `column`, `postgres`, `nativeType`, `primaryKey`, …) or the name of a Prisma version before 8 (`prisma7`, `Prisma 6`, `prisma@5.22.0`, …). `Prisma 8` is never flagged. It emits `info` diagnostics; `pnpm lint:framework-vocabulary` is the ratchet that counts them, deduplicated by file and line, against the `threshold` in `scripts/lint-framework-vocabulary.config.json`. The count may only shrink, and the threshold must be lowered whenever it does.
+The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabulary.grit) matches syntax nodes — identifiers, string literals, template chunks, import paths — carrying family/target terms (`table`, `column`, `postgres`, `nativeType`, `primaryKey`, …) or, outside the CLI, the name of a Prisma version before 8 (`prisma7`, `Prisma 6`, `prisma@5.22.0`, …). `Prisma 8` is never flagged. It emits `info` diagnostics; `pnpm lint:framework-vocabulary` is the ratchet that counts them, deduplicated by file and line, against the `threshold` in `scripts/lint-framework-vocabulary.config.json`. The count may only shrink, and the threshold must be lowered whenever it does.
 
 **Comments and JSDoc are deliberately not counted.** Prose that documents family-blind code correctly ("family-parameterized (SQL, Mongo, …)") is good documentation, and the previous line-scanning checker taxed it — the majority of what it flagged was prose, not surface. A leak that matters is a real type, field, identifier, string, or import path, and the plugin only sees those.
 
