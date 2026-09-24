@@ -107,7 +107,6 @@ It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")
 - The Prisma 7-specific edits (renaming the config, changing its import, rewriting scripts that call `prisma`, moving the Prisma 7 packages) all happen under one consent; the file merges a fresh init makes happen as usual. Renaming the config alone would leave scripts calling a `prisma` binary that is now Prisma 8, and `@prisma/client` moves with the Prisma 7 CLI because Prisma 7 requires both at the same version.
 - `package.json#type` and `tsconfig.json` are handled as on a fresh init; see [TypeScript module settings for Prisma 8 projects](../../../../docs/reference/typescript-module-settings.md).
 - There is no cutover step. The next steps list only what the user runs right after init.
-- The schema check runs the target package's source inside the init process, so it uses the control stack of the CLI that invoked init, not the project's installed `prisma`. Published releases pin the two to the same version; an older CLI running against a newer target package can refuse a valid schema.
 
 **Exit codes:**
 - `0`: set up (and, unless skipped, installed and emitted)
