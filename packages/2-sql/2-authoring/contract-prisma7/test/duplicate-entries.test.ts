@@ -1,8 +1,8 @@
 /**
  * Prisma 7's dialect reads its blocks structurally, so duplicate-key
- * reporting for those blocks belongs to this package — the shared block
- * reconstruction is provenance-only and the shared interpreter never sees
- * these unregistered keywords.
+ * reporting for those blocks belongs to this package — the parser collects
+ * unregistered keywords as symbols without interpreting them, so no shared
+ * pass sees their entries.
  */
 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';

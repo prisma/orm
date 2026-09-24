@@ -128,14 +128,14 @@ export type PslDiagnosticCode =
 export type ContributedPslDiagnosticCode = `PSL_${string}`;
 
 /**
- * One entry of the source/print representation of an extension block: the
- * entry's expression text exactly as authored (or synthesized by inference)
- * and its span. A missing `expression` is a bare line — a key with no
- * `= value`.
+ * One entry of the producer-only print shape of an extension block: the
+ * entry's expression text and its span. A missing `expression` is a bare
+ * line — a key with no `= value`.
  *
- * The text is output provenance only. No validator, classifier, or lowering
- * may read it; validated values travel through
- * {@link ParsedPslExtensionBlock} instead.
+ * The text is born from a producer's own values (e.g. database inference),
+ * never from parsed source — parsed AST is not stringified into this shape.
+ * No validator, classifier, or lowering may read it; validated values travel
+ * through {@link ParsedPslExtensionBlock} instead.
  */
 export interface PslExtensionBlockSourceEntry {
   readonly expression?: string;
@@ -170,9 +170,11 @@ export interface PslExtensionBlockParsedAttribute {
 }
 
 /**
- * Source/print representation of an extension-contributed top-level PSL
- * block. This shape exists for rendering only — the printer and inference
- * producers construct and consume it; validated values never travel here.
+ * Producer-only print-document shape of an extension-contributed top-level
+ * PSL block. It exists for producers that hold no AST — inference and other
+ * generators whose text is born from introspected or computed values — and
+ * the printer is its only consumer. Parsed source is never converted into
+ * this shape, and validated values never travel here.
  *
  * - `kind` is the routing discriminant, equal to the descriptor's
  *   `discriminator`. Several keywords may share one discriminator (e.g.
@@ -181,12 +183,11 @@ export interface PslExtensionBlockParsedAttribute {
  * - `keyword` is the source PSL keyword the block was declared with
  *   (`policy_select`, `policy_insert`, …) — the parse-dispatch identity.
  * - `name` is the block's declared name (the identifier after the keyword).
- * - `parameters` maps entry keys to their source entries in authored order
- *   (the first occurrence of a duplicate key is retained). Each entry
- *   carries expression text and span for printing only; a missing
- *   `expression` renders as a bare line.
+ * - `parameters` maps entry keys to their print entries in the producer's
+ *   order. Each entry carries expression text and span for printing only; a
+ *   missing `expression` renders as a bare line.
  * - `blockAttributes` are `@@`-prefixed attribute lines inside the block, in
- *   declaration order, captured generically for printing.
+ *   the producer's order.
  * - `span` covers the full block from keyword to closing brace.
  */
 export interface PslExtensionBlock {

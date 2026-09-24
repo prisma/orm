@@ -104,13 +104,13 @@ namespace auth {
     expect(diagnostics).toEqual([]);
   });
 
-  it('places the parsed block in the auth namespace entries under native_enum', () => {
-    const { symbolTable } = parsePsl(source);
+  it('places the parsed block in the auth namespace with a native_enum envelope', () => {
+    const { symbolTable, parsedBlocks } = parsePsl(source);
     const authNs = symbolTable.topLevel.namespaces['auth'];
     expect(authNs).toBeDefined();
-    const blocks = Object.values(authNs!.blocks).map((b) => b.block);
+    const blocks = Object.values(authNs!.blocks);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toMatchObject({ kind: 'native_enum', name: 'AalLevel' });
+    expect(parsedBlocks.get(blocks[0]!)).toMatchObject({ kind: 'native_enum', name: 'AalLevel' });
   });
 });
 
