@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { AnyCodecDescriptorTemplate } from '@internal/framework-components/codec';
-import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import {
   BinaryExpr,
@@ -38,7 +38,7 @@ function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
     codecId,
     traits: ['equality'],
     targetTypes: [],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => codec,
   };

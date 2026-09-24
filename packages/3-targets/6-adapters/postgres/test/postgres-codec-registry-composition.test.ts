@@ -3,7 +3,7 @@ import type {
   AnyCodecDescriptor,
   AnyCodecDescriptorTemplate,
 } from '@internal/framework-components/codec';
-import { dataType, dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataType, dataTypeId } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import {
@@ -95,7 +95,7 @@ function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
     codecId,
     traits: ['equality'],
     targetTypes: [],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => codec,
   };
@@ -130,7 +130,7 @@ function transformingPostgresDescriptor(
     codecId,
     traits: ['equality'],
     targetTypes: [nativeType],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => {
       onMaterialize?.();

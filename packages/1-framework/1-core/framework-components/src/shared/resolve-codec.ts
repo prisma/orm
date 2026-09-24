@@ -29,19 +29,29 @@ export function resolveCodecDescriptorOrThrow(
 /**
  * Validates `ref.typeParams` against `descriptor.paramsSchema`.
  *
- * Parameterized codecs that omit `typeParams` have it normalized to `{}` before
- * validation (mirrors `ast-codec-resolver.ts` semantics). Throws
- * `RUNTIME.TYPE_PARAMS_INVALID` when the validator returns a `Promise` or
- * reports issues.
+ * A codec without a `paramsSchema` takes no params and accepts no `typeParams`.
+ * A parameterized codec whose ref omits `typeParams` validates `{}` (mirrors
+ * `ast-codec-resolver.ts` semantics). Throws `RUNTIME.TYPE_PARAMS_INVALID` when
+ * params are given to a codec without params, or when the validator returns a
+ * `Promise` or reports issues.
  */
 export function validateCodecTypeParams(descriptor: AnyCodecDescriptor, ref: CodecRef): unknown {
-  const normalized =
-    descriptor.isParameterized && ref.typeParams === undefined ? { ...ref, typeParams: {} } : ref;
+  const schema = descriptor.paramsSchema;
+  if (schema === undefined) {
+    if (ref.typeParams !== undefined) {
+      throw runtimeError(
+        'RUNTIME.TYPE_PARAMS_INVALID',
+        `Invalid typeParams for codec '${ref.codecId}': unexpected typeParams for non-parameterized codec`,
+        { codecId: ref.codecId, typeParams: ref.typeParams },
+      );
+    }
+    return undefined;
+  }
 
   const result = blindCast<
     { value: unknown } | { issues: ReadonlyArray<{ message: string }> } | Promise<unknown>,
     'Standard Schema validate returns unknown; the spec guarantees this union shape'
-  >(descriptor.paramsSchema['~standard'].validate(normalized.typeParams));
+  >(schema['~standard'].validate(ref.typeParams ?? {}));
 
   if (result instanceof Promise) {
     throw runtimeError(

@@ -1,5 +1,4 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
 
@@ -110,23 +109,3 @@ export const emptyCodecLookup: CodecLookup = {
 export interface CodecInstanceContext {
   readonly name: string;
 }
-
-/**
- * Standard Schema validator for `void` params. Accepts only `undefined` (or absent input); rejects any other value so a contract that tries to thread `typeParams` through a non-parameterized codec id fails fast at the JSON boundary instead of silently coercing the value away. Used by the framework-supplied non-parameterized descriptor synthesizer.
- */
-export const voidParamsSchema: StandardSchemaV1<void> = {
-  '~standard': {
-    version: 1,
-    vendor: 'prisma',
-    validate: (input) =>
-      input === undefined
-        ? { value: undefined }
-        : {
-            issues: [
-              {
-                message: 'unexpected typeParams for non-parameterized codec (void params expected)',
-              },
-            ],
-          },
-  },
-};

@@ -11,7 +11,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
-import { type CodecInstanceContext, type CodecTrait, voidParamsSchema } from './codec-types';
+import type { CodecInstanceContext, CodecTrait } from './codec-types';
 import type { DataTypeId } from './data-type';
 
 /**
@@ -32,9 +32,9 @@ export interface CodecDescriptorTemplate<P = void> {
   readonly traits: readonly CodecTrait[];
   /** Database-native type names this codec handles (e.g. `['timestamptz']`). */
   readonly targetTypes: readonly string[];
-  /** Standard Schema validator for the factory's params. Validates JSON-sourced params at the contract boundary (PSL → IR; `contract.json` → runtime). For non-parameterized codecs (`P = void`), the schema validates `void`/`undefined` — the framework supplies no params at the call boundary. */
-  readonly paramsSchema: StandardSchemaV1<P>;
-  /** Whether this descriptor is parameterized — i.e. its `paramsSchema` is something other than the singleton `voidParamsSchema`. Consumers that need to gate column-aware dispatch read this directly rather than threading a free-floating `(codecId) => boolean` callback. */
+  /** Standard Schema validator for the factory's params. Validates JSON-sourced params at the contract boundary (PSL → IR; `contract.json` → runtime). `undefined` for a codec that takes no params (`P = void`), which then rejects any `typeParams`. */
+  readonly paramsSchema: StandardSchemaV1<P> | undefined;
+  /** Whether this descriptor takes params, i.e. has a `paramsSchema`. Consumers that need to gate column-aware dispatch read this directly rather than threading a free-floating `(codecId) => boolean` callback. */
   readonly isParameterized: boolean;
   /** Emit-path string renderer for `contract.d.ts`. Returns the TypeScript output type expression for given params (e.g. `Vector<1536>`). Optional; absent renderers cause the emitter to fall back to the codec's base output type. Non-parameterized codecs typically omit it. */
   readonly renderOutputType?: (params: P) => string | undefined;
@@ -96,11 +96,10 @@ export abstract class CodecDescriptorTemplateImpl<TParams = void>
   abstract readonly traits: readonly CodecTrait[];
   abstract readonly targetTypes: readonly string[];
 
-  abstract readonly paramsSchema: StandardSchemaV1<TParams>;
+  abstract readonly paramsSchema: StandardSchemaV1<TParams> | undefined;
 
-  /** Boolean derived from `paramsSchema`: `true` whenever the schema is not the singleton `voidParamsSchema`. */
   get isParameterized(): boolean {
-    return this.paramsSchema !== voidParamsSchema;
+    return this.paramsSchema !== undefined;
   }
 
   /** Optional emit-path string renderer for `contract.d.ts`. Returns the TypeScript output type expression for the given params (e.g. `Vector<1536>`). Non-parameterized codecs typically omit it. */
