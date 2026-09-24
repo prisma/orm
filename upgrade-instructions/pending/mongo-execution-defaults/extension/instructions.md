@@ -11,6 +11,12 @@ changes:
       matches:
         - '(?:\)|\b\w+)\s*:\s*MongoExecutionContext\b(?:<[^>]*>)?\s*(?:=\s*\{|\{)'
         - '\bsatisfies\s+MongoExecutionContext\b'
+  - id: mongo-field-builder-execution-defaults-parameter
+    summary: |
+      The Mongo `FieldBuilder` type gains a fifth type parameter, the field's execution defaults,
+      defaulting to `undefined`, so a bare `FieldBuilder` constraint rejects preset fields such as
+      `field.temporal.createdAt()`; widen it to
+      `FieldBuilder<ContractFieldType, boolean, boolean, EnumTypeHandle | undefined, ExecutionMutationDefaultPhases | undefined>`.
 ---
 
 ## `mongo-execution-context-applies-mutation-defaults`
@@ -26,3 +32,7 @@ const context: MongoExecutionContext = { contract, codecs, stack };
 // after
 const context: MongoExecutionContext = { contract, codecs, stack, applyMutationDefaults: () => [] };
 ```
+
+## `mongo-field-builder-execution-defaults-parameter`
+
+Code that constrains on a bare `FieldBuilder` (for example `Fields extends Record<string, FieldBuilder>`) accepts only builders without execution defaults; pass `ExecutionMutationDefaultPhases | undefined` as the fifth type argument to accept preset fields. There is no detection pattern: a bare `FieldBuilder` reference is too common to tell which uses need the wider type.
