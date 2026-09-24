@@ -35,6 +35,8 @@ const CASES: readonly string[] = [
   'timestamps',
   'unknown-attribute',
   'unknown-top-level-block',
+  'unsupported-type',
+  'unsupported-type-model-ignored',
   'updated-at-type-unsupported',
   'view',
 ];

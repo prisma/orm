@@ -524,15 +524,39 @@ interface TypeContext {
   readonly diagnostics: Diagnostics;
 }
 
+interface FieldOwner {
+  readonly kind: 'model' | 'type';
+  readonly name: string;
+}
+
+function unsupportedTypeMessage(label: string, typeName: string, owner: FieldOwner): string {
+  const ownerLabel = `${owner.kind} "${owner.name}"`;
+  const base = `${label} has type "${typeName}(...)", which has no Prisma 8 codec, so ${ownerLabel} cannot use this contract source while it has the field. Prisma 6 rejects @ignore on an Unsupported field. Removing the field from the schema leaves its stored values in the documents, but the Prisma 6 client no longer reads or writes them.`;
+  if (owner.kind === 'type') return base;
+  return `${base} Adding @@ignore to model "${owner.name}" keeps the model out of the contract, but the model disappears from the Prisma 6 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 6 client as well.`;
+}
+
 /** The field's contract type, or `undefined` after reporting why it has none. */
 function resolveFieldType(
   field: FieldSymbol,
-  label: string,
+  owner: FieldOwner,
   nativeType: ResolvedAttribute | undefined,
   sourceId: string,
   ctx: TypeContext,
 ): ContractField | undefined {
   const { binding, diagnostics } = ctx;
+  const label = `Field "${owner.name}.${field.name}"`;
+  if (field.typeConstructor !== undefined) {
+    diagnostics.push(
+      prisma6Diagnostic(
+        'PSL.PRISMA6_MONGO_UNSUPPORTED_TYPE',
+        unsupportedTypeMessage(label, field.typeConstructor.path.join('.'), owner),
+        sourceId,
+        field.typeConstructor.span,
+      ),
+    );
+    return undefined;
+  }
   const nativeTypeUnsupported = (attribute: ResolvedAttribute): undefined => {
     diagnostics.push(
       prisma6Diagnostic(
@@ -574,10 +598,10 @@ function resolveFieldType(
   const scalarCodecId = Object.hasOwn(binding.scalarCodecIds, field.typeName)
     ? binding.scalarCodecIds[field.typeName]
     : undefined;
-  if (field.typeConstructor !== undefined || scalarCodecId === undefined) {
+  if (scalarCodecId === undefined) {
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-      message: `${label} type "${field.typeConstructor?.path.join('.') ?? field.typeName}" is not supported by the Prisma 6 MongoDB contract source.`,
+      message: `${label} type "${field.typeName}" is not supported by the Prisma 6 MongoDB contract source.`,
       sourceId,
       span: field.span,
     });
@@ -629,7 +653,13 @@ function readCompositeFields(
       }
     }
     if (rejected) continue;
-    const resolved = resolveFieldType(field, label, nativeType, sourceId, ctx);
+    const resolved = resolveFieldType(
+      field,
+      { kind: 'type', name: symbol.name },
+      nativeType,
+      sourceId,
+      ctx,
+    );
     if (resolved !== undefined) fields[field.name] = resolved;
   }
   return fields;
@@ -784,7 +814,13 @@ function readModelField(
   build.storedNames.set(field.name, storedName);
   if (field.malformedType) return;
 
-  const resolved = resolveFieldType(field, label, nativeType, sourceId, ctx);
+  const resolved = resolveFieldType(
+    field,
+    { kind: 'model', name: symbol.name },
+    nativeType,
+    sourceId,
+    ctx,
+  );
   if (resolved === undefined) return;
   const codecId = resolved.type.kind === 'scalar' ? resolved.type.codecId : undefined;
 
