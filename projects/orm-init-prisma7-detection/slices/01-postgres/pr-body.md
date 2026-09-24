@@ -55,13 +55,13 @@ The contract source is the existing `schema.prisma`, read through `prisma7Schema
 
 **Asking, never assuming.** The Prisma 7 path is entered only by the `--from-prisma7-schema` flag or by a yes to the question. The question has no default, so `--yes` and non-interactive runs never take the path by accident. Combining the flag with `--schema-path` or `--authoring` is an error, since those mean "write a starter schema".
 
-**Choosing the target.** The provider picks among the targets init knows: `postgresql` or `mongodb`. `--target` may only agree with it, or name the database when the provider is not a string literal. A mismatch (`CLI.INIT_PRISMA7_TARGET_MISMATCH`) and a provider with no target (`CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`) are refused before anything is asked or installed. Init no longer refuses Mongo by name.
+**Choosing the target.** The provider picks among the targets init knows: `postgresql` or `mongodb`. `--target` may only agree with it, or name the database when the provider is not a string literal. With `--from-prisma7-schema`, a mismatch (`CLI.INIT_PRISMA7_TARGET_MISMATCH`) and a provider with no target (`CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`) are refused before anything is asked or installed. Without the flag, init does not ask its Prisma 7 question in those cases and runs as a fresh init. Init no longer refuses Mongo by name.
 
 **Checking the schema first.** Before any consent question, init installs the target package and `dotenv` (both are installed by every init), loads the package's `/config` entrypoint from the project, and runs its `prisma7Schema` source through the new `loadContractSource`, the part of `contract emit` that builds the control stack and runs the source, without writing anything. The CLI carries no target code, so the installed package is the only one that can answer. Outcomes:
 
 - The source reads the schema: init continues.
-- The source refuses: `CLI.INIT_PRISMA7_SCHEMA_REFUSED` with each diagnostic as `<file>:<line>:<column> <code> <message>`, and the command that removes the packages the project did not declare before.
-- The package has no `prisma7Schema`: after a yes to the question init warns and runs as a fresh init; with the flag it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`. When `@prisma/orm-mongo/config` exports `prisma7Schema`, the Mongo path works with no change to init.
+- The source refuses: `CLI.INIT_PRISMA7_SCHEMA_REFUSED` with each diagnostic as `<file>:<line>:<column> <code> <message>`, and the command that removes the packages the project did not declare before. Any later error, including the engine's own consent and cancellation errors, carries the same remove command.
+- The package has no `prisma7Schema`: after a yes to the question init warns before its next question and runs as a fresh init, and the warning says when that replaces the Prisma 7 `prisma.config.ts` (after asking) and the Prisma 7 CLI; with the flag it stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`. When `@prisma/orm-mongo/config` exports `prisma7Schema`, the Mongo path works with no change to init.
 - `--skip-install` and the package is not installed: a warning, and init continues.
 - The install fails: exit 4 with nothing written.
 
@@ -86,6 +86,7 @@ The contract source is the existing `schema.prisma`, read through `prisma7Schema
 - `loadContractSource` has its own tests, and every existing emit test passes unchanged.
 - Each new test was checked to fail without its implementation; the notes are in the PR conversation.
 - Manual QA on 2026-09-24 (`manual-qa-reports/2026-09-24-opus.md`) against a Prisma 7.10.0 project, scenarios S1 to S12. It found two bugs, both fixed here: the remove command named a `dotenv` the project already declared, and a re-run replaced init's own `prisma.config.ts` without naming it in the consent. It also found that the process stays alive after "Done" only when a prompt was answered, in a real terminal or a pseudo-terminal alike; that and `--confirm` being ignored in an interactive session are engine issues, briefed separately.
+- An independent review of the diff found three more problems, fixed here: the remove command was missing from the engine's consent and cancellation errors, the Prisma 7 question was asked when a `--target` mismatch made a yes pointless, and the fresh-init fallback did not say before its questions what it would replace.
 
 ## Known limitation
 

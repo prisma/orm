@@ -100,7 +100,9 @@ function collectArtifactCollisionDiagnostics(
 }
 
 /**
- * Validates a raw `orm` section and resolves its paths against `configDir`, the way a loaded config file is. A caller that builds the section in memory gets the same diagnostics as one that wrote it to `prisma.config.ts`.
+ * Validates a raw `orm` section and resolves its paths against `configDir`, the way a loaded config
+ * file is. A caller that builds the section in memory gets the same diagnostics as one that wrote
+ * it to `prisma.config.ts`.
  */
 export function buildLoadedConfig(
   rawConfig: Record<string, unknown>,
