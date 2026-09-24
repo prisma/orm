@@ -119,7 +119,7 @@ Interpreters still run spec interpretation for argument **values**; the binder o
 
 ## Transitional-shape constraints
 
-- Work stacks on the unmerged PR #30335 and lands after it; no cherry-picking its content into `main` independently.
+- ~~Work stacks on the unmerged PR #30335 and lands after it.~~ Obsolete: #30335 squash-merged 2026-09-18; the branch is based on `main`. PR CI tests the merge into current `main` automatically — which on 2026-09-24 exposed that contributed model attributes (`@@fullTextIndex`, landed on `main` post-branch-point, carrying reference arguments) must reach the binder's injected spec namespace; fixed in-tree with a reproduction fixture, no base-merge required.
 - A consumer converts wholly within its slice: no consumer carries both a hand-rolled resolver and binder calls for the same question across slice boundaries.
 - Unconverted consumers keep working at every intermediate state. Amended by operator decree: the attribute-argument question converts across ALL consumers at once (the required-binder threading) — per-question wholeness supersedes per-consumer wholeness for that question; each consumer's remaining hand-rolled resolution (type references, relation targets) still converts wholly in its own slice.
 
