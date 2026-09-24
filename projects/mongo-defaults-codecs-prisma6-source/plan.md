@@ -36,7 +36,17 @@ Builds on: slices 1 and 3. Hands to: close-out.
 
 ## Sequence
 
-Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. Then parallel: 4 and 5 (4 does not touch authoring or the reader, 5 does not touch the runtime). Five slices: the rename was split out of slice 4 during slice 3's first dispatch to keep the Mongo diff reviewable.
+Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 4 and 5 are independent of each other but share one worktree and one implementer, so they run sequentially: 5 first (the user-facing reader), then 4 (the runtime hoist, cleanup). Five slices: the rename was split out of slice 4 during slice 3's first dispatch to keep the Mongo diff reviewable.
+
+## Delivery state
+
+| Slice | Branch | PR |
+|---|---|---|
+| 1 | `mongo-target-owns-codecs` | #30396, CI green, awaiting review |
+| 2 | `execution-ref-neutral-names` | #30399, CI green, awaiting review |
+| 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
+| 5 | `mongo-prisma6-source` | in progress, stacked on 3 |
+| 4 | | not started |
 
 ## Dependencies
 
