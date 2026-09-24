@@ -48,3 +48,4 @@ Stack: 1 → 2. Then parallel: 3 and 4 (independent of each other; 4 does not to
 ## Open items
 
 - ADR 198 describes a `MongoCommandExecutor` DDL visitor and a `MarkerOperations` without a `space` parameter; neither matches the code, and the drift predates this project. Slice 1 corrected only the composition-site example. Rewriting the DDL dispatch text is its own change; do it at close-out or as a separate direct change.
+- `architecture.config.json` maps the Postgres, SQLite, and Mongo target packages to the `extensions` domain, which may import from `targets` (the adapters). So `lint:deps` accepts a target importing its adapter, the direction ADR 198 forbids. Correcting the domain mapping touches all three targets and is its own change.

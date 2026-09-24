@@ -67,7 +67,8 @@ Out: generators, `execution` section, `temporal.*` (slice 2); consolidating dupl
 
 Inherits `drive/calibration/dod.md`. Slice-specific:
 
-- `grep -r "@internal/adapter-mongo" packages/3-mongo-target/1-mongo-target/src` returns nothing, and `pnpm lint:deps` enforces it through the new glob registrations.
+- `grep -r "@internal/adapter-mongo" packages/3-mongo-target/1-mongo-target/src` returns nothing, enforced by `packages/3-mongo-target/1-mongo-target/test/layering.test.ts`. `pnpm lint:deps` cannot enforce it today because `architecture.config.json` maps target packages to the `extensions` domain, which may import `targets`; see the project plan's open items.
+- Upgrade-instructions fragments exist under `upgrade-instructions/pending/` for the removed `adapter/codec*` and `adapter/data-types` import paths and the removed `createMongoRunnerDeps`, and `pnpm check:upgrade-coverage --mode pr` passes.
 - Every new codec has wire and JSON round-trip tests, a PSL interpreter test, a TS builder test, and an end-to-end write-then-read test on `mongodb-memory-server`.
 
 ## References
