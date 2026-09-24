@@ -16,7 +16,7 @@ import {
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
-  resolvePrimaryKeyColumn,
+  resolveRowIdentityColumns,
 } from './collection-contract';
 import { mapModelDataToStorageRow, mapStorageRowToModelFields } from './collection-runtime';
 import { and, shorthandToWhereExpr } from './filters';
@@ -141,25 +141,34 @@ export async function executeNestedUpdateMutation(options: {
   );
 }
 
-export function buildPrimaryKeyFilterFromRow(
+export function buildRowIdentityFilterFromRow(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   modelName: string,
   row: Record<string, unknown>,
 ): Record<string, unknown> {
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
-  const primaryKeyColumn = resolvePrimaryKeyColumn(contract, namespaceId, tableName);
-  const fieldName = toFieldName(contract, namespaceId, modelName, primaryKeyColumn);
-  const value = row[fieldName];
-  if (value === undefined) {
-    throw new InternalError(
-      `Missing primary key field "${fieldName}" while reloading model "${modelName}"`,
+  const identityColumns = resolveRowIdentityColumns(contract, namespaceId, tableName);
+  if (identityColumns.length === 0) {
+    throw ormError(
+      'ORM.ROW_IDENTITY_MISSING',
+      `Nested mutations on model "${modelName}" require table "${tableName}" to have a primary key or unique constraint`,
+      { meta: { model: modelName, table: tableName } },
     );
   }
 
-  return {
-    [fieldName]: value,
-  };
+  const filter: Record<string, unknown> = {};
+  for (const column of identityColumns) {
+    const fieldName = toFieldName(contract, namespaceId, modelName, column);
+    const value = row[fieldName];
+    if (value === undefined) {
+      throw new InternalError(
+        `Missing identity field "${fieldName}" while reloading model "${modelName}"`,
+      );
+    }
+    filter[fieldName] = value;
+  }
+  return filter;
 }
 
 export async function withMutationScope<T>(
@@ -340,15 +349,20 @@ async function updateFirstGraph(
     for (const def of appliedUpdateDefaults) {
       mappedUpdateData[def.column] = def.value;
     }
-    const pkFilter = buildPrimaryKeyFilterFromRow(contract, namespaceId, modelName, existingRow);
-    const pkWhere = shorthandToWhereExpr(
+    const identityFilter = buildRowIdentityFilterFromRow(
+      contract,
+      namespaceId,
+      modelName,
+      existingRow,
+    );
+    const identityWhere = shorthandToWhereExpr(
       context,
       namespaceId,
       modelName,
-      castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(pkFilter),
+      castAs<MutationUpdateInput<Contract<SqlStorage>, string>>(identityFilter),
     );
-    if (!pkWhere) {
-      throw new InternalError(`Failed to build primary key filter for model "${modelName}"`);
+    if (!identityWhere) {
+      throw new InternalError(`Failed to build row identity filter for model "${modelName}"`);
     }
 
     const compiled = compileUpdateReturning(
@@ -356,7 +370,7 @@ async function updateFirstGraph(
       namespaceId,
       tableName,
       mappedUpdateData,
-      [pkWhere],
+      [identityWhere],
       undefined,
     );
     const updatedRowsRaw = await queryPlanRows<Record<string, unknown>>(scope, compiled).toArray();

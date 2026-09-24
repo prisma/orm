@@ -86,7 +86,7 @@ import {
 } from './include-descriptors';
 import { createModelAccessor } from './model-accessor';
 import {
-  buildPrimaryKeyFilterFromRow,
+  buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
@@ -1456,13 +1456,13 @@ class CollectionImpl<
         >(data),
       });
 
-      const pkCriterion = buildPrimaryKeyFilterFromRow(
+      const identityCriterion = buildRowIdentityFilterFromRow(
         this.contract,
         this.namespaceId,
         this.modelName,
         createdRow,
       );
-      const reloaded = await this.#reloadMutationRowByPrimaryKey(pkCriterion);
+      const reloaded = await this.#reloadMutationRowByIdentity(identityCriterion);
       if (!reloaded) {
         throw ormError(
           'ORM.MUTATION_ROW_MISSING',
@@ -2155,13 +2155,13 @@ class CollectionImpl<
         return null;
       }
 
-      const pkCriterion = buildPrimaryKeyFilterFromRow(
+      const identityCriterion = buildRowIdentityFilterFromRow(
         this.contract,
         this.namespaceId,
         this.modelName,
         updatedRow,
       );
-      return this.#reloadMutationRowByPrimaryKey(pkCriterion);
+      return this.#reloadMutationRowByIdentity(identityCriterion);
     }
 
     return withMutationScope(this.ctx.runtime, async (scope) => {
@@ -2612,8 +2612,8 @@ class CollectionImpl<
     );
   }
 
-  async #reloadMutationRowByPrimaryKey(criterion: Record<string, unknown>): Promise<Row | null> {
-    return this.#reloadMutationRowByCriterion(criterion, 'primary key');
+  async #reloadMutationRowByIdentity(criterion: Record<string, unknown>): Promise<Row | null> {
+    return this.#reloadMutationRowByCriterion(criterion, 'row identity');
   }
 
   async #reloadMutationRowByCriterion(
