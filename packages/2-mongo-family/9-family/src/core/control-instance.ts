@@ -23,6 +23,7 @@ import { assertDescriptorSelfConsistency } from '@internal/migration-tools/space
 import type { MongoContract } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
@@ -86,7 +87,10 @@ function deserializeMongoContract(contractJson: unknown): MongoContract {
  * shape with a single narrow cast.
  */
 function asValidatedMongoContract(contract: unknown): MongoContract {
-  return contract as MongoContract;
+  return blindCast<
+    MongoContract,
+    'the framework SPI passes the family its own validated contract as unknown'
+  >(contract);
 }
 
 function buildVerifyResult(opts: {
@@ -139,7 +143,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
   // inconsistent descriptor" into an explicit, actionable error
   // (`MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH`) rather than a confusing
   // mismatch surfacing several layers downstream. Mirrors the SQL family.
-  const extensions = (controlStack.extensions ?? []) as readonly MongoControlExtensionDescriptor[];
+  const extensions = blindCast<
+    readonly MongoControlExtensionDescriptor[],
+    'a Mongo control stack composes only Mongo extension descriptors'
+  >(controlStack.extensions ?? []);
   for (const extension of extensions) {
     if (extension.contractSpace) {
       const { contractJson, headRef } = extension.contractSpace;
@@ -158,12 +165,20 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
   // the adapter resolved from the control stack; the family carries no
   // direct imports of target/adapter/driver internals. Mirrors the SQL
   // family's `getControlAdapter()` helper.
-  const adapter = controlStack.adapter as MongoControlAdapterDescriptor<'mongo'> | undefined;
+  const adapter = blindCast<
+    MongoControlAdapterDescriptor<'mongo'> | undefined,
+    'a Mongo control stack composes a Mongo adapter descriptor'
+  >(controlStack.adapter);
   const getControlAdapter = (): MongoControlAdapter<'mongo'> => {
     if (!adapter) {
       throw new InternalError('Mongo family requires an adapter descriptor in ControlStack');
     }
-    return adapter.create(controlStack as ControlStack<'mongo', 'mongo'>);
+    return adapter.create(
+      blindCast<
+        ControlStack<'mongo', 'mongo'>,
+        'this family instance was created for the Mongo target'
+      >(controlStack),
+    );
   };
 
   // The family-level driver type is `ControlDriverInstance<'mongo', string>`,
@@ -195,11 +210,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
     familyId: 'mongo' as const,
 
     deserializeContract(contractJson: unknown): Contract {
-      // The deserialized class form (MongoTargetContract, owned by
-      // target-mongo) and the framework Contract are structurally
-      // compatible — same fields, just a class instance on the storage
-      // envelope. The cast preserves the framework signature.
-      return deserializeMongoContract(contractJson) as unknown as Contract;
+      return blindCast<
+        Contract,
+        'a deserialized Mongo contract is a framework Contract whose storage is Mongo storage'
+      >(deserializeMongoContract(contractJson));
     },
 
     async verify(options): Promise<VerifyDatabaseResult> {
