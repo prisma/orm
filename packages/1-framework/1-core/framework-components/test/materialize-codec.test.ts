@@ -159,3 +159,10 @@ test('materializeCodec rejects typeParams for a codec without params', ({ expect
     "Invalid typeParams for codec 'demo/int4@1': unexpected typeParams for non-parameterized codec",
   );
 });
+
+test('materializeCodec treats empty typeParams as none for a codec without params', ({
+  expect,
+}) => {
+  const ref: CodecRef = { codecId: 'demo/int4@1', typeParams: {} };
+  expect(materializeCodec(descriptorFor(ref), ref, stubCtx).id).toBe('demo/int4@1');
+});

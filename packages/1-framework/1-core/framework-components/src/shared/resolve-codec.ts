@@ -26,10 +26,21 @@ export function resolveCodecDescriptorOrThrow(
   return descriptor;
 }
 
+function isAbsentOrEmpty(typeParams: CodecRef['typeParams']): boolean {
+  return (
+    typeParams === undefined ||
+    (typeof typeParams === 'object' &&
+      typeParams !== null &&
+      !Array.isArray(typeParams) &&
+      Object.keys(typeParams).length === 0)
+  );
+}
+
 /**
  * Validates `ref.typeParams` against `descriptor.paramsSchema`.
  *
- * A codec without a `paramsSchema` takes no params and accepts no `typeParams`.
+ * A codec without a `paramsSchema` takes no params: it accepts absent or empty
+ * `typeParams` (a bare native-type alias carries `{}`) and rejects anything else.
  * A parameterized codec whose ref omits `typeParams` validates `{}` (mirrors
  * `ast-codec-resolver.ts` semantics). Throws `RUNTIME.TYPE_PARAMS_INVALID` when
  * params are given to a codec without params, or when the validator returns a
@@ -38,7 +49,7 @@ export function resolveCodecDescriptorOrThrow(
 export function validateCodecTypeParams(descriptor: AnyCodecDescriptor, ref: CodecRef): unknown {
   const schema = descriptor.paramsSchema;
   if (schema === undefined) {
-    if (ref.typeParams !== undefined) {
+    if (!isAbsentOrEmpty(ref.typeParams)) {
       throw runtimeError(
         'RUNTIME.TYPE_PARAMS_INVALID',
         `Invalid typeParams for codec '${ref.codecId}': unexpected typeParams for non-parameterized codec`,
