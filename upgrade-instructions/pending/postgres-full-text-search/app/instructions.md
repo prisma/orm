@@ -63,9 +63,10 @@ The operations also take an options object as their second argument — `languag
 ```ts
 import { tsquery, websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 
+const q = websearchToTsquery(query);
 await db.orm.public.Message.select('id', 'text')
-  .where((m) => m.text.fullTextMatches(websearchToTsquery(query)))
-  .orderBy((m) => m.text.fullTextRank(websearchToTsquery(query), { normalization: 32 }).desc())
+  .where((m) => m.text.fullTextMatches(q))
+  .orderBy((m) => m.text.fullTextRank(q, { normalization: 32 }).desc())
   .all();
 
 const suggestions = await db.orm.public.Message.select('id', 'text')

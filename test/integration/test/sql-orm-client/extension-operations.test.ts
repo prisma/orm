@@ -123,10 +123,11 @@ describe('integration/full-text-search operations', () => {
       await withCollectionRuntime(async (runtime) => {
         await seedSearchablePosts(runtime);
 
+        const query = websearchToTsquery('alice');
         const results = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches(websearchToTsquery('alice')))
-          .orderBy((p) => p.title.fullTextRank(websearchToTsquery('alice')).desc())
+          .where((p) => p.title.fullTextMatches(query))
+          .orderBy((p) => p.title.fullTextRank(query).desc())
           .all();
 
         expect(results).toEqual([

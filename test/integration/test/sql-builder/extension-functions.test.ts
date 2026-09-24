@@ -1,4 +1,4 @@
-import { tsquery } from '@internal/target-postgres/full-text';
+import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
@@ -223,6 +223,37 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
       expect(await idsFor('bob')).toEqual([103]);
       expect(await idsFor("bob' | 'alice")).toEqual([]);
     });
+  });
+
+  it('a parser takes a varchar column as its text', async () => {
+    const row = await runtime()
+      .query(
+        db()
+          .public.comments.select('id')
+          .select('query', (f, fns) => fns.websearchToTsquery(f.subject))
+          .where((f, fns) => fns.eq(f.id, 101))
+          .build(),
+      )
+      .firstOrThrow();
+    expect(row).toEqual({ id: 101, query: "'alic' & 'subject' & 'line'" });
+  });
+
+  it('one query expression can filter, rank and highlight', async () => {
+    const query = websearchToTsquery('alice');
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .select('snippet', (f, fns) => fns.fullTextHeadline(f.body, query))
+        .where((f, fns) => fns.fullTextMatches(f.body, query))
+        .orderBy((f, fns) => fns.fullTextRank(f.body, query), { direction: 'desc' })
+        .orderBy((f) => f.id, { direction: 'asc' })
+        .build(),
+    );
+    expect(rows).toEqual([
+      { id: 102, snippet: '<b>alice</b> met <b>alice</b> and <b>alice</b> again' },
+      { id: 101, snippet: '<b>alice</b> wrote the report' },
+      { id: 106, snippet: '<b>alice</b> manuscript draft' },
+    ]);
   });
 
   it('a selected parser expression reads back as the normalized tsquery text', async () => {

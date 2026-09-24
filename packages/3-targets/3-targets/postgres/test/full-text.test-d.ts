@@ -57,3 +57,22 @@ test('the tsquery tag takes only string values and gives a tsquery the operation
   // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
   tsquery({ language: 'klingon' });
 });
+
+test('a parser takes a string or any textual column, and nothing else', () => {
+  type Column<CodecId extends string> = Expression<{ codecId: CodecId; nullable: false }>;
+  const column = <CodecId extends string>(): Column<CodecId> => null as unknown as Column<CodecId>;
+
+  websearchToTsquery('zebra');
+  websearchToTsquery(column<'pg/text@1'>());
+  toTsquery(column<'sql/varchar@1'>());
+  plaintoTsquery(column<'pg/varchar@1'>());
+  phrasetoTsquery(column<'pg/char@1'>());
+  // @ts-expect-error an integer column is not text
+  websearchToTsquery(column<'pg/int4@1'>());
+  // @ts-expect-error nor is a number
+  websearchToTsquery(42);
+  // @ts-expect-error a tsquery is already parsed
+  websearchToTsquery(column<'pg/tsquery@1'>());
+  // @ts-expect-error a nullable text column may hold no text to parse
+  websearchToTsquery(null as unknown as Expression<{ codecId: 'pg/text@1'; nullable: true }>);
+});

@@ -125,7 +125,7 @@ This package contributes the built-in Postgres query operations — `ilike`, and
 - `` tsquery`${term}:*` `` for `tsquery` operator syntax around user input, such as a typeahead prefix match. The literal parts are trusted syntax the application writes. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax. An empty value adds no words, like a stop word. A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word. Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error for every input. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
 - `toTsquery(text)` for operator syntax the application writes in full, such as `'zebra' & !'graze'`. Malformed text fails at execution, so never pass user input; use the `tsquery` tag instead.
 
-The four parsers take text (a string or a `pg/text@1` expression, not a `varchar` column) and `{ language? }`, bind the text as a parameter, and lower to the Postgres function of the same name. They are also registered as query operations that attach to no column, so the SQL builder's `fns` has them by name; the ORM reaches them, and the `tsquery` tag, through the import. A `tsquery` value read back from a query can be passed straight back as the query; it binds as a `tsquery` parameter.
+The four parsers take text (a string, or a column of any `textual` type such as `text` or `varchar`) and `{ language? }`, bind the text as a parameter, and lower to the Postgres function of the same name. They are also registered as query operations that attach to no column, so the SQL builder's `fns` has them by name; the ORM reaches them, and the `tsquery` tag, through the import. A `tsquery` value read back from a query can be passed straight back as the query; it binds as a `tsquery` parameter.
 
 Each operation takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's or tag's own `language` governs the query side); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
 
@@ -149,9 +149,10 @@ Through the ORM:
 ```typescript
 import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 
+const q = websearchToTsquery(query);
 const hits = await db.orm.public.Message.select('id', 'text')
-  .where((row) => row.text.fullTextMatches(websearchToTsquery(query)))
-  .orderBy((row) => row.text.fullTextRank(websearchToTsquery(query)).desc())
+  .where((row) => row.text.fullTextMatches(q))
+  .orderBy((row) => row.text.fullTextRank(q).desc())
   .limit(20)
   .all();
 
@@ -160,13 +161,15 @@ const suggestions = await db.orm.public.Message.select('id', 'text')
   .all();
 ```
 
-Through the SQL builder:
+Through the SQL builder, with one query for the filter, the order and the snippet, so the snippet highlights what selected the row:
 
 ```typescript
+const q = websearchToTsquery(query);
 const snippets = db.sql.public.message
   .select('id')
-  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, fns.websearchToTsquery(query)))
-  .where((f, fns) => fns.fullTextMatches(f.text, fns.toTsquery("'zebra' & !'graze'")))
+  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, q))
+  .where((f, fns) => fns.fullTextMatches(f.text, q))
+  .orderBy((f, fns) => fns.fullTextRank(f.text, q), { direction: 'desc' })
   .build();
 ```
 

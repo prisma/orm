@@ -68,18 +68,19 @@ Operators on the field proxy include `.eq`, `.neq`, `.lt`, `.lte`, `.gt`, `.gte`
 - User input inside operator syntax, such as typeahead: the `tsquery` tag, `` tsquery`${term}:*` ``. The literal parts are trusted `tsquery` syntax you write. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax; an empty value adds no words, like a stop word. A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word. Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error for every input. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
 - Operator syntax you write in full: `toTsquery("'zebra' & !'graze'")`. Malformed text fails at execution, so never pass user input to it; use the `tsquery` tag for that.
 
-The four parsers are also `fns` members in the SQL builder. Each takes the text (a string or a `text` column, not a `varchar` column) and `{ language? }`, and binds the text as a parameter. The `tsquery` tag is an import in both the ORM and the SQL builder. A `tsquery` value read back from a query can be passed straight back as the query.
+The four parsers are also `fns` members in the SQL builder. Each takes the text (a string, or a text column of any kind, `varchar` included) and `{ language? }`, and binds the text as a parameter. The `tsquery` tag is an import in both the ORM and the SQL builder. A `tsquery` value read back from a query can be passed straight back as the query.
 
 Each operation takes an options object as its second argument. `language` (default `'english'`) is the configuration for the column's `to_tsvector`, the expression the index covers; the parser's or tag's own `language` governs the query side, and the two normally match. It only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
 
 ```typescript
 import { tsquery, websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
 
-// ORM: filter by the search-box query, order by relevance.
+// ORM: filter by the search-box query, order by relevance. Build the query once and reuse it.
+const q = websearchToTsquery(query);
 const hits = await db.orm.public.Message
   .select('id', 'text')
-  .where((m) => m.text.fullTextMatches(websearchToTsquery(query)))
-  .orderBy((m) => m.text.fullTextRank(websearchToTsquery(query)).desc())
+  .where((m) => m.text.fullTextMatches(q))
+  .orderBy((m) => m.text.fullTextRank(q).desc())
   .limit(20)
   .all();
 
@@ -89,13 +90,13 @@ const suggestions = await db.orm.public.Message
   .where((m) => m.text.fullTextMatches(tsquery`${term}:*`))
   .all();
 
-// SQL builder: the parsers are fns; a snippet with your own markers.
+// SQL builder: the same query filters and highlights, so the snippet marks what selected the row.
 const snippets = db.sql.public.message
   .select('id')
   .select('snippet', (f, fns) =>
-    fns.fullTextHeadline(f.text, fns.websearchToTsquery(query), { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 }),
+    fns.fullTextHeadline(f.text, q, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 }),
   )
-  .where((f, fns) => fns.fullTextMatches(f.text, fns.toTsquery("'zebra' & !'graze'")))
+  .where((f, fns) => fns.fullTextMatches(f.text, q))
   .build();
 ```
 

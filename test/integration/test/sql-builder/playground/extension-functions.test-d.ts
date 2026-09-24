@@ -158,3 +158,12 @@ test('rank and headline options are typed', () => {
     fns.fullTextHeadline(f.name, fns.websearchToTsquery('alice'), { startSel: 1 }),
   );
 });
+
+test('a parser takes a varchar column, but not a non-textual one', () => {
+  db.public.comments
+    .select('query', (f, fns) => fns.websearchToTsquery(f.subject))
+    .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery(f.subject)));
+  db.public.comments
+    // @ts-expect-error an integer column is not text
+    .select('query', (f, fns) => fns.websearchToTsquery(f.id));
+});
