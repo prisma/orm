@@ -26,7 +26,7 @@
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.0",
+    "@prisma/cli-engine": "0.6.1",
     "@repo/test-utils": "workspace:8.0.0-rc.11",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
     "@repo/tsdown": "workspace:8.0.0-rc.11",
@@ -36,7 +36,7 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/cli-engine": "0.6.0",
+    "@prisma/cli-engine": "0.6.1",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
