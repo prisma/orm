@@ -35,27 +35,27 @@ describe('interpretPslDocumentToSqlContract default function lowering', () => {
       mutations: {
         defaults: [
           {
-            ref: { namespace: 'public', table: 'Defaults', column: 'idCuid2' },
+            ref: { namespace: 'public', entry: 'Defaults', field: 'idCuid2' },
             onCreate: { kind: 'generator', id: 'cuid2' },
           },
           {
-            ref: { namespace: 'public', table: 'Defaults', column: 'idNanoidDefault' },
+            ref: { namespace: 'public', entry: 'Defaults', field: 'idNanoidDefault' },
             onCreate: { kind: 'generator', id: 'nanoid' },
           },
           {
-            ref: { namespace: 'public', table: 'Defaults', column: 'idNanoidSized' },
+            ref: { namespace: 'public', entry: 'Defaults', field: 'idNanoidSized' },
             onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
           },
           {
-            ref: { namespace: 'public', table: 'Defaults', column: 'idUlid' },
+            ref: { namespace: 'public', entry: 'Defaults', field: 'idUlid' },
             onCreate: { kind: 'generator', id: 'ulid' },
           },
           {
-            ref: { namespace: 'public', table: 'Defaults', column: 'idUuidV4' },
+            ref: { namespace: 'public', entry: 'Defaults', field: 'idUuidV4' },
             onCreate: { kind: 'generator', id: 'uuidv4' },
           },
           {
-            ref: { namespace: 'public', table: 'Defaults', column: 'idUuidV7' },
+            ref: { namespace: 'public', entry: 'Defaults', field: 'idUuidV7' },
             onCreate: { kind: 'generator', id: 'uuidv7' },
           },
         ],
@@ -128,11 +128,11 @@ model UuidNative {
       mutations: {
         defaults: expect.arrayContaining([
           {
-            ref: { namespace: 'public', table: 'UuidNative', column: 'idV4' },
+            ref: { namespace: 'public', entry: 'UuidNative', field: 'idV4' },
             onCreate: { kind: 'generator', id: 'uuidv4' },
           },
           {
-            ref: { namespace: 'public', table: 'UuidNative', column: 'idV7' },
+            ref: { namespace: 'public', entry: 'UuidNative', field: 'idV7' },
             onCreate: { kind: 'generator', id: 'uuidv7' },
           },
         ]),
@@ -176,7 +176,7 @@ model Profile {
       mutations: {
         defaults: [
           {
-            ref: { namespace: 'public', table: 'Profile', column: 'id' },
+            ref: { namespace: 'public', entry: 'Profile', field: 'id' },
             onCreate: { kind: 'generator', id: 'uuidv4' },
           },
         ],

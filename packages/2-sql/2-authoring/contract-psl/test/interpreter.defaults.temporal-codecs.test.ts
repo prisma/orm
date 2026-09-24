@@ -147,7 +147,7 @@ stamped ${field}
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: '__unbound__', table: 'T', column: 'stamped' },
+        ref: { namespace: '__unbound__', entry: 'T', field: 'stamped' },
         onCreate: nowPhase,
         onUpdate: nowPhase,
       },

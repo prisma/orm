@@ -684,7 +684,7 @@ function applyMutationDefaults(
   const rowCache = new Map<string, unknown>();
 
   for (const mutationDefault of defaults) {
-    if (mutationDefault.ref.table !== options.table) {
+    if (mutationDefault.ref.entry !== options.table) {
       continue;
     }
     if (mutationDefault.ref.namespace !== options.namespace) {
@@ -702,7 +702,7 @@ function applyMutationDefaults(
       continue;
     }
 
-    const columnName = mutationDefault.ref.column;
+    const columnName = mutationDefault.ref.field;
     if (Object.hasOwn(options.values, columnName) || appliedColumns.has(columnName)) {
       continue;
     }

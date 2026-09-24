@@ -61,8 +61,8 @@ const ExecutionMutationDefaultSchema = type({
   ref: {
     '+': 'reject',
     namespace: 'string',
-    table: 'string',
-    column: 'string',
+    entry: 'string',
+    field: 'string',
   },
   'onCreate?': ExecutionMutationDefaultValueSchema,
   'onUpdate?': ExecutionMutationDefaultValueSchema,

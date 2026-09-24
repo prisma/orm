@@ -1275,10 +1275,11 @@ type HasExecutionCreateDefault<
       // (e.g. a junction resolved through its declared `namespaceId`), the match
       // must include it so a same-named `table.column` in another namespace
       // cannot borrow this namespace's default. With no namespace (`never`), fall
-      // back to table/column matching.
+      // back to table/column matching. A SQL ref names the table as its `entry`
+      // and the column as its `field`.
       readonly ref: {
-        readonly table: ModelTableName<TContract, ModelName, NsId>;
-        readonly column: FieldColumnName<TContract, ModelName, FieldName, NsId>;
+        readonly entry: ModelTableName<TContract, ModelName, NsId>;
+        readonly field: FieldColumnName<TContract, ModelName, FieldName, NsId>;
       } & ([NsId] extends [never] ? unknown : { readonly namespace: NsId });
       readonly onCreate?: unknown;
     }

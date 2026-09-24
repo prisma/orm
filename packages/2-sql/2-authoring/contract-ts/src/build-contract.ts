@@ -1168,7 +1168,7 @@ export function buildSqlContractFromDefinition(
 
       if (executionDefaultPhases) {
         executionDefaults.push({
-          ref: { namespace: namespaceId, table: tableName, column: field.columnName },
+          ref: { namespace: namespaceId, entry: tableName, field: field.columnName },
           ...ifDefined('onCreate', executionDefaultPhases.onCreate),
           ...ifDefined('onUpdate', executionDefaultPhases.onUpdate),
         });
@@ -1604,11 +1604,11 @@ export function buildSqlContractFromDefinition(
       ? {
           mutations: {
             defaults: executionDefaults.sort((a, b) => {
-              const tableCompare = a.ref.table.localeCompare(b.ref.table);
-              if (tableCompare !== 0) {
-                return tableCompare;
+              const entryCompare = a.ref.entry.localeCompare(b.ref.entry);
+              if (entryCompare !== 0) {
+                return entryCompare;
               }
-              return a.ref.column.localeCompare(b.ref.column);
+              return a.ref.field.localeCompare(b.ref.field);
             }),
           },
         }
