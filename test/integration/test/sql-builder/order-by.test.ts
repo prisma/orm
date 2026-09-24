@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
 describe('integration: ORDER BY', { timeout: timeouts.databaseOperation }, () => {
-  const { db, runtime } = setupIntegrationTest();
+  const { db, runtime, lower } = setupIntegrationTest();
 
   it('sorts by column descending', async () => {
     const rows = await runtime().query(
@@ -16,6 +16,30 @@ describe('integration: ORDER BY', { timeout: timeouts.databaseOperation }, () =>
   it('sorts by column ascending (default)', async () => {
     const rows = await runtime().query(db().public.users.select('id').orderBy('id').build());
     expect(rows.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('places nulls first when asked, against the ascending default of nulls last', async () => {
+    const plan = db()
+      .public.users.select('id')
+      .orderBy('invited_by_id', { direction: 'asc', nulls: 'first' })
+      .orderBy('id')
+      .build();
+
+    expect(lower(plan).sql).toContain('ORDER BY "invited_by_id" ASC NULLS FIRST, "id" ASC');
+    const rows = await runtime().query(plan);
+    expect(rows.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+  });
+
+  it('places nulls last when asked, against the descending default of nulls first', async () => {
+    const plan = db()
+      .public.users.select('id')
+      .orderBy('invited_by_id', { direction: 'desc', nulls: 'last' })
+      .orderBy('id')
+      .build();
+
+    expect(lower(plan).sql).toContain('ORDER BY "invited_by_id" DESC NULLS LAST, "id" ASC');
+    const rows = await runtime().query(plan);
+    expect(rows.map((r) => r.id)).toEqual([4, 2, 3, 1]);
   });
 
   it('sorts by expression callback', async () => {
