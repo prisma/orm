@@ -60,6 +60,55 @@ const Schema = type.declare<Expected, { side: 'out' }>().type({
 
 Reference: [Arktype Declare API](https://arktype.io/docs/declare)
 
+## Read the Docs Before Building Machinery
+
+Read the arktype docs (https://arktype.io/docs) before you write code that walks a schema, copies values around validation, or repairs arktype's output afterwards. The Configuration, Morphs and Scopes pages cover most of the problems that look like they need bespoke code. Do not read arktype's compiled node tree (`schema.internal`, `.structure`, `.branches`, `.in`): it is not a public API, and code built on it breaks on shapes you did not anticipate (unions, tuples, a root `.narrow()` combined with defaults).
+
+An example of what goes wrong otherwise: the CLI engine's config schemas once copied the input along the schema's declared shape before validation and put the config file's objects back afterwards, by walking the compiled node tree twice. arktype's documented `clone` option does the same job in about twenty lines.
+
+## What a Transformation Does to Its Input
+
+### arktype clones the input before any morph applies
+
+A morph is any transformation: `.pipe()`, `=>`, or a default value (`'string = "x"'`, `['path', '=', () => './x']`). When at least one morph applies anywhere in a value, arktype clones the whole root input before it applies the morphs, then writes each result into the clone at the morph's path. Without morphs nothing is cloned and validation returns the input itself.
+
+The clone comes from the `clone` config option. Its default, `deepClone` from `@ark/util`:
+
+- keeps each object's prototype, but builds a new object with copies of its own properties;
+- rebuilds plain objects, arrays and class instances all the way down;
+- keeps functions, `Map`, `Set` and other built-ins as they are, and re-creates `Date`s.
+
+So after validation:
+
+- `===` against a shared object fails. Codec descriptors used to mark "takes no params" with a shared `voidParamsSchema` object and compare against it; a cloned descriptor carried a copy, and every codec looked parameterized.
+- Private `#fields` are missing on the copy, so methods that read them throw.
+- Anything keyed by object identity (`WeakMap`, `Set` of objects) no longer finds the value.
+
+### Configuring the clone
+
+The option can be set globally, per scope, or per type:
+
+```typescript
+const configScope = scope(
+  { path: type('string').pipe((value, ctx) => resolveAgainstConfigFile(value, ctx.path)) },
+  { clone: (original) => copyPlainObjectsAndArrays(original) },
+);
+```
+
+- A custom function replaces the clone. The CLI engine's config scope copies only plain objects and arrays, where arktype writes results, and returns everything else as it is.
+- `clone: false` writes results into the caller's input. That mutates the caller's objects and throws on frozen input.
+- `structuredClone` is not a safe substitute: it throws on functions and drops prototypes.
+
+Reference: [Configuration](https://arktype.io/docs/configuration), "clone".
+
+### Other behaviour worth knowing
+
+- **Literal defaults run their morph when the schema is defined; thunk defaults run it when the default is applied.** `['path', '=', './x']` resolves `./x` once, with no validation context. `['path', '=', () => './x']` resolves it during each validation. Use a thunk when the morph needs validation-time context.
+- **A morph receives its location.** In `.pipe((value, ctx) => ...)`, `ctx.path` is the key path of the value within the root. The engine's `path` keyword uses it to find which config file declared the value.
+- **A path given inside a `.narrow()` is taken from the root.** `ctx.error({ path: ['id'], ... })` inside a narrow on `family` reports at `id`, not `family.id`. Prepend the narrowed value's location to report under it: `path: [...ctx.path, 'id']`. Better, declare the fields structurally, so arktype reports each bad field at its full path itself.
+- **Undeclared keys are kept by default.** Declaring only the keys you check lets the rest of an object pass through unchanged.
+- **Errors for missing keys come out in alphabetical key order**, not declaration order.
+
 ## Optional Keys
 
 **❌ WRONG:**
