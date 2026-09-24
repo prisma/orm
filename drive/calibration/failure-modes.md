@@ -644,3 +644,13 @@ Per-repo stop conditions beyond the canonical ones:
 - An implementer's claim "predates this dispatch" about a journey is verified by the reviewer with `git log -1 origin/main -- <file>` and by asking whether `dist` was rebuilt after the last source change.
 
 **Reference incident.** remove-dbgenerated slice C dispatch 1 (2026-09-22): `infer-roundtrip-fidelity.prisma7-defaults` failed on a stale `family-sql` dist; the reviewer accepted the "red on main" claim in round 1 and corrected it in dispatch 3 after the implementer rebuilt the package.
+
+### F32. Stacked PR fails upgrade coverage because the fragment lives on its base branch
+
+**Symptom.** A stacked PR's local `pnpm check:upgrade-coverage --mode pr` passes, but CI's `Lint` job fails it with `[per-pr-declaration] ... requires a new declaration relative to --prev`.
+
+**Root cause.** CI passes `--prev <PR base sha>`; for a stacked PR that is the previous slice's head, which already carries the earlier fragment. Fragments inherited from the base do not count, so the stacked PR needs its own declaration even for an additive change. Locally the default base is `origin/main`, where the inherited fragment masks the gap.
+
+**Fix.** Run the check with `--prev $(git rev-parse <base-branch>)` in every dispatch gate on a stacked branch, and add a `changes: []` declaration for additive changes under `packages/3-extensions/**` or `examples/**`.
+
+**Reference incident.** 2026-09-25, the Mongo defaults project's slice 5 PR (#30405, stacked on #30403): the facade widening `contract: string | ContractConfig` was additive, the slice 3 fragment sat on the base branch, and CI refused the PR until a `changes: []` extension declaration was added. Same project, slice 3 (#30403): CI `Lint` failed on biome `no-bare-cast` and `noBannedTypes` because the dispatch briefs never listed the always-run per-package `pnpm lint` from `dod.md`; the F14 rule was already on file, the orchestrator did not thread it into the briefs.
