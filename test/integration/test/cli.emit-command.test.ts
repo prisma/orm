@@ -551,7 +551,8 @@ describe('emit command: additional fixtures', () => {
     try {
       writeFileSync(
         join(testSetup.testDir, 'schema.prisma'),
-        `model Post {
+        `// use prisma-8
+model Post {
   id Int @id
   data Unsupported
 }
@@ -591,9 +592,9 @@ describe('emit command: additional fixtures', () => {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: './schema.prisma',
+            sourceId: join(testSetup.testDir, 'schema.prisma'),
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -657,7 +658,9 @@ describe('emit command: additional fixtures', () => {
     try {
       writeFileSync(
         join(testSetup.testDir, 'contract.prisma'),
-        `model User {
+        `// use prisma-8
+
+model User {
   id    ObjectId @id @map("_id")
   name  String
   email String

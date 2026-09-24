@@ -58,7 +58,7 @@ withTempDir(({ createTempDir }) => {
         expect(result.exitCode, 'F.01: format PSL in place').toBe(0);
         expect(result.presented?.data, 'F.01: reports the file it rewrote').toEqual({
           formatted: true,
-          path: sourcePath,
+          paths: [sourcePath],
         });
 
         const onDisk = readFileSync(sourcePath, 'utf-8');
