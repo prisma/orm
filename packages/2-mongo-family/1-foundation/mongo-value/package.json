@@ -1,7 +1,7 @@
 {
   "name": "@internal/mongo-value",
   "private": true,
-  "version": "8.0.0-rc.11",
+  "version": "8.0.0-rc.12",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -19,8 +19,8 @@
     "mongodb": "catalog:"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.11",
-    "@repo/tsdown": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/tsdown": "workspace:8.0.0-rc.12",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

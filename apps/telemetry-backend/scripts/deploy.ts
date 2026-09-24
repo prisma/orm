@@ -3,18 +3,18 @@ import { fileURLToPath } from 'node:url';
 import { BuildError, BunBuild, ComputeClient } from '@prisma/compute-sdk';
 import { createManagementApiClient } from '@prisma/management-api-sdk';
 
-const token = process.env.TELEMETRY_DEPLOY_SERVICE_TOKEN;
+const token = process.env['TELEMETRY_DEPLOY_SERVICE_TOKEN'];
 if (!token) {
   throw new Error('TELEMETRY_DEPLOY_SERVICE_TOKEN not set');
 }
 
-const projectId = process.env.TELEMETRY_DEPLOY_PROJECT_ID;
+const projectId = process.env['TELEMETRY_DEPLOY_PROJECT_ID'];
 if (!projectId) {
   throw new Error('TELEMETRY_DEPLOY_PROJECT_ID not set');
 }
 
-const serviceId = process.env.TELEMETRY_DEPLOY_SERVICE_ID;
-if (!serviceId) {
+const appId = process.env['TELEMETRY_DEPLOY_SERVICE_ID'];
+if (!appId) {
   throw new Error('TELEMETRY_DEPLOY_SERVICE_ID not set');
 }
 
@@ -27,7 +27,7 @@ const result = await compute.deploy({
     entrypoint: 'src/server.ts',
   }),
   projectId,
-  serviceId,
+  appId,
   progress: {
     onBuildStart() {
       console.log('Building application...');
@@ -41,8 +41,8 @@ const result = await compute.deploy({
     onArchiveReady(sizeBytes) {
       console.log(`Archive ready (${sizeBytes} bytes)`);
     },
-    onVersionCreated(versionId) {
-      console.log(`Version created: ${versionId}`);
+    onDeploymentCreated(deploymentId) {
+      console.log(`Deployment created: ${deploymentId}`);
     },
     onUploadStart() {
       console.log('Uploading archive...');
@@ -60,40 +60,40 @@ const result = await compute.deploy({
       console.log(`Deployment running at ${deploymentUrl}`);
     },
     onPromoteStart() {
-      console.log('Promoting new version...');
+      console.log('Promoting new deployment...');
     },
-    onPromoted(serviceEndpointDomain) {
-      console.log(`Promoted: ${serviceEndpointDomain}`);
+    onPromoted(appEndpointDomain) {
+      console.log(`Promoted: ${appEndpointDomain}`);
     },
     onPromoteFailed(error) {
       console.error(`Promote failed: ${error}`);
     },
-    onOldVersionStopping(versionId) {
-      console.log(`Stopping old version ${versionId}...`);
+    onOldDeploymentStopping(deploymentId) {
+      console.log(`Stopping old deployment ${deploymentId}...`);
     },
-    onOldVersionStopped(versionId) {
-      console.log(`Stopped old version ${versionId}`);
+    onOldDeploymentStopped(deploymentId) {
+      console.log(`Stopped old deployment ${deploymentId}`);
     },
-    onOldVersionStopFailed(versionId) {
-      console.error(`Failed to stop old version ${versionId}`);
+    onOldDeploymentStopFailed(deploymentId) {
+      console.error(`Failed to stop old deployment ${deploymentId}`);
     },
-    onOldVersionDeleting(versionId) {
-      console.log(`Deleting old version ${versionId}...`);
+    onOldDeploymentDeleting(deploymentId) {
+      console.log(`Deleting old deployment ${deploymentId}...`);
     },
-    onOldVersionDeleted(versionId) {
-      console.log(`Deleted old version ${versionId}`);
+    onOldDeploymentDeleted(deploymentId) {
+      console.log(`Deleted old deployment ${deploymentId}`);
     },
-    onOldVersionDeleteFailed(versionId) {
-      console.error(`Failed to delete old version ${versionId}`);
+    onOldDeploymentDeleteFailed(deploymentId) {
+      console.error(`Failed to delete old deployment ${deploymentId}`);
     },
-    onCleanupDanglingVersion(versionId) {
-      console.log(`Cleaning up dangling version ${versionId}...`);
+    onCleanupDanglingDeployment(deploymentId) {
+      console.log(`Cleaning up dangling deployment ${deploymentId}...`);
     },
-    onCleanupDanglingVersionComplete(versionId) {
-      console.log(`Cleaned up dangling version ${versionId}`);
+    onCleanupDanglingDeploymentComplete(deploymentId) {
+      console.log(`Cleaned up dangling deployment ${deploymentId}`);
     },
-    onCleanupDanglingVersionFailed(versionId) {
-      console.error(`Failed to clean up dangling version ${versionId}`);
+    onCleanupDanglingDeploymentFailed(deploymentId) {
+      console.error(`Failed to clean up dangling deployment ${deploymentId}`);
     },
   },
 });
@@ -101,14 +101,14 @@ const result = await compute.deploy({
 result.match({
   ok: (deployment) => {
     console.log('Deploy succeeded:');
-    console.log(`  version:     ${deployment.versionId}`);
-    console.log(`  version URL: ${deployment.versionEndpointDomain}`);
-    if (deployment.promoted && deployment.serviceEndpointDomain) {
-      console.log(`  service URL: ${deployment.serviceEndpointDomain}`);
+    console.log(`  deployment:     ${deployment.deploymentId}`);
+    console.log(`  deployment URL: ${deployment.deploymentEndpointDomain}`);
+    if (deployment.promoted && deployment.appEndpointDomain) {
+      console.log(`  app URL:        ${deployment.appEndpointDomain}`);
     }
-    if (deployment.previousVersionId) {
+    if (deployment.previousDeploymentId) {
       console.log(
-        `  previous version ${deployment.previousVersionId}: ${deployment.previousVersionAction ?? 'unchanged'}`,
+        `  previous deployment ${deployment.previousDeploymentId}: ${deployment.previousDeploymentAction ?? 'unchanged'}`,
       );
     }
   },
