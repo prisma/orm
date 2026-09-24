@@ -29,7 +29,7 @@ export interface PostgresConfigOptions {
 
 function staticPrefixDirectory(pattern: string): string {
   const staticSegments: string[] = [];
-  for (const segment of pattern.split('/')) {
+  for (const segment of pattern.replaceAll('\\', '/').split('/')) {
     if (isDynamicPattern(segment)) break;
     staticSegments.push(segment);
   }

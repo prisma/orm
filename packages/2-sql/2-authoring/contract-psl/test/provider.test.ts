@@ -77,6 +77,13 @@ describe('prismaContract provider helper', () => {
       const contract = prismaContract('**/*.prisma', baseOptions);
       expect(contract.output).toBe('contract.json');
     });
+
+    it('derives the same output from a backslash-separated glob as its forward-slash twin', () => {
+      const forwardSlash = prismaContract('./prisma/**/*.prisma', baseOptions);
+      const backslash = prismaContract('.\\prisma\\**\\*.prisma', baseOptions);
+      expect(backslash.output).toBe(forwardSlash.output);
+      expect(backslash.output).toBe('./prisma/contract.json');
+    });
   });
 
   describe('the data types of the stack it is loaded with', () => {
