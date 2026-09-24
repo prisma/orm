@@ -2298,6 +2298,9 @@ importers:
       '@internal/mongo-query-ast':
         specifier: workspace:8.0.0-rc.12
         version: link:../4-query/query-ast
+      '@internal/mongo-runtime':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../7-runtime
       '@internal/mongo-schema-ir':
         specifier: workspace:8.0.0-rc.12
         version: link:../3-tooling/mongo-schema-ir

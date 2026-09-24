@@ -1,3 +1,4 @@
+import { timestampNowRuntimeGenerator } from '@internal/family-mongo/runtime';
 import type {
   ExecutionStack,
   RuntimeAdapterDescriptor,
@@ -6,7 +7,6 @@ import type {
 import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
-import { timestampNowRuntimeGenerator } from '../core/timestamp-now-runtime-generator';
 import { createMongoAdapter } from '../mongo-adapter';
 
 /**
