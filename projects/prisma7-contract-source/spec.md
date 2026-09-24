@@ -37,7 +37,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 ## Non-goals
 
-- Filling capability gaps. Views, Mongo defaults and automatic timestamps, Mongo `Json`/`Bytes`/`Decimal`/`BigInt`, opaque Postgres columns (`Unsupported(...)` and native types with no codec), referential-action emulation on Mongo, and `relationMode = "prisma"` are hard errors in this project. See § Deferred gaps.
+- Filling capability gaps. Views, opaque Postgres columns (`Unsupported(...)` and native types with no codec), referential-action emulation on Mongo, and `relationMode = "prisma"` are hard errors in this project. See § Deferred gaps. Mongo defaults and automatic timestamps, and Mongo `Json`/`Bytes`/`Decimal`/`BigInt`, were gaps here too; `projects/mongo-defaults-codecs-prisma6-source/` filled them.
 - Query-code rewriting.
 - Migration history and `_prisma_migrations`.
 - Prisma 6 SQL schemas that are not valid Prisma 7 schemas. The Mongo slice is the exception it has to be: Prisma 7 has no MongoDB connector, so that slice reads the Prisma 6 MongoDB dialect through `prisma6Schema`.
@@ -104,8 +104,8 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 Recorded so they are not lost; each becomes its own project when scheduled.
 
 - Views: no schema node, introspection selects `BASE TABLE` only (`control-adapter.ts:702-709`), verify reports a missing table.
-- Mongo execution defaults: the Mongo contract validator rejects `execution` (`contract-schema.ts:444-472`); the runtime generator machinery lives only in `packages/2-sql/5-runtime/src/sql-context.ts`; no Mongo timestamp generator; the default's reference shape is SQL-specific.
-- Mongo codecs for BSON binary, Decimal128, Int64, embedded documents.
+- Mongo execution defaults: filled by `projects/mongo-defaults-codecs-prisma6-source/` (PRs #30396, #30403, and its Prisma 6 MongoDB source PR).
+- Mongo codecs for BSON binary, Decimal128, Int64, embedded documents: filled by `projects/mongo-defaults-codecs-prisma6-source/` (PRs #30396, #30403, and its Prisma 6 MongoDB source PR).
 - A `pg/opaque` codec carrying the native type name, which also repairs `contract infer` emitting `Unsupported(...)` that nothing reads back.
 - A cuid v1 generator, if mapping `cuid()` to cuid2 turns out to matter.
 - Referential-action emulation on Mongo.
