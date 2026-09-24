@@ -82,7 +82,7 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
     });
     return interpretPslDocumentToSqlContract({
       dataTypeLookup: postgresDataTypeLookup,
-      document,
+      documents: [document],
       symbolTable,
       sources,
       capabilities: {},
