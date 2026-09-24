@@ -78,7 +78,7 @@ Out: hoisting the runtime registry into the framework and renaming the framework
 Inherits `drive/calibration/dod.md`. Slice-specific:
 
 - Red-then-green tests: contract requires a generator no runtime provides; duplicate generator id; preset on an optional field (PSL and TS); preset with `@id`; empty update payload does not advance `updatedAt`; explicit value wins; `createAll` shares one timestamp across rows; upsert create and update halves.
-- PSL and TS authoring of the same model emit byte-identical `contract.json` including `executionHash`.
+- PSL and TS authoring of the same model emit an identical `execution` section and `executionHash`, and identical `contract.json` apart from `storageHash` and collection validators, which differ today for reasons that predate this project (see edge cases and the plan's open items).
 - End to end on `mongodb-memory-server`: emit, apply, create without timestamps, update, read both back; create-input type has both fields optional.
 - SQL tests unchanged in intent and green after the preset-builder hoist.
 
