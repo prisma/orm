@@ -73,7 +73,7 @@ It is **offline** — it never consults a database, never reads a marker (which 
 
 When the origin came from the `db` ref by default and that node **already has an outgoing migration**, the plan still succeeds but warns: planning from there forks the graph. Pass `--from` to name the origin deliberately if that is what you want.
 
-**`migration new` picks its origin the same way.** With `--from <hash-or-prefix>` it uses that migration's `to` hash. Without `--from`: the `db` ref, else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`. It never chains from "the newest migration on disk" — there is no such node.
+**`migration new` picks its origin the same way, with one difference.** With `--from <hash-or-prefix>` it uses that migration's `to` hash. Without `--from`: the `db` ref (which must be a graph node), else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`. The difference: on an empty graph that has a `db` ref, `migration plan` writes the baseline (auto-baseline above) while `migration new` refuses with `MIGRATION.HASH_NOT_IN_GRAPH` and tells you to run `migration plan` first. Neither command ever chains from "the newest migration on disk" — there is no such node.
 
 The human output names the resolved origin on its `from:` line. **`from: (baseline)` means the origin resolved to nothing — the plan starts from an empty database** and will contain a create for every object in the contract.
 
