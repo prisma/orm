@@ -1785,6 +1785,9 @@ importers:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/0-foundation/contract
+      '@internal/errors':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/1-core/errors
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/1-core/framework-components
