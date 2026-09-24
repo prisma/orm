@@ -98,4 +98,28 @@ describe('orderBy null placement', () => {
       OrderByItem.desc(ColumnRef.of('posts__rows', 'posts__order_0'), { nulls: 'last' }),
     ]);
   });
+
+  it('keeps nulls on the order reapplied to a distinct include that nests another include', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .distinct('title')
+        .orderBy((post) => post.views.desc({ nulls: 'last' }))
+        .include('comments'),
+    ).state;
+
+    const plan = compileSelectWithIncludes(
+      baseContract,
+      getTestAggregates(),
+      'public',
+      'users',
+      state,
+    );
+
+    expect(orderByItemsIn(plan.ast)).toEqual([
+      OrderByItem.desc(ColumnRef.of('posts', 'views'), { nulls: 'last' }),
+      OrderByItem.desc(ColumnRef.of('posts__ranked', 'posts__order_0'), { nulls: 'last' }),
+      OrderByItem.desc(ColumnRef.of('posts__rows', 'posts__order_0'), { nulls: 'last' }),
+    ]);
+  });
 });

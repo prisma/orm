@@ -42,6 +42,10 @@ describe('ordering through a to-one relation', () => {
     expectTypeOf<PostAccessor['author']>().not.toHaveProperty('invitedBy');
   });
 
+  test('does not expose a related field whose codec is not orderable', () => {
+    expectTypeOf<PostAccessor['author']>().not.toHaveProperty('address');
+  });
+
   test('orders a collection by a related column, and cursor still typechecks after it', () => {
     posts.orderBy((p) => p.author.name.asc());
     posts.orderBy([(p) => p.author.name.desc({ nulls: 'last' }), (p) => p.id.asc()]);
