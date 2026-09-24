@@ -762,7 +762,25 @@ describe('entityRef', () => {
     const attribute = field?.node.attributes()[Symbol.iterator]().next().value;
     const expr = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
     if (!selfModel || !expr) throw new Error('Missing reference argument');
-    return { expr, ctx: { sources, symbols: symbolTable, selfModel } };
+    const { binder } = createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: {},
+      attributeSpecs: {
+        model: {},
+        field: {
+          x: () =>
+            fieldAttribute('x', {
+              documentation: 'fixture',
+              positional: [
+                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+              ],
+            }),
+        },
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    });
+    return { expr, ctx: { sources, symbols: symbolTable, selfModel, binder } };
   }
 
   it('parses a bare identifier into its resolved model', () => {

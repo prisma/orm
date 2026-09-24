@@ -1,15 +1,11 @@
 import type { Resolution } from './binder';
-import { documentScope, namespaceScope, type Scope, type ScopeResolution } from './scope';
 import type {
   BlockSymbol,
   CompositeTypeSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
-  SymbolTable,
 } from './symbol-table';
-import { NamespaceDeclarationAst } from './syntax/ast/declarations';
-import type { ExpressionAst } from './syntax/ast/expressions';
 
 export type EntitySelector =
   | { readonly kind: 'model' }
@@ -27,22 +23,6 @@ export type DeclarationFor<S extends EntitySelector> = Extract<
 export interface ResolvedEntityReference<D extends EntityDeclaration = EntityDeclaration> {
   readonly declaration: D;
   readonly namespace: NamespaceSymbol | undefined;
-}
-
-export function lookupEntityReferenceInSymbols(
-  expression: ExpressionAst,
-  name: string,
-  symbols: SymbolTable,
-): ScopeResolution | undefined {
-  const namespaceName = expression.syntax
-    .findAncestor(NamespaceDeclarationAst.cast)
-    ?.name()
-    ?.name();
-  const document: Scope = documentScope(symbols.topLevel, undefined);
-  const namespace =
-    namespaceName === undefined ? undefined : symbols.topLevel.namespaces[namespaceName];
-  const scope = namespace === undefined ? document : namespaceScope(namespace, document);
-  return scope.lookup(name);
 }
 
 const references = new WeakMap<EntityDeclaration, ResolvedEntityReference>();
