@@ -257,7 +257,7 @@ describe('executeContractEmit', () => {
       expect(await emitFailure()).toMatchObject({
         code: 'CONTRACT.SOURCE_LOAD_FAILED',
         why: 'Source interpretation failed',
-        fix: 'Edit the schema where each finding points, then run contract emit again.',
+        fix: 'Edit the source where each finding points, then run the command again.',
       });
     });
 

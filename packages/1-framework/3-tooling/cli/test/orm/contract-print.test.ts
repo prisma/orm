@@ -40,7 +40,7 @@ const groups = BIN_GROUPS;
 const dirs: string[] = [];
 
 async function projectDir(): Promise<string> {
-  const dir = createTestProjectDir('orm-convert');
+  const dir = createTestProjectDir('orm-print');
   dirs.push(dir);
   return dir;
 }
@@ -80,7 +80,7 @@ function ormConfig(dir: string, overrides: Record<string, unknown> = {}): Record
     adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
     driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
     contract: {
-      source: { format: 'typescript', inputs: ['./prisma/schema.prisma'], load: mocks.load },
+      source: { format: 'psl', inputs: ['./prisma/schema.prisma'], load: mocks.load },
       output: join(dir, 'generated', 'contract.json'),
     },
     ...overrides,
@@ -214,21 +214,28 @@ describe('contract print', () => {
         label: 'Point contract in prisma.config.ts at generated/contract.prisma',
       },
       { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
-      {
-        kind: 'run-command',
-        label: 'Plan the baseline migration',
-        command: '{bin} migration plan --name baseline',
-      },
-      { kind: 'run-command', label: 'Sign the database', command: '{bin} db sign' },
-      {
-        kind: 'run-command',
-        label: 'Point the db ref at the baseline migration',
-        command: '{bin} migration ref set db <timestamp>_baseline',
-      },
     ]);
     expect(run.presented?.presentation.stdout).toEqual([]);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
     expect(run.stdout).toBe('');
+  });
+
+  it('names the default control policy the config must set, because a PSL file cannot carry it', async () => {
+    const dir = await projectDir();
+    mocks.load.mockResolvedValue(ok({ roots: {}, domain: {}, defaultControlPolicy: 'external' }));
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toMatchObject({ defaultControlPolicy: 'external' });
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'user-choice',
+        label:
+          "Point contract in prisma.config.ts at generated/contract.prisma, with defaultControlPolicy 'external' on its source",
+      },
+      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+    ]);
   });
 
   it('refuses to write over the schema it reads and leaves that file untouched', async () => {
@@ -255,7 +262,7 @@ describe('contract print', () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
       contract: {
-        source: { format: 'typescript', inputs: ['./prisma'], load: mocks.load },
+        source: { format: 'psl', inputs: ['./prisma'], load: mocks.load },
         output: join(dir, 'generated', 'contract.json'),
       },
     });
@@ -310,7 +317,7 @@ describe('contract print', () => {
     expect(await readdir(dir)).not.toContain('generated');
   });
 
-  it('errors when the target cannot print the contract as PSL', async () => {
+  it('errors when the family cannot print the contract as PSL', async () => {
     const dir = await projectDir();
     mocks.printPslContract.mockReturnValue(undefined);
 
@@ -321,16 +328,16 @@ describe('contract print', () => {
     expect(mocks.close).toHaveBeenCalled();
   });
 
-  it('writes no file at the output path when the target refuses a column', async () => {
+  it('writes no file at the output path when the target refuses part of the contract', async () => {
     const dir = await projectDir();
     mocks.printPslContract.mockImplementation(() => {
       throw structuredError(
         'CONTRACT.PRINT_UNSUPPORTED',
-        'contract print: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
+        'contract print: field "public".Shop.location has a union type, which cannot be written in Prisma 8 PSL.',
         {
-          why: 'The PSL source would read a quoted default back as a string.',
-          fix: 'Replace the literal default with a database expression default.',
-          meta: { namespaceId: 'public', table: 'Defaults', column: 'jsonLiteral' },
+          why: 'A PSL field names one scalar, enum, or value-object type; a union of types has no PSL form.',
+          fix: 'Give the field a single type.',
+          meta: { coordinate: '"public".Shop.location', kind: 'union' },
         },
       );
     });
@@ -343,7 +350,7 @@ describe('contract print', () => {
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({
       code: 'CONTRACT.PRINT_UNSUPPORTED',
-      summary: expect.stringContaining('"public"."Defaults"."jsonLiteral"'),
+      summary: expect.stringContaining('"public".Shop.location'),
     });
     expect(await readdir(dir)).not.toContain('contract.prisma');
   });
@@ -353,11 +360,11 @@ describe('contract print', () => {
     mocks.printPslContract.mockImplementation(() => {
       throw structuredError(
         'CONTRACT.PRINT_UNSUPPORTED',
-        'contract print: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
+        'contract print: field "public".Shop.location has a union type, which cannot be written in Prisma 8 PSL.',
         {
-          why: 'The PSL source would read the written value back as a string rather than as the value the column defaults to.',
-          fix: 'Replace the literal default with a database expression default, or drop the default before converting.',
-          meta: { namespaceId: 'public', table: 'Defaults', column: 'jsonLiteral' },
+          why: 'A PSL field names one scalar, enum, or value-object type; a union of types has no PSL form.',
+          fix: 'Give the field a single type.',
+          meta: { coordinate: '"public".Shop.location', kind: 'union' },
         },
       );
     });
@@ -367,16 +374,10 @@ describe('contract print', () => {
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({
       code: 'CONTRACT.PRINT_UNSUPPORTED',
-      summary: expect.stringContaining('"public"."Defaults"."jsonLiteral"'),
-      why: 'The PSL source would read the written value back as a string rather than as the value the column defaults to.',
-      nextActions: [
-        {
-          kind: 'user-choice',
-          label:
-            'Replace the literal default with a database expression default, or drop the default before converting.',
-        },
-      ],
-      meta: { namespaceId: 'public', table: 'Defaults', column: 'jsonLiteral' },
+      summary: expect.stringContaining('"public".Shop.location'),
+      why: 'A PSL field names one scalar, enum, or value-object type; a union of types has no PSL form.',
+      nextActions: [{ kind: 'user-choice', label: 'Give the field a single type.' }],
+      meta: { coordinate: '"public".Shop.location', kind: 'union' },
     });
     expect(await readdir(dir)).not.toContain('generated');
   });

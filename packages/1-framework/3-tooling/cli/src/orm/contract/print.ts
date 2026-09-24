@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { printPsl as printPslFromAst } from '@internal/psl-printer';
+import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
@@ -15,7 +16,7 @@ import { publishTextArtifact } from '../../utils/publish-text-artifact';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import { inferredContractPathFor } from './paths';
+import { pslOutputPathFor } from './paths';
 
 interface PrintDocument {
   readonly ok: true;
@@ -23,31 +24,37 @@ interface PrintDocument {
   readonly target: { readonly familyId: string; readonly id: string };
   readonly psl: { readonly path: string };
   readonly source: readonly string[];
+  /**
+   * The contract's default control policy. A PSL file cannot carry it; the
+   * config sets it on the PSL source, or the emitted contract loses it.
+   */
+  readonly defaultControlPolicy?: string;
   readonly timings: { readonly total: number };
 }
 
-/**
- * The routine that carries a printed contract onto the database its source
- * describes: point the config at the written file, emit, plan a baseline,
- * sign, then point the `db` ref at the baseline.
- */
-function cutoverActions(writtenPath: string): readonly NextAction[] {
+/** Switching the config to the written file: emitting it produces the same contract. */
+function switchToPrintedActions(document: PrintDocument): readonly NextAction[] {
+  const policy = document.defaultControlPolicy;
   return [
-    chooseAction(`Point contract in prisma.config.ts at ${writtenPath}`),
-    runCommandAction('Emit the printed contract', '{bin} contract emit'),
-    runCommandAction('Plan the baseline migration', '{bin} migration plan --name baseline'),
-    runCommandAction('Sign the database', '{bin} db sign'),
-    runCommandAction(
-      'Point the db ref at the baseline migration',
-      '{bin} migration ref set db <timestamp>_baseline',
+    chooseAction(
+      policy === undefined
+        ? `Point contract in prisma.config.ts at ${document.psl.path}`
+        : `Point contract in prisma.config.ts at ${document.psl.path}, with defaultControlPolicy '${policy}' on its source`,
     ),
+    runCommandAction('Emit the printed contract', '{bin} contract emit'),
   ];
+}
+
+function defaultControlPolicyOf(contract: unknown): string | undefined {
+  if (typeof contract !== 'object' || contract === null) return undefined;
+  const policy = Reflect.get(contract, 'defaultControlPolicy');
+  return typeof policy === 'string' ? policy : undefined;
 }
 
 function printPresentations(document: PrintDocument): Presentations {
   return {
     stdout: () => [],
-    next: () => cutoverActions(document.psl.path),
+    next: () => switchToPrintedActions(document),
     human: (): readonly Block[] => [
       {
         kind: 'summary',
@@ -106,9 +113,9 @@ export function createContractPrintCommand({
         'of source that is, and writes it as a Prisma 8 PSL file. Emitting that\n' +
         'file produces the same contract: same hashes, same domain. If the\n' +
         'contract holds something PSL cannot express, the command refuses,\n' +
-        'names it, and writes nothing. The command stops at contract.prisma;\n' +
-        'switch the config to the written file, then run `contract emit`. An\n' +
-        'existing file at the output path is overwritten, with a warning.',
+        'names it, and writes nothing. The command only writes the PSL file;\n' +
+        'switch the config to it, then run `contract emit`. An existing file at\n' +
+        'the output path is overwritten, with a warning.',
       examples: [
         'contract print',
         'contract print --output ./src/prisma/contract.prisma',
@@ -139,7 +146,7 @@ export function createContractPrintCommand({
       const sourceInputs = contractConfig.source.inputs ?? [];
       const sourcePaths = sourceInputs.map((input) => relative(ctx.cwd, input));
 
-      const outputPath = inferredContractPathFor({
+      const outputPath = pslOutputPathFor({
         config: ctx.config,
         cwd: ctx.cwd,
         output: args.flags.output,
@@ -155,7 +162,7 @@ export function createContractPrintCommand({
           normalizeError(
             errorRuntime(
               'CONTRACT.PRINT_OUTPUT_IS_SOURCE',
-              'contract print would write over the schema it reads',
+              'contract print would write over its own contract source',
               {
                 why: `The output path ${displayPath} is the contract source ${relative(ctx.cwd, sourceInput)}, or sits inside it, so printing would destroy the source it reads.`,
                 fix: 'Pick another --output path, outside the source files the config names.',
@@ -175,23 +182,24 @@ export function createContractPrintCommand({
       });
 
       let pslContent: string;
+      let defaultControlPolicy: string | undefined;
       try {
         const { stack, contract } = await loadContractSource({
           config: ctx.config,
           contractConfig,
           signal: ctx.signal,
         });
+        defaultControlPolicy = defaultControlPolicyOf(contract);
         const pslContractAst = client.printPslContract(contract);
         if (pslContractAst === undefined) {
           return notOk(
             normalizeError(
               errorRuntime(
                 'CONTRACT.PRINT_UNSUPPORTED',
-                'contract print is not supported for this target',
+                'contract print is not supported for this family',
                 {
-                  why: 'The configured target does not implement the PslContractPrintCapable capability, so the loaded contract cannot be written as Prisma 8 PSL.',
-                  // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — this is user-facing guidance about which target can convert, not a framework type
-                  fix: 'Use a target that can print a contract as PSL (Postgres today).',
+                  why: 'The configured family cannot print a contract as PSL, so nothing was written.',
+                  fix: 'Use a family and target that can print a contract as PSL.',
                 },
               ),
             ),
@@ -228,6 +236,7 @@ export function createContractPrintCommand({
         target: { familyId: ctx.config.family.familyId, id: ctx.config.target.targetId },
         psl: { path: displayPath },
         source: sourcePaths,
+        ...ifDefined('defaultControlPolicy', defaultControlPolicy),
         timings: { total: Date.now() - startedAt },
       };
 

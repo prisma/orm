@@ -586,8 +586,9 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     SqlControlTargetDescriptor<TTargetId, unknown>,
     'reading the optional target-descriptor inferPslContract hook'
   >(target).inferPslContract;
-  // Contract→PSL printing is target logic for the same reason, and is read the
-  // same way. Absent for targets without `contract print`.
+  // Contract→PSL printing is also target logic (it owns the dialect type and
+  // default maps), so it is read off the descriptor the same way. Absent for
+  // targets without `contract print`.
   const targetPrintPslContract = blindCast<
     SqlControlTargetDescriptor<TTargetId, unknown>,
     'reading the optional target-descriptor printPslContract hook'
@@ -1030,12 +1031,14 @@ export function createSqlFamilyInstance<TTargetId extends string>(
           `Target "${target.targetId}" does not support contract print (no printPslContract on its descriptor).`,
           {
             why: 'The target descriptor does not provide the printPslContract hook, so the contract cannot be printed as a Prisma 8 PSL file.',
-            fix: 'Use a target package that supports contract print, or author the contract instead of converting it.',
+            fix: 'Use a target whose descriptor provides printPslContract, or write the Prisma 8 PSL file by hand.',
             meta: { targetId: target.targetId },
           },
         );
       }
-      return targetPrintPslContract(contract);
+      return targetPrintPslContract(contract, {
+        authoringTypes: stack.authoringContributions.type,
+      });
     },
 
     lowerAst(

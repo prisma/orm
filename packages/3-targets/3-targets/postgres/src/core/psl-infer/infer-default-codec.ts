@@ -42,6 +42,12 @@ export const CODEC_ID_BY_PRINTED_TYPE: ReadonlyMap<string, string> = new Map([
   ['Char', 'sql/char@1'],
 ]);
 
+/** The data type a codec represents; an enum column's default is a member name, so it reads as text. */
+export function dataTypeForCodec(codecId: string, isEnum: boolean): DataTypeId | undefined {
+  return postgresCodecDescriptorRegistry.descriptorFor(isEnum ? PG_TEXT_CODEC_ID : codecId)
+    ?.dataType;
+}
+
 /**
  * The data type a column of `pslTypeName` holds values of, which is the one its codec represents.
  * An enum column's default is a member name, which is text either way, so it reads through the text

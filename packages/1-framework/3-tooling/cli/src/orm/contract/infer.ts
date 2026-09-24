@@ -21,7 +21,7 @@ import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
-import { inferredContractPathFor } from './paths';
+import { pslOutputPathFor } from './paths';
 
 interface InferDocument {
   readonly ok: true;
@@ -173,7 +173,7 @@ export function createContractInferCommand({
         await closeQuietly(client);
       }
 
-      const outputPath = inferredContractPathFor({
+      const outputPath = pslOutputPathFor({
         config: ctx.config,
         cwd: ctx.cwd,
         output: args.flags.output,

@@ -42,12 +42,12 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 - Migration history and `_prisma_migrations`.
 - Prisma 6 SQL schemas that are not valid Prisma 7 schemas. The Mongo slice is the exception it has to be: Prisma 7 has no MongoDB connector, so that slice reads the Prisma 6 MongoDB dialect through `prisma6Schema`.
 - Extending the Prisma 7 dialect. It is frozen.
-- Teaching `contract format` or the language server to read Prisma 7 files.
+- Teaching the language server to read Prisma 7 files. `contract format` formats a Prisma 7 schema with the Prisma 8 formatter when it parses, because the Prisma 7 source is a `psl` source.
 
 ## Place in the larger world
 
 - The transition story this serves is the public upgrade guides listed under § References: Prisma 7 owns migrations, Prisma 8 adopts the database read-only with `db sign`, and cutover happens once. The older note `projects/prisma-8-rc1/parallel-install.md` assumes `prisma-next` and is out of date; `design-notes.md` reads the guides instead.
-- Contract sources are `ContractConfig` objects whose `source.load` returns a contract or diagnostics; the emit path calls it without caring about format (`packages/1-framework/3-tooling/cli/src/control-api/operations/contract-emit.ts:227`). The PSL source (`packages/2-sql/2-authoring/contract-psl/src/provider.ts:65`) and the TypeScript source (`packages/2-sql/2-authoring/contract-ts/src/config-types.ts:90`) are the two existing kinds. This project adds a third, one package per family, mirroring `contract-psl`.
+- Contract sources are `ContractConfig` objects whose `source.load` returns a contract or diagnostics; `contract emit` and `contract print` call it without caring about format (`packages/1-framework/3-tooling/cli/src/control-api/operations/load-contract-source.ts`). The framework knows two source formats, `psl` and `typescript`: the PSL source (`packages/2-sql/2-authoring/contract-psl/src/provider.ts`) and the TypeScript source (`packages/2-sql/2-authoring/contract-ts/src/config-types.ts`). The Prisma 7 source is a `psl` source in its own package per family, mirroring `contract-psl`.
 - The Prisma 8 syntax parser (`@internal/psl-parser`) already reads the Prisma 7 grammar almost completely. See `design-notes.md`.
 - Every existing PSL printer starts from the database schema description, not from a contract. The contract-to-PSL printer is new and exposed as a target-descriptor hook beside `inferPslContract`.
 
@@ -57,7 +57,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 2. **Fidelity is defined by `db verify`.** The interpreter must produce a contract that `db sign` verifies with zero findings, in lenient mode, against the database Prisma 7 built. `db verify` (`packages/2-sql/9-family/src/core/diff/schema-verify.ts`) compares: column native type string and nullability (never the codec); column defaults structurally; primary key columns but not the name; foreign key `onDelete` and `onUpdate` with `noAction` equal to absent, but not the name; unique constraints by columns, not the name; indexes by name plus uniqueness, type, and columns; check constraints by name; native enums by type name and ordered member list. Consequences: reproduce Prisma 7's default index names, always set both referential actions explicitly, keep enum member order, and leave key, foreign key, and unique names to Prisma 8.
 3. **No Prisma 7 packages in the product.** No framework, family, target, or extension package depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`. Parsing uses `@internal/psl-parser`.
 4. **Layering.** Family-specific rules live in the family authoring packages (`packages/2-sql/2-authoring/contract-prisma7`, and `packages/2-mongo-family/2-authoring/contract-prisma6` for the Mongo slice). Everything a target must answer arrives through a binding the target pack supplies (`Prisma7TargetBinding`); the authoring package holds no target facts. The Prisma 7 source is a `ContractConfig`, and `defineConfig` in both `@prisma/orm-postgres/config` and `@prisma/orm-mongo/config` accepts `contract: string | ContractConfig`. Nothing family-specific enters `packages/1-framework`.
-5. **Round trip is a hash equality.** For every fixture, interpreting the Prisma 7 file and interpreting the converted Prisma 8 file produce the same contract hashes, so the signed marker survives cutover.
+5. **Round trip is a hash equality.** For every fixture `contract print` can write, interpreting the Prisma 7 file and interpreting the printed Prisma 8 file produce the same contract hashes, so the signed marker survives cutover.
 6. **Multi-file schemas.** A directory path reads every `.prisma` file in it, matching Prisma 7's multi-file layout.
 
 ## Transitional-shape constraints
@@ -82,7 +82,7 @@ Inherits `drive/calibration/dod.md`. Project-specific:
 
 - Every rule row and every error code in the slice specs has a fixture that passes through the real parser and interpreter.
 - The Postgres and Mongo end-to-end proofs emit, sign, and verify with zero findings in lenient mode against databases shaped by Prisma 7 migrations.
-- For every fixture, `hash(interpret(prisma7)) === hash(interpret(convert(prisma7)))`.
+- For every fixture `contract print` can write, `hash(interpret(prisma7)) === hash(interpret(print(prisma7)))`. The two fixtures that declare one model name in two namespaces are refused.
 - A schema using any unsupported construct fails emit with one diagnostic per construct and no partial output.
 - No framework, family, target, or extension package depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`. The adoption example app (slice 4) intentionally installs Prisma 7, because showing both side by side is its purpose.
 - CLI README documents `contract print`, and each facade's config reference documents its reader (`prisma7Schema` for Postgres, `prisma6Schema` for Mongo).
@@ -116,18 +116,17 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 
 ### What `contract print` cannot write
 
-`contract print` loads the contract the config names, from any source, and writes it as Prisma 8 PSL that reads back as the same contract. The proof is two round-trip tests: one over every Prisma 7 fixture (`contract-prisma7/test/convert-roundtrip.test.ts`) and one over contracts emitted from TypeScript and PSL sources that carry what a Prisma 7 schema cannot (`adapter-postgres/test/psl-print-roundtrip.test.ts`): value objects, polymorphism, named types, domain enums, control policies, and every index argument. The printer writes all of those. Where the PSL language has no form for something the contract holds, the printer refuses it by name with `CONTRACT.PRINT_UNSUPPORTED` and writes no file; it never drops anything silently.
+`contract print` loads the contract the config names, from any source, and writes it as Prisma 8 PSL that reads back as the same contract. The proof is three round-trip tests: every Prisma 7 fixture (`contract-prisma7/test/print-roundtrip.test.ts`); emitted and PSL-authored contracts that carry what a Prisma 7 schema cannot, including value objects, polymorphism, named types, domain enums, control policies, every index argument, primary key names, non-default codecs, row-level security with roles and policies, and the Supabase contract (`adapter-postgres/test/psl-print-roundtrip.test.ts`); and a pgvector column with the extension in the stack (`test/integration/test/psl-print/extension-types-roundtrip.integration.test.ts`). Where PSL has no form for part of the contract, the printer refuses it by name with `CONTRACT.PRINT_UNSUPPORTED` and writes no file. The full list of refusals is under that code in `docs/reference/error-reference.md`. A PSL file cannot carry the contract's default control policy; the command names it so the config can set it on the PSL source.
 
-The refusals, and what would lift each:
+The refusals that a reader or language change would lift:
 
-- One model name declared in two namespaces. The PSL reader keys relation targets, junction detection and id columns by model name alone (`contract-psl/src/interpreter.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models read back as one. Lifted by re-keying those on (namespace, model).
-- A domain enum outside the default namespace. The PSL reader refuses an `enum` block inside a `namespace` block. Lifted by a reader change.
+- One model name declared in two namespaces. The PSL reader groups relations by bare model name (`contract-psl/src/psl-relation-resolution.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models would get each other's relations. Lifted by keying those on (namespace, model).
+- A domain enum or value object outside the default namespace. The PSL reader refuses an `enum` block inside a `namespace` block, and reads every `type` block into the default namespace. Lifted by reader changes.
 - A foreign key no relation travels, and a to-one relation with no foreign key behind it. The PSL reader derives every foreign key from a `@relation`, and every `@relation(fields:, references:)` lowers to one. Lifted by a relation argument that declines the constraint.
-- A field whose type is a union of types, a dictionary field, a column with its own control policy, and a model with an owner. None has PSL syntax.
-- An entity kind an extension contributes (row-level security policies, roles). Its PSL syntax belongs to the extension. Lifted by a per-kind print hook on the extension pack, the mirror of the block descriptors extensions already contribute for reading.
-- A generator the Postgres printer has no PSL form for (none of the Prisma 7 generators, which all print).
+- A union or dictionary field, a column with its own control policy, and a model with an owner. None has PSL syntax.
+- A generator with no PSL default function, and a generator on update other than the wall-clock-now generator. None of the Prisma 7 generators meets either.
 
-A `Json` object or array literal default was refused in the first version and now prints as a `json` tagged literal through the data types of ADR 254; the `defaults` fixture round-trips. With `dbgenerated` removed (#30380), `print-column-default.ts` writes every other function default as a `sql` tagged literal. Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
+A `Json` object or array literal default was refused in the first version and now prints as a `json` tagged literal through the data types of ADR 254; the `defaults` fixture round-trips. With `dbgenerated` removed (#30380), every other function default prints as a `sql` tagged literal. Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
 
 ### Found outside this project's scope
 
@@ -135,10 +134,9 @@ Each exists on `main` unless the line says otherwise, so none is a regression th
 
 - `contract format` deletes a `//` comment written between a block's name and its `{`. In `@internal/psl-parser`'s formatter.
 - `contract infer` prints a PascalCase table as a model of the same name with no `@@map`, and Prisma 8 then maps that model to the lower-first table name, so `db verify` reports the table missing. Every Prisma 7 table is PascalCase, so this blocks adopting a Prisma 7 database through infer. In the Postgres target's infer code.
-- `contract infer` prints a nullable list column as required; it never prints `Int[]?`, the form that emits and verifies. Every Prisma 7 list column is nullable. In the Postgres target's infer code.
-- `db init` fails on a `dbgenerated` date or time default, because the CLI process has no global `Temporal`. In the CLI.
+- `db init` failed on a `dbgenerated` date or time default, because the CLI process has no global `Temporal`. In the CLI. Recorded before #30380 replaced `dbgenerated` with `sql` tagged literals; not rechecked since.
 - `db init` fails on an enum list default. In the Postgres target's planner.
-- A list default Postgres reports as `'{a,b}'::text[]` or `'{t,f}'::boolean[]` infers as `dbgenerated(...)`, and `contract emit` then stops at that field. In the Postgres default reader.
+- A list default Postgres reports as `'{a,b}'::text[]` or `'{t,f}'::boolean[]` inferred as `dbgenerated(...)`, and `contract emit` then stopped at that field. In the Postgres default reader. Recorded before #30380; not rechecked since.
 - `interval`, `timetz`, `bytea`, and `jsonb` list defaults fail `db verify` or Postgres itself; for a `bytea` list, base64 text is stored as the bytes. True of single values on `main` too.
 - A timestamp default is compared through a JavaScript `Date`, which drops microseconds, so a one-microsecond difference is not reported; `BC` values and offsets carrying seconds are compared as text rather than as instants. In the SQL family's default comparison.
 - The string timestamp presets (`pg/timestamp-string@1`, `pg/timestamptz-string@1`) pair a text codec with `timestampNow`, which hands a JavaScript `Date` to `encode` and `encodeJson` instead of text. In the SQL family's authoring presets.
@@ -149,14 +147,12 @@ Each exists on `main` unless the line says otherwise, so none is a regression th
 - When `db sign` fails verification, its next action tells the user to bring the database up to the contract with `db update`. During a side-by-side period that tells the user to let Prisma 8 change a database Prisma 7 owns. Belongs with the `db sign` command or the upgrade guide.
 - The CLI engine's terminal renderer prints a finding's code and summary but nothing of its `where`. It lives in the `prisma-cli` repository, which is why every Prisma 7 finding puts its location at the start of the summary.
 - `test/integration/test/cli-journeys/infer-roundtrip-fidelity.e2e.test.ts` matches CLI failure output with a regular expression that can never match. It predates this project.
-- Removing `dbgenerated(...)` from Prisma 8 is its own project. When it happens it must cover this source, which maps several Prisma 7 defaults onto it.
 
 ## Product findings for hand-off
 
 Found by the adoption example (slice 4). Each is outside this project's scope and needs an owner.
 
-- **Raw SQL in the contract, state of play (researched 2026-09-14).** Prisma 8 carries opaque target SQL in three content-addressed places under ADR 234/244 (`@@index` expression and predicate, `@@check`, Postgres RLS predicates); column defaults are the only raw-SQL site compared by normalised text; TS authoring has `.defaultSql(expression)` producing the same arm as `dbgenerated`; ADR 129 (template-tagged literals, `pg.sql\`...\``) is the accepted design for opaque textual payloads in PSL and was never implemented (no backtick token in the tokenizer, no tagged-literal node anywhere); the three existing raw-SQL attribute arguments were built as plain strings instead of ADR 129 literals; generated columns do not exist at all. Whether to remove raw-expression defaults everywhere or design one under ADR 244 is an open decision.
-- **`dbgenerated("...")` must be removed from Prisma 8.** It was ADR 167's temporary escape hatch and was never meant to ship; the Postgres and SQLite registries accept it, infer emits it, the Supabase contract carries 21 uses, and the Prisma 7 source maps onto it. Proposed replacement: named storage functions and typed literal defaults; arbitrary expressions become a reported gap.
+- **Raw SQL in the contract, state of play (researched 2026-09-14; since then #30325 implemented ADR 129 tagged literals for column defaults and #30380 removed `dbgenerated`).** Prisma 8 carries opaque target SQL in three content-addressed places under ADR 234/244 (`@@index` expression and predicate, `@@check`, Postgres RLS predicates); column defaults are the only raw-SQL site compared by normalised text; TS authoring has `.defaultSql(expression)` producing the same arm as `dbgenerated`; ADR 129 (template-tagged literals, `pg.sql\`...\``) is the accepted design for opaque textual payloads in PSL and was never implemented (no backtick token in the tokenizer, no tagged-literal node anywhere); the three existing raw-SQL attribute arguments were built as plain strings instead of ADR 129 literals; generated columns do not exist at all. Whether to remove raw-expression defaults everywhere or design one under ADR 244 is an open decision.
 - **Infer and verify should ignore `_prisma_migrations`.** The public guide has users delete the inferred `PrismaMigrations` model by hand, and strict verify flags the ledger as foreign. Proposed fix: an ignore list supplied by the Postgres facade and passed into both evaluators.
 
 - **Wrong CLI through peer resolution.** `@prisma/client@7.10.0` declares a peer dependency on `prisma`; with pnpm auto-installing peers and no explicit Prisma 8 `prisma` dev dependency, `prisma` resolves to Prisma 7 and `prisma contract emit` runs the wrong CLI. The guide should tell users to keep an explicit Prisma 8 `prisma` dev dependency; the example README does.
@@ -170,4 +166,4 @@ Found by the adoption example (slice 4). Each is outside this project's scope an
 
 - The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
 - `design-notes.md` for alternatives considered.
-- `slices/01-postgres-source/spec.md`, `slices/02-mongo-source/spec.md`, `slices/03-contract-to-psl-and-convert/spec.md`.
+- `slices/01-postgres-source/spec.md`, `slices/02-mongo-source/spec.md`, `slices/03-contract-to-psl-and-print/spec.md`.

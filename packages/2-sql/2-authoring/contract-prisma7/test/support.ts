@@ -70,11 +70,13 @@ export function loadFixtureSchema(caseName: string, contextFor = postgresSourceC
 
 /** Prints a contract as Prisma 8 PSL text, the way `contract print` does. */
 export function printContractAsPsl(contract: Contract<SqlStorage>): string {
-  const ast = postgres.printPslContract?.(contract);
+  const context = postgresSourceContext([]);
+  const ast = postgres.printPslContract?.(contract, {
+    authoringTypes: context.authoringContributions.type,
+  });
   if (ast === undefined) {
     throw new Error('the Postgres target descriptor has no printPslContract hook');
   }
-  const context = postgresSourceContext([]);
   return printPsl(ast, {
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
     codecLookup: context.codecLookup,

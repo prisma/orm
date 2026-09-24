@@ -408,10 +408,13 @@ describe('printPslFromAst', () => {
 
     it('opens with the header the caller names', () => {
       const printed = printPslFromAst(headerAst, {
-        headerComment: '// use prisma-8\n// Converted from prisma/schema.prisma.',
+        headerComment:
+          '// use prisma-8\n// Printed from prisma/schema.prisma by `prisma contract print`.',
       });
 
-      expect(headerOf(printed)).toBe('// use prisma-8\n// Converted from prisma/schema.prisma.');
+      expect(headerOf(printed)).toBe(
+        '// use prisma-8\n// Printed from prisma/schema.prisma by `prisma contract print`.',
+      );
       expect(printed).toContain('model X {');
     });
   });

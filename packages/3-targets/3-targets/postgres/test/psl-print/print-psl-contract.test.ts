@@ -17,6 +17,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { postgresAuthoringTypes } from '../../src/core/authoring';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { printPostgresPslContract } from '../../src/core/psl-print/print-psl-contract';
 
@@ -86,6 +87,7 @@ function print(input: {
   const contract = new PostgresContractSerializer().deserializeContract(json);
   const ast = printPostgresPslContract(
     blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
+    { authoringTypes: postgresAuthoringTypes },
   );
   return ast.namespaces.flatMap((namespace) => namespace.models);
 }
@@ -188,7 +190,7 @@ describe('keys and indexes', () => {
     ]);
   });
 
-  it('prints every check constraint the table carries', () => {
+  it('prints each check constraint the PSL source does not derive', () => {
     const [model] = print({
       models: { Widget: { table: 'Widget', fields: { id: { column: 'id' } } } },
       tables: {
@@ -301,7 +303,7 @@ describe('column defaults', () => {
 });
 
 describe('list columns', () => {
-  it('prints the element-not-null check a list column carries', () => {
+  it('prints a waived element-not-null check as @noCheck(elementNotNull)', () => {
     const model = oneModel(
       { id: INT_COLUMN, tags: { ...TEXT_COLUMN, many: true, noCheck: ['elementNotNull'] } },
       { id: { column: 'id' }, tags: { column: 'tags' } },
@@ -598,6 +600,7 @@ describe('native enum blocks', () => {
     const contract = new PostgresContractSerializer().deserializeContract(json);
     const ast = printPostgresPslContract(
       blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
+      { authoringTypes: postgresAuthoringTypes },
     );
     return ast.namespaces
       .flatMap((namespace) => namespacePslExtensionBlocks(namespace))
@@ -683,5 +686,98 @@ describe('native enum blocks', () => {
       'native_enum OrderStatus2 A = "A" @@map("order status")',
       'native_enum OrderStatus B = "B" @@map("order_status")',
     ]);
+  });
+});
+
+describe('parts of a contract PSL cannot carry', () => {
+  function printContract(overrides: Parameters<typeof createSqlContract>[0]) {
+    const contract = new PostgresContractSerializer().deserializeContract(
+      createSqlContract(overrides),
+    );
+    return () =>
+      printPostgresPslContract(
+        blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
+        { authoringTypes: postgresAuthoringTypes },
+      );
+  }
+
+  it('refuses a value object outside the default namespace, which the PSL source would move', () => {
+    const print = printContract({
+      namespaces: {
+        public: { models: {} },
+        auth: {
+          models: {},
+          valueObjects: { Address: { fields: { street: INT_FIELD } } },
+        },
+      },
+      storage: {
+        namespaces: {
+          public: { id: 'public', entries: { table: {} } },
+          auth: { id: 'auth', entries: { table: {} } },
+        },
+      },
+    });
+
+    expect(print).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        message: expect.stringContaining('namespace "auth" declares the value object Address'),
+      }),
+    );
+  });
+
+  it('refuses a column whose codec no PSL type in the stack produces, naming the column', () => {
+    const print = printContract({
+      namespaces: {
+        public: {
+          models: {
+            Doc: {
+              storage: {
+                table: 'Doc',
+                namespaceId: 'public',
+                fields: { id: { column: 'id' }, v: { column: 'v' } },
+              },
+              fields: {
+                id: INT_FIELD,
+                v: { nullable: false, type: { kind: 'scalar', codecId: 'pg/vector@1' } },
+              },
+              relations: {},
+            },
+          },
+        },
+      },
+      storage: {
+        namespaces: {
+          public: {
+            id: 'public',
+            entries: {
+              table: {
+                Doc: table({
+                  columns: {
+                    id: INT_COLUMN,
+                    v: {
+                      nativeType: 'vector',
+                      codecId: 'pg/vector@1',
+                      nullable: false,
+                      typeParams: { length: 3 },
+                    },
+                  },
+                  primaryKey: { columns: ['id'] },
+                }),
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(print).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        message: expect.stringContaining(
+          '"public"."Doc"."v" has native type "vector" with codec "pg/vector@1"',
+        ),
+      }),
+    );
   });
 });

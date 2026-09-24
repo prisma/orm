@@ -1,14 +1,14 @@
 /**
  * The user-facing journey for `prisma contract print`: a project whose
  * `prisma.config.ts` points at `prisma7Schema('./schema.prisma')` runs
- * `contract print`, switches its config to the Prisma 8 PSL the command
- * wrote, and emits the same contract — which `db verify` then reports zero
- * findings against the database the Prisma 7 SQL built. It runs over the
- * `relations` fixture, whose database is the SQL Prisma 7.10.0 generated for
- * the full `supported` schema. The command is not tied to Prisma 7: a PSL source prints
- * as the same schema. Two things are refused with exit 2 and no file
- * written: a Prisma 7 schema Prisma 8 cannot read, and an output path that is
- * the schema being read.
+ * `contract print`, switches its config to the Prisma 8 PSL the command wrote,
+ * and emits the same contract, which `db sign` and `db verify` then accept
+ * against the database the Prisma 7 SQL built. It runs over the `relations` and
+ * `supported-verify` fixtures, whose database is the SQL Prisma 7.10.0
+ * generated for the full `supported` schema. The command is not tied to
+ * Prisma 7: a PSL source prints too. Two things are refused with exit 2 and no
+ * file written: a Prisma 7 schema Prisma 8 cannot read, and an output path
+ * that is the schema being read.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -78,7 +78,7 @@ function setupPrisma7Project(
 }
 
 /** The same project, read through the Prisma 8 PSL `contract print` wrote. */
-function onConvertedContract(ctx: JourneyContext, connectionString: string): JourneyContext {
+function onPrintedContract(ctx: JourneyContext, connectionString: string): JourneyContext {
   return {
     ...ctx,
     configPath: writeConfig(ctx.testDir, 'prisma.config.prisma7-printed.ts', connectionString),
@@ -111,18 +111,18 @@ function errorOf(run: EngineCommandResult): { readonly code: string; readonly su
 }
 
 /**
- * Converts, switches the config to the written file, emits, and verifies. The
- * two passing and failing journeys differ only in the fixture they run over.
+ * Prints, switches the config to the written file, emits, signs, and verifies.
+ * The two journeys differ only in the fixture they run over.
  */
-async function convertAndVerify(ctx: JourneyContext, connectionString: string): Promise<void> {
+async function printAndVerify(ctx: JourneyContext, connectionString: string): Promise<void> {
   const prisma7Emit = await runContractEmit(ctx, ['--json']);
   expect(prisma7Emit.exitCode, `contract emit on the Prisma 7 source\n${output(prisma7Emit)}`).toBe(
     0,
   );
 
-  const convert = await runContractPrint(ctx, ['--json']);
-  expect(convert.exitCode, `contract print\n${output(convert)}`).toBe(0);
-  expect(convert.presented?.data).toMatchObject({
+  const print = await runContractPrint(ctx, ['--json']);
+  expect(print.exitCode, `contract print\n${output(print)}`).toBe(0);
+  expect(print.presented?.data).toMatchObject({
     ok: true,
     psl: { path: 'contract.prisma' },
     source: ['schema.prisma'],
@@ -133,15 +133,15 @@ async function convertAndVerify(ctx: JourneyContext, connectionString: string): 
     '// use prisma-8\n// Printed from schema.prisma by `prisma contract print`.',
   );
 
-  const converted = onConvertedContract(ctx, connectionString);
-  const pslEmit = await runContractEmit(converted, ['--json']);
-  expect(pslEmit.exitCode, `contract emit on the converted contract\n${output(pslEmit)}`).toBe(0);
+  const printed = onPrintedContract(ctx, connectionString);
+  const pslEmit = await runContractEmit(printed, ['--json']);
+  expect(pslEmit.exitCode, `contract emit on the printed contract\n${output(pslEmit)}`).toBe(0);
   expect(storageHashOf(pslEmit)).toBe(storageHashOf(prisma7Emit));
 
-  const sign = await runDbSign(converted, ['--json']);
+  const sign = await runDbSign(printed, ['--json']);
   expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
 
-  const verify = await runDbVerify(converted, ['--json']);
+  const verify = await runDbVerify(printed, ['--json']);
   expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(0);
   expect(verify.presented?.data).toMatchObject({
     ok: true,
@@ -151,7 +151,7 @@ async function convertAndVerify(ctx: JourneyContext, connectionString: string): 
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey: converting a Prisma 7 schema and emitting it as Prisma 8', () => {
+  describe('Journey: printing a Prisma 7 schema and emitting it as Prisma 8', () => {
     const db = useDevDatabase({
       onReady: (cs) => withClient(cs, (client) => client.query(PRISMA7_DDL)),
     });
@@ -159,7 +159,7 @@ withTempDir(({ createTempDir }) => {
     it.each(['relations', 'supported-verify'])(
       'prints the %s fixture and verifies against the database Prisma 7 built',
       async (fixture) => {
-        await convertAndVerify(
+        await printAndVerify(
           setupPrisma7Project(createTempDir, db.connectionString, {
             copyFrom: join(PRISMA7_FIXTURES, `${fixture}/schema.prisma`),
           }),
@@ -170,13 +170,13 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Journey: contract print refuses what it cannot convert', () => {
-    it('prints a PSL source as the same contract, so the command is not tied to Prisma 7', async () => {
+  describe('Journey: contract print on other sources, and what it refuses', () => {
+    it('prints a PSL source, so the command is not tied to Prisma 7', async () => {
       const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
         copyFrom: join(PRISMA7_FIXTURES, 'implicit-many-to-many-names/schema.prisma'),
       });
       writeFileSync(join(ctx.testDir, 'contract.prisma'), 'model User {\n  id Int @id\n}\n');
-      const onPsl = onConvertedContract(ctx, NO_DATABASE);
+      const onPsl = onPrintedContract(ctx, NO_DATABASE);
 
       const print = await runContractPrint(onPsl, ['--output', 'printed.prisma', '--json']);
 
@@ -189,10 +189,10 @@ withTempDir(({ createTempDir }) => {
     it('reports what the Prisma 7 source reports about a view and writes nothing', async () => {
       const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, { text: VIEW_SCHEMA });
 
-      const convert = await runContractPrint(ctx, ['--json']);
+      const print = await runContractPrint(ctx, ['--json']);
 
-      expect(convert.exitCode, output(convert)).toBe(2);
-      expect(errorOf(convert).code).toBe('CONTRACT.SOURCE_LOAD_FAILED');
+      expect(print.exitCode, output(print)).toBe(2);
+      expect(errorOf(print).code).toBe('CONTRACT.SOURCE_LOAD_FAILED');
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
 
@@ -203,10 +203,10 @@ withTempDir(({ createTempDir }) => {
       const schemaPath = join(ctx.testDir, 'schema.prisma');
       const before = readFileSync(schemaPath, 'utf-8');
 
-      const convert = await runContractPrint(ctx, ['--output', 'schema.prisma', '--json']);
+      const print = await runContractPrint(ctx, ['--output', 'schema.prisma', '--json']);
 
-      expect(convert.exitCode, output(convert)).toBe(2);
-      expect(errorOf(convert).code).toBe('CONTRACT.PRINT_OUTPUT_IS_SOURCE');
+      expect(print.exitCode, output(print)).toBe(2);
+      expect(errorOf(print).code).toBe('CONTRACT.PRINT_OUTPUT_IS_SOURCE');
       expect(readFileSync(schemaPath, 'utf-8')).toBe(before);
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });

@@ -61,16 +61,14 @@ function sameValues(left: readonly unknown[], right: readonly unknown[]): boolea
 /**
  * Builds one `native_enum` block per enum type a namespace declares.
  *
- * The block's name is the name of the value set the enum derives, never the
- * physical type name: a contract keys a native enum by its type name and keys
- * the value set it derives by the name the schema gave the enum, so the value
- * set is the only place the authored name survives. A column typed by the enum
- * names its value set directly. An enum no column refers to is matched to the
- * one unclaimed value set that holds exactly its members, in order; if no value
- * set matches, or more than one does, the block name is derived from the
- * physical type name the way `contract infer` derives one, and kept apart from
- * every other block name in the namespace. `@@map` carries the physical type
- * name whenever the two differ.
+ * A contract keys a native enum by its type name and keys the value set it
+ * derives by the name the schema gave the enum, so the block is named after
+ * that value set when one is found: the value set a column typed by the enum
+ * names; else, for an enum no column refers to, the unclaimed value set with
+ * the enum's own name that holds exactly its members, or the only such value
+ * set. If none is found, the block name is derived from the type name the way
+ * `contract infer` derives one, kept apart from every other block name in the
+ * namespace. `@@map` carries the type name whenever the two differ.
  */
 export function buildNativeEnumBlocksForNamespace(input: {
   readonly namespaceId: string;

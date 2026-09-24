@@ -5,7 +5,12 @@ import { escapePslString } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresError } from '../errors';
 import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
-import { crossReferenceCoordinate, type ModelEntry, modelCoordinate } from './contract-model-index';
+import {
+  crossReferenceCoordinate,
+  type ModelEntry,
+  modelCoordinate,
+  pslNamespaceName,
+} from './contract-model-index';
 
 const PSL_REFERENTIAL_ACTIONS: Readonly<Record<ReferentialAction, string>> = {
   noAction: 'NoAction',
@@ -149,7 +154,9 @@ export function printRelationField(input: {
   const { entry, target, name } = input;
   const { relation } = entry;
   const typeNamespaceId =
-    target.namespaceId === entry.owner.namespaceId ? undefined : target.namespaceId;
+    target.namespaceId === entry.owner.namespaceId
+      ? undefined
+      : pslNamespaceName(target.namespaceId);
 
   const args: PslAttributeArgument[] = [];
   if (name !== undefined) {
@@ -167,7 +174,7 @@ export function printRelationField(input: {
         `contract print: relation "${entry.owner.name}.${entry.fieldName}" has no foreign key in storage, which Prisma 8 PSL cannot express.`,
         {
           why: 'A to-one relation is authored as `@relation(fields:…, references:…)`, which always lowers to a foreign key.',
-          fix: 'Author the Prisma 8 contract by hand for this relation.',
+          fix: 'Declare a foreign key for the relation, or keep authoring this contract in its current source.',
           meta: { model: entry.owner.name, field: entry.fieldName },
         },
       );

@@ -104,7 +104,7 @@ Family instances implement domain actions:
 - **`emitContract({ contract })`**: Emits contract JSON and DTS as strings. Handles stripping mappings and validation internally. Uses preassembled state (operation registry, type imports, extension IDs).
 
 - **`inferPslContract(schemaIR)`**: Infers a PSL contract AST from an introspected schema, for `contract infer`. Delegates to the target descriptor's optional `inferPslContract` hook; throws `CONTRACT.INFER_UNSUPPORTED` when the target has none.
-- **`printPslContract(contract)`**: Prints an assembled contract as the PSL document that reads back as the same contract, for `contract print`. Delegates to the target descriptor's optional `printPslContract` hook; throws `CONTRACT.PRINT_UNSUPPORTED` when the target has none.
+- **`printPslContract(contract)`**: Builds the PSL document AST that reads back as the same contract, for `contract print`. Delegates to the target descriptor's optional `printPslContract` hook. Throws `CONTRACT.PRINT_UNSUPPORTED` when the target has no hook, or when the contract holds something PSL cannot express.
 
 The descriptor is "pure data + factory" - it only provides the hook and factory method. All family-specific logic lives on the instance.
 

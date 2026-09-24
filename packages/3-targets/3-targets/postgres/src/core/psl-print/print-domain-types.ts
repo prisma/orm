@@ -1,5 +1,6 @@
 import type { Contract, ContractField } from '@internal/contract/types';
 import type { PslTypeMap } from '@internal/family-sql/psl-infer';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
   PslCompositeType,
   PslField,
@@ -14,6 +15,7 @@ import type { JsonValue } from '@internal/utils/json';
 import type { AnyPostgresCodecDescriptor } from '../codec-descriptor';
 import { codecDescriptorMap } from '../codec-type-map';
 import { postgresError } from '../errors';
+import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
 import { type PslColumnType, printColumnType } from './print-column-type';
 
@@ -33,7 +35,7 @@ function columnForDomainField(field: ContractField, coordinate: string): Storage
       `contract print: field ${coordinate} has a ${field.type.kind} type, which cannot be written in Prisma 8 PSL.`,
       {
         why: 'A PSL field names one scalar, enum, or value-object type; a union of types has no PSL form.',
-        fix: 'Give the field a single type, or author the Prisma 8 contract by hand.',
+        fix: 'Give the field a single type, or keep authoring this contract in its current source.',
         meta: { coordinate, kind: field.type.kind },
       },
     );
@@ -45,7 +47,7 @@ function columnForDomainField(field: ContractField, coordinate: string): Storage
       `contract print: field ${coordinate} uses codec "${field.type.codecId}", which the Postgres printer cannot name a native type for.`,
       {
         why: 'A value-object field has no storage column, so its PSL type is derived from its codec; this codec is not one the Postgres target owns.',
-        fix: 'Author the Prisma 8 contract by hand for this value object.',
+        fix: 'Keep authoring this contract in its current source.',
         meta: { coordinate, codecId: field.type.codecId },
       },
     );
@@ -73,7 +75,7 @@ function refuseDictField(field: ContractField, coordinate: string): void {
     `contract print: field ${coordinate} is a dictionary, which cannot be written in Prisma 8 PSL.`,
     {
       why: 'PSL writes a field as one value or a list; it has no form for a keyed dictionary.',
-      fix: 'Author the Prisma 8 contract by hand for this field.',
+      fix: 'Keep authoring this contract in its current source.',
       meta: { coordinate },
     },
   );
@@ -84,6 +86,7 @@ export function printDomainFieldType(input: {
   readonly field: ContractField;
   readonly coordinate: string;
   readonly typeMap: PslTypeMap;
+  readonly authoringTypes: AuthoringTypeNamespace;
   readonly enumBlockNames: ReadonlyMap<string, string>;
 }): PslColumnType {
   const { field, coordinate } = input;
@@ -94,6 +97,7 @@ export function printDomainFieldType(input: {
   return printColumnType({
     column: columnForDomainField(field, coordinate),
     typeMap: input.typeMap,
+    authoringTypes: input.authoringTypes,
     enumBlockNames: input.enumBlockNames,
     coordinate,
   });
@@ -104,9 +108,22 @@ export function buildCompositeTypes(input: {
   readonly contract: Contract<SqlStorage>;
   readonly namespaceId: string;
   readonly typeMap: PslTypeMap;
+  readonly authoringTypes: AuthoringTypeNamespace;
   readonly enumBlockNames: ReadonlyMap<string, string>;
 }): readonly PslCompositeType[] {
   const valueObjects = input.contract.domain.namespaces[input.namespaceId]?.valueObjects ?? {};
+  const names = Object.keys(valueObjects);
+  if (input.namespaceId !== DEFAULT_NAMESPACE_ID && names.length > 0) {
+    throw postgresError(
+      'CONTRACT.PRINT_UNSUPPORTED',
+      `contract print: namespace "${input.namespaceId}" declares the value object${names.length === 1 ? '' : 's'} ${names.join(', ')}, which cannot be written in Prisma 8 PSL: the PSL source reads every value object into the default namespace.`,
+      {
+        why: 'A `type` block written in any namespace reads back into the default namespace, so the value object would move.',
+        fix: 'Move the value object to the default namespace, or keep authoring this contract in its current source.',
+        meta: { namespaceId: input.namespaceId, names },
+      },
+    );
+  }
   return Object.entries(valueObjects).map(([name, valueObject]) => ({
     kind: 'compositeType',
     name,
@@ -115,6 +132,7 @@ export function buildCompositeTypes(input: {
         field,
         coordinate: `"${input.namespaceId}".${name}.${fieldName}`,
         typeMap: input.typeMap,
+        authoringTypes: input.authoringTypes,
         enumBlockNames: input.enumBlockNames,
       });
       return {
@@ -137,6 +155,7 @@ export function buildCompositeTypes(input: {
 export function buildTypesBlock(
   contract: Contract<SqlStorage>,
   typeMap: PslTypeMap,
+  authoringTypes: AuthoringTypeNamespace,
 ): PslTypesBlock | undefined {
   const declarations: PslNamedTypeDeclaration[] = [];
   for (const [name, instance] of Object.entries(contract.storage.types ?? {})) {
@@ -148,6 +167,7 @@ export function buildTypesBlock(
         ...ifDefined('typeParams', instance.typeParams),
       }),
       typeMap,
+      authoringTypes,
       enumBlockNames: new Map(),
       coordinate: `types.${name}`,
     });

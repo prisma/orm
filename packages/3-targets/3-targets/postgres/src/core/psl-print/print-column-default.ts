@@ -3,7 +3,7 @@ import { mapDefault } from '@internal/family-sql/psl-infer';
 import type { PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { postgresError } from '../errors';
-import { dataTypeForPrintedType } from '../psl-infer/infer-default-codec';
+import { dataTypeForCodec } from '../psl-infer/infer-default-codec';
 import { createPostgresDefaultMapping } from '../psl-infer/postgres-default-mapping';
 import {
   buildAttribute,
@@ -17,13 +17,13 @@ const defaultMapping = createPostgresDefaultMapping();
  * The `@default(…)` attribute for a storage column, or `undefined` when the
  * column carries no default.
  *
- * A literal prints as the PSL literal the column's data type reads back, the
- * same mapping `contract infer` uses; a domain enum's literal prints as the
- * member name that carries it; `now()` and `autoincrement()` print by name;
- * every other function default prints as a `sql` tagged literal.
+ * A literal prints as the PSL literal the data type of the column's codec reads
+ * back, the same mapping `contract infer` uses; a domain enum's literal prints
+ * as the member name that carries it; `now()` and `autoincrement()` print by
+ * name; every other function default prints as a `sql` tagged literal.
  *
- * A literal no data type of the column writes is refused, because every
- * literal that would parse reads back as a different value.
+ * A literal is refused when the column's codec has no Postgres data type, or
+ * when no PSL literal of that data type reads back as the stored value.
  */
 export function printColumnDefault(input: {
   readonly column: StorageColumn;
@@ -61,7 +61,7 @@ export function printColumnDefault(input: {
 
   const result = mapDefault(columnDefault, {
     ...defaultMapping,
-    columnDataType: dataTypeForPrintedType(input.pslTypeName, input.isEnum),
+    columnDataType: dataTypeForCodec(input.column.codecId, input.isEnum),
     list: input.column.many === true,
   });
   if (result === undefined) {

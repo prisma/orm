@@ -51,13 +51,10 @@ export interface ContractSourceContext {
 }
 
 /**
- * A contract source is PSL or TypeScript: the inputs it reads and the `load`
- * that turns them into a contract. `format` says which language the inputs are
- * written in; a source that declares none is a TypeScript source. A PSL source
- * may also carry the `interpret` capability `@internal/psl-parser` defines;
- * tooling that rewrites PSL in place narrows through `hasPslInterpreter`,
- * because PSL text exists that the Prisma 8 reader does not interpret, such as
- * a Prisma 7 schema.
+ * The language a contract source's inputs are written in. Tooling that reads
+ * the inputs itself, such as `contract format` and the language server, checks
+ * this instead of guessing from file extensions. A source that declares no
+ * format is a TypeScript source.
  */
 export type ContractSourceFormat = 'psl' | 'typescript';
 

@@ -59,12 +59,7 @@ function ormConfig(source: Record<string, unknown>): Record<string, unknown> {
 }
 
 function pslConfig(inputPath: string): Record<string, unknown> {
-  return ormConfig({
-    format: 'psl',
-    inputs: [inputPath],
-    load: async () => ({}),
-    interpret: () => ({}),
-  });
+  return ormConfig({ format: 'psl', inputs: [inputPath], load: async () => ({}) });
 }
 
 function harness(config: Record<string, unknown>) {

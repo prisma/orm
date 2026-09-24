@@ -130,13 +130,10 @@ export async function executeContractEmit(
         config.target.targetId,
         rawComponents,
       );
-      // Blind cast: `loadContractSource` upstream has already
-      // pinned `loadedSource.contract` to the provider's loose
-      // `Contract` envelope, but the local `Contract` type at this
-      // call site is the precise structural interface. The cast just
-      // defers the structural check by one statement so `enrichContract`
-      // can decorate first; the subsequent serialize→deserialize round-trip
-      // re-narrows the envelope into the precise type.
+      // Blind cast: `loadContractSource` returns the provider's value as
+      // `unknown` and checks only that it is present. The cast defers the
+      // structural check by one statement so `enrichContract` can decorate
+      // first; the serialize→deserialize round-trip below checks the shape.
       const enrichedIR = enrichContract(
         blindCast<
           Contract,

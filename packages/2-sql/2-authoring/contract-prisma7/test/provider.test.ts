@@ -48,7 +48,7 @@ function scratchDir(name: string): string {
 }
 
 describe('prisma7Contract', () => {
-  it('declares the prisma7 format and the input path', () => {
+  it('declares the psl format and the input path', () => {
     expect(prisma7Contract('prisma/schema.prisma', postgres)).toMatchObject({
       source: { format: 'psl', inputs: ['prisma/schema.prisma'] },
     });

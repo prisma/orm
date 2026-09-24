@@ -2,7 +2,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { EOL } from 'node:os';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { type FormatOptions, format } from '@internal/psl-parser/format';
-import { hasPslInterpreter } from '@internal/psl-parser/interpret';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { resolve } from 'pathe';
@@ -37,7 +36,7 @@ export async function executeFormat(
   const config = options.config;
 
   const source = config.contract?.source;
-  if (source === undefined || !hasPslInterpreter(source)) {
+  if (source?.format !== 'psl') {
     return ok({ formatted: false });
   }
 

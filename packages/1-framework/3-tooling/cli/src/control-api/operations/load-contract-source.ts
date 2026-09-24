@@ -180,7 +180,7 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
     ok: false,
     error: failedToResolveContractSource(
       String(failure['summary']),
-      'Edit the schema where each finding points, then run contract emit again.',
+      'Edit the source where each finding points, then run the command again.',
       {
         diagnostics: failure['diagnostics'],
         issues: mapDiagnosticsToIssues(failure['diagnostics']),

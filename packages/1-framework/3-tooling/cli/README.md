@@ -365,19 +365,21 @@ Options:
 
 The command needs no database connection: it reads the source files, not the server. The output path is chosen the same way `contract infer` chooses one, and an existing file there is overwritten with a warning.
 
-The written file opens with the two lines that say where it came from:
+The written file opens with two comment lines: the `// use prisma-8` marker, and a line naming the source files it was printed from:
 
 ```prisma
 // use prisma-8
 // Printed from prisma/schema.prisma by `prisma contract print`.
 ```
 
-The written file must read back as the identical contract. The printer writes models, value objects (`type` blocks), named types (`types` block), native enums, keys, indexes with every argument, checks, relations, polymorphism (`@@discriminator`, `@@base`), control policies and execution defaults. Where the PSL language has no form for something the contract holds, the command refuses and writes nothing. Three things are refused with exit `2`:
-- A shape the language cannot carry exits with `CONTRACT.PRINT_UNSUPPORTED`, naming the model, column, field or entity it stopped on: a foreign key no relation travels, a to-one relation with no foreign key, a union or dictionary field, a column with its own control policy, a model with an owner, one model name declared in two namespaces, or an entity an extension contributes (row-level security policies, roles).
-- A source Prisma 8 cannot read exits with `CONTRACT.SOURCE_LOAD_FAILED`, reporting exactly what `contract emit` reports for the same source.
-- An `--output` path that is a source file the config reads, or sits inside a directory of source files, exits with `CONTRACT.PRINT_OUTPUT_IS_SOURCE`. Pick another path.
+The written file reads back as the identical contract. Where PSL has no form for part of the contract, the command refuses, names that part, and writes nothing. It exits `2` in three cases:
+- `CONTRACT.PRINT_UNSUPPORTED`: part of the contract cannot be written as PSL that reads back the same. The full list of cases is under that code in `docs/reference/error-reference.md`. A column type an extension contributes, such as pgvector's `Vector`, prints only when that extension is in the config.
+- `CONTRACT.SOURCE_LOAD_FAILED`: the source cannot be read, reported exactly as `contract emit` reports it.
+- `CONTRACT.PRINT_OUTPUT_IS_SOURCE`: the `--output` path is a source file the config reads, or sits inside a directory of source files. Pick another path.
 
-Printing is the first step of the cutover, not the whole of it. After it succeeds, point `contract` in `prisma.config.ts` at the written file and run the rest:
+A PSL file cannot carry the contract's default control policy. When the contract has one, the result names it (`defaultControlPolicy` in the JSON result, and in the next step), and the config must set it on the PSL source.
+
+To switch to the written file, point `contract` in `prisma.config.ts` at it and run `prisma contract emit`. For a project leaving a Prisma 7 schema, that is the first step of the cutover; the rest takes migration ownership of the database Prisma 7 built:
 
 ```bash
 prisma contract emit

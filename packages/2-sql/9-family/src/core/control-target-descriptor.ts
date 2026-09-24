@@ -1,4 +1,5 @@
 import type { Contract } from '@internal/contract/types';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
   ContractSerializer,
   DiffSubjectGranularity,
@@ -63,14 +64,18 @@ export interface SqlControlTargetDescriptor<
     describedContracts?: readonly SqlDescribedContractSpace[],
   ) => PslDocumentAst;
   /**
-   * Contract→PSL printing for `contract print`. The reverse of
-   * {@link inferPslContract}: it takes an already-assembled family contract and
-   * returns the PSL document that reads back as the same contract. Target logic
-   * for the same reason — it owns the dialect maps — so it lives beside its
-   * sibling on the descriptor. Optional: targets without `contract print`
-   * omit it, and the family instance throws when it is absent.
+   * Contract→PSL printing for `contract print`. Like {@link inferPslContract}
+   * it produces a PSL document, but from an assembled contract instead of a
+   * database schema. The document reads back as the same contract; the hook
+   * throws `CONTRACT.PRINT_UNSUPPORTED` for a contract PSL cannot express.
+   * Target logic, because it owns the dialect maps, so it lives on the
+   * descriptor. Optional: targets without `contract print` omit it, and the
+   * family instance throws when it is absent.
    */
-  readonly printPslContract?: (contract: TContract) => PslDocumentAst;
+  readonly printPslContract?: (
+    contract: TContract,
+    context: { readonly authoringTypes: AuthoringTypeNamespace },
+  ) => PslDocumentAst;
   /**
    * The full-tree node diff the family verify verdict derives from —
    * expected-tree derivation, pre-diff normalization, the generic differ,
