@@ -55,7 +55,7 @@ stamped ${field}
     nullable: false,
     typeParams: { precision: 3 },
   };
-  const stampedRef = { namespace: 'public', table: 'T', column: 'stamped' };
+  const stampedRef = { namespace: 'public', entry: 'T', field: 'stamped' };
   const nowPhase = { kind: 'generator', id: 'timestampNow' };
 
   it('timestamp(3, onCreate: now, onUpdate: now) yields precision 3 and both phases', () => {
