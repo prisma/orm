@@ -46,7 +46,7 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 | 2 | `execution-ref-neutral-names` | #30399, CI green, awaiting review |
 | 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
 | 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
-| 4 | `mongo-generator-runtime-hoist` | in progress, stacked on 5 |
+| 4 | `mongo-generator-runtime-hoist` | #30406, stacked on 5 |
 
 ## Dependencies
 
@@ -54,10 +54,10 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 
 ## Close-out (required)
 
-- [ ] Verify every project DoD item in `spec.md`.
-- [ ] Write the ADR for the framework-owned mutation-default runtime.
-- [ ] Update `docs/reference/codec-authoring-guide.md`, the Mongo authoring reference, and the Mongo facade config reference.
-- [ ] Delete or update `projects/prisma7-contract-source/slices/02-mongo-source/` and the filled "Deferred gaps" entries.
+- [x] Verify every project DoD item in `spec.md` (verification block in `wip/closeout-dod.md`, to be copied into the close-out PR).
+- [x] Write the ADR for the framework-owned mutation-default runtime (ADR 255, in #30406).
+- [x] Update `docs/reference/codec-authoring-guide.md` (#30396), the Mongo authoring references (#30403), and the Mongo facade config reference (#30405).
+- [x] Delete `projects/prisma7-contract-source/slices/02-mongo-source/` and update the filled "Deferred gaps" entries (#30405).
 - [ ] Strip repo-wide references to `projects/mongo-defaults-codecs-prisma6-source/**`.
 - [ ] Delete `projects/mongo-defaults-codecs-prisma6-source/`.
 
