@@ -1,10 +1,8 @@
-import {
-  rawTsquery,
-  toTsquery,
-  tsquery,
-  websearchToTsquery,
-} from '@internal/target-postgres/full-text';
+import { postgresRawCodecInferer } from '@internal/adapter-postgres/adapter';
+import { sql } from '@internal/sql-builder/runtime';
+import { toTsquery, tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
+import { getTestContext } from './helpers';
 import { createPostsCollection, timeouts, withCollectionRuntime } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
 
@@ -141,21 +139,37 @@ describe('integration/full-text-search operations', () => {
   );
 
   it(
-    'a raw tsquery is tsquery syntax, so a word:* prefix matches every word it starts',
+    'a tsquery read back from a query binds as the query and matches the same rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seedSearchablePosts(runtime);
+        const builder = sql({
+          context: getTestContext(),
+          rawCodecInferer: postgresRawCodecInferer,
+        });
 
-        const results = await createPostsCollection(runtime)
+        const { query } = await runtime
+          .query(
+            builder.public.posts
+              .select('query', (_f, fns) => fns.websearchToTsquery('Alice reports'))
+              .limit(1)
+              .build(),
+          )
+          .firstOrThrow();
+        const viaParser = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches(rawTsquery('rep:*')))
+          .where((p) => p.title.fullTextMatches(websearchToTsquery('Alice reports')))
+          .orderBy((p) => p.id.asc())
+          .all();
+        const viaReadBack = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches(query))
           .orderBy((p) => p.id.asc())
           .all();
 
-        expect(results).toEqual([
-          { id: 1, title: 'alice wrote the report' },
-          { id: 3, title: 'bob wrote the report' },
-        ]);
+        expect(query).toBe("'alic' & 'report'");
+        expect(viaParser).toEqual([{ id: 1, title: 'alice wrote the report' }]);
+        expect(viaReadBack).toEqual(viaParser);
       });
     },
     timeouts.spinUpPpgDev,
@@ -246,7 +260,7 @@ describe('integration/full-text-search operations', () => {
   );
 
   it(
-    'a malformed raw tsquery fails at execution with the Postgres error',
+    'toTsquery on malformed text fails at execution with the Postgres error',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         await seedSearchablePosts(runtime);
@@ -254,7 +268,7 @@ describe('integration/full-text-search operations', () => {
         await expect(
           createPostsCollection(runtime)
             .select('id')
-            .where((p) => p.title.fullTextMatches(rawTsquery('alice &')))
+            .where((p) => p.title.fullTextMatches(toTsquery('alice &')))
             .all(),
         ).rejects.toThrow(/tsquery/);
       });

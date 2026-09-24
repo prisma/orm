@@ -1,8 +1,8 @@
 import type { ComparisonMethods, ModelAccessor } from '@internal/sql-orm-client';
+import type { CodecTypes } from '@internal/target-postgres/codec-types';
 import {
   phrasetoTsquery,
   plaintoTsquery,
-  rawTsquery,
   toTsquery,
   tsquery,
   websearchToTsquery,
@@ -192,18 +192,19 @@ describe('full-text search operations on text fields', () => {
     expectTypeOf<HeadlineResult>().toHaveProperty('like');
   });
 
-  test('the query is a tsquery from a parser, the tsquery tag or rawTsquery, never a bare string', () => {
+  test('the query is a tsquery from a parser or the tsquery tag, never a bare string', () => {
     const title = null as unknown as PostAccessor['title'];
     title.fullTextMatches(websearchToTsquery('alice'));
     title.fullTextMatches(toTsquery('alice & !bob'));
     title.fullTextMatches(plaintoTsquery('alice bob'));
     title.fullTextMatches(phrasetoTsquery('alice wrote'));
     title.fullTextRank(websearchToTsquery('alice', { language: 'german' }), { language: 'german' });
-    title.fullTextHeadline(rawTsquery('ali:*'));
     title.fullTextMatches(tsquery`${'ali'}:*`);
     title.fullTextRank(tsquery({ language: 'german' })`${'ali'}:*`, { language: 'german' });
     title.fullTextHeadline(tsquery`${'ali'}:*`);
-    // @ts-expect-error a bare string is not a tsquery; parse it or mark it with rawTsquery
+    const readBack = null as unknown as CodecTypes['pg/tsquery@1']['output'];
+    title.fullTextMatches(readBack);
+    // @ts-expect-error a bare string is not a tsquery; parse it first
     title.fullTextMatches('alice');
     // @ts-expect-error the same holds for rank
     title.fullTextRank('alice');

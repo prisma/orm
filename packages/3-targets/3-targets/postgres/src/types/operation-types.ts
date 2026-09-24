@@ -20,9 +20,9 @@ type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual
 type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
 /**
- * The query side of a full-text operation: a `tsquery` expression from one of the parsers in
- * `full-text`, or text marked with `rawTsquery`, bound as a `tsquery` parameter. A bare string is
- * not accepted.
+ * The query side of a full-text operation: a `tsquery` expression from a parser or the `tsquery` tag
+ * in `full-text`, or a `tsquery` value read back from a query, bound as a `tsquery` parameter. A
+ * bare string is not accepted.
  */
 export type TsqueryArgument<CT extends CodecTypesBase> = CodecExpression<'pg/tsquery@1', false, CT>;
 

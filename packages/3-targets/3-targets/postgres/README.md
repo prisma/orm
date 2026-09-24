@@ -124,11 +124,10 @@ This package contributes the built-in Postgres query operations — `ilike`, and
 - `websearchToTsquery(text)` for a search box: quotes, `or` and `-` work, and it never errors. `plaintoTsquery` requires every word, and `phrasetoTsquery` requires the words in order.
 - `` tsquery`${term}:*` `` for `tsquery` operator syntax around user input, such as a typeahead prefix match. The literal parts are trusted syntax the application writes. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax. An empty value adds no words, like a stop word. A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word. Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error for every input. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
 - `toTsquery(text)` for operator syntax the application writes in full, such as `'zebra' & !'graze'`. Malformed text fails at execution, so never pass user input; use the `tsquery` tag instead.
-- `rawTsquery(text)` for `tsquery` text that is already normalized, such as the output of a query builder in the application. Postgres does not lowercase or stem it, and malformed text fails at execution, so never pass user input; use the `tsquery` tag instead.
 
-The four parsers take text (a string or a `pg/text@1` expression, not a `varchar` column) and `{ language? }`, bind the text as a parameter, and lower to the Postgres function of the same name. They are also registered as query operations that attach to no column, so the SQL builder's `fns` has them by name; the ORM reaches them, and the `tsquery` tag, through the import.
+The four parsers take text (a string or a `pg/text@1` expression, not a `varchar` column) and `{ language? }`, bind the text as a parameter, and lower to the Postgres function of the same name. They are also registered as query operations that attach to no column, so the SQL builder's `fns` has them by name; the ORM reaches them, and the `tsquery` tag, through the import. A `tsquery` value read back from a query can be passed straight back as the query; it binds as a `tsquery` parameter.
 
-Each operation takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's or tag's own `language` governs the query side, and a `rawTsquery` gets none); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
+Each operation takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's or tag's own `language` governs the query side); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
 
 ```typescript
 row.text.fullTextRank(websearchToTsquery(query, { language: 'german' }), {
@@ -231,7 +230,7 @@ Postgres prints a `timestamptz` value in the session's time zone, and dates and 
 - `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
 - `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, and the types their signatures name (`TsqueryArgument`, the `FullText*Options` types, `FullTextSearchLanguage`)
-- `./full-text`: what an application calls to build a full-text query: the four parsers, the `tsquery` tag, `rawTsquery`, and their types
+- `./full-text`: what an application calls to build a full-text query: the four parsers, the `tsquery` tag, and their types
 - `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 
 ## Tests

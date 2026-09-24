@@ -1,4 +1,4 @@
-import { rawTsquery, tsquery } from '@internal/target-postgres/full-text';
+import { tsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
@@ -120,11 +120,11 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
     expect(await idsMatching('alice', 'german')).toEqual([101, 102, 106]);
   });
 
-  it('a raw tsquery is tsquery syntax, so a word:* prefix matches every word it starts', async () => {
+  it('toTsquery takes a word:* prefix, which matches every word it starts', async () => {
     const rows = await runtime().query(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, rawTsquery('manu:*')))
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.toTsquery('manu:*')))
         .build(),
     );
     expect(rows.map((row) => row.id)).toEqual([106]);
@@ -140,15 +140,48 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
     expect(rows.map((row) => row.id).sort((a, b) => a - b)).toEqual([101, 102]);
   });
 
-  it('a malformed raw tsquery fails at execution with the Postgres error', async () => {
+  it('toTsquery on malformed text fails at execution with the Postgres error', async () => {
     await expect(
       runtime().query(
         db()
           .public.comments.select('id')
-          .where((f, fns) => fns.fullTextMatches(f.body, rawTsquery('alice &')))
+          .where((f, fns) => fns.fullTextMatches(f.body, fns.toTsquery('alice &')))
           .build(),
       ),
     ).rejects.toThrow(/tsquery/);
+  });
+
+  it('a tsquery read back from a query binds as the query and matches the same rows', async () => {
+    const { query } = await runtime()
+      .query(
+        db()
+          .public.comments.select('query', (_f, fns) =>
+            fns.websearchToTsquery('Alice -manuscripts'),
+          )
+          .limit(1)
+          .build(),
+      )
+      .firstOrThrow();
+    const viaParser = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) =>
+          fns.fullTextMatches(f.body, fns.websearchToTsquery('Alice -manuscripts')),
+        )
+        .orderBy((f) => f.id, { direction: 'asc' })
+        .build(),
+    );
+    const viaReadBack = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, query))
+        .orderBy((f) => f.id, { direction: 'asc' })
+        .build(),
+    );
+
+    expect(query).toBe("'alic' & !'manuscript'");
+    expect(viaParser.map((row) => row.id)).toEqual([101, 102]);
+    expect(viaReadBack).toEqual(viaParser);
   });
 
   describe('the tsquery tag', () => {

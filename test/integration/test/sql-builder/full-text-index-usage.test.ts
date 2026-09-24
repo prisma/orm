@@ -22,14 +22,13 @@ import {
 } from '@internal/adapter-postgres/control';
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { rawTsquery, tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
+import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
 const QUERY = 'zebra';
-const PREFIX_QUERY = rawTsquery('zeb:*');
 
 /** Every `Index Name` anywhere in an EXPLAIN plan tree. */
 function indexNames(node: unknown): readonly string[] {
@@ -158,17 +157,30 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(lowered.params).toEqual([QUERY]);
   });
 
-  it('lowers a raw tsquery to a bound tsquery parameter over the same index expression', () => {
+  async function prefixQueryReadBack() {
+    const { query } = await runtime()
+      .query(
+        db()
+          .public.comments.select('query', (_f, fns) => fns.toTsquery('zeb:*'))
+          .limit(1)
+          .build(),
+      )
+      .firstOrThrow();
+    return query;
+  }
+
+  it('lowers a tsquery read back from a query to a bound tsquery parameter over the same index expression', async () => {
+    const prefixQuery = await prefixQueryReadBack();
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+        .where((f, fns) => fns.fullTextMatches(f.body, prefixQuery))
         .build(),
     );
 
     expect(lowered.sql).toContain(`to_tsvector('english', "body") @@ $1`);
     expect(lowered.sql).not.toContain('to_tsquery');
-    expect(lowered.params).toEqual([PREFIX_QUERY]);
+    expect(lowered.params).toEqual(["'zeb':*"]);
   });
 
   it('uses the index for the SQL builder predicate', async () => {
@@ -183,11 +195,12 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));
   });
 
-  it('uses the index for a raw prefix query', async () => {
+  it('uses the index for a prefix query read back from a query', async () => {
+    const prefixQuery = await prefixQueryReadBack();
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+        .where((f, fns) => fns.fullTextMatches(f.body, prefixQuery))
         .build(),
     );
 
@@ -197,7 +210,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
       await runtime().query(
         db()
           .public.comments.select('id')
-          .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+          .where((f, fns) => fns.fullTextMatches(f.body, prefixQuery))
           .build(),
       ),
     ).toHaveLength(6);

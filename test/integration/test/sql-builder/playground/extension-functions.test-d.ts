@@ -1,6 +1,6 @@
 import type { BooleanCodecType, Expression } from '@internal/sql-builder/types';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { type RawTsquery, rawTsquery, tsquery } from '@internal/target-postgres/full-text';
+import { tsquery } from '@internal/target-postgres/full-text';
 import { expectTypeOf, test } from 'vitest';
 import { db } from './preamble';
 
@@ -67,8 +67,7 @@ test('the parsers are fns returning a non-nullable tsquery expression', () => {
   });
 });
 
-test('the query is a tsquery from a parser, the tsquery tag or rawTsquery, never another type', () => {
-  db.public.users.select('id').where((f, fns) => fns.fullTextMatches(f.name, rawTsquery('ali:*')));
+test('the query is a tsquery from a parser or the tsquery tag, never another type', () => {
   db.public.users
     .select('id')
     .select('rank', (f, fns) => fns.fullTextRank(f.name, tsquery`${'ali'}:*`))
@@ -76,7 +75,7 @@ test('the query is a tsquery from a parser, the tsquery tag or rawTsquery, never
     .where((f, fns) => fns.fullTextMatches(f.name, tsquery`${'ali'}:*`));
   db.public.users
     .select('id')
-    // @ts-expect-error a bare string is not a tsquery; parse it or mark it with rawTsquery
+    // @ts-expect-error a bare string is not a tsquery; parse it first
     .where((f, fns) => fns.fullTextMatches(f.name, 'ali:*'));
   db.public.users
     .select('id')
@@ -88,12 +87,16 @@ test('the query is a tsquery from a parser, the tsquery tag or rawTsquery, never
     .where((f, fns) => fns.fullTextMatches(f.name, f.name));
 });
 
-test('a selected parser expression reads back as a raw tsquery', () => {
+test('a tsquery read back from a query is a string, and is accepted as the query', () => {
   const plan = db.public.users
     .select('query', (_f, fns) => fns.websearchToTsquery('alice'))
     .build();
+  type Row = typeof plan extends SqlQueryPlan<infer R> ? R : never;
+  const row = null as unknown as Row;
 
-  expectTypeOf(plan).toEqualTypeOf<SqlQueryPlan<{ query: RawTsquery }>>();
+  expectTypeOf(row.query).toExtend<string>();
+  expectTypeOf<string>().not.toExtend<Row['query']>();
+  db.public.users.select('id').where((f, fns) => fns.fullTextMatches(f.name, row.query));
 });
 
 test('fullTextRank returns a non-nullable float4 expression', () => {

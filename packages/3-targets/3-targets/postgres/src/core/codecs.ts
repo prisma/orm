@@ -135,7 +135,6 @@ import { pgTimestamptzDateDescriptor } from './date-codecs';
 import { postgresError } from './errors';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { PostgresNativeEnum } from './postgres-native-enum';
-import { rawTsquery } from './raw-tsquery';
 import {
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
@@ -1378,44 +1377,40 @@ pgInetColumn satisfies ColumnHelperForStrict<PgInetDescriptor>;
 const PG_TSQUERY_NATIVE_TYPE = 'tsquery';
 
 /**
- * The same type as `RawTsquery`, declared again rather than imported. If `CodecTypes` names
- * `RawTsquery`, a consumer declaration that expands `CodecTypes` must name it too, and TypeScript
- * finds it only through a subpath that consumer already imports. `PgInterval` relies on that by
- * being exported from both `codec-types` and `codecs`; exporting `RawTsquery` from `codec-types`
- * alone still fails the `@internal/postgres` build with TS2742, because that package imports
- * `codecs`. This unexported copy needs no name, so it works for every consumer and keeps
- * `full-text` the only public home of `RawTsquery`. `full-text.test-d.ts` checks the two are equal.
+ * A `tsquery` value as the application holds it: text that only Postgres produces, when a query
+ * selects one. The brand keeps a bare string from being passed where a full-text query is expected,
+ * while a value read back can be passed straight back. It is not exported, so reading one back from
+ * Postgres is the only way to get one.
  */
-type TsqueryText = string & { readonly __rawTsquery: true };
+type TsqueryValue = string & { readonly __tsquery: true };
 
 export class PgTsqueryCodec extends CodecImpl<
   typeof PG_TSQUERY_CODEC_ID,
   readonly [],
   string,
-  TsqueryText
+  TsqueryValue
 > {
-  async encode(value: TsqueryText, _ctx: CodecCallContext): Promise<string> {
+  async encode(value: TsqueryValue, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<TsqueryText> {
-    return rawTsquery(wire);
+  async decode(wire: string, _ctx: CodecCallContext): Promise<TsqueryValue> {
+    return blindCast<TsqueryValue, 'Postgres produced this text as a tsquery value'>(wire);
   }
-  encodeJson(value: TsqueryText): JsonValue {
+  encodeJson(value: TsqueryValue): JsonValue {
     return value;
   }
-  decodeJson(json: JsonValue): TsqueryText {
-    return blindCast<TsqueryText, 'tsquery values serialize to JSON as their wire string form'>(
+  decodeJson(json: JsonValue): TsqueryValue {
+    return blindCast<TsqueryValue, 'tsquery values serialize to JSON as their wire string form'>(
       json,
     );
   }
 }
 
 /**
- * The type of a full-text query: what the parsers in `full-text` return and what a `rawTsquery`
- * passed to `fullTextMatches`, `fullTextRank` or `fullTextHeadline` binds as. Its application value
- * is a branded string, so a bare string is not accepted where a query is expected. It has no column
- * helper, because a contract cannot author a `tsquery` column, and no traits, because comparing or
- * ordering queries means nothing to an application.
+ * The type of a full-text query: what the parsers and the tag in `full-text` return, and what a
+ * `tsquery` value read back from a query binds as when passed to `fullTextMatches`, `fullTextRank`
+ * or `fullTextHeadline`. It has no column helper, because a contract cannot author a `tsquery`
+ * column, and no traits, because comparing or ordering queries means nothing to an application.
  */
 export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
   protected override nativeType(): string {

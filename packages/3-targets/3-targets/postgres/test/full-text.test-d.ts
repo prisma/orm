@@ -4,8 +4,6 @@ import type { CodecTypes } from '../src/exports/codec-types';
 import {
   phrasetoTsquery,
   plaintoTsquery,
-  type RawTsquery,
-  rawTsquery,
   toTsquery,
   tsquery,
   websearchToTsquery,
@@ -14,23 +12,20 @@ import type { QueryOperationTypes, TsqueryArgument } from '../src/exports/operat
 
 type Tsquery = Expression<{ codecId: 'pg/tsquery@1'; nullable: false }>;
 type TextColumn = Expression<{ codecId: 'pg/text@1'; nullable: false }>;
+type TsqueryValue = CodecTypes['pg/tsquery@1']['output'];
 
-test('the codec type map carries pg/tsquery@1 as a raw tsquery in and out', () => {
-  expectTypeOf<CodecTypes['pg/tsquery@1']['input']>().toEqualTypeOf<RawTsquery>();
-  expectTypeOf<CodecTypes['pg/tsquery@1']['output']>().toEqualTypeOf<RawTsquery>();
+test('a tsquery value is a string that a bare string cannot stand in for', () => {
+  expectTypeOf<CodecTypes['pg/tsquery@1']['input']>().toEqualTypeOf<TsqueryValue>();
+  expectTypeOf<TsqueryValue>().toExtend<string>();
+  expectTypeOf<string>().not.toExtend<TsqueryValue>();
 });
 
-test('rawTsquery brands a string, and a raw tsquery is still a string', () => {
-  expectTypeOf(rawTsquery('zeb:*')).toEqualTypeOf<RawTsquery>();
-  expectTypeOf<RawTsquery>().toExtend<string>();
-});
-
-test('the query is a parser expression or a raw tsquery, never a bare string', () => {
+test('the query is a parser expression or a tsquery value read back, never a bare string', () => {
   for (const parse of [websearchToTsquery, toTsquery, plaintoTsquery, phrasetoTsquery]) {
     expectTypeOf(parse('zebra')).toEqualTypeOf<Tsquery>();
   }
   expectTypeOf<Tsquery>().toExtend<TsqueryArgument<CodecTypes>>();
-  expectTypeOf<RawTsquery>().toExtend<TsqueryArgument<CodecTypes>>();
+  expectTypeOf<TsqueryValue>().toExtend<TsqueryArgument<CodecTypes>>();
   expectTypeOf<string>().not.toExtend<TsqueryArgument<CodecTypes>>();
   expectTypeOf<number>().not.toExtend<TsqueryArgument<CodecTypes>>();
   expectTypeOf<TextColumn>().not.toExtend<TsqueryArgument<CodecTypes>>();

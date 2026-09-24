@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   phrasetoTsquery,
   plaintoTsquery,
-  rawTsquery,
   toTsquery,
   websearchToTsquery,
 } from '../src/exports/full-text';
@@ -64,11 +63,5 @@ describe.each(parsers)('%s', (method, fn, parse) => {
 
   it('passes a text expression through as the parsed input', () => {
     expect(astOf(parse(TEXT_COLUMN)).self).toBe(TEXT_COLUMN_AST);
-  });
-});
-
-describe('rawTsquery', () => {
-  it('returns its text unchanged, so the text binds as written', () => {
-    expect(rawTsquery("'zebra' & !'graze'")).toBe("'zebra' & !'graze'");
   });
 });
