@@ -234,10 +234,10 @@ CONTRACT.SOURCE_LOAD_FAILED
   PSL_NO_OPTED_IN_SCHEMA_FILES: None of the matched files carry the "// use prisma-8" directive: <path>
 ```
 
-Run the colocated codemod over every PSL schema file `contract.source.inputs` names (a plain path or a glob). The script path is relative to this guide's directory:
+From the project root, run the codemod that sits next to this guide over every PSL schema file `contract.source.inputs` names (a plain path or a glob). `<skill>` is the directory of the synced `prisma-8` skill:
 
 ```bash
-node ./scripts/multifile-psl/add-use-prisma-8-directive.mjs 'prisma/**/*.prisma'
+node <skill>/upgrading/app/upgrades/8.0.0-rc.11-to-8.0.0-rc.12/scripts/multifile-psl/add-use-prisma-8-directive.mjs 'prisma/**/*.prisma'
 ```
 
 It inserts `// use prisma-8` followed by a blank line at the top of every matched file that lacks the directive (or its earlier `// use prisma-next` spelling); a file that already carries either form is left untouched, so running it twice is a no-op. This is the same directive `orm init` already scaffolds into a fresh project.
@@ -248,10 +248,10 @@ The directive is content, not configuration: it does not change `contract.source
 
 A PSL `model` with no `@@map` used to name its table, or its Mongo collection, after the model with the first letter lowered: `model UserProfile` read and wrote `"userProfile"`. It now uses the model name verbatim, `"UserProfile"`, the same rule every other Prisma 8 authoring surface already followed. Every model without `@@map` therefore points at a table that does not exist yet, so the schema must say which table it means.
 
-Run the colocated codemod once, from the project root, over every schema file, including the `contract.prisma` copy inside each migration directory. The script path is relative to this guide's directory:
+From the project root, run the codemod that sits next to this guide once over every schema file, including the `contract.prisma` copy inside each migration directory. `<skill>` is the directory of the synced `prisma-8` skill. The script exits with an error if no file matches:
 
 ```bash
-node ./scripts/psl-verbatim-table-names/add-model-map.mjs '**/*.prisma'
+node <skill>/upgrading/app/upgrades/8.0.0-rc.11-to-8.0.0-rc.12/scripts/psl-verbatim-table-names/add-model-map.mjs '**/*.prisma'
 ```
 
 It adds `@@map("<model name with its first letter lowered>")` as the last line of every `model` block that has no `@@map`, keeps the file's indentation and line endings, leaves models that already have `@@map` alone, and leaves a variant with `@@base(...)` and no `@@map` alone because it shares its base's table. It never descends into `node_modules` or `dist`, prints every model it mapped as `<file>: model <Name> -> @@map("<name>")`, and is idempotent. If a `model` block is written in a shape it cannot read it prints `<file>:<line>: model block not understood` and exits 1; add the `@@map` to that block by hand.

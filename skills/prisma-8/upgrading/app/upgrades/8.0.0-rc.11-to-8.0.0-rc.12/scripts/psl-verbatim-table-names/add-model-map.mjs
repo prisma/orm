@@ -5,7 +5,7 @@
  * model names verbatim keeps the table (or collection) names it already has.
  *
  * Usage:
- *   node scripts/psl-verbatim-table-names/add-model-map.mjs <file-or-glob> [...more]
+ *   node <path to this file> <file-or-glob> [...more]
  *
  * Globs never descend into `node_modules` or `dist`.
  *
@@ -213,12 +213,14 @@ async function expandPatterns(patterns) {
 async function main() {
   const patterns = argv.slice(2);
   if (patterns.length === 0) {
-    stderr.write(
-      'usage: node scripts/psl-verbatim-table-names/add-model-map.mjs <file-or-glob> [...more]\n',
-    );
+    stderr.write('usage: node add-model-map.mjs <file-or-glob> [...more]\n');
     exit(2);
   }
   const files = await expandPatterns(patterns);
+  if (files.length === 0) {
+    stderr.write('no files matched\n');
+    exit(1);
+  }
   let failed = false;
   let mappedCount = 0;
   for (const file of files) {

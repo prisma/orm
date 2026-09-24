@@ -284,10 +284,10 @@ section.validate(raw, { files: [configPath], keys: { contract: configPath } });
 
 A PSL `model` with no `@@map` used to name its table, or its Mongo collection, after the model with the first letter lowered: `model UserProfile` read and wrote `"userProfile"`. It now uses the model name verbatim, `"UserProfile"`, the same rule every other Prisma 8 authoring surface already followed. Every model without `@@map` therefore points at a table that does not exist yet, so the schema must say which table it means.
 
-Run the colocated codemod once, from the extension package root, over every schema file, including the contract-space `contract.prisma` and the copy inside each migration directory. The script path is relative to this guide's directory:
+From the extension package root, run the codemod that sits next to this guide once over every schema file, including the contract-space `contract.prisma` and the copy inside each migration directory. `<skill>` is the directory of the synced `prisma-8` skill. The script exits with an error if no file matches:
 
 ```bash
-node ./scripts/psl-verbatim-table-names/add-model-map.mjs '**/*.prisma'
+node <skill>/upgrading/extension/upgrades/8.0.0-rc.11-to-8.0.0-rc.12/scripts/psl-verbatim-table-names/add-model-map.mjs '**/*.prisma'
 ```
 
 It adds `@@map("<model name with its first letter lowered>")` as the last line of every `model` block that has no `@@map`, keeps the file's indentation and line endings, leaves models that already have `@@map` alone, and leaves a variant with `@@base(...)` and no `@@map` alone because it shares its base's table. It never descends into `node_modules` or `dist`, prints every model it mapped as `<file>: model <Name> -> @@map("<name>")`, and is idempotent. If a `model` block is written in a shape it cannot read it prints `<file>:<line>: model block not understood` and exits 1; add the `@@map` to that block by hand.
