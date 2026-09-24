@@ -6,6 +6,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  dataTypeId,
 } from '@internal/framework-components/codec';
 import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -59,6 +60,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -77,6 +79,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
 }
 
 class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -103,6 +106,7 @@ class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
 const genericDescriptor = new GenericVectorDescriptor();
 const directDescriptor = new DirectVectorDescriptor();
 const adaptedDescriptor = postgresCodec(genericDescriptor, {
+  dataType: dataTypeId('demo/fixture'),
   nativeType(params) {
     expectTypeOf(params).toEqualTypeOf<VectorParams>();
     return `vector(${params.length})`;
@@ -159,6 +163,7 @@ test('postgresCodec requires explicit native and scalar projection behavior', ()
 
 // @ts-expect-error -- direct descriptors must implement scalar JSON projection
 class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/missing-json@1' as const;
   override readonly traits: readonly CodecTrait[] = [];
   override readonly targetTypes: readonly string[] = [];
@@ -173,6 +178,7 @@ class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
 
 // @ts-expect-error -- direct descriptors must implement native type resolution
 class MissingNativeType extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/missing-native@1' as const;
   override readonly traits: readonly CodecTrait[] = [];
   override readonly targetTypes: readonly string[] = [];

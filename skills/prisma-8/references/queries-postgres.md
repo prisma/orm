@@ -62,6 +62,44 @@ db.orm.public.User.where({ kind: 'admin' });
 
 Operators on the field proxy include `.eq`, `.neq`, `.lt`, `.lte`, `.gt`, `.gte`, `.like`, `.ilike`, `.in([...])`, `.isNull()`, `.isNotNull()`. Extensions add target-specific operators on extension-typed columns (`pgvector`'s `.cosineDistance(...)`, `postgis`'s `.within(...)` / `.intersectsBbox(...)` / `.distanceSphere(...)`).
 
+**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The search string is a bound parameter lowered to `websearch_to_tsquery`, so `"an exact phrase"` and `-excluded` work the way a user expects from a search box. Each takes an options object as its second argument. `language` defaults to `'english'` and only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
+
+```typescript
+// ORM: filter by the query, order by relevance.
+const hits = await db.orm.public.Message
+  .select('id', 'text')
+  .where((m) => m.text.fullTextMatches(query))
+  .orderBy((m) => m.text.fullTextRank(query).desc())
+  .limit(20)
+  .all();
+
+// SQL builder: the same predicate, plus a snippet with your own markers.
+const snippets = db.sql.public.message
+  .select('id')
+  .select('snippet', (f, fns) =>
+    fns.fullTextHeadline(f.text, query, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 }),
+  )
+  .where((f, fns) => fns.fullTextMatches(f.text, query))
+  .build();
+```
+
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
+
+```prisma
+@@fullTextIndex([text], name: "message_text_search")
+@@fullTextIndex([text], where: "archived_at IS NULL", name: "message_text_search_live")
+```
+
+Give the index and the operation the same `language`: a mismatch raises no error, the query silently falls back to a sequential scan.
+
+In a TypeScript contract, the same helper from `@prisma/orm-postgres/contract-builder`:
+
+```typescript
+model('Message', { fields: { id, text } }).sql(({ cols }) => ({
+  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+}));
+```
+
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 
 ```typescript

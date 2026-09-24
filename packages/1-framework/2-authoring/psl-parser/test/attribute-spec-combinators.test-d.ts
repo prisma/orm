@@ -3,10 +3,15 @@ import { expectTypeOf, test } from 'vitest';
 import type {
   ArgType,
   AttributeCtx,
+  BlockSymbol,
+  CompositeTypeSymbol,
   FieldAttributeCtx,
   InspectableArgType,
   ModelAttributeCtx,
+  ModelSymbol,
+  NamedTypeSymbol,
   OutOf,
+  ResolvedEntityReference,
   TypedFuncCall,
 } from '../src/exports';
 import {
@@ -35,15 +40,57 @@ test('inspectable lists and records expose ArgType children', () => {
   expectTypeOf<RecordMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
 });
 
+test('checked reference selectors and wrappers preserve inferred outputs', () => {
+  const model = entityRef({ kind: 'model' });
+  const composite = entityRef({ kind: 'compositeType' });
+  const named = entityRef({ kind: 'namedType' });
+  const block = entityRef({ kind: 'block', keyword: 'permission' });
+  const names = identifier();
+  const optionalModel = optional(model);
+  const models = list(model);
+  const alternative = oneOf(model, names);
+  expectTypeOf<OutOf<typeof model>>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>>();
+  expectTypeOf<OutOf<typeof composite>>().toEqualTypeOf<
+    ResolvedEntityReference<CompositeTypeSymbol>
+  >();
+  expectTypeOf<OutOf<typeof named>>().toEqualTypeOf<ResolvedEntityReference<NamedTypeSymbol>>();
+  expectTypeOf<OutOf<typeof block>>().toEqualTypeOf<ResolvedEntityReference<BlockSymbol>>();
+  expectTypeOf<OutOf<typeof names>>().toEqualTypeOf<string>();
+  expectTypeOf(names.name).toEqualTypeOf<undefined>();
+  expectTypeOf<OutOf<typeof optionalModel>>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>>();
+  expectTypeOf<OutOf<typeof models>>().toEqualTypeOf<ResolvedEntityReference<ModelSymbol>[]>();
+  expectTypeOf<OutOf<typeof alternative>>().toEqualTypeOf<
+    ResolvedEntityReference<ModelSymbol> | string
+  >();
+  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<AttributeCtx>();
+  expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sources' | 'symbols'>();
+  // @ts-expect-error checked references require an expected selector
+  entityRef();
+  // @ts-expect-error checked references do not accept injected resolvers
+  entityRef({ kind: 'model' }, () => undefined);
+});
+
+test('identifier requires semantic value documentation', () => {
+  // @ts-expect-error identifier values require documentation
+  identifier('Undocumented');
+  // @ts-expect-error the options object must document the value
+  identifier('Undocumented', {});
+});
+
 test('identifier pins its name as the output literal type', () => {
-  const action = identifier('NoAction');
+  const action = identifier('NoAction', {
+    documentation: 'An accepted identifier in this test grammar.',
+  });
 
   expectTypeOf<OutOf<typeof action>>().toEqualTypeOf<'NoAction'>();
   expectTypeOf(action.name).toEqualTypeOf<'NoAction'>();
 });
 
 test('oneOf infers the union of its alternatives output types', () => {
-  const action = oneOf(identifier('NoAction'), identifier('Cascade'));
+  const action = oneOf(
+    identifier('NoAction', { documentation: 'An accepted identifier in this test grammar.' }),
+    identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+  );
 
   expectTypeOf<OutOf<typeof action>>().toEqualTypeOf<'NoAction' | 'Cascade'>();
   expectTypeOf(action.alternatives[0].name).toEqualTypeOf<'NoAction'>();
@@ -88,25 +135,133 @@ test('oneOf preserves every alternative parse context', () => {
   expectTypeOf<typeof modelThenField>().toExtend<ArgType<string, FieldAttributeCtx>>();
   expectTypeOf<typeof fieldThenModel>().toExtend<ArgType<string, FieldAttributeCtx>>();
 
-  modelAttribute('modelOnly', { positional: [{ key: 'value', type: bareThenModel }] });
-  modelAttribute('modelOnly', { positional: [{ key: 'value', type: modelThenBare }] });
-  fieldAttribute('fieldOnly', { positional: [{ key: 'value', type: bareThenField }] });
-  fieldAttribute('fieldOnly', { positional: [{ key: 'value', type: fieldThenBare }] });
-  fieldAttribute('fieldOnly', { positional: [{ key: 'value', type: modelThenField }] });
-  fieldAttribute('fieldOnly', { positional: [{ key: 'value', type: fieldThenModel }] });
+  modelAttribute('modelOnly', {
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: bareThenModel,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  modelAttribute('modelOnly', {
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: modelThenBare,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  fieldAttribute('fieldOnly', {
+    documentation: 'Declares a field attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: bareThenField,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  fieldAttribute('fieldOnly', {
+    documentation: 'Declares a field attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: fieldThenBare,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  fieldAttribute('fieldOnly', {
+    documentation: 'Declares a field attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: modelThenField,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  fieldAttribute('fieldOnly', {
+    documentation: 'Declares a field attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: fieldThenModel,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
 
-  // @ts-expect-error model-only alternatives cannot enter block attribute specs
-  blockAttribute('invalid', { positional: [{ key: 'value', type: bareThenModel }] });
-  // @ts-expect-error model-only alternatives cannot enter block attribute specs
-  blockAttribute('invalid', { positional: [{ key: 'value', type: modelThenBare }] });
-  // @ts-expect-error field-only alternatives cannot enter block attribute specs
-  blockAttribute('invalid', { positional: [{ key: 'value', type: bareThenField }] });
-  // @ts-expect-error field-only alternatives cannot enter block attribute specs
-  blockAttribute('invalid', { positional: [{ key: 'value', type: fieldThenBare }] });
-  // @ts-expect-error field-only alternatives cannot enter model attribute specs
-  modelAttribute('invalid', { positional: [{ key: 'value', type: modelThenField }] });
-  // @ts-expect-error field-only alternatives cannot enter model attribute specs
-  modelAttribute('invalid', { positional: [{ key: 'value', type: fieldThenModel }] });
+  blockAttribute('invalid', {
+    documentation: 'Declares a block attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error model-only alternatives cannot enter block attribute specs
+        type: bareThenModel,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  blockAttribute('invalid', {
+    documentation: 'Declares a block attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error model-only alternatives cannot enter block attribute specs
+        type: modelThenBare,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  blockAttribute('invalid', {
+    documentation: 'Declares a block attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error field-only alternatives cannot enter block attribute specs
+        type: bareThenField,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  blockAttribute('invalid', {
+    documentation: 'Declares a block attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error field-only alternatives cannot enter block attribute specs
+        type: fieldThenBare,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  modelAttribute('invalid', {
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error field-only alternatives cannot enter model attribute specs
+        type: modelThenField,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  modelAttribute('invalid', {
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error field-only alternatives cannot enter model attribute specs
+        type: fieldThenModel,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
 });
 
 test('oneOf parse contexts survive optional and nested wrappers', () => {
@@ -126,20 +281,70 @@ test('oneOf parse contexts survive optional and nested wrappers', () => {
     ArgType<Record<string, string>, FieldAttributeCtx>
   >();
 
-  fieldAttribute('fieldOnly', { positional: [{ key: 'value', type: fieldAlternativeList }] });
   fieldAttribute('fieldOnly', {
-    positional: [{ key: 'value', type: reverseFieldAlternativeRecord }],
+    documentation: 'Declares a field attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: fieldAlternativeList,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  fieldAttribute('fieldOnly', {
+    documentation: 'Declares a field attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        type: reverseFieldAlternativeRecord,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
   });
 
-  // @ts-expect-error nested model-only alternatives cannot enter block attribute specs
-  blockAttribute('invalid', { positional: [{ key: 'value', type: optionalModelAlternative }] });
-  // @ts-expect-error nested field-only alternatives cannot enter model attribute specs
-  modelAttribute('invalid', { positional: [{ key: 'value', type: fieldAlternativeList }] });
-  // @ts-expect-error nested field-only alternatives cannot enter model attribute specs
-  modelAttribute('invalid', { positional: [{ key: 'value', type: fieldAlternativeRecord }] });
+  blockAttribute('invalid', {
+    documentation: 'Declares a block attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error nested model-only alternatives cannot enter block attribute specs
+        type: optionalModelAlternative,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
   modelAttribute('invalid', {
-    // @ts-expect-error nested field-only alternatives cannot enter model attribute specs
-    positional: [{ key: 'value', type: reverseFieldAlternativeRecord }],
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error nested field-only alternatives cannot enter model attribute specs
+        type: fieldAlternativeList,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  modelAttribute('invalid', {
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error nested field-only alternatives cannot enter model attribute specs
+        type: fieldAlternativeRecord,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+  });
+  modelAttribute('invalid', {
+    documentation: 'Declares a model attribute for argument binding.',
+    positional: [
+      {
+        key: 'value',
+        // @ts-expect-error nested field-only alternatives cannot enter model attribute specs
+        type: reverseFieldAlternativeRecord,
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
   });
 });
 
@@ -150,7 +355,11 @@ test('list infers an array of its element type', () => {
 });
 
 test('combinators narrow by kind to inspectable metadata', () => {
-  const arg = oneOf(str('hashed'), num(-1), list(identifier('Cascade')));
+  const arg = oneOf(
+    str('hashed'),
+    num(-1),
+    list(identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' })),
+  );
 
   if (arg.kind === 'oneOf') {
     expectTypeOf<OutOf<(typeof arg.alternatives)[number]>>().toEqualTypeOf<
@@ -191,8 +400,15 @@ test('child and signature metadata preserve output and context types', () => {
   const fields = list(fieldRef(), { allowEmpty: false, unique: true });
   const namedRecord = record(int({ min: 1, max: 9 }));
   const call = funcCall('nanoid', {
-    positional: [{ key: 'size', type: optional(int({ min: 2 })) }],
-    named: { prefix: optional(str('usr')) },
+    documentation: 'Calls the named value generator.',
+    positional: [
+      {
+        key: 'size',
+        type: optional(int({ min: 2 })),
+        documentation: 'The value bound to this positional slot.',
+      },
+    ],
+    named: { prefix: { type: optional(str('usr')), documentation: 'The value supplied by name.' } },
   });
 
   if (fields.kind === 'list') {
@@ -210,7 +426,7 @@ test('child and signature metadata preserve output and context types', () => {
       OutOf<NonNullable<typeof call.signature.positional>[0]['type']>
     >().toEqualTypeOf<number>();
     expectTypeOf<
-      OutOf<NonNullable<typeof call.signature.named>['prefix']>
+      OutOf<NonNullable<typeof call.signature.named>['prefix']['type']>
     >().toEqualTypeOf<'usr'>();
     expectTypeOf<OutOf<typeof call>>().toEqualTypeOf<TypedFuncCall>();
   }
@@ -234,7 +450,7 @@ test('optional wrappers retain child metadata and optional markers', () => {
 test('field references have distinct inspectable kinds', () => {
   expectTypeOf(fieldRef().kind).toEqualTypeOf<'fieldRef'>();
   expectTypeOf(referencedFieldRef().kind).toEqualTypeOf<'referencedFieldRef'>();
-  expectTypeOf(entityRef().kind).toEqualTypeOf<'entityRef'>();
+  expectTypeOf(entityRef({ kind: 'model' }).kind).toEqualTypeOf<'entityRef'>();
 });
 
 test('runtime context metadata is rejected from arg types', () => {

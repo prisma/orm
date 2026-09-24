@@ -1,16 +1,23 @@
-import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
+import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
-import type { SourceFile } from '../source-file';
-import type { FieldSymbol, ModelSymbol } from '../symbol-table';
+import type { PslDiagnostic } from '../diagnostic';
+import type {
+  EntityDeclaration,
+  EntitySelector,
+  ResolvedEntityReference,
+} from '../entity-reference';
+import type { PslSources } from '../source-file';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 
 export type AttributeLevel = 'field' | 'model' | 'block';
 
 export interface AttributeCtx {
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
+  readonly symbols: SymbolTable;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
@@ -36,7 +43,8 @@ export type ArgTypeKind =
   | 'record'
   | 'referencedFieldRef'
   | 'rejecting'
-  | 'str';
+  | 'str'
+  | 'taggedLiteral';
 
 export type ArgTypeContext = 'attribute' | 'field' | 'model';
 
@@ -51,9 +59,12 @@ export interface BoolArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly kind: 'bool';
 }
 
-export interface EntityRefArgType<Ctx extends AttributeCtx = AttributeCtx>
-  extends ArgTypeOutput<string, Ctx> {
+export interface EntityRefArgType<
+  D extends EntityDeclaration = EntityDeclaration,
+  Ctx extends AttributeCtx = AttributeCtx,
+> extends ArgTypeOutput<ResolvedEntityReference<D>, Ctx> {
   readonly kind: 'entityRef';
+  readonly expected: EntitySelector;
 }
 
 export interface FieldRefArgType<Ctx extends ModelAttributeCtx = ModelAttributeCtx>
@@ -67,6 +78,7 @@ export interface ReferencedFieldRefArgType<Ctx extends FieldAttributeCtx = Field
 }
 
 export interface FuncCallSig {
+  readonly documentation: string;
   readonly positional?: readonly PositionalParam<unknown, AttributeCtx>[];
   readonly named?: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
 }
@@ -87,13 +99,25 @@ export interface FuncCallArgType<
   readonly signature: Signature;
 }
 
-export interface IdentifierArgType<
+export interface FixedIdentifierArgType<
   Name extends string = string,
   Ctx extends AttributeCtx = AttributeCtx,
 > extends ArgTypeOutput<Name, Ctx> {
   readonly kind: 'identifier';
   readonly name: Name;
+  readonly documentation: string;
 }
+
+export interface UnrestrictedIdentifierArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<string, Ctx> {
+  readonly kind: 'identifier';
+  readonly name: undefined;
+}
+
+export type IdentifierArgType<
+  Name extends string = string,
+  Ctx extends AttributeCtx = AttributeCtx,
+> = FixedIdentifierArgType<Name, Ctx> | UnrestrictedIdentifierArgType<Ctx>;
 
 export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<number, Ctx> {
@@ -179,6 +203,23 @@ export type StrArgType<
   Ctx extends AttributeCtx = AttributeCtx,
 > = string extends T ? UnrestrictedStrArgType<Ctx> : FixedStrArgType<T, Ctx>;
 
+/**
+ * A tagged literal argument as parsed: its tag, the canonicalization of its string literal, and its
+ * span. Neither the tag nor the canonicalization has been checked; lowering does both.
+ */
+export interface ParsedTaggedLiteral {
+  readonly tag: string;
+  readonly canonicalization: TaggedLiteralCanonicalization;
+  readonly span: PslSpan;
+}
+
+export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<ParsedTaggedLiteral, Ctx> {
+  readonly kind: 'taggedLiteral';
+  readonly tags: readonly string[];
+  readonly documentation: string;
+}
+
 export interface ArgType<T, Ctx extends AttributeCtx> extends ArgTypeOutput<T, Ctx> {
   readonly kind: ArgTypeKind;
 }
@@ -206,7 +247,7 @@ export type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'fie
 
 export type InspectableArgType<Ctx extends AttributeCtx> =
   | BoolArgType<Ctx>
-  | EntityRefArgType<Ctx>
+  | EntityRefArgType<EntityDeclaration, Ctx>
   | FieldRefArgType<ModelAttributeCtx & Ctx>
   | FuncCallArgType<string, Ctx>
   | IdentifierArgType<string, Ctx>
@@ -221,7 +262,8 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | ReferencedFieldRefArgType<FieldAttributeCtx & Ctx>
   | RejectingArgType<never, Ctx>
   | FixedStrArgType<string, Ctx>
-  | UnrestrictedStrArgType<Ctx>;
+  | UnrestrictedStrArgType<Ctx>
+  | TaggedLiteralArgType<Ctx>;
 
 export type OptionalArgType<
   T,
@@ -234,14 +276,17 @@ export type OptionalArgType<
   readonly defaultValue?: T | undefined;
 };
 
-export type Param<T, Ctx extends AttributeCtx> = ArgType<T, Ctx>;
+export interface Param<T, Ctx extends AttributeCtx> {
+  readonly type: ArgType<T, Ctx>;
+  readonly documentation: string;
+}
 
-export interface PositionalParam<T, Ctx extends AttributeCtx> {
+export interface PositionalParam<T, Ctx extends AttributeCtx> extends Param<T, Ctx> {
   readonly key: string;
-  readonly type: Param<T, Ctx>;
 }
 
 export interface AttributeSpec<Out, Ctx extends AttributeCtx> {
+  readonly documentation: string;
   readonly level: AttributeLevel;
   readonly name: string;
   readonly positional: readonly PositionalParam<unknown, Ctx>[];
@@ -259,8 +304,8 @@ export type OutOf<P> = P extends { readonly _out?: infer T } ? T : never;
 type OptionalMarker = { readonly optional: true };
 
 export type NamedOut<N extends Record<string, Param<unknown, never>>> = Simplify<
-  { [K in keyof N as N[K] extends OptionalMarker ? never : K]: OutOf<N[K]> } & {
-    [K in keyof N as N[K] extends OptionalMarker ? K : never]?: OutOf<N[K]>;
+  { [K in keyof N as N[K]['type'] extends OptionalMarker ? never : K]: OutOf<N[K]['type']> } & {
+    [K in keyof N as N[K]['type'] extends OptionalMarker ? K : never]?: OutOf<N[K]['type']>;
   }
 >;
 

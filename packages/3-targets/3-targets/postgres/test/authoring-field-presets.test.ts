@@ -174,12 +174,14 @@ describe('postgres temporal per-codec presets', () => {
     });
   });
 
-  it.each(['createdAt', 'createdAtString'] as const)(
-    'gives %s a now() storage default rather than an execution generator',
-    (helper) => {
-      expect(postgresAuthoringFieldPresets.temporal[helper].output).toMatchObject({
-        default: { kind: 'function', expression: 'now()' },
-      });
-    },
-  );
+  it.each([
+    ['createdAt', 'instantNow'],
+    ['createdAtString', 'timestampNow'],
+  ] as const)('gives %s the %s generator only on create', (helper, generatorId) => {
+    const output = postgresAuthoringFieldPresets.temporal[helper].output;
+    expect(output.executionDefaults).toEqual({
+      onCreate: { kind: 'generator', id: generatorId },
+    });
+    expect(output).not.toHaveProperty('default');
+  });
 });

@@ -177,6 +177,19 @@ describe('CreateIndexCall DDL rendering', () => {
     );
   });
 
+  it('renders a GIN index over to_tsvector, the shape a full-text predicate needs', async () => {
+    const call = new CreateIndexCall(
+      'public',
+      'message',
+      'message_text_search',
+      { expression: `to_tsvector('english', "text")` },
+      { type: 'gin' },
+    );
+    expect(await executeSql(call)).toBe(
+      `CREATE INDEX "message_text_search" ON "public"."message" USING "gin" (to_tsvector('english', "text"))`,
+    );
+  });
+
   it('combines unique, USING, expression, WITH, and WHERE in clause order', async () => {
     const call = new CreateIndexCall(
       'public',

@@ -1,6 +1,10 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringArgumentDescriptor } from '@internal/framework-components/authoring';
-import type { PslSpan, ResolvedAttributeArg } from '@internal/psl-parser';
+import type {
+  DiagnosticSource,
+  PslDiagnosticCollector,
+  PslSpan,
+  ResolvedAttributeArg,
+} from '@internal/psl-parser';
 import { unquoteStringLiteral } from './psl-attribute-parsing';
 
 const INVALID_AUTHORING_ARGUMENT = Symbol('invalidAuthoringArgument');
@@ -338,8 +342,8 @@ function parsePslAuthoringArgumentValue(
 }
 
 function pushInvalidPslHelperArgument(input: {
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
   readonly entityLabel: string;
   readonly helperLabel: string;
@@ -348,8 +352,7 @@ function pushInvalidPslHelperArgument(input: {
   input.diagnostics.push({
     code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
     message: `${input.entityLabel} ${input.helperLabel} ${input.message}`,
-    sourceId: input.sourceId,
-    span: input.span,
+    ...input.source.at(input.span),
   });
   return undefined;
 }
@@ -359,8 +362,8 @@ export function mapPslHelperArgs(input: {
   readonly descriptors: readonly AuthoringArgumentDescriptor[];
   readonly helperLabel: string;
   readonly span: PslSpan;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly diagnostics: PslDiagnosticCollector;
+  readonly source: DiagnosticSource;
   readonly entityLabel: string;
 }): readonly unknown[] | undefined {
   const mappedArgs: unknown[] = input.descriptors.map(() => undefined);
@@ -371,7 +374,7 @@ export function mapPslHelperArgs(input: {
   if (positionalArgs.length > input.descriptors.length) {
     return pushInvalidPslHelperArgument({
       diagnostics: input.diagnostics,
-      sourceId: input.sourceId,
+      source: input.source,
       span: input.span,
       entityLabel: input.entityLabel,
       helperLabel: input.helperLabel,
@@ -384,7 +387,7 @@ export function mapPslHelperArgs(input: {
     if (!descriptor) {
       return pushInvalidPslHelperArgument({
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source: input.source,
         span: argument.span,
         entityLabel: input.entityLabel,
         helperLabel: input.helperLabel,
@@ -396,7 +399,7 @@ export function mapPslHelperArgs(input: {
     if (value === INVALID_AUTHORING_ARGUMENT) {
       return pushInvalidPslHelperArgument({
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source: input.source,
         span: argument.span,
         entityLabel: input.entityLabel,
         helperLabel: input.helperLabel,
@@ -414,7 +417,7 @@ export function mapPslHelperArgs(input: {
     if (descriptorIndex < 0) {
       return pushInvalidPslHelperArgument({
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source: input.source,
         span: argument.span,
         entityLabel: input.entityLabel,
         helperLabel: input.helperLabel,
@@ -425,7 +428,7 @@ export function mapPslHelperArgs(input: {
     if (mappedArgs[descriptorIndex] !== undefined) {
       return pushInvalidPslHelperArgument({
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source: input.source,
         span: argument.span,
         entityLabel: input.entityLabel,
         helperLabel: input.helperLabel,
@@ -437,7 +440,7 @@ export function mapPslHelperArgs(input: {
     if (!descriptor) {
       return pushInvalidPslHelperArgument({
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source: input.source,
         span: argument.span,
         entityLabel: input.entityLabel,
         helperLabel: input.helperLabel,
@@ -449,7 +452,7 @@ export function mapPslHelperArgs(input: {
     if (value === INVALID_AUTHORING_ARGUMENT) {
       return pushInvalidPslHelperArgument({
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source: input.source,
         span: argument.span,
         entityLabel: input.entityLabel,
         helperLabel: input.helperLabel,

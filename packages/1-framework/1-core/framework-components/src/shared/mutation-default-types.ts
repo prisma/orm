@@ -3,6 +3,7 @@ import type {
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
+import type { AuthoringDataTypeEntry } from './framework-authoring';
 
 interface SourcePosition {
   readonly offset: number;
@@ -18,7 +19,7 @@ export interface SourceSpan {
 export interface SourceDiagnostic {
   readonly code: string;
   readonly message: string;
-  readonly sourceId?: string;
+  readonly sourceId: string;
   readonly span?: SourceSpan;
   readonly data?: Readonly<Record<string, unknown>>;
 }
@@ -81,7 +82,23 @@ export interface ControlMutationDefaultEntry {
 
 export type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>;
 
+/** A `` tag`body` `` default literal as the attribute spec accepted it: tag, canonical body, and span. */
+export interface TaggedLiteralValue {
+  readonly tag: string;
+  readonly body: string;
+  readonly span: SourceSpan;
+}
+
 export interface ControlMutationDefaults {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly generatorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
+}
+
+/**
+ * What an attribute spec needs to build its `@default` arms: the functions a stack registers, and
+ * the PSL support for its data types, which is where the tags live. ADR 254.
+ */
+export interface ControlDefaultRegistries
+  extends Pick<ControlMutationDefaults, 'defaultFunctionRegistry'> {
+  readonly dataTypeEntries: Readonly<Record<string, AuthoringDataTypeEntry>>;
 }

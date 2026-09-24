@@ -10,6 +10,7 @@ import type {
   CodecInstanceContext,
   ColumnTypeDescriptor,
 } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
@@ -117,6 +118,7 @@ const pgVectorCodecStubExtension: SqlRuntimeExtensionDescriptor<'postgres'> = ((
 
   const vectorDescriptor: RuntimeParameterizedCodecDescriptor<{ length: number }> = {
     codecId: 'pg/vector@1',
+    dataType: dataTypeId('pg/vector'),
     traits: ['equality'],
     targetTypes: ['vector'],
     paramsSchema: {
@@ -590,7 +592,7 @@ export function buildManyToManyContract(opts: {
     if (col.default !== undefined) {
       builder =
         typeof col.default === 'string'
-          ? builder.defaultSql(col.default)
+          ? builder.default({ kind: 'function', expression: col.default })
           : builder.default(col.default);
     }
     junctionFields[name] = builder;

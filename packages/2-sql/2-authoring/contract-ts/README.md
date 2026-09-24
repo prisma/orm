@@ -61,18 +61,20 @@ Direct imports expose the base structural helpers. Use this surface when you wan
 
 Built-in ID helpers from `@internal/ids` already return the generated-field spec accepted by `field.generated(...)`, so `field.generated(uuidv4())` is a valid structural DSL call.
 
+Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, or raw SQL written with the `sql` template tag, such as `` .default(sql`gen_random_uuid()`) `` or `` .default(sql`(now() + interval '7 days')`) ``. The `sql` body is canonicalized like PSL's `` @default(sql`...`) `` and used verbatim. JavaScript interpolation is a type error; to put the two characters `${` in the body, write `\${`, which the tag resolves. PSL needs no escape there. As in PSL, `` sql`now()` `` and `` sql`autoincrement()` `` are refused with `CONTRACT.DEFAULT_INVALID`: write `.default(now())` or `.default(autoincrement())`. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
+
 ```typescript
 import { textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
 import sqlFamily from '@internal/family-sql/pack';
 import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/sql-contract-ts/contract-builder';
+import { defineContract, field, model, now, rel } from '@internal/sql-contract-ts/contract-builder';
 import postgresPack from '@internal/target-postgres/pack';
 
 const User = model('User', {
   fields: {
     id: field.generated(uuidv4()).id(),
     email: field.column(textColumn).unique(),
-    createdAt: field.column(timestamptzColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzColumn).default(now()),
   },
 })
   .relations({
@@ -243,6 +245,8 @@ constraints.index({ expression: 'eql_v3.eq_term(email)', name: 'users_email_eq' 
 - **Fields form** — `constraints.index(cols | [cols...], options?)`. Options: `unique?`, `where?` (partial-index predicate, WHERE body without the keyword), `name?` xor `map?`, and — when the target pack registers index types — `type?` paired with its `options?` (e.g. `type: 'hash', options: {}`). The pack-typed arm requires the `options` key at compile time; PSL accepts `type:` without `options:` (absent validates as `{}`) — both lower to the same IR.
 - **Expression form** — `constraints.index({ expression, ...options })`. The expression is the whole CREATE INDEX element list as one opaque string; `name` or `map` is required (no default name can be derived from an expression). Same remaining options as the fields form.
 
+  The expression may instead be `{ fields, render }`, which defers rendering until lowering knows the storage column names: `fields` are `ColumnRef`s resolved exactly as the fields form resolves them — a `.column()` override first, then the contract's column naming convention — and `render` receives the resolved names in order and returns the element list. Use this whenever the expression names a column, because neither the override nor the naming convention is knowable while the model is being authored; a string written by hand silently stops matching the column it names when either changes. The rendered string is what reaches the IR, so nothing downstream sees a new shape. The Postgres facade's `fullTextIndex(cols.text, { name })` is built this way.
+
 `name:` declares a **wire-named** index: the physical name is `<name>_<8-hex content hash>`, and renames plan as `ALTER INDEX … RENAME`. `map:` adopts an **exact** physical name verbatim (no hash) — intended for objects captured by `contract infer`. Combining `map:` with a SQL body (`expression`/`where`) emits the `PN_EXACT_NAME_BODY_COMPARISON` warning at build time: drift detection byte-compares the authored text against Postgres's reprinted form, which is only reliable for infer-captured text. Prefer `name:` for hand-authored bodies.
 
 ### Helper Notes
@@ -250,7 +254,7 @@ constraints.index({ expression: 'eql_v3.eq_term(email)', name: 'users_email_eq' 
 - Structural helpers: `field.column(...)`, `field.generated(...)`, `field.namedType(...)`, plus `model(...)` and `rel.*`
 - Callback helper presets: `field.id.uuidv4String()`, `field.id.uuidv7String()`, `field.id.nanoid({ size })`, `field.uuidString()`, `field.text()`, `field.temporal.createdAt()`, `field.temporal.updatedAt()`, and `type.*` (Postgres also adds `field.uuidNative()`, `field.id.uuidv4Native()`, `field.id.uuidv7Native()` — these emit `pg/uuid@1`)
 - Integer representation types: register composed `type.BigIntNumber()` / `type.UnboundedInt()` instances in the returned `types` map and reference those same instances with `field.namedType(...)`, or use the direct per-codec column helpers with `field.column(...)`. `BigIntNumber` emits `pg/int8number@1` on PostgreSQL or `sqlite/bigintnumber@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `UnboundedInt` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. Bare `field.bigint()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
-- Timestamp helpers mirror PSL semantics: `field.temporal.createdAt()` lowers to a target storage `now()` default, while `field.temporal.updatedAt()` lowers to the target-owned `timestampNow` execution default for create and non-empty update mutations.
+- Timestamp helpers mirror PSL presets: `field.temporal.createdAt()` generates a client-side timestamp on create, while `field.temporal.updatedAt()` uses the same execution generator on create and non-empty update mutations. Neither creates a database default; matching representations share one generated value per operation.
 - Keep field-local and FK-local storage overrides next to the authoring site with `field.sql(...)` and `rel.belongsTo(...).sql({ fk })`
 - Prefer typed local refs such as `field.namedType(types.Role)`, `User.refs.id`, and `User.ref('id')` when those tokens are available
 - See [API.md](./API.md) for generated-field spec semantics, validation rules, and typed-reference warning behavior

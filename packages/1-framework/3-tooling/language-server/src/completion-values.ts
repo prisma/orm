@@ -1,15 +1,12 @@
-import type {
-  ArgType,
-  AttributeSpec,
-  InspectableArgType,
-  Param,
-  PositionalParam,
-} from '@internal/psl-parser';
+import type { ArgType, AttributeSpec } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type ArgumentSignature,
+  directArgType,
+  resolveGrammar,
+} from './attribute-argument-grammar';
 import type {
-  AttributeArgumentPathStep,
   AttributeArgumentPosition,
   AttributeArgumentSlotPosition,
   AttributeNamedKeyPosition,
@@ -22,19 +19,13 @@ interface CompletionInput<Position extends AttributeArgumentPosition> {
   readonly sourceFile: SourceFile;
   readonly clientSupportsSnippets: boolean;
   readonly clientSupportsTriggerSuggestCommand?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }
 
 interface ValueCompletionInput<Position extends AttributeArgumentPosition>
   extends CompletionInput<Position> {
   readonly fieldNames: (kind: 'fieldRef' | 'referencedFieldRef') => readonly string[];
 }
-
-interface ArgumentSignature {
-  readonly positional?: readonly PositionalParam<unknown, never>[];
-  readonly named?: Readonly<Record<string, Param<unknown, never>>>;
-}
-
-type Grammar = ArgumentSignature | Param<unknown, never>;
 
 export function provideAttributeNamedKeyCompletionItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
@@ -71,61 +62,25 @@ export function provideAttributeValueCompletionItems(
   );
 }
 
-function directArgType(param: ArgType<unknown, never>): InspectableArgType<never> {
-  return blindCast<
-    InspectableArgType<never>,
-    'Completion inspects registry combinators whose constructors retain kind-specific metadata; public ArgType erases that metadata, and completion never invokes parse.'
-  >(param);
-}
-
-function resolveGrammar(
-  signature: ArgumentSignature,
-  path: readonly AttributeArgumentPathStep[],
-): readonly Grammar[] {
-  let grammars: readonly Grammar[] = [signature];
-  for (const step of path) {
-    grammars = grammars.flatMap((grammar) => advanceGrammar(grammar, step));
-  }
-  return grammars;
-}
-
-function advanceGrammar(grammar: Grammar, step: AttributeArgumentPathStep): readonly Grammar[] {
-  const type = 'kind' in grammar ? directArgType(grammar) : undefined;
-  if (type?.kind === 'oneOf') {
-    return type.alternatives.flatMap((alternative) => advanceGrammar(alternative, step));
-  }
-  switch (step.kind) {
-    case 'positionalArgument': {
-      if ('kind' in grammar) return [];
-      const param = grammar.positional?.[step.index]?.type;
-      return param === undefined ? [] : [param];
-    }
-    case 'namedArgument': {
-      if ('kind' in grammar) return [];
-      const param = grammar.named?.[step.name];
-      return param === undefined ? [] : [param];
-    }
-    case 'listElement':
-      return type?.kind === 'list' ? [type.of] : [];
-    case 'recordValue':
-      return type?.kind === 'record' ? [type.of] : [];
-    case 'functionCall':
-      return type?.kind === 'funcCall' && type.name === step.name ? [type.signature] : [];
-  }
-}
-
 function namedKeyItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
   signature: ArgumentSignature,
 ): readonly CompletionItem[] {
-  return Object.keys(signature.named ?? {})
-    .filter((name) => !input.context.existingNamedKeys.includes(name))
-    .map((name) => {
+  return Object.entries(signature.named ?? {})
+    .filter(([name]) => !input.context.existingNamedKeys.includes(name))
+    .map(([name, param]) => {
       const snippet = input.clientSupportsSnippets && !input.context.hasColon;
-      const value = snippet ? '$' + '{1:}' : '';
+      const value = snippet ? `\${1:${name}}` : '';
       const text = input.context.hasColon ? name : `${name}: ${value}`;
       return {
-        ...completionItem(input, name, text, CompletionItemKind.Property, snippet),
+        ...completionItem(
+          input,
+          name,
+          text,
+          CompletionItemKind.Property,
+          snippet,
+          param.documentation,
+        ),
         ...(!input.context.hasColon && input.clientSupportsTriggerSuggestCommand === true
           ? {
               command: {
@@ -140,7 +95,7 @@ function namedKeyItems(
 
 function valueItems(
   input: ValueCompletionInput<AttributeArgumentPosition>,
-  param: Param<unknown, never> | undefined,
+  param: ArgType<unknown, never> | undefined,
   syntax: AttributeValuePosition['syntax'],
 ): readonly CompletionItem[] {
   if (param === undefined) return [];
@@ -150,13 +105,48 @@ function valueItems(
   }
   if (type.kind === 'funcCall') {
     const snippet = input.clientSupportsSnippets && syntax !== 'functionName';
-    const text = snippet ? `${type.name}(${requiredArgumentsSnippet(type.signature)})` : type.name;
-    return [completionItem(input, type.name, text, CompletionItemKind.Function, snippet)];
+    const hasParameters =
+      (type.signature.positional?.length ?? 0) > 0 ||
+      Object.keys(type.signature.named ?? {}).length > 0;
+    const args = requiredArgumentsSnippet(type.signature) || (hasParameters ? '$' + '{1:}' : '');
+    const text = snippet ? `${type.name}(${args})` : type.name;
+    return [
+      {
+        ...completionItem(
+          input,
+          type.name,
+          text,
+          CompletionItemKind.Function,
+          snippet,
+          type.signature.documentation,
+        ),
+        ...(snippet && input.clientSupportsTriggerParameterHintsCommand === true && hasParameters
+          ? {
+              command: {
+                title: 'Show argument hints',
+                command: 'editor.action.triggerParameterHints',
+              },
+            }
+          : {}),
+      },
+    ];
   }
   if (syntax === 'functionName') return [];
+  if (type.kind === 'taggedLiteral') {
+    return type.tags.map((tag) => ({
+      ...completionItem(
+        input,
+        tag,
+        input.clientSupportsSnippets ? `${tag}\`$1\`` : tag,
+        CompletionItemKind.Value,
+        input.clientSupportsSnippets,
+      ),
+      detail: type.documentation,
+    }));
+  }
   switch (type.kind) {
     case 'identifier':
-      return scalarItems(input, [type.name]);
+      return type.name === undefined ? [] : scalarItems(input, [type.name], type.documentation);
     case 'str':
       return scalarItems(input, type.value === undefined ? [] : [JSON.stringify(type.value)]);
     case 'num':
@@ -179,8 +169,11 @@ function valueItems(
 function scalarItems(
   input: CompletionInput<AttributeArgumentPosition>,
   labels: readonly string[],
+  documentation?: string,
 ): readonly CompletionItem[] {
-  return labels.map((label) => completionItem(input, label, label, CompletionItemKind.Value));
+  return labels.map((label) =>
+    completionItem(input, label, label, CompletionItemKind.Value, false, documentation),
+  );
 }
 
 function completionItem(
@@ -189,11 +182,14 @@ function completionItem(
   newText: string,
   kind: CompletionItemKind,
   snippet = false,
+  documentation?: string,
 ): CompletionItem {
   return {
     label,
     kind,
-    detail: kind === CompletionItemKind.Property ? 'Attribute argument' : 'PSL argument value',
+    detail:
+      documentation ??
+      (kind === CompletionItemKind.Property ? 'Attribute argument' : 'PSL argument value'),
     filterText: label,
     textEdit: {
       range: {

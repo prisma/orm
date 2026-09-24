@@ -60,6 +60,27 @@ const posts = await db.Post
   .all();
 ```
 
+## Skipping rows that collide with a unique constraint
+
+`createAll` and `createAndCount` take an options object in second position that asks the database to skip rows colliding with a unique constraint instead of failing the whole statement.
+
+```ts
+// Skip on any unique constraint of the table.
+const inserted = await db.User.createAll(rows, { onConflict: 'skip' });
+
+// Skip only on the constraint over `email`.
+const added = await db.User.createAndCount(rows, {
+  onConflict: 'skip',
+  conflictOn: ['email'],
+});
+```
+
+`createAll` yields only the rows the database inserted; `createAndCount` returns its count. A collision on a constraint other than the one `conflictOn` names is not skipped — it surfaces as a unique violation.
+
+The option needs the contract capability `insertOnConflictSkip`, and `insertOnConflictWithoutTarget` as well when `conflictOn` is omitted. A contract emitted before the adapters reported these keys is refused with `ORM.CAPABILITY_MISSING`; re-emit it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
+
+The optional `configure` callback may still be passed in second position when there are no options.
+
 ## Prepared row descriptions
 
 Built-in collection chains expose terminal-only `.prepared.all(configure?)` and `.prepared.first(filter?, configure?)` views. They synchronously return a `Preparable<DbRow, Result>` without executing it: a description containing a SQL `plan` and a required `consume` function. The description is not itself a `SqlQueryPlan`. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.
@@ -86,7 +107,13 @@ ORM equality and inequality accept nullable prepared parameters: two nulls compa
 
 Root and nested `.limit(params.take).offset(params.skip)` accept SQL's non-nullable numeric expression operands, including paginated row/scalar/combine include refinements and distinct wrappers. Prepared executions keep SQL and binding slots fixed while pagination values change. `prepared.first()` replaces an earlier limit with `1`; a placeholder used only by that replaced limit remains subject to unused-declaration validation.
 
-Aggregate or mutation terminals, custom helper preparation and dynamic parameter lists are not supported.
+Ungrouped collections also expose `.prepared.aggregate(selector, configure?)`. For example, `db.prepare({}, () => db.orm.public.Post.prepared.aggregate((agg) => ({ total: agg.count() })))` returns a query whose `query(target, {})` produces `Promise<{ total: number }>`. Preparation invokes the selector and annotation callback once and retains alias, empty-result descriptor and codec metadata. Executions return fresh objects; projected values are already decoded by SQL runtime, while contributed empty-result conversion runs separately whenever a fallback is needed. WHERE parameters and pre-aggregate pagination use the same collection chain as ordinary aggregates.
+
+Grouped collections expose the same `.prepared.aggregate(selector, configure?)` terminal and return `Promise<Array<GroupKeys & AggregateResult<Spec>>>`. Group keys retain model names and decoded values; empty input produces `[]`. The prepared consumer captures the storage-to-model mapper and aggregate aliases once, then allocates fresh arrays and objects for each execution.
+
+Prepared HAVING comparands must use the selected aggregate's output codec (for example, Postgres `count()` uses `pg/int8number@1`, not the counted column's codec). Equality and inequality select null-safe operators for nullable prepared parameters at construction; ordered comparisons reject nullable parameters. Literal HAVING comparisons retain their existing numeric types. Projection-only aggregate operations remain unavailable in HAVING. After grouping, `.limit(params.take).offset(params.skip)` requires a prior group-key `.orderBy(...)` and accepts non-nullable numeric expressions. Pre-group pagination limits input rows; post-group pagination limits groups.
+
+Mutation preparation, custom helper preparation and dynamic parameter lists are not supported.
 
 ## Pagination
 

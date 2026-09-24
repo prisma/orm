@@ -10,4 +10,5 @@
 model Resource {
   id    String @id
   bytes Bytes  @unique
+  @@map("resource")
 }

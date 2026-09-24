@@ -37,12 +37,14 @@ model User {
   balance  Int
   posts    Post[]
   groups   Group[]
+  @@map("user")
 }
 
 model Group {
   id    String  @id
   title String
   users User[]
+  @@map("group")
 }
 
 model UserGroup {
@@ -52,6 +54,7 @@ model UserGroup {
   group   Group @relation(fields: [groupId], references: [id])
 
   @@id([userId, groupId])
+  @@map("userGroup")
 }
 
 model Post {
@@ -60,4 +63,5 @@ model Post {
   upvotes   Int
   authorId  String
   author    User    @relation(fields: [authorId], references: [id])
+  @@map("post")
 }

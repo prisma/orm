@@ -4,6 +4,7 @@ import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { type ControlStack, createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -207,6 +208,19 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
       ),
     };
   }
+  if (
+    failure['diagnostics'].some(
+      (diagnostic: unknown) => !isRecord(diagnostic) || typeof diagnostic['sourceId'] !== 'string',
+    )
+  ) {
+    return {
+      kind: 'malformed',
+      error: failedToResolveContractSource(
+        'Contract source provider returned malformed failure result: each diagnostic must include a string sourceId.',
+        'Include the source filename in each diagnostic returned by contract.source.load.',
+      ),
+    };
+  }
   return {
     kind: 'failed',
     failure: {
@@ -258,6 +272,7 @@ async function resolveContractSource(
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
+    dataTypeLookup: stack.dataTypeLookup,
     resolvedInputs: contractConfig.source.inputs ?? [],
     capabilities: stack.capabilities,
   };
@@ -393,7 +408,13 @@ export async function executeContractEmit(
       // defers the structural check by one statement so `enrichContract`
       // can decorate first; the subsequent serialize→deserialize round-trip
       // re-narrows the envelope into the precise type.
-      const enrichedIR = enrichContract(resolved.value as unknown as Contract, frameworkComponents);
+      const enrichedIR = enrichContract(
+        blindCast<
+          Contract,
+          'Provider payload is enriched before target serialization and family validation'
+        >(resolved.value),
+        frameworkComponents,
+      );
       const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);
       const deserializedContract = familyInstance.deserializeContract(rawContractJson);
       // Each target's descriptor ships a `contractSerializer` SPI; the

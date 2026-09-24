@@ -42,7 +42,7 @@ Legend:
 | `@default(cuid(2))` | 🟡 | 🟡 | — | |
 | `@default(ulid())` | 🟡 | 🟡 | — | |
 | `@default(nanoid())` | 🟡 | 🟡 | — | |
-| `@default(dbgenerated("..."))` | 🟡 | 🟡 | — | |
+| `@default(dbgenerated("..."))` | ❌ | ❌ | — | Removed; a raw SQL default is `` @default(sql`...`) `` (`packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.tagged-literal.test.ts`). A `dbgenerated(...)` call is `PSL_UNKNOWN_DEFAULT_FUNCTION` naming the replacement (`test/integration/test/authoring/diagnostics/removed-dbgenerated/`). |
 | TS ID generator `ulid` | 🟡 | 🟡 | — | |
 | TS ID generator `nanoid` | 🟡 | 🟡 | — | |
 | TS ID generator `uuidv7` | ✅ | 🟡 | — | `test/e2e/framework/test/dml.test.ts` (`auto-generates a valid UUIDv7 id on insert`) |

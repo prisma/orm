@@ -1,12 +1,14 @@
 import { crossRef } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
 import type { SqlModelStorage, SqlStorage } from '@internal/sql-contract/types';
+import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -26,6 +28,7 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
+      | 'dataTypeLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -34,9 +37,117 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });
+
+  it('keeps same-named inheritance graphs independent across namespaces', () => {
+    const inheritanceSchema = (namespace: string) => `namespace ${namespace} {
+  model Bug {
+    ${namespace}Detail String @map("${namespace}_detail")
+    @@base(Task, "bug")
+  }
+  model Feature {
+    ${namespace}Priority Int
+    @@base(Task, "feature")
+    @@map("${namespace}_features")
+  }
+  model Task {
+    ${namespace}Id Int @id @map("${namespace}_id")
+    ${namespace}Kind String
+    @@discriminator(${namespace}Kind)
+    @@map("${namespace}_tasks")
+  }
+}`;
+    const standalone = 'model Bug {\n id Int @id\n @@map("standalone_bug")\n}';
+    const interpret = (schema: string) => {
+      const result = interpretPslDocumentToSqlContract({
+        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+        controlMutationDefaults: builtinControlMutationDefaults,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(JSON.stringify(result.failure));
+      return result.value;
+    };
+    const combined = interpret(
+      [standalone, inheritanceSchema('alpha'), inheritanceSchema('beta')].join('\n'),
+    );
+    expect(() => validateContractDomain(combined)).not.toThrow();
+    const envelope: unknown = JSON.parse(JSON.stringify(combined));
+    expect(() => validateSqlContractFully(envelope)).not.toThrow();
+    for (const namespace of ['alpha', 'beta']) {
+      const isolated = interpret(inheritanceSchema(namespace));
+      expect(combined.domain.namespaces[namespace]).toEqual(isolated.domain.namespaces[namespace]);
+      const storage = combined.storage as SqlStorage;
+      expect(storage.namespaces[namespace]).toEqual(
+        (isolated.storage as SqlStorage).namespaces[namespace],
+      );
+      expect(combined.domain.namespaces[namespace]?.models['Task']).toMatchObject({
+        discriminator: { field: `${namespace}Kind` },
+        variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
+      });
+      expect(combined.domain.namespaces[namespace]?.models['Bug']).toMatchObject({
+        base: crossRef('Task', namespace),
+        storage: { table: `${namespace}_tasks` },
+      });
+      expect(storage.namespaces[namespace]?.entries.table?.[`${namespace}_features`]).toMatchObject(
+        {
+          primaryKey: { columns: [`${namespace}_id`] },
+          foreignKeys: [
+            {
+              target: {
+                tableName: `${namespace}_tasks`,
+                columns: [`${namespace}_id`],
+                namespaceId: namespace,
+              },
+            },
+          ],
+        },
+      );
+    }
+    expect(combined.roots).toEqual({
+      standalone_bug: crossRef('Bug', 'public'),
+      alpha_tasks: crossRef('Task', 'alpha'),
+      beta_tasks: crossRef('Task', 'beta'),
+    });
+  });
+
+  it.each([
+    [
+      'type Base { value String }',
+      'model Variant { id Int @id\n @@base(Base, "v") }',
+      'Expected model reference "Base", found compositeType',
+    ],
+    [
+      'namespace sibling { model Base { id Int @id } }',
+      'namespace local { model Variant { id Int @id\n @@base(Base, "v") } }',
+      'Unknown model reference "Base"',
+    ],
+    [
+      'model Base { id Int @id }',
+      'namespace local { type Base { value String }\n model Variant { id Int @id\n @@base(Base, "v") } }',
+      'Expected model reference "Base", found compositeType',
+    ],
+  ])('reports checked-reference failure for %s', (base, variant, message) => {
+    const schema = `${base}\n${variant}`;
+    const result = interpretPslDocumentToSqlContract({
+      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message,
+          sourceId: 'schema.prisma',
+          span: expect.objectContaining({
+            start: expect.objectContaining({ offset: schema.indexOf('@@base(Base') + 7 }),
+          }),
+        }),
+      ]);
+  });
 
   it('ignores polymorphism collection when the schema has no models', () => {
     const document = symbolTableInputFromParseArgs({
@@ -396,7 +507,7 @@ model Bug {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      expect(result.value.roots).toHaveProperty('task', crossRef('Task', 'public'));
+      expect(result.value.roots).toHaveProperty('Task', crossRef('Task', 'public'));
       expect(Object.values(result.value.roots)).not.toContainEqual(crossRef('Bug', 'public'));
     });
   });
@@ -551,7 +662,7 @@ model Bug {
       // The STI variant shares the base table; it must not also produce its
       // own (empty) table or a root pointing at one.
       expect(Object.keys(tablesOf(result.value))).toEqual(['tasks']);
-      expect(result.value.roots).not.toHaveProperty('bug');
+      expect(result.value.roots).not.toHaveProperty('Bug');
     });
 
     it('materializes columns for two STI variants onto the same base table', () => {
@@ -856,7 +967,8 @@ model Bug {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_BASE_TARGET_NOT_FOUND',
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Unknown model reference "NonExistent"',
           }),
         ]),
       );

@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
+  AuthoringDataTypeEntry,
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
 } from '@internal/framework-components/authoring';
@@ -29,21 +30,37 @@ import { providePslCompletionItems } from '../src/completion-provider';
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
 const emptySnippetPlaceholder1 = '$' + '{1:}';
-const emptySnippetPlaceholder2 = '$' + '{2:}';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const orderFixtureAttribute = fieldAttribute('orderFixture', {
-  named: { zebra: int(), alpha: int(), middle: int() },
+  documentation: 'Accepts named values in declaration order rather than alphabetical order.',
+  named: {
+    zebra: { type: int(), documentation: 'The first declared value.' },
+    alpha: { type: int(), documentation: 'The second declared value.' },
+    middle: { type: int(), documentation: 'The third declared value.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { enabled: optional(str()), mode: str() },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+    mode: { type: str(), documentation: 'The security mode.' },
+  },
 });
 const auditAttribute = blockAttribute('audit', {
-  named: { reason: optional(str()), level: int() },
+  documentation: 'Configures auditing for this block.',
+  named: {
+    reason: { type: optional(str()), documentation: 'The reason for auditing.' },
+    level: { type: int(), documentation: 'The audit level.' },
+  },
 });
 
 const attributeContributions = assembleAuthoringContributions([
@@ -56,8 +73,12 @@ const attributeContributions = assembleAuthoringContributions([
           orderFixture: () => orderFixtureAttribute,
           ownerAware: (ctx: FieldAttributeSpecContext) =>
             fieldAttribute('ownerAware', {
+              documentation: 'Selects a key based on the declaring model’s fields.',
               named: {
-                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: str(),
+                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: {
+                  type: str(),
+                  documentation: 'The value for the owner-specific key.',
+                },
               },
             }),
         },
@@ -86,11 +107,12 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   policy: {
     kind: 'pslBlock',
     keyword: 'policy',
+    documentation: 'Defines a security policy.',
     discriminator: 'fixture-policy',
     name: { required: true },
     parameters: {
       on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
+      where: { kind: 'value', codecId: 'fixture/text@1', documentation: 'The policy predicate.' },
       mode: { kind: 'option', values: ['permissive', 'restrictive'] },
       using: { kind: 'value', codecId: 'fixture/text@1' },
     },
@@ -143,7 +165,10 @@ const candidateSource = [
 
 function complete(
   markedFieldSource: string,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
+  options: {
+    readonly clientSupportsSnippets?: boolean;
+    readonly clientSupportsTriggerParameterHintsCommand?: boolean;
+  } = {},
 ) {
   return completeWithSource({
     markedSource: `${candidateSource}\n${markedFieldSource}`,
@@ -151,6 +176,8 @@ function complete(
     authoringContributions: attributeContributions,
     controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
+    clientSupportsTriggerParameterHintsCommand:
+      options.clientSupportsTriggerParameterHintsCommand === true,
   });
 }
 
@@ -173,6 +200,14 @@ interface ActualPostgresDefaultsModule {
   createPostgresDefaultFunctionRegistry(): ControlMutationDefaultRegistry;
 }
 
+interface ActualPostgresDataTypesModule {
+  createPostgresDataTypeEntries(): Readonly<Record<string, AuthoringDataTypeEntry>>;
+}
+
+interface ActualSqliteDataTypesModule {
+  createSqliteDataTypeEntries(): Readonly<Record<string, AuthoringDataTypeEntry>>;
+}
+
 interface ActualMongoAttributeModule {
   readonly mongoAttributeSpecs: AttributeSpecNamespace;
 }
@@ -188,14 +223,16 @@ function completeWithSource(input: {
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
   readonly clientSupportsSnippets?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }) {
   const cursorOffset = input.markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
   const source = `${input.markedSource.slice(0, cursorOffset)}${input.markedSource.slice(cursorOffset + 1)}`;
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: input.pslBlockDescriptors,
   });
   const context = classifyPslCompletionContext({
@@ -220,6 +257,8 @@ function completeWithSource(input: {
           : { controlMutationDefaults: input.controlMutationDefaults }),
       },
       clientSupportsSnippets: input.clientSupportsSnippets === true,
+      clientSupportsTriggerParameterHintsCommand:
+        input.clientSupportsTriggerParameterHintsCommand === true,
     }),
     sourceFile,
     cursorOffset,
@@ -281,12 +320,17 @@ function completeWithActualStack(
   options: {
     readonly clientSupportsSnippets?: boolean;
     readonly controlMutationDefaults?: typeof controlMutationDefaults;
+    readonly dataTypes?: Readonly<Record<string, AuthoringDataTypeEntry>>;
   } = {},
 ) {
+  const contributions = actualAuthoringContributions(stack);
   return completeWithSource({
     markedSource,
     pslBlockDescriptors: stack.pslBlockDescriptors,
-    authoringContributions: actualAuthoringContributions(stack),
+    authoringContributions:
+      options.dataTypes === undefined
+        ? contributions
+        : { ...contributions, dataTypes: options.dataTypes },
     controlMutationDefaults: options.controlMutationDefaults ?? controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
   });
@@ -326,12 +370,12 @@ describe('providePslCompletionItems', () => {
       'policy',
     ]);
     expect(items.map((item) => item.detail)).toEqual([
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
+      'Defines a data model.',
+      'Defines a reusable composite type.',
+      'Defines reusable named types.',
+      'Groups declarations belonging to the same database schema or database.',
       'Generic block keyword',
-      'Generic block keyword',
+      'Defines a security policy.',
     ]);
     expect(items[0]).toMatchObject({
       kind: CompletionItemKind.Keyword,
@@ -401,17 +445,70 @@ describe('providePslCompletionItems', () => {
 
     expect(items.find((item) => item.label === 'model')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}` },
     });
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `policy ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: {
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+      },
     });
   });
+
+  it.each([true, false])(
+    'inserts only required generic block parameters, snippets=%s',
+    (snippets) => {
+      const { items } = completeWithSource({
+        markedSource: '|',
+        clientSupportsSnippets: snippets,
+        pslBlockDescriptors: {
+          security: {
+            policy: {
+              kind: 'pslBlock',
+              keyword: 'policy',
+              discriminator: 'policy',
+              name: { required: true },
+              parameters: {
+                target: { kind: 'ref', refKind: 'model', scope: 'same-space', required: true },
+                optional: { kind: 'value', codecId: 'fixture/text@1' },
+                using: { kind: 'value', codecId: 'fixture/text@1', required: true },
+                roles: {
+                  kind: 'list',
+                  of: { kind: 'ref', refKind: 'role', scope: 'same-space' },
+                  required: true,
+                },
+                mode: { kind: 'option', values: ['permissive', 'restrictive'], required: true },
+                omitted: { kind: 'value', codecId: 'fixture/text@1', required: false },
+              },
+              attributes: { audit: () => auditAttribute },
+            },
+          },
+        },
+      });
+      const item = completionItemByLabel(items, 'policy');
+      expect(item.textEdit?.newText).toBe(
+        snippets
+          ? [
+              `policy ${nameSnippetPlaceholder} {`,
+              '  target = $' + '{2:target}',
+              '  using = $' + '{3:using}',
+              '  roles = [$' + '{4:roles}]',
+              '  mode = $' + '{5:mode}',
+              '  $0',
+              '}',
+            ].join('\n')
+          : 'policy ',
+      );
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+    },
+  );
 
   it('returns registry-backed attribute name completions as function items', () => {
     const fieldItems = complete(['model Post {', '  id Int @|', '}'].join('\n')).items;
     expect(fieldItems.map((item) => item.label)).toEqual(['marker', 'orderFixture', 'ownerAware']);
+    expect(fieldItems.find((item) => item.label === 'marker')?.detail).toBe(
+      'Attaches a named marker to a target.',
+    );
     expect(fieldItems.map((item) => item.kind)).toEqual([
       CompletionItemKind.Function,
       CompletionItemKind.Function,
@@ -442,10 +539,11 @@ describe('providePslCompletionItems', () => {
     const markedSource = ['model User {', '  id Int @|', '}'].join('\n');
     const cursorOffset = markedSource.indexOf('|');
     const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
-    const { document, sourceFile } = parse(source);
-    const { table: symbolTable } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const sourceFile = sources.sourceFileFor(document.syntax);
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors,
     });
     const context = classifyPslCompletionContext({
@@ -475,11 +573,15 @@ describe('providePslCompletionItems', () => {
             field: {
               first: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('first', {});
+                return fieldAttribute('first', {
+                  documentation: 'Marks the first contributed field attribute.',
+                });
               },
               second: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('second', {});
+                return fieldAttribute('second', {
+                  documentation: 'Marks the second contributed field attribute.',
+                });
               },
             },
             model: {},
@@ -558,17 +660,37 @@ describe('providePslCompletionItems', () => {
     expect(item).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}")`,
+        newText: `marker("\${1:target}", name: "\${2:name}")`,
       },
     });
     expect(applyCompletionItem({ sourceFile, item })).toEqual(
       [
         candidateSource,
         'model Post {',
-        `  id Int @marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}") // keep`,
+        `  id Int @marker("\${1:target}", name: "\${2:name}") // keep`,
         '}',
       ].join('\n'),
     );
+  });
+
+  it.each([false, true])('gates argument snippet hints on client support: %s', (supported) => {
+    for (const [source, snippets, hints] of [
+      ['model Post { id Int @mar| }', true, true],
+      ['model Post { id Int @mar| }', false, false],
+      ['model Post { id Int @mar|ker("x") }', true, false],
+      ['|', true, false],
+    ] as const) {
+      const { items } = complete(source, {
+        clientSupportsSnippets: snippets,
+        clientSupportsTriggerParameterHintsCommand: supported,
+      });
+      const item = completionItemByLabel(items, source === '|' ? 'model' : 'marker');
+      expect(item.command).toEqual(
+        supported && hints
+          ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+          : undefined,
+      );
+    }
   });
 
   it('keeps plain contributed attribute completion free of snippet syntax', () => {
@@ -666,10 +788,10 @@ describe('providePslCompletionItems', () => {
     const mapItem = completionItemByLabel(mapCompletion.items, 'map');
     expect(mapItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `map("${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `map("\${1:name}")` },
     });
     expect(applyCompletionItem({ sourceFile: mapCompletion.sourceFile, item: mapItem })).toEqual(
-      ['model Post {', `  id Int @map("${emptySnippetPlaceholder1}") // keep`, '}'].join('\n'),
+      ['model Post {', `  id Int @map("\${1:name}") // keep`, '}'].join('\n'),
     );
 
     const checkCompletion = completeWithActualStack(
@@ -680,17 +802,14 @@ describe('providePslCompletionItems', () => {
     const checkItem = completionItemByLabel(checkCompletion.items, 'check');
     expect(checkItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `check(expression: "${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `check(expression: "\${1:expression}")` },
     });
     expect(
       applyCompletionItem({ sourceFile: checkCompletion.sourceFile, item: checkItem }),
     ).toEqual(
-      [
-        'model Post {',
-        '  id Int',
-        `  @@check(expression: "${emptySnippetPlaceholder1}") // keep`,
-        '}',
-      ].join('\n'),
+      ['model Post {', '  id Int', `  @@check(expression: "\${1:expression}") // keep`, '}'].join(
+        '\n',
+      ),
     );
   }, 5_000);
 
@@ -764,10 +883,10 @@ describe('providePslCompletionItems', () => {
     const mapItem = completionItemByLabel(mapCompletion.items, 'map');
     expect(mapItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `map("${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `map("\${1:name}")` },
     });
     expect(applyCompletionItem({ sourceFile: mapCompletion.sourceFile, item: mapItem })).toEqual(
-      ['model Post {', `  id String @map("${emptySnippetPlaceholder1}") // keep`, '}'].join('\n'),
+      ['model Post {', `  id String @map("\${1:name}") // keep`, '}'].join('\n'),
     );
   }, 5_000);
 
@@ -927,7 +1046,7 @@ describe('providePslCompletionItems', () => {
     expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
     expect(items.map((item) => item.detail)).toEqual([
       'Generic block parameter',
-      'Generic block parameter',
+      'The policy predicate.',
       'Generic block parameter',
       'Generic block parameter',
     ]);
@@ -958,6 +1077,12 @@ describe('providePslCompletionItems', () => {
     });
   });
 
+  it('uses generic block parameter documentation with a fallback for undocumented parameters', () => {
+    const { items } = complete('policy Rule { | }');
+    expect(completionItemByLabel(items, 'where').detail).toBe('The policy predicate.');
+    expect(completionItemByLabel(items, 'on').detail).toBe('Generic block parameter');
+  });
+
   it('still offers the in-progress key while excluding an already-present sibling key', () => {
     const { items } = complete(['policy Rule {', '  where = "x"', '  on|', '}'].join('\n'));
 
@@ -974,6 +1099,30 @@ describe('providePslCompletionItems', () => {
     const { items } = complete(['model Post {', '  // @|', '}'].join('\n'));
 
     expect(items).toEqual([]);
+  });
+
+  it('uses registered scalar documentation for completion details', () => {
+    const { items } = completeWithSource({
+      markedSource: 'model Post { value | }',
+      pslBlockDescriptors: {},
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'documented-scalars',
+          authoring: {
+            type: {
+              String: {
+                kind: 'typeConstructor',
+                documentation: 'Variable-length Unicode text.',
+                output: { codecId: 'fixture/text@1', nativeType: 'text' },
+              },
+            },
+          },
+        },
+      ]),
+      controlMutationDefaults,
+    });
+    expect(completionItemByLabel(items, 'String').detail).toBe('Variable-length Unicode text.');
+    expect(completionItemByLabel(items, 'Int').detail).toBe('Configured scalar type');
   });
 
   it('uses actual SQL enum metadata and rejects an empty enum without invented values', async () => {
@@ -1014,7 +1163,6 @@ describe('providePslCompletionItems', () => {
       'cuid',
       'ulid',
       'nanoid',
-      'dbgenerated',
     ]);
     expect(
       completeWithActualStack(source('uuid(|)'), stack, options).items.map((item) => item.label),
@@ -1023,17 +1171,93 @@ describe('providePslCompletionItems', () => {
       completeWithActualStack(source('cuid(|)'), stack, options).items.map((item) => item.label),
     ).toEqual(['2']);
     expect(completeWithActualStack(source('nanoid(|)'), stack, options).items).toEqual([]);
-    expect(completeWithActualStack(source('dbgenerated(|)'), stack, options).items).toEqual([]);
     const snippetItems = completeWithActualStack(source('|'), stack, {
       ...options,
       clientSupportsSnippets: true,
     }).items;
-    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe('uuid()');
-    expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
-      `cuid(${emptySnippetPlaceholder1})`,
+    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe(
+      `uuid(${emptySnippetPlaceholder1})`,
     );
-    expect(completionItemByLabel(snippetItems, 'dbgenerated').textEdit?.newText).toBe(
-      `dbgenerated("${emptySnippetPlaceholder1}")`,
+    expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
+      'cuid($' + '{1:version})',
+    );
+  }, 5_000);
+
+  it('offers each registered tag inside @default( with its own documentation', async () => {
+    const stack = await actualSqlStack();
+    const [postgres, sqlite] = await Promise.all([
+      importFromPackageRoot<ActualPostgresDataTypesModule>(
+        '../../../3-targets/6-adapters/postgres/src/core/data-type-authoring.ts',
+      ),
+      importFromPackageRoot<ActualSqliteDataTypesModule>(
+        '../../../3-targets/6-adapters/sqlite/src/core/data-type-authoring.ts',
+      ),
+    ]);
+    const complete = (
+      dataTypes: Readonly<Record<string, AuthoringDataTypeEntry>>,
+      clientSupportsSnippets: boolean,
+    ) =>
+      completeWithActualStack('model Post { value String @default(|) }', stack, {
+        clientSupportsSnippets,
+        controlMutationDefaults,
+        dataTypes,
+      }).items.map((item) => ({
+        label: item.label,
+        detail: item.detail,
+        newText: item.textEdit?.newText,
+        insertTextFormat: item.insertTextFormat,
+      }));
+    const postgresEntries = postgres.createPostgresDataTypeEntries();
+    const documentationOf = (
+      entries: Readonly<Record<string, AuthoringDataTypeEntry>>,
+      tag: string,
+    ) =>
+      Object.values(entries).find(
+        (entry) => entry.written.kind === 'tag' && entry.written.tag === tag,
+      )?.documentation;
+    const value = (label: string) => ({
+      label,
+      detail: 'PSL argument value',
+      newText: label,
+      insertTextFormat: undefined,
+    });
+    const tag = (
+      entries: Readonly<Record<string, AuthoringDataTypeEntry>>,
+      label: string,
+      snippet: boolean,
+    ) => ({
+      label,
+      detail: documentationOf(entries, label),
+      newText: snippet ? `${label}\`$1\`` : label,
+      insertTextFormat: snippet ? InsertTextFormat.Snippet : undefined,
+    });
+
+    expect(complete(postgresEntries, true)).toEqual([
+      value('true'),
+      value('false'),
+      tag(postgresEntries, 'json', true),
+      tag(postgresEntries, 'sql', true),
+      tag(postgresEntries, 'pg.sql', true),
+    ]);
+    const sqliteEntries = sqlite.createSqliteDataTypeEntries();
+    expect(complete(sqliteEntries, true)).toEqual([
+      value('true'),
+      value('false'),
+      tag(sqliteEntries, 'json', true),
+      tag(sqliteEntries, 'sql', true),
+      tag(sqliteEntries, 'sqlite.sql', true),
+    ]);
+    expect(complete(postgresEntries, false)).toEqual([
+      value('true'),
+      value('false'),
+      tag(postgresEntries, 'json', false),
+      tag(postgresEntries, 'sql', false),
+      tag(postgresEntries, 'pg.sql', false),
+    ]);
+
+    // Each tag carries the text of the tag it names, not every registered tag's text.
+    expect(documentationOf(postgresEntries, 'json')).not.toBe(
+      documentationOf(postgresEntries, 'sql'),
     );
   }, 5_000);
 
@@ -1043,7 +1267,7 @@ describe('providePslCompletionItems', () => {
       `model Target { topOnly Int }\nnamespace remote { model Target { remoteOnly Int } }\nmodel Owner { ownOnly Int\n relation remote.Target @relation(${args}) }`;
     expect(
       completeWithActualStack(schema('fields: [|]'), stack).items.map((item) => item.label),
-    ).toEqual(['ownOnly', 'relation']);
+    ).toEqual(['ownOnly']);
     expect(
       completeWithActualStack(schema('references: [|]'), stack).items.map((item) => item.label),
     ).toEqual(['remoteOnly']);
@@ -1063,9 +1287,9 @@ describe('providePslCompletionItems', () => {
     expect(snippets.map((item) => [item.label, item.textEdit?.newText])).toEqual([
       ['title', 'title'],
       ['slug', 'slug'],
-      ['wildcard', 'wildcard()'],
-      ['title', `title(sort: ${emptySnippetPlaceholder1})`],
-      ['slug', `slug(sort: ${emptySnippetPlaceholder1})`],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
+      ['title', 'title(sort: $' + '{1:sort})'],
+      ['slug', 'slug(sort: $' + '{1:sort})'],
     ]);
     expect(
       completeWithActualStack(schema('[title(|)]'), stack).items.map((item) => item.label),
@@ -1090,8 +1314,8 @@ describe('providePslCompletionItems', () => {
       ]),
     ).toEqual([
       ['scopedOnly', 'scopedOnly'],
-      ['wildcard', 'wildcard()'],
-      ['scopedOnly', `scopedOnly(sort: ${emptySnippetPlaceholder1})`],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
+      ['scopedOnly', 'scopedOnly(sort: $' + '{1:sort})'],
     ]);
   }, 5_000);
 

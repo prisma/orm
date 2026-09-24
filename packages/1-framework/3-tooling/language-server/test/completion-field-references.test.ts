@@ -18,16 +18,27 @@ import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 
 const completionOnlyNestedSignature = {
-  named: { local: list(fieldRef()), remote: list(referencedFieldRef()) },
+  documentation: 'Selects fields from the declaring and referenced models.',
+  named: {
+    local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' },
+    remote: { type: list(referencedFieldRef()), documentation: 'Fields on the referenced model.' },
+  },
 } as unknown as FuncCallSig;
 const fieldSpec = fieldAttribute('probe', {
+  documentation: 'Selects local and referenced fields, directly or through a nested call.',
   named: {
-    local: list(fieldRef()),
-    remote: list(referencedFieldRef()),
-    nested: funcCall('fields', completionOnlyNestedSignature),
+    local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' },
+    remote: { type: list(referencedFieldRef()), documentation: 'Fields on the referenced model.' },
+    nested: {
+      type: funcCall('fields', completionOnlyNestedSignature),
+      documentation: 'A nested field selection.',
+    },
   },
 });
-const modelSpec = modelAttribute('probe', { named: { local: list(fieldRef()) } });
+const modelSpec = modelAttribute('probe', {
+  documentation: 'Selects fields from this model.',
+  named: { local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' } },
+});
 const authoringContributions = assembleAuthoringContributions([
   {
     id: 'scoped-completion-fixture',
@@ -40,10 +51,11 @@ const authoringContributions = assembleAuthoringContributions([
 function complete(markedSource: string) {
   const offset = markedSource.indexOf('|');
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   const items = providePslCompletionItems({
@@ -80,7 +92,7 @@ namespace unrelated { model Missing { unrelatedOnly String } }`;
 
 describe('scoped field-reference completion', () => {
   it('uses declaring-model fields for local references', () => {
-    expect(complete(schema('remote.Target', 'local: [|]')).labels).toEqual(['ownOnly', 'relation']);
+    expect(complete(schema('remote.Target', 'local: [|]')).labels).toEqual(['ownOnly']);
   });
 
   it('uses explicitly referenced fields rather than declaring-model fields', () => {
@@ -127,7 +139,6 @@ namespace unrelated { model Target { unrelatedOnly String } }`;
   it('retains the declaring model inside a function and list', () => {
     expect(complete(schema('remote.Target', 'nested: fields(local: [|])')).labels).toEqual([
       'ownOnly',
-      'relation',
     ]);
   });
 

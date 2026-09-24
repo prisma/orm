@@ -2,6 +2,7 @@ import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -13,6 +14,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
@@ -88,7 +90,7 @@ model Event {
         public: {
           entries: {
             table: {
-              event: {
+              Event: {
                 columns: {
                   id: { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false, typeRef: 'Id' },
                   slug: {
@@ -135,7 +137,7 @@ model Event {
         },
       },
     });
-    expect(result.value.roots).toEqual({ event: crossRef('Event', 'public') });
+    expect(result.value.roots).toEqual({ Event: crossRef('Event', 'public') });
   });
 
   it('lowers additional Postgres native type attributes on named types', () => {
@@ -205,7 +207,7 @@ model Event {
         public: {
           entries: {
             table: {
-              event: {
+              Event: {
                 columns: {
                   id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
                   code: {
@@ -251,6 +253,6 @@ model Event {
         },
       },
     });
-    expect(result.value.roots).toEqual({ event: crossRef('Event', 'public') });
+    expect(result.value.roots).toEqual({ Event: crossRef('Event', 'public') });
   });
 });

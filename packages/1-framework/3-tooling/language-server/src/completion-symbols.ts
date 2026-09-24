@@ -1,3 +1,7 @@
+import {
+  type AuthoringTypeNamespace,
+  isAuthoringTypeConstructorDescriptor,
+} from '@internal/framework-components/authoring';
 import type { FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
 import {
   type FieldDeclarationAst,
@@ -5,6 +9,7 @@ import {
   NamespaceDeclarationAst,
 } from '@internal/psl-parser/syntax';
 import type { AttributeArgumentCompletionContext } from './completion-context';
+import { refinesScalarType } from './named-type-classification';
 
 export function modelSymbolForNode(
   symbolTable: SymbolTable,
@@ -33,6 +38,8 @@ export function fieldSymbolForNode(
 export function localFieldNames(
   context: AttributeArgumentCompletionContext,
   symbols: SymbolTable,
+  scalarTypes: readonly string[],
+  typeConstructors: AuthoringTypeNamespace = {},
 ): readonly string[] {
   switch (context.kind) {
     case 'blockAttributeNamedKey':
@@ -45,13 +52,20 @@ export function localFieldNames(
     case 'modelAttributeNamedKey':
     case 'modelAttributeArgumentSlot':
     case 'modelAttributeValue':
-      return Object.keys(modelSymbolForNode(symbols, context.model)?.fields ?? {});
+      return scalarFieldNames(
+        symbols,
+        modelSymbolForNode(symbols, context.model),
+        scalarTypes,
+        typeConstructors,
+      );
   }
 }
 
 export function referencedFieldNames(
   context: AttributeArgumentCompletionContext,
   symbols: SymbolTable,
+  scalarTypes: readonly string[],
+  typeConstructors: AuthoringTypeNamespace = {},
 ): readonly string[] {
   switch (context.kind) {
     case 'blockAttributeNamedKey':
@@ -68,9 +82,70 @@ export function referencedFieldNames(
       if (model === undefined) return [];
       const field = fieldSymbolForNode(model, context.field);
       if (field === undefined) return [];
-      return Object.keys(referencedModel(symbols, model, field)?.fields ?? {});
+      return scalarFieldNames(
+        symbols,
+        referencedModel(symbols, model, field),
+        scalarTypes,
+        typeConstructors,
+      );
     }
   }
+}
+
+function scalarFieldNames(
+  symbols: SymbolTable,
+  model: ModelSymbol | undefined,
+  scalarTypes: readonly string[],
+  typeConstructors: AuthoringTypeNamespace,
+): readonly string[] {
+  if (model === undefined) return [];
+  const namespaceName = model.node.syntax
+    .findAncestor(NamespaceDeclarationAst.cast)
+    ?.name()
+    ?.name();
+  const namespace =
+    namespaceName === undefined ? undefined : symbols.topLevel.namespaces[namespaceName];
+  return Object.values(model.fields)
+    .filter((field) => {
+      if (field.malformedType === true || field.typeContractSpaceId !== undefined) {
+        return false;
+      }
+      if (field.typeConstructor !== undefined) {
+        return isScalarConstructor(field.typeConstructor.path, typeConstructors);
+      }
+      if (field.typeNamespaceId !== undefined) return false;
+      const name = field.typeName;
+      if (
+        namespace?.models[name] !== undefined ||
+        namespace?.compositeTypes[name] !== undefined ||
+        namespace?.blocks[name] !== undefined ||
+        symbols.topLevel.models[name] !== undefined ||
+        symbols.topLevel.compositeTypes[name] !== undefined ||
+        symbols.topLevel.blocks[name] !== undefined
+      ) {
+        return false;
+      }
+      const namedType = symbols.topLevel.namedTypes[name];
+      if (namedType === undefined) return scalarTypes.includes(name);
+      return namedType.typeConstructor === undefined
+        ? refinesScalarType(namedType, scalarTypes)
+        : isScalarConstructor(namedType.typeConstructor.path, typeConstructors);
+    })
+    .map((field) => field.name);
+}
+
+function isScalarConstructor(
+  path: readonly string[],
+  typeConstructors: AuthoringTypeNamespace,
+): boolean {
+  let current = typeConstructors;
+  for (const [index, segment] of path.entries()) {
+    const value = Object.hasOwn(current, segment) ? current[segment] : undefined;
+    if (value === undefined) return false;
+    if (isAuthoringTypeConstructorDescriptor(value)) return index === path.length - 1;
+    current = value;
+  }
+  return false;
 }
 
 function referencedModel(

@@ -95,6 +95,7 @@ function resolveInterpretation(
       composedExtensionContracts: stack.extensionContracts,
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
+      dataTypeLookup: stack.dataTypeLookup,
       controlMutationDefaults: stack.controlMutationDefaults,
       resolvedInputs: [...inputs.uris()],
       capabilities: stack.capabilities,

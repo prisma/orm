@@ -2,7 +2,12 @@ import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-bindin
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
-import { fixturesDir, loadFixtureTable, postgresSourceContext } from './support';
+import {
+  fixturesDir,
+  loadFixtureTable,
+  postgresSourceContext,
+  postgresSourceContextWithout,
+} from './support';
 
 describe('DateTime string defaults', () => {
   it('carry the default Postgres stores for each native type, not the text Prisma 7 writes', async () => {
@@ -53,7 +58,39 @@ describe('Bytes[] and DateTime[] list defaults', () => {
   });
 });
 
+describe('dbgenerated("<sql>")', () => {
+  it('lowers to a raw SQL default without a registry entry for dbgenerated', async () => {
+    const { columns } = await loadFixtureTable(
+      'defaults',
+      'Defaults',
+      'public',
+      postgresSourceContextWithout('dbgenerated'),
+    );
+    expect(columns['generated']?.['default']).toEqual({
+      kind: 'function',
+      expression: 'gen_random_uuid()',
+    });
+  });
+
+  it('is refused unless the argument list is a single positional string with text in it', async () => {
+    expect(await diagnosticsOf('dbgenerated-without-expression', 'unread-argument.prisma')).toEqual(
+      [
+        'Field "T.number": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.two": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.named": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.blank": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.spaces": @default function "dbgenerated()" has an argument this contract source does not read.',
+      ],
+    );
+  });
+});
+
 describe('dbgenerated() with no expression', () => {
+  it('describes a required column with no default and reports nothing', async () => {
+    const { columns } = await loadFixtureTable('dbgenerated-without-expression', 'T');
+    expect(columns['a']).toEqual({ nativeType: 'text', codecId: 'pg/text@1', nullable: false });
+  });
+
   it('describes an optional or list column with no default, as Prisma 7 creates it', async () => {
     const { columns } = await loadFixtureTable('dbgenerated-without-expression-optional', 'T');
     expect({ a: columns['a'], list: columns['list'] }).toEqual({
@@ -132,19 +169,63 @@ describe('Decimal and BigInt number defaults', () => {
   });
 });
 
+async function diagnosticsOf(caseName: string, file: string) {
+  const schemaPath = join(fixturesDir, caseName, file);
+  const result = await prisma7Contract(schemaPath, {
+    binding: prisma7PostgresBinding,
+  }).source.load(postgresSourceContext([schemaPath]));
+  return result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message);
+}
+
 describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => {
-  it('are rejected, as Prisma 7 rejects them', async () => {
-    const schemaPath = join(fixturesDir, 'number-default-spellings', 'other-types.prisma');
-    const result = await prisma7Contract(schemaPath, {
-      binding: prisma7PostgresBinding,
-    }).source.load(postgresSourceContext([schemaPath]));
-    expect(
-      result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message),
-    ).toEqual([
-      'Field "OtherTypes.name": @default holds 5, which is not a valid String value.',
-      'Field "OtherTypes.payload": @default holds 1234, which is not a valid Bytes value.',
-      'Field "OtherTypes.at": @default holds 0, which is not a valid DateTime value.',
-      'Field "OtherTypes.flag": @default holds 1, which is not a valid Boolean value.',
+  it('are refused, naming the data type and the casts the column type has', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'other-types.prisma')).toEqual([
+      'Field "OtherTypes.name": @default holds a pg/int2 value, which pg/text has no cast from; it casts from nothing.',
+      'Field "OtherTypes.payload": @default holds a pg/int2 value, which pg/bytea has no cast from; it casts from pg/text.',
+      'Field "OtherTypes.at": @default holds a pg/int2 value, which pg/timestamp has no cast from; it casts from pg/text.',
+      'Field "OtherTypes.flag": @default holds a pg/int2 value, which pg/bool has no cast from; it casts from nothing.',
     ]);
+  });
+});
+
+describe('Number defaults too large for the column', () => {
+  it('are refused before anything is decoded, naming the data type', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'out-of-range.prisma')).toEqual([
+      'Field "OutOfRange.count": @default holds a pg/int8 value, which pg/int4 has no cast from; it casts from pg/int2.',
+      'Field "OutOfRange.small": @default holds a pg/int4 value, which pg/int2 has no cast from; it casts from nothing.',
+      'Field "OutOfRange.ints": @default holds a pg/int8 value at element 2, which pg/int4 has no cast from; it casts from pg/int2.',
+    ]);
+  });
+});
+
+describe('Json defaults whose text is not a JSON document', () => {
+  it('are rejected, carrying the JSON parser message', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'unreadable-json.prisma')).toEqual([
+      expect.stringMatching(
+        /^Field "UnreadableJson\.broken": @default holds text that this contract source does not read: /,
+      ),
+      expect.stringMatching(
+        /^Field "UnreadableJson\.list": @default holds text at element 2 that this contract source does not read: /,
+      ),
+    ]);
+  });
+});
+
+describe('Json, Decimal, BigInt and Float literal defaults', () => {
+  it('lower through the column codec', async () => {
+    const { columns } = await loadFixtureTable('defaults', 'Defaults');
+    expect(
+      Object.fromEntries(
+        ['jsonLiteral', 'decimalLiteral', 'bigIntLiteral', 'floatLiteral', 'intLiteral'].map(
+          (column) => [column, columns[column]?.['default']],
+        ),
+      ),
+    ).toEqual({
+      jsonLiteral: { kind: 'literal', value: { a: 1 } },
+      decimalLiteral: { kind: 'literal', value: '12.34' },
+      bigIntLiteral: { kind: 'literal', value: '9007199254740993' },
+      floatLiteral: { kind: 'literal', value: 1.5 },
+      intLiteral: { kind: 'literal', value: 42 },
+    });
   });
 });

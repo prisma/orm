@@ -1,2 +1,2 @@
-model device { id Int @id device_id String @unique current_state device_state @relation(fields: [device_id], references: [device_id], onDelete: NoAction) }
-model device_state { id Int @id device_id String @unique device device[] }
+model device { id Int @id device_id String @unique current_state device_state @relation(fields: [device_id], references: [device_id], onDelete: NoAction) @@map("device") }
+model device_state { id Int @id device_id String @unique device device[] @@map("device_state") }

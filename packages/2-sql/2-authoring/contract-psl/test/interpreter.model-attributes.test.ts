@@ -5,6 +5,7 @@ import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -16,14 +17,23 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 function stampScopeFrom(ctx: Parameters<ModelAttributeSpecFactory>[0]): string {
   const declaredModels = Object.keys(ctx.symbols.topLevel.models).sort().join('+');
-  const defaultFunctions = [...ctx.controlMutationDefaults.keys()].sort().join('+');
+  const defaultFunctions = [...ctx.controlMutationDefaults.defaultFunctionRegistry.keys()]
+    .sort()
+    .join('+');
   return `${ctx.model.name}|${declaredModels}|${defaultFunctions}`;
 }
 
 const stampSpecFactory: ModelAttributeSpecFactory = (ctx) =>
   modelAttribute('stamp', {
-    positional: [{ key: 'label', type: str() }],
-    named: { scope: optional(str(), stampScopeFrom(ctx)) },
+    documentation: 'Records a label and the authoring scope for this model.',
+    positional: [{ key: 'label', type: str(), documentation: 'The label stored in the stamp.' }],
+    named: {
+      scope: {
+        type: optional(str(), stampScopeFrom(ctx)),
+        documentation:
+          'The stamp scope. Defaults to the declaring model and its available models and default functions.',
+      },
+    },
   });
 
 const stampAuthoringContributions: AuthoringContributions = {
@@ -68,6 +78,7 @@ function interpretWith(
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     controlMutationDefaults: builtinControlMutationDefaults,
     composedExtensionContracts: new Map(),
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     createNamespace,
     capabilities: { sql: { scalarList: true } },
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),
@@ -102,7 +113,7 @@ describe('contributed model attributes (AuthoringContributions.modelAttributes)'
     expect(capturedEntries).toMatchObject({
       public: {
         stamp: {
-          widget: { kind: 'stamp', tableName: 'widget', modelName: 'Widget', label: 'v1' },
+          Widget: { kind: 'stamp', tableName: 'Widget', modelName: 'Widget', label: 'v1' },
         },
       },
     });
@@ -128,7 +139,7 @@ model Gadget {
       .join('+');
 
     expect(result.ok).toBe(true);
-    expect(capturedEntries['public']?.['stamp']?.['widget']).toMatchObject({
+    expect(capturedEntries['public']?.['stamp']?.['Widget']).toMatchObject({
       scope: `Widget|Gadget+Widget|${expectedDefaultFunctions}`,
     });
   });
@@ -145,7 +156,7 @@ model Gadget {
     );
 
     expect(result.ok).toBe(true);
-    expect(capturedEntries['tenant']?.['stamp']?.['widget']).toMatchObject({
+    expect(capturedEntries['tenant']?.['stamp']?.['Widget']).toMatchObject({
       namespaceId: 'tenant',
       label: 'in-namespace',
     });

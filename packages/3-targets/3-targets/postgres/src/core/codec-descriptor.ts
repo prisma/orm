@@ -1,12 +1,15 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
+  type AnyCodecDescriptorTemplate,
   type Codec,
   type CodecDescriptor,
   CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
+  type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import {
@@ -101,24 +104,28 @@ export abstract class PostgresCodecDescriptor<P = void>
   }
 }
 
-type DescriptorParams<D extends AnyCodecDescriptor> =
-  D extends CodecDescriptor<infer P> ? P : never;
+type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
+  D extends CodecDescriptorTemplate<infer P> ? P : never;
 
 export interface PostgresCodecOptions<P> {
+  /** The data type the adapted codec represents here. A template names none; this target does. */
+  readonly dataType: DataTypeId;
   readonly nativeType: (params: P) => string;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   readonly jsonArrayProjection?: (expression: ProjectionExpr, params: P) => ProjectionExpr;
 }
 
-export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptor> = Pick<
+export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
   D,
-  keyof CodecDescriptor<DescriptorParams<D>>
+  keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
+  Pick<CodecDescriptor, 'dataType'> &
   Pick<AnyPostgresCodecDescriptor, 'descriptorKind' | 'nativeTypeFor' | 'projectJson'>;
 
-class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends PostgresCodecDescriptor<
-  DescriptorParams<D>
-> {
+class PostgresCodecDescriptorAdapter<
+  D extends AnyCodecDescriptorTemplate,
+> extends PostgresCodecDescriptor<DescriptorParams<D>> {
+  override readonly dataType: DataTypeId;
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly targetTypes: readonly string[];
@@ -138,6 +145,7 @@ class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends Postg
     private readonly options: PostgresCodecOptions<DescriptorParams<D>>,
   ) {
     super();
+    this.dataType = options.dataType;
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
@@ -185,7 +193,7 @@ class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends Postg
   }
 }
 
-export function postgresCodec<D extends AnyCodecDescriptor>(
+export function postgresCodec<D extends AnyCodecDescriptorTemplate>(
   descriptor: D,
   options: PostgresCodecOptions<DescriptorParams<D>>,
 ): AdaptedPostgresCodecDescriptor<D> {

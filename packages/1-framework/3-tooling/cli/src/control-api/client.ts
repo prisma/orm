@@ -28,12 +28,14 @@ import {
   keepInternalSpecifiers,
 } from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
-
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
+import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
 import { executeDbUpdate } from './operations/db-update';
@@ -89,10 +91,13 @@ class ControlClientImpl implements ControlClient {
   > | null = null;
   private initialized = false;
   private readonly defaultConnection: unknown;
+  /** One per client so the verified-hash memo spans operations (e.g. db update's pre-plan + consented apply). */
+  private readonly snapshotVerifier: SnapshotContentVerifier | undefined;
 
   constructor(options: ControlClientOptions) {
     this.options = options;
     this.defaultConnection = options.connection;
+    this.snapshotVerifier = snapshotVerifierFor(options);
   }
 
   init(): void {
@@ -153,8 +158,12 @@ class ControlClientImpl implements ControlClient {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: required for runtime connection type flexibility
-    this.driver = await this.stack.driver.create(resolvedConnection as any);
+    this.driver = await this.stack.driver.create(
+      blindCast<
+        Parameters<typeof this.stack.driver.create>[0],
+        'Connection shape is validated by the selected driver at runtime'
+      >(resolvedConnection),
+    );
   }
 
   async close(): Promise<void> {
@@ -419,6 +428,7 @@ class ControlClientImpl implements ControlClient {
       migrationsDir: options.migrationsDir,
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -458,6 +468,7 @@ class ControlClientImpl implements ControlClient {
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
       ...ifDefined('consent', options.consent),
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -478,6 +489,7 @@ class ControlClientImpl implements ControlClient {
       mode: options.strict ? 'strict' : 'lenient',
       skipSchema: options.skipSchema,
       skipMarker: options.skipMarker,
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -534,6 +546,7 @@ class ControlClientImpl implements ControlClient {
       ...ifDefined('refHash', options.refHash),
       ...ifDefined('refInvariants', options.refInvariants),
       ...ifDefined('refName', options.refName),
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -633,6 +646,7 @@ class ControlClientImpl implements ControlClient {
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
         controlMutationDefaults: stack.controlMutationDefaults,
+        dataTypeLookup: stack.dataTypeLookup,
         resolvedInputs: contractConfig.source.inputs ?? [],
         capabilities: stack.capabilities,
       };
@@ -674,15 +688,6 @@ class ControlClientImpl implements ControlClient {
         code: 'CONTRACT_SOURCE_INVALID',
         summary: 'Failed to resolve contract source',
         why: message,
-        diagnostics: {
-          summary: 'Contract source provider threw an exception',
-          diagnostics: [
-            {
-              code: 'PROVIDER_THROW',
-              message,
-            },
-          ],
-        },
         meta: undefined,
       });
     }
@@ -704,7 +709,10 @@ class ControlClientImpl implements ControlClient {
       // seam-of-record and the only thing that may surface
       // structural errors to the caller.
       const enrichedIR = enrichContract(
-        contractRaw as unknown as Contract,
+        blindCast<
+          Contract,
+          'Provider payload is enriched before target serialization and family validation'
+        >(contractRaw),
         this.frameworkComponents ?? [],
       );
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);

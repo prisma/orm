@@ -70,5 +70,26 @@ export default defineConfig({
     // Note it cannot cover the JIT abort above: that kills the worker fork
     // rather than failing a test, so there is nothing for vitest to retry.
     retry: process.env['CI'] ? 2 : 0,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: ['test/**/*.test.ts'],
+          exclude: [...configDefaults.exclude, ...initJourneyExclude, 'test/packaging/**'],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'packaging',
+          include: ['test/packaging/**/*.test.ts'],
+          fileParallelism: false,
+          typecheck: { enabled: false },
+          testTimeout: 300_000,
+          hookTimeout: 300_000,
+        },
+      },
+    ],
   },
 });

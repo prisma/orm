@@ -28,17 +28,35 @@ export function postgresSourceContext(resolvedInputs: readonly string[]): Contra
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs,
     capabilities: stack.capabilities,
   };
 }
 
+/** The Postgres composition with one default function unregistered. */
+export function postgresSourceContextWithout(
+  functionName: string,
+): (resolvedInputs: readonly string[]) => ContractSourceContext {
+  return (resolvedInputs) => {
+    const context = postgresSourceContext(resolvedInputs);
+    const defaultFunctionRegistry = new Map(
+      context.controlMutationDefaults.defaultFunctionRegistry,
+    );
+    defaultFunctionRegistry.delete(functionName);
+    return {
+      ...context,
+      controlMutationDefaults: { ...context.controlMutationDefaults, defaultFunctionRegistry },
+    };
+  };
+}
+
 /** Loads `fixtures/<caseName>/schema.prisma` through the provider, as `contract emit` does. */
-export function loadFixtureSchema(caseName: string) {
+export function loadFixtureSchema(caseName: string, contextFor = postgresSourceContext) {
   const schemaPath = join(fixturesDir, caseName, 'schema.prisma');
   return prisma7Contract(schemaPath, { binding: prisma7PostgresBinding }).source.load(
-    postgresSourceContext([schemaPath]),
+    contextFor([schemaPath]),
   );
 }
 
@@ -52,8 +70,9 @@ export async function loadFixtureTable(
   caseName: string,
   tableName: string,
   namespaceId = 'public',
+  contextFor = postgresSourceContext,
 ): Promise<SerializedTable> {
-  const result = await loadFixtureSchema(caseName);
+  const result = await loadFixtureSchema(caseName, contextFor);
   if (!result.ok) {
     throw new Error(
       `Fixture "${caseName}" did not load: ${JSON.stringify(result.failure.diagnostics)}`,

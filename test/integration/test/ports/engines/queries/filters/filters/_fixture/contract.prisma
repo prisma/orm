@@ -7,6 +7,7 @@ model User {
   optional  String?
   vehicle_id String?  @unique
   ride       Vehicle? @relation(fields: [vehicle_id], references: [id])
+  @@map("user")
 }
 
 model Vehicle {
@@ -15,6 +16,7 @@ model Vehicle {
   brand  String?
   parked Boolean?
   owner  User?
+  @@map("vehicle")
 }
 
 model ParkingLot {
@@ -23,4 +25,5 @@ model ParkingLot {
   area     String?
   size     Float?
   capacity Int?
+  @@map("parkingLot")
 }

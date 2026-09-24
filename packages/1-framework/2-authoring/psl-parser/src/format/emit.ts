@@ -111,6 +111,8 @@ function spaceBetween(
 ): boolean {
   if (prev === undefined) return false;
   if (inQualifiedName) return false;
+  // Only a tagged literal puts a string directly after an identifier, and its tag and string hug.
+  if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
     case 'LParen':
@@ -178,9 +180,9 @@ function closeContinuation(writer: LineWriter, count: number): void {
 function emitField(
   writer: LineWriter,
   field: FieldDeclarationAst,
-  columns: AlignmentColumns | undefined,
+  alignmentColumns: AlignmentColumns | undefined,
 ): number {
-  return streamRow(writer, field.syntax, columns);
+  return streamRow(writer, field.syntax, alignmentColumns);
 }
 
 function emitNamedType(writer: LineWriter, decl: NamedTypeDeclarationAst): number {
@@ -190,7 +192,7 @@ function emitNamedType(writer: LineWriter, decl: NamedTypeDeclarationAst): numbe
 function streamRow(
   writer: LineWriter,
   row: SyntaxNode,
-  columns: AlignmentColumns | undefined,
+  alignmentColumns: AlignmentColumns | undefined,
 ): number {
   let continuation = 0;
   let sawAttribute = false;
@@ -199,10 +201,10 @@ function streamRow(
     if (child instanceof SyntaxNode) {
       let padTo: number | undefined;
       if (child.kind === 'TypeAnnotation' && continuation === 0) {
-        padTo = columns?.typeColumn;
+        padTo = alignmentColumns?.typeColumn;
       } else if (child.kind === 'FieldAttribute') {
         if (continuation > 0) writer.newline();
-        else if (!sawAttribute) padTo = columns?.attributeColumn;
+        else if (!sawAttribute) padTo = alignmentColumns?.attributeColumn;
         sawAttribute = true;
       }
       continuation += streamNode(writer, child, padTo);
@@ -264,10 +266,11 @@ function emitModel(
   model: ModelDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const columns = alignmentMap(model.syntax);
+  const alignmentColumns = alignmentMap(model.syntax);
   emitBlockBody(writer, model.syntax, trailing, (node) => {
     const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, columns));
+    if (field)
+      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -280,10 +283,11 @@ function emitCompositeType(
   composite: CompositeTypeDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const columns = alignmentMap(composite.syntax);
+  const alignmentColumns = alignmentMap(composite.syntax);
   emitBlockBody(writer, composite.syntax, trailing, (node) => {
     const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, columns));
+    if (field)
+      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));

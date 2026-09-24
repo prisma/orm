@@ -9,12 +9,14 @@ model PostManyToMany {
   id          String                        @id
   categories  CategoriesOnPostsManyToMany[]
   published   Boolean?
+  @@map("postManyToMany")
 }
 
 model CategoryManyToMany {
   id          String                        @id
   posts       CategoriesOnPostsManyToMany[]
   published   Boolean?
+  @@map("categoryManyToMany")
 }
 
 model CategoriesOnPostsManyToMany {
@@ -24,4 +26,5 @@ model CategoriesOnPostsManyToMany {
   categoryId  String
 
   @@id([postId, categoryId])
+  @@map("categoriesOnPostsManyToMany")
 }

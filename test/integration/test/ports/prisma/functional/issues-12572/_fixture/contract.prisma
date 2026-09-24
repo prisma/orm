@@ -14,4 +14,5 @@ model User {
   id        String   @id @default(cuid(2))
   createdAt DateTime @default(now())
   updatedAt temporal.updatedAt()
+  @@map("user")
 }

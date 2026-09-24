@@ -1,7 +1,9 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,6 +13,8 @@ import {
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -29,16 +33,17 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 ]);
 
 function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'index-types.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresTargetDescriptorMeta,
     scalarColumnDescriptors: scalarTypeDescriptors,
@@ -90,7 +95,7 @@ describe('contract build registers postgres index types end-to-end', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = result.value.storage.namespaces['public'] as PostgresSchema;
-    expect(ns.table['widgets']?.indexes.map((idx) => idx.type)).toEqual(['gin']);
+    expect(ns.table['Widgets']?.indexes.map((idx) => idx.type)).toEqual(['gin']);
   });
 
   it('accepts @@index(..., type: "hash")', () => {
@@ -98,7 +103,7 @@ describe('contract build registers postgres index types end-to-end', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = result.value.storage.namespaces['public'] as PostgresSchema;
-    expect(ns.table['widgets']?.indexes.map((idx) => idx.type)).toEqual(['hash']);
+    expect(ns.table['Widgets']?.indexes.map((idx) => idx.type)).toEqual(['hash']);
   });
 
   it('still rejects a bogus, unregistered index type — registering real methods does not disable the check', () => {

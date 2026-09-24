@@ -7,7 +7,7 @@ import type {
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { notOk, type Result } from '@internal/utils/result';
-import type { SourceFile } from './source-file';
+import type { PslSources } from './source-file';
 import type { SymbolTable } from './symbol-table';
 import type { DocumentAst } from './syntax/ast/declarations';
 
@@ -18,13 +18,12 @@ import type { DocumentAst } from './syntax/ast/declarations';
  */
 export interface PslInterpretInput {
   readonly document: DocumentAst;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
-  readonly sourceId: string;
 }
 
 /**
- * Declared here — the authoring layer that owns `DocumentAst` / `SourceFile` /
+ * Declared here — the authoring layer that owns `DocumentAst` / `PslSources` /
  * `SymbolTable` — because `@internal/config` (core) cannot name authoring
  * types. `interpret` must not read disk or `context.resolvedInputs` — those
  * are load-path concerns.

@@ -7,6 +7,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
@@ -37,6 +38,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
+      | 'dataTypeLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -47,6 +49,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       ...input,
     });
 
@@ -69,6 +72,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -79,7 +83,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   email: {
                     codecId: 'custom/text@1',
@@ -92,7 +96,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         },
       },
     });
-    expect(result.value.roots).toEqual({ user: crossRef('User', 'public') });
+    expect(result.value.roots).toEqual({ User: crossRef('User', 'public') });
   });
 
   it('does not synthesise capabilities the target did not contribute', () => {
@@ -136,6 +140,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -162,12 +167,16 @@ describe('interpretPslDocumentToSqlContract', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       capabilities: { sql: { scalarList: true } },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       controlMutationDefaults: {
         defaultFunctionRegistry: new Map([
           [
             'slugid',
             {
-              signature: {},
+              signature: {
+                documentation:
+                  'Generates a slug identifier without changing the field’s storage type.',
+              },
               lower: () => ({
                 ok: true as const,
                 value: {
@@ -191,7 +200,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   slug: {
                     codecId: 'pg/text@1',
@@ -239,9 +248,9 @@ model Comment {
     if (!result.ok) return;
 
     expect(result.value.roots).toEqual({
-      user: crossRef('User', 'public'),
-      post: crossRef('Post', 'public'),
-      comment: crossRef('Comment', 'public'),
+      User: crossRef('User', 'public'),
+      Post: crossRef('Post', 'public'),
+      Comment: crossRef('Comment', 'public'),
     });
   });
 
@@ -265,13 +274,13 @@ model Comment {
 
     expect(result.value.targetFamily).toBe('sql');
     expect(result.value.target).toBe('postgres');
-    expect(result.value.roots).toEqual({ user: crossRef('User', 'public') });
+    expect(result.value.roots).toEqual({ User: crossRef('User', 'public') });
     expect(result.value.storage).toMatchObject({
       namespaces: {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   id: { codecId: 'pg/int4@1', nativeType: 'int4' },
                   email: { codecId: 'pg/text@1', nativeType: 'text' },
@@ -287,7 +296,7 @@ model Comment {
       User: {
         storage: {
           namespaceId: 'public',
-          table: 'user',
+          table: 'User',
           fields: {
             id: { column: 'id' },
             email: { column: 'email' },
@@ -320,7 +329,7 @@ model Comment {
         public: {
           entries: {
             table: {
-              idlessThing: {
+              IdlessThing: {
                 columns: {
                   email: { codecId: 'pg/text@1', nativeType: 'text' },
                   token: { codecId: 'pg/text@1', nativeType: 'text' },
@@ -335,12 +344,12 @@ model Comment {
     // `toMatchObject` with `primaryKey: undefined` requires the key to be
     // present — assert absence directly via a narrowed accessor instead.
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['idlessThing']?.primaryKey).toBeUndefined();
+    expect(unboundTables(storage)['IdlessThing']?.primaryKey).toBeUndefined();
     expect(modelsOf(result.value)).toMatchObject({
       IdlessThing: {
         storage: {
           namespaceId: 'public',
-          table: 'idlessThing',
+          table: 'IdlessThing',
           fields: {
             email: { column: 'email' },
             token: { column: 'token' },
@@ -375,7 +384,7 @@ model Comment {
         public: {
           entries: {
             table: {
-              compositeThing: {
+              CompositeThing: {
                 primaryKey: { columns: ['email', 'token'] },
               },
             },
@@ -422,6 +431,29 @@ model Comment {
         },
       },
     });
+  });
+
+  it('names the storage table after the model verbatim when there is no @@map', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model UserProfile {
+  id Int @id
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.roots).toEqual({ UserProfile: crossRef('UserProfile', 'public') });
+    expect(Object.keys(result.value.storage.namespaces['public']!.entries['table'] ?? {})).toEqual([
+      'UserProfile',
+    ]);
   });
 
   it('maps @@map and @map to storage table and column names', () => {
@@ -652,7 +684,7 @@ model OrderItem {
           public: {
             entries: {
               table: {
-                doc: {
+                Doc: {
                   indexes: [
                     {
                       columns: ['body'],
@@ -692,7 +724,7 @@ model OrderItem {
           public: {
             entries: {
               table: {
-                doc: {
+                Doc: {
                   indexes: [{ type: 'bm25', options: { key_field: 'id', language: 'en' } }],
                 },
               },
@@ -809,7 +841,7 @@ model OrderItem {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(unboundTables(storage)['doc']).toMatchObject({
+      expect(unboundTables(storage)['Doc']).toMatchObject({
         indexes: [{ columns: ['body'] }],
       });
     });
@@ -831,7 +863,7 @@ model OrderItem {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      const table = unboundTables(storage)['user'];
+      const table = unboundTables(storage)['User'];
       expect(table).toBeDefined();
       const json = JSON.parse(JSON.stringify(table)) as Record<string, unknown>;
       expect(json).not.toHaveProperty('namespaceId');
@@ -854,7 +886,7 @@ model OrderItem {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      const tenant = unboundTables(storage)['tenant'];
+      const tenant = unboundTables(storage)['Tenant'];
       expect(tenant).toBeDefined();
       const json = JSON.parse(JSON.stringify(tenant)) as Record<string, unknown>;
       expect(json).not.toHaveProperty('namespaceId');
@@ -877,9 +909,9 @@ model OrderItem {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      const user = storage.namespaces['auth']!.entries.table?.['user'];
+      const user = storage.namespaces['auth']!.entries.table?.['User'];
       expect(user).toBeDefined();
-      expect(unboundTables(storage)['user']).toBeUndefined();
+      expect(unboundTables(storage)['User']).toBeUndefined();
       const json = JSON.parse(JSON.stringify(user)) as Record<string, unknown>;
       expect(json).not.toHaveProperty('namespaceId');
     });
@@ -911,10 +943,10 @@ namespace logs {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(unboundTables(storage)['post']).toBeDefined();
-      expect(storage.namespaces['auth']!.entries.table?.['user']).toBeDefined();
-      expect(storage.namespaces['logs']!.entries.table?.['auditLog']).toBeDefined();
-      expect(unboundTables(storage)['user']).toBeUndefined();
+      expect(unboundTables(storage)['Post']).toBeDefined();
+      expect(storage.namespaces['auth']!.entries.table?.['User']).toBeDefined();
+      expect(storage.namespaces['logs']!.entries.table?.['AuditLog']).toBeDefined();
+      expect(unboundTables(storage)['User']).toBeUndefined();
     });
   });
 });

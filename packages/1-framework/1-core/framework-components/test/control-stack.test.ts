@@ -16,6 +16,7 @@ import {
 import type { Codec } from '../src/shared/codec';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
 import type { CodecLookup } from '../src/shared/codec-types';
+import { dataTypeId } from '../src/shared/data-type';
 import type { ComponentDescriptor } from '../src/shared/framework-components';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
@@ -129,6 +130,7 @@ describe('assembleAuthoringContributions', () => {
   it('returns empty namespaces for descriptors without authoring', () => {
     const result = assembleAuthoringContributions([createDescriptor()]);
     expect(result).toEqual({
+      dataTypes: {},
       field: {},
       type: {},
       entityTypes: {},
@@ -1148,6 +1150,7 @@ describe('extractCodecLookup', () => {
 
   const stubDescriptor = (id: string): AnyCodecDescriptor => ({
     codecId: id,
+    dataType: dataTypeId('demo/stub'),
     traits: [],
     targetTypes: [],
     paramsSchema: {
@@ -1403,6 +1406,7 @@ describe('createControlStack', () => {
     expect(state.queryOperationTypeImports).toEqual([]);
     expect(state.extensionIds).toEqual(['fam', 'tgt']);
     expect(state.authoringContributions).toEqual({
+      dataTypes: {},
       field: {},
       type: {},
       entityTypes: {},

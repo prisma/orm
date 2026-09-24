@@ -3,4 +3,5 @@
 model User {
   id Int @id
   cuidValue String @default(cuid())
+  @@map("user")
 }

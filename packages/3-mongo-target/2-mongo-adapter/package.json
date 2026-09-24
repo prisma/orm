@@ -69,6 +69,7 @@
     "./codec-types": "./dist/codec-types.mjs",
     "./codecs": "./dist/codecs.mjs",
     "./control": "./dist/control.mjs",
+    "./data-types": "./dist/data-types.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },

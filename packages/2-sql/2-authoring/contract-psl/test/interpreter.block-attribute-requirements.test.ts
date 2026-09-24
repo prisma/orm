@@ -3,6 +3,7 @@ import { modelAttribute } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -22,7 +23,9 @@ const pslBlockDescriptors = {
   },
 };
 
-const auditedModelSpec = modelAttribute('audited', {});
+const auditedModelSpec = modelAttribute('audited', {
+  documentation: 'Allows audit rules to target this model.',
+});
 
 const auditContributions: AuthoringContributions = {
   entityTypes: {
@@ -58,6 +61,7 @@ function interpretWith(schema: string) {
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     capabilities: { sql: { scalarList: true } },
     authoringContributions: auditContributions,
   });

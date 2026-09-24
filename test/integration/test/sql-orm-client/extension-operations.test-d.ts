@@ -143,3 +143,44 @@ describe('vector field itself: only equality trait', () => {
     expectTypeOf<PostAccessor['embedding']>().not.toHaveProperty('asc');
   });
 });
+
+describe('full-text search operations on text fields', () => {
+  test('text field exposes the full-text operations', () => {
+    expectTypeOf<PostAccessor['title']>().toHaveProperty('fullTextMatches');
+    expectTypeOf<PostAccessor['title']>().toHaveProperty('fullTextRank');
+    expectTypeOf<PostAccessor['title']>().toHaveProperty('fullTextHeadline');
+  });
+
+  test('numeric and vector fields do not', () => {
+    expectTypeOf<PostAccessor['views']>().not.toHaveProperty('fullTextMatches');
+    expectTypeOf<PostAccessor['embedding']>().not.toHaveProperty('fullTextMatches');
+  });
+
+  test('fullTextMatches returns a predicate expression', () => {
+    type Fn = PostAccessor['title']['fullTextMatches'];
+    expectTypeOf<Fn>().toBeFunction();
+    expectTypeOf<ReturnType<Fn>>().toExtend<
+      import('@internal/sql-relational-core/ast').AnyExpression
+    >();
+  });
+
+  test('fullTextRank returns numeric comparison methods, so it can order results', () => {
+    type RankResult = ReturnType<PostAccessor['title']['fullTextRank']>;
+    expectTypeOf<RankResult>().toEqualTypeOf<
+      ComparisonMethods<number, 'equality' | 'order' | 'numeric'>
+    >();
+    expectTypeOf<RankResult>().toHaveProperty('desc');
+  });
+
+  test('fullTextHeadline returns textual comparison methods', () => {
+    type HeadlineResult = ReturnType<PostAccessor['title']['fullTextHeadline']>;
+    expectTypeOf<HeadlineResult>().toHaveProperty('like');
+  });
+
+  test('the language argument is one of the configurations Postgres ships with', () => {
+    const title = null as unknown as PostAccessor['title'];
+    title.fullTextMatches('alice', { language: 'german' });
+    // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
+    title.fullTextMatches('alice', { language: 'klingon' });
+  });
+});

@@ -1,5 +1,5 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { ArrayLiteralAst, type ExpressionAst } from '../../syntax/ast/expressions';
 import type { ArgType, AttributeCtx, ListArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
@@ -7,6 +7,8 @@ import { leafDiagnostic } from './diagnostic';
 export interface ListOptions {
   readonly allowEmpty?: boolean;
   readonly unique?: boolean;
+  /** How the list reads in an "expected one of" message. Defaults to the element label plus `[]`, which is unreadable when the element label is itself a list of alternatives. */
+  readonly label?: string;
 }
 
 export function list<T, Ctx extends AttributeCtx>(
@@ -17,7 +19,7 @@ export function list<T, Ctx extends AttributeCtx>(
   const unique = opts?.unique ?? false;
   return {
     kind: 'list',
-    label: `${of.label}[]`,
+    label: opts?.label ?? (of.label.includes(' | ') ? `(${of.label})[]` : `${of.label}[]`),
     of,
     allowEmpty,
     unique,

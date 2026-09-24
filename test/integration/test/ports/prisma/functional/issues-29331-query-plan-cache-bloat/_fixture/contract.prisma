@@ -13,6 +13,7 @@
 model Contact {
   id        String             @id @default(cuid(2))
   analytics ContactAnalytics[]
+  @@map("contact")
 }
 
 model ContactAnalytics {
@@ -36,4 +37,5 @@ model ContactAnalytics {
   bool1     Boolean?
   bool2     Boolean?
   bool3     Boolean?
+  @@map("contactAnalytics")
 }

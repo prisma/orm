@@ -71,14 +71,6 @@
     "@prisma/orm-target-postgres#test": {
       "dependsOn": ["build", "^build"],
       "inputs": ["test/**", "dist/**", "vitest.config.ts"]
-    },
-    "@prisma/orm-postgres#test": {
-      "dependsOn": ["build", "^build"],
-      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
-    },
-    "@prisma/orm-extension-pgvector#test": {
-      "dependsOn": ["build", "^build", "@prisma/orm-postgres#build"],
-      "inputs": ["test/**", "dist/**", "vitest.config.ts"]
     }
   }
 }

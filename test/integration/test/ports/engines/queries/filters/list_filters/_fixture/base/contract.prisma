@@ -7,4 +7,5 @@ model TestModel {
   bytes  Bytes[]
   bool   Boolean[]
   dt     DateTime[]
+  @@map("testModel")
 }

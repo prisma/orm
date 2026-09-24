@@ -3,7 +3,7 @@ import { CliStructuredError } from '@internal/errors/control';
 import { placeholder } from '@internal/errors/migration';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
@@ -226,6 +226,7 @@ const transformingCodec: Codec = {
 
 const transformingCodecDescriptor: AnyCodecDescriptor = {
   codecId: TEST_CODEC_ID,
+  dataType: dataTypeId('demo/fixture'),
   traits: [],
   targetTypes: ['text'],
   paramsSchema: voidParamsSchema,
@@ -233,6 +234,7 @@ const transformingCodecDescriptor: AnyCodecDescriptor = {
   factory: () => () => transformingCodec,
 };
 const transformingDescriptor = postgresCodec(transformingCodecDescriptor, {
+  dataType: dataTypeId('demo/fixture'),
   nativeType: () => 'text',
   jsonProjection: (expression: ProjectionExpr) => expression,
 });

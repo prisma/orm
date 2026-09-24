@@ -64,6 +64,37 @@ describe('prismaContract provider helper', () => {
     });
   });
 
+  describe('the data types of the stack it is loaded with', () => {
+    it('reads a number default through the cast its column type declares', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-data-types-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      await writeFile(
+        schemaPath,
+        `model Account {
+  id      Int    @id
+  balance BigInt @default(42)
+}
+`,
+        'utf-8',
+      );
+
+      process.chdir(tempDir);
+      const config = prismaContract('./schema.prisma', baseOptions);
+      const result = await config.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath] }),
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(
+        unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Account']?.columns[
+          'balance'
+        ]?.default,
+      ).toEqual({ kind: 'literal', value: '42' });
+    });
+  });
+
   describe('defaultControlPolicy specifier precedence', () => {
     it('applies the specifier default when the interpreted contract omits one', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-policy-'));
@@ -164,7 +195,7 @@ describe('prismaContract provider helper', () => {
             public: {
               entries: {
                 table: {
-                  user: expect.any(Object),
+                  User: expect.any(Object),
                 },
               },
             },
@@ -203,7 +234,7 @@ describe('prismaContract provider helper', () => {
             public: {
               entries: {
                 table: {
-                  user: expect.any(Object),
+                  User: expect.any(Object),
                 },
               },
             },
@@ -520,7 +551,7 @@ model Other {
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       expect(unboundTables(storage)).toMatchObject({
-        document: {
+        Document: {
           columns: {
             embedding: {
               codecId: 'pg/vector@1',
@@ -598,7 +629,7 @@ model Document {
   cuid2 String @default(cuid(2))
   uuidV7 String @default(uuid(7))
   nanoid16 String @default(nanoid(16))
-  dbExpr String @default(dbgenerated("gen_random_uuid()"))
+  dbExpr String @default(sql\`gen_random_uuid()\`)
 }
 `,
         'utf-8',
@@ -617,15 +648,15 @@ model Document {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'user', column: 'cuid2' },
+              ref: { namespace: 'public', table: 'User', column: 'cuid2' },
               onCreate: { kind: 'generator', id: 'cuid2' },
             },
             {
-              ref: { namespace: 'public', table: 'user', column: 'nanoid16' },
+              ref: { namespace: 'public', table: 'User', column: 'nanoid16' },
               onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
             },
             {
-              ref: { namespace: 'public', table: 'user', column: 'uuidV7' },
+              ref: { namespace: 'public', table: 'User', column: 'uuidV7' },
               onCreate: { kind: 'generator', id: 'uuidv7' },
             },
           ],
@@ -636,7 +667,7 @@ model Document {
           public: {
             entries: {
               table: {
-                user: {
+                User: {
                   columns: {
                     dbExpr: {
                       default: {
@@ -746,6 +777,7 @@ model Document {
       const result = await contract.source.load(
         createPostgresTestContext({
           authoringContributions: {
+            dataTypes: {},
             field: {},
             type: {
               Int: {
@@ -792,7 +824,7 @@ model Document {
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       expect(unboundTables(storage)).toMatchObject({
-        user: {
+        User: {
           columns: {
             id: { codecId: 'pg/int4@1', nativeType: 'int4' },
             name: { codecId: 'pg/text@1', nativeType: 'text' },

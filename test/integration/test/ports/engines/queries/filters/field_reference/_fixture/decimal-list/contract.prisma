@@ -3,4 +3,5 @@ model TestModel {
   dec       Decimal?
   dec_list  Decimal[]
   dec_list2 Decimal[]
+  @@map("testModel")
 }

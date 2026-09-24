@@ -350,6 +350,29 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
       metadata: { count: 42 },
     });
     expect(await decoded.query(runtime, { id: 99 })).toBeNull();
+    const grouped = await db.prepare(
+      { minimum: 'sqlite/bigintnumber@1', take: 'sqlite/integer@1' },
+      (p) =>
+        db.orm.Post.groupBy('userId')
+          .having((h) => h.count().gte(p.minimum))
+          .orderBy((post) => post.userId.asc())
+          .limit(p.take)
+          .prepared.aggregate((agg) => ({ total: agg.countBigInt(), views: agg.sum('views') })),
+    );
+    expectTypeOf<ReturnType<typeof grouped.query>>().toEqualTypeOf<
+      Promise<Array<{ userId: number; total: bigint; views: number | null }>>
+    >();
+    expect(await grouped.query(runtime, { minimum: 2, take: 1 })).toEqual([
+      { userId: 1, total: 2n, views: 6 },
+    ]);
+    expect(await grouped.query(runtime, { minimum: 3, take: 1 })).toEqual([]);
+    expect(
+      await db.orm.Post.groupBy('userId')
+        .having((h) => h.count().gte(2))
+        .orderBy((post) => post.userId.asc())
+        .limit(1)
+        .aggregate((agg) => ({ total: agg.countBigInt(), views: agg.sum('views') })),
+    ).toEqual([{ userId: 1, total: 2n, views: 6 }]);
     await expect(
       db.prepare({ take: 'sqlite/integer@1' }, (p) =>
         db.orm.User.limit(p.take).select('id').prepared.first(),

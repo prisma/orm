@@ -1,8 +1,9 @@
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
-import { escapePslString, SYNTHETIC_SPAN } from './psl-literals';
+import { SYNTHETIC_SPAN } from './psl-literals';
 
 const POLICY_OPERATION_KEYWORD = {
   select: 'policy_select',

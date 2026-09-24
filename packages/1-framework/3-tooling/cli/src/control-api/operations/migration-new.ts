@@ -17,6 +17,7 @@ import { formatMigrationDirName, writeMigrationPackage } from '@internal/migrati
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import {
@@ -32,6 +33,7 @@ import {
 } from '../../utils/command-helpers';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
@@ -116,10 +118,12 @@ export async function executeMigrationNewCommand(
     );
   }
 
+  const verifySnapshotContent = snapshotVerifierFor(config);
   const aggregate = await loadContractSpaceAggregate({
     migrationsDir,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
     appContract: toContract,
+    ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
   const packageCorruptionFailure = refusePackageCorruptionOnAggregate(aggregate, migrationsDir);
   if (packageCorruptionFailure) {
@@ -131,23 +135,44 @@ export async function executeMigrationNewCommand(
 
   let fromHash: string | null = null;
 
-  if (packages.length > 0) {
-    if (options.from) {
-      const match = packages.find((p) => p.metadata.to.startsWith(options.from!));
-      if (!match) {
-        return notOk(
-          errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'Starting contract not found', {
-            why: `No migration with to hash matching "${options.from}" exists in ${appMigrationsRelative}`,
-            fix: 'Check that the --from hash matches a known migration target hash.',
-          }),
-        );
-      }
-      fromHash = match.metadata.to;
-    } else {
-      const latestMigration = findLatestMigration(graph);
-      if (latestMigration) {
-        fromHash = latestMigration.to;
-      }
+  if (options.from !== undefined) {
+    if (packages.length === 0) {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', '--from has no meaning on an empty graph', {
+          why: `--from "${options.from}" was passed, but ${appMigrationsRelative} contains no migrations, so there is no migration target hash it could name.`,
+          fix: 'Omit --from to scaffold the first migration (it records a baseline origin). `migration new --from` accepts the full 64-hex target hash of an existing migration, or a unique prefix of one.',
+        }),
+      );
+    }
+    const matchedHashes = [
+      ...new Set(
+        packages
+          .filter((p) => p.metadata.to.startsWith(options.from ?? ''))
+          .map((p) => p.metadata.to),
+      ),
+    ].sort();
+    if (matchedHashes.length === 0) {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'Starting contract not found', {
+          why: `No migration with to hash matching "${options.from}" exists in ${appMigrationsRelative}`,
+          fix: 'Check that the --from hash matches a known migration target hash. `migration new --from` accepts the full 64-hex target hash of an existing migration, or a unique prefix of one.',
+        }),
+      );
+    }
+    if (matchedHashes.length > 1) {
+      return notOk(
+        errorRuntime('MIGRATION.REF_AMBIGUOUS', `Ambiguous --from prefix: "${options.from}"`, {
+          why: `"${options.from}" is a prefix of ${matchedHashes.length} migration target hashes in ${appMigrationsRelative}: ${matchedHashes.join(', ')}`,
+          fix: 'Provide a longer prefix or the full 64-hex target hash to disambiguate.',
+          meta: { input: options.from, candidates: matchedHashes },
+        }),
+      );
+    }
+    fromHash = matchedHashes[0] ?? null;
+  } else if (packages.length > 0) {
+    const latestMigration = findLatestMigration(graph);
+    if (latestMigration) {
+      fromHash = latestMigration.to;
     }
   }
 

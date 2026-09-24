@@ -2,6 +2,8 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import {
   collectScalarTypeConstructors,
   instantiateAuthoringTypeConstructor,
+  isDataTypeLoweringEntry,
+  loweringEntryKey,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +15,7 @@ import {
   postgresNativeAuthoringTypes,
   postgresScalarAuthoringTypes,
 } from '../src/core/control-mutation-defaults';
+import { createPostgresDataTypeEntries } from '../src/core/data-type-authoring';
 import postgresAdapterDescriptor from '../src/exports/control';
 import runtimeAdapterDescriptor from '../src/exports/runtime';
 
@@ -36,16 +39,28 @@ describe('createPostgresDefaultFunctionRegistry', () => {
 
   it('contains all builtin default function entries', () => {
     expect([...registry.keys()]).toEqual(
-      expect.arrayContaining([
-        'autoincrement',
-        'now',
-        'uuid',
-        'cuid',
-        'ulid',
-        'nanoid',
-        'dbgenerated',
-      ]),
+      expect.arrayContaining(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']),
     );
+  });
+
+  it('retains declaration documentation in the opaque function registry', () => {
+    expect(registry.get('now')?.signature).toMatchObject({
+      documentation: 'Uses the current database timestamp as the default value.',
+    });
+    expect(registry.get('uuid')?.signature).toMatchObject({
+      documentation: 'Generates a UUID when a value is not supplied.',
+      positional: [
+        {
+          key: 'version',
+          documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+          type: { kind: 'oneOf', optional: true },
+        },
+      ],
+    });
+  });
+
+  it('registers no named gen_random_uuid function; raw database functions use sql`...`', () => {
+    expect(registry.has('gen_random_uuid')).toBe(false);
   });
 
   it('lowers autoincrement() to a storage default', () => {
@@ -129,79 +144,6 @@ describe('createPostgresDefaultFunctionRegistry', () => {
         kind: 'execution',
         generated: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
       },
-    });
-  });
-
-  it('lowers dbgenerated("expr") to storage default', () => {
-    const handler = registry.get('dbgenerated')!;
-    const result = handler.lower({
-      call: makeCall('dbgenerated', { expression: 'gen_random_uuid()' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: {
-        kind: 'storage',
-        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
-      },
-    });
-  });
-
-  it('rejects dbgenerated with empty string', () => {
-    const handler = registry.get('dbgenerated')!;
-    const result = handler.lower({
-      call: makeCall('dbgenerated', { expression: '' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({ ok: false });
-  });
-
-  describe('dbgenerated keeps the raw expression verbatim, never resolving it', () => {
-    // `lowerDbgenerated` must not resolve the raw SQL text — a literal-shaped
-    // expression (e.g. `'{}'::jsonb`) is normalized once, at SchemaIR
-    // construction on the expected side (`contractToSchemaIR`'s
-    // target-supplied `resolveDefault` hook), not here. Rewriting here would
-    // also discard the user's original expression for cases like
-    // `nextval('my_seq')`, whose DDL must keep referencing the named sequence.
-    const handler = createPostgresDefaultFunctionRegistry().get('dbgenerated')!;
-
-    function lower(expression: string) {
-      return handler.lower({
-        call: makeCall('dbgenerated', { expression }),
-        context: stubContext,
-      });
-    }
-
-    it('keeps a jsonb literal expression as a function, unresolved', () => {
-      const expression = "'{}'::jsonb";
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-
-    it('keeps a text[] literal expression as a function, unresolved', () => {
-      const expression = "'{}'::text[]";
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-
-    it('keeps gen_random_uuid() a function', () => {
-      const expression = 'gen_random_uuid()';
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-
-    it("keeps nextval(...) a function, unchanged (doesn't adopt the normalizer's autoincrement() rewrite)", () => {
-      const expression = "nextval('seq'::regclass)";
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
     });
   });
 
@@ -290,6 +232,7 @@ describe('postgresScalarAuthoringTypes', () => {
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
+        documentation: expect.stringMatching(/\S/),
         output: {
           codecId,
           nativeType: codecLookup.targetTypesFor(codecId)?.[0],
@@ -379,5 +322,77 @@ describe('postgresNativeAuthoringTypes', () => {
         [-1],
       ),
     ).toThrow('must be >= 0');
+  });
+});
+
+describe('createPostgresDataTypeEntries', () => {
+  const entries = createPostgresDataTypeEntries();
+  const loweringTag = (tag: string) => {
+    const entry = entries[loweringEntryKey(tag)];
+    if (entry === undefined || !isDataTypeLoweringEntry(entry)) {
+      throw new Error(`the entries do not register "${tag}" as a lowering tag`);
+    }
+    return entry;
+  };
+
+  it('registers the json tag and the two lowering tags', () => {
+    expect(
+      Object.values(entries).flatMap((entry) =>
+        entry.written.kind === 'tag' ? [entry.written.tag] : [],
+      ),
+    ).toEqual(['json', 'sql', 'pg.sql']);
+  });
+
+  it('registers json under its own data type, with no prefixed alias', () => {
+    expect(entries['postgres.json']).toBeUndefined();
+    expect(loweringTag('sql').written.tag).toBe('sql');
+  });
+
+  it('lowers a body verbatim as a function default', () => {
+    const result = loweringTag('pg.sql').lower({
+      literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: "'{}'::jsonb" } },
+    });
+  });
+
+  it('is wired as the adapter descriptor authoring entries', () => {
+    expect(Object.keys(postgresAdapterDescriptor.authoring?.dataTypes ?? {})).toEqual(
+      Object.keys(entries),
+    );
+  });
+
+  it.each([
+    ['sql', 'now'],
+    ['pg.sql', 'autoincrement'],
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, fn) => {
+    const result = loweringTag(tag).lower({
+      literal: { tag, body: `${fn}()`, span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: `Write @default(${fn}()) instead of ${tag}\`${fn}()\`; ${fn}() is a Prisma default function, not raw SQL.`,
+      },
+    });
+  });
+
+  it('lowers sql`gen_random_uuid()` verbatim', () => {
+    const result = loweringTag('sql').lower({
+      literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
+      },
+    });
   });
 });

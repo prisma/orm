@@ -5,4 +5,5 @@ types {
 model TestModel {
   id      Int             @id
   decimal Decimal65_30?
+  @@map("testModel")
 }

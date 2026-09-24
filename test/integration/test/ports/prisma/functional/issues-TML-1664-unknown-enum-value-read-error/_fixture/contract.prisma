@@ -16,4 +16,5 @@ native_enum Status {
 model User {
   id     String         @id
   status pg.enum(Status)
+  @@map("user")
 }

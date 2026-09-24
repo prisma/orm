@@ -1,4 +1,4 @@
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -239,6 +239,75 @@ describe('shared contract definition lowering', () => {
     expect(unboundTables(contract.storage)['event']?.columns['scheduled_at']?.default).toEqual({
       kind: 'literal',
       value: '2025-01-01T00:00:00.000Z',
+    });
+  });
+
+  it("encodes a parameterized column's default through a codec built with the column's typeParams", () => {
+    // A codec whose encoding answers for its params, as `pg/vector@1` does: it refuses a value
+    // whose length is not the length the column declares.
+    const descriptor = {
+      codecId: 'test/vector@1',
+      traits: ['equality'],
+      targetTypes: ['vector'],
+      isParameterized: true,
+      paramsSchema: {
+        '~standard': { version: 1, vendor: 'test', validate: (value: unknown) => ({ value }) },
+      },
+      factory: (params: { readonly length: number }) => () => ({
+        id: 'test/vector@1',
+        encode: async (value: unknown) => value,
+        decode: async (wire: unknown) => wire,
+        encodeJson: (value: unknown) => {
+          if (!Array.isArray(value) || value.length !== params.length) {
+            throw new Error(`length mismatch: expected ${params.length}, got ${String(value)}`);
+          }
+          return [...value];
+        },
+        decodeJson: (json: unknown) => json,
+      }),
+    } as unknown as AnyCodecDescriptor;
+
+    const codecLookup: CodecLookup = {
+      // The representative instance carries no params, as the control stack's does, so a build that
+      // used it in place of the column's own codec refuses every value.
+      get: (id) =>
+        id === 'test/vector@1' ? descriptor.factory({ length: 0 })({ name: id }) : undefined,
+      descriptorFor: (id) => (id === 'test/vector@1' ? descriptor : undefined),
+      targetTypesFor: (id) => (id === 'test/vector@1' ? ['vector'] : undefined),
+      renderOutputTypeFor: () => undefined,
+    };
+
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Document',
+            tableName: 'document',
+            fields: [
+              {
+                fieldName: 'embedding',
+                columnName: 'embedding',
+                descriptor: {
+                  codecId: 'test/vector@1',
+                  nativeType: 'vector',
+                  typeParams: { length: 3 },
+                },
+                nullable: false,
+                default: { kind: 'literal', value: [0.5, 0.25, 0.125] },
+              },
+            ],
+          },
+        ],
+      },
+      codecLookup,
+    );
+
+    expect(unboundTables(contract.storage)['document']?.columns['embedding']?.default).toEqual({
+      kind: 'literal',
+      value: [0.5, 0.25, 0.125],
     });
   });
 

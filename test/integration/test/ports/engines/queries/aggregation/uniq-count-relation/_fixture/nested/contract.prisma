@@ -2,6 +2,7 @@ model User {
   id    Int    @id
   name  String
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -11,6 +12,7 @@ model Post {
   userId   Int
   comments Comment[]
   tags     Tag[]
+  @@map("post")
 }
 
 model Comment {
@@ -19,6 +21,7 @@ model Comment {
   post   Post  @relation(fields: [postId], references: [id])
   postId Int
   tags   Tag[]
+  @@map("comment")
 }
 
 model Tag {
@@ -26,6 +29,7 @@ model Tag {
   name     String
   posts    Post[]
   comments Comment[]
+  @@map("tag")
 }
 
 model PostTag {
@@ -35,6 +39,7 @@ model PostTag {
   tag    Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([postId, tagId])
+  @@map("postTag")
 }
 
 model CommentTag {
@@ -44,4 +49,5 @@ model CommentTag {
   tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([commentId, tagId])
+  @@map("commentTag")
 }

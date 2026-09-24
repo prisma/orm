@@ -32,6 +32,7 @@ import {
   mapRefResolutionError,
 } from '../../utils/cli-errors';
 import { resolveMigrationPaths } from '../../utils/command-helpers';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 export interface RefSetResult {
@@ -127,7 +128,7 @@ export async function executeRefSetCommand(
       'contract.json',
     );
     try {
-      await readContractSnapshotJson(migrationsDir, resolvedHash);
+      await readContractSnapshotJson(migrationsDir, resolvedHash, snapshotVerifierFor(config));
     } catch (readError) {
       if (
         MigrationToolsError.is(readError) &&

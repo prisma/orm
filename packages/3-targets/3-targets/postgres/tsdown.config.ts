@@ -4,6 +4,7 @@ export default defineConfig({
   entry: [
     'src/exports/aggregates.ts',
     'src/exports/codec-ids.ts',
+    'src/exports/data-types.ts',
     'src/exports/codec-types.ts',
     'src/exports/codec-descriptor.ts',
     'src/exports/codecs.ts',
@@ -18,6 +19,7 @@ export default defineConfig({
     'src/exports/migration.ts',
     'src/exports/native-type-normalizer.ts',
     'src/exports/op-factory-call.ts',
+    'src/exports/operation-types.ts',
     'src/exports/pack.ts',
     'src/exports/planner-ddl-builders.ts',
     'src/exports/planner-identity-values.ts',

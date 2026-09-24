@@ -45,12 +45,19 @@ function cloneAndFreezeRecord<T extends Record<string, unknown>>(value: T): T {
     } else if (Array.isArray(val)) {
       cloned[key] = Object.freeze([...val]);
     } else if (typeof val === 'object') {
-      cloned[key] = cloneAndFreezeRecord(val as Record<string, unknown>);
+      cloned[key] = cloneAndFreezeRecord(
+        blindCast<
+          Record<string, unknown>,
+          'recursive clone only recurses into plain record-shaped values'
+        >(val),
+      );
     } else {
       cloned[key] = val;
     }
   }
-  return Object.freeze(cloned) as T;
+  return blindCast<T, 'cloned record preserves the key/value shape of the input record'>(
+    Object.freeze(cloned),
+  );
 }
 
 export function createPostgresMigrationRunner(

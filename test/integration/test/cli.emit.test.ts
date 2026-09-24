@@ -3,14 +3,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadContractFromTs } from '@internal/cli';
-import { emit } from '@internal/emitter/test/utils';
-import {
-  extractCodecTypeImports,
-  extractComponentIds,
-} from '@internal/framework-components/control';
+import sql from '@internal/family-sql/control';
+import { createControlStack } from '@internal/framework-components/control';
+import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { emit } from '../utils/emit';
 import { getSqlDescriptorBundle } from '../utils/framework-components';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,13 +32,16 @@ describe('emit command functionality', () => {
     }
   });
 
-  const buildEmitterArtifacts = () => {
+  const emitContract = (contract: Awaited<ReturnType<typeof loadContractFromTs>>) => {
     const { adapter, target, extensions } = getSqlDescriptorBundle();
-    const descriptors = [target, adapter, ...extensions];
-    return {
-      codecTypeImports: extractCodecTypeImports(descriptors),
-      extensionIds: extractComponentIds({ id: 'sql' }, target, adapter, extensions),
-    };
+    const stack = createControlStack({ family: sql, target, adapter, extensions });
+    return emit(contract, stack, sqlEmission, {
+      serializeContract: (c) =>
+        target.contractSerializer.serializeContract(
+          c as Parameters<typeof target.contractSerializer.serializeContract>[0],
+        ),
+      ...sqlContractCanonicalizationHooks,
+    });
   };
 
   it(
@@ -47,16 +49,8 @@ describe('emit command functionality', () => {
     async () => {
       const contractPath = join(fixturesDir, 'valid-contract.ts');
       const contract = await loadContractFromTs(contractPath);
-      const { codecTypeImports, extensionIds } = buildEmitterArtifacts();
 
-      const result = await emit(
-        contract,
-        {
-          codecTypeImports,
-          extensionIds,
-        },
-        sqlEmission,
-      );
+      const result = await emitContract(contract);
 
       const contractJsonPath = join(outputDir, 'contract.json');
       const contractDtsPath = join(outputDir, 'contract.d.ts');
@@ -96,16 +90,8 @@ describe('emit command functionality', () => {
     async () => {
       const contractPath = join(fixturesDir, 'valid-contract.ts');
       const contract = await loadContractFromTs(contractPath);
-      const { codecTypeImports, extensionIds } = buildEmitterArtifacts();
 
-      const result = await emit(
-        contract,
-        {
-          codecTypeImports,
-          extensionIds,
-        },
-        sqlEmission,
-      );
+      const result = await emitContract(contract);
 
       expect(result.storageHash).toMatch(/^[a-f0-9]{64}$/);
     },
@@ -118,16 +104,8 @@ describe('emit command functionality', () => {
       const newOutputDir = join(tmpdir(), `prisma-8-test-new-${Date.now()}`);
       const contractPath = join(fixturesDir, 'valid-contract.ts');
       const contract = await loadContractFromTs(contractPath);
-      const { codecTypeImports, extensionIds } = buildEmitterArtifacts();
 
-      const result = await emit(
-        contract,
-        {
-          codecTypeImports,
-          extensionIds,
-        },
-        sqlEmission,
-      );
+      const result = await emitContract(contract);
 
       mkdirSync(newOutputDir, { recursive: true });
 

@@ -20,6 +20,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
@@ -72,6 +73,7 @@ class StubPolicyTextCodec extends CodecImpl<
 }
 
 class StubPolicyTextDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -236,6 +238,7 @@ describe('generic extension-block printer (P2)', () => {
     }
 
     class NumericExpressionDescriptor extends CodecDescriptorImpl<void> {
+      override readonly dataType = dataTypeId('demo/fixture');
       override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
       override readonly traits = ['numeric'] as const;
       override readonly targetTypes = ['numeric'] as const;

@@ -8,6 +8,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -23,6 +24,7 @@ describe('composed mutation default registries', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
+      | 'dataTypeLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -31,6 +33,7 @@ describe('composed mutation default registries', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });
@@ -77,7 +80,7 @@ describe('composed mutation default registries', () => {
           [
             'slugid',
             {
-              signature: {},
+              signature: { documentation: 'Generates a slug identifier when a value is omitted.' },
               lower: (input: {
                 call: TypedDefaultFunctionCall;
                 context: DefaultFunctionLoweringContext;
@@ -110,7 +113,7 @@ describe('composed mutation default registries', () => {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'user', column: 'slug' },
+              ref: { namespace: 'public', table: 'User', column: 'slug' },
               onCreate: { kind: 'generator', id: 'slugid' },
             },
           ],
@@ -135,7 +138,7 @@ describe('composed mutation default registries', () => {
           [
             'slugid',
             {
-              signature: {},
+              signature: { documentation: 'Generates a slug identifier for text fields.' },
               lower: () => ({
                 ok: true as const,
                 value: {

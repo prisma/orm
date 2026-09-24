@@ -5,7 +5,7 @@ import { type FormatOptions, resolveFormatOptions } from './options';
 
 export function format(source: string, options?: FormatOptions): string {
   const resolved = resolveFormatOptions(options);
-  const { document, diagnostics } = parse(source);
+  const { document, diagnostics } = parse(source, '<format-input>.psl');
   if (diagnostics.length > 0) {
     const summary = diagnostics[0]?.message ?? 'unknown parse error';
     const more = diagnostics.length > 1 ? ` (and ${diagnostics.length - 1} more)` : '';

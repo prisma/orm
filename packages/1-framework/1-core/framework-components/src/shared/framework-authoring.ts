@@ -2,6 +2,7 @@ import type {
   ColumnDefault,
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
+  JsonValue,
 } from '@internal/contract/types';
 import {
   isColumnDefaultLiteralInputValue,
@@ -13,6 +14,12 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Type } from 'arktype';
 import type { CodecLookup } from './codec-types';
+import type { DataTypeId } from './data-type';
+import type {
+  DefaultFunctionLoweringContext,
+  LoweredDefaultResult,
+  TaggedLiteralValue,
+} from './mutation-default-types';
 import type { AuthoringOption } from './option-descriptor';
 import type { PslBlockParam, PslExtensionBlock, PslSpan } from './psl-extension-block';
 import { runtimeError } from './runtime-error';
@@ -118,6 +125,7 @@ export interface AuthoringTypeConstructorEntityRef {
 
 export interface AuthoringTypeConstructorDescriptor {
   readonly kind: 'typeConstructor';
+  readonly documentation?: string;
   readonly args?: readonly AuthoringArgumentDescriptor[];
   readonly output: AuthoringStorageTypeTemplate;
   /** Present when one of this constructor's positional arguments names another document-local entity instead of carrying a literal value. Absent for ordinary literal-argument constructors. */
@@ -234,7 +242,7 @@ export function flushAuthoringWarnings(warnings: readonly AuthoringWarning[]): v
   // warnings sharing a code but differing in summary never share a batch.
   const groups = new Map<string, AuthoringWarning[]>();
   for (const warning of warnings) {
-    const key = `${warning.code}\u0000${warning.summary}`;
+    const key = JSON.stringify([warning.code, warning.summary]);
     const group = groups.get(key) ?? [];
     group.push(warning);
     groups.set(key, group);
@@ -420,6 +428,7 @@ export type AuthoringEntityTypeNamespace = {
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';
+  readonly documentation?: string;
   readonly keyword: string;
   readonly discriminator: string;
   readonly name: { readonly required: boolean };
@@ -472,20 +481,52 @@ export interface AuthoringModelAttributeContext extends AuthoringEntityContext {
   readonly modelName: string;
   readonly storageName: string;
   readonly namespaceId: string;
+  /**
+   * The storage name a field of the declaring model maps to, or `undefined`
+   * when the model declares no such field. The interpreter owns the mapping
+   * — a lowering that renders storage-level text must ask for the name here
+   * rather than reusing the authored field name, which `@map` may rename.
+   */
+  readonly fieldStorageName: (fieldName: string) => string | undefined;
+  /**
+   * The codec a field of the declaring model stores its values through, or
+   * `undefined` when the model declares no such field or the field is not a
+   * stored value at all. A lowering that only makes sense over certain value
+   * kinds checks this rather than guessing from the field's declared type.
+   */
+  readonly fieldCodecId: (fieldName: string) => string | undefined;
 }
 
 /**
  * What a model-attribute lowering returns when it produces an entity: `key`
  * is the identity the entity is stored under within its `entries` slot
- * (`entries[attribute][key]`); `entity` is the value stored there. A
- * lowering that instead pushed a diagnostic through
- * {@link AuthoringModelAttributeContext.diagnostics} returns `undefined` —
- * the same convention {@link AuthoringEntityTypeFactoryOutput} uses.
+ * (`entries[attribute][key]`); `entity` is the value stored there.
  */
-export interface AuthoringModelAttributeLoweringOutput {
+export interface AuthoringModelAttributeEntityOutput {
   readonly key: string;
   readonly entity: unknown;
 }
+
+/**
+ * What a model-attribute lowering returns when it produces an index on the
+ * declaring model's storage rather than a standalone entity. The framework
+ * never reads `index`: its shape is the family's authored-index input, which
+ * the family interpreter narrows and files through the same path its own
+ * index attribute uses, so naming and validation are shared.
+ */
+export interface AuthoringModelAttributeIndexOutput {
+  readonly index: unknown;
+}
+
+/**
+ * What a model-attribute lowering returns. A lowering that instead pushed a
+ * diagnostic through {@link AuthoringModelAttributeContext.diagnostics}
+ * returns `undefined` — the same convention
+ * {@link AuthoringEntityTypeFactoryOutput} uses.
+ */
+export type AuthoringModelAttributeLoweringOutput =
+  | AuthoringModelAttributeEntityOutput
+  | AuthoringModelAttributeIndexOutput;
 
 /**
  * Declarative descriptor for an extension-contributed `@@` model attribute.
@@ -510,6 +551,11 @@ export interface AuthoringModelAttributeDescriptor<Out = never> {
   readonly kind: 'modelAttribute';
   readonly attribute: string;
   readonly spec: unknown;
+  /**
+   * Whether one model may declare this attribute more than once. Defaults to
+   * false, which is what the duplicate diagnostic enforces.
+   */
+  readonly repeatable?: boolean;
   readonly lower: (
     parsed: Out,
     ctx: AuthoringModelAttributeContext,
@@ -525,6 +571,86 @@ export type AuthoringModelAttributeDescriptorNamespace = {
 export interface AuthoringAttributeSpecContributions {
   readonly model: Readonly<Record<string, unknown>>;
   readonly field: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * How a contract source writes values of one data type, and how it reads the text back.
+ *
+ * A tag is a qualified name followed by a body in any of the quote styles. A plain form is one of
+ * the three pieces of syntax read without a tag: a quoted string, `true`/`false`, and a number.
+ *
+ * A number is the one plain form that yields several types, so instead of `parse` its arm carries a
+ * classifier, which picks the type from the digits and returns the canonical form with it, and
+ * `types`, every type the classifier can return — which is how assembly knows those types can be
+ * written. ADR 254.
+ */
+export type DataTypeWrittenForm =
+  | {
+      readonly kind: 'tag';
+      readonly tag: string;
+      readonly parse: (text: string) => JsonValue;
+    }
+  | {
+      readonly kind: 'plain';
+      readonly syntax: 'string' | 'boolean';
+      readonly parse: (text: string) => JsonValue;
+    }
+  | {
+      readonly kind: 'plain';
+      readonly syntax: 'number';
+      readonly types: readonly DataTypeId[];
+      readonly classify: (
+        text: string,
+      ) => { readonly type: DataTypeId; readonly value: JsonValue } | undefined;
+    };
+
+/**
+ * PSL support for one data type, contributed by the pack that owns the type and keyed by its id.
+ *
+ * The written form reads text into the type's canonical form, throwing a structured error for text
+ * it cannot read; `print` is the reverse.
+ */
+export interface DataTypeAuthoringEntry {
+  readonly written: DataTypeWrittenForm;
+  readonly print: (value: JsonValue) => string;
+  readonly documentation: string;
+  readonly lower?: never;
+}
+
+/**
+ * A tag whose body the family lowers itself rather than reading as a value of a data type. It sits
+ * in the same map under a reserved key, because it names no type. ADR 254.
+ */
+export interface DataTypeLoweringAuthoringEntry {
+  readonly written: { readonly kind: 'tag'; readonly tag: string };
+  readonly documentation: string;
+  readonly lower: (input: {
+    readonly literal: TaggedLiteralValue;
+    readonly context: DefaultFunctionLoweringContext;
+  }) => LoweredDefaultResult;
+}
+
+export type AuthoringDataTypeEntry = DataTypeAuthoringEntry | DataTypeLoweringAuthoringEntry;
+
+const LOWERING_ENTRY_PREFIX = 'lowering:';
+
+/**
+ * The key a lowering entry sits under. A data type id is `owner/name`, so a key carrying this
+ * prefix can never collide with one.
+ */
+export function loweringEntryKey(tag: string): string {
+  return `${LOWERING_ENTRY_PREFIX}${tag}`;
+}
+
+export function isLoweringEntryKey(key: string): boolean {
+  return key.startsWith(LOWERING_ENTRY_PREFIX);
+}
+
+/** Which of the two kinds of entry this is; the only place the discriminating key is named. */
+export function isDataTypeLoweringEntry(
+  entry: AuthoringDataTypeEntry,
+): entry is DataTypeLoweringAuthoringEntry {
+  return 'lower' in entry && entry.lower !== undefined;
 }
 
 export interface AuthoringContributions {
@@ -553,6 +679,11 @@ export interface AuthoringContributions {
    */
   readonly modelAttributes?: AuthoringModelAttributeDescriptorNamespace;
   readonly attributeSpecs?: AuthoringAttributeSpecContributions;
+  /**
+   * PSL support for the data types this contribution owns, keyed by data type id, plus any
+   * lowering entries under their reserved keys. ADR 254.
+   */
+  readonly dataTypes?: Readonly<Record<string, AuthoringDataTypeEntry>>;
   /**
    * Names the top-level type constructor that stores embedded value-object
    * fields (fields typed as a value-object `type` block). A single named

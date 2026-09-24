@@ -1,6 +1,7 @@
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { defineConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { typescriptContract } from '@internal/sql-contract-ts/config-types';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
@@ -173,6 +174,7 @@ describe('defineConfig', () => {
       composedExtensions: [],
       composedExtensionContracts: new Map(),
       authoringContributions: {
+        dataTypes: {},
         field: {},
         type: {},
         entityTypes: {},
@@ -180,12 +182,16 @@ describe('defineConfig', () => {
         modelAttributes: {},
         attributeSpecs: { model: {}, field: {} },
       },
+      dataTypeLookup: createDataTypeLookup([]),
       codecLookup: {
         get: () => undefined,
         targetTypesFor: () => undefined,
         renderOutputTypeFor: () => undefined,
       },
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+      controlMutationDefaults: {
+        defaultFunctionRegistry: new Map(),
+        generatorDescriptors: [],
+      },
       resolvedInputs: [],
       capabilities: {},
     });

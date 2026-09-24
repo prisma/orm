@@ -5,10 +5,13 @@ import pgvector from '@internal/extension-pgvector/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import { sql } from '@internal/sql-builder/runtime';
+import type { Adapter, AnyQueryAst, LoweredStatement } from '@internal/sql-relational-core/ast';
+import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import {
   createExecutionContext,
   createSqlExecutionStack,
+  lowerSqlPlan,
   type Runtime,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -30,11 +33,13 @@ const sqlContract = blindCast<
 export function setupIntegrationTest() {
   let runtime: Runtime;
   let context: ExecutionContext<typeof sqlContract>;
+  let client: Client;
+  let adapter: Adapter<AnyQueryAst, typeof sqlContract, LoweredStatement>;
   const closeFns: Array<() => Promise<void>> = [];
 
   beforeAll(async () => {
     const database = await createDevDatabase();
-    const client = new Client({ connectionString: database.connectionString });
+    client = new Client({ connectionString: database.connectionString });
     await client.connect();
 
     await setupTestDatabase(client, sqlContract, async (c) => {
@@ -60,6 +65,7 @@ export function setupIntegrationTest() {
         CREATE TABLE comments (
           id int4 PRIMARY KEY,
           body text NOT NULL,
+          subject varchar(200) NOT NULL,
           post_id int4 NOT NULL
         )
       `);
@@ -86,10 +92,16 @@ export function setupIntegrationTest() {
           (4, 'Another One', 3, 10, '[1,1,0]')
       `);
       await c.query(`
-        INSERT INTO comments (id, body, post_id) VALUES
-          (1, 'Great post!', 1),
-          (2, 'Nice work', 1),
-          (3, 'Interesting', 3)
+        INSERT INTO comments (id, body, subject, post_id) VALUES
+          (1, 'Great post!', 'praise', 1),
+          (2, 'Nice work', 'praise', 1),
+          (3, 'Interesting', 'remark', 3),
+          (101, 'alice wrote the report', 'alice subject line', 1),
+          (102, 'alice met alice and alice again', 'meeting notes', 1),
+          (103, 'bob wrote the report', 'bob subject line', 1),
+          (104, 'the quick brown fox jumps', 'animals', 1),
+          (105, 'a brown dog and a quick cat', 'animals', 1),
+          (106, 'alice manuscript draft', 'drafts', 1)
       `);
       await c.query(`
         INSERT INTO profiles (id, user_id, bio) VALUES
@@ -125,6 +137,10 @@ export function setupIntegrationTest() {
       driver: cursorDisabledDriver,
     });
     const driver = stackInstance.driver!;
+    adapter = blindCast<
+      Adapter<AnyQueryAst, typeof sqlContract, LoweredStatement>,
+      'the stack-composed adapter lowers this contract; the instance type erases the contract parameter'
+    >(stackInstance.adapter);
     await driver.connect({ kind: 'pgClient', client });
 
     runtime = new PostgresRuntimeImpl({
@@ -153,5 +169,13 @@ export function setupIntegrationTest() {
   return {
     db: () => sql({ context, rawCodecInferer: postgresRawCodecInferer }),
     runtime: () => runtime,
+    /** The contract the fixture emits, for tests that read its storage. */
+    contract: () => sqlContract,
+    /** The execution context, for tests that drive another lane over the same stack. */
+    context: () => context,
+    /** The raw connection, for tests that need SQL the DSL does not express (EXPLAIN, DDL). */
+    client: () => client,
+    /** The SQL and bound params a plan lowers to, exactly as the runtime sends them. */
+    lower: <Row>(plan: SqlQueryPlan<Row>) => lowerSqlPlan(adapter, sqlContract, plan),
   };
 }

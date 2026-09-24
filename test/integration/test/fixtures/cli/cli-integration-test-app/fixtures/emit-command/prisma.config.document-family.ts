@@ -1,7 +1,7 @@
 import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import type { ControlFamilyInstance } from '@internal/framework-components/control';
 import { typescriptContract } from '@internal/sql-contract-ts/config-types';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { contract } from './invalid-contract-document';
 
 // Create a config with document family (which doesn't exist, but we'll test the error)
@@ -12,7 +12,7 @@ const mockHook = {
   generateContractTypes: () => '',
 };
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: {
       kind: 'family',

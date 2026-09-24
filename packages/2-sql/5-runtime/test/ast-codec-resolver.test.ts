@@ -4,7 +4,7 @@ import type {
   CodecDescriptor,
   CodecRef,
 } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
 import type { Codec, SqlCodecInstanceContext } from '@internal/sql-relational-core/ast';
 import { buildCodecDescriptorRegistry } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { describe, expect, it, vi } from 'vitest';
@@ -23,6 +23,7 @@ interface VectorParams {
 function makeVectorDescriptor(): CodecDescriptor<VectorParams> {
   return {
     codecId: 'pg/vector@1',
+    dataType: dataTypeId('pg/vector'),
     traits: ['equality'],
     targetTypes: ['vector'],
     paramsSchema: {
@@ -55,6 +56,7 @@ function makeVectorDescriptor(): CodecDescriptor<VectorParams> {
 function makeScalarDescriptor(): CodecDescriptor {
   return {
     codecId: 'test/scalar@1',
+    dataType: dataTypeId('test/scalar'),
     traits: [],
     targetTypes: ['scalar'],
     paramsSchema: voidParamsSchema,
@@ -137,6 +139,7 @@ describe('createAstCodecResolver', () => {
   it('throws RUNTIME.TYPE_PARAMS_INVALID when paramsSchema returns a Promise (async validator)', () => {
     const asyncDescriptor: CodecDescriptor<VectorParams> = {
       codecId: 'async/vector@1',
+      dataType: dataTypeId('async/vector'),
       traits: [],
       targetTypes: ['vector'],
       paramsSchema: {

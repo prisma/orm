@@ -19,4 +19,5 @@ model TestData {
   date        Date
   timestamp   Timestamp
   timestamptz Timestamptz
+  @@map("testData")
 }

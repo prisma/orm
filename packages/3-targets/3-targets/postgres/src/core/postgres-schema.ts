@@ -300,7 +300,7 @@ PostgresSchema.unbound = PostgresUnboundSchema.instance;
  * it inherits the same `kind: 'schema'` from `PostgresSchema`.
  */
 export function isPostgresSchema(ns: unknown): ns is PostgresSchema {
-  return (ns as { kind?: unknown } | null | undefined)?.kind === 'schema';
+  return typeof ns === 'object' && ns !== null && Reflect.get(ns, 'kind') === 'schema';
 }
 
 /**

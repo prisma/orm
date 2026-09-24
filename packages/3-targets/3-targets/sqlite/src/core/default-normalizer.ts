@@ -55,11 +55,11 @@ export function parseSqliteDefault(
   }
 
   // SQLite has several spellings for "current timestamp" — `CURRENT_TIMESTAMP`
-  // (keyword) and `datetime('now')` / `datetime("now")` (function call). The
-  // contract authoring side canonicalizes `dbgenerated("CURRENT_TIMESTAMP")`
-  // (and friends) to `now()` via `lowerDbgenerated`; mirror that here so a
-  // schema produced by either spelling round-trips to the same canonical
-  // form for verification.
+  // (keyword) and `datetime('now')` / `datetime("now")` (function call). A
+  // named `now()` default in the contract is rendered as one of them, so they
+  // read back as `now()` here and the named default verifies against the
+  // database's text. `sqliteResolveDefault` applies the same rule to the
+  // contract side, so a raw sql`CURRENT_TIMESTAMP` default compares equal too.
   const lower = trimmed.toLowerCase();
   if (lower === 'current_timestamp' || lower === "datetime('now')" || lower === 'datetime("now")') {
     return { kind: 'function', expression: 'now()' };
@@ -89,4 +89,20 @@ export function parseSqliteDefault(
 
   // Unrecognized expression — preserve as function
   return { kind: 'function', expression: trimmed };
+}
+
+/**
+ * The contract-derived side of verify: an authored function default is read
+ * through the same parser as an introspected one, so `` sql`CURRENT_TIMESTAMP` ``
+ * and the database's `CURRENT_TIMESTAMP` compare equal. Mirrors Postgres's
+ * `postgresResolveDefault`.
+ */
+export function sqliteResolveDefault(
+  def: ColumnDefault,
+  resolvedNativeType: string,
+): ColumnDefault {
+  if (def.kind !== 'function') {
+    return def;
+  }
+  return parseSqliteDefault(def.expression, resolvedNativeType) ?? def;
 }

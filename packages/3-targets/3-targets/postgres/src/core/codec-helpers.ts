@@ -9,6 +9,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
+import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -59,8 +60,12 @@ export function renderPrecision(
   return `${typeName}<${precision}>`;
 }
 
+/**
+ * A `numeric` value as its canonical decimal text. A number is written out without an exponent,
+ * because `numeric` text has no exponent syntax and `encodeJson` refuses one.
+ */
 export const pgNumericDecode = (wire: string | number): string => {
-  if (typeof wire === 'number') return String(wire);
+  if (typeof wire === 'number') return numeralText(wire);
   return wire;
 };
 
@@ -148,6 +153,26 @@ export const pgInt8Decode = (wire: string | number | bigint): bigint =>
 export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
   decimalIntegerDecode('pg/unboundedint@1', wire);
 
+/**
+ * Neither JSON nor a SQL number literal has a form for `NaN` or the infinities; PostgreSQL reads
+ * and writes them as the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as
+ * that text on the wire and in JSON.
+ */
+export const pgFloatEncode = (value: number): string | number =>
+  Number.isFinite(value) ? value : String(value);
+
+export const pgFloatEncodeJson = (value: number): JsonValue => pgFloatEncode(value);
+
+export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
+  if (typeof json === 'number') return json;
+  if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
+  throw postgresError(
+    'RUNTIME.DECODE_FAILED',
+    `${codecId} database JSON value must be a number or the text NaN, Infinity or -Infinity`,
+    { meta: { codecId, received: typeof json } },
+  );
+};
+
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
@@ -170,12 +195,12 @@ const pgInt8NumberGuard = (
   return value;
 };
 
-export const pgInt8NumberEncodeJson = (value: number): number => {
+export const pgInt8NumberEncode = (value: number): string => {
   requireJsType('pg/int8number@1', 'number', value);
-  return pgInt8NumberGuard('RUNTIME.ENCODE_FAILED', value);
+  return String(pgInt8NumberGuard('RUNTIME.ENCODE_FAILED', value));
 };
 
-export const pgInt8NumberEncode = (value: number): string => String(pgInt8NumberEncodeJson(value));
+export const pgInt8NumberEncodeJson = (value: number): string => pgInt8NumberEncode(value);
 
 /**
  * Reads an `int8` wire value as a `number`, throwing outside ±(2^53 − 1) and on
@@ -196,14 +221,14 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
 };
 
 export const pgInt8NumberDecodeJson = (json: JsonValue): number => {
-  if (typeof json !== 'number') {
+  if (typeof json !== 'string') {
     throw postgresError(
       'RUNTIME.DECODE_FAILED',
-      'pg/int8number@1 database JSON value must be a number',
+      'pg/int8number@1 database JSON value must be decimal text',
       { meta: { codecId: 'pg/int8number@1', received: typeof json } },
     );
   }
-  return pgInt8NumberGuard('RUNTIME.DECODE_FAILED', json);
+  return pgInt8NumberDecode(json);
 };
 
 /**
@@ -214,6 +239,10 @@ export const pgInt8NumberDecodeJson = (json: JsonValue): number => {
  */
 export const decimalTextBigintLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? `${value}n` : undefined;
+
+/** Renders the decimal text of `pg/int8number@1`, whose application type is `number`, as a number literal. */
+export const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
+  typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
 export const pgNumericRenderOutputType = (typeParams: {
   readonly precision?: number;

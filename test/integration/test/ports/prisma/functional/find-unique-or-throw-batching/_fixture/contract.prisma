@@ -7,4 +7,5 @@
 //   }
 model User {
   id String @id
+  @@map("user")
 }

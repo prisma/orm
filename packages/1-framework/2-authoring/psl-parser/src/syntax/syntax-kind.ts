@@ -21,6 +21,8 @@ export type SyntaxKind =
   | 'FunctionCall'
   | 'ArrayLiteral'
   | 'StringLiteralExpr'
+  // `` tag`body` ``, `tag"body"`, or `tag'body'`: a QualifiedName, then a StringLiteralExpr.
+  | 'TaggedLiteral'
   | 'NumberLiteralExpr'
   | 'BooleanLiteralExpr'
   | 'ObjectLiteralExpr'

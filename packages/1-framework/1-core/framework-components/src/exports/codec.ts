@@ -8,8 +8,13 @@
 
 export type { Codec } from '../shared/codec';
 export { CodecImpl } from '../shared/codec';
-export type { AnyCodecDescriptor, CodecDescriptor } from '../shared/codec-descriptor';
-export { CodecDescriptorImpl } from '../shared/codec-descriptor';
+export type {
+  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
+  CodecDescriptor,
+  CodecDescriptorTemplate,
+} from '../shared/codec-descriptor';
+export { CodecDescriptorImpl, CodecDescriptorTemplateImpl } from '../shared/codec-descriptor';
 export type {
   CodecCallContext,
   CodecInstanceContext,
@@ -26,6 +31,19 @@ export type {
   ColumnTypeDescriptor,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
+export type {
+  Cast,
+  DataType,
+  DataTypeId,
+  DataTypeLookup,
+  DataTypeSpec,
+  ListCast,
+} from '../shared/data-type';
+export {
+  createDataTypeLookup,
+  dataType,
+  dataTypeId,
+} from '../shared/data-type';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

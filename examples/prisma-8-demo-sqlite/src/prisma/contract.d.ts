@@ -706,6 +706,8 @@ type ContractBase = Omit<
   readonly capabilities: {
     readonly sql: {
       readonly foreignKeys: true;
+      readonly insertOnConflictSkip: true;
+      readonly insertOnConflictWithoutTarget: true;
       readonly jsonAgg: true;
       readonly limit: true;
       readonly orderBy: true;

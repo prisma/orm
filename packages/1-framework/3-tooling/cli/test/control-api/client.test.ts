@@ -559,15 +559,9 @@ describe('ControlClient progress emission', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.failure.code).toBe('CONTRACT_SOURCE_INVALID');
-        expect(result.failure.diagnostics).toEqual({
-          summary: 'Contract source provider threw an exception',
-          diagnostics: [
-            {
-              code: 'PROVIDER_THROW',
-              message: 'Source load error',
-            },
-          ],
-        });
+        expect(result.failure.summary).toBe('Failed to resolve contract source');
+        expect(result.failure.why).toBe('Source load error');
+        expect(result.failure).not.toHaveProperty('diagnostics');
       }
 
       // Should emit resolveSource span with error outcome
@@ -609,7 +603,13 @@ describe('ControlClient progress emission', () => {
       if (!result.ok) {
         expect(result.failure.code).toBe('CONTRACT_SOURCE_INVALID');
         expect(result.failure.diagnostics?.summary).toBe('Provider failed');
-        expect(result.failure.diagnostics?.diagnostics).toHaveLength(1);
+        expect(result.failure.diagnostics?.diagnostics).toEqual([
+          {
+            code: 'PSL_INVALID_MODEL',
+            message: 'Model declaration is invalid',
+            sourceId: 'schema.prisma',
+          },
+        ]);
       }
     });
 

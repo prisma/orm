@@ -26,12 +26,14 @@ model User {
   email      String              @unique
   workspaces UsersOnWorkspaces[]
   name       String?
+  @@map("user")
 }
 
 model Workspace {
   id    String              @id @default(cuid(2))
   users UsersOnWorkspaces[]
   name  String
+  @@map("workspace")
 }
 
 model UsersOnWorkspaces {
@@ -41,4 +43,5 @@ model UsersOnWorkspaces {
   workspaceId String
 
   @@id([userId, workspaceId])
+  @@map("usersOnWorkspaces")
 }

@@ -5,6 +5,8 @@ import {
   type IExtensionManifest,
   registerExtension,
 } from '@codingame/monaco-vscode-api/extensions';
+import { SnippetController2 } from '@codingame/monaco-vscode-api/vscode/vs/editor/contrib/snippet/browser/snippetController2';
+import { KeyCode } from '@codingame/monaco-vscode-editor-api';
 import editorWorkerUrl from '@codingame/monaco-vscode-editor-api/esm/vs/editor/editor.worker?worker&url';
 import getFilesServiceOverride, {
   RegisteredFileSystemProvider,
@@ -173,7 +175,12 @@ async function main(): Promise<void> {
     },
     clientOptions: {
       documentSelector: [LANGUAGE_ID],
-      initializationOptions: { completion: { supportsTriggerSuggestCommand: true } },
+      initializationOptions: {
+        completion: {
+          supportsTriggerSuggestCommand: true,
+          supportsTriggerParameterHintsCommand: true,
+        },
+      },
       workspaceFolder: {
         index: 0,
         name: 'workspace',
@@ -212,6 +219,18 @@ async function main(): Promise<void> {
 
   const editorApp = new EditorApp(editorAppConfig);
   await editorApp.start(htmlContainer);
+
+  const editor = editorApp.getEditor();
+  const snippetHints = editor?.onKeyUp((event) => {
+    if (
+      event.keyCode === KeyCode.Tab &&
+      editor.getModel()?.getLanguageId() === LANGUAGE_ID &&
+      editor.getContribution<SnippetController2>(SnippetController2.ID)?.isInSnippet()
+    ) {
+      void vscode.commands.executeCommand('editor.action.triggerParameterHints');
+    }
+  });
+  editor?.onDidDispose(() => snippetHints?.dispose());
 
   const languageClientWrapper = new LanguageClientWrapper(languageClientConfig);
   await languageClientWrapper.start();

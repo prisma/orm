@@ -145,8 +145,9 @@ function getPositionalStringArg(attr: PslAttribute, index: number): string | und
   const raw = positional[index]?.value.trim();
   if (!raw) return undefined;
   const m = raw.match(/^(['"])(.*)\1$/);
-  if (!m) return undefined;
-  return unescapePslString(m[2] as string);
+  const unescaped = m?.[2];
+  if (unescaped === undefined) return undefined;
+  return unescapePslString(unescaped);
 }
 
 /**
@@ -281,7 +282,7 @@ function buildModelFkDeps(
       const refModel = relationReferencedModel(field, modelNames);
       if (!refModel || refModel === m.name) continue;
       if (!hasFullRelation(field)) continue;
-      (deps.get(m.name) as Set<string>).add(refModel);
+      deps.get(m.name)?.add(refModel);
     }
   }
 

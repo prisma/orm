@@ -143,13 +143,22 @@ export const mongoFamilyEntityTypes: AuthoringEntityTypeNamespace = {
 };
 
 const enumTypeBlockAttribute = blockAttribute('type', {
-  positional: [{ key: 'codecId', type: str() }],
+  documentation: 'Selects the storage codec for this enum.',
+  positional: [
+    {
+      key: 'codecId',
+      type: str(),
+      documentation: 'The fully qualified codec identifier used to store enum values.',
+    },
+  ],
 });
 
 export const mongoFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
     keyword: 'enum',
+    documentation:
+      'Defines an enum with named values and an inferred or explicitly selected storage codec.',
     discriminator: 'enum',
     name: { required: true },
     parameters: {},

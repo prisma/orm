@@ -139,6 +139,9 @@ export async function seedDbRef(options: {
 /**
  * The planner the fake target hands back. `plan` replays whatever operations
  * the test asked for; `emptyMigration` renders the stub `migration new` writes.
+ * With `throwOnOperations`, any scripted `operations` still resolve alongside
+ * the rejection — mirroring a real plan where some operations resolve and a
+ * placeholder op rejects.
  */
 export interface FakePlannerScript {
   readonly operations?: readonly MigrationPlanOperation[];
@@ -156,7 +159,10 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
               operations:
                 script.throwOnOperations === undefined
                   ? (script.operations ?? [ADDITIVE_OP]).map((op) => Promise.resolve(op))
-                  : [Promise.reject(script.throwOnOperations)],
+                  : [
+                      ...(script.operations ?? []).map((op) => Promise.resolve(op)),
+                      Promise.reject(script.throwOnOperations),
+                    ],
               renderTypeScript: () => '// planned migration\n',
             },
           }

@@ -29,21 +29,25 @@
 model User1 {
   email     String      @id
   relation1 Relation1[]
+  @@map("user1")
 }
 
 model Relation1 {
   id    String @id
   user  User1  @relation(fields: [email], references: [email])
   email String
+  @@map("relation1")
 }
 
 model User2 {
   id        String      @id
   relation2 Relation2[]
+  @@map("user2")
 }
 
 model Relation2 {
   field String @id
   user  User2  @relation(fields: [email], references: [id])
   email String
+  @@map("relation2")
 }

@@ -3,6 +3,7 @@
 model User {
   id Int @id
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -11,4 +12,5 @@ model Post {
   secondaryUserId Int
   primaryUser User @relation(fields: [primaryUserId], references: [id])
   secondaryUser User @relation(fields: [secondaryUserId], references: [id])
+  @@map("post")
 }

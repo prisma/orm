@@ -10,4 +10,5 @@
 model Resource {
   id     String @id
   bigint BigInt @unique
+  @@map("resource")
 }

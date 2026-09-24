@@ -6,4 +6,5 @@ model user {
   phone String?
   bio String?
   feature String?
+  @@map("user")
 }

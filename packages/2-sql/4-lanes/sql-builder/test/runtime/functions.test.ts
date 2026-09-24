@@ -437,7 +437,6 @@ describe('extension functions', () => {
     const vectorField: ScopeField = { codecId: 'pgvector/vector@1', nullable: false };
     const lowering = {
       targetFamily: 'sql' as const,
-      strategy: 'function' as const,
       template: '{{self}} <=> {{arg0}}',
     };
     const resultField: ScopeField = { codecId: 'pg/float8@1', nullable: false };

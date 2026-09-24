@@ -27,6 +27,7 @@ model User {
   id    String @id
   name  String @unique
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -34,6 +35,7 @@ model Post {
   title    String  @unique
   author   User    @relation(fields: [authorId], references: [id])
   authorId String
+  @@map("post")
 }
 
 model Compound {
@@ -45,4 +47,5 @@ model Compound {
 
   @@unique([field1, field2])
   @@id([id1, id2])
+  @@map("compound")
 }

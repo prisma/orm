@@ -210,7 +210,7 @@ describe('compileSelectWithIncludes', () => {
       self: ColumnRef.of('posts', 'embedding'),
       args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
       returns: { codecId: 'builtin/float8', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+      lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
     });
 
     const { collection } = createCollectionFor('Post');
@@ -239,7 +239,7 @@ describe('compileSelectWithIncludes', () => {
       self: ColumnRef.of('posts', 'embedding'),
       args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
       returns: { codecId: 'builtin/float8', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+      lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
     });
 
     const { collection } = createCollectionFor('Post');
@@ -268,7 +268,7 @@ describe('compileSelectWithIncludes', () => {
       self: ColumnRef.of('posts', 'embedding'),
       args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
       returns: { codecId: 'builtin/float8', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+      lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
     });
 
     const whereExpr = new BinaryExpr('lt', opExpr, LiteralExpr.of(0.2));
@@ -297,7 +297,7 @@ describe('compileSelectWithIncludes', () => {
       self: ColumnRef.of('posts', 'embedding'),
       args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
       returns: { codecId: 'builtin/float8', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+      lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
     });
 
     const whereExpr = new BinaryExpr('lt', opExpr, LiteralExpr.of(0.5));
@@ -307,7 +307,7 @@ describe('compileSelectWithIncludes', () => {
       self: ColumnRef.of('posts', 'embedding'),
       args: [ParamRef.of([4, 5, 6], { name: 'orderVec', codec: { codecId: 'pg/vector@1' } })],
       returns: { codecId: 'builtin/float8', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+      lowering: { targetFamily: 'sql', template: '{{self}} <=> {{arg0}}' },
     });
 
     const { collection } = createCollectionFor('Post');

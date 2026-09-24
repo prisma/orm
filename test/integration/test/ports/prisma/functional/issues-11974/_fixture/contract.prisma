@@ -24,12 +24,14 @@ model Comment {
   id             String        @id
   upVotedUsers   User[]        @relation("upVotes")
   downVotedUsers User[]        @relation("downVotes")
+  @@map("comment")
 }
 
 model User {
   uid               String    @id
   upVotedComments   Comment[] @relation("upVotes")
   downVotedComments Comment[] @relation("downVotes")
+  @@map("user")
 }
 
 model UpVote {
@@ -40,6 +42,7 @@ model UpVote {
   user    User    @relation("upVotes", fields: [userId], references: [uid])
 
   @@id([commentId, userId])
+  @@map("upVote")
 }
 
 model DownVote {
@@ -50,4 +53,5 @@ model DownVote {
   user    User    @relation("downVotes", fields: [userId], references: [uid])
 
   @@id([commentId, userId])
+  @@map("downVote")
 }
