@@ -142,6 +142,7 @@ namespace scoped {
       spec: sqlAttributeSpecs.model.base(),
       model,
       sources: input.sources,
+      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
       diagnostics,
     });
     expect(diagnostics.toExternal()).toEqual([]);

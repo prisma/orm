@@ -35,20 +35,25 @@ function build(text: string) {
     attributeSpecs: { model: {}, field: {} },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
-  return { sources, model, binder };
+  return { sources, model, binder, symbolTable };
 }
 
 function interpretFirst<Out>(
   text: string,
   spec: Parameters<typeof interpretAttribute<Out, ModelAttributeCtx>>[1],
 ) {
-  const { sources, model, binder } = build(text);
+  const { sources, model, binder, symbolTable } = build(text);
   const node = Array.from(model.node.attributes())[0];
   if (node === undefined) throw new Error('no attribute');
-  return interpretAttribute(node, spec, { sources, selfModel: model, binder });
+  return interpretAttribute(node, spec, {
+    sources,
+    symbols: symbolTable,
+    selfModel: model,
+    binder,
+  });
 }
 
 const listSpec = modelAttribute('index', {

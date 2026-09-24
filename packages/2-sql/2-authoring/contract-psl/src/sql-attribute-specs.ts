@@ -175,7 +175,7 @@ export function createSqlBinder(input: {
     },
     controlMutationDefaults: input.controlMutationDefaults ?? {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
     describeUnsupportedAttribute: input.describeUnsupportedAttribute,
   });

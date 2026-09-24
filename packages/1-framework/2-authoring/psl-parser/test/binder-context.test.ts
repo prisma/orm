@@ -73,7 +73,7 @@ function bind(text: string) {
       attributeSpecs: ATTRIBUTE_SPECS,
       controlMutationDefaults: {
         defaultFunctionRegistry: new Map(),
-        defaultLiteralTagRegistry: new Map(),
+        dataTypeEntries: {},
       },
     }),
   };
@@ -143,6 +143,7 @@ describe('fieldAttributeContext', () => {
     const post = symbolTable.topLevel.models['Post']!;
     const ctx = fieldAttributeContext({
       binder,
+      symbols: symbolTable,
       sources,
       model: post,
       field: post.fields['author']!,
@@ -162,6 +163,7 @@ describe('fieldAttributeContext', () => {
     const cart = symbolTable.topLevel.models['Cart']!;
     const ctx = fieldAttributeContext({
       binder,
+      symbols: symbolTable,
       sources,
       model: cart,
       field: cart.fields['user']!,
@@ -175,7 +177,7 @@ describe('modelAttributeContext', () => {
   it('carries the sources and the declaring model', () => {
     const { sources, symbolTable, binder } = bind(RELATION_SCHEMA);
     const post = symbolTable.topLevel.models['Post']!;
-    const ctx = modelAttributeContext({ binder, sources, model: post });
+    const ctx = modelAttributeContext({ binder, sources, symbols: symbolTable, model: post });
 
     expect(ctx.sources).toBe(sources);
     expect(ctx.selfModel).toBe(post);

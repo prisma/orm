@@ -1,7 +1,7 @@
 import type { FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
 import { type Binder, typeReferenceNode } from './binder';
 import type { PslSources } from './source-file';
-import type { FieldSymbol, ModelSymbol } from './symbol-table';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from './symbol-table';
 
 export function referencedModel(binder: Binder, field: FieldSymbol): ModelSymbol | undefined {
   const node = typeReferenceNode(field);
@@ -13,6 +13,7 @@ export function referencedModel(binder: Binder, field: FieldSymbol): ModelSymbol
 export interface AttributeContextInput {
   readonly binder: Binder;
   readonly sources: PslSources;
+  readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
 }
 
@@ -23,12 +24,18 @@ export interface FieldAttributeContextInput extends AttributeContextInput {
 }
 
 export function modelAttributeContext(input: ModelAttributeContextInput): ModelAttributeCtx {
-  return { sources: input.sources, binder: input.binder, selfModel: input.model };
+  return {
+    sources: input.sources,
+    symbols: input.symbols,
+    binder: input.binder,
+    selfModel: input.model,
+  };
 }
 
 export function fieldAttributeContext(input: FieldAttributeContextInput): FieldAttributeCtx {
   return {
     sources: input.sources,
+    symbols: input.symbols,
     binder: input.binder,
     selfModel: input.model,
     field: input.field,

@@ -132,9 +132,11 @@ export {
 export type {
   DeclarationFor,
   EntityDeclaration,
+  EntityLookup,
   EntitySelector,
   ResolvedEntityReference,
 } from '../entity-reference';
+export { lookupEntityReference, lookupEntityReferenceInTable } from '../entity-reference';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,
@@ -143,6 +145,8 @@ export {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from '../resolve';
+export type { Scope, ScopeResolution } from '../scope-chain';
+export { lookupIn, qualifiedChain, unqualifiedChain } from '../scope-chain';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,

@@ -48,11 +48,10 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
     attributeSpecs: { model: {}, field: {} },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
-  return { sources,
-    symbols: symbolTable, selfModel, field, binder };
+  return { sources, symbols: symbolTable, selfModel, field, binder };
 }
 
 function schemaArg(schema: string, attribute: string, argName?: string) {
@@ -87,7 +86,7 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
     },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
   for (const node of field.node.attributes()) {
@@ -100,7 +99,7 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
       if (element === undefined) throw new Error('expected a list element');
       return {
         expr: element,
-        ctx: { sources: registry, selfModel: model, field, binder },
+        ctx: { sources: registry, symbols: symbolTable, selfModel: model, field, binder },
       };
     }
   }

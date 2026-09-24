@@ -36,11 +36,10 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
     attributeSpecs: { model: {}, field: {} },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
-  return { sources,
-    symbols: symbolTable, selfModel, field, binder };
+  return { sources, symbols: symbolTable, selfModel, field, binder };
 }
 
 function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttributeCtx } {

@@ -2109,7 +2109,10 @@ export function interpretPslDocumentToSqlContract(
     symbolTable: input.symbolTable,
     sources: input.sources,
     authoringContributions: input.authoringContributions,
-    controlMutationDefaults: input.controlMutationDefaults,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
+      dataTypeEntries: input.authoringContributions?.dataTypes ?? {},
+    },
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     contributedModelAttributeSpecs: contributedModelSpecs,
     describeUnsupportedAttribute: describeUnsupportedSqlAttribute({

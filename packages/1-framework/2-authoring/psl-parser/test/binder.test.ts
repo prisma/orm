@@ -71,7 +71,7 @@ const MODEL_SPECS = {
   base: () =>
     modelAttribute('base', {
       documentation: 'fixture',
-      positional: [{ key: 'model', type: entityRef(), documentation: 'fixture' }],
+      positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
     }),
   map: () =>
     modelAttribute('map', {
@@ -98,7 +98,7 @@ const ATTRIBUTE_SPECS = { model: MODEL_SPECS, field: FIELD_SPECS };
 
 const NO_CONTROL_DEFAULTS = {
   defaultFunctionRegistry: new Map(),
-  defaultLiteralTagRegistry: new Map(),
+  dataTypeEntries: {},
 };
 
 function attributeNodes(
@@ -260,6 +260,7 @@ describe('createBinder — the scope chain', () => {
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'app.Inside', 'account'))).toEqual({
       kind: 'model',
       symbol: symbolTable.topLevel.namespaces['app']!.models['Account'],
+      namespace: symbolTable.topLevel.namespaces['app'],
     });
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Outside', 'account'))).toEqual({
       kind: 'model',
@@ -366,6 +367,7 @@ describe('createBinder — qualified references', () => {
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'item'))).toEqual({
       kind: 'model',
       symbol: symbolTable.topLevel.namespaces['app']!.models['Item'],
+      namespace: symbolTable.topLevel.namespaces['app'],
     });
   });
 
@@ -478,6 +480,7 @@ describe('createBinder — multiple documents', () => {
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'app.Cart', 'item'))).toEqual({
       kind: 'model',
       symbol: symbolTable.topLevel.namespaces['app']!.models['Item'],
+      namespace: symbolTable.topLevel.namespaces['app'],
     });
   });
 });
@@ -805,6 +808,7 @@ describe('createBinder — entityRef arguments', () => {
     expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
       kind: 'model',
       symbol: symbolTable.topLevel.namespaces['app']!.models['Base'],
+      namespace: symbolTable.topLevel.namespaces['app'],
     });
   });
 
@@ -840,11 +844,7 @@ describe('createBinder — entityRef arguments', () => {
       kind: 'block',
       symbol: symbolTable.topLevel.blocks['Role'],
     });
-    expect(diagnostics.map(({ message }) => message)).toEqual([
-      'Cannot find entity "Ghost"',
-      '"String" is a scalar type; an entity reference must name a model or composite type',
-      '"Role" is an enum; an entity reference must name a model or composite type',
-    ]);
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find entity "Ghost"']);
   });
 });
 
@@ -870,13 +870,12 @@ describe('createBinder — one kind-blind scope chain', () => {
     const app = symbolTable.topLevel.namespaces['app']!;
     const node = attributeNodes(app.models['Bar']!, 'base')[0]!;
 
-    expect(binder.symbolForNode(node)).toEqual({ kind: 'block', symbol: app.blocks['Foo'] });
-    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
-      [
-        'PSL_UNRESOLVED_REFERENCE',
-        '"Foo" is an enum; an entity reference must name a model or composite type',
-      ],
-    ]);
+    expect(binder.symbolForNode(node)).toEqual({
+      kind: 'block',
+      symbol: app.blocks['Foo'],
+      namespace: app,
+    });
+    expect(diagnostics).toEqual([]);
   });
 
   it('resolves a type reference through the same shadowing chain', () => {
@@ -886,6 +885,7 @@ describe('createBinder — one kind-blind scope chain', () => {
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'app.Bar', 'kind'))).toEqual({
       kind: 'block',
       symbol: app.blocks['Foo'],
+      namespace: app,
     });
   });
 
@@ -917,7 +917,6 @@ describe('createBinder — one kind-blind scope chain', () => {
     });
     expect(diagnostics.map(({ message }) => message)).toEqual([
       '"app" is a namespace; a type reference must name a model, composite type, enum, or named type',
-      '"app" is a namespace; an entity reference must name a model or composite type',
     ]);
   });
 
@@ -993,7 +992,7 @@ describe('attribute-spec registry shape', () => {
     });
     const base = modelAttribute('base', {
       documentation: 'fixture',
-      positional: [{ key: 'model', type: entityRef(), documentation: 'fixture' }],
+      positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
     });
     const relation = fieldAttribute('relation', {
       documentation: 'fixture',
@@ -1110,6 +1109,7 @@ describe('createBinder — prototype-named declarations', () => {
     expect(binder.symbolForNode(attributeNodes(namespaced.models['Basket']!, 'base')[0]!)).toEqual({
       kind: 'model',
       symbol: namespaced.models['toString'],
+      namespace: namespaced,
     });
   });
 

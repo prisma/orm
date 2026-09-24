@@ -3,14 +3,11 @@ import type { ControlDefaultRegistries } from '@internal/framework-components/co
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type { AttributeSpecNamespace } from './attribute-spec/spec-context';
 import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
-import {
-  type ContributedTypeScope,
-  type ContributedTypeSymbol,
-  contributedTypeScope,
-} from './contributed-type-scope';
+import { type ContributedTypeScope, contributedTypeScope } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
 import type { ParseDiagnostic } from './parse';
 import type { ResolvedAttribute } from './resolve';
+import { lookupIn, qualifiedChain, type ScopeResolution, unqualifiedChain } from './scope-chain';
 import type { PslSources } from './source-file';
 import type {
   BlockSymbol,
@@ -50,12 +47,7 @@ export type PslSymbol =
   | FieldSymbol;
 
 export type Resolution =
-  | { readonly kind: 'model'; readonly symbol: ModelSymbol }
-  | { readonly kind: 'compositeType'; readonly symbol: CompositeTypeSymbol }
-  | { readonly kind: 'namedType'; readonly symbol: NamedTypeSymbol }
-  | { readonly kind: 'block'; readonly symbol: BlockSymbol }
-  | { readonly kind: 'namespace'; readonly symbol: NamespaceSymbol }
-  | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
+  | ScopeResolution
   | { readonly kind: 'field'; readonly symbol: FieldSymbol }
   | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
   | { readonly kind: 'crossSpace' }
@@ -332,14 +324,6 @@ function resolveEntity(name: string, node: SyntaxNode, ctx: BindContext): Resolu
     report(`Cannot find entity "${name}"`, node, ctx, 'entity');
     return { kind: 'unresolved', name };
   }
-  if (found.kind !== 'model' && found.kind !== 'compositeType') {
-    report(
-      `"${name}" is ${describeResolution(found)}; an entity reference must name a model or composite type`,
-      node,
-      ctx,
-      'entity',
-    );
-  }
   return found;
 }
 
@@ -388,102 +372,6 @@ function* entities(symbolTable: SymbolTable): Iterable<ScopedEntity> {
   for (const scope of Object.values(topLevel.namespaces)) {
     for (const entity of Object.values(scope.models)) yield { scope, entity };
     for (const entity of Object.values(scope.compositeTypes)) yield { scope, entity };
-  }
-}
-
-interface Scope {
-  lookup(name: string): Resolution | undefined;
-}
-
-function namespaceScope(namespace: NamespaceSymbol): Scope {
-  return {
-    lookup(name) {
-      const model = namespace.models[name];
-      if (model !== undefined) return { kind: 'model', symbol: model };
-      const compositeType = namespace.compositeTypes[name];
-      if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-      const block = namespace.blocks[name];
-      if (block !== undefined) return { kind: 'block', symbol: block };
-      return undefined;
-    },
-  };
-}
-
-function topLevelScope(topLevel: TopLevelScope): Scope {
-  return {
-    lookup(name) {
-      const model = topLevel.models[name];
-      if (model !== undefined) return { kind: 'model', symbol: model };
-      const compositeType = topLevel.compositeTypes[name];
-      if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-      const namedType = topLevel.namedTypes[name];
-      if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
-      const block = topLevel.blocks[name];
-      if (block !== undefined) return { kind: 'block', symbol: block };
-      const namespace = topLevel.namespaces[name];
-      if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
-      return undefined;
-    },
-  };
-}
-
-function contributedScope(
-  contributedTypes: ContributedTypeScope,
-  prefix: readonly string[],
-): Scope {
-  return {
-    lookup(name) {
-      const symbol = contributedTypes.lookup([...prefix, name]);
-      return symbol === undefined ? undefined : { kind: 'contributedType', symbol };
-    },
-  };
-}
-
-function unqualifiedChain(
-  scope: NamespaceSymbol | undefined,
-  topLevel: TopLevelScope,
-  contributedTypes: ContributedTypeScope,
-): readonly Scope[] {
-  const outer = [topLevelScope(topLevel), contributedScope(contributedTypes, [])];
-  return scope === undefined ? outer : [namespaceScope(scope), ...outer];
-}
-
-function qualifiedChain(
-  namespaceId: string,
-  topLevel: TopLevelScope,
-  contributedTypes: ContributedTypeScope,
-): readonly Scope[] {
-  const namespace = topLevel.namespaces[namespaceId];
-  const contributed = contributedScope(contributedTypes, [namespaceId]);
-  return namespace === undefined ? [contributed] : [namespaceScope(namespace), contributed];
-}
-
-function lookupIn(chain: readonly Scope[], name: string): Resolution | undefined {
-  for (const scope of chain) {
-    const found = scope.lookup(name);
-    if (found !== undefined) return found;
-  }
-  return undefined;
-}
-
-function describeResolution(resolution: Resolution): string {
-  switch (resolution.kind) {
-    case 'model':
-      return 'a model';
-    case 'compositeType':
-      return 'a composite type';
-    case 'namedType':
-      return 'a named type';
-    case 'block':
-      return resolution.symbol.keyword === 'enum'
-        ? 'an enum'
-        : `a ${resolution.symbol.keyword} block`;
-    case 'namespace':
-      return 'a namespace';
-    case 'contributedType':
-      return 'a scalar type';
-    default:
-      return 'not a declaration';
   }
 }
 

@@ -51,7 +51,7 @@ const relationSpec = fieldAttribute('relation', {
 
 const baseSpec = modelAttribute('base', {
   documentation: 'fixture',
-  positional: [{ key: 'model', type: entityRef(), documentation: 'fixture' }],
+  positional: [{ key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' }],
 });
 
 const indexSpec = modelAttribute('index', {
@@ -79,7 +79,7 @@ function bind(text: string) {
     attributeSpecs: ATTRIBUTE_SPECS,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
   return { sources, symbolTable, binder, binderDiagnostics: diagnostics };
@@ -113,7 +113,7 @@ function interpretRelation(text: string) {
   const { sources, symbolTable, binder, binderDiagnostics } = bind(text);
   const post = symbolTable.topLevel.models['Post']!;
   const field = post.fields['author']!;
-  const ctx = fieldAttributeContext({ binder, sources, model: post, field });
+  const ctx = fieldAttributeContext({ binder, sources, symbols: symbolTable, model: post, field });
   return {
     binderDiagnostics,
     result: interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx),
@@ -174,11 +174,11 @@ describe('reference combinators with a binder-backed context', () => {
       'model Child {\n  id Int\n  @@base(Ghost)\n}',
     );
     const child = symbolTable.topLevel.models['Child']!;
-    const ctx = modelAttributeContext({ binder, sources, model: child });
+    const ctx = modelAttributeContext({ binder, sources, symbols: symbolTable, model: child });
     const result = interpretAttribute(modelAttributeNode(child, 'base'), baseSpec, ctx);
 
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toEqual({ model: 'Ghost' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
     expect(binderDiagnostics.map(({ code, message }) => [code, message])).toEqual([
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find entity "Ghost"'],
     ]);
@@ -194,7 +194,13 @@ describe('reference combinators with a binder-backed context', () => {
     const { sources, symbolTable, binder, binderDiagnostics } = bind(schema);
     const post = symbolTable.topLevel.models['Post']!;
     const field = post.fields['author']!;
-    const ctx = fieldAttributeContext({ binder, sources, model: post, field });
+    const ctx = fieldAttributeContext({
+      binder,
+      sources,
+      symbols: symbolTable,
+      model: post,
+      field,
+    });
     const result = interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx);
 
     expect(result.ok).toBe(true);
@@ -207,7 +213,7 @@ describe('reference combinators with a binder-backed context', () => {
       'model User {\n  id Int\n  @@index("id")\n}',
     );
     const user = symbolTable.topLevel.models['User']!;
-    const ctx = modelAttributeContext({ binder, sources, model: user });
+    const ctx = modelAttributeContext({ binder, sources, symbols: symbolTable, model: user });
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
     expect(result.ok).toBe(false);
@@ -224,7 +230,7 @@ describe('reference combinators with a binder-backed context', () => {
       'model User {\n  id Int\n  @@index(["id"])\n}',
     );
     const user = symbolTable.topLevel.models['User']!;
-    const ctx = modelAttributeContext({ binder, sources, model: user });
+    const ctx = modelAttributeContext({ binder, sources, symbols: symbolTable, model: user });
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
     expect(result.ok).toBe(false);
@@ -241,7 +247,7 @@ describe('the binder is the only resolution path', () => {
       'model User {\n  id Int\n  @@index([nope])\n}',
     );
     const user = symbolTable.topLevel.models['User']!;
-    const ctx = modelAttributeContext({ binder, sources, model: user });
+    const ctx = modelAttributeContext({ binder, sources, symbols: symbolTable, model: user });
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
     expect(result.ok).toBe(false);
@@ -256,7 +262,7 @@ describe('the binder is the only resolution path', () => {
       'model User {\n  id Int\n  @@index([id])\n}',
     );
     const user = symbolTable.topLevel.models['User']!;
-    const ctx = modelAttributeContext({ binder, sources, model: user });
+    const ctx = modelAttributeContext({ binder, sources, symbols: symbolTable, model: user });
     const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
     expect(result.ok).toBe(true);
@@ -273,6 +279,7 @@ describe('a binder built over another snapshot', () => {
     const field = post.fields['author']!;
     const ctx = fieldAttributeContext({
       binder: first.binder,
+      symbols: second.symbolTable,
       sources: second.sources,
       model: post,
       field,
@@ -287,7 +294,13 @@ describe('a binder built over another snapshot', () => {
     const { sources, symbolTable, binder } = bind(RELATION_SCHEMA);
     const post = symbolTable.topLevel.models['Post']!;
     const field = post.fields['author']!;
-    const ctx = fieldAttributeContext({ binder, sources, model: post, field });
+    const ctx = fieldAttributeContext({
+      binder,
+      sources,
+      symbols: symbolTable,
+      model: post,
+      field,
+    });
 
     const result = interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx);
 

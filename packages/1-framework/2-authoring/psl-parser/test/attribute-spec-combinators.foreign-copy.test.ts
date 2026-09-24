@@ -46,18 +46,18 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
     attributeSpecs: { model: {}, field: {} },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
   return {
-  arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
-  ctx: {
-    sources,
-    symbols: symbolTable,
-    selfModel,
-    binder,
-  },
-};
+    arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
+    ctx: {
+      sources,
+      symbols: symbolTable,
+      selfModel,
+      binder,
+    },
+  };
 }
 
 describe('combinators dispatch on syntax kind, not on AST class identity', () => {
@@ -99,14 +99,14 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
   });
 
   it('funcCall accepts a node from another module copy', () => {
-  const { arg, ctx } = foreignArg('now()');
+    const { arg, ctx } = foreignArg('now()');
 
-  const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
-    arg,
-    ctx,
-  );
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      arg,
+      ctx,
+    );
 
-  expect(result.ok).toBe(true);
-  if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });
-});
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });
+  });
 });

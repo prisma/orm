@@ -1,3 +1,6 @@
+import { InternalError } from '@internal/utils/internal-error';
+import type { Binder, Resolution } from './binder';
+import { lookupIn, unqualifiedChain } from './scope-chain';
 import type {
   BlockSymbol,
   CompositeTypeSymbol,
@@ -5,7 +8,6 @@ import type {
   NamedTypeSymbol,
   NamespaceSymbol,
   SymbolTable,
-  TopLevelScope,
 } from './symbol-table';
 import { NamespaceDeclarationAst } from './syntax/ast/declarations';
 import type { ExpressionAst } from './syntax/ast/expressions';
@@ -28,62 +30,76 @@ export interface ResolvedEntityReference<D extends EntityDeclaration = EntityDec
   readonly namespace: NamespaceSymbol | undefined;
 }
 
-const references = new WeakMap<
-  TopLevelScope | NamespaceSymbol,
-  WeakMap<EntityDeclaration, ResolvedEntityReference>
->();
+export type EntityLookup =
+  | { readonly kind: 'entity'; readonly reference: ResolvedEntityReference }
+  | { readonly kind: 'unresolved'; readonly voiced: boolean }
+  | { readonly kind: 'notAnEntity'; readonly described: string };
 
-export function resolveEntityReference(
+const references = new WeakMap<EntityDeclaration, ResolvedEntityReference>();
+
+export function lookupEntityReference(expression: ExpressionAst, binder: Binder): EntityLookup {
+  const resolution = binder.symbolForNode(expression.syntax);
+  if (resolution === undefined) {
+    throw new InternalError(
+      'The binder on this attribute context bound nothing for this entity reference. A reference argument is always examined, so the binder must be built over the same snapshot - the same symbol table and sources - as the interpretation consuming it.',
+    );
+  }
+  return classify(resolution, true);
+}
+
+export function lookupEntityReferenceInTable(
   expression: ExpressionAst,
   name: string,
   symbols: SymbolTable,
-): ResolvedEntityReference | undefined {
+): EntityLookup {
   const namespaceName = expression.syntax
     .findAncestor(NamespaceDeclarationAst.cast)
     ?.name()
     ?.name();
   const namespace =
-    namespaceName === undefined ? undefined : ownValue(symbols.topLevel.namespaces, namespaceName);
-  if (namespace !== undefined) {
-    const declaration = declarationIn(namespace, name);
-    if (declaration !== undefined) return referenceFor(namespace, declaration, namespace);
+    namespaceName === undefined ? undefined : symbols.topLevel.namespaces[namespaceName];
+  const found = lookupIn(unqualifiedChain(namespace, symbols.topLevel), name);
+  if (found === undefined) return { kind: 'unresolved', voiced: false };
+  return classify(found, false);
+}
+
+function classify(resolution: Resolution, voiced: boolean): EntityLookup {
+  switch (resolution.kind) {
+    case 'model':
+    case 'compositeType':
+    case 'namedType':
+    case 'block':
+      return { kind: 'entity', reference: referenceFor(resolution) };
+    case 'unresolved':
+      return { kind: 'unresolved', voiced };
+    default:
+      return { kind: 'notAnEntity', described: describeNonEntity(resolution) };
   }
-  const declaration = declarationIn(symbols.topLevel, name);
-  return declaration === undefined
-    ? undefined
-    : referenceFor(symbols.topLevel, declaration, undefined);
 }
 
-function ownValue<T>(values: Readonly<Record<string, T>>, name: string): T | undefined {
-  return Object.hasOwn(values, name) ? values[name] : undefined;
-}
-
-function declarationIn(
-  scope: TopLevelScope | NamespaceSymbol,
-  name: string,
-): EntityDeclaration | undefined {
-  return (
-    ownValue(scope.models, name) ??
-    ownValue(scope.compositeTypes, name) ??
-    ownValue(scope.blocks, name) ??
-    ('namedTypes' in scope ? ownValue(scope.namedTypes, name) : undefined)
-  );
+function describeNonEntity(resolution: Resolution): string {
+  switch (resolution.kind) {
+    case 'namespace':
+      return 'namespace';
+    case 'contributedType':
+      return 'scalar type';
+    case 'field':
+      return 'field';
+    case 'attribute':
+      return 'attribute';
+    default:
+      return 'cross-space reference';
+  }
 }
 
 function referenceFor(
-  scope: TopLevelScope | NamespaceSymbol,
-  declaration: EntityDeclaration,
-  namespace: NamespaceSymbol | undefined,
+  resolution: Extract<Resolution, { kind: 'model' | 'compositeType' | 'namedType' | 'block' }>,
 ): ResolvedEntityReference {
-  let byDeclaration = references.get(scope);
-  if (byDeclaration === undefined) {
-    byDeclaration = new WeakMap();
-    references.set(scope, byDeclaration);
-  }
-  let reference = byDeclaration.get(declaration);
+  const declaration = resolution.symbol;
+  let reference = references.get(declaration);
   if (reference === undefined) {
-    reference = { declaration, namespace };
-    byDeclaration.set(declaration, reference);
+    reference = { declaration, namespace: resolution.namespace };
+    references.set(declaration, reference);
   }
   return reference;
 }
