@@ -126,6 +126,23 @@ describe(
         expect(inputs.reinit).toBe(true);
       });
 
+      it("counts init's own prisma.config.ts beside a prisma7.config.ts as a file to replace", async () => {
+        writePrisma7Schema();
+        writeProjectFile('prisma.config.ts', PRISMA8_CONFIG);
+        writeProjectFile('prisma7.config.ts', PRISMA7_CONFIG);
+        writeProjectFile('prisma-8.md', '');
+        const question =
+          'Re-initializing replaces prisma.config.ts and prisma-8.md with a fresh scaffold, losing anything you wrote in them.';
+        const { prompt, calls } = scriptedPrompt({ [question]: true });
+
+        const inputs = await resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
+
+        expect(
+          calls.filter((call) => call.kind === 'consent').map((call) => call.question),
+        ).toEqual([question]);
+        expect(inputs.reinit).toBe(true);
+      });
+
       it('does not count a Prisma 7 prisma.config.ts as a file to replace', async () => {
         writePrisma7Schema();
         writeProjectFile('prisma.config.ts', PRISMA7_CONFIG);

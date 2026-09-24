@@ -435,9 +435,11 @@ async function resolvePrisma7Inputs(ctx: {
     });
   }
 
+  const prisma7ConfigOccupiesConfigFile = config.kind === 'prisma7' && config.path === CONFIG_FILE;
   const replaced = generatedFilesPrisma7PathReplaces().filter(
     (relative) =>
-      (relative !== CONFIG_FILE || config.kind === 'prisma8') && existsSync(join(cwd, relative)),
+      (relative !== CONFIG_FILE || !prisma7ConfigOccupiesConfigFile) &&
+      existsSync(join(cwd, relative)),
   );
   const reinit = await requireReinitConsent({ cwd, prompt, replaced, added: check.added });
 
