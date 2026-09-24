@@ -25,6 +25,8 @@ describe('tsquery', () => {
     ],
     ['spaces, kept inside the term', ' new  york ', "' new  york ':*"],
     ['an empty value, as a single space', '', "' ':*"],
+    ['a trailing backslash, escaped', 'abc\\', "'abc\\\\':*"],
+    ['a value made only of quotes', "'''", "'''''''':*"],
   ])('quotes %s as one term', (_label, value, expected) => {
     expect(assembled(tsquery`${value}:*`)).toBe(expected);
   });
@@ -56,6 +58,21 @@ describe('tsquery', () => {
 
     expect(ast.args).toEqual([LiteralExpr.of('german')]);
     expect(ast.self).toEqual(ParamRef.of("'zebra':*", { codec: { codecId: 'pg/text@1' } }));
+  });
+
+  it('rejects a literal part JavaScript could not read, rather than dropping it', () => {
+    expect(() => tsquery`\unicode & ${'zebra'}:*`).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.ARGUMENT_INVALID',
+        meta: expect.objectContaining({ argument: 'literal part 0' }),
+      }),
+    );
+    expect(() => tsquery`${'zebra'}:* & \x`).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.ARGUMENT_INVALID',
+        meta: expect.objectContaining({ argument: 'literal part 1' }),
+      }),
+    );
   });
 
   it('rejects a language Postgres has no configuration for, before any template', () => {

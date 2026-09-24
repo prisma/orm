@@ -17,7 +17,7 @@ type TextualSelfSpec = { readonly traits: readonly ['textual'] };
 
 type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual'], false, CT>;
 
-type TextArgument<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
+type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
 /**
  * The query side of a full-text operation: a `tsquery` expression from one of the parsers in
@@ -35,7 +35,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
       readonly self: TextualSelfSpec;
       readonly impl: (
         self: TextualSelf<CT>,
-        pattern: TextArgument<CT>,
+        pattern: TextOperand<CT>,
       ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
     };
     readonly fullTextMatches: {

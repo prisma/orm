@@ -1,3 +1,4 @@
+import { postgresError } from './errors';
 import { languageLiteral } from './full-text-options';
 import { type TsqueryExpression, type TsqueryParserOptions, toTsquery } from './full-text-parsers';
 import { DEFAULT_FULL_TEXT_SEARCH_LANGUAGE } from './text-search-languages';
@@ -12,10 +13,30 @@ function quotedTerm(value: string): string {
   return value === '' ? "' '" : `'${value.replaceAll('\\', '\\\\').replaceAll("'", "''")}'`;
 }
 
+function literalPart(strings: TemplateStringsArray, index: number): string {
+  const part = strings[index];
+  if (part === undefined) {
+    throw postgresError(
+      'RUNTIME.ARGUMENT_INVALID',
+      `tsquery: literal part ${index} of the template has an invalid escape sequence.`,
+      {
+        why: 'JavaScript gives a template tag no text for a literal part with an invalid escape such as \\u or \\x, so the tsquery syntax written there would be lost.',
+        fix: 'Write a literal backslash as \\\\, or remove the escape.',
+        meta: {
+          helper: 'tsquery',
+          argument: `literal part ${index}`,
+          received: strings.raw[index],
+        },
+      },
+    );
+  }
+  return part;
+}
+
 function assemble(strings: TemplateStringsArray, values: readonly string[]): string {
   return values.reduce(
-    (text, value, i) => `${text}${quotedTerm(value)}${strings[i + 1] ?? ''}`,
-    strings[0] ?? '',
+    (text, value, i) => `${text}${quotedTerm(value)}${literalPart(strings, i + 1)}`,
+    literalPart(strings, 0),
   );
 }
 
@@ -33,6 +54,11 @@ function isTemplate(
  * becomes exactly one quoted term, so it cannot add operators or break the syntax, whatever it
  * contains; an empty value adds no words, like a stop word. The whole text is one bound parameter,
  * parsed by Postgres `to_tsquery`, which lowercases and stems every word.
+ *
+ * A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives
+ * `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word.
+ * Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error
+ * for every input.
  *
  * `` tsquery`...` `` uses `english`; `` tsquery({ language })`...` `` picks the configuration.
  */

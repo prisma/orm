@@ -1378,9 +1378,13 @@ pgInetColumn satisfies ColumnHelperForStrict<PgInetDescriptor>;
 const PG_TSQUERY_NATIVE_TYPE = 'tsquery';
 
 /**
- * The same type as `RawTsquery`, declared again rather than imported: a named, exported type in
- * `CodecTypes` makes every consumer declaration that expands `CodecTypes` reference a private
- * build chunk (TS2742). `full-text.test-d.ts` checks that the two stay equal.
+ * The same type as `RawTsquery`, declared again rather than imported. If `CodecTypes` names
+ * `RawTsquery`, a consumer declaration that expands `CodecTypes` must name it too, and TypeScript
+ * finds it only through a subpath that consumer already imports. `PgInterval` relies on that by
+ * being exported from both `codec-types` and `codecs`; exporting `RawTsquery` from `codec-types`
+ * alone still fails the `@internal/postgres` build with TS2742, because that package imports
+ * `codecs`. This unexported copy needs no name, so it works for every consumer and keeps
+ * `full-text` the only public home of `RawTsquery`. `full-text.test-d.ts` checks the two are equal.
  */
 type TsqueryText = string & { readonly __rawTsquery: true };
 
