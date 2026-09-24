@@ -51,7 +51,7 @@ test('pack field presets appear on field with the codec their preset names', () 
     expectTypeOf(field.temporal.updatedAt()).toEqualTypeOf<
       DateField<{ readonly onCreate: TimestampNow; readonly onUpdate: TimestampNow }>
     >();
-    expectTypeOf(field.temporal.timestamp()).toEqualTypeOf<DateField<{}>>();
+    expectTypeOf(field.temporal.timestamp()).toEqualTypeOf<DateField<Record<never, never>>>();
     expectTypeOf(field.temporal.timestamp(undefined, 'now')).toEqualTypeOf<
       DateField<{ readonly onCreate?: TimestampNow; readonly onUpdate?: TimestampNow }>
     >();

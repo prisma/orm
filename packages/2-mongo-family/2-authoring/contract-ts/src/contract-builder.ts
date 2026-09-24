@@ -1057,12 +1057,17 @@ function composeMongoFieldHelpers(
   return { ...field, ...presetHelpers };
 }
 
-function composeMongoAuthoringHelpers(
-  family: FamilyPackRef<string>,
-  target: TargetPackRef<string, string>,
-  extensions: Record<string, ExtensionPackRef<string, string>> | undefined,
-): Record<string, unknown> {
-  const components = [family, target, ...Object.values(extensions ?? {})];
+function composeMongoAuthoringHelpers<
+  Family extends FamilyPackRef<string>,
+  Target extends TargetPackRef<string, string>,
+  Extensions extends Record<string, ExtensionPackRef<string, string>> | undefined,
+>(
+  family: Family,
+  target: Target,
+  extensions: Extensions | undefined,
+): ContractAuthoringHelpers<Family, Target, Extensions> {
+  const extensionPacks: Record<string, ExtensionPackRef<string, string>> = extensions ?? {};
+  const components = [family, target, ...Object.values(extensionPacks)];
   const entityNamespace = composePackAuthoringNamespace(components, 'entityTypes');
   const fieldNamespace = composePackAuthoringNamespace(components, 'field');
   assertNoCrossRegistryCollisions({}, fieldNamespace, entityNamespace);
@@ -1080,7 +1085,10 @@ function composeMongoAuthoringHelpers(
       { meta: { reason: 'reserved-helper-key-collision', contribution: collisions } },
     );
   }
-  return {
+  return blindCast<
+    ContractAuthoringHelpers<Family, Target, Extensions>,
+    'entity and field preset helpers are built by a runtime walk of the pack namespaces, which returns Record<string, unknown>; their static shape comes from the pack type parameters'
+  >({
     ...createEntityHelpersFromNamespace(entityNamespace, {
       ctx: { family: family.familyId, target: target.targetId },
     }),
@@ -1089,7 +1097,7 @@ function composeMongoAuthoringHelpers(
     model,
     rel,
     valueObject,
-  };
+  });
 }
 
 export type ContractScaffold<
@@ -2522,14 +2530,11 @@ export function buildBoundContract<
   const full = { ...definition, family, target };
 
   if (factory !== undefined) {
-    // composeMongoAuthoringHelpers returns Record<string, unknown> via an opaque runtime
-    // namespace walk; there is no way to reconstruct ContractAuthoringHelpers<F,T,Ext>
-    // structurally from that return type, so this single cast is irreducible.
-    const helpers = composeMongoAuthoringHelpers(
+    const helpers = composeMongoAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>(
       family,
       target,
       definition.extensions,
-    ) as unknown as ContractAuthoringHelpers<F, T, NonNullable<Definition['extensions']>>;
+    );
     const built = factory(helpers);
     return buildContractFromDefinition({
       ...full,
