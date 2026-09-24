@@ -1,6 +1,6 @@
 # Project plan — mongo-defaults-codecs-prisma6-source
 
-**Spec:** `spec.md`. Linear Project: not yet created (no tracker access in the shaping session). Working branch: `worktree/prisma-mongo-defaults-codecs-439e71`.
+**Spec:** `spec.md`. Linear: intentionally not used for this project. Working branch: `worktree/prisma-mongo-defaults-codecs-439e71`.
 
 ## Slices
 
