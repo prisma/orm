@@ -1,3 +1,7 @@
+export {
+  checkUncomposedNamespace,
+  getAuthoringFieldPreset,
+} from '../shared/field-preset-resolution';
 export type {
   AuthoringArgRef,
   AuthoringArgumentDescriptor,
@@ -74,3 +78,12 @@ export type {
   PslExtensionBlockParamValue,
   PslExtensionBlockParsedAttribute,
 } from '../shared/psl-extension-block';
+export type { PresetStorageTemplate } from '../shared/temporal-presets';
+export {
+  TEMPORAL_ON_CREATE_ARG,
+  TEMPORAL_ON_UPDATE_ARG,
+  TIMESTAMP_NOW_GENERATOR_ID,
+  temporalAuthoringPresets,
+  temporalCodecPreset,
+  temporalPhaseTemplate,
+} from '../shared/temporal-presets';
