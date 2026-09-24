@@ -42,7 +42,7 @@ One package, one subject: the binder and the node-identity substrate it requires
 
 - [ ] Diff touches only `psl-parser`, `projects/symbol-table-resolve/`, the attribute-context construction sites in `2-sql/2-authoring/contract-psl` and `2-mongo-family/2-authoring/contract-psl` (D6; the language server needed none), and one additive `and` combinator in `0-foundation/utils` where the `Result` type lives (review round, operator-designed) — nothing else in those packages.
 - [ ] A `fieldRef`/`referencedFieldRef` argument resolving to a non-field fails its parse with no second diagnostic; cross-space still parses; pinned by tests.
-- [ ] The attribute-ctx builders are exported and covered by tests; contexts carry the required binder (decision 10 — `resolveReferencedModel` no longer exists).
+- [ ] Contexts carry the binder as a compile-level requirement wherever a reference combinator can appear (decision 10 — `resolveReferencedModel` no longer exists; the once-planned attribute-ctx builder helpers were deleted in review: zero production callers, their purpose died with the callback they replaced).
 - [ ] A resolution failure inside an attribute argument yields exactly one diagnostic — the binder's, carrying its reference class; neither the combinators nor a consumer's residual validators re-voice it, pinned by exact-set assertions in each converted consumer.
 
 ## Open Questions
