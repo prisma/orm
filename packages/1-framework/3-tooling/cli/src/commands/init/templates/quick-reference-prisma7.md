@@ -25,7 +25,7 @@ const user = await db.orm.public.User
 
 ## Configuration
 
-[`prisma.config.ts`](prisma.config.ts) tells the Prisma 8 CLI where your contract source lives and how to connect to your database. Prisma 7 reads its own config from `prisma7.config.ts`.
+[`prisma.config.ts`](prisma.config.ts) tells the Prisma 8 CLI where your contract source lives and how to connect to your database.{{prisma7ConfigSentence}}
 
 ```typescript
 import 'dotenv/config';
@@ -70,8 +70,7 @@ prisma7 migrate dev            # Migrate with Prisma 7, as before
 | File | Purpose |
 |---|---|
 | [`{{schemaPath}}`]({{schemaPath}}) | Your Prisma 7 schema — the contract source |
-| [`prisma.config.ts`](prisma.config.ts) | Prisma 8 CLI configuration |
-| [`prisma7.config.ts`](prisma7.config.ts) | Prisma 7 CLI configuration |
+| [`prisma.config.ts`](prisma.config.ts) | Prisma 8 CLI configuration |{{prisma7ConfigRow}}
 | [`{{outputDir}}/db.ts`]({{outputDir}}/db.ts) | Database client — `import { db } from '{{dbImportPath}}'` |
 | `{{outputDir}}/contract.json` | Compiled contract (generated) |
 | `{{outputDir}}/contract.d.ts` | Contract types (generated) |

@@ -100,6 +100,7 @@ function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedIni
       kind: 'prisma7-schema',
       schemaPath: 'prisma/schema.prisma',
       provider: 'postgresql',
+      prisma7Config: 'prisma7.config.ts',
     },
     sideBySide: null,
     warnings: [],
@@ -174,6 +175,45 @@ describe('the Prisma 7 scaffold', () => {
       expect(reference).toContain('pnpm prisma db sign');
       expect(reference).not.toContain('model User');
       expect(reference).not.toContain('cutover');
+    });
+
+    it('names the Prisma 7 config with the extension it keeps', () => {
+      copyFixture();
+
+      scaffold({
+        contractSource: {
+          kind: 'prisma7-schema',
+          schemaPath: 'prisma/schema.prisma',
+          provider: 'postgresql',
+          prisma7Config: 'prisma7.config.mts',
+        },
+      });
+
+      const reference = readProjectFile('prisma-8.md');
+      expect(reference).toContain('Prisma 7 reads its own config from `prisma7.config.mts`.');
+      expect(reference).toContain(
+        '| [`prisma.config.ts`](prisma.config.ts) | Prisma 8 CLI configuration |\n| [`prisma7.config.mts`](prisma7.config.mts) | Prisma 7 CLI configuration |\n',
+      );
+      expect(reference).not.toContain('prisma7.config.ts');
+    });
+
+    it('leaves the Prisma 7 config out of the quick reference when the project has none', () => {
+      copyFixture();
+
+      scaffold({
+        contractSource: {
+          kind: 'prisma7-schema',
+          schemaPath: 'prisma/schema.prisma',
+          provider: 'postgresql',
+          prisma7Config: undefined,
+        },
+      });
+
+      const reference = readProjectFile('prisma-8.md');
+      expect(reference).not.toContain('prisma7.config');
+      expect(reference).toContain(
+        '| [`prisma.config.ts`](prisma.config.ts) | Prisma 8 CLI configuration |\n| [`src/prisma/db.ts`]',
+      );
     });
 
     it('writes no README even when the project has src/index.ts', () => {

@@ -264,6 +264,7 @@ function planScaffold(ctx: {
               source.schemaPath,
               outputDir,
               runPrefix,
+              source.prisma7Config,
               resolveImportSpecifier,
             ),
           },

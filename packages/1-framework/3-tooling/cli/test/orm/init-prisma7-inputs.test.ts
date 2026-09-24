@@ -70,6 +70,7 @@ describe(
             kind: 'prisma7-schema',
             schemaPath: 'prisma/schema.prisma',
             provider: 'postgresql',
+            prisma7Config: undefined,
           },
           sideBySide: null,
           reinit: false,

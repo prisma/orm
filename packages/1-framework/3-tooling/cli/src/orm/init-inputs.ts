@@ -67,6 +67,8 @@ export type InitContractSource =
       readonly kind: 'prisma7-schema';
       readonly schemaPath: string;
       readonly provider: string | undefined;
+      /** The Prisma 7 config's file name once init is done; `undefined` when the project has none. */
+      readonly prisma7Config: string | undefined;
     };
 
 /**
@@ -466,6 +468,18 @@ async function resolvePrisma7Inputs(ctx: {
   }
 }
 
+function prisma7ConfigAfterInit(
+  detection: Prisma7Detection,
+  sideBySide: Prisma7SideBySidePlan | null,
+): string | undefined {
+  const rename = sideBySide?.renameConfig;
+  if (rename !== undefined && rename !== null) {
+    return `prisma7.config.${rename.extension}`;
+  }
+  const { config } = detection;
+  return config.kind === 'prisma7' || config.kind === 'unreadable' ? config.path : undefined;
+}
+
 /** The consents and questions of the Prisma 7 path, once the check has read the schema. */
 async function confirmPrisma7Inputs(ctx: {
   readonly cwd: string;
@@ -513,6 +527,7 @@ async function confirmPrisma7Inputs(ctx: {
       kind: 'prisma7-schema',
       schemaPath: schema.path,
       provider: schema.provider,
+      prisma7Config: prisma7ConfigAfterInit(detection, sideBySide),
     },
     sideBySide,
     warnings: [...detection.warnings, ...check.warnings],

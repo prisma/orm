@@ -90,6 +90,7 @@ describe(
           renameConfig: { from: 'prisma.config.mts', extension: 'mts' },
           movePackages: null,
         });
+        expect(inputs.contractSource).toMatchObject({ prisma7Config: 'prisma7.config.mts' });
       });
 
       it('is not asked when the config is already prisma7.config.* and prisma is at 8', async () => {
@@ -105,6 +106,7 @@ describe(
 
         expect(calls.filter((call) => call.kind === 'consent')).toEqual([]);
         expect(inputs.sideBySide).toBeNull();
+        expect(inputs.contractSource).toMatchObject({ prisma7Config: 'prisma7.config.ts' });
       });
     });
 

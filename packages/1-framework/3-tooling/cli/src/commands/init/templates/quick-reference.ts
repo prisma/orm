@@ -81,6 +81,8 @@ export const prisma7Variables = [
   'pkg',
   'configEntrypoint',
   'requirements',
+  'prisma7ConfigSentence',
+  'prisma7ConfigRow',
 ] as const;
 
 /** The quick reference for a project whose contract source is its Prisma 7 schema. */
@@ -89,6 +91,7 @@ export function prisma7QuickReferenceMd(
   schemaPath: string,
   outputDir: string,
   pkgRun: string,
+  prisma7Config: string | undefined,
   resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
 ): string {
   const vars: Record<(typeof prisma7Variables)[number], string> = {
@@ -99,6 +102,14 @@ export function prisma7QuickReferenceMd(
     pkg: targetPackageName(target, resolveImportSpecifier),
     configEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
     requirements: requirementsBlock(target, pkgRun),
+    prisma7ConfigSentence:
+      prisma7Config === undefined
+        ? ''
+        : ` Prisma 7 reads its own config from \`${prisma7Config}\`.`,
+    prisma7ConfigRow:
+      prisma7Config === undefined
+        ? ''
+        : `\n| [\`${prisma7Config}\`](${prisma7Config}) | Prisma 7 CLI configuration |`,
   };
   return renderTemplate('quick-reference-prisma7.md', prisma7Variables, vars);
 }
