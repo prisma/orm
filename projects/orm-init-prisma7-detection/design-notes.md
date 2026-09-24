@@ -38,9 +38,9 @@ Evaluating the Prisma 7 config yields the resolved URL, which must not be writte
 
 `db.ts`, `contract.json`, and `contract.d.ts` go where a fresh init puts them, so an upgraded project ends up shaped like a new one. `prisma/` belongs to Prisma 7 and is deleted at cutover. The guide's `prisma8/` and the example app's `generated/prisma8/` were not adopted.
 
-### D6. Mongo is its own slice and waits
+### D6. Mongo is its own slice and waits (superseded by D10)
 
-Prisma 7 has no Mongo connector; the Mongo guide is a Prisma 6 port. The parallel project's slice 2 defines the Mongo source. Until it exports `prisma7Schema` from `@prisma/orm-mongo/config`, init refuses the Prisma 7 path for a `mongodb` provider.
+Prisma 7 has no Mongo connector; the Mongo guide is a Prisma 6 port. The parallel project's slice 2 defines the Mongo source. Init does not refuse Mongo by name: it installs the chosen target package and uses its `prisma7Schema` when the package exports one (D10).
 
 ### D7. `"type": "module"` and tsconfig handling are unchanged
 
@@ -60,20 +60,25 @@ Will: leave init alone, it does what it does now. The docs brief in this directo
 - Whether `contract convert` should be named in init's next steps once it exists is the parallel project's call at its close-out.
 - The `prisma/config` import (init writes `@prisma/cli-engine` today; the published `prisma` package re-exports it as `prisma/config`) is an orphan slice outside this project.
 
-### D8. Init checks the schema before it edits anything (added 2026-09-16)
+### D8. Init checks the schema before it edits anything (added 2026-09-16, resolved by D10)
 
 Manual review after the end-to-end proof: init renamed the config, swapped `prisma`, and rewrote scripts before `contract emit` could report a construct the Prisma 7 source refuses. For a construct with no fix (a view, `Unsupported(...)`), the user's project was changed for nothing. The source's refusals are permanent for some constructs, so waiting for them to be lifted is not an option; init must find out first.
 
-Checking needs the target package: the refusal rules ship only in `@prisma/orm-postgres`, and the CLI is family-blind, so it carries none of that code and reaches it only through an installed target package. Options: (1) install the target package into a temporary directory, check there, delete it, so a refused schema leaves the project untouched, at the cost of one extra download on success; with `--skip-install` the check is skipped with a warning; (2) install it into the project first, leaving one unused dependency on refusal; (3) bundle the source into the CLI, which breaks the family-blind CLI. Recommended: (1). **Awaiting Will's decision.**
+Checking needs the target package: the refusal rules ship only in `@prisma/orm-postgres`, and the CLI is family-blind, so it carries none of that code and reaches it only through an installed target package. Options: (1) install the target package into a temporary directory, check there, delete it, so a refused schema leaves the project untouched, at the cost of one extra download on success; with `--skip-install` the check is skipped with a warning; (2) install it into the project first, leaving one unused dependency on refusal; (3) bundle the source into the CLI, which breaks the family-blind CLI. Recommended: (1). Will chose option (2), because init installs the target package anyway (D10, answer 3).
 
-### D9. The cutover step points at the Postgres README (added 2026-09-16)
+### D9. No cutover step (added 2026-09-16, superseded by D10)
 
-The guide's cutover section describes `contract infer` plus hand edits, the workflow `prisma7Schema` replaces. Until `contract convert` exists, init's last next step points at the `prisma7Schema` section of the `@prisma/orm-postgres` README.
+The guide's cutover section describes `contract infer` plus hand edits, the workflow `prisma7Schema` replaces. Init prints no cutover step (D10, answer 6).
 
-### D10. Init is target-agnostic (Will, 2026-09-16)
+### D10. Init selects among known targets and checks the schema before any edit (Will, 2026-09-16 to 2026-09-24)
 
-Will: "Our init command cannot be target specific." Slice 1 as built maps `datasource.provider` to a target, refuses Mongo by name, lists `postgresql` as supported, names the PostgreSQL guide in its next steps, and the schema check proposed in D8 imported `@prisma/orm-postgres`. All of it goes. The Prisma 7 source in each target package already refuses a schema whose provider does not match (`PRISMA7_PROVIDER_MISMATCH`), so init does not need the provider.
+Will's ruling on 2026-09-16 was that init cannot be target-specific. On 2026-09-23 he clarified what that means: init must not be coupled to one database, but selecting between the targets it knows is fine. The answers to the open questions:
 
-Shape: the target comes from `--target` or the existing target question; init installs the chosen target package as it already does, loads that package's `/config` entrypoint through the import-specifier resolver it already uses to write the config, and if the package exports `prisma7Schema` runs that source against the schema before any edit, stopping with the source's own diagnostics on refusal. A package without `prisma7Schema` gets one generic refusal. Next steps name only generic commands and point at the chosen package's README. Supersedes D6 (Mongo needs no init change once `@prisma/orm-mongo/config` exports `prisma7Schema`) and the install question in D8 (the check uses the package init installs anyway, loaded after install and before the edits).
+1. **Target branches on `main` stay.** Init already picks starter schemas, package names, labels, and the `--probe-db` driver per known target. That is selection among known targets, so it stays. Only the target coupling this project added goes: the Mongo-by-name refusal and the PostgreSQL guide in the next steps.
+2. **The target comes from the schema's `datasource` provider, with `--target` as an override.** A provider with no known target keeps `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, which now lists every known provider. A `--target` that disagrees with the provider is refused before anything is installed or asked, with `CLI.INIT_PRISMA7_TARGET_MISMATCH` (Will: "fail early on invalid options").
+3. **The check runs from the target package installed in the project.** Will asked whether bundling the target packages into the CLI would be simpler. It is not: both target packages depend on the CLI package, so bundling creates a dependency cycle, and `pnpm lint:deps` forbids framework packages from importing target packages. Init installs the target package anyway, so the check only moves that install earlier. On the Prisma 7 path, after the target is known and before any consent question, init installs the target package and `dotenv`, loads the package's `/config` entrypoint from the project, and runs its `prisma7Schema` source in memory, writing nothing. A refused schema stops init with `CLI.INIT_PRISMA7_SCHEMA_REFUSED` and the source's diagnostics; the project is unchanged apart from the two packages, and the error prints the command that removes them.
+4. **A target package without `prisma7Schema` means the Prisma 7 project is ignored** (Will: init "should function fine and just ignore the presence of prisma 7 config"). When the user entered the path by answering yes to the question, init warns and continues as a fresh init for that target. When the user passed `--from-prisma7-schema`, init cannot honour the flag and stops with `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`: a fresh init needs `--authoring`, which cannot be combined with the flag. This split is the implementer's call, open to veto. When `@prisma/orm-mongo/config` exports `prisma7Schema`, the Prisma 7 path works for Mongo with no change to init.
+5. **The terminal problems found in manual QA are out of scope.** `--confirm` being ignored in an interactive session is caused by `consent` in `@prisma/cli-engine` checking `--confirm` values only when the session is non-interactive. The process that does not exit after "Done" is unconfirmed outside a pseudo-terminal. A brief for an agent in the engine repository covers both; manual QA scenario S12 checks the second in a real terminal.
+6. **The cutover step is removed** (Will: too much instruction for a command modelled on `git init`). The next steps list only what the user runs right after init.
 
-Open: whether the 17 target branches init already has on `main` (starter schemas, facade package names, target labels, `--probe-db` driver) move behind the target packages in this project, or only this PR stops adding more. **Awaiting Will.**
+Supersedes D6 and D9. D8 is resolved by answer 3.
