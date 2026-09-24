@@ -25,6 +25,7 @@
     "@internal/contract-authoring": "workspace:8.0.0-rc.12",
     "@internal/framework-components": "workspace:8.0.0-rc.12",
     "@internal/mongo-contract": "workspace:8.0.0-rc.12",
+    "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
     "@internal/psl-parser": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
     "pathe": "^2.0.3"
@@ -33,7 +34,6 @@
     "@internal/adapter-mongo": "workspace:8.0.0-rc.12",
     "@internal/driver-mongo": "workspace:8.0.0-rc.12",
     "@internal/family-mongo": "workspace:8.0.0-rc.12",
-    "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
     "@internal/target-mongo": "workspace:8.0.0-rc.12",
     "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@repo/tsconfig": "workspace:8.0.0-rc.12",

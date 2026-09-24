@@ -1862,6 +1862,9 @@ importers:
       '@internal/mongo-contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-foundation/mongo-contract
+      '@internal/mongo-contract-psl':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../contract-psl
       '@internal/psl-parser':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/2-authoring/psl-parser
@@ -1881,9 +1884,6 @@ importers:
       '@internal/family-mongo':
         specifier: workspace:8.0.0-rc.12
         version: link:../../9-family
-      '@internal/mongo-contract-psl':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../contract-psl
       '@internal/target-mongo':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../3-mongo-target/1-mongo-target
@@ -1920,9 +1920,6 @@ importers:
       '@internal/contract-authoring':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/2-authoring/contract
-      '@internal/errors':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../../../1-framework/1-core/errors
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/1-core/framework-components

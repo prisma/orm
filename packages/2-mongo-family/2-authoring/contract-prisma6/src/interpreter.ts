@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
+import { computeProfileHash } from '@internal/contract/hashing';
 import {
   type Contract,
   type ContractEnum,
@@ -28,14 +28,17 @@ import type { AssembledAuthoringContributions } from '@internal/framework-compon
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   buildMongoExecutionSection,
-  buildMongoNamespace,
+  buildMongoStorage,
+  encodeMongoValueSets,
   type MongoCollectionInput,
   MongoIndex,
   type MongoIndexKeyDirection,
-  MongoStorage,
-  type MongoValueSetInput,
 } from '@internal/mongo-contract';
-import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import {
+  type MongoBackRelationCandidate,
+  type MongoForeignKeyRelation,
+  pairMongoBackRelations,
+} from '@internal/mongo-contract-psl';
 import {
   type BlockSymbol,
   buildSymbolTable,
@@ -43,13 +46,14 @@ import {
   type FieldSymbol,
   keywordPslSpan,
   type ModelSymbol,
+  mapPslDiagnostics,
   nodePslSpan,
   type PslSpan,
   type ResolvedAttribute,
   readResolvedAttribute,
   readResolvedAttributes,
 } from '@internal/psl-parser';
-import { requiredOneToOneBackrelationDiagnostic } from '@internal/psl-parser/interpret';
+import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import {
   ArrayLiteralAst,
@@ -58,6 +62,8 @@ import {
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
 import { prisma6Diagnostic } from './diagnostics';
@@ -97,31 +103,6 @@ type Diagnostics = ContractSourceDiagnostic[];
 interface EnumBuild {
   readonly codecId: string;
   readonly members: readonly { readonly name: string; readonly value: unknown }[];
-}
-
-interface ForeignKeyRelation {
-  readonly declaringModel: string;
-  readonly targetModel: string;
-  readonly relationName: string | undefined;
-  readonly localFields: readonly string[];
-  readonly targetFields: readonly string[];
-}
-
-/** A foreign-key relation field that was reported, so its back-relation is not reported again as orphaned. */
-interface RejectedForeignKey {
-  readonly declaringModel: string;
-  readonly targetModel: string;
-  readonly relationName: string | undefined;
-}
-
-interface BackRelationCandidate {
-  readonly modelName: string;
-  readonly field: FieldSymbol;
-  readonly targetModelName: string;
-  readonly relationName: string | undefined;
-  readonly cardinality: '1:1' | '1:N';
-  readonly sources: PslSources;
-  readonly sourceId: string;
 }
 
 interface ModelBuild {
@@ -326,18 +307,27 @@ export function interpretPrisma6Documents(
     builds.set(located.symbol.name, readModel(located, modelNames, ignoredModels, typeContext));
   }
 
-  const foreignKeys: ForeignKeyRelation[] = [];
-  const rejectedForeignKeys: RejectedForeignKey[] = [];
-  const backRelations: BackRelationCandidate[] = [];
+  const foreignKeys: MongoForeignKeyRelation[] = [];
+  const invalidFkPairings: InvalidFkPairing[] = [];
+  const backRelations: MongoBackRelationCandidate[] = [];
   for (const build of builds.values()) {
     readRelationFields(
       build,
       builds,
-      { foreignKeys, rejectedForeignKeys, backRelations },
+      { foreignKeys, invalidFkPairings, backRelations },
       diagnostics,
     );
   }
-  pairBackRelations(builds, foreignKeys, rejectedForeignKeys, backRelations, diagnostics);
+  const paired = pairMongoBackRelations({
+    foreignKeys,
+    candidates: backRelations,
+    invalidFkPairings,
+  });
+  diagnostics.push(...mapPslDiagnostics(paired.diagnostics, mergedSources(input.documents)));
+  for (const { modelName, fieldName, relation } of paired.relations) {
+    const build = builds.get(modelName);
+    if (build !== undefined) build.relations[fieldName] = relation;
+  }
 
   const collections: Record<string, { indexes: MongoIndex[] }> = {};
   const roots: Record<string, CrossReference> = {};
@@ -965,9 +955,9 @@ function readRelationFields(
   build: ModelBuild,
   builds: ReadonlyMap<string, ModelBuild>,
   out: {
-    readonly foreignKeys: ForeignKeyRelation[];
-    readonly rejectedForeignKeys: RejectedForeignKey[];
-    readonly backRelations: BackRelationCandidate[];
+    readonly foreignKeys: MongoForeignKeyRelation[];
+    readonly invalidFkPairings: InvalidFkPairing[];
+    readonly backRelations: MongoBackRelationCandidate[];
   },
   diagnostics: Diagnostics,
 ): void {
@@ -975,10 +965,9 @@ function readRelationFields(
   for (const { field, relation } of build.relationFields) {
     const label = `Relation field "${symbol.name}.${field.name}"`;
     const reject = (): void => {
-      out.rejectedForeignKeys.push({
-        declaringModel: symbol.name,
-        targetModel: field.typeName,
-        relationName: relation === undefined ? undefined : stringArgument(relation),
+      out.invalidFkPairings.push({
+        pairKey: fkRelationPairKey(symbol.name, field.typeName),
+        ...ifDefined('relationName', relation === undefined ? undefined : stringArgument(relation)),
       });
     };
     const args =
@@ -997,12 +986,10 @@ function readRelationFields(
         modelName: symbol.name,
         field,
         targetModelName: field.typeName,
-        relationName: args?.name,
+        ...ifDefined('relationName', args?.name),
         cardinality: field.list ? '1:N' : '1:1',
         sources,
-        sourceId,
       });
-      reject();
       continue;
     }
     if (field.list) {
@@ -1092,75 +1079,10 @@ function readRelationFields(
     out.foreignKeys.push({
       declaringModel: symbol.name,
       targetModel: field.typeName,
-      relationName: args?.name,
+      ...ifDefined('relationName', args?.name),
       localFields: local,
       targetFields: referenced,
     });
-  }
-}
-
-function pairBackRelations(
-  builds: ReadonlyMap<string, ModelBuild>,
-  foreignKeys: readonly ForeignKeyRelation[],
-  rejectedForeignKeys: readonly RejectedForeignKey[],
-  backRelations: readonly BackRelationCandidate[],
-  diagnostics: Diagnostics,
-): void {
-  for (const candidate of backRelations) {
-    const matches = foreignKeys.filter(
-      (fk) =>
-        fk.declaringModel === candidate.targetModelName &&
-        fk.targetModel === candidate.modelName &&
-        (candidate.relationName === undefined || fk.relationName === candidate.relationName),
-    );
-    const label = `"${candidate.modelName}.${candidate.field.name}"`;
-    const pairsWithCandidate = (fk: RejectedForeignKey): boolean =>
-      fk.declaringModel === candidate.targetModelName &&
-      fk.targetModel === candidate.modelName &&
-      (candidate.relationName === undefined || fk.relationName === candidate.relationName);
-    if (matches.length === 0 && rejectedForeignKeys.some(pairsWithCandidate)) continue;
-    if (matches.length === 0) {
-      diagnostics.push({
-        code: 'PSL_ORPHANED_BACKRELATION',
-        message: `Backrelation list field ${label} has no matching FK-side relation on model "${candidate.targetModelName}". Add @relation(fields: [...], references: [...]) on the FK-side relation.`,
-        sourceId: candidate.sourceId,
-        span: candidate.field.span,
-      });
-      continue;
-    }
-    if (matches.length > 1) {
-      diagnostics.push({
-        code: 'PSL_AMBIGUOUS_BACKRELATION',
-        message: `Backrelation list field ${label} matches multiple FK-side relations on model "${candidate.targetModelName}". Add @relation("...") to both sides to disambiguate.`,
-        sourceId: candidate.sourceId,
-        span: candidate.field.span,
-      });
-      continue;
-    }
-    const [fk] = matches;
-    const build = builds.get(candidate.modelName);
-    if (fk === undefined || build === undefined) continue;
-    if (candidate.cardinality === '1:1' && !candidate.field.optional) {
-      diagnostics.push(
-        blindCast<ContractSourceDiagnostic, 'PslDiagnostic carries sourceId and span'>(
-          requiredOneToOneBackrelationDiagnostic({
-            modelName: candidate.modelName,
-            field: candidate.field,
-            targetModelName: candidate.targetModelName,
-            sources: candidate.sources,
-            recordNoun: 'document',
-          }),
-        ),
-      );
-      continue;
-    }
-    build.relations[candidate.field.name] = {
-      to: crossRef(candidate.targetModelName, UNBOUND_NAMESPACE_ID),
-      ...(candidate.cardinality === '1:N'
-        ? { cardinality: '1:N' as const }
-        : { cardinality: '1:1' as const, nullable: true }),
-      on: { localFields: fk.targetFields, targetFields: fk.localFields },
-    };
   }
 }
 
@@ -1235,10 +1157,8 @@ function assembleContract(input: {
   const target = input.binding.target.targetId;
   const targetFamily = input.binding.target.familyId;
 
-  const storageValueSets: Record<string, MongoValueSetInput> = {};
   const builtEnums: Record<string, ContractEnum> = {};
   for (const [enumName, built] of input.enums) {
-    const codec = input.codecLookup.get(built.codecId);
     builtEnums[enumName] = {
       codecId: built.codecId,
       members: built.members.map((member) => ({
@@ -1248,50 +1168,21 @@ function assembleContract(input: {
         ),
       })),
     };
-    storageValueSets[enumName] = {
-      kind: 'valueSet',
-      values: built.members.map((member) =>
-        codec === undefined
-          ? blindCast<JsonValue, 'enum members are JSON values'>(member.value)
-          : codec.encodeJson(member.value),
-      ),
-    };
   }
 
-  const collectionInputs: Record<string, MongoCollectionInput> = {};
+  const collections: Record<string, MongoCollectionInput> = {};
   for (const [name, collection] of Object.entries(input.collections)) {
-    collectionInputs[name] = collection.indexes.length > 0 ? { indexes: collection.indexes } : {};
+    collections[name] = collection.indexes.length > 0 ? { indexes: collection.indexes } : {};
   }
-  const hasValueSets = Object.keys(storageValueSets).length > 0;
-  const unboundNamespace = buildMongoNamespace({
-    id: UNBOUND_NAMESPACE_ID,
-    entries: {
-      collection: collectionInputs,
-      ...(hasValueSets ? { valueSet: storageValueSets } : {}),
-    },
-  });
-  const storageHash = computeStorageHash({
-    target,
-    targetFamily,
-    storage: {
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: {
-          id: UNBOUND_NAMESPACE_ID,
-          entries: {
-            collection: unboundNamespace.entries.collection,
-            ...(unboundNamespace.entries.valueSet !== undefined
-              ? { valueSet: unboundNamespace.entries.valueSet }
-              : {}),
-          },
-        },
-      },
-    },
-    ...mongoContractCanonicalizationHooks,
-  });
   const storage = blindCast<
     Contract['storage'],
     'MongoStorage is the Mongo family concrete storage class; it structurally satisfies the Contract storage slot.'
-  >(new MongoStorage({ storageHash, namespaces: { [UNBOUND_NAMESPACE_ID]: unboundNamespace } }));
+  >(
+    buildMongoStorage({
+      collections,
+      valueSets: encodeMongoValueSets(Object.fromEntries(input.enums), input.codecLookup),
+    }),
+  );
 
   const models: Record<string, unknown> = {};
   for (const [modelName, build] of input.builds) {
@@ -1328,4 +1219,10 @@ function assembleContract(input: {
     meta: {},
     ...(execution !== undefined ? { execution } : {}),
   };
+}
+
+function mergedSources(documents: readonly Prisma6Document[]): PslSources {
+  const [first, ...rest] = documents.map((document) => document.sources);
+  if (first === undefined) throw new InternalError('A Prisma 6 schema has at least one document');
+  return first.merge(...rest);
 }
