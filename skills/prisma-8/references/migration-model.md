@@ -156,7 +156,7 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 
 ## Common Pitfalls
 
-1. **Assuming `migration plan` or `migration new` chains from the newest migration on disk.** Neither does. The origin is `--from`, else the `db` ref, else empty. If neither exists, you get a from-scratch plan; on an empty graph the only warning is the muted `No db ref set` notice.
+1. **Assuming `migration plan` or `migration new` chains from the newest migration on disk.** Neither does. The origin is `--from`, else the `db` ref. With neither, only an empty graph plans from scratch (with the muted `No db ref set` notice); once migrations exist, both commands refuse with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
 2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` / `db sign` advance implicitly, and only `--advance-ref` advances at apply time.
 3. **Expecting a deploy to update refs.** Deploys write the database's marker; the files under `migrations/app/refs/` only change when you change them.
 4. **Reading `from: (baseline)` as informational.** Over a non-empty migrations directory it is the trap announcing itself. Stop and pick an exit before applying or committing.

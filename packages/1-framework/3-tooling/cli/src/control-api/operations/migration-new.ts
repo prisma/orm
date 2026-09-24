@@ -173,6 +173,15 @@ export async function executeMigrationNewCommand(
     if (!origin.ok) {
       return notOk(origin.failure);
     }
+    if (origin.value.kind === 'ref-needs-baseline') {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'The db ref is not a graph node yet', {
+          why: `The db ref points at ${origin.value.fromHash}, but ${appMigrationsRelative} contains no migrations, so that contract is not a graph node and nothing can chain from it.`,
+          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref alongside the delta, after which `migration new` can chain from it.',
+          meta: { refName: origin.value.refName, resolvedHash: origin.value.fromHash },
+        }),
+      );
+    }
     fromHash = origin.value.fromHash;
   }
 

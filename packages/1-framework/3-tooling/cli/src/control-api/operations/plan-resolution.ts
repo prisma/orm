@@ -86,23 +86,31 @@ export function assertFromIsGraphNode(fromHash: string, graph: MigrationGraph, r
 
 export type DefaultOriginHash =
   | { kind: 'greenfield'; fromHash: null }
-  | { kind: 'ref'; refName: 'db'; fromHash: string };
+  | { kind: 'ref'; refName: 'db'; fromHash: string }
+  | { kind: 'ref-needs-baseline'; refName: 'db'; fromHash: string };
 
 /**
- * The origin a command uses when `--from` is omitted, as a hash only: an empty
- * graph plans from the empty database; otherwise the `db` ref must exist and
- * point at a graph node. `migration plan` materialises the contract on top of
- * this; `migration new` needs only the hash.
+ * The origin a command uses when `--from` is omitted, as a hash only. An empty
+ * graph with no `db` ref plans from the empty database. An empty graph with a
+ * `db` ref is `ref-needs-baseline`: the ref names a real contract that is not
+ * a graph node yet (`migration plan` handles this by writing a baseline first).
+ * Otherwise the `db` ref must exist and point at a graph node. `migration
+ * plan` materialises the contract on top of this; `migration new` needs only
+ * the hash.
  */
 export function resolveDefaultOriginHash(
   space: AggregateContractSpace,
 ): Result<DefaultOriginHash, CliStructuredError> {
-  if (graphIsEmpty(space)) {
-    return ok({ kind: 'greenfield', fromHash: null });
-  }
-  const graph = space.graph();
   const refs = space.refs;
   const dbRef = refs['db'];
+  if (graphIsEmpty(space)) {
+    return ok(
+      dbRef
+        ? { kind: 'ref-needs-baseline', refName: 'db', fromHash: dbRef.hash }
+        : { kind: 'greenfield', fromHash: null },
+    );
+  }
+  const graph = space.graph();
   if (!dbRef) {
     return notOk(errorPlanOriginUnknown(getReachableRefs(refs, graph)));
   }

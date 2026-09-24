@@ -16,6 +16,7 @@ import {
   looksLikeFullHash,
   type ResolveFromForPlanInput,
   type ResolveToForPlanInput,
+  resolveDefaultOriginHash,
   resolveFromForPlan,
   resolveToForPlan,
 } from '../../src/control-api/operations/plan-resolution';
@@ -350,11 +351,8 @@ describe('resolveFromForPlan', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expectRefuse(
-        result.failure,
-        'MIGRATION.HASH_NOT_IN_GRAPH',
-        'Commit pending migrations first, then run migration plan.',
-      );
+      expectRefuse(result.failure, 'MIGRATION.HASH_NOT_IN_GRAPH', '--from <contract>');
+      expect(result.failure.fix).toContain('ref set db <contract>');
     }
   });
 
@@ -630,6 +628,53 @@ describe('resolveToForPlan', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.failure.meta?.['input']).toBe('does-not-exist');
+    }
+  });
+});
+
+describe('resolveDefaultOriginHash', () => {
+  function originOf(space: AggregateContractSpace) {
+    const result = resolveDefaultOriginHash(space);
+    expect(result.ok).toBe(true);
+    return result.ok ? result.value : undefined;
+  }
+
+  it('is greenfield on an empty graph with no db ref', () => {
+    expect(originOf(makeSpace([]))).toEqual({ kind: 'greenfield', fromHash: null });
+  });
+
+  it('reports a db ref that needs a baseline on an empty graph', () => {
+    const space = makeSpace([], { db: { hash: HASH_A, invariants: [] } });
+    expect(originOf(space)).toEqual({
+      kind: 'ref-needs-baseline',
+      refName: 'db',
+      fromHash: HASH_A,
+    });
+  });
+
+  it('returns the db ref hash when it is a graph node', () => {
+    const space = makeSpace([makePkg(E, HASH_A, 'a'), makePkg(E, HASH_B, 'b')], {
+      db: { hash: HASH_B, invariants: [] },
+    });
+    expect(originOf(space)).toEqual({ kind: 'ref', refName: 'db', fromHash: HASH_B });
+  });
+
+  it('refuses plan-origin-unknown with migrations and no db ref', () => {
+    const result = resolveDefaultOriginHash(makeSpace([makePkg(E, HASH_A, 'a')]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.code).toBe('MIGRATION.PLAN_ORIGIN_UNKNOWN');
+    }
+  });
+
+  it('refuses forgot-the-flag when the db ref is not a graph node', () => {
+    const space = makeSpace([makePkg(E, HASH_A, 'a')], {
+      db: { hash: HASH_ORPHAN, invariants: [] },
+    });
+    const result = resolveDefaultOriginHash(space);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
     }
   });
 });

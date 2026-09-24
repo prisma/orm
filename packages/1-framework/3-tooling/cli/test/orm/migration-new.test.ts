@@ -219,6 +219,30 @@ describe('migration new', () => {
     });
   });
 
+  it('refuses a db ref on an empty graph instead of scaffolding from nothing', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+
+    const run = await harness(project).run(['migration', 'new', '--json'], {
+      cwd: project.dir,
+    });
+
+    const terminal = run.json.at(-1);
+    const envelope =
+      terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
+
+    expect(run.exitCode).toBe(2);
+    expect(envelope).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.HASH_NOT_IN_GRAPH',
+        meta: { refName: 'db', resolvedHash: HASH_FROM },
+      },
+      nextActions: [{ kind: 'user-choice', label: expect.stringContaining('migration plan') }],
+    });
+    expect(await scaffoldedDirs(project)).toEqual([]);
+  });
+
   it('refuses a db ref that is not a graph node', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
     await seedMigrationPackage({

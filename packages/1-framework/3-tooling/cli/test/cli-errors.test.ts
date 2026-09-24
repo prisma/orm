@@ -159,7 +159,8 @@ describe('errorRefSetHashNotInGraph', () => {
     const envelope = errorRefSetHashNotInGraph(resolvedHash, reachableHashes).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
     expect(envelope.meta).toEqual({ resolvedHash, reachableHashes });
-    expect(envelope.fix).toBe('Set the ref to a hash that appears in the migration graph.');
+    expect(envelope.fix).toContain('`to` hash of an on-disk migration');
+    expect(envelope.fix).toContain('{bin} migration list');
   });
 
   it('describes an empty migration graph in the why line', () => {
@@ -178,11 +179,16 @@ describe('errorRefSetEmptySentinel', () => {
 });
 
 describe('typed next actions on the CLI factories', () => {
-  it('offers the ref-set remediation as a choice over the graph nodes', () => {
+  it('sends the ref-set remediation through migration list', () => {
     const error = errorRefSetHashNotInGraph('x'.repeat(64), ['a'.repeat(64)]);
 
     expect(error.nextActions).toEqual([
-      { kind: 'user-choice', label: 'Set the ref to a hash that appears in the migration graph' },
+      {
+        kind: 'run-command',
+        label: 'List the migrations and their destination hashes',
+        command: '{bin} migration list',
+      },
+      { kind: 'user-choice', label: 'Set the ref to the `to` hash of one of them' },
     ]);
   });
 
@@ -208,7 +214,7 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Catch the on-disk graph up to the live marker',
-        command: '{bin} migration plan',
+        command: '{bin} migration plan --from <contract>',
       },
       {
         kind: 'run-command',

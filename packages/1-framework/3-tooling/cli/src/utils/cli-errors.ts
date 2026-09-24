@@ -153,11 +153,17 @@ export function errorRefSetHashNotInGraph(
     reachableHashes.length > 0 ? reachableHashes.join(', ') : '(none — migration graph is empty)';
   const fix =
     reachableHashes.length > 0
-      ? 'Set the ref to a hash that appears in the migration graph.'
+      ? 'Set the ref to the `to` hash of an on-disk migration; `{bin} migration list` shows them.'
       : 'Run `{bin} migration plan` first.';
   const nextActions =
     reachableHashes.length > 0
-      ? [chooseAction('Set the ref to a hash that appears in the migration graph')]
+      ? [
+          runCommandAction(
+            'List the migrations and their destination hashes',
+            '{bin} migration list',
+          ),
+          chooseAction('Set the ref to the `to` hash of one of them'),
+        ]
       : [runCommandAction('Plan the first migration', '{bin} migration plan')];
   return new ActionableCliError(
     'MIGRATION.HASH_NOT_IN_GRAPH',
@@ -345,13 +351,22 @@ export function errorPlanForgotTheFlag(
   const refFix =
     reachableRefs.length > 0
       ? `Run migration plan with ${reachableRefs.map((r) => `--from ${r.name}`).join(' or ')}.`
-      : 'Commit pending migrations first, then run migration plan.';
+      : 'Pass --from <contract> naming the `to` hash of an on-disk migration (`{bin} migration list` shows them), or point the db ref at one with `{bin} migration ref set db <contract>`.';
   const nextActions =
     reachableRefs.length > 0
       ? reachableRefs.map((ref) =>
           runCommandAction(`Plan from ${ref.name}`, `{bin} migration plan --from ${ref.name}`),
         )
-      : [chooseAction('Commit pending migrations first, then run migration plan')];
+      : [
+          runCommandAction(
+            'Plan from an explicit origin',
+            '{bin} migration plan --from <contract>',
+          ),
+          runCommandAction(
+            'Point the db ref at a graph node',
+            '{bin} migration ref set db <contract>',
+          ),
+        ];
   return new ActionableCliError(
     'MIGRATION.HASH_NOT_IN_GRAPH',
     `Resolved from-hash is not in the migration graph: ${resolvedHash}`,
@@ -475,8 +490,8 @@ export function errorMarkerMismatch(
   const reachableList =
     reachableHashes.length > 0 ? reachableHashes.join(', ') : '(none — migration graph is empty)';
   const planFromFix =
-    'Run `{bin} migration plan` if the live marker is canonical and the on-disk graph needs catching up.';
-  const planCommand = '{bin} migration plan';
+    'Run `{bin} migration plan --from <contract>`, naming the graph node the database was migrated from, if the live marker is canonical and the on-disk graph needs catching up.';
+  const planCommand = '{bin} migration plan --from <contract>';
   return new ActionableCliError(
     'MIGRATION.MARKER_MISMATCH',
     'Database marker is not reachable in the on-disk migration graph',
