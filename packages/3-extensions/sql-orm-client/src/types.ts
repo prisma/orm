@@ -1277,8 +1277,8 @@ type HasExecutionCreateDefault<
       // cannot borrow this namespace's default. With no namespace (`never`), fall
       // back to table/column matching.
       readonly ref: {
-        readonly table: ModelTableName<TContract, ModelName, NsId>;
-        readonly column: FieldColumnName<TContract, ModelName, FieldName, NsId>;
+        readonly entry: ModelTableName<TContract, ModelName, NsId>;
+        readonly field: FieldColumnName<TContract, ModelName, FieldName, NsId>;
       } & ([NsId] extends [never] ? unknown : { readonly namespace: NsId });
       readonly onCreate?: unknown;
     }

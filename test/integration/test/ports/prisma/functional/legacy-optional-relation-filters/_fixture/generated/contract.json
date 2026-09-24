@@ -219,7 +219,7 @@
     "storageHash": "ca111dab289b2891819c8c8c2a0f7fa24f5d7199184c81eb131123480698f3b5"
   },
   "execution": {
-    "executionHash": "a211e4e8103e8896872fcfadb16b3dc625cbd0a9d398e3ee141e60dbfbfe79d1",
+    "executionHash": "306595dbd391a2a832bbeb6c8bf82bb3f2b8b8cda74471a33ecbe2d8d6cc1e3f",
     "mutations": {
       "defaults": [
         {
@@ -228,9 +228,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "bio"
+            "entry": "bio",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

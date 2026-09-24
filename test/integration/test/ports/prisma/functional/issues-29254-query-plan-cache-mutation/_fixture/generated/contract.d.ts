@@ -36,7 +36,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'af128a8bad15b66db1c444a9004466f40b6aded0a06de5f182ad14738b9bb88a'>;
 export type ExecutionHash =
-  ExecutionHashBase<'1b6c1e54a0bbd7ec278cb34b8db32dae3760c67d3e541c21c197da7a2a82f66e'>;
+  ExecutionHashBase<'86e96c4cff8b852d73b60209d9391442aa2c6f58a70a90bd13de9fdf8a89919e'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -401,9 +401,9 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'item';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'item';
           };
         },
       ];

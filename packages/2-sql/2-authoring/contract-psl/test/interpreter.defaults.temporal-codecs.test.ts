@@ -55,7 +55,7 @@ stamped ${field}
     nullable: false,
     typeParams: { precision: 3 },
   };
-  const stampedRef = { namespace: 'public', table: 'T', column: 'stamped' };
+  const stampedRef = { namespace: 'public', entry: 'T', field: 'stamped' };
   const nowPhase = { kind: 'generator', id: 'timestampNow' };
 
   it('timestamp(3, onCreate: now, onUpdate: now) yields precision 3 and both phases', () => {
@@ -147,7 +147,7 @@ stamped ${field}
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: '__unbound__', table: 'T', column: 'stamped' },
+        ref: { namespace: '__unbound__', entry: 'T', field: 'stamped' },
         onCreate: nowPhase,
         onUpdate: nowPhase,
       },
