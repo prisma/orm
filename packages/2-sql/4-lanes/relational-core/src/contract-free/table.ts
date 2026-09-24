@@ -115,7 +115,6 @@ export const cfExpr = {
         returns: options.returns,
         lowering: {
           targetFamily: 'sql',
-          strategy: 'function',
           template: options.template,
         },
       }),

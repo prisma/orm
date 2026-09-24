@@ -335,7 +335,6 @@ describe('Postgres adapter', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'vector_length({{self}})',
       },
     });

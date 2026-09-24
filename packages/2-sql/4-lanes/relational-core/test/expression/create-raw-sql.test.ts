@@ -112,7 +112,7 @@ describe('createRawSql factory', () => {
         method: 'lower',
         args: [ColumnRef.of('t', 'name')],
         returns: { codecId: 'pg/text', nullable: false },
-        lowering: { targetFamily: 'sql', strategy: 'function', template: 'lower({{self}})' },
+        lowering: { targetFamily: 'sql', template: 'lower({{self}})' },
       });
       const expr = rawSql`prefix_${innerExpr}_suffix`.returns('pg/text');
       const rawExpr = expr.buildAst() as RawExpr;

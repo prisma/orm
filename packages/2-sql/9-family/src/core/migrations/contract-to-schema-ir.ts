@@ -63,7 +63,7 @@ export type DefaultRenderer = (def: ColumnDefault, column: StorageColumn) => str
  * Target-supplied hook (same IoC seam as `NativeTypeExpander`/`DefaultRenderer`)
  * that normalizes a contract-declared `ColumnDefault` into the resolved shape
  * the target's introspection parses from the live database — e.g. a
- * `dbgenerated("'{}'::jsonb")` function call and the literal Postgres reports
+ * sql`'{}'::jsonb` raw default and the literal Postgres reports
  * are the same value in different shapes, and `resolvedDefaultsEqual`
  * compares `kind` before content. When omitted, the contract's raw default
  * is the resolved default unchanged.
@@ -141,7 +141,7 @@ function convertColumn(
     // structured default becomes the resolved default after passing through
     // the target's `resolveDefault` hook (when supplied), so a default the
     // target's introspection side would normalize differently (e.g. a
-    // `dbgenerated(...)` function call that is actually a literal) compares
+    // raw sql`...` default whose body is a literal) compares
     // equal instead of drifting on `kind` alone.
     resolvedNativeType,
     ...ifDefined('resolvedDefault', resolvedColumnDefault),

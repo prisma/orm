@@ -13,6 +13,7 @@ import type { BlockAttributeSpecFactory } from './attribute-spec/spec-context';
 import type { ParseDiagnostic } from './parse';
 import { nodePslSpan } from './resolve';
 import type { PslSources } from './source-file';
+import type { BlockSymbol, SymbolTable } from './symbol-table';
 import type { ModelAttributeAst } from './syntax/ast/attributes';
 import type { GenericBlockDeclarationAst, KeyValuePairAst } from './syntax/ast/declarations';
 import { ArrayLiteralAst, type ExpressionAst } from './syntax/ast/expressions';
@@ -33,8 +34,7 @@ export function reconstructExtensionBlock(
   const blockName = node.name()?.name() ?? '';
 
   const blockAttributes: PslExtensionBlockAttribute[] = [];
-  const attributes: Record<string, PslExtensionBlockParsedAttribute> = {};
-  const seenAttributeNames = new Set<string>();
+
   for (const attribute of node.attributes()) {
     const name = attribute.name()?.path().join('.') ?? '';
     const args = Array.from(attribute.argList()?.args() ?? [], (arg) => {
@@ -47,22 +47,6 @@ export function reconstructExtensionBlock(
     });
     const span = nodePslSpan(attribute.syntax, sources);
     blockAttributes.push({ name, args, span });
-    if (descriptor === undefined) continue;
-    const parsed = parseBlockAttribute(
-      attribute,
-      name,
-      span,
-      descriptor,
-      seenAttributeNames,
-      keyword,
-      blockName,
-      sources,
-    );
-    if (parsed.ok) {
-      attributes[name] = parsed.value;
-    } else {
-      diagnostics.push(...parsed.diagnostics);
-    }
   }
 
   const parameters: Record<string, PslExtensionBlockParamValue> = {};
@@ -97,9 +81,38 @@ export function reconstructExtensionBlock(
     name: blockName,
     parameters,
     blockAttributes,
-    attributes,
+    attributes: {},
     span: nodePslSpan(node.syntax, sources),
   };
+}
+
+export function interpretBlockAttributes(
+  symbol: BlockSymbol,
+  descriptor: AuthoringPslBlockDescriptor,
+  sources: PslSources,
+  symbols: SymbolTable,
+  diagnostics: ParseDiagnostic[],
+): void {
+  const seenNames = new Set<string>();
+  for (const attribute of symbol.node.attributes()) {
+    const name = attribute.name()?.path().join('.') ?? '';
+    const parsed = parseBlockAttribute(
+      attribute,
+      name,
+      nodePslSpan(attribute.syntax, sources),
+      descriptor,
+      seenNames,
+      symbol.keyword,
+      symbol.name,
+      sources,
+      symbols,
+    );
+    if (parsed.ok) {
+      Object.assign(symbol.block.attributes, { [name]: parsed.value });
+    } else {
+      diagnostics.push(...parsed.diagnostics);
+    }
+  }
 }
 
 function parseBlockAttribute(
@@ -111,6 +124,7 @@ function parseBlockAttribute(
   keyword: string,
   blockName: string,
   sources: PslSources,
+  symbols: SymbolTable,
 ):
   | { readonly ok: true; readonly value: PslExtensionBlockParsedAttribute }
   | { readonly ok: false; readonly diagnostics: readonly ParseDiagnostic[] } {
@@ -148,7 +162,7 @@ function parseBlockAttribute(
     BlockAttributeSpecFactory,
     'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; this is the single point that restores the factory type the descriptor surface documents'
   >(declared[name]);
-  const result = interpretAttribute(attribute, factory(), { sources });
+  const result = interpretAttribute(attribute, factory(), { sources, symbols });
   if (!result.ok) {
     return {
       ok: false,

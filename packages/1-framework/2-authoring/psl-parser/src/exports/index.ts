@@ -74,8 +74,11 @@ export type {
   AttributeLevel,
   AttributeOut,
   AttributeSpec,
+  EntityRefArgType,
   FieldAttributeCtx,
+  FixedIdentifierArgType,
   FuncCallSig,
+  IdentifierArgType,
   InferAttr,
   InspectableArgType,
   ModelAttributeCtx,
@@ -90,6 +93,7 @@ export type {
   RejectingArgType,
   TaggedLiteralArgType,
   TypedFuncCall,
+  UnrestrictedIdentifierArgType,
 } from '../attribute-spec/types';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
@@ -98,6 +102,12 @@ export {
   diagnosticSource,
   mapPslDiagnostics,
 } from '../diagnostic';
+export type {
+  DeclarationFor,
+  EntityDeclaration,
+  EntitySelector,
+  ResolvedEntityReference,
+} from '../entity-reference';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,

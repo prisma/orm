@@ -69,8 +69,42 @@ describe('emitScaffoldedContract', () => {
       const invocation = JSON.parse(
         readFileSync(join(projectDir, 'emit-invocation.json'), 'utf-8'),
       ) as { argv: string[]; cwd: string };
-      expect(invocation.argv).toEqual(['contract', 'emit']);
+      expect(invocation.argv).toEqual(['contract', 'emit', '--json']);
       expect(realpathSync(invocation.cwd)).toBe(realpathSync(projectDir));
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
+    'reports the error envelope the child printed instead of whatever stderr said last',
+    async () => {
+      const envelope = {
+        kind: 'result',
+        envelope: {
+          ok: false,
+          commandId: 'contract.emit',
+          error: {
+            code: 'CLI.CONFIG_UNREADABLE',
+            summary: 'prisma.config.ts could not be evaluated: prisma7Schema is not a function',
+            why: 'The config imports prisma7Schema from a package that does not export it.',
+          },
+          exitCode: 2,
+        },
+      };
+      installFakePrismaCli(
+        [
+          `process.stdout.write(${JSON.stringify(`${JSON.stringify(envelope)}\n`)});`,
+          "process.stderr.write('Prisma agent skills are out of date. Run: prisma skills sync\\n');",
+          'process.exit(2);',
+        ].join('\n'),
+      );
+
+      const error = await emitFailure();
+
+      expect(error.message).toBe(
+        '`prisma contract emit` exited with code 2: CLI.CONFIG_UNREADABLE: prisma.config.ts could not be evaluated: prisma7Schema is not a function — The config imports prisma7Schema from a package that does not export it.',
+      );
+      expect(error.message).not.toContain('skills');
     },
     timeouts.databaseOperation,
   );
@@ -134,7 +168,7 @@ describe('emitScaffoldedContract', () => {
       const invocation = JSON.parse(
         readFileSync(join(projectDir, 'emit-invocation.json'), 'utf-8'),
       ) as { argv: string[] };
-      expect(invocation.argv).toEqual(['contract', 'emit']);
+      expect(invocation.argv).toEqual(['contract', 'emit', '--json']);
     },
     timeouts.databaseOperation,
   );

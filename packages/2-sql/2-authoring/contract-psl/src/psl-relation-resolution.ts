@@ -96,6 +96,7 @@ export function interpretRelationAttribute(input: {
   const node = findFieldAttributeNode(input.field, 'relation');
   if (node === undefined) return undefined;
   return interpretFieldAttribute({
+    symbols: input.symbols,
     node,
     spec: sqlAttributeSpecs.field.relation(),
     model: input.selfModel,

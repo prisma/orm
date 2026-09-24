@@ -1,6 +1,8 @@
 export type { PrismaNextConfig } from '@internal/config/config-types';
 export type { ConfigFile, ConfigFiles, LoadedConfig } from '../load';
 export {
+  buildLoadedConfig,
+  evaluateConfigModule,
   findNearestConfigPathForFile,
   loadConfig,
   loadConfigFiles,

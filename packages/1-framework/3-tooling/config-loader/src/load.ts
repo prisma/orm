@@ -104,7 +104,7 @@ function collectArtifactCollisionDiagnostics(
   return [];
 }
 
-function buildLoadedConfig(
+function validateLoadedSection(
   rawConfig: Record<string, unknown>,
   provenance: SectionProvenance,
 ): LoadedConfig {
@@ -152,6 +152,22 @@ function buildLoadedConfig(
   return { config, diagnostics: collectArtifactCollisionDiagnostics(config.contract) };
 }
 
+/**
+ * Validates a raw `orm` section and resolves its paths against `configDir`, the way a loaded config
+ * file is. A caller that builds the section in memory gets the same diagnostics as one that wrote
+ * it to `prisma.config.ts`.
+ */
+export function buildLoadedConfig(
+  rawConfig: Record<string, unknown>,
+  configDir: string,
+): LoadedConfig {
+  const file = join(configDir, CONFIG_FILENAME);
+  return validateLoadedSection(rawConfig, {
+    files: [file],
+    keys: Object.fromEntries(Object.keys(rawConfig).map((key) => [key, file])),
+  });
+}
+
 function toConfigLoadFailure(error: unknown, configPath?: string): CliStructuredError {
   if (CliStructuredError.is(error)) {
     return error;
@@ -181,15 +197,6 @@ function toConfigLoadFailure(error: unknown, configPath?: string): CliStructured
 }
 
 /**
- * Loads and finalizes the Prisma 8 config.
- *
- * Failures that prevent evaluation entirely — missing file, module that does
- * not evaluate (`CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED`) — are the
- * `Result` failure. Structural problems inside an evaluated config do not
- * fail the load: they are returned as section-tagged diagnostics so commands
- * fail only on the sections they read (via {@link requireConfigSections}).
- */
-/**
  * c12 is resolved to its real on-disk entry before importing: jiti (inside
  * c12) resolves its own transitive imports from the importing file's location,
  * and a symlinked install (pnpm) would otherwise anchor them somewhere the
@@ -199,6 +206,39 @@ function toConfigLoadFailure(error: unknown, configPath?: string): CliStructured
 async function importC12(): Promise<typeof import('c12')> {
   const entry = realpathSync(createRequire(import.meta.url).resolve('c12'));
   return await import(pathToFileURL(entry).href);
+}
+
+type C12Result = Awaited<ReturnType<typeof import('c12').loadConfig<Record<string, unknown>>>>;
+
+/**
+ * Runs c12 against one config path. Every throw out of evaluation becomes a
+ * `CONFIG.EVALUATION_FAILED` and a requested path c12 did not resolve to becomes
+ * `CONFIG.FILE_NOT_FOUND`, so both loaders report the same failures for the
+ * same file.
+ */
+async function evaluateWithC12(
+  configPath: string | undefined,
+  cwd: string,
+): Promise<Result<C12Result, CliStructuredError>> {
+  const resolvedConfigPath = configPath ? resolve(cwd, configPath) : undefined;
+  const configCwd = resolvedConfigPath ? dirname(resolvedConfigPath) : cwd;
+
+  let result: C12Result;
+  try {
+    const c12 = await importC12();
+    result = await c12.loadConfig<Record<string, unknown>>({
+      name: 'prisma',
+      ...ifDefined('configFile', resolvedConfigPath),
+      cwd: configCwd,
+    });
+  } catch (error) {
+    return notOk(toConfigLoadFailure(error, configPath));
+  }
+
+  if (resolvedConfigPath && result.configFile !== resolvedConfigPath) {
+    return notOk(errorConfigFileNotFound(resolvedConfigPath));
+  }
+  return ok(result);
 }
 
 /** One evaluated config file: its path and its top-level sections. */
@@ -237,21 +277,11 @@ export async function loadConfigFiles(
   const resolvedConfigPath = configPath ? resolve(cwd, configPath) : undefined;
   const configCwd = resolvedConfigPath ? dirname(resolvedConfigPath) : cwd;
 
-  let result: Awaited<ReturnType<typeof import('c12').loadConfig<Record<string, unknown>>>>;
-  try {
-    const c12 = await importC12();
-    result = await c12.loadConfig<Record<string, unknown>>({
-      name: 'prisma',
-      ...ifDefined('configFile', resolvedConfigPath),
-      cwd: configCwd,
-    });
-  } catch (error) {
-    return notOk(toConfigLoadFailure(error, configPath));
+  const evaluated = await evaluateWithC12(configPath, cwd);
+  if (!evaluated.ok) {
+    return evaluated;
   }
-
-  if (resolvedConfigPath && result.configFile !== resolvedConfigPath) {
-    return notOk(errorConfigFileNotFound(resolvedConfigPath));
-  }
+  const result = evaluated.value;
 
   if (!result.config || Object.keys(result.config).length === 0) {
     /* v8 ignore next -- @preserve */
@@ -299,6 +329,31 @@ export async function loadConfigFiles(
   });
 }
 
+/**
+ * The raw default export of the module at `configPath`, evaluated exactly as
+ * {@link loadConfig} evaluates it and returned without validation or the
+ * version-marker check. The caller decides what the export means — a
+ * default export without the `$prismaConfig` marker is what an earlier Prisma
+ * CLI's config looks like.
+ */
+export async function evaluateConfigModule(
+  configPath: string,
+  options?: { readonly cwd?: string },
+): Promise<Result<unknown, CliStructuredError>> {
+  const cwd = options?.cwd ?? process.cwd();
+  const resolvedConfigPath = resolve(cwd, configPath);
+  if (!(await fileExists(resolvedConfigPath))) {
+    return notOk(errorConfigFileNotFound(resolvedConfigPath));
+  }
+  const evaluated = await evaluateWithC12(resolvedConfigPath, cwd);
+  if (!evaluated.ok) {
+    return evaluated;
+  }
+  /* v8 ignore next -- c12 always returns layers for a config it evaluated */
+  const [requestedLayer] = evaluated.value.layers ?? [];
+  return ok(requestedLayer?.config);
+}
+
 /** Which file wrote each top-level key of the `orm` section, nearest file first. */
 function ormProvenance(
   files: readonly ConfigFile[],
@@ -319,6 +374,15 @@ function ormProvenance(
   return { files: paths, keys };
 }
 
+/**
+ * Loads the Prisma 8 config and validates its `orm` section.
+ *
+ * Failures that prevent evaluation entirely — missing file, module that does
+ * not evaluate (`CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED`) — are the
+ * `Result` failure. Structural problems inside an evaluated config do not
+ * fail the load: they are returned as section-tagged diagnostics so commands
+ * fail only on the sections they read (via {@link requireConfigSections}).
+ */
 export async function loadConfig(
   configPath?: string,
   options?: { readonly cwd?: string },
@@ -329,7 +393,7 @@ export async function loadConfig(
   }
   const orm = loaded.value.merged['orm'];
   if (orm !== undefined && !isRecord(orm)) {
-    const base = buildLoadedConfig({}, { files: [], keys: {} });
+    const base = validateLoadedSection({}, { files: [], keys: {} });
     return ok({
       config: base.config,
       diagnostics: [
@@ -343,7 +407,7 @@ export async function loadConfig(
   const provenance = ormProvenance(loaded.value.files, section);
   const requested = loaded.value.files[0]?.path;
   return ok(
-    buildLoadedConfig(
+    validateLoadedSection(
       section,
       provenance.files.length === 0 && requested !== undefined
         ? {

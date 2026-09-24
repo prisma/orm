@@ -181,7 +181,8 @@ withTempDir(({ createTempDir }) => {
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
 
         const psl = readContractPsl(ctx);
-        expect(psl, 'Users.tags carries a PSL literal-list default, not dbgenerated').toMatch(
+        expect(psl).not.toContain('dbgenerated');
+        expect(psl, 'Users.tags carries a PSL literal-list default, not a raw one').toMatch(
           /tags\s+String\[\]\s+@default\(\[\]\)/,
         );
         expect(psl, 'Users.tags waives the element check its source database never had').toMatch(

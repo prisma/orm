@@ -523,9 +523,7 @@ async function recordOne(opts: {
     try {
       const probeCwd = setup !== 'none' ? LEGACY_WORKSPACE_DIR : CLI_ROOT;
       const output = probeCliOutput(recording.command, probeCwd);
-      const hash = hashContent(
-        [output, JSON.stringify(config.vhs), JSON.stringify(recording)].join('\0'),
-      );
+      const hash = hashContent(JSON.stringify([output, config.vhs, recording]));
       const key = `${group}/${recording.name}`;
 
       const svgExists = existsSync(join(SVGS_DIR, group, `${recording.name}.svg`));

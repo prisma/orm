@@ -63,6 +63,9 @@ describe('declaration documentation', () => {
     if (!node) throw new Error('expected a block attribute');
     const result = interpretAttribute(node, spec, {
       sources: new PslSources([[root, cursor.sourceFile]]),
+      symbols: {
+        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+      },
     });
     expect(result.assertOk()).toStrictEqual({
       value: {

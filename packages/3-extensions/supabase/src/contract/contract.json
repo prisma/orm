@@ -4969,8 +4969,8 @@
                 "attribute_mapping": {
                   "codecId": "pg/jsonb@1",
                   "default": {
-                    "expression": "'{}'::jsonb",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": {}
                   },
                   "nativeType": "jsonb",
                   "nullable": false
@@ -4978,8 +4978,8 @@
                 "authorization_params": {
                   "codecId": "pg/jsonb@1",
                   "default": {
-                    "expression": "'{}'::jsonb",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": {}
                   },
                   "nativeType": "jsonb",
                   "nullable": false
@@ -7613,8 +7613,8 @@
                 "transports": {
                   "codecId": "pg/jsonb@1",
                   "default": {
-                    "expression": "'[]'::jsonb",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": []
                   },
                   "nativeType": "jsonb",
                   "nullable": false
@@ -8115,8 +8115,8 @@
                 "metadata": {
                   "codecId": "pg/jsonb@1",
                   "default": {
-                    "expression": "'{}'::jsonb",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": {}
                   },
                   "nativeType": "jsonb",
                   "nullable": false
@@ -8824,7 +8824,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "43f09411473534105017fa715b8932facbdf79feab1bfc75da681beb87f22cbc",
+    "storageHash": "734893bc990ae5ec14dc7ad50a7d8b5873a864f056085a7ffd2f69c866989067",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

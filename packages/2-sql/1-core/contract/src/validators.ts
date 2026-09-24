@@ -236,7 +236,7 @@ function validateTableScopedEntryNames(storage: SqlStorage, errors: string[]): v
         const name = record['name'];
         const tableName = record['tableName'];
         if (typeof name !== 'string' || typeof tableName !== 'string') continue;
-        const key = `${tableName} ${name}`;
+        const key = JSON.stringify([tableName, name]);
         seen.set(key, (seen.get(key) ?? 0) + 1);
         if (seen.get(key) === 2) {
           errors.push(

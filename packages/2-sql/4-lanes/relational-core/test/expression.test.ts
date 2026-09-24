@@ -4,7 +4,6 @@ import { buildOperation, codecOf, type Expression, isExpression, toExpr } from '
 
 const infixLowering = {
   targetFamily: 'sql',
-  strategy: 'infix',
   template: '{{self}} ILIKE {{arg0}}',
 } as const;
 
@@ -170,7 +169,7 @@ describe('buildOperation', () => {
       method: 'length',
       args: [self],
       returns: { codecId: 'pg/int4@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'length({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'length({{self}})' },
     });
 
     const op = expression.buildAst() as OperationExpr;
@@ -184,7 +183,7 @@ describe('buildOperation', () => {
       method: 'upper',
       args: [self],
       returns: { codecId: 'pg/text@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'upper({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'upper({{self}})' },
     });
     expect(expression.buildAst()).toBe(expression.buildAst());
   });
@@ -194,7 +193,7 @@ describe('buildOperation', () => {
       method: 'upper',
       args: [ColumnRef.of('t', 'c')],
       returns: { codecId: 'pg/text@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'upper({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'upper({{self}})' },
     });
     expect(toExpr(inner)).toBe(inner.buildAst());
   });

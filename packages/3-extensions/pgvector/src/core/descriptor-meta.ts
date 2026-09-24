@@ -30,7 +30,6 @@ export function pgvectorQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} <=> {{arg0}}',
           },
         });
@@ -49,7 +48,6 @@ export function pgvectorQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '1 - ({{self}} <=> {{arg0}})',
           },
         });
