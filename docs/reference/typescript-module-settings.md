@@ -16,15 +16,15 @@ Prisma 8 does not require `NodeNext`. Under `"module": "NodeNext"` with `"type":
 | Project | Settings | Notes |
 | --- | --- | --- |
 | Already on an ESM-capable `module` | Keep it; add `resolveJsonModule` and the `include` entry | Nothing else changes. |
-| CommonJS, staying CommonJS | `"module": "nodenext"` and `resolveJsonModule`; `db.ts` imports the JSON without the `with { type: "json" }` attribute | No `"type": "module"`, no `.js` extensions, no import attribute. |
-| Running through `tsx`, `vite`, `next`, `esbuild`, or another bundler | `"module": "preserve"`, `"moduleResolution": "bundler"`, `resolveJsonModule` | Accepts extensionless imports and the import attribute. This is what `prisma orm init` writes. |
+| CommonJS, staying CommonJS | `"module": "nodenext"` and `resolveJsonModule`; `db.ts` imports the JSON without the `with { type: "json" }` attribute | No `"type": "module"`, no `.js` extensions, no import attribute. The attribute-free import works only because `nodenext` emits `db.ts` as CommonJS here; a file emitted as an ES module needs the attribute. |
+| Running through `tsx`, `vite`, `next`, `esbuild`, or another bundler | `"module": "preserve"`, `"moduleResolution": "bundler"`, `resolveJsonModule` | Accepts extensionless imports and the import attribute. Needs TypeScript 5.4 or later, the release that added `preserve`. This is what `prisma orm init` writes. |
 | Compiled with `tsc` and run with plain `node` as ES modules | `"module": "NodeNext"` | Every relative import needs its `.js` extension. |
 
 ## What `prisma orm init` writes
 
-- It merges `module: 'preserve'`, `moduleResolution: 'bundler'`, and `resolveJsonModule: true` into an existing `tsconfig.json` (`packages/1-framework/3-tooling/cli/src/commands/init/templates/tsconfig.ts`). It does this whatever the project's current `module` setting is, and reports only that it updated the file.
+- It merges `module: 'preserve'`, `moduleResolution: 'bundler'`, and `resolveJsonModule: true` into an existing `tsconfig.json`, and adds `node` to `compilerOptions.types` while keeping the entries already there, so `process.env` typechecks in a project with an explicit `types` list (`packages/1-framework/3-tooling/cli/src/commands/init/templates/tsconfig.ts`). It does this whatever the project's current `module` setting is, and reports only that it updated the file.
 - It scaffolds `db.ts` with the `with { type: 'json' }` import (`templates/code-templates.ts`).
-- When `package.json` declares a `"type"` other than `"module"`, it keeps the user's value and warns that `db.ts` will not load under it (`commands/init/hygiene-package-scripts.ts`). For a CommonJS project, the attribute-free import from the table above would load in both module systems.
+- When `package.json` declares a `"type"` other than `"module"`, it keeps the user's value and warns that `db.ts` will not load under it (`commands/init/hygiene-package-scripts.ts`). For a CommonJS project, the attribute-free import from the table above would load, because the file runs as CommonJS; Node requires the attribute when the file runs as an ES module.
 
 ## How the CommonJS option was verified
 
