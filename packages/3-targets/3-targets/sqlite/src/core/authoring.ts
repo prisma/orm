@@ -1,7 +1,10 @@
-import { temporalAuthoringPresets, temporalCodecPreset } from '@internal/family-sql/control';
 import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
+} from '@internal/framework-components/authoring';
+import {
+  temporalAuthoringPresets,
+  temporalCodecPreset,
 } from '@internal/framework-components/authoring';
 
 export const sqliteAuthoringTypes = {

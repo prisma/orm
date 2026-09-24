@@ -3,6 +3,7 @@ import type {
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
+import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
@@ -30,7 +31,6 @@ import { defaultTableName } from './default-table-name';
 import { formatDbAttributeMigrationMessage, getAttribute } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
 import {
-  checkUncomposedNamespace,
   lowerDefaultForField,
   reportUncomposedNamespace,
   resolveFieldTypeDescriptor,

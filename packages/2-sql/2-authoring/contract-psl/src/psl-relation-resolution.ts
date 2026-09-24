@@ -1,4 +1,5 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
+import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
 import type { FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
 import {
   diagnosticSource,
@@ -17,7 +18,7 @@ import type { RelationNode } from '@internal/sql-contract-ts/contract-builder';
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 
-import { checkUncomposedNamespace, reportUncomposedNamespace } from './psl-column-resolution';
+import { reportUncomposedNamespace } from './psl-column-resolution';
 import {
   findFieldAttributeNode,
   interpretFieldAttribute,

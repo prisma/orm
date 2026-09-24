@@ -1,8 +1,6 @@
+import { temporalCodecPreset } from '@internal/framework-components/authoring';
 import { expectTypeOf, test } from 'vitest';
-import {
-  temporalCodecPreset,
-  temporalCodecPresetWithPrecision,
-} from '../src/core/timestamp-now-generator';
+import { temporalCodecPresetWithPrecision } from '../src/core/timestamp-now-generator';
 
 const withPrecision = temporalCodecPresetWithPrecision({
   codecId: 'pg/timestamp-temporal@1',

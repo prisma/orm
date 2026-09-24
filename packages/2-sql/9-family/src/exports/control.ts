@@ -96,12 +96,8 @@ export {
   sqlDefaultLiteralTagEntry,
 } from '../core/sql-default-literal-tag';
 export {
-  TIMESTAMP_NOW_GENERATOR_ID,
-  temporalAuthoringPresets,
-  temporalCodecPreset,
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,
-  timestampNowControlDescriptor,
 } from '../core/timestamp-now-generator';
 
 export default new SqlFamilyDescriptor();

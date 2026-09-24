@@ -7,17 +7,17 @@ import type {
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeNamespace,
-  AuthoringFieldNamespace,
   AuthoringFieldPresetDescriptor,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
+  checkUncomposedNamespace,
+  getAuthoringFieldPreset,
   hasRegisteredFieldNamespace,
   instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeConstructor,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
   isDataTypeLoweringEntry,
   loweringEntryKey,
@@ -141,65 +141,6 @@ export function getAuthoringEntity(
   }
 
   return current !== undefined && isAuthoringEntityTypeDescriptor(current) ? current : undefined;
-}
-
-/**
- * Walks `authoringContributions.field` segment-by-segment and returns the field-preset descriptor at the resolved path, or `undefined` if no descriptor is registered.
- *
- * Symmetric with `getAuthoringTypeConstructor`. Field presets are strictly richer than type constructors — they can contribute `default` / `executionDefaults` / `id` / `unique` / `nullable` in addition to the `codecId` / `nativeType` / `typeParams` triple. PSL resolution tries field presets first, then falls back to type constructors on miss (see `resolveFieldTypeDescriptor`).
- */
-export function getAuthoringFieldPreset(
-  contributions: AuthoringContributions | undefined,
-  path: readonly string[],
-): AuthoringFieldPresetDescriptor | undefined {
-  let current: AuthoringFieldPresetDescriptor | AuthoringFieldNamespace | undefined =
-    contributions?.field;
-
-  for (const segment of path) {
-    if (typeof current !== 'object' || current === null || 'kind' in current) {
-      return undefined;
-    }
-    current = current[segment];
-  }
-
-  return current !== undefined && isAuthoringFieldPresetDescriptor(current) ? current : undefined;
-}
-
-/**
- * Returns the namespace prefix of `attributeName` if it references an unrecognized extension namespace, otherwise `undefined`. A namespace is considered recognized when it is:
- *
- * - `db` (native-type spec, always allowed),
- * - the active family id (e.g. `sql`),
- * - the active target id (e.g. `postgres`),
- * - a registered field-preset namespace (e.g. `temporal`),
- * - present in `composedExtensions`.
- *
- * Family/target/field-preset namespaces are exempted so that e.g. `@sql.foo` surfaces as PSL_UNSUPPORTED_*_ATTRIBUTE (the attribute isn't defined) rather than PSL_EXTENSION_NAMESPACE_NOT_COMPOSED (the namespace is already composed).
- */
-export function checkUncomposedNamespace(
-  attributeName: string,
-  composedExtensions: ReadonlySet<string>,
-  context?: {
-    readonly familyId?: string;
-    readonly targetId?: string;
-    readonly authoringContributions?: AuthoringContributions | undefined;
-  },
-): string | undefined {
-  const dotIndex = attributeName.indexOf('.');
-  if (dotIndex <= 0 || dotIndex === attributeName.length - 1) {
-    return undefined;
-  }
-  const namespace = attributeName.slice(0, dotIndex);
-  if (
-    namespace === 'db' ||
-    namespace === context?.familyId ||
-    namespace === context?.targetId ||
-    hasRegisteredFieldNamespace(context?.authoringContributions, namespace) ||
-    composedExtensions.has(namespace)
-  ) {
-    return undefined;
-  }
-  return namespace;
 }
 
 /**

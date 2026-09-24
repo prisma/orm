@@ -1,9 +1,11 @@
 import {
-  temporalAuthoringPresets,
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,
 } from '@internal/family-sql/control';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import {
+  collectScalarTypeConstructors,
+  temporalAuthoringPresets,
+} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringFieldPresets, postgresAuthoringTypes } from '../src/core/authoring';
 

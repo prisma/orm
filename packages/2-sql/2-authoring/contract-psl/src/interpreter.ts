@@ -25,6 +25,7 @@ import type {
   AuthoringWarning,
 } from '@internal/framework-components/authoring';
 import {
+  checkUncomposedNamespace,
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
   isAuthoringModelAttributeDescriptor,
@@ -92,7 +93,6 @@ import type { DataTypeSupport } from './data-type-default';
 import { getAttribute, getNamedArgument, mapFieldNamesToColumns } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
-  checkUncomposedNamespace,
   getAuthoringEntity,
   reportUncomposedNamespace,
   resolveFieldTypeDescriptor,

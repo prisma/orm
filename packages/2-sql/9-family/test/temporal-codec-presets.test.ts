@@ -1,3 +1,7 @@
+import {
+  temporalAuthoringPresets,
+  temporalCodecPreset,
+} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import {
   temporalCodecPresetMirrors,
@@ -5,8 +9,6 @@ import {
 } from '../../2-authoring/contract-psl/test/fixtures';
 import { sqlTimestampPresetMirror } from '../../2-authoring/contract-ts/test/temporal-preset-mirror';
 import {
-  temporalAuthoringPresets,
-  temporalCodecPreset,
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,
 } from '../src/core/timestamp-now-generator';
