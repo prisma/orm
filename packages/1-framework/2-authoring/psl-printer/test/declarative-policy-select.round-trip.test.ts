@@ -132,7 +132,7 @@ policy_select ProfilesSelect {
 }
 `;
 
-    it('publishes a typed envelope with the correct discriminator and source provenance', () => {
+    it('publishes a typed envelope with the correct discriminator and decoded values', () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
       expect(parsed.diagnostics).toEqual([]);
@@ -141,7 +141,7 @@ policy_select ProfilesSelect {
         kind: POLICY_SELECT_DISCRIMINATOR,
         name: 'ProfilesSelect',
       });
-      expect(block.block.parameters['using']?.expression).toBe('"auth.uid() = author_id"');
+      expect(envelope?.values['using']).toBe('auth.uid() = author_id');
     });
 
     it('lowers the typed envelope to a PolicySelectIr via the entityTypes factory', () => {
@@ -258,14 +258,33 @@ policy_select ProfilesSelect {
 }
 `;
 
+    // The test is the producer here: the print shape's text is written from
+    // the values the block means to carry, never rendered from parsed AST.
+    function producedPolicyBlock(): PslExtensionBlock {
+      return {
+        kind: POLICY_SELECT_DISCRIMINATOR,
+        keyword: POLICY_SELECT_KEYWORD,
+        name: 'ProfilesSelect',
+        parameters: {
+          target: { expression: 'Post', span: ZERO_SPAN },
+          as: { expression: 'restrictive', span: ZERO_SPAN },
+          using: { expression: '"auth.uid() = \\"author\\""', span: ZERO_SPAN },
+        },
+        blockAttributes: [],
+        span: ZERO_SPAN,
+      };
+    }
+
     it('prints the block back to PSL text containing the keyword and all entries', () => {
       const parsed = parsePolicySelect(source);
-      const block = onlyBlockSymbol(parsed);
       expect(parsed.diagnostics).toEqual([]);
 
-      const printed = printPslFromAst(documentForPrinting(parsed.symbolTable, block.block), {
-        pslBlockDescriptors: assembled.pslBlockDescriptors,
-      });
+      const printed = printPslFromAst(
+        documentForPrinting(parsed.symbolTable, producedPolicyBlock()),
+        {
+          pslBlockDescriptors: assembled.pslBlockDescriptors,
+        },
+      );
 
       expect(printed).toContain('policy_select ProfilesSelect {');
       expect(printed).toContain('target = Post');
@@ -279,7 +298,7 @@ policy_select ProfilesSelect {
       expect(firstParsed.diagnostics).toEqual([]);
 
       const printed = printPslFromAst(
-        documentForPrinting(firstParsed.symbolTable, firstBlock.block),
+        documentForPrinting(firstParsed.symbolTable, producedPolicyBlock()),
         { pslBlockDescriptors: assembled.pslBlockDescriptors },
       );
 

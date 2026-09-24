@@ -571,11 +571,10 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
   const enumDescriptor = getAuthoringEntity(input.authoringContributions, ['enum']);
   if (!enumDescriptor) {
     for (const symbol of input.enumBlocks) {
-      const decl = symbol.block;
       input.diagnostics.push({
         code: 'PSL_ENUM_MISSING_FACTORY',
-        message: `enum "${decl.name}" requires an "enum" entityType factory in the active authoring contributions`,
-        ...diagnosticSource(input.source.sources, symbol.node.syntax).at(decl.span),
+        message: `enum "${symbol.name}" requires an "enum" entityType factory in the active authoring contributions`,
+        ...diagnosticSource(input.source.sources, symbol.node.syntax).at(symbol.span),
       });
     }
     return { enumHandles, enumTypeDescriptors };

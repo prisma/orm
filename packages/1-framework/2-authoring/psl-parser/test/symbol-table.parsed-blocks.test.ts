@@ -174,7 +174,11 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
     const block = blockNamed(result, 'ReadPosts');
 
     expect(result.parsedBlocks.has(block)).toBe(false);
-    expect(block.block.parameters['using']?.expression).toBe('42');
+    expect(block.keyword).toBe('policy_select');
+    expect([...block.node.entries()].map((entry) => entry.key()?.name())).toEqual([
+      'target',
+      'using',
+    ]);
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
@@ -199,7 +203,8 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
 
     expect(result.parsedBlocks.size).toBe(0);
     expect(result.diagnostics).toEqual([]);
-    expect(block.block.parameters['on']?.expression).toBe('read');
+    expect(block.keyword).toBe('mystery');
+    expect([...block.node.entries()].map((entry) => entry.key()?.name())).toEqual(['on', 'on']);
   });
 
   it('resolves a forward reference: the policy is declared before its target model', () => {
