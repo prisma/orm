@@ -198,7 +198,7 @@ export interface PslExtensionBlockParsedAttribute {
 }
 ```
 
-`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The source/print representation's `blockAttributes` array, whose argument values are flattened source text, exists for the printer only ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
+`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
 
 ---
 
