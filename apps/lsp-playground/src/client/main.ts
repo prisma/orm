@@ -135,14 +135,15 @@ function basename(path: string): string {
 /**
  * One scratch-project member as the client tracks it: its Monaco-facing
  * identity (`uri`/`path`), the text last known for it (the seed text until
- * the tab is opened and edited, then whatever the editor model held when the
- * user last switched away), and whether `didOpen` has been sent for it yet.
+ * its file is opened and edited, then whatever the editor model held when
+ * the user last switched away), and whether `didOpen` has been sent for it
+ * yet.
  *
- * A tab's document opens — and `didOpen` fires — only the first time it is
- * activated; re-activating an already-opened tab only swaps the visible
+ * A file's document opens — and `didOpen` fires — only the first time it is
+ * selected; re-selecting an already-opened file only swaps the visible
  * model, never re-opens it.
  */
-interface Tab {
+interface FileEntry {
   readonly uri: string;
   readonly path: string;
   readonly button: HTMLButtonElement;
@@ -154,7 +155,7 @@ interface Tab {
    * reference to whichever model the editor stops showing; without a second,
    * independently-held reference keeping the ref count above zero, the
    * underlying document closes (and its `didOpen` re-fires) every time its
-   * tab is switched away from and back to, defeating "switching back only
+   * entry is switched away from and back to, defeating "switching back only
    * swaps the visible model".
    */
   pin: IReference<ITextFileEditorModel> | undefined;
@@ -176,20 +177,20 @@ async function main(): Promise<void> {
     throw new Error('#format-document button not found');
   }
 
-  const tabStrip = document.getElementById('tab-strip');
-  if (tabStrip === null) {
-    throw new InternalError('#tab-strip mount point not found');
+  const filePicker = document.getElementById('file-picker');
+  if (filePicker === null) {
+    throw new InternalError('#file-picker mount point not found');
   }
 
   const fileSystemProvider = new RegisteredFileSystemProvider(false);
-  const tabs: Tab[] = runtimeConfig.members.map((member) => {
+  const entries: FileEntry[] = runtimeConfig.members.map((member) => {
     const uri = vscode.Uri.parse(member.uri);
     fileSystemProvider.registerFile(new RegisteredMemoryFile(uri, member.text));
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'tab';
+    button.className = 'file-entry';
     button.textContent = basename(uri.path);
-    tabStrip.appendChild(button);
+    filePicker.appendChild(button);
     return {
       uri: member.uri,
       path: uri.path,
@@ -201,8 +202,8 @@ async function main(): Promise<void> {
   });
   registerFileSystemOverlay(1, fileSystemProvider);
 
-  const firstTab = tabs[0];
-  if (firstTab === undefined) {
+  const firstEntry = entries[0];
+  if (firstEntry === undefined) {
     throw new InternalError('Playground runtime config carries no scratch-project members');
   }
 
@@ -267,8 +268,8 @@ async function main(): Promise<void> {
   const editorAppConfig: EditorAppConfig = {
     codeResources: {
       modified: {
-        text: firstTab.text,
-        uri: firstTab.path,
+        text: firstEntry.text,
+        uri: firstEntry.path,
       },
     },
     editorOptions: {
@@ -310,52 +311,53 @@ async function main(): Promise<void> {
   const languageClientWrapper = new LanguageClientWrapper(languageClientConfig);
   await languageClientWrapper.start();
 
-  let activeTab = firstTab;
+  let activeEntry = firstEntry;
   const setActiveStyling = (): void => {
-    for (const tab of tabs) {
-      tab.button.classList.toggle('active', tab === activeTab);
+    for (const entry of entries) {
+      entry.button.classList.toggle('active', entry === activeEntry);
     }
   };
 
-  async function openTab(tab: Tab): Promise<void> {
-    // First activation only: this is the one `didOpen` a never-clicked tab
+  async function openEntry(entry: FileEntry): Promise<void> {
+    // First selection only: this is the one `didOpen` a never-selected file
     // never sends. `openTextDocument` — via vscode-languageclient's
     // document-sync feature — is what notifies the language server.
-    await vscode.workspace.openTextDocument(vscode.Uri.parse(tab.uri));
+    await vscode.workspace.openTextDocument(vscode.Uri.parse(entry.uri));
     // Pin a second, independently-held model reference so the document stays
     // open server-side even after `updateCodeResources` later disposes its
-    // own reference while switching to a different tab (see the `pin` field
-    // doc on `Tab`).
-    tab.pin = await createModelReference(vscode.Uri.parse(tab.uri));
-    tab.opened = true;
+    // own reference while switching to a different file (see the `pin` field
+    // doc on `FileEntry`).
+    entry.pin = await createModelReference(vscode.Uri.parse(entry.uri));
+    entry.opened = true;
   }
 
-  async function activateTab(tab: Tab): Promise<void> {
-    if (tab === activeTab) {
+  async function selectEntry(entry: FileEntry): Promise<void> {
+    if (entry === activeEntry) {
       return;
     }
-    // Capture the outgoing tab's live edits so switching back later restores
+    // Capture the outgoing file's live edits so switching back later restores
     // them instead of the stale seed text (updateCodeResources below writes
     // whatever text it is given back into the file-system overlay).
     const outgoingModel = editorApp.getEditor()?.getModel();
     if (outgoingModel !== null && outgoingModel !== undefined) {
-      activeTab.text = outgoingModel.getValue();
+      activeEntry.text = outgoingModel.getValue();
     }
-    if (!tab.opened) {
-      await openTab(tab);
+    if (!entry.opened) {
+      await openEntry(entry);
     }
-    await editorApp.updateCodeResources({ modified: { text: tab.text, uri: tab.path } });
-    activeTab = tab;
+    await editorApp.updateCodeResources({ modified: { text: entry.text, uri: entry.path } });
+    activeEntry = entry;
     setActiveStyling();
   }
 
-  for (const tab of tabs) {
-    tab.button.addEventListener('click', () => void activateTab(tab));
+  for (const entry of entries) {
+    entry.button.addEventListener('click', () => void selectEntry(entry));
   }
 
-  // The first tab opens on startup exactly as the single-schema playground
-  // always has; every other tab stays unmanaged until its own first click.
-  await openTab(firstTab);
+  // The first file opens on startup exactly as the single-schema playground
+  // always has; every other file stays unmanaged until its own first
+  // selection.
+  await openEntry(firstEntry);
   setActiveStyling();
 
   formatButton.addEventListener('click', async () => {

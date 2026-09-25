@@ -29,34 +29,41 @@
         padding: 3px 8px;
       }
       #format-document:hover { background: #45475a; }
-      /* Tab strip: one tab per scratch-project member. A tab's document opens
-         (and sends didOpen) only the first time it is clicked. */
-      #tab-strip {
+      /* Below the header: a file-picker sidebar (left) beside the editor
+         (right, filling the rest). Selecting a file's entry opens its
+         document (and sends didOpen) only the first time it is selected. */
+      #main {
+        flex: 1;
+        min-height: 0;
         display: flex;
         align-items: stretch;
-        gap: 2px;
-        padding: 4px 8px 0;
-        background: #181825;
-        border-bottom: 1px solid #313244;
-        overflow-x: auto;
       }
-      #tab-strip .tab {
-        border: 1px solid #313244;
-        border-bottom: none;
-        border-radius: 4px 4px 0 0;
-        background: #1e1e2e;
+      #file-picker {
+        flex: none;
+        width: 180px;
+        background: #181825;
+        border-right: 1px solid #313244;
+        overflow-y: auto;
+      }
+      #file-picker .file-entry {
+        display: block;
+        width: 100%;
+        border: none;
+        border-left: 2px solid transparent;
+        background: transparent;
         color: #a6adc8;
         cursor: pointer;
         font: inherit;
         font-size: 12px;
+        text-align: left;
         padding: 6px 12px;
         white-space: nowrap;
       }
-      #tab-strip .tab:hover { background: #313244; color: #cdd6f4; }
-      #tab-strip .tab.active {
+      #file-picker .file-entry:hover { background: #313244; color: #cdd6f4; }
+      #file-picker .file-entry.active {
         background: #313244;
         color: #cdd6f4;
-        border-color: #45475a;
+        border-left-color: #45475a;
       }
       /* Monaco editor container */
       #editor {
@@ -74,8 +81,10 @@
         <button type="button" id="format-document">Format</button>
       </div>
     </div>
-    <div id="tab-strip"></div>
-    <div id="editor"></div>
+    <div id="main">
+      <div id="file-picker"></div>
+      <div id="editor"></div>
+    </div>
     <script type="module" src="/src/client/main.ts"></script>
   </body>
 </html>
