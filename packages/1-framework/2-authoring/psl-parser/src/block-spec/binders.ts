@@ -7,16 +7,12 @@ export function fixedBlock<const P extends Record<string, Param<unknown, Attribu
   return { mode: 'fixed', parameters: config.parameters };
 }
 
-export function entriesBlock<R extends ArgType<unknown, AttributeCtx>>(config: {
+export function entriesBlock<
+  R extends ArgType<unknown, AttributeCtx>,
+  Bare extends boolean = false,
+>(config: {
   readonly value: { readonly type: R; readonly documentation: string };
-}): EntriesBlockSpec<Record<string, OutOf<R>>>;
-export function entriesBlock<R extends ArgType<unknown, AttributeCtx>>(config: {
-  readonly value: { readonly type: R; readonly documentation: string };
-  readonly allowBare: true;
-}): EntriesBlockSpec<Record<string, OutOf<R> | undefined>>;
-export function entriesBlock<R extends ArgType<unknown, AttributeCtx>>(config: {
-  readonly value: { readonly type: R; readonly documentation: string };
-  readonly allowBare?: true;
-}): EntriesBlockSpec<Record<string, OutOf<R> | undefined>> {
+  readonly allowBare?: Bare;
+}): EntriesBlockSpec<Record<string, Bare extends true ? OutOf<R> | undefined : OutOf<R>>> {
   return { mode: 'entries', value: config.value, allowBare: config.allowBare ?? false };
 }
