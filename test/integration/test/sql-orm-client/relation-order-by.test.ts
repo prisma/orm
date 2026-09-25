@@ -21,7 +21,7 @@ import {
   withCollectionRuntime,
 } from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
-import { seedPosts, seedTags, seedUsers, seedUserTags } from './runtime-helpers';
+import { seedComments, seedPosts, seedTags, seedUsers, seedUserTags } from './runtime-helpers';
 
 const ALICE = { id: 1, name: 'Alice' };
 const ZOE = { id: 2, name: 'Zoe' };
@@ -244,6 +244,73 @@ describe('integration/relation-order-by', () => {
 
         expect(all).toEqual({ totalViews: 160 });
         expect(firstPage).toEqual({ totalViews: 100 });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  // Proves a relation order inside a self-relation include correlates with the
+  // aliased child rows: Alice's invited users come back by their own post
+  // counts (Bob 2, Zoe 3), not by id; and ordering them by their inviter's name
+  // (the same inviter for every child, so id decides) runs against the
+  // aliased inner table.
+  it(
+    'orders a self-relation include by a relation count and by a to-one column',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seed(runtime);
+        const users = createUsersCollection(runtime).select('id', 'name');
+
+        const byPostCount = await users
+          .where((u) => u.id.eq(ALICE.id))
+          .include('invitedUsers', (invited) =>
+            invited.select('id', 'name').orderBy([(u) => u.posts.count().asc(), (u) => u.id.asc()]),
+          )
+          .all();
+        const byInviterName = await users
+          .where((u) => u.id.eq(ALICE.id))
+          .include('invitedUsers', (invited) =>
+            invited
+              .select('id', 'name')
+              .orderBy([(u) => u.invitedBy.name.asc(), (u) => u.id.desc()]),
+          )
+          .all();
+
+        expect(byPostCount).toEqual([{ ...ALICE, invitedUsers: [BOB, ZOE] }]);
+        expect(byInviterName).toEqual([{ ...ALICE, invitedUsers: [BOB, ZOE] }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  // Proves a filtered count order inside an include binds its parameter:
+  // Zoe's posts ordered by how many 'ok' comments each has differ from both id
+  // order and the unfiltered comment count.
+  it(
+    'orders an include by a filtered to-many count',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seed(runtime);
+        await seedComments(runtime, [
+          { id: 1, body: 'ok', postId: 2 },
+          { id: 2, body: 'ok', postId: 2 },
+          { id: 3, body: 'spam', postId: 3 },
+          { id: 4, body: 'spam', postId: 3 },
+          { id: 5, body: 'spam', postId: 3 },
+          { id: 6, body: 'ok', postId: 4 },
+        ]);
+        const users = createUsersCollection(runtime).select('id', 'name');
+
+        const rows = await users
+          .where((u) => u.id.eq(ZOE.id))
+          .include('posts', (posts) =>
+            posts
+              .select('id')
+              .orderBy([(p) => p.comments.count((c) => c.body.eq('ok')).desc(), (p) => p.id.asc()]),
+          )
+          .all();
+
+        expect(rows).toEqual([{ ...ZOE, posts: [{ id: 2 }, { id: 4 }, { id: 3 }] }]);
       });
     },
     timeouts.spinUpPpgDev,
