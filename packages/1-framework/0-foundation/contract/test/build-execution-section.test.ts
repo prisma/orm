@@ -46,6 +46,30 @@ describe('buildExecutionSection', () => {
     expect(input[0]).toEqual(defaultFor('b', 'Post', 'createdAt'));
   });
 
+  it('orders entries by UTF-16 code unit, independent of the host locale', () => {
+    const section = buildExecutionSection({
+      target: 'postgres',
+      targetFamily: 'sql',
+      defaults: [
+        defaultFor('public', 'Ürün', 'createdAt'),
+        defaultFor('public', 'user_profile', 'createdAt'),
+        defaultFor('public', 'post', 'createdAt'),
+        defaultFor('public', 'User', 'createdAt'),
+      ],
+    });
+    expect(section).toEqual({
+      executionHash: '81b78e1492452f91daacdb0fd3a21ec9b4eb58febabdb4548963ab55b810fa3a',
+      mutations: {
+        defaults: [
+          defaultFor('public', 'User', 'createdAt'),
+          defaultFor('public', 'post', 'createdAt'),
+          defaultFor('public', 'user_profile', 'createdAt'),
+          defaultFor('public', 'Ürün', 'createdAt'),
+        ],
+      },
+    });
+  });
+
   it('hashes the same defaults differently for another target', () => {
     const defaults = [defaultFor('a', 'User', 'createdAt')];
     expect(

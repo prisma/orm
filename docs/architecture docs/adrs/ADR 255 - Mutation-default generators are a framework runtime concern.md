@@ -116,7 +116,7 @@ For each default of `(namespace, entry)` with a phase for `op` (`onCreate` for `
 
 ## The execution section
 
-A default's `ref` is `{ namespace, entry, field }` ([ADR 158](ADR%20158%20-%20Execution%20mutation%20defaults.md)): `entry` is the table or collection and `field` the column or stored document field, so the runtime matches refs without knowing the family. Authoring builds the section with `buildExecutionSection({ target, targetFamily, defaults })` from `@internal/contract/hashing`. It sorts the defaults by namespace, then entry, then field, and computes `executionHash` over the sorted section, so every authoring path (the SQL TypeScript builder, the Mongo PSL interpreter and TypeScript builder, the Prisma 6 MongoDB reader) emits the same section and hash for the same defaults.
+A default's `ref` is `{ namespace, entry, field }` ([ADR 158](ADR%20158%20-%20Execution%20mutation%20defaults.md)): `entry` is the table or collection and `field` the column or stored document field, so the runtime matches refs without knowing the family. Authoring builds the section with `buildExecutionSection({ target, targetFamily, defaults })` from `@internal/contract/hashing`. It sorts the defaults by namespace, then entry, then field, comparing names by UTF-16 code unit rather than locale collation (which varies with the host's locale and ICU build), and computes `executionHash` over the sorted section, so every authoring path (the SQL TypeScript builder, the Mongo PSL interpreter and TypeScript builder, the Prisma 6 MongoDB reader) emits the same section and hash for the same defaults.
 
 ## Consequences
 

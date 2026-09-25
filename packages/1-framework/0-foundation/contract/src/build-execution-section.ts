@@ -1,17 +1,18 @@
+import { compareCodeUnits } from './canonicalization-storage-sort';
 import type { ContractExecutionSection } from './contract-types';
 import { computeExecutionHash } from './hashing';
 import type { ExecutionMutationDefault } from './types';
 
 function compareRefs(a: ExecutionMutationDefault, b: ExecutionMutationDefault): number {
   return (
-    a.ref.namespace.localeCompare(b.ref.namespace) ||
-    a.ref.entry.localeCompare(b.ref.entry) ||
-    a.ref.field.localeCompare(b.ref.field)
+    compareCodeUnits(a.ref.namespace, b.ref.namespace) ||
+    compareCodeUnits(a.ref.entry, b.ref.entry) ||
+    compareCodeUnits(a.ref.field, b.ref.field)
   );
 }
 
 /**
- * Builds a contract's `execution` section from its mutation defaults: sorted by namespace, entry and field, and hashed for the target. Every authoring path calls this, so they emit the same section and hash for the same defaults.
+ * Builds a contract's `execution` section from its mutation defaults: sorted by namespace, entry and field in UTF-16 code-unit order, and hashed for the target. Every authoring path calls this, so they emit the same section and hash for the same defaults.
  */
 export function buildExecutionSection(input: {
   readonly target: string;
