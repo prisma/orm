@@ -19,7 +19,6 @@
         gap: 12px;
       }
       #header .actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
-      #header .path { opacity: 0.7; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       #format-document {
         border: 1px solid #45475a;
         border-radius: 4px;
@@ -30,6 +29,42 @@
         padding: 3px 8px;
       }
       #format-document:hover { background: #45475a; }
+      /* Below the header: a file-picker sidebar (left) beside the editor
+         (right, filling the rest). Selecting a file's entry opens its
+         document (and sends didOpen) only the first time it is selected. */
+      #main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: stretch;
+      }
+      #file-picker {
+        flex: none;
+        width: 180px;
+        background: #181825;
+        border-right: 1px solid #313244;
+        overflow-y: auto;
+      }
+      #file-picker .file-entry {
+        display: block;
+        width: 100%;
+        border: none;
+        border-left: 2px solid transparent;
+        background: transparent;
+        color: #a6adc8;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        text-align: left;
+        padding: 6px 12px;
+        white-space: nowrap;
+      }
+      #file-picker .file-entry:hover { background: #313244; color: #cdd6f4; }
+      #file-picker .file-entry.active {
+        background: #313244;
+        color: #cdd6f4;
+        border-left-color: #45475a;
+      }
       /* Monaco editor container */
       #editor {
         flex: 1;
@@ -44,10 +79,12 @@
       <span>PSL Playground — live diagnostics from <code>prisma lsp</code></span>
       <div class="actions">
         <button type="button" id="format-document">Format</button>
-        <span class="path" id="schema-path"></span>
       </div>
     </div>
-    <div id="editor"></div>
+    <div id="main">
+      <div id="file-picker"></div>
+      <div id="editor"></div>
+    </div>
     <script type="module" src="/src/client/main.ts"></script>
   </body>
 </html>
