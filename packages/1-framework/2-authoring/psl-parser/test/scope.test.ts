@@ -21,7 +21,6 @@ function scopesFor(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const contributed = contributedScope(contributedTypeScope(TYPE_CONSTRUCTORS));
   const top = documentScope(symbolTable.topLevel, contributed);

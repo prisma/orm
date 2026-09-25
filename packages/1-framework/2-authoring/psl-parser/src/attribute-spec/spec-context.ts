@@ -1,22 +1,19 @@
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type { ParsedPslExtensionBlock } from '@internal/framework-components/psl-ast';
 import type { BlockSpecContext } from '../block-spec/types';
-import type { BlockSymbol, FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
-import type { AttributeCtx, AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './types';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
+import type { AttributeSpec, BoundCtx, FieldAttributeCtx, ModelAttributeCtx } from './types';
 
+/**
+ * Construction-time context for attribute spec factories. Factories run
+ * inside binder construction, so the context carries symbol and registry
+ * facts only — never the binder and never interpreted envelopes; a grammar
+ * that depends on a block (e.g. enum member default arms) reads names from
+ * the block's syntax through the symbol table.
+ */
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
-  /**
-   * Typed block envelopes for spec factories whose grammar depends on an
-   * interpreted block (e.g. enum member default arms). Required: the owner
-   * building the context has just resolved the table's blocks
-   * (`interpretExtensionBlocks`) and supplies the map, so a spec can rely
-   * on it. Absence semantics exist only per block: an invalid or
-   * unregistered block has no envelope in the map.
-   */
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
@@ -41,6 +38,4 @@ export interface AttributeSpecNamespace {
  * factory context block value specs get; implementations that need no
  * context may ignore the argument.
  */
-export type BlockAttributeSpecFactory = (
-  ctx: BlockSpecContext,
-) => AttributeSpec<never, AttributeCtx>;
+export type BlockAttributeSpecFactory = (ctx: BlockSpecContext) => AttributeSpec<never, BoundCtx>;

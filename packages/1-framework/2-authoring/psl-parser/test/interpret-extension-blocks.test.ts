@@ -8,6 +8,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
+import { createBinder } from '../src/binder';
 import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
@@ -80,8 +81,32 @@ function build(source: string) {
     documents: [document],
     sources,
   });
-  const { parsedBlocks, diagnostics } = interpretExtensionBlocks(symbolTable, sources, DESCRIPTORS);
-  return { symbolTable, sources, collectionDiagnostics, parsedBlocks, diagnostics };
+  const { binder, diagnostics: binderDiagnostics } = createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {
+      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+    },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: DESCRIPTORS,
+  });
+  const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
+    symbolTable,
+    sources,
+    pslBlockDescriptors: DESCRIPTORS,
+    binder,
+  });
+  return {
+    symbolTable,
+    sources,
+    binder,
+    binderDiagnostics,
+    collectionDiagnostics,
+    parsedBlocks,
+    diagnostics,
+  };
 }
 
 function blockNamed(
@@ -297,8 +322,12 @@ describe('interpretExtensionBlocks() — consumer-resolved envelopes', () => {
     );
 
     expect(result.parsedBlocks.size).toBe(0);
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({ message: 'Unknown model reference "Hidden"' }),
+    expect(result.diagnostics).toEqual([]);
+    expect(result.binderDiagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find entity "Hidden"',
+      }),
     ]);
   });
 
@@ -398,7 +427,12 @@ describe('interpretExtensionBlocks() — consumer-resolved envelopes', () => {
       ].join('\n'),
     );
 
-    const again = interpretExtensionBlocks(result.symbolTable, result.sources, DESCRIPTORS);
+    const again = interpretExtensionBlocks({
+      symbolTable: result.symbolTable,
+      sources: result.sources,
+      pslBlockDescriptors: DESCRIPTORS,
+      binder: result.binder,
+    });
 
     expect([...again.parsedBlocks.keys()]).toEqual([...result.parsedBlocks.keys()]);
     const block = blockNamed(result, 'ReadPosts');

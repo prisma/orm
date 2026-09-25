@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { blockAttribute, fixedBlock, interpretExtensionBlocks, str } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
+import { supportBinder } from './support';
 
 const locations = [
   { namespace: undefined, name: 'Gear' },
@@ -50,7 +51,16 @@ function fixture(
     documents: [document],
     sources,
   });
-  const blocks = interpretExtensionBlocks(result.symbolTable, sources, descriptors);
+  const blocks = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
+    pslBlockDescriptors: descriptors,
+    binder: supportBinder({
+      sources,
+      symbolTable: result.symbolTable,
+      pslBlockDescriptors: descriptors,
+    }),
+  });
   const scope =
     namespace === undefined
       ? result.symbolTable.topLevel
@@ -88,7 +98,11 @@ describe.each(locations)(
           message: `Duplicate attribute "@@map" in "widget" block "${name}"; first occurrence wins`,
         },
       ]);
-      expect(result.factory).toHaveBeenCalledTimes(1);
+      // One instantiation per declared occurrence while the binder binds
+      // arguments (both @@map lines), plus one for the accepted first
+      // occurrence at interpretation.
+      expect(result.factory).toHaveBeenCalledTimes(3);
+      expect(result.interpretedSymbols).toHaveLength(1);
       expect(result.scope && Object.hasOwn(result.scope.blocks, name)).toBe(true);
     });
 
@@ -98,7 +112,7 @@ describe.each(locations)(
         'PSL_INVALID_ATTRIBUTE_SYNTAX',
         'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
       ]);
-      expect(result.factory).toHaveBeenCalledTimes(1);
+      expect(result.factory).toHaveBeenCalledTimes(3);
     });
 
     it('interprets only the first accepted block declaration', () => {
@@ -106,7 +120,7 @@ describe.each(locations)(
       expect(result.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
         { code: 'PSL_DUPLICATE_DECLARATION', message: `Duplicate declaration of "${name}"` },
       ]);
-      expect(result.factory).toHaveBeenCalledTimes(1);
+      expect(result.factory).toHaveBeenCalledTimes(2);
       expect(result.interpretedSymbols).toHaveLength(1);
       expect(result.interpretedSymbols[0]).toBe(result.block);
     });

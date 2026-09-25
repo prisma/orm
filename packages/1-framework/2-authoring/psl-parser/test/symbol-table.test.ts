@@ -16,12 +16,21 @@ import {
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
 } from '../src/syntax/ast/declarations';
-import { ownEntry } from './support';
+import { ownEntry, supportBinder } from './support';
 
 function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {}) {
   const { document, sources } = parse(source, 'test.psl');
   const result = buildSymbolTable({ documents: [document], sources });
-  const blocks = interpretExtensionBlocks(result.symbolTable, sources, pslBlockDescriptors);
+  const blocks = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
+    pslBlockDescriptors,
+    binder: supportBinder({
+      sources,
+      symbolTable: result.symbolTable,
+      pslBlockDescriptors,
+    }),
+  });
   return { ...result, blocks };
 }
 

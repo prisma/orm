@@ -1,12 +1,21 @@
-import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeNamespace,
+} from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
-import type { AttributeSpecNamespace } from './attribute-spec/spec-context';
+import { blindCast } from '@internal/utils/casts';
+import type {
+  AttributeSpecNamespace,
+  BlockAttributeSpecFactory,
+} from './attribute-spec/spec-context';
 import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
+import { blockSpecFactoryOf } from './block-spec/descriptor';
 import { contributedTypeScope } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
+import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
-import type { ResolvedAttribute } from './resolve';
+import { type ResolvedAttribute, readResolvedAttributes } from './resolve';
 import {
   contributedScope,
   documentScope,
@@ -82,6 +91,13 @@ export interface CreateBinderOptions {
   readonly typeConstructors: AuthoringTypeNamespace;
   readonly attributeSpecs: AttributeSpecNamespace;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  /**
+   * Registered generic-block descriptors. Reference-kinded rules in each
+   * block's value spec (and its `@@` attribute specs) are bound in the same
+   * eager pass as attribute arguments, so one binder per snapshot covers
+   * attributes and block entries alike.
+   */
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
 }
 
@@ -162,6 +178,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     controlMutationDefaults,
     describeUnsupportedAttribute,
   } = options;
+  const pslBlockDescriptors = options.pslBlockDescriptors ?? {};
   const stack = new ScopeStack(
     documentScope(symbolTable.topLevel, contributedScope(contributedTypeScope(typeConstructors))),
   );
@@ -239,7 +256,129 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   });
 
+  const blockScopes: readonly {
+    readonly blocks: Readonly<Record<string, BlockSymbol>>;
+    readonly scope: Scope;
+  }[] = [
+    { blocks: symbolTable.topLevel.blocks, scope: stack.current() },
+    ...Object.values(symbolTable.topLevel.namespaces).map((namespace) => ({
+      blocks: namespace.blocks,
+      scope: namespaceScope(namespace, stack.current()),
+    })),
+  ];
+  for (const { blocks, scope } of blockScopes) {
+    for (const block of Object.values(blocks)) {
+      bindBlock(block, scope, {
+        pslBlockDescriptors,
+        symbolTable,
+        sources,
+        references,
+        diagnostics,
+      });
+    }
+  }
+
   return { binder: new PslBinder(declarations, references), diagnostics };
+}
+
+interface BlockBindContext {
+  readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
+  readonly symbolTable: SymbolTable;
+  readonly sources: PslSources;
+  readonly references: WeakMap<SyntaxNode, Resolution>;
+  readonly diagnostics: ParseDiagnostic[];
+}
+
+/**
+ * Binds a registered block's reference-kinded value entries and `@@`
+ * attribute arguments against the block's lexical scope — declaring
+ * namespace, then top level, then the universe scope; siblings never. A rule
+ * whose grammar also accepts a plain identifier (e.g. a checked role
+ * reference with an unrestricted fallback) binds an unresolved name
+ * silently, because the spec declares that an undeclared name is legal.
+ */
+function bindBlock(block: BlockSymbol, scope: Scope, ctx: BlockBindContext): void {
+  const descriptor = findBlockDescriptor(ctx.pslBlockDescriptors, block.keyword);
+  if (descriptor === undefined) return;
+  const spec = blockSpecFactoryOf(descriptor)({ symbols: ctx.symbolTable, block });
+
+  for (const entry of block.node.entries()) {
+    const key = entry.key()?.name();
+    if (key === undefined) continue;
+    const rule =
+      spec.mode === 'fixed'
+        ? Object.hasOwn(spec.parameters, key)
+          ? spec.parameters[key]?.type
+          : undefined
+        : spec.value.type;
+    const value = entry.value();
+    if (rule === undefined || value === undefined) continue;
+    bindBlockExpression(rule, value, scope, ctx);
+  }
+
+  const attributeSpecs = descriptor.attributes ?? {};
+  if (Object.keys(attributeSpecs).length === 0) return;
+  for (const attribute of readResolvedAttributes(block.node.attributes(), ctx.sources)) {
+    const factory = attributeSpecs[attribute.name];
+    if (factory === undefined) continue;
+    const attributeSpec = blindCast<
+      BlockAttributeSpecFactory,
+      'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; the binder restores the factory type the descriptor surface documents'
+    >(factory)({ symbols: ctx.symbolTable, block });
+    let positional = 0;
+    for (const arg of attribute.args) {
+      const param =
+        arg.name === undefined
+          ? attributeSpec.positional[positional++]
+          : attributeSpec.named[arg.name];
+      if (param === undefined || arg.expression === undefined) continue;
+      bindBlockExpression(param.type, arg.expression, scope, ctx);
+    }
+  }
+}
+
+function bindBlockExpression(
+  rule: unknown,
+  expression: ExpressionAst,
+  scope: Scope,
+  ctx: BlockBindContext,
+): void {
+  if (referenceKind(rule) !== 'entityRef') return;
+  const silent = allowsUnresolvedName(rule);
+  for (const node of referenceNodes(expression)) {
+    const name = IdentifierAst.cast(node)?.name();
+    if (name === undefined) continue;
+    const found = scope.lookup(name);
+    if (found !== undefined) {
+      ctx.references.set(node, found);
+      continue;
+    }
+    ctx.references.set(node, { kind: 'unresolved', name });
+    if (silent) continue;
+    ctx.diagnostics.push({
+      code: PSL_UNRESOLVED_REFERENCE,
+      message: `Cannot find entity "${name}"`,
+      data: { reference: 'entity' },
+      ...diagnosticSource(ctx.sources, node).at(),
+    });
+  }
+}
+
+/**
+ * Whether the rule's grammar accepts a name the scope cannot resolve: a
+ * `oneOf` carrying a non-reference alternative (an unrestricted identifier)
+ * parses successfully without a resolution, so binding stays silent.
+ */
+function allowsUnresolvedName(type: unknown): boolean {
+  if (typeof type !== 'object' || type === null) return false;
+  if ('alternatives' in type && Array.isArray(type.alternatives)) {
+    return type.alternatives.some(
+      (alternative) =>
+        referenceKind(alternative) === undefined || allowsUnresolvedName(alternative),
+    );
+  }
+  if ('of' in type) return allowsUnresolvedName(type.of);
+  return false;
 }
 
 interface BindContext {

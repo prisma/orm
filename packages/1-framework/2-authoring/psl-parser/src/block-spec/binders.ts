@@ -1,4 +1,4 @@
-import type { ArgType, AttributeCtx, NamedOut, OutOf, Param } from '../attribute-spec/types';
+import type { ArgType, BoundCtx, NamedOut, OutOf, Param } from '../attribute-spec/types';
 import type { EntriesBlockSpec, FixedBlockSpec } from './types';
 
 /**
@@ -7,7 +7,7 @@ import type { EntriesBlockSpec, FixedBlockSpec } from './types';
  * case the shared default metadata applies. Required/optional property
  * inference reuses `NamedOut`, matching named attribute arguments.
  */
-export function fixedBlock<const P extends Record<string, Param<unknown, AttributeCtx>>>(config: {
+export function fixedBlock<const P extends Record<string, Param<unknown, BoundCtx>>>(config: {
   readonly parameters: P;
 }): FixedBlockSpec<NamedOut<P>> {
   return { mode: 'fixed', parameters: config.parameters };
@@ -19,14 +19,14 @@ export function fixedBlock<const P extends Record<string, Param<unknown, Attribu
  * bare member line, surfaced as a present key with an `undefined` value —
  * distinct from an explicit JSON null.
  */
-export function entriesBlock<R extends ArgType<unknown, AttributeCtx>>(config: {
+export function entriesBlock<R extends ArgType<unknown, BoundCtx>>(config: {
   readonly value: { readonly type: R; readonly documentation: string };
 }): EntriesBlockSpec<Record<string, OutOf<R>>>;
-export function entriesBlock<R extends ArgType<unknown, AttributeCtx>>(config: {
+export function entriesBlock<R extends ArgType<unknown, BoundCtx>>(config: {
   readonly value: { readonly type: R; readonly documentation: string };
   readonly allowBare: true;
 }): EntriesBlockSpec<Record<string, OutOf<R> | undefined>>;
-export function entriesBlock<R extends ArgType<unknown, AttributeCtx>>(config: {
+export function entriesBlock<R extends ArgType<unknown, BoundCtx>>(config: {
   readonly value: { readonly type: R; readonly documentation: string };
   readonly allowBare?: true;
 }): EntriesBlockSpec<Record<string, OutOf<R> | undefined>> {

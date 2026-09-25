@@ -4,6 +4,7 @@ import type {
   ArgType,
   AttributeCtx,
   BlockSymbol,
+  BoundCtx,
   CompositeTypeSymbol,
   FieldAttributeCtx,
   InspectableArgType,
@@ -62,7 +63,7 @@ test('checked reference selectors and wrappers preserve inferred outputs', () =>
   expectTypeOf<OutOf<typeof alternative>>().toEqualTypeOf<
     ResolvedEntityReference<ModelSymbol> | string
   >();
-  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<ModelAttributeCtx>();
+  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<BoundCtx>();
   expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sources' | 'symbols'>();
   // @ts-expect-error checked references require an expected selector
   entityRef();
@@ -70,13 +71,12 @@ test('checked reference selectors and wrappers preserve inferred outputs', () =>
   entityRef({ kind: 'model' }, () => undefined);
 });
 
-test('a block attribute cannot name a reference combinator', () => {
+test('a block attribute names checked references but never field-scoped rules', () => {
   blockAttribute('target', {
     documentation: 'Names a model.',
     positional: [
       {
         key: 'model',
-        // @ts-expect-error a block attribute context carries no binder, so it cannot resolve a reference
         type: entityRef({ kind: 'model' }),
         documentation: 'The selected model.',
       },
@@ -87,7 +87,7 @@ test('a block attribute cannot name a reference combinator', () => {
     positional: [
       {
         key: 'field',
-        // @ts-expect-error a block attribute context carries no binder, so it cannot resolve a reference
+        // @ts-expect-error a block attribute has no declaring model, so field-scoped rules cannot enter
         type: fieldRef(),
         documentation: 'The selected field.',
       },

@@ -8,7 +8,7 @@ import type {
 } from '../../entity-reference';
 import { describeResolution, entityReference, matchesSelector } from '../../entity-reference';
 import { IdentifierAst } from '../../syntax/ast/identifier';
-import type { EntityRefArgType, ModelAttributeCtx } from '../types';
+import type { BoundCtx, EntityRefArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
 function unbound(name: string): never {
@@ -19,7 +19,7 @@ function unbound(name: string): never {
 
 export function entityRef<const S extends EntitySelector>(
   expected: S,
-): EntityRefArgType<DeclarationFor<S>, ModelAttributeCtx> {
+): EntityRefArgType<DeclarationFor<S>, BoundCtx> {
   const label = `${expected.kind === 'block' ? expected.keyword : expected.kind} reference`;
   return {
     kind: 'entityRef',
