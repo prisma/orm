@@ -292,3 +292,103 @@ model Post {
     },
   );
 });
+
+describe('Mongo PSL temporal presets on polymorphic models', () => {
+  const base = `model Event {
+  id        ObjectId             @id @map("_id")
+  kind      String
+  createdAt temporal.createdAt()
+  @@discriminator(kind)
+  @@map("events")
+}
+`;
+
+  it('emits one ref for a preset on the base model, shared by its variants', () => {
+    const result = interpret(`${base}
+model Click {
+  url String
+  @@base(Event, "click")
+}
+
+model View {
+  path String
+  @@base(Event, "view")
+}
+`);
+    if (!result.ok) throw new Error(JSON.stringify(result.failure));
+    expect(result.value.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: UNBOUND_NAMESPACE_ID, entry: 'events', field: 'createdAt' },
+        onCreate: timestampNow,
+      },
+    ]);
+  });
+
+  it('rejects a preset on a variant field with PSL_PRESET_ON_VARIANT_FIELD at the preset', () => {
+    const schema = `${base}
+model Click {
+  url       String
+  clickedAt temporal.createdAt()
+  @@base(Event, "click")
+}
+`;
+    const presetOffset = schema.lastIndexOf('temporal.createdAt()');
+    expect(diagnosticsOf(schema)).toEqual([
+      expect.objectContaining({
+        code: 'PSL_PRESET_ON_VARIANT_FIELD',
+        message:
+          'Preset "temporal.createdAt" on variant "Click" field "clickedAt": execution defaults apply to every document in collection "events", so declare them on the base model.',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ offset: presetOffset }),
+          end: expect.objectContaining({ offset: presetOffset + 'temporal.createdAt()'.length }),
+        }),
+      }),
+    ]);
+  });
+});
+
+describe('Mongo PSL temporal presets on models sharing a collection', () => {
+  it('merges identical execution defaults for the same collection field', () => {
+    const result = interpret(`model Post {
+  id        ObjectId             @id @map("_id")
+  createdAt temporal.createdAt()
+  @@map("entries")
+}
+
+model Page {
+  id        ObjectId             @id @map("_id")
+  createdAt temporal.createdAt()
+  @@map("entries")
+}
+`);
+    if (!result.ok) throw new Error(JSON.stringify(result.failure));
+    expect(result.value.execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: UNBOUND_NAMESPACE_ID, entry: 'entries', field: 'createdAt' },
+        onCreate: timestampNow,
+      },
+    ]);
+  });
+
+  it('rejects differing execution defaults for the same collection field with PSL_PRESET_CONFLICT', () => {
+    expect(
+      diagnosticsOf(`model Post {
+  id    ObjectId             @id @map("_id")
+  stamp temporal.createdAt()
+  @@map("entries")
+}
+
+model Page {
+  id    ObjectId             @id @map("_id")
+  stamp temporal.updatedAt()
+  @@map("entries")
+}
+`),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'PSL_PRESET_CONFLICT',
+        message: expect.stringContaining('"entries"'),
+      }),
+    ]);
+  });
+});

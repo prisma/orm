@@ -948,6 +948,66 @@ function resolveFieldCodecId(
   return scalarTypeCodecIds.get(field.typeName);
 }
 
+interface PresetExecutionDefault {
+  readonly modelName: string;
+  readonly field: FieldSymbol;
+  readonly storedField: string;
+  readonly phases: ExecutionMutationDefaultPhases;
+}
+
+/**
+ * Keys each preset's execution defaults by collection and stored field. Rejects presets on variant fields, since a default keyed by collection applies to every document in it, and merges identical defaults that two models declare for the same collection field.
+ */
+function resolvePresetExecutionDefaults(input: {
+  readonly defaults: readonly PresetExecutionDefault[];
+  readonly models: Readonly<Record<string, MongoModelEntry>>;
+  readonly sources: PslSources;
+  readonly diagnostics: PslDiagnosticCollector;
+}): ExecutionMutationDefault[] {
+  const byRef = new Map<
+    string,
+    { readonly owner: PresetExecutionDefault; readonly phasesKey: string }
+  >();
+  const resolved: ExecutionMutationDefault[] = [];
+  for (const preset of input.defaults) {
+    const model = input.models[preset.modelName];
+    if (model === undefined) continue;
+    const collection = model.storage.collection;
+    const call = preset.field.typeConstructor;
+    const presetPath = call?.path.join('.') ?? preset.field.typeName;
+    const at = diagnosticSource(input.sources, preset.field.node.syntax).at(
+      call?.span ?? preset.field.span,
+    );
+    if (model.base !== undefined) {
+      input.diagnostics.push({
+        code: 'PSL_PRESET_ON_VARIANT_FIELD',
+        message: `Preset "${presetPath}" on variant "${preset.modelName}" field "${preset.field.name}": execution defaults apply to every document in collection "${collection}", so declare them on the base model.`,
+        ...at,
+      });
+      continue;
+    }
+    const refKey = JSON.stringify([collection, preset.storedField]);
+    const phasesKey = canonicalJson(preset.phases);
+    const existing = byRef.get(refKey);
+    if (existing === undefined) {
+      byRef.set(refKey, { owner: preset, phasesKey });
+      resolved.push({
+        ref: { namespace: UNBOUND_NAMESPACE_ID, entry: collection, field: preset.storedField },
+        ...preset.phases,
+      });
+      continue;
+    }
+    if (existing.phasesKey !== phasesKey) {
+      input.diagnostics.push({
+        code: 'PSL_PRESET_CONFLICT',
+        message: `Preset "${presetPath}" on "${preset.modelName}.${preset.field.name}" sets different execution defaults than the preset on "${existing.owner.modelName}.${existing.owner.field.name}" for field "${preset.storedField}" of collection "${collection}". Use the same preset on both models.`,
+        ...at,
+      });
+    }
+  }
+  return resolved;
+}
+
 interface ResolvedNonRelationField {
   readonly field: ContractField;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
@@ -1105,10 +1165,7 @@ export function interpretPslDocumentToMongoContract(
     sources,
     diagnostics,
   };
-  const executionDefaultsByModel = new Map<
-    string,
-    { readonly field: string; readonly phases: ExecutionMutationDefaultPhases }[]
-  >();
+  const presetExecutionDefaults: PresetExecutionDefault[] = [];
   const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
     symbolTable,
     sources,
@@ -1298,9 +1355,12 @@ export function interpretPslDocumentToMongoContract(
       const mappedName = fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
       fields[mappedName] = resolved.field;
       if (resolved.executionDefaults) {
-        const modelDefaults = executionDefaultsByModel.get(pslModel.name) ?? [];
-        modelDefaults.push({ field: mappedName, phases: resolved.executionDefaults });
-        executionDefaultsByModel.set(pslModel.name, modelDefaults);
+        presetExecutionDefaults.push({
+          modelName: pslModel.name,
+          field,
+          storedField: mappedName,
+          phases: resolved.executionDefaults,
+        });
       }
     }
 
@@ -1480,6 +1540,12 @@ export function interpretPslDocumentToMongoContract(
     modelMetadataByName,
     indexSources,
   });
+  const executionDefaults = resolvePresetExecutionDefaults({
+    defaults: presetExecutionDefaults,
+    models: polyResult.models,
+    sources,
+    diagnostics,
+  });
 
   if (
     diagnostics.length > 0 ||
@@ -1499,14 +1565,6 @@ export function interpretPslDocumentToMongoContract(
   const resolvedModels = polyResult.models;
   const resolvedCollections = polyResult.collections;
 
-  const executionDefaults: ExecutionMutationDefault[] = [];
-  for (const [modelName, modelDefaults] of executionDefaultsByModel) {
-    const entry = resolvedModels[modelName]?.storage.collection;
-    if (entry === undefined) continue;
-    for (const { field, phases } of modelDefaults) {
-      executionDefaults.push({ ref: { namespace: UNBOUND_NAMESPACE_ID, entry, field }, ...phases });
-    }
-  }
   const execution = buildMongoExecutionSection(executionDefaults);
 
   // The storage value set is the source of truth for both the emit typing and the validator's

@@ -129,6 +129,24 @@ describe('Mongo temporal presets end to end', () => {
     timeouts.spinUpMongoMemoryServer,
   );
 
+  it(
+    'a preset on a polymorphic base model fills every variant create',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const click = await db.events.variant('Click').create({ url: '/a' });
+        const view = await db.events.variant('View').create({ path: '/b' });
+        expect(click.createdAt).toBeInstanceOf(Date);
+        expect(view.createdAt).toBeInstanceOf(Date);
+
+        const stored = await mongoDb.collection('events').find({}).sort({ kind: 1 }).toArray();
+        expect(stored).toEqual([
+          expect.objectContaining({ kind: 'click', url: '/a', createdAt: click.createdAt }),
+          expect.objectContaining({ kind: 'view', path: '/b', createdAt: view.createdAt }),
+        ]);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
   it('types generated-on-create fields as optional on the emitted create input', () => {
     type PostCreate = CreateInput<Contract, 'Post'>;
     expectTypeOf<{ title: string; touchedAt: Date }>().toExtend<PostCreate>();
