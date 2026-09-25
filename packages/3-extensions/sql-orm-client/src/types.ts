@@ -499,14 +499,11 @@ export type ToManyRelationAccessor<
   TContract extends Contract<SqlStorage>,
   RelatedNsId extends DomainNamespaceId<TContract>,
   RelatedModelName extends string,
-> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> &
-  (IsOrderable<AggregateOutputTraits<TContract, 'count'>> extends true
-    ? {
-        count(
-          predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>,
-        ): OrderingExpression;
-      }
-    : unknown);
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> & {
+  count(
+    predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>,
+  ): OrderingExpression;
+};
 
 type ScalarModelAccessor<
   TContract extends Contract<SqlStorage>,
@@ -682,21 +679,6 @@ type AggregateRowFor<TContract extends Contract<SqlStorage>, Op extends string, 
   : InputCodecId extends keyof OperationRows<AggregateOperationOf<TContract, Op>>
     ? OperationRows<AggregateOperationOf<TContract, Op>>[InputCodecId]
     : AnyInputRow<AggregateOperationOf<TContract, Op>>;
-
-type AggregateOutputTraits<
-  TContract extends Contract<SqlStorage>,
-  Op extends string,
-  InputCodecId = never,
-> =
-  AggregateRowFor<TContract, Op, InputCodecId> extends {
-    readonly output: infer Output extends string;
-  }
-    ? Output extends keyof ExtractCodecTypes<TContract>
-      ? ExtractCodecTypes<TContract>[Output] extends { readonly traits: infer Traits }
-        ? Traits
-        : never
-      : never
-    : never;
 
 type OperationRows<Operation> = Operation extends { readonly byCodec: infer Rows } ? Rows : never;
 type AnyInputRow<Operation> = Operation extends { readonly anyInput: infer Row } ? Row : never;

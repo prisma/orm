@@ -17,11 +17,12 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
+import { createModelAccessor } from '../src/model-accessor';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-aggregate';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
-import { getTestAggregates } from './helpers';
+import { getEmptyAggregates, getTestAggregates, getTestContext } from './helpers';
 
 const adapter = createPostgresAdapter();
 
@@ -166,6 +167,21 @@ describe('orderBy a to-many relation count', () => {
     expect(plan.params).toEqual(['a', 10]);
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT "users"."id" AS "id" FROM "public"."users" WHERE "users"."name" = $1 ORDER BY (SELECT COUNT(*) AS "count" FROM "public"."posts" WHERE ("posts"."user_id" = "users"."id" AND "posts"."views" > $2)) DESC"`,
+    );
+  });
+
+  it('offers count whatever the target declares for projected counts', () => {
+    const context = { ...getTestContext(), aggregateDescriptors: getEmptyAggregates() };
+    const user = createModelAccessor(context, 'public', 'User');
+
+    expect(user.posts.count().desc()).toEqual(
+      OrderByItem.desc(
+        correlated(
+          table('posts'),
+          ProjectionItem.of('count', AggregateExpr.count()),
+          BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
+        ),
+      ),
     );
   });
 

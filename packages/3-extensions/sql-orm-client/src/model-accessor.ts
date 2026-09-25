@@ -487,9 +487,6 @@ function createRelationFilterAccessor<
     };
   }
 
-  if (!isCountOrderable(context)) {
-    return filters;
-  }
   return {
     ...filters,
     count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
@@ -535,11 +532,6 @@ function relatedFieldOrderings<TContract extends Contract<SqlStorage>>(
     });
   }
   return orderings;
-}
-
-function isCountOrderable(context: ExecutionContext): boolean {
-  const count = context.aggregateDescriptors.resolve('count', undefined);
-  return count !== undefined && hasTrait(context, count.output.codecId, 'order');
 }
 
 function hasTrait(context: ExecutionContext, codecId: string, trait: string): boolean {
