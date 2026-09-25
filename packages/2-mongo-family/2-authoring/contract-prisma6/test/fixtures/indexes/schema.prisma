@@ -1,0 +1,17 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  slug      String   @unique(map: "slug_key")
+  rank      Int      @unique(sort: Desc)
+  title     String   @map("post_title")
+  authorId  String   @db.ObjectId
+  createdAt DateTime
+
+  @@unique([authorId, title], name: "author_title")
+  @@index([authorId, createdAt(sort: Desc)], map: "by_author")
+  @@index([title])
+}

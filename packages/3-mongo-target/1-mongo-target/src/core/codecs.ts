@@ -7,6 +7,7 @@ import {
   mongoCodec,
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
 import {
@@ -179,18 +180,24 @@ function descriptorFor<Id extends string>(
     readonly renderValueLiteral?: CodecDescriptor['renderValueLiteral'];
   },
 ): CodecDescriptor {
-  // The descriptor's `P` is structurally `Record<string, unknown>` for codecs that take params (Mongo `vector`); non-parameterized codecs ignore the slot. Cast through `unknown` to fit the `CodecDescriptor` slot's `(params: P) => …` typing without leaking a per-codec `P` into the heterogeneous descriptor list.
-  const renderOutputType = metadata.renderOutputType as
-    | CodecDescriptor['renderOutputType']
-    | undefined;
+  const renderOutputType = blindCast<
+    CodecDescriptor['renderOutputType'] | undefined,
+    "the descriptor's P is structurally Record<string, unknown> for codecs that take params (Mongo vector); non-parameterized codecs ignore the slot, so no per-codec P leaks into the heterogeneous descriptor list"
+  >(metadata.renderOutputType);
   return {
     codecId: codec.id,
     dataType: metadata.dataType,
     traits: metadata.traits,
     targetTypes: metadata.targetTypes,
-    paramsSchema: undefined as CodecDescriptor['paramsSchema'],
+    paramsSchema: blindCast<
+      CodecDescriptor['paramsSchema'],
+      'a non-parameterized codec has no params schema'
+    >(undefined),
     isParameterized: false,
-    factory: (() => () => codec) as CodecDescriptor['factory'],
+    factory: blindCast<
+      CodecDescriptor['factory'],
+      'every call hands out the one shared codec, which ignores params'
+    >(() => () => codec),
     ...ifDefined('renderOutputType', renderOutputType),
     ...ifDefined('renderValueLiteral', metadata.renderValueLiteral),
   };

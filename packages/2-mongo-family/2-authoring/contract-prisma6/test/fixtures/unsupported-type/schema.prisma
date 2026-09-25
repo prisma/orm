@@ -1,0 +1,10 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Place {
+  id       String                  @id @default(auto()) @map("_id") @db.ObjectId
+  location Unsupported("geometry")?
+  shape    Polygon
+}

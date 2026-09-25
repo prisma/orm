@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_SCHEMA_READ_FAILED",
+    "file": "schema",
+    "message": "The schema directory \"schema-read-failed/schema\" contains no .prisma file."
+  }
+]

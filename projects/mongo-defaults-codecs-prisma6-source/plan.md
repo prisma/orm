@@ -36,7 +36,17 @@ Builds on: slices 1 and 3. Hands to: close-out.
 
 ## Sequence
 
-Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. Then parallel: 4 and 5 (4 does not touch authoring or the reader, 5 does not touch the runtime). Five slices: the rename was split out of slice 4 during slice 3's first dispatch to keep the Mongo diff reviewable.
+Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 4 and 5 are independent of each other but share one worktree and one implementer, so they run sequentially: 5 first (the user-facing reader), then 4 (the runtime hoist, cleanup). Five slices: the rename was split out of slice 4 during slice 3's first dispatch to keep the Mongo diff reviewable.
+
+## Delivery state
+
+| Slice | Branch | PR |
+|---|---|---|
+| 1 | `mongo-target-owns-codecs` | #30396, CI green, awaiting review |
+| 2 | `execution-ref-neutral-names` | #30399, CI green, awaiting review |
+| 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
+| 5 | `mongo-prisma6-source` | in progress, stacked on 3 |
+| 4 | | not started |
 
 ## Dependencies
 
@@ -64,3 +74,4 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 - SQL sorts execution defaults by entry then field; Mongo sorts by namespace, entry, field (the spec's order). Aligning SQL re-hashes multi-namespace SQL contracts. Decide at the slice 4 hoist.
 - Mongo TS `field.temporal.timestamp(undefined, 'now')`: TypeScript infers both option arguments as optional, so the create-input type keeps such a field required even though the runtime fills it. `timestamp()` and `timestamp('now', 'now')` resolve exactly. Consider named-object arguments for the TS form; check what SQL's TS `temporal.timestamp` signature does.
 - Mongo update defaults treat every top-level field the update document touches (`$set`, `$unset`, `$inc`, `$push`) as explicit, and an operator-only update as non-empty. Document this beside SQL's `$set`-only rule when the runtime machinery is hoisted (slice 4).
+- The Mongo TypeScript contract builder keeps its own enum encoding and storage hashing; slice 5 unified the PSL interpreter and the Prisma 6 reader on `buildMongoStorage` in `@internal/mongo-contract` but did not move the TS builder onto it. It is part of the pre-existing PSL/TS storage-hash gap above.

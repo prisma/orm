@@ -1,0 +1,67 @@
+{
+  "name": "@internal/mongo-contract-prisma6",
+  "private": true,
+  "version": "8.0.0-rc.12",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Prisma 6 MongoDB schema.prisma to Mongo contract reader for Prisma 8",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/config": "workspace:8.0.0-rc.12",
+    "@internal/contract": "workspace:8.0.0-rc.12",
+    "@internal/contract-authoring": "workspace:8.0.0-rc.12",
+    "@internal/framework-components": "workspace:8.0.0-rc.12",
+    "@internal/mongo-contract": "workspace:8.0.0-rc.12",
+    "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
+    "@internal/psl-parser": "workspace:8.0.0-rc.12",
+    "@internal/utils": "workspace:8.0.0-rc.12",
+    "pathe": "^2.0.3"
+  },
+  "devDependencies": {
+    "@internal/adapter-mongo": "workspace:8.0.0-rc.12",
+    "@internal/driver-mongo": "workspace:8.0.0-rc.12",
+    "@internal/family-mongo": "workspace:8.0.0-rc.12",
+    "@internal/target-mongo": "workspace:8.0.0-rc.12",
+    "@repo/test-utils": "workspace:8.0.0-rc.12",
+    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/tsdown": "workspace:8.0.0-rc.12",
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./provider": "./dist/provider.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/provider.d.mts",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/2-mongo-family/2-authoring/contract-prisma6"
+  }
+}

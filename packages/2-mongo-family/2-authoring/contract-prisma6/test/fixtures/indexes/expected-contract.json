@@ -1,0 +1,146 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "slug": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              },
+              "rank": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int32@1"
+                },
+                "nullable": false
+              },
+              "post_title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "createdAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Post"
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "c608a6990faced294eef8a9279dfbd595662d77dea731ff3a0f11ad3cc33795a",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "Post": {
+              "kind": "mongo-collection",
+              "indexes": [
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "slug",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true
+                },
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "rank",
+                      "direction": -1
+                    }
+                  ],
+                  "unique": true
+                },
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "authorId",
+                      "direction": 1
+                    },
+                    {
+                      "field": "post_title",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true
+                },
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "authorId",
+                      "direction": 1
+                    },
+                    {
+                      "field": "createdAt",
+                      "direction": -1
+                    }
+                  ]
+                },
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "post_title",
+                      "direction": 1
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

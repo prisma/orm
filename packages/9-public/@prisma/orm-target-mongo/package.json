@@ -52,6 +52,7 @@
     "./target/data-types": "./dist/target__data-types.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
+    "./target/prisma6-binding": "./dist/target__prisma6-binding.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./package.json": "./package.json"
   },

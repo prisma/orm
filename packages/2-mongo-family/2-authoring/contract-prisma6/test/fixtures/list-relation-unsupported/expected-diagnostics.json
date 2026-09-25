@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Relation field \"Post.tags\" is a list relation that stores its keys in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields from the schema this contract source reads and keep the key list as a plain field."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 15,
+    "message": "Relation field \"Tag.posts\" is a list relation that stores its keys in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields from the schema this contract source reads and keep the key list as a plain field."
+  }
+]

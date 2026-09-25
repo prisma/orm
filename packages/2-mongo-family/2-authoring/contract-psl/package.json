@@ -18,7 +18,6 @@
     "@internal/config": "workspace:8.0.0-rc.12",
     "@internal/contract": "workspace:8.0.0-rc.12",
     "@internal/contract-authoring": "workspace:8.0.0-rc.12",
-    "@internal/errors": "workspace:8.0.0-rc.12",
     "@internal/framework-components": "workspace:8.0.0-rc.12",
     "@internal/mongo-contract": "workspace:8.0.0-rc.12",
     "@internal/mongo-value": "workspace:8.0.0-rc.12",

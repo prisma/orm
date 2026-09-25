@@ -1,0 +1,26 @@
+[
+  {
+    "code": "PSL_ORPHANED_BACKRELATION",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Backrelation list field \"User.posts\" has no matching FK-side relation on model \"Post\". Add @relation(fields: [...], references: [...]) on the FK-side relation or use an explicit join model for many-to-many."
+  },
+  {
+    "code": "PSL_ORPHANED_BACKRELATION",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Backrelation list field \"User.profile\" has no matching FK-side relation on model \"Profile\". Add @relation(fields: [...], references: [...]) on the FK-side relation or use an explicit join model for many-to-many."
+  },
+  {
+    "code": "PSL_REQUIRED_ONE_TO_ONE_BACKRELATION",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Backrelation field \"User.account\" is required, but \"Account\" holds the relation fields, so nothing in storage guarantees a \"Account\" document exists. Make it optional: \"account Account?\"."
+  },
+  {
+    "code": "PSL_ORPHANED_BACKRELATION",
+    "file": "schema.prisma",
+    "line": 20,
+    "message": "Backrelation list field \"Profile.user\" has no matching FK-side relation on model \"User\". Add @relation(fields: [...], references: [...]) on the FK-side relation or use an explicit join model for many-to-many."
+  }
+]

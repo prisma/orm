@@ -42,7 +42,7 @@ export default defineContract({
 
 ### `@internal/mongo/config`
 
-Simplified `defineConfig` that pre-wires all MongoDB internals (family, target, adapter, driver, contract providers). Accepts `contract`, `db`, `extensions`, and `migrations.dir`.
+Simplified `defineConfig` that pre-wires all MongoDB internals (family, target, adapter, driver, contract providers). Pass a contract path (`.prisma` or `.ts`) or a ready `ContractConfig`, and optional `db`, `extensions`, and `migrations.dir`.
 
 ```typescript
 import { defineConfig } from '@internal/mongo/config';
@@ -53,6 +53,35 @@ export default defineConfig({
   migrations: { dir: 'migrations/app' },
 });
 ```
+
+#### `prisma6Schema(path)`: adopt a Prisma 6 MongoDB schema during the transition
+
+`prisma6Schema` reads a Prisma 6 MongoDB `schema.prisma` as the contract source, so a project that still runs Prisma 6 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (every file under it, nested directories included, as Prisma 6 reads a schema directory). `contract emit` writes `contract.json` and `contract.d.ts` into the directory that holds the schema file or the schema directory: `prisma6Schema('prisma/schema.prisma')` and `prisma6Schema('prisma/schema')` both write `prisma/contract.json` and `prisma/contract.d.ts`. The `output` directory on `defineConfig` overrides that, as for every other source.
+
+```typescript
+// prisma.config.ts
+import { definePrismaConfig } from 'prisma/config';
+import { defineConfig as ormConfig, prisma6Schema } from '@prisma/orm-mongo/config';
+
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: prisma6Schema('prisma/schema.prisma'),
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
+});
+```
+
+`prisma/config` is the published `prisma` package re-exporting `definePrismaConfig` from `@prisma/cli-engine`. Contributors working inside this repository import it from `@prisma/cli-engine` directly and the facade from `@internal/mongo/config`; the forms are the same functions.
+
+What the project needs around that file:
+
+- A `package.json` that depends on `@prisma/orm-mongo` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports.
+- `db.connection` is the database URL Prisma 6 reads from its `datasource` block, usually the same `DATABASE_URL` variable. The schema keeps `url` in the `datasource` block as Prisma 6 wants it; this source reads only `provider`, which must be `"mongodb"`.
+- The schema uses only what Prisma 8 supports on MongoDB. A construct it does not support (a composite `@@id`, a list relation, a `@default` other than `now()` on a `DateTime`, a referential action, a `view`, and so on) fails `contract emit` with one `PSL.PRISMA6_MONGO_*` diagnostic per construct and writes nothing. The codes are listed in the [error reference](../../../docs/reference/error-reference.md).
+
+The contract carries no `$jsonSchema` validators, because a Prisma 6 database has none. Indexes are matched by keys and options, not by name, so the names Prisma 6 gives them (`Post_authorId_idx`, `User_email_key`) need no change.
+
+During the transition Prisma 6 keeps owning the database: `prisma db push` on Prisma 6 creates collections and indexes. Prisma 8 reads the schema and verifies it against what Prisma 6 built; it does not migrate. After every schema change on Prisma 6, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match.
 
 ### `@internal/mongo/contract-builder`
 

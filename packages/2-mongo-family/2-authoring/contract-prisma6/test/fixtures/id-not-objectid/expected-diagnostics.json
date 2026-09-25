@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_ID_NOT_OBJECTID",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Post.id\" is the model's @id, but it is not a required ObjectId stored as \"_id\". Prisma 8 identifies a MongoDB document by an ObjectId \"_id\"; declare the id as `id String @id @default(auto()) @map(\"_id\") @db.ObjectId`."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_ID_NOT_OBJECTID",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Tag.id\" is the model's @id, but it is not a required ObjectId stored as \"_id\". Prisma 8 identifies a MongoDB document by an ObjectId \"_id\"; declare the id as `id String @id @default(auto()) @map(\"_id\") @db.ObjectId`."
+  }
+]

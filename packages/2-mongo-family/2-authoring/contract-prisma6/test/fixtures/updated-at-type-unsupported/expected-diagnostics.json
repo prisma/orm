@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.version\": @updatedAt is only supported on a DateTime field. Remove @updatedAt and set the value when you write documents."
+  }
+]

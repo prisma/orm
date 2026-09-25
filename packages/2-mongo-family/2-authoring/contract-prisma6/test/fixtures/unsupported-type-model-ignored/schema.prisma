@@ -1,0 +1,18 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id     String  @id @default(auto()) @map("_id") @db.ObjectId
+  places Place[] @ignore
+}
+
+model Place {
+  id       String                  @id @default(auto()) @map("_id") @db.ObjectId
+  location Unsupported("geometry")?
+  ownerId  String                  @db.ObjectId
+  owner    User                    @relation(fields: [ownerId], references: [id])
+
+  @@ignore
+}

@@ -1,0 +1,15 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String   @default("untitled")
+  count     Int      @default(0)
+  token     String   @default(uuid())
+  code      String   @default(cuid())
+  stamp     Int      @default(now())
+  other     String   @default(auto()) @db.ObjectId
+  legacy    String   @default(dbgenerated("legacy()"))
+}
