@@ -105,8 +105,20 @@ function readFields(
       continue;
     }
     const call = FunctionCallAst.cast(element.syntax);
-    const [callee, ...rest] = call?.path() ?? [];
-    if (call === undefined || callee === undefined || rest.length > 0) {
+    const path = call?.path() ?? [];
+    const [callee] = path;
+    if (path.length > 1) {
+      ctx.diagnostics.push(
+        prisma6Diagnostic(
+          'PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED',
+          `Index path "${path.join('.')}" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index.`,
+          ctx.sourceId,
+          nodePslSpan(element.syntax, ctx.sources),
+        ),
+      );
+      return undefined;
+    }
+    if (call === undefined || callee === undefined) {
       return unsupported(
         attribute,
         'expects a list of field names.',

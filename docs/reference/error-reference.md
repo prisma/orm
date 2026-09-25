@@ -539,6 +539,10 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 
 `@@id` on a model; a MongoDB document is identified by its `_id` field alone. Declare the id as `id String @id @default(auto()) @map("_id") @db.ObjectId`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
+### PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED
+
+An `@@index`, `@@unique`, or `@@fulltext` path that reaches into a composite type, such as `address.city(sort: Asc)`, which the Mongo contract cannot express yet. Index a top-level field or remove the index. A dotted path without a call, such as `address.city`, fails at parse time instead. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
 ### PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED
 
 `@map` on a field of a composite `type`, which the Mongo contract cannot express yet. Removing `@map` renames the stored field, so keep the schema until Prisma 8 supports it. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.

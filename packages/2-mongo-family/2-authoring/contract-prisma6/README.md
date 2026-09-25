@@ -19,6 +19,7 @@ Reads a Prisma 6 MongoDB `schema.prisma` as a Prisma 8 contract source. During t
 | `DateTime @default(now())`, `DateTime @updatedAt` | `onCreate`, or `onCreate` and `onUpdate`, with the timestamp generator. Other defaults, optional generated fields, and `@updatedAt` on other types are hard errors. |
 | `@relation(fields, references)` on a to-one field, back-relations | `N:1`, paired as the Prisma 8 Mongo interpreter pairs them. Referential actions and list relations with keys are hard errors. |
 | `@unique`, `@@unique`, `@@index`, `@@fulltext` | Indexes, with `sort:`; names are dropped; `length:` and a second `@@fulltext` are hard errors. |
+| Index path into a composite type, `@@index([address.city(sort: Asc)])` | `PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED`. A dotted path without a call, such as `address.city`, fails at parse time today. |
 | `@map`, `@@map`, `@ignore`, `@@ignore` | Stored names; ignored fields and models are omitted. |
 | `@@schema`, `view`, unknown attributes and blocks | Hard errors. |
 
