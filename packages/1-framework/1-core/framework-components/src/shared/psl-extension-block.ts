@@ -1,6 +1,6 @@
 /**
  * Shape-only types for the PSL source-position primitives, diagnostic
- * codes, the extension-block source/print representation, and the typed
+ * codes, the producer-only extension-block print shape, and the typed
  * extension-block envelope.
  *
  * These live in the shared plane so an extension's authoring descriptor
@@ -137,7 +137,7 @@ export type ContributedPslDiagnosticCode = `PSL_${string}`;
  * No validator, classifier, or lowering may read it; validated values travel
  * through {@link ParsedPslExtensionBlock} instead.
  */
-export interface PslExtensionBlockSourceEntry {
+export interface PslExtensionBlockPrintEntry {
   readonly expression?: string;
   readonly span: PslSpan;
 }
@@ -200,7 +200,7 @@ export interface PslExtensionBlock {
    */
   readonly keyword: string;
   readonly name: string;
-  readonly parameters: Record<string, PslExtensionBlockSourceEntry>;
+  readonly parameters: Record<string, PslExtensionBlockPrintEntry>;
   readonly blockAttributes: readonly PslExtensionBlockAttribute[];
   readonly span: PslSpan;
 }

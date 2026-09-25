@@ -7,7 +7,7 @@ export type {
   PslExtensionBlockAttribute,
   PslExtensionBlockAttributeArg,
   PslExtensionBlockParsedAttribute,
-  PslExtensionBlockSourceEntry,
+  PslExtensionBlockPrintEntry,
   PslPosition,
   PslSpan,
 } from '../shared/psl-extension-block';
