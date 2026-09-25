@@ -5598,6 +5598,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4
+      cli-journeys:
+        specifier: workspace:8.0.0-rc.12
+        version: link:test/cli-journeys
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -5640,6 +5643,9 @@ importers:
       '@prisma/orm-extension-pgvector':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../../packages/9-public/@prisma/orm-extension-pgvector
+      '@prisma/orm-family-sql':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../../packages/9-public/@prisma/orm-family-sql
       '@prisma/orm-mongo':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../../packages/9-public/@prisma/orm-mongo
