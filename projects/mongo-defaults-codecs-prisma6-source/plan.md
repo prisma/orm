@@ -28,6 +28,12 @@ Outcome: registry, checks, and apply loop live once in `framework-components/src
 
 Builds on: slice 3. Hands to: close-out.
 
+### 6. `Json` means JSON; `Bson` means any BSON value
+
+Outcome: `mongo/json@1` validates and enforces the JSON-representable subset; new `mongo/bson@1` with `Bson` PSL name, `field.bson()`, structural `BsonValue`, Extended JSON canonical form, unconstrained validator; validator derivation reads the whole `targetTypes` list; `docs/reference/scalar-types.md` written for Mongo; upgrade fragments. Specification: `design/scalar-naming.md` § 5, § 6, § 8, § 9.
+
+Builds on: slice 4 (branch order) and slice 1 (validator mechanism). Hands to: close-out.
+
 ### 5. `prisma6Schema` contract source for Mongo
 
 Outcome: package `packages/2-mongo-family/2-authoring/contract-prisma6`; `defineConfig` in the Mongo facade accepts `contract: string | ContractConfig`; rule table from `projects/prisma7-contract-source/slices/02-mongo-source/spec.md` with `Json`/`Bytes`/`Decimal`/`BigInt` mapped to the slice 1 codecs and `@default(now())`/`@updatedAt` mapped to the slice 3 presets under the ADR 252 hard-error rules; unknown-top-level-block diagnostic in the Mongo PSL interpreter; end-to-end emit and sign against Prisma 6 shaped collections.
@@ -47,6 +53,7 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 | 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
 | 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
 | 4 | `mongo-generator-runtime-hoist` | #30406, stacked on 5 |
+| 6 | | not started; stacked on 4 |
 
 ## Dependencies
 
@@ -75,3 +82,12 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 - Mongo TS `field.temporal.timestamp(undefined, 'now')`: TypeScript infers both option arguments as optional, so the create-input type keeps such a field required even though the runtime fills it. `timestamp()` and `timestamp('now', 'now')` resolve exactly. Consider named-object arguments for the TS form; check what SQL's TS `temporal.timestamp` signature does.
 - Mongo update defaults treat every top-level field the update document touches (`$set`, `$unset`, `$inc`, `$push`) as explicit, and an operator-only update as non-empty. Document this beside SQL's `$set`-only rule when the runtime machinery is hoisted (slice 4).
 - The Mongo TypeScript contract builder keeps its own enum encoding and storage hashing; slice 5 unified the PSL interpreter and the Prisma 6 reader on `buildMongoStorage` in `@internal/mongo-contract` but did not move the TS builder onto it. It is part of the pre-existing PSL/TS storage-hash gap above.
+
+## Follow-on projects specified in `design/`
+
+- `target-named-scalars-sql`: Postgres and SQLite PSL and TS helper names follow the token rule (`design/scalar-naming.md` § 4, § 7, § 8, § 9). Before general availability.
+- `mongo-driver-wire-contract`: the transport layer names the BSON wire vocabulary and `mongodb` types stop leaking past the driver (`design/driver-wire-contract.md`).
+
+## Amendment to slice 1 (PR #30396)
+
+The Mongo PSL renames `Int`→`Int32`, `Float`→`Double`, `Boolean`→`Bool`, `DateTime`→`Date` and their diagnostic and `app` fragment (`design/scalar-naming.md` § 3), plus the two other review findings (ADR 198 made self-consistent; codec errors carry collection and field), land in #30396 before merge.
