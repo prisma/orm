@@ -512,9 +512,9 @@ function relatedOrderableField<TContract extends Contract<SqlStorage>>(
   correlate: () => CorrelatedRelatedRows,
   fieldName: string,
 ): Orderable | undefined {
-  const columnName = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to)[
-    fieldName
-  ];
+  const fieldToColumn = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to);
+  if (!Object.hasOwn(fieldToColumn, fieldName)) return undefined;
+  const columnName = fieldToColumn[fieldName];
   if (columnName === undefined) return undefined;
   const column = resolveColumn(
     context.contract,

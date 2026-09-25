@@ -129,6 +129,14 @@ describe('a to-one relation accessor', () => {
     expect(descriptorFor.mock.calls).toEqual([['pg/text@1']]);
   });
 
+  it('yields nothing for a name that is not a related field', () => {
+    const post = createModelAccessor(getTestContext(), 'public', 'Post');
+
+    expect([Reflect.get(post.author, 'toString'), Reflect.get(post.author, 'constructor')]).toEqual(
+      [undefined, undefined],
+    );
+  });
+
   it('offers no count', () => {
     const post = createModelAccessor(getTestContext(), 'public', 'Post');
 

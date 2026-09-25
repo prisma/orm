@@ -213,7 +213,7 @@ describe('integration/relation-order-by', () => {
   // Proves an aggregate over distinct rows keeps a relation order: distinct
   // keeps each title's post by the first author name, the page keeps the
   // first such post, and the sum reads it. Ordering by id instead would keep
-  // posts 1 and 3 and sum 10.
+  // posts 1 and 3: the unpaged sum would be 15 and the first page 10.
   it(
     'aggregates distinct rows paged by a to-one relation order',
     async () => {
