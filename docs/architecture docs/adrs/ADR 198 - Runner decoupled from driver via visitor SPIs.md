@@ -66,13 +66,23 @@ The adapter's `createRunnerDependencies` is the only place in the system where t
 
 ## Decision
 
-The runner depends on abstract visitor interfaces and an abstract `MarkerOperations` interface — not on `mongodb`'s `Db` type. Concrete implementations stay in the adapter, which builds them behind the family's `MongoControlAdapter` SPI; the target reaches them through the family instance.
+The runner depends on `MongoRunnerDependencies`, not on `mongodb`'s `Db` type: the inspection visitor, the runtime `MongoAdapter` and `MongoDriver`, the `executeDdl` function, the `MarkerOperations` interface, and `introspectSchema`. Every member is typed by the family layer (`@internal/mongo-query-ast`, `@internal/mongo-lowering`, `@internal/family-mongo`). Concrete implementations stay in the adapter, which builds them behind the family's `MongoControlAdapter` SPI; the target reaches them through the family instance.
 
-This gives the runner a clean package-layer position. It lives in the target package (`@internal/target-mongo`), which sits above the family-layer AST types but below the adapter. A target-layer module must not import adapter or driver code. The visitor SPIs make this possible: they are defined in the family layer (`@internal/mongo-query-ast`), the runner depends on them, and the adapter provides implementations.
+This gives the runner a clean package-layer position. It lives in the target package (`@internal/target-mongo`), which sits above the family-layer types but below the adapter. A target-layer module must not import adapter or driver code, and the runner's dependencies are the only way it reaches the database.
 
 ### DDL execution
 
-DDL commands — `CreateIndexCommand`, `DropIndexCommand`, `CreateCollectionCommand`, etc. — are frozen AST nodes with `accept(visitor)` dispatch ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)). The runner calls `step.command.accept(commandExecutor)` for each execute step. The concrete `MongoCommandExecutor` in the adapter receives the typed command and calls the corresponding `mongodb` driver method. The runner never knows what `createIndex` actually does at the driver level.
+DDL commands — `CreateIndexCommand`, `DropIndexCommand`, `CreateCollectionCommand`, etc. — are frozen AST nodes from the `AnyMongoDdlCommand` union ([ADR 188](ADR%20188%20-%20MongoDB%20migration%20operation%20model.md)). For each execute step the runner calls `executeDdl(step.command)`. The adapter lowers the command to a wire command and the control driver runs it:
+
+```ts
+// adapter-mongo/src/core/mongo-control-adapter.ts
+async executeDdl(driver: MongoDriver, command: AnyMongoDdlCommand): Promise<void> {
+  const wire = await this.#adapter.lower({ command }, {});
+  await driver.run(wire);
+}
+```
+
+Exhaustiveness is checked where the command is lowered, not in the runner: the adapter's `lowerDdlCommand` switches over `command.kind` and ends in a `never` check, so a new command kind in the union does not compile until the adapter lowers it. The runner never knows what `createIndex` does at the driver level.
 
 Inspection commands (`ListIndexesCommand`, `ListCollectionsCommand`) follow the same pattern. The runner calls `check.source.accept(inspectionExecutor)` and gets back `Record<string, unknown>[]`. The concrete `MongoInspectionExecutor` calls `db.collection(...).listIndexes().toArray()` or `db.listCollections().toArray()`.
 
@@ -88,22 +98,39 @@ The runner needs to read, initialize, and CAS-update the migration marker, and a
 
 ```ts
 export interface MarkerOperations {
-  readMarker(): Promise<ContractMarkerRecord | null>;
-  initMarker(destination: {
-    readonly storageHash: string;
-    readonly profileHash: string;
-  }): Promise<void>;
+  readMarker(space: string): Promise<ContractMarkerRecord | null>;
+  initMarker(
+    space: string,
+    destination: {
+      readonly storageHash: string;
+      readonly profileHash: string;
+      readonly invariants?: readonly string[];
+    },
+  ): Promise<void>;
   updateMarker(
+    space: string,
     expectedFrom: string,
-    destination: { readonly storageHash: string; readonly profileHash: string },
+    destination: {
+      readonly storageHash: string;
+      readonly profileHash: string;
+      readonly invariants?: readonly string[];
+    },
   ): Promise<boolean>;
-  writeLedgerEntry(entry: {
-    readonly edgeId: string;
-    readonly from: string;
-    readonly to: string;
-  }): Promise<void>;
+  writeLedgerEntry(
+    space: string,
+    entry: {
+      readonly edgeId: string;
+      readonly from: string;
+      readonly to: string;
+      readonly migrationName: string;
+      readonly migrationHash: string;
+      readonly operations: readonly unknown[];
+    },
+  ): Promise<void>;
 }
 ```
+
+Every method takes the contract space, so each space addresses its own marker document ([ADR 212](ADR%20212%20-%20Contract%20spaces.md)).
 
 The concrete implementation calls into the migration marker collection per [ADR 190](ADR%20190%20-%20CAS-based%20concurrency%20and%20migration%20state%20storage%20for%20MongoDB.md) — but the runner interacts only with the interface. This was the last remaining `Db` dependency in the runner; extracting it completed the decoupling.
 
@@ -113,9 +140,9 @@ The target descriptor's `mongoTargetDescriptor.migrations.createRunner(family)` 
 
 ## Consequences
 
-- **Testability.** The runner can be unit-tested with mock visitors and no `mongodb` dependency. Tests supply in-memory implementations of `MarkerOperations` and stub visitors that record dispatched commands.
-- **Extensibility.** Adding a new DDL command kind means one new visitor method in the adapter's `MongoCommandExecutor` — not a runner change. The runner's three-phase loop ([ADR 191](ADR%20191%20-%20Generic%20three-phase%20migration%20operation%20envelope.md)) is generic over the commands inside the envelope.
-- **Layering.** The runner has no import from `mongodb`. It lives cleanly in the target layer, and `pnpm lint:deps` enforces the boundary.
+- **Testability.** The runner can be unit-tested with no `mongodb` dependency. Tests supply an `executeDdl` that records the commands it receives, in-memory `MarkerOperations`, and a stub inspection visitor.
+- **Extensibility.** Adding a new DDL command kind means a new case in the adapter's `lowerDdlCommand` and a wire command for it — not a runner change. The runner's three-phase loop ([ADR 191](ADR%20191%20-%20Generic%20three-phase%20migration%20operation%20envelope.md)) is generic over the commands inside the envelope.
+- **Layering.** The runner has no import from `mongodb`, and the target package imports neither the adapter nor the driver. `pnpm lint:deps` cannot enforce that: `architecture.config.json` maps the target package to the `extensions` domain and the adapter and driver to the `targets` domain, and `extensions` may import `targets`. The boundary is enforced by `packages/3-mongo-target/1-mongo-target/test/layering.test.ts`, which fails on any `@internal/adapter-mongo` or `@internal/driver-mongo` import in the target's sources.
 
 ## Alternatives considered
 
@@ -127,9 +154,11 @@ The simplest option: pass `Db` to the runner's constructor and let it instantiat
 - It makes the runner untestable without a live MongoDB instance.
 - It couples the runner to a specific driver version — swapping driver implementations (e.g., for Atlas serverless) would require modifying the runner.
 
-### Adapter-level indirection without visitors
+### A DDL command visitor in the runner (superseded 2026-09-25)
 
-Instead of visitor dispatch, the runner could call a single `executeCommand(command: AnyMongoDdlCommand): Promise<void>` function. This works for DDL execution but loses the exhaustiveness guarantee: adding a new command kind to the union type wouldn't produce a compile error at the executor. The visitor interface forces every command kind to be handled — the same pattern used throughout the Mongo AST layer.
+This ADR first chose a DDL command visitor: the runner called `step.command.accept(commandExecutor)`, and an adapter-side `MongoCommandExecutor` implemented one visitor method per command kind, so a new kind failed to compile at the executor. A single `executeDdl(command)` function was rejected at the time because it seemed to give up that exhaustiveness check.
+
+The decision was reversed. DDL execution now goes through the same lowering the adapter already does for every other command: `executeDdl` lowers the command with the adapter and runs the wire command on the driver. The exhaustiveness check moved rather than disappeared: `lowerDdlCommand` ends in a `never` check over `command.kind`. A separate executor duplicated the per-kind dispatch that lowering already performs. The inspection commands keep the visitor, because they return documents rather than lowering to a wire command.
 
 ### Marker operations as a separate service
 
