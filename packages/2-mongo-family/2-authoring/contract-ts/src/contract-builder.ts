@@ -2282,8 +2282,13 @@ function assertNoValueObjectExecutionDefaults(
 function buildExecutionDefaults(
   models: Record<string, AnyModelBuilder> | undefined,
 ): ExecutionMutationDefault[] {
+  const modelBuilders = Object.values(models ?? {});
+  const collectionByModelName = new Map(
+    modelBuilders.map((modelBuilder) => [modelBuilder.__name, modelBuilder.__collection]),
+  );
+  const byRef = new Map<string, { readonly modelName: string; readonly phasesKey: string }>();
   const defaults: ExecutionMutationDefault[] = [];
-  for (const modelBuilder of Object.values(models ?? {})) {
+  for (const modelBuilder of modelBuilders) {
     for (const [fieldName, fieldBuilder] of Object.entries(modelBuilder.__fields)) {
       const phases = fieldBuilder.__executionDefaults;
       if (!phases || !hasExecutionDefaults(fieldBuilder)) continue;
@@ -2304,6 +2309,16 @@ function buildExecutionDefaults(
           'cannot be a list when executionDefaults are present.',
         );
       }
+      if (modelBuilder.__base !== undefined) {
+        const collection =
+          modelBuilder.__collection ?? collectionByModelName.get(modelBuilder.__base);
+        throw executionDefaultError(
+          modelName,
+          fieldName,
+          'executionDefaults-on-variant',
+          `has executionDefaults, but "${modelName}" is a variant of "${modelBuilder.__base}". Execution defaults apply to every document in collection "${collection}", so declare them on the base model.`,
+        );
+      }
       const entry = modelBuilder.__collection;
       if (entry === undefined) {
         throw executionDefaultError(
@@ -2313,6 +2328,21 @@ function buildExecutionDefaults(
           'has executionDefaults, but its model has no collection. Generated values are only supported on fields of a model stored in a collection.',
         );
       }
+      const refKey = JSON.stringify([entry, fieldName]);
+      const phasesKey = canonicalStringify(phases);
+      const existing = byRef.get(refKey);
+      if (existing !== undefined) {
+        if (existing.phasesKey !== phasesKey) {
+          throw executionDefaultError(
+            modelName,
+            fieldName,
+            'executionDefaults-conflict',
+            `has different executionDefaults than "${existing.modelName}.${fieldName}", which is stored in the same collection "${entry}". Use the same executionDefaults on both models.`,
+          );
+        }
+        continue;
+      }
+      byRef.set(refKey, { modelName, phasesKey });
       defaults.push({
         ref: { namespace: UNBOUND_NAMESPACE_ID, entry, field: fieldName },
         ...phases,

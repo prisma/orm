@@ -270,3 +270,85 @@ describe('Mongo TS temporal preset misuse', () => {
     );
   });
 });
+
+describe('Mongo TS temporal presets on polymorphic models', () => {
+  function eventContract(clickFields: 'plain' | 'withPreset') {
+    return defineContract(scaffold, ({ field, model }) => {
+      const Event = model('Event', {
+        collection: 'events',
+        fields: {
+          _id: field.objectId(),
+          kind: field.string(),
+          createdAt: field.temporal.createdAt(),
+        },
+        discriminator: { field: 'kind', variants: { Click: { value: 'click' } } },
+      });
+      const Click = model('Click', {
+        collection: 'events',
+        base: Event,
+        fields:
+          clickFields === 'withPreset'
+            ? { url: field.string(), clickedAt: field.temporal.createdAt() }
+            : { url: field.string() },
+      });
+      return { models: { Event, Click } };
+    });
+  }
+
+  it('emits one ref for a preset on the base model, shared by its variants', () => {
+    expect(eventContract('plain').execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: UNBOUND_NAMESPACE_ID, entry: 'events', field: 'createdAt' },
+        onCreate: timestampNow,
+      },
+    ]);
+  });
+
+  it('refuses execution defaults on a variant field', () => {
+    expect(() => eventContract('withPreset')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: {
+          modelName: 'Click',
+          fieldName: 'clickedAt',
+          reason: 'executionDefaults-on-variant',
+        },
+      }),
+    );
+  });
+});
+
+describe('Mongo TS temporal presets on models sharing a collection', () => {
+  function sharedCollectionContract(pageStamp: 'createdAt' | 'updatedAt') {
+    return defineContract(scaffold, ({ field, model }) => ({
+      models: {
+        Post: model('Post', {
+          collection: 'entries',
+          fields: { _id: field.objectId(), stamp: field.temporal.createdAt() },
+        }),
+        Page: model('Page', {
+          collection: 'entries',
+          fields: { _id: field.objectId(), stamp: field.temporal[pageStamp]() },
+        }),
+      },
+    }));
+  }
+
+  it('merges identical execution defaults for the same collection field', () => {
+    expect(sharedCollectionContract('createdAt').execution?.mutations.defaults).toEqual([
+      {
+        ref: { namespace: UNBOUND_NAMESPACE_ID, entry: 'entries', field: 'stamp' },
+        onCreate: timestampNow,
+      },
+    ]);
+  });
+
+  it('refuses differing execution defaults for the same collection field', () => {
+    expect(() => sharedCollectionContract('updatedAt')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: { modelName: 'Page', fieldName: 'stamp', reason: 'executionDefaults-conflict' },
+      }),
+    );
+  });
+});
