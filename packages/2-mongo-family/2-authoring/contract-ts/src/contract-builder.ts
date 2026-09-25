@@ -2349,8 +2349,8 @@ function buildContractFromDefinition<
   const collections = buildCollections(definition.models);
   assertNoValueObjectExecutionDefaults(definition.valueObjects);
   const execution = buildExecutionSection({
-    target: 'mongo',
-    targetFamily: 'mongo',
+    target: definition.target.targetId,
+    targetFamily: definition.family.familyId,
     defaults: buildExecutionDefaults(definition.models),
   });
 

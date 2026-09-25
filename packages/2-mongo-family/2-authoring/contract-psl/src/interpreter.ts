@@ -1435,9 +1435,11 @@ export function interpretPslDocumentToMongoContract(
       executionDefaults.push({ ref: { namespace: UNBOUND_NAMESPACE_ID, entry, field }, ...phases });
     }
   }
+  const target = 'mongo';
+  const targetFamily = 'mongo';
   const execution = buildExecutionSection({
-    target: 'mongo',
-    targetFamily: 'mongo',
+    target,
+    targetFamily,
     defaults: executionDefaults,
   });
 
@@ -1487,8 +1489,6 @@ export function interpretPslDocumentToMongoContract(
     }
   }
 
-  const target = 'mongo';
-  const targetFamily = 'mongo';
   const collectionInputs: Record<string, MongoCollectionInput> = {};
   for (const [name, coll] of Object.entries(resolvedCollections)) {
     const raw: Record<string, unknown> = {};

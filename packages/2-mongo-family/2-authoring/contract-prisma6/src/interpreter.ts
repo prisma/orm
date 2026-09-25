@@ -1245,8 +1245,8 @@ function assembleContract(input: {
   }
   const capabilities: Record<string, Record<string, boolean>> = {};
   const execution = buildExecutionSection({
-    target: 'mongo',
-    targetFamily: 'mongo',
+    target,
+    targetFamily,
     defaults: input.executionDefaults,
   });
   return {
