@@ -4,6 +4,7 @@ import type {
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-relational-core/ast';
+import { NAME_THE_PSL_SOURCE_LOSES } from './name-the-psl-source-loses';
 import { SYNTHETIC_SPAN } from './psl-literals';
 import { createUniqueFieldName } from './unique-name';
 
@@ -13,13 +14,14 @@ export function buildNativeEnumBlock(
   typeName: string,
   values: readonly string[],
 ): PslExtensionBlock {
-  const usedMemberNames = new Set<string>();
-  const parameters: Record<string, PslExtensionBlockParamValue> = {};
-  for (const value of values) {
-    const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
-    usedMemberNames.add(memberName);
-    parameters[memberName] = { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN };
-  }
+  const usedMemberNames = new Set<string>([NAME_THE_PSL_SOURCE_LOSES]);
+  const parameters = Object.fromEntries(
+    values.map((value): [string, PslExtensionBlockParamValue] => {
+      const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
+      usedMemberNames.add(memberName);
+      return [memberName, { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN }];
+    }),
+  );
 
   return {
     kind: 'native_enum',

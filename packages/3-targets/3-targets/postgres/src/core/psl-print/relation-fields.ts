@@ -14,9 +14,9 @@ import {
 } from './contract-model-index';
 import {
   refuseManyToManyWithoutJunctionRelation,
-  refuseNonIdentifier,
   refuseRelationToOtherContractSpace,
   refuseToOneRelationWithoutForeignKey,
+  refuseUnwritableName,
 } from './refusals';
 
 const PSL_REFERENTIAL_ACTIONS: Readonly<Record<ReferentialAction, string>> = {
@@ -312,7 +312,7 @@ export function buildRelationFields(input: {
 }): readonly PslField[] {
   const fields: PslField[] = [];
   for (const modelRelation of orderedByForeignKey(input.entry, input.relations)) {
-    refuseNonIdentifier('field', modelRelation.fieldName);
+    refuseUnwritableName('field', modelRelation.fieldName);
     const target = relationTarget(modelRelation, input.modelsByCoordinate);
     const junctionRelation =
       modelRelation.relation.cardinality === 'N:M'

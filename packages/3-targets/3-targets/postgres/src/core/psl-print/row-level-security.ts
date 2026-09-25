@@ -11,11 +11,11 @@ import {
   refuseEntryFiledUnderAnotherName,
   refuseEntryInOtherNamespace,
   refuseInvalidEntry,
-  refuseNonIdentifier,
   refusePolicyNameNotDerived,
   refusePolicyWithoutModel,
   refusePolicyWithoutRls,
   refuseRoleOutsideUnbound,
+  refuseUnwritableName,
 } from './refusals';
 
 /**
@@ -65,7 +65,7 @@ export function buildRoleBlocks(
       recordedNamespaceId: entity.namespaceId,
     });
     refuseEntryFiledUnderAnotherName({ namespaceId, kind: 'role', name, readsBackAs: entity.name });
-    refuseNonIdentifier('role', entity.name);
+    refuseUnwritableName('role', entity.name);
     return {
       kind: 'role',
       keyword: 'role',
@@ -109,7 +109,7 @@ export function buildPolicyBlocks(input: {
   return Object.entries(input.entries ?? {}).map(([head, policy]): PslExtensionBlock => {
     if (!(policy instanceof PostgresRlsPolicy))
       refuseInvalidEntry(input.namespaceId, 'policy', head);
-    refuseNonIdentifier('policy', head);
+    refuseUnwritableName('policy', head);
     refuseEntryInOtherNamespace({
       namespaceId: input.namespaceId,
       kind: 'policy',
@@ -120,7 +120,7 @@ export function buildPolicyBlocks(input: {
     if (modelName === undefined) refusePolicyWithoutModel(policy);
     if (!input.rlsTables.has(policy.tableName)) refusePolicyWithoutRls(policy);
     if (!policyNameReadsBack(head, policy)) refusePolicyNameNotDerived(policy);
-    for (const role of policy.roles) refuseNonIdentifier('role', role);
+    for (const role of policy.roles) refuseUnwritableName('role', role);
 
     return {
       kind: 'policy',

@@ -14,8 +14,8 @@ import { isPostgresCodecDescriptor } from '../codec-descriptor';
 import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
 import { buildColumnType, type PslColumnType } from './column-types';
 import {
-  refuseNonIdentifier,
   refuseUnwritableFieldShape,
+  refuseUnwritableName,
   refuseValueObjectFieldCodecNeedingTypeParameters,
   refuseValueObjectFieldCodecWithoutNativeType,
   refuseValueObjectFieldPartsTheSourceDrops,
@@ -83,12 +83,12 @@ export function buildCompositeTypes(input: {
   refuseValueObjectsOutsideDefaultNamespace(input.contract, input.namespaceId);
   const valueObjects = input.contract.domain.namespaces[input.namespaceId]?.valueObjects ?? {};
   return Object.entries(valueObjects).map(([name, valueObject]) => {
-    refuseNonIdentifier('value object', name);
+    refuseUnwritableName('value object', name);
     return {
       kind: 'compositeType',
       name,
       fields: Object.entries(valueObject.fields).map(([fieldName, field]): PslField => {
-        refuseNonIdentifier('field', fieldName);
+        refuseUnwritableName('field', fieldName);
         const { typeName, typeConstructor } = buildDomainFieldType({
           field,
           coordinate: `"${input.namespaceId}".${name}.${fieldName}`,
@@ -121,7 +121,7 @@ export function buildTypesBlock(
 ): PslTypesBlock | undefined {
   const declarations: PslNamedTypeDeclaration[] = [];
   for (const [name, instance] of Object.entries(contract.storage.types ?? {})) {
-    refuseNonIdentifier('named type', name);
+    refuseUnwritableName('named type', name);
     const { typeName, typeConstructor } = buildColumnType({
       column: new StorageColumn({
         nativeType: instance.nativeType,

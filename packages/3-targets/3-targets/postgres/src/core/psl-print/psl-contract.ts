@@ -47,7 +47,6 @@ import {
   refuseInvalidEntry,
   refuseModelOwner,
   refuseModelsOutsideTableNamespace,
-  refuseNonIdentifier,
   refuseRlsWithoutModel,
   refuseUnderivedChecks,
   refuseUnderivedRoots,
@@ -56,6 +55,7 @@ import {
   refuseUnmodelledTablesAndColumns,
   refuseUnprintedEntryKinds,
   refuseUntravelledForeignKeys,
+  refuseUnwritableName,
   refuseUnwrittenExecutionDefaults,
   refuseUnwrittenNamespaces,
 } from './refusals';
@@ -125,7 +125,7 @@ function buildModel(
   rlsTables: ReadonlySet<string>,
 ): PslModel {
   const { models, variants, relationsByModel, byCoordinate } = all;
-  refuseNonIdentifier('model', entry.name);
+  refuseUnwritableName('model', entry.name);
   refuseModelOwner(entry);
   const variant = variants.get(entry);
   if (variant !== undefined && !variant.singleTable) refuseUnderivedVariantLink(entry, variant);

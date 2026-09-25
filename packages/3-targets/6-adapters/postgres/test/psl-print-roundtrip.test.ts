@@ -272,6 +272,34 @@ describe('a printed PSL contract reads back as the same contract', () => {
   );
 });
 
+describe('a native enum value "__proto__"', () => {
+  it(
+    'is written under a member name the PSL source keeps, and reads back',
+    async () => {
+      const authored = await readPsl(`// use prisma-8
+namespace public {
+  native_enum Mood {
+    proto = "__proto__"
+    calm  = "calm"
+  }
+
+  model Person {
+    id   Int           @id
+    mood pg.enum(Mood)
+  }
+}
+`);
+      const printed = await printAndReadBack(authored);
+
+      expect(printContract(authored).text).toContain('= "__proto__"');
+      expect(serializedWithoutCapabilities(printed)).toEqual(
+        serializedWithoutCapabilities(authored),
+      );
+    },
+    timeouts.pslRoundTrip,
+  );
+});
+
 describe('a contract the language cannot carry is refused by name', () => {
   it('refuses a to-one relation that travels no foreign key', () => {
     const authored = loadContract(

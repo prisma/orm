@@ -348,7 +348,7 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a row-level security setting or role is filed under a key the PSL source would not file it under (meta: `namespaceId`, `kind`, `name`);
   - a row-level security setting, role or policy records a namespace other than the one it is stored in (meta: `namespaceId`, `kind`, `name`).
 - Names and storage entries:
-  - a name PSL writes as an identifier is not one: a model, field, value object, enum, enum member, native enum, named type, policy, role or index option key. `NaN` and `Infinity` are number words, not identifiers (meta: `kind`, `name`);
+  - a name PSL writes as an identifier is not one, or is `__proto__`, which the PSL source loses when it reads it: a model, field, value object, enum, enum member, native enum, named type, policy, role or index option key. `NaN` and `Infinity` are number words, not identifiers (meta: `kind`, `name`);
   - a namespace holds a storage entity kind other than tables, value sets, native enums, row-level security settings, policies and roles (meta: `namespaceId`, `kind`, `names`);
   - a storage entry is not an entity of its kind (meta: `namespaceId`, `kind`, `name`).
 

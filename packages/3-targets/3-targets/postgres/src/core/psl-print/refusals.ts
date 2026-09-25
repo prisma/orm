@@ -31,6 +31,7 @@ import { postgresError } from '../errors';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import type { PostgresRlsPolicy } from '../postgres-rls-policy';
+import { NAME_THE_PSL_SOURCE_LOSES } from '../psl-ast/name-the-psl-source-loses';
 import {
   isVariantLinkForeignKey,
   type ModelWithTable,
@@ -583,7 +584,7 @@ export function refuseUnwritableIndexOptions(entry: ModelWithTable, index: Index
     );
   }
   for (const [key, value] of Object.entries(index.options ?? {})) {
-    refuseNonIdentifier('index option', key);
+    refuseUnwritableName('index option', key);
     if (typeof value === 'string') continue;
     throw unsupported(
       `index "${index.name}" on "${entry.namespaceId}"."${entry.tableName}" has option "${key}" whose value is not a string, which cannot be written in Prisma 8 PSL.`,
@@ -934,7 +935,15 @@ export function refuseEntryInOtherNamespace(input: {
  * Refuses a name the printer writes where PSL reads an identifier: a model, field, value object,
  * enum, enum member, native enum, named type, policy, role or index option key.
  */
-export function refuseNonIdentifier(kind: string, name: string): void {
+export function refuseUnwritableName(kind: string, name: string): void {
+  if (name === NAME_THE_PSL_SOURCE_LOSES) {
+    throw unsupported(
+      `${kind} "${name}" cannot be written in Prisma 8 PSL, because the PSL source loses this name when it reads it.`,
+      'The PSL source keeps names as keys of plain objects, where this name sets the prototype instead of adding a key.',
+      'Rename it, or keep authoring this contract in its current source.',
+      { kind, name },
+    );
+  }
   if (isPslIdentifier(name)) return;
   throw unsupported(
     `${kind} "${name}" is not a PSL identifier, so it cannot be written in Prisma 8 PSL.`,

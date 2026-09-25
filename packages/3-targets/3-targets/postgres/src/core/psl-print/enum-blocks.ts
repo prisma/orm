@@ -11,7 +11,7 @@ import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
 import {
   refuseNativeEnumControl,
   refuseNativeEnumWithoutValueSet,
-  refuseNonIdentifier,
+  refuseUnwritableName,
 } from './refusals';
 
 /**
@@ -23,16 +23,16 @@ export function buildDomainEnumBlocks(
   enums: Readonly<Record<string, ContractEnum>>,
 ): readonly PslExtensionBlock[] {
   return Object.entries(enums).map(([name, domainEnum]): PslExtensionBlock => {
-    refuseNonIdentifier('enum', name);
-    const parameters: Record<string, PslExtensionBlockParamValue> = {};
-    for (const member of domainEnum.members) {
-      refuseNonIdentifier('enum member', member.name);
-      parameters[member.name] = {
-        kind: 'value',
-        raw: JSON.stringify(member.value),
-        span: SYNTHETIC_SPAN,
-      };
-    }
+    refuseUnwritableName('enum', name);
+    const parameters = Object.fromEntries(
+      domainEnum.members.map((member): [string, PslExtensionBlockParamValue] => {
+        refuseUnwritableName('enum member', member.name);
+        return [
+          member.name,
+          { kind: 'value', raw: JSON.stringify(member.value), span: SYNTHETIC_SPAN },
+        ];
+      }),
+    );
     return {
       kind: 'enum',
       keyword: 'enum',
@@ -126,7 +126,7 @@ export function buildNativeEnumBlocksForNamespace(input: {
   for (const [entryName, nativeEnum] of input.nativeEnums) {
     const { typeName } = nativeEnum;
     const blockName = nameByEntry.get(entryName) ?? typeName;
-    refuseNonIdentifier('native enum', blockName);
+    refuseUnwritableName('native enum', blockName);
     blocks.push(buildNativeEnumBlock(blockName, typeName, nativeEnum.members));
     blockNamesByTypeName.set(typeName, blockName);
     blockNamesByTypeName.set(`${input.namespaceId}.${typeName}`, blockName);

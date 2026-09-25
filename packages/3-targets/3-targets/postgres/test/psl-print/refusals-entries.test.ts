@@ -53,6 +53,19 @@ describe('names PSL writes as identifiers', () => {
     );
   });
 
+  it('refuses an enum member named __proto__, a name the PSL source loses when it reads it', () => {
+    expect(
+      printingWidget({
+        domain: {
+          enum: {
+            Slot: { codecId: 'pg/text@1', members: [{ name: '__proto__', value: 'a' }] },
+          },
+        },
+        entries: { valueSet: { Slot: { kind: 'valueSet', values: ['a'] } } },
+      }),
+    ).toThrow(refusal({ kind: 'enum member', name: '__proto__' }));
+  });
+
   it('refuses a named type name that is not an identifier', () => {
     expect(
       printingWidget({

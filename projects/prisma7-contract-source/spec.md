@@ -146,6 +146,7 @@ A `Json` object or array literal default was refused in the first version and no
 
 Each exists on `main` unless the line says otherwise, so none is a regression this project caused. Each needs its own piece of work.
 
+- The PSL source loses any name `__proto__`: a model, field, block or enum member so named. The parser and readers keep names as keys of plain objects, where assigning `__proto__` sets the prototype instead of adding a key (for example `symbol-table.ts` and `block-reconstruction.ts` in `@internal/psl-parser`). `contract print` refuses the name rather than write a file that reads back without it. In the PSL parser and readers.
 - The string form of the facade `defineConfig` passes no composed extension packs to the PSL source, so a PSL contract with a ParadeDB `bm25` index fails to emit with an unregistered index type. In `packages/3-extensions/postgres/src/config/define-config.ts`.
 - `contract infer` prints a PascalCase table as a model of the same name with no `@@map`, and Prisma 8 then maps that model to the lower-first table name, so `db verify` reports the table missing. Every Prisma 7 table is PascalCase, so this blocks adopting a Prisma 7 database through infer. In the Postgres target's infer code.
 - `db init` failed on a `dbgenerated` date or time default, because the CLI process has no global `Temporal`. In the CLI. Recorded before #30380 replaced `dbgenerated` with `sql` tagged literals; not rechecked since.

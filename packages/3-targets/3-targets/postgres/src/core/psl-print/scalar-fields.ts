@@ -25,9 +25,9 @@ import {
   refuseFieldColumnMismatch,
   refuseFieldsWithoutColumn,
   refuseGeneratorWithDatabaseDefault,
-  refuseNonIdentifier,
   refuseStorageWithoutFieldOrColumn,
   refuseUnwritableFieldShape,
+  refuseUnwritableName,
 } from './refusals';
 
 /** The generated values of the contract, keyed by the column they fill. */
@@ -121,7 +121,7 @@ export function buildScalarFields(input: {
     if (column === undefined || field === undefined) {
       refuseStorageWithoutFieldOrColumn({ entry, fieldName, coordinate });
     }
-    refuseNonIdentifier('field', fieldName);
+    refuseUnwritableName('field', fieldName);
     refuseUnwritableFieldShape(field, coordinate);
     refuseColumnControl(column, coordinate);
     refuseFieldColumnMismatch({
