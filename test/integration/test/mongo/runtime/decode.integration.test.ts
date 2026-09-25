@@ -101,6 +101,46 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
     });
   });
 
+  it('names the collection and field when a Decimal128 field holds a double', async () => {
+    await withMongod(async (ctx) => {
+      await ctx.client.db(ctx.dbName).collection('posts').insertOne({ price: 19.99 });
+      const shape: MongoResultShape = {
+        kind: 'document',
+        fields: {
+          price: { kind: 'leaf', codecId: 'mongo/decimal128@1', nullable: false },
+        },
+      };
+      let err: unknown;
+      try {
+        for await (const _ of ctx.runtime.query({
+          collection: 'posts',
+          command: new AggregateCommand('posts', []),
+          meta: ctx.stubMeta,
+          resultShape: shape,
+        })) {
+          void _;
+        }
+      } catch (e) {
+        err = e;
+      }
+      expect(isRuntimeError(err)).toBe(true);
+      if (!isRuntimeError(err)) return;
+      expect({ code: err.code, message: err.message, details: err.details }).toEqual({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          "Failed to decode field price in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
+        details: {
+          codecId: 'mongo/decimal128@1',
+          received: 'number',
+          collection: 'posts',
+          path: 'price',
+          codec: 'mongo/decimal128@1',
+          wirePreview: '19.99',
+        },
+      });
+    });
+  });
+
   it('raw aggregate yields rows unchanged without resultShape', async () => {
     await withMongod(async (ctx) => {
       const oid = await ctx.client.db(ctx.dbName).collection('rawt').insertOne({ a: 1 });

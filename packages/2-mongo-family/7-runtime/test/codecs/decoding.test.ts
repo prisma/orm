@@ -1,7 +1,6 @@
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { type MongoCodecRegistry, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
-import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { structuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
@@ -438,6 +437,20 @@ describe('decodeMongoRow', () => {
   });
 
   it('adds the collection and field to a structured RUNTIME.DECODE_FAILED from a codec, keeping its details', async () => {
+    const registry = newMongoCodecRegistry();
+    registry.register(
+      mongoCodec({
+        typeId: 'mongo/decimal128@1',
+        encode: (v: string) => v,
+        decode: (wire: unknown) => {
+          throw structuredError(
+            'RUNTIME.DECODE_FAILED',
+            'mongo/decimal128@1 wire value must be a Decimal128',
+            { meta: { codecId: 'mongo/decimal128@1', received: typeof wire } },
+          );
+        },
+      }),
+    );
     const shape: MongoResultShape = {
       kind: 'document',
       fields: {
@@ -445,7 +458,7 @@ describe('decodeMongoRow', () => {
       },
     };
     try {
-      await decodeMongoRow({ price: 19.99 }, shape, buildStandardCodecRegistry(), 'posts');
+      await decodeMongoRow({ price: 19.99 }, shape, registry, 'posts');
       expect.fail('expected throw');
     } catch (e) {
       expect(isRuntimeError(e)).toBe(true);
