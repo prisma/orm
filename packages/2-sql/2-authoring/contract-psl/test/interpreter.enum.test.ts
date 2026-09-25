@@ -394,7 +394,8 @@ model Post {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          message: 'Expected a JSON value, found identifier "notjson"',
+          message:
+            'Expected one of: string | number | boolean | null | JSON value[] | { [key]: JSON value }',
         }),
       ]),
     );
