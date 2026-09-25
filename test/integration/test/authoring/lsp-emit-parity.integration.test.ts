@@ -38,6 +38,10 @@ const configPath = join(
   import.meta.dirname,
   '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity/prisma.config.ts',
 );
+const multiFileConfigPath = join(
+  import.meta.dirname,
+  '../fixtures/cli/cli-test-app/fixtures/lsp-emit-parity-multi-file/prisma.config.ts',
+);
 
 function pullClient() {
   const stdin = new PassThrough();
@@ -249,16 +253,7 @@ namespace billing {
       const testDir = createTempDir();
       writeProjectManifest(testDir);
       const configPath = join(testDir, 'prisma.config.ts');
-      writeFileSync(
-        configPath,
-        `import { definePrismaConfig } from '@prisma/cli-engine';
-import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
-
-export default definePrismaConfig({
-  orm: ormConfig({ contract: './*.prisma' }),
-});
-`,
-      );
+      copyFileSync(multiFileConfigPath, configPath);
       const paths = {
         user: join(testDir, 'user.prisma'),
         post: join(testDir, 'post.prisma'),
