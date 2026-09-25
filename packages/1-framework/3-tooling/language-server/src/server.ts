@@ -10,6 +10,7 @@ import {
   type Diagnostic,
   DiagnosticSeverity,
   DidChangeWatchedFilesNotification,
+  type Disposable,
   type DocumentDiagnosticReport,
   DocumentDiagnosticReportKind,
   type FoldingRange,
@@ -46,7 +47,13 @@ import {
   type DocumentArtifacts,
   type ProjectArtifacts,
 } from './project-artifacts';
-import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
+import {
+  canonicalFileIdentity,
+  resolveSchemaInputs,
+  type SchemaInputConfig,
+  type SchemaInputSet,
+  toWatcherGlobPattern,
+} from './schema-inputs';
 import { buildSemanticTokens, semanticTokensLegend } from './semantic-tokens';
 import { providePslSignatureHelp } from './signature-help';
 
@@ -63,6 +70,8 @@ export interface LanguageServer {
 interface ProjectState {
   readonly configPath: string;
   readonly inputs: SchemaInputSet;
+  /** Kept so a schema-glob watch event can re-expand membership cheaply. */
+  readonly schemaInputConfig: SchemaInputConfig;
   readonly formatter?: FormatOptions;
   /**
    * Resolved once per config and refreshed by the config-watch path — never
@@ -98,6 +107,16 @@ function lastGoodProject(entry: ManagedProject | undefined): ProjectState | unde
   return entry.status === 'loaded' ? entry.project : entry.lastGood;
 }
 
+/**
+ * A just-closed overlay's own URI spelling, captured before the overlay is
+ * removed from the store — the identity it names must still be pushed under
+ * that exact spelling (aliasing), not the project's configured/expanded one.
+ */
+interface ClosedOverride {
+  readonly identity: string;
+  readonly uri: string;
+}
+
 export const CONFIG_LOAD_FAILED_CODE = 'PRISMA_CONFIG_LOAD_FAILED';
 
 const semanticTokenSourceLimit = 100_000;
@@ -114,6 +133,12 @@ function createServerOn(connection: Connection): LanguageServer {
   const { getDocument } = documents;
   const managedProjects = new Map<string, ManagedProject>();
   const documentConfigPaths = new Map<string, string>();
+  // Per-project ledger of the last push, keyed by canonical file identity so
+  // a member found under a different literal URI spelling still diffs
+  // correctly. Survives project reload (it is never reset on config
+  // change) so a stale entry from before the reload still clears.
+  const publishedMembers = new Map<string, ReadonlyMap<string, string>>();
+  const schemaWatchRegistrations = new Map<string, Disposable>();
   let rootPath = process.cwd();
   let watchedConfigGlob = join(rootPath, '**', CONFIG_FILENAME);
   let clientCapabilities = noClientCapabilities;
@@ -126,25 +151,120 @@ function createServerOn(connection: Connection): LanguageServer {
     connection.console.warn(message);
   }
 
-  async function publish(uri: string): Promise<void> {
-    const project = await resolveProjectForDocument(uri);
-    if (project === undefined) {
+  /**
+   * Which of a project's current members should receive a push right now.
+   * A client without pull support gets every member, open or closed — the
+   * push path is its only diagnostics channel. A pull-capable client still
+   * gets closed members pushed (design decision 7: VS Code pulls open
+   * files only, so an unopened member has no other way to reach it); its
+   * open members stay on the pull path exclusively.
+   */
+  function membersToPush(project: ProjectState): readonly string[] {
+    const members = Array.from(project.inputs.uris());
+    return clientCapabilities.pullDiagnostics
+      ? members.filter((uri) => getDocument(uri) === undefined)
+      : members;
+  }
+
+  /**
+   * The literal URI a push for `candidateUri` should target. An open member
+   * keeps the exact spelling the client opened it under (aliasing:
+   * `%73chema.psl` vs `schema.psl` name the same file); everything else
+   * uses the configured/expanded spelling, since there is no live buffer to
+   * defer to.
+   */
+  function pushTargetUri(candidateUri: string, closedOverride?: ClosedOverride): string {
+    const identity = canonicalFileIdentity(candidateUri);
+    if (closedOverride !== undefined && closedOverride.identity === identity) {
+      return closedOverride.uri;
+    }
+    return getDocument(candidateUri)?.uri ?? candidateUri;
+  }
+
+  /**
+   * Publishes to every member this project currently needs pushed
+   * (`membersToPush`), then clears any previously-published member that
+   * fell out of that set — a member that left the schema (directive
+   * removed, deleted, glob no longer matches) gets exactly one empty-array
+   * publish, at the URI it was last published under.
+   *
+   * An unreadable candidate (nothing on disk, or disk content that fails
+   * the directive gate) publishes an empty array only while it is open: an
+   * open buffer is something the client is actively editing and expects a
+   * live diagnostics response for regardless of content. A closed,
+   * never-successfully-read candidate is skipped outright — there is
+   * nothing to say yet about a member nobody has looked at, and forcing an
+   * empty array would wrongly stand in as "no problems".
+   */
+  function publishProjectMembers(project: ProjectState, closedOverride?: ClosedOverride): void {
+    const nextLedger = new Map<string, string>();
+    for (const candidateUri of membersToPush(project)) {
+      const artifacts = project.artifacts.document(candidateUri);
+      if (artifacts === undefined && getDocument(candidateUri) === undefined) {
+        continue;
+      }
+      const uri = pushTargetUri(candidateUri, closedOverride);
+      sendDiagnostics({
+        uri,
+        diagnostics:
+          artifacts === undefined ? [] : combinedDiagnostics(project.artifacts, artifacts),
+      });
+      nextLedger.set(canonicalFileIdentity(candidateUri), uri);
+    }
+    const previousLedger = publishedMembers.get(project.configPath);
+    if (previousLedger !== undefined) {
+      for (const [identity, uri] of previousLedger) {
+        if (!nextLedger.has(identity)) {
+          sendDiagnostics({ uri, diagnostics: [] });
+        }
+      }
+    }
+    publishedMembers.set(project.configPath, nextLedger);
+  }
+
+  function clearPublishedMembers(configPath: string): void {
+    const ledger = publishedMembers.get(configPath);
+    if (ledger === undefined) {
       return;
     }
-    const document = getDocument(uri);
-    if (document === undefined) {
-      documentConfigPaths.delete(canonicalFileIdentity(uri));
+    for (const uri of ledger.values()) {
+      sendDiagnostics({ uri, diagnostics: [] });
+    }
+    publishedMembers.delete(configPath);
+  }
+
+  async function registerSchemaWatcher(project: ProjectState): Promise<void> {
+    schemaWatchRegistrations.get(project.configPath)?.dispose();
+    schemaWatchRegistrations.delete(project.configPath);
+    if (!clientCapabilities.watchedFilesRegistration) {
       return;
     }
-    const artifacts = project.artifacts.document(uri);
-    if (artifacts === undefined) {
-      sendDiagnostics({ uri: document.uri, diagnostics: [] });
+    const patterns = project.schemaInputConfig.contract?.source.inputs ?? [];
+    if (patterns.length === 0) {
       return;
     }
-    sendDiagnostics({
-      uri: document.uri,
-      diagnostics: combinedDiagnostics(project.artifacts, artifacts),
-    });
+    try {
+      const disposable = await connection.client.register(DidChangeWatchedFilesNotification.type, {
+        watchers: patterns.map((pattern) => ({ globPattern: toWatcherGlobPattern(pattern) })),
+      });
+      // A reload that raced this registration may have already superseded
+      // it; the newer disposable already won `schemaWatchRegistrations`.
+      if (managedProjects.get(project.configPath) !== undefined) {
+        schemaWatchRegistrations.set(project.configPath, disposable);
+      } else {
+        disposable.dispose();
+      }
+    } catch {
+      // Registration failures are logged by the connection's own client
+      // implementation; no schema-level fallback beyond stat revalidation.
+    }
+  }
+
+  // Registration only: the load's own caller (documentChanged, a pull
+  // request, a config/schema-glob watch event) sweeps once it has the
+  // resolved project — sweeping here too would double every first publish.
+  function onProjectLoaded(project: ProjectState): void {
+    void registerSchemaWatcher(project);
   }
 
   // The single diagnostics assembly — push and pull must serve the same
@@ -261,6 +381,7 @@ function createServerOn(connection: Connection): LanguageServer {
             // Unconditional: clients keep per-server diagnostic state, so an
             // empty publish is harmless when no marker is outstanding.
             clearConfigFailure(configPath);
+            onProjectLoaded(project);
           }
           return project;
         },
@@ -275,6 +396,11 @@ function createServerOn(connection: Connection): LanguageServer {
             }
             managedProjects.set(configPath, { status: 'failed' });
             unmanageDocuments(configPath);
+            // No project is left to watch or push for — a member's edit
+            // from here has nothing to (re)load into.
+            schemaWatchRegistrations.get(configPath)?.dispose();
+            schemaWatchRegistrations.delete(configPath);
+            clearPublishedMembers(configPath);
           }
           throw error;
         },
@@ -335,6 +461,7 @@ function createServerOn(connection: Connection): LanguageServer {
     const project: ProjectState = {
       configPath,
       inputs: resolution.inputs,
+      schemaInputConfig: resolution.schemaInputConfig,
       controlStack: resolution.controlStack,
       artifacts,
       ...(resolution.formatter === undefined ? {} : { formatter: resolution.formatter }),
@@ -355,33 +482,22 @@ function createServerOn(connection: Connection): LanguageServer {
     }
   }
 
-  async function republishOpenDocumentsForConfig(configPath: string): Promise<void> {
-    for (const document of documents.all()) {
-      const knownConfigPath = documentConfigPaths.get(canonicalFileIdentity(document.uri));
-      if (knownConfigPath === configPath) {
-        if ((await resolveProjectForDocument(document.uri)) === undefined) {
-          // The reload dropped a previously managed document; clear its markers.
-          sendDiagnostics({ uri: document.uri, diagnostics: [] });
-          continue;
-        }
-        await publish(document.uri);
-        continue;
-      }
-
-      const filePath = filePathFromUri(document.uri);
-      if (filePath === undefined) {
-        continue;
-      }
-      const nearestConfigPath = await findNearestConfigPathForFile(filePath);
-      if (nearestConfigPath === configPath) {
-        documentConfigPaths.set(canonicalFileIdentity(document.uri), configPath);
-        await publish(document.uri);
-      }
+  /**
+   * Re-resolves `uri`'s project and sweeps its whole membership set —
+   * an edit anywhere in a project can change diagnostics anywhere else in
+   * it (`interFileDependencies`), so a single-document push is never
+   * sufficient once more than one file can be involved.
+   */
+  async function publishForDocument(uri: string): Promise<void> {
+    const project = await resolveProjectForDocument(uri);
+    if (project === undefined) {
+      return;
     }
+    publishProjectMembers(project);
   }
 
-  function publishSafely(uri: string): void {
-    void publish(uri).catch((error: unknown) => {
+  function publishForDocumentSafely(uri: string): void {
+    void publishForDocument(uri).catch((error: unknown) => {
       connection.console.error(error instanceof Error ? error.message : String(error));
     });
   }
@@ -547,14 +663,10 @@ function createServerOn(connection: Connection): LanguageServer {
         },
         completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
         signatureHelpProvider: { triggerCharacters: ['(', ','] },
-        // Both flags reflect the current single-input implementation scope —
-        // not a property of PSL. Once the project symbol table merges multiple
-        // inputs, an edit in one file can change diagnostics in another and
-        // these must flip alongside that work.
         ...(clientCapabilities.pullDiagnostics
           ? {
               diagnosticProvider: {
-                interFileDependencies: false,
+                interFileDependencies: true,
                 workspaceDiagnostics: false,
               },
             }
@@ -581,31 +693,83 @@ function createServerOn(connection: Connection): LanguageServer {
     }
   });
 
+  /**
+   * Re-expands membership (a create or delete needs this) and drops the
+   * touched identity's cached artifacts (a change needs this) without a
+   * full config reload — schema-member watch events are far more frequent
+   * than config edits and do not need the control stack rebuilt.
+   */
+  async function handleSchemaMemberChange(uri: string): Promise<boolean> {
+    const filePath = filePathFromUri(uri);
+    if (filePath === undefined) {
+      return false;
+    }
+    let configPath: string | undefined;
+    try {
+      configPath = await findNearestConfigPathForFile(filePath);
+    } catch {
+      return false;
+    }
+    // Only a live (or currently loading) project is refreshed eagerly — same
+    // rule the config-watch path already applies.
+    if (configPath === undefined) {
+      return false;
+    }
+    const entry = managedProjects.get(configPath);
+    if (entry === undefined || entry.status === 'failed') {
+      return false;
+    }
+    const project =
+      entry.status === 'loaded' ? entry.project : await entry.load.catch(() => undefined);
+    if (project === undefined) {
+      return false;
+    }
+    documents.invalidate(uri);
+    const readText = (candidate: string): string | undefined => documents.text(candidate);
+    const nextInputs = await resolveSchemaInputs(project.schemaInputConfig, readText);
+    project.artifacts.documentChanged(uri);
+    project.artifacts.updateInputs(nextInputs);
+    const updated: ProjectState = { ...project, inputs: nextInputs };
+    managedProjects.set(configPath, { status: 'loaded', project: updated });
+    publishProjectMembers(updated);
+    return true;
+  }
+
   connection.onDidChangeWatchedFiles(async (params) => {
-    const changedConfigPaths = configPathsFromWatchedChanges(
-      params.changes.map((change) => filePathFromUri(change.uri)),
-    );
+    const configChanges: string[] = [];
+    const memberChanges: string[] = [];
+    for (const change of params.changes) {
+      const filePath = filePathFromUri(change.uri);
+      (filePath?.endsWith(CONFIG_FILENAME) ? configChanges : memberChanges).push(change.uri);
+    }
+
+    const changedConfigPaths = configPathsFromWatchedChanges(configChanges.map(filePathFromUri));
     for (const configPath of changedConfigPaths) {
       // Only live (or currently loading) projects are refreshed eagerly, so a
       // config change cannot resurrect a project dropped when its last input
       // closed; a config that newly gains an open input is still picked up
-      // lazily below through per-document rediscovery.
+      // lazily through per-document rediscovery.
       if (managedProjects.has(configPath)) {
         try {
-          await refreshProject(configPath);
+          const project = await refreshProject(configPath);
+          publishProjectMembers(project);
         } catch {
           // Failure consequences live in the load chain; nothing to do here.
-          continue;
         }
       }
-      if (!clientCapabilities.pullDiagnostics) {
-        await republishOpenDocumentsForConfig(configPath);
+    }
+
+    let handledMemberChange = false;
+    for (const uri of memberChanges) {
+      if (await handleSchemaMemberChange(uri)) {
+        handledMemberChange = true;
       }
     }
+
     if (
       clientCapabilities.pullDiagnostics &&
       clientCapabilities.diagnosticsRefresh &&
-      changedConfigPaths.size > 0
+      (changedConfigPaths.size > 0 || handledMemberChange)
     ) {
       void connection.languages.diagnostics.refresh();
     }
@@ -629,7 +793,11 @@ function createServerOn(connection: Connection): LanguageServer {
     if (project === undefined) {
       return { kind: DocumentDiagnosticReportKind.Full, items: [] };
     }
-    return buildDocumentDiagnosticReport(project, params.textDocument.uri);
+    const report = buildDocumentDiagnosticReport(project, params.textDocument.uri);
+    // A pull-capable client only pulls its own open documents (design
+    // decision 7); this is the closed members' only route to a push.
+    publishProjectMembers(project);
+    return report;
   });
 
   connection.onFoldingRanges(async (params): Promise<FoldingRange[]> => {
@@ -646,9 +814,10 @@ function createServerOn(connection: Connection): LanguageServer {
 
   function documentChanged(uri: string): void {
     artifactsForDocument(uri)?.documentChanged(uri);
-    if (!clientCapabilities.pullDiagnostics) {
-      publishSafely(uri);
-    }
+    // Always sweeps — `membersToPush` decides per-member whether a pull
+    // client already owns this member's diagnostics, so a push client and a
+    // pull client with closed siblings both end up correctly served.
+    publishForDocumentSafely(uri);
   }
 
   connection.onDidOpenTextDocument((event) => {
@@ -671,14 +840,36 @@ function createServerOn(connection: Connection): LanguageServer {
     const document = documents.close(event.textDocument.uri);
     if (document === undefined) return;
     const uri = document.uri;
+    const configPath = documentConfigPaths.get(canonicalFileIdentity(uri));
     artifactsForDocument(uri)?.documentClosed(uri);
     documentConfigPaths.delete(canonicalFileIdentity(uri));
     // The project survives the close (design decision 8): the member's text
-    // is still readable from disk, so its project keeps computing.
-    if (!clientCapabilities.pullDiagnostics) {
+    // is still readable from disk, so its project keeps computing — and,
+    // now closed, it is pushed rather than pulled (design decision 7). The
+    // just-closed identity keeps its own spelling for this one publish; a
+    // member that dropped out of the schema entirely (directive removed
+    // in the buffer, file gone) still clears via the ledger diff. Resolved
+    // synchronously from whatever project state already exists — a load
+    // still in flight has nothing settled to compute from yet, and a close
+    // must clear immediately rather than wait on it.
+    const project = currentProjectState(configPath);
+    if (project === undefined) {
       sendDiagnostics({ uri, diagnostics: [] });
+      return;
     }
+    publishProjectMembers(project, { identity: canonicalFileIdentity(uri), uri });
   });
+
+  function currentProjectState(configPath: string | undefined): ProjectState | undefined {
+    if (configPath === undefined) {
+      return undefined;
+    }
+    const entry = managedProjects.get(configPath);
+    if (entry === undefined || entry.status === 'failed') {
+      return undefined;
+    }
+    return entry.status === 'loaded' ? entry.project : entry.lastGood;
+  }
 
   connection.listen();
 

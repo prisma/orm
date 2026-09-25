@@ -1,3 +1,4 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
@@ -80,7 +81,7 @@ import {
 import type { ConfigResolution } from '../src/config-resolution';
 import { guardedConnection } from '../src/guarded-connection';
 import type { DocumentArtifacts } from '../src/project-artifacts';
-import { resolveSchemaInputs } from '../src/schema-inputs';
+import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
 import { CONFIG_LOAD_FAILED_CODE, createServer } from '../src/server';
 
@@ -213,13 +214,10 @@ async function resolutionForInputs(
   formatter?: FormatOptions,
   descriptors: AuthoringPslBlockDescriptorNamespace = {},
 ): Promise<ConfigResolutionWithFormatter> {
+  const schemaInputConfig: SchemaInputConfig = { contract: { source: { format: 'psl', inputs } } };
   const resolution = {
-    inputs: await resolveSchemaInputs(
-      {
-        contract: { source: { format: 'psl', inputs } },
-      },
-      alwaysMember,
-    ),
+    inputs: await resolveSchemaInputs(schemaInputConfig, alwaysMember),
+    schemaInputConfig,
     controlStack: { scalarTypes: [...scalarTypes], pslBlockDescriptors: descriptors },
   };
   return formatter === undefined ? resolution : { ...resolution, formatter };
@@ -228,6 +226,7 @@ async function resolutionForInputs(
 async function emptyResolution(): Promise<ConfigResolution> {
   return {
     inputs: await resolveSchemaInputs({}, alwaysMember),
+    schemaInputConfig: {},
     controlStack: { scalarTypes: [...scalarTypes], pslBlockDescriptors: {} },
   };
 }
@@ -2828,7 +2827,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     harness = startHarness(resolveToSchema, pullDiagnosticsCapabilities);
     const result = await harness.initialize();
     expect(result.capabilities.diagnosticProvider).toEqual({
-      interFileDependencies: false,
+      interFileDependencies: true,
       workspaceDiagnostics: false,
     });
   });
@@ -3955,5 +3954,182 @@ describe('language server prisma-8 directive gating', {
     expect(models).not.toContain('Stray');
     expect(harness.getDocumentAst(schema2Uri)).toBeUndefined();
     expect(harness.getProjectSymbolTable(schema2Uri)).toBeUndefined();
+  });
+});
+
+describe('language server whole-project push and freshness', {
+  timeout: timeouts.databaseOperation,
+}, () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    for (const fixtureDirPath of tempDirs) {
+      await rm(fixtureDirPath, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  async function fixtureDir(): Promise<string> {
+    const created = await mkdtemp(join(tmpdir(), 'lsp-whole-project-'));
+    tempDirs.push(created);
+    return created;
+  }
+
+  const userSchema = '// use prisma-8\nmodel User {\n  id Int @id\n}\n';
+  const postSchema = '// use prisma-8\nmodel Post {\n  id Int @id\n}\n';
+  const conflictingSchema =
+    '// use prisma-8\nmodel User {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n';
+  const selfDuplicatePostSchema =
+    '// use prisma-8\nmodel Post {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n';
+  const isDuplicateDeclaration = (diagnostics: readonly Diagnostic[]): boolean =>
+    diagnostics.some((diagnostic) => diagnostic.code === 'PSL_DUPLICATE_DECLARATION');
+
+  it('produces then clears a diagnostic in a closed sibling from an edit in an open member', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, postSchema, 'utf8');
+
+    harness = startHarness(async () => resolutionForInputs([memberAPath, memberBPath]));
+    await harness.initialize();
+
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    // b is closed but readable from disk, so the sweep from opening a already
+    // pushed an (empty) diagnostic set to it.
+    expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+
+    const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: memberAUri, version: 2 },
+      contentChanges: [{ text: conflictingSchema }],
+    });
+    expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+    expect(harness.publishCount(memberBUri)).toBeGreaterThan(0);
+
+    const cleared = harness.waitForDiagnosticsMatching(
+      memberBUri,
+      (diagnostics) => diagnostics.length === 0,
+    );
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: memberAUri, version: 3 },
+      contentChanges: [{ text: userSchema }],
+    });
+    expect(await cleared).toEqual([]);
+  });
+
+  it('picks up an external edit to a closed member via a watch event', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, postSchema, 'utf8');
+
+    const activeHarness = startHarness(
+      async () => resolutionForInputs([memberAPath, memberBPath]),
+      watchedFilesCapabilities,
+    );
+    harness = activeHarness;
+    await harness.initialize();
+    await harness.waitForWatchedFilesRegistration(timeouts.default);
+
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+    // The schema-glob watcher registers once the project the open member
+    // belongs to has loaded.
+    await waitUntil(() =>
+      watchedFilesRegistrations(activeHarness).some((registration) =>
+        JSON.stringify(registration.registerOptions).includes('a.prisma'),
+      ),
+    );
+
+    // A byte-length change alongside the content change, so the assertion
+    // does not depend on filesystem mtime granularity.
+    await writeFile(memberBPath, conflictingSchema, 'utf8');
+    const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+    harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: memberBUri, type: FileChangeType.Changed }],
+    });
+    expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+  });
+
+  it('picks up an external edit to a closed member via stat revalidation when no watcher is registered', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, postSchema, 'utf8');
+
+    harness = startHarness(async () => resolutionForInputs([memberAPath, memberBPath]));
+    await harness.initialize();
+    expect(watchedFilesRegistrations(harness).length).toBe(0);
+
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+
+    await writeFile(memberBPath, conflictingSchema, 'utf8');
+    expect(watchedFilesRegistrations(harness).length).toBe(0);
+
+    // No watcher exists to notify the server of b's change; an unrelated
+    // edit to the open sibling is the next validation pass, and b's
+    // diagnostics must still pick up the on-disk change through the
+    // store's stat-mtime+size revalidation alone.
+    const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: memberAUri, version: 2 },
+      contentChanges: [{ text: `${userSchema}// trigger a revalidation pass\n` }],
+    });
+    expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+  });
+
+  it("clears a closed member's diagnostics and drops it from the symbol table once it is deleted", async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    // b's own two `Post` declarations conflict with each other, independent
+    // of a's content, so a's own model set is the control for the
+    // "dropped from the symbol table" assertion below.
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, selfDuplicatePostSchema, 'utf8');
+
+    harness = startHarness(
+      async () => resolutionForInputs([memberAPath, memberBPath]),
+      watchedFilesCapabilities,
+    );
+    await harness.initialize();
+
+    openDocument(harness, memberAUri, userSchema);
+    expect(
+      isDuplicateDeclaration(
+        await harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration),
+      ),
+    ).toBe(true);
+    expect(Object.keys(harness.getProjectSymbolTable(memberAUri)?.topLevel.models ?? {})).toContain(
+      'Post',
+    );
+
+    await rm(memberBPath);
+    const cleared = harness.waitForDiagnosticsMatching(
+      memberBUri,
+      (diagnostics) => diagnostics.length === 0,
+    );
+    harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: memberBUri, type: FileChangeType.Deleted }],
+    });
+    expect(await cleared).toEqual([]);
+    expect(
+      Object.keys(harness.getProjectSymbolTable(memberAUri)?.topLevel.models ?? {}),
+    ).not.toContain('Post');
   });
 });

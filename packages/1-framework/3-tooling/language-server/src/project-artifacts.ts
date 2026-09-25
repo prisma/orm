@@ -17,6 +17,10 @@ import {
 import { computeDocumentDiagnostics } from './document-diagnostics';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
+function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
+  return new Set(Array.from(inputs.uris(), canonicalFileIdentity));
+}
+
 export interface DocumentArtifacts {
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
@@ -43,11 +47,16 @@ export interface ProjectArtifactsOptions {
 }
 
 /**
- * Reads can never observe stale artifacts: the vscode-languageserver runtime
- * dispatches messages in order and the server raises `documentChanged` /
- * `documentClosed` synchronously against the already-updated text mirror, so
- * every mutation that could affect a read lands before that read runs. A
- * config reload replaces the store wholesale.
+ * An overlay's edits are never observed stale: the vscode-languageserver
+ * runtime dispatches messages in order and the server raises
+ * `documentChanged` / `documentClosed` synchronously against the
+ * already-updated text mirror, so every overlay mutation lands before the
+ * read that could see it. A disk-origin member has no such event to ride —
+ * `readText` is re-consulted on every read instead (design decision 4's
+ * stat-mtime+size fallback lives one layer down, inside the store), so an
+ * external edit to a closed member surfaces on the next read even without
+ * an intervening `documentChanged`. A config reload replaces the store
+ * wholesale.
  */
 export interface ProjectArtifacts {
   readonly sources: PslSources;
@@ -60,11 +69,27 @@ export interface ProjectArtifacts {
   symbolDiagnostics(): readonly PslDiagnostic[];
   documentChanged(uri: string): void;
   documentClosed(uri: string): void;
+  /**
+   * Swaps in a freshly re-expanded membership set (a schema-glob watch
+   * event) without discarding this project's caches — a control-stack
+   * rebuild (a full config reload) is not needed just to notice a member
+   * file was created or deleted. Members no longer covered by `next` are
+   * dropped from the cache immediately, so a deleted member's stale
+   * artifacts cannot outlive its membership.
+   */
+  updateInputs(next: SchemaInputSet): void;
+}
+
+interface CachedDocument {
+  /** The text `artifacts` was computed from — the freshness check for the next read. */
+  readonly text: string;
+  readonly artifacts: DocumentArtifacts;
 }
 
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const { inputs, getDocument, readText, interpretation } = options;
-  const documents = new Map<string, DocumentArtifacts>();
+  const {, getDocument, readText, interpretation } = options;
+  let inputs = options.inputs;
+  const documents = new Map<string, CachedDocument>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
   let interpretMemo:
@@ -78,7 +103,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     sources = new PslSources(
       Array.from(
         documents.values(),
-        ({ document, sourceFile }) => [document.syntax, sourceFile] as const,
+        ({ artifacts }) => [artifacts.document.syntax, artifacts.sourceFile] as const,
       ),
     );
     symbolTableResult = undefined;
@@ -106,7 +131,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     activeInterpretation: ProjectInterpretation,
   ): ReadonlyMap<string, readonly LspDiagnostic[]> {
     const currentSymbolTable = readSymbolTable();
-    const allDocuments = Array.from(documents.values(), ({ document }) => document);
+    const allDocuments = Array.from(documents.values(), ({ artifacts }) => artifacts.document);
     const warnings: ContractSourceDiagnostic[] = [];
     const result = activeInterpretation.source.interpret(
       { documents: allDocuments, sources, symbolTable: currentSymbolTable },
@@ -118,7 +143,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       },
     );
     const sourceFileByFilename = new Map<string, SourceFile>();
-    for (const artifacts of documents.values()) {
+    for (const { artifacts } of documents.values()) {
       sourceFileByFilename.set(artifacts.sourceFile.filename, artifacts.sourceFile);
     }
     const grouped = new Map<string, ContractSourceDiagnostic[]>();
@@ -179,23 +204,52 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     }
   }
 
+  function updateInputs(next: SchemaInputSet): void {
+    inputs = next;
+    const validIdentities = schemaInputIdentities(next);
+    let changed = false;
+    for (const identity of documents.keys()) {
+      if (!validIdentities.has(identity)) {
+        documents.delete(identity);
+        changed = true;
+      }
+    }
+    if (changed) {
+      refreshSources();
+    }
+  }
+
+  /**
+   * `readText` is consulted on every call, cache hit or not: for an open
+   * overlay this is a cheap in-memory read, but for a disk-origin member it
+   * is the store's stat-mtime+size revalidation — the freshness path for
+   * clients that cannot register a file watcher (design decision 4). A
+   * cache hit whose text has not changed skips reparsing; a change (or a
+   * first read) recomputes.
+   */
   function readDocument(uri: string): DocumentArtifacts | undefined {
     const identity = canonicalFileIdentity(uri);
+    const text = readText(uri);
+    if (text === undefined) {
+      if (documents.delete(identity)) {
+        refreshSources();
+      }
+      return undefined;
+    }
     const existing = documents.get(identity);
-    if (existing !== undefined) {
-      return existing;
+    if (existing !== undefined && existing.text === text) {
+      return existing.artifacts;
     }
     // An open overlay keeps its own URI spelling (a client's live document
     // URI can differ in encoding/casing from the configured input string);
     // a disk-only member has no such live spelling, so it uses `uri` as
     // given by the membership set.
     const resolvedUri = getDocument(uri)?.uri ?? uri;
-    const text = readText(uri);
-    if (text === undefined) {
-      return undefined;
-    }
     const computed = computeDocumentDiagnostics(resolvedUri, text, inputs);
     if (computed === null) {
+      if (documents.delete(identity)) {
+        refreshSources();
+      }
       return undefined;
     }
     const artifacts: DocumentArtifacts = {
@@ -204,7 +258,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       diagnostics: computed.parseDiagnostics,
       interpretDiagnostics: createInterpretSlot(resolvedUri, computed.sourceFile),
     };
-    documents.set(identity, artifacts);
+    documents.set(identity, { text, artifacts });
     refreshSources();
     return artifacts;
   }
@@ -235,5 +289,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     symbolDiagnostics: () => readSymbolTableResult().diagnostics,
     documentChanged: drop,
     documentClosed: drop,
+    updateInputs,
   };
 }

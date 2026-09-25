@@ -219,14 +219,24 @@ describe('createProjectArtifacts', () => {
     expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User']);
   });
 
-  it('returns the same artifacts for repeated reads without an intervening event', () => {
+  it('returns the same artifacts for repeated reads while the underlying text is unchanged', () => {
+    const { texts, store } = projectWithMirror();
+    texts.set(schemaUri, cleanSource);
+    const first = store.document(schemaUri);
+
+    expect(store.document(schemaUri)).toBe(first);
+  });
+
+  it('picks up a disk-origin member text change on the next read without a documentChanged event', () => {
     const { texts, store } = projectWithMirror();
     texts.set(schemaUri, cleanSource);
     const first = store.document(schemaUri);
 
     texts.set(schemaUri, twoModelSource);
 
-    expect(store.document(schemaUri)).toBe(first);
+    const second = store.document(schemaUri);
+    expect(second).not.toBe(first);
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
   });
 
   it('reflects the latest mirrored text on the read after documentChanged', () => {

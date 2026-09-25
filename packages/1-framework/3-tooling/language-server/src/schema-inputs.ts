@@ -61,6 +61,17 @@ function toExpandablePath(input: string): string {
   return isFileUri(input) ? fileURLToPath(new URL(input), { windows: isWindowsPlatform() }) : input;
 }
 
+/**
+ * Converts a configured raw input pattern into an LSP `FileSystemWatcher`
+ * glob pattern: a backslash-separated Windows path is not valid glob syntax
+ * on the client side, so every separator becomes a forward slash. A pattern
+ * already using forward slashes (the common case, and every POSIX path)
+ * passes through unchanged.
+ */
+export function toWatcherGlobPattern(pattern: string): string {
+  return pattern.replaceAll('\\', '/');
+}
+
 function isFileUri(input: string): boolean {
   try {
     return new URL(input).protocol === 'file:';

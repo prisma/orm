@@ -5,7 +5,12 @@ import { createControlStack } from '@internal/framework-components/control';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import { hasPslInterpreter, type PslInterpretCapable } from '@internal/psl-parser/interpret';
 import type { PipelineInputs } from './pipeline';
-import { hasPslInputs, resolveSchemaInputs, type SchemaInputSet } from './schema-inputs';
+import {
+  hasPslInputs,
+  resolveSchemaInputs,
+  type SchemaInputConfig,
+  type SchemaInputSet,
+} from './schema-inputs';
 
 export const CONFIG_FILENAME = 'prisma.config.ts';
 
@@ -16,6 +21,12 @@ export interface ProjectInterpretation {
 
 export interface ConfigResolution {
   readonly inputs: SchemaInputSet;
+  /**
+   * The raw section `inputs` was resolved from — kept so membership can be
+   * re-expanded later (a schema-glob watch event) without paying for a full
+   * config reload (`loadConfig` plus control-stack rebuild).
+   */
+  readonly schemaInputConfig: SchemaInputConfig;
   readonly formatter?: FormatOptions;
   readonly controlStack: PipelineInputs;
   readonly interpretation?: ProjectInterpretation;
@@ -42,9 +53,12 @@ export async function resolveConfigInputs(
   }
   const config = projectSections.value;
   const inputs = await resolveSchemaInputs(config, readText);
+  const schemaInputConfig: SchemaInputConfig =
+    config.contract === undefined ? {} : { contract: config.contract };
   if (!hasPslInputs(config)) {
     return {
       inputs,
+      schemaInputConfig,
       controlStack: emptyPipelineInputs,
       ...(config.formatter === undefined ? {} : { formatter: config.formatter }),
     };
@@ -65,6 +79,7 @@ export async function resolveConfigInputs(
   const interpretation = resolveInterpretation(config, stack, inputs);
   return {
     inputs,
+    schemaInputConfig,
     controlStack: pipelineInputsFromStack(stack),
     ...(config.formatter === undefined ? {} : { formatter: config.formatter }),
     ...(interpretation === undefined ? {} : { interpretation }),
