@@ -15,7 +15,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
 import { createModelAccessor } from '../src/model-accessor';
 import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-aggregate';
@@ -97,6 +97,43 @@ describe('orderBy through a to-one relation', () => {
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT "__orm_rel_1"."name" AS "name" FROM "public"."users" AS "__orm_rel_1" WHERE "__orm_rel_1"."id" = "users"."invited_by_id") DESC NULLS LAST"`,
     );
+  });
+});
+
+describe('a to-one relation accessor', () => {
+  function countingContext() {
+    const base = getTestContext();
+    const descriptorFor = vi.fn((codecId: string) => base.codecDescriptors.descriptorFor(codecId));
+    const context = {
+      ...base,
+      codecDescriptors: { ...base.codecDescriptors, descriptorFor },
+    };
+    return { context, descriptorFor };
+  }
+
+  it('resolves no related field when only a relation filter is used', () => {
+    const { context, descriptorFor } = countingContext();
+    const post = createModelAccessor(context, 'public', 'Post');
+
+    post.author.some();
+
+    expect(descriptorFor).not.toHaveBeenCalled();
+  });
+
+  it('resolves only the related field that is read', () => {
+    const { context, descriptorFor } = countingContext();
+    const post = createModelAccessor(context, 'public', 'Post');
+
+    post.author.name.asc();
+
+    expect(descriptorFor.mock.calls).toEqual([['pg/text@1']]);
+  });
+
+  it('offers no count', () => {
+    const post = createModelAccessor(getTestContext(), 'public', 'Post');
+
+    expect(Object.hasOwn(post.author, 'count')).toBe(false);
+    expect(Reflect.get(post.author, 'count')).toBeUndefined();
   });
 });
 

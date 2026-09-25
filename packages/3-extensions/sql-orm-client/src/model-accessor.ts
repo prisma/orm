@@ -481,10 +481,14 @@ function createRelationFilterAccessor<
   };
 
   if (isToOneCardinality(relation.cardinality)) {
-    return {
-      ...relatedOrderableFields(context, relation, relatedTableName, correlate),
-      ...filters,
-    };
+    return new Proxy(filters, {
+      get(target, prop) {
+        if (typeof prop !== 'string') return undefined;
+        if (Object.hasOwn(target, prop)) return Reflect.get(target, prop);
+        if (RELATION_ACCESSOR_METHOD_NAMES.has(prop)) return undefined;
+        return relatedOrderableField(context, relation, relatedTableName, correlate, prop);
+      },
+    });
   }
 
   return {
@@ -501,35 +505,32 @@ function createOrderable(buildExpr: () => AnyExpression): Orderable {
   };
 }
 
-function relatedOrderableFields<TContract extends Contract<SqlStorage>>(
+function relatedOrderableField<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
   relation: ResolvedModelRelation,
   relatedTableName: string,
   correlate: () => CorrelatedRelatedRows,
-): Record<string, Orderable> {
-  const orderings: Record<string, Orderable> = {};
-  const fieldToColumn = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to);
-  for (const [fieldName, columnName] of Object.entries(fieldToColumn)) {
-    if (RELATION_ACCESSOR_METHOD_NAMES.has(fieldName)) continue;
-    const column = resolveColumn(
-      context.contract,
-      relation.toNamespace,
-      relatedTableName,
-      columnName,
+  fieldName: string,
+): Orderable | undefined {
+  const columnName = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to)[
+    fieldName
+  ];
+  if (columnName === undefined) return undefined;
+  const column = resolveColumn(
+    context.contract,
+    relation.toNamespace,
+    relatedTableName,
+    columnName,
+  );
+  if (!column || !hasTrait(context, column.codecId, 'order')) return undefined;
+  return createOrderable(() => {
+    const rows = correlate();
+    return SubqueryExpr.of(
+      rows.source
+        .withProjection([ProjectionItem.of(columnName, rows.childScope.current.column(columnName))])
+        .withWhere(rows.correlation),
     );
-    if (!column || !hasTrait(context, column.codecId, 'order')) continue;
-    orderings[fieldName] = createOrderable(() => {
-      const rows = correlate();
-      return SubqueryExpr.of(
-        rows.source
-          .withProjection([
-            ProjectionItem.of(columnName, rows.childScope.current.column(columnName)),
-          ])
-          .withWhere(rows.correlation),
-      );
-    });
-  }
-  return orderings;
+  });
 }
 
 function hasTrait(context: ExecutionContext, codecId: string, trait: string): boolean {
