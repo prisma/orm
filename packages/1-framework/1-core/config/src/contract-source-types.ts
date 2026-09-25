@@ -23,6 +23,8 @@ export interface ContractSourceDiagnostic {
   readonly message: string;
   readonly sourceId: string;
   readonly span?: ContractSourceDiagnosticSpan;
+  /** `'warning'` for a finding that does not stop the source from producing a contract; absent means `'error'`. */
+  readonly severity?: 'error' | 'warning';
   /**
    * Optional structured payload for machine-readable consumers (agents,
    * IDE extensions, CLI auto-fix). Human-readable prose lives in `message`;
@@ -54,6 +56,10 @@ export interface ContractSourceContext {
    */
   readonly resolvedInputs: readonly string[];
   readonly capabilities: CapabilityMatrix;
+  /**
+   * Receives a warning the source reports while it still produces a contract, such as a deprecated name. Callers that show diagnostics supply it; a source reports through it when present and otherwise drops the warning.
+   */
+  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }
 
 /** Lets format-aware tooling avoid file-extension sniffing and opaque loader introspection. */

@@ -6,6 +6,7 @@ import {
   DerivedTableSource,
   ExistsExpr,
   IdentifierRef,
+  OrderByItem,
   ParamRef,
   SelectAst,
   TableSource,
@@ -274,6 +275,35 @@ describe('orderBy', () => {
     expect(ast.orderBy![0]!.dir).toBe('desc');
     expect(ast.orderBy![0]!.expr).toBeInstanceOf(IdentifierRef);
     expect((ast.orderBy![0]!.expr as IdentifierRef).name).toBe('name');
+  });
+
+  it('orderBy carries null placement into the order item', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('id')
+        .orderBy('name', { direction: 'asc', nulls: 'last' })
+        .orderBy((f) => f.id, { direction: 'desc', nulls: 'first' }),
+    );
+    expect(ast.orderBy).toEqual([
+      OrderByItem.asc(IdentifierRef.of('name'), { nulls: 'last' }),
+      OrderByItem.desc(IdentifierRef.of('id'), { nulls: 'first' }),
+    ]);
+  });
+
+  it('orderBy refuses a direction outside asc and desc', () => {
+    expect(() =>
+      db()
+        .public.users.select('id')
+        .orderBy('name', { direction: 'asc, (SELECT 1)' as never }),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
+  });
+
+  it('orderBy refuses a null placement outside first and last', () => {
+    expect(() =>
+      db()
+        .public.users.select('id')
+        .orderBy((f) => f.id, { nulls: 'last, (SELECT 1)' as never }),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
   });
 
   it('orderBy defaults to asc', () => {

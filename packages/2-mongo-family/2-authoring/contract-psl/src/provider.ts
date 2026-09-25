@@ -43,6 +43,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         authoringContributions: context.authoringContributions,
         composedExtensions: context.composedExtensions,
         ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),
+        ...ifDefined('reportWarning', context.reportWarning),
       });
     },
     async load(context) {

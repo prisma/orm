@@ -14,7 +14,7 @@ import {
   ListExpression,
   NotExpr,
   NullCheckExpr,
-  OrderByItem,
+  type OrderByItem,
   OrExpr,
   ParamRef,
   type ProjectionExpr,
@@ -187,7 +187,7 @@ function bindProjectionExpr(contract: Contract<SqlStorage>, expr: ProjectionExpr
 }
 
 function bindOrderByItem(contract: Contract<SqlStorage>, orderItem: OrderByItem): OrderByItem {
-  return new OrderByItem(bindExpression(contract, orderItem.expr), orderItem.dir);
+  return orderItem.withExpr(bindExpression(contract, orderItem.expr));
 }
 
 function bindJoin(contract: Contract<SqlStorage>, join: JoinAst): JoinAst {

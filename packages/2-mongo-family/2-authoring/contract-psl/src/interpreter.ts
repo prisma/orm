@@ -21,10 +21,12 @@ import { errorEnumCodecNotInPackStack } from '@internal/errors/control';
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
+  AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
+  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
@@ -58,6 +60,7 @@ import {
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
+  mapPslDiagnostics,
   nodePslSpan,
   type PslDiagnostic,
   type PslDiagnosticCollector,
@@ -100,15 +103,6 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
   return codec.encodeJson(value);
 }
 
-/** Scalar names Mongo PSL used before its scalars were named after the BSON types they store. */
-const RENAMED_SCALARS: ReadonlyMap<string, { readonly name: string; readonly bsonType: string }> =
-  new Map([
-    ['Int', { name: 'Int32', bsonType: 'int' }],
-    ['Float', { name: 'Double', bsonType: 'double' }],
-    ['Boolean', { name: 'Bool', bsonType: 'bool' }],
-    ['DateTime', { name: 'Date', bsonType: 'date' }],
-  ]);
-
 export interface InterpretPslDocumentToMongoContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
@@ -121,6 +115,43 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly composedExtensions?: readonly string[];
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
+  /** Receives a warning for each field typed with a deprecated scalar name. */
+  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+}
+
+/**
+ * Reports `PSL_DEPRECATED_SCALAR_NAME` at the type of a field whose scalar name is a deprecated alias, naming the replacement. The alias resolves to the same codec, so the contract does not change.
+ */
+function deprecatedScalarWarner(input: {
+  readonly types: AuthoringTypeNamespace | undefined;
+  readonly sources: PslSources;
+  readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
+}): (field: FieldSymbol) => void {
+  const { reportWarning } = input;
+  if (reportWarning === undefined) return () => {};
+  return (field) => {
+    if (field.typeConstructor !== undefined) return;
+    const descriptor = input.types?.[field.typeName];
+    if (
+      descriptor === undefined ||
+      !isAuthoringTypeConstructorDescriptor(descriptor) ||
+      descriptor.deprecated === undefined
+    ) {
+      return;
+    }
+    const typeNode = field.node.typeAnnotation()?.name()?.syntax ?? field.node.syntax;
+    const [warning] = mapPslDiagnostics(
+      [
+        {
+          code: 'PSL_DEPRECATED_SCALAR_NAME',
+          message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}" (stored as BSON ${descriptor.output.nativeType}).`,
+          ...diagnosticSource(input.sources, typeNode).at(),
+        },
+      ],
+      input.sources,
+    );
+    if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
+  };
 }
 
 /**
@@ -1020,6 +1051,7 @@ function resolveNonRelationField(
   scalarTypeCodecIds: ReadonlyMap<string, string>,
   codecIdByEnumName: ReadonlyMap<string, string>,
   presetContext: FieldPresetContext,
+  warnDeprecatedScalar: (field: FieldSymbol) => void,
 ): ResolvedNonRelationField | undefined {
   const { sources, diagnostics } = presetContext;
   const ownerName = owner.name;
@@ -1071,17 +1103,6 @@ function resolveNonRelationField(
   }
 
   const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
-  const renamed =
-    field.typeConstructor === undefined ? RENAMED_SCALARS.get(field.typeName) : undefined;
-  if (!codecId && renamed !== undefined) {
-    const typeNode = field.node.typeAnnotation()?.name()?.syntax ?? field.node.syntax;
-    diagnostics.push({
-      code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-      message: `Scalar type "${field.typeName}" was renamed to "${renamed.name}" (stored as BSON ${renamed.bsonType}). Replace "${field.typeName}" with "${renamed.name}".`,
-      ...diagnosticSource(sources, typeNode).at(),
-    });
-    return undefined;
-  }
   if (!codecId) {
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
@@ -1091,6 +1112,7 @@ function resolveNonRelationField(
     return undefined;
   }
 
+  warnDeprecatedScalar(field);
   const result: ContractField = {
     type: { kind: 'scalar', codecId },
     nullable: field.optional,
@@ -1166,6 +1188,11 @@ export function interpretPslDocumentToMongoContract(
     diagnostics,
   };
   const presetExecutionDefaults: PresetExecutionDefault[] = [];
+  const warnDeprecatedScalar = deprecatedScalarWarner({
+    types: input.authoringContributions?.type,
+    sources,
+    reportWarning: input.reportWarning,
+  });
   const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
     symbolTable,
     sources,
@@ -1349,6 +1376,7 @@ export function interpretPslDocumentToMongoContract(
         scalarTypeCodecIds,
         codecIdByEnumName,
         presetContext,
+        warnDeprecatedScalar,
       );
       if (!resolved) continue;
 
@@ -1447,6 +1475,7 @@ export function interpretPslDocumentToMongoContract(
         scalarTypeCodecIds,
         codecIdByEnumName,
         presetContext,
+        warnDeprecatedScalar,
       );
       if (!resolved) continue;
       fields[field.name] = resolved.field;

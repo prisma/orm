@@ -145,6 +145,10 @@ The SQL ORM's `ModelAccessor` provides typed comparison methods (`.eq()`, `.neq(
 
 The SQL ORM has `.groupBy()` and `.aggregate()`. Mongo has aggregation pipelines. Whether these belong on the shared `Collection` interface or are family-specific extensions is an open question. The pipeline DSL is architecturally the Mongo equivalent of the SQL query builder — a lower-level escape hatch, not part of the ORM Collection.
 
+### Ordering by relations and null placement
+
+The SQL ORM's `orderBy` accepts a to-one relation's field, a to-many relation's `count(predicate?)` and `{ nulls: 'first' | 'last' }` on `asc`/`desc` ([ADR 255](ADR%20255%20-%20Relation%20ordering%20lowers%20to%20correlated%20subqueries.md)). The Mongo ORM's `orderBy` takes `Record<field, 1 | -1>`. Whether the shared interface adopts the accessor form, and how Mongo would lower a relation order, is open.
+
 ### Include refinement depth
 
 The SQL ORM supports nested includes (include → include → include) and complex refinements (scalar selectors, `combine()`). The Mongo ORM currently supports single-level includes via `$lookup`. How deep the shared interface goes is a design question for extraction time.

@@ -1,12 +1,11 @@
-import { access, copyFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import * as nodeHttp from 'node:http';
 import { createRequire } from 'node:module';
-import { basename, dirname, isAbsolute, resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as vite from 'vite';
 import { attachBridge } from './bridge';
-import { generateDefaultPostgresConfig, PLAYGROUND_DIR } from './default-config';
-import { findNearestConfig } from './find-config';
+import { ensureScratchProject, SCRATCH_DIR } from './default-config';
 
 const PACKAGE_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const PORT = 5295;
@@ -14,12 +13,16 @@ const LSP_PATH = '/psl';
 const RUNTIME_CONFIG_PATH = '/__psl_playground_runtime.json';
 const REQUEST_URL_BASE = 'http://localhost/';
 
+interface RuntimeMember {
+  readonly uri: string;
+  readonly text: string;
+}
+
 interface RuntimeConfig {
   readonly wsPath: string;
-  readonly documentUri: string;
   readonly rootUri: string;
-  readonly schemaPath: string;
-  readonly schemaText: string;
+  readonly scratchRootUri: string;
+  readonly members: readonly RuntimeMember[];
 }
 
 function requestPathname(requestUrl: string | undefined): string | undefined {
@@ -42,29 +45,6 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-/**
- * Stages a writable schema file under `.playground/` and returns its path.
- *
- * `.playground/` is where the server can resolve both the generated config's
- * `@prisma/orm-postgres` import and (via walk-up) the config for the opened
- * document. When `sourceFile` points at an existing file, its contents are
- * copied so the playground edits a sandbox copy rather than the user's file;
- * otherwise a scratch file with the Prisma Next directive is created. The
- * staged file reuses the source's basename (or `scratch.psl`) so the editor tab
- * reads naturally.
- */
-async function stageSchema(sourceFile?: string): Promise<string> {
-  await mkdir(PLAYGROUND_DIR, { recursive: true });
-  const name = sourceFile !== undefined ? basename(sourceFile) : 'scratch.psl';
-  const target = resolve(PLAYGROUND_DIR, name);
-  if (sourceFile !== undefined && (await fileExists(sourceFile))) {
-    await copyFile(sourceFile, target);
-  } else if (!(await fileExists(target))) {
-    await writeFile(target, '// use prisma-8\n\n', 'utf8');
-  }
-  return target;
-}
-
 function resolveCliEntry(): string {
   // Nothing published carries a bin anymore (the unified `prisma` CLI is the
   // only user-facing binary), so the playground spawns the workspace-local
@@ -79,67 +59,31 @@ async function main(): Promise<void> {
   const flags = args.filter((a) => a.startsWith('-'));
   if (flags.length > 0) {
     console.error(`Unknown option(s): ${flags.join(', ')}`);
-    console.error('Usage: psl-playground [<schema.psl>]');
+    console.error('Usage: psl-playground');
     process.exit(1);
   }
   const positionals = args.filter((a) => !a.startsWith('-'));
-  if (positionals.length > 1) {
-    console.error(`Expected at most one schema path, got ${positionals.length}.`);
-    console.error('Usage: psl-playground [<schema.psl>]');
+  if (positionals.length > 0) {
+    console.error(`psl-playground no longer accepts a schema path (got "${positionals[0]}").`);
+    console.error(`Edit the scratch project directly instead: ${SCRATCH_DIR}`);
+    console.error('Usage: psl-playground');
     process.exit(1);
   }
-  const schemaArg = positionals[0];
 
-  // Resolve the schema the editor opens and the config the server will find for
-  // it. The language server discovers a document's config by walking up from
-  // the document's own path, so the schema must sit at or under a directory
-  // that contains a resolvable `prisma.config.ts`. (There is deliberately
-  // no `--config` flag: the server has no way to be pointed at an arbitrary
-  // config path, so accepting one would be misleading.)
-  //
-  // The PSL file is optional. An existing file already inside a project opens
-  // in place under its discovered config; otherwise (no file, missing path, or
-  // an existing file with no project config) the schema is staged into
-  // `.playground/` (whose `@prisma/orm-postgres` import resolves) beside a generated
-  // default-postgres config — the "without a config, assume default postgres"
-  // path.
-  let schemaPath: string;
-  let configPath: string;
-
-  const sourceFile =
-    schemaArg === undefined
-      ? undefined
-      : isAbsolute(schemaArg)
-        ? schemaArg
-        : resolve(process.cwd(), schemaArg);
-
-  if (sourceFile !== undefined && (await fileExists(sourceFile))) {
-    if (!(await stat(sourceFile)).isFile()) {
-      console.error(`Schema path must be a file: ${sourceFile}`);
-      process.exit(1);
-    }
-    const discovered = await findNearestConfig(sourceFile);
-    if (discovered !== undefined) {
-      // The file belongs to a real project; open it in place under its own config.
-      schemaPath = sourceFile;
-      configPath = discovered;
-      console.log(`Using schema in place: ${schemaPath}`);
-      console.log(`Using config (discovered): ${configPath}`);
-    } else {
-      // Existing file, no project config: stage a copy and assume default postgres.
-      schemaPath = await stageSchema(sourceFile);
-      configPath = await generateDefaultPostgresConfig(schemaPath);
-      console.log(
-        `No project config found; staged copy under default-postgres config: ${schemaPath}`,
-      );
-    }
-  } else {
-    // No file, or a path that does not exist yet: scratch under default postgres.
-    schemaPath = await stageSchema(sourceFile);
-    configPath = await generateDefaultPostgresConfig(schemaPath);
-    const why = sourceFile === undefined ? 'No schema given' : 'Schema not found';
-    console.log(`${why}; opening scratch schema: ${schemaPath}`);
+  // The playground always opens the gitignored multi-file scratch project
+  // under `.playground/scratch/`, seeding it with a demo schema on first
+  // creation and reusing it (untouched) on every later run. There is
+  // deliberately no `--config` flag and no schema-path argument: the
+  // language server discovers a document's config by walking up from the
+  // document's own path, so it cannot be pointed at an arbitrary config, and
+  // the scratch project is the one place that walk-up is guaranteed to land.
+  const { configPath, members: scratchMembers } = await ensureScratchProject();
+  if (scratchMembers.length === 0) {
+    console.error(`Scratch directory has no .prisma files: ${SCRATCH_DIR}`);
+    console.error(`Delete it to re-seed the default multi-file project: rm -rf "${SCRATCH_DIR}"`);
+    process.exit(1);
   }
+  console.log(`Opening scratch project: ${SCRATCH_DIR}`);
 
   const cliEntry = resolveCliEntry();
   if (!(await fileExists(cliEntry))) {
@@ -147,16 +91,18 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const schemaText = await readFile(schemaPath, 'utf8');
-  const documentUri = pathToFileURL(schemaPath).toString();
   const rootUri = pathToFileURL(dirname(configPath)).toString();
+  const scratchRootUri = pathToFileURL(SCRATCH_DIR).toString();
+  const members: RuntimeMember[] = scratchMembers.map(({ path, text }) => ({
+    uri: pathToFileURL(path).toString(),
+    text,
+  }));
 
   const runtimeConfig: RuntimeConfig = {
     wsPath: LSP_PATH,
-    documentUri,
     rootUri,
-    schemaPath,
-    schemaText,
+    scratchRootUri,
+    members,
   };
 
   // One HTTP server hosts both the editor (Vite, in middleware mode) and the

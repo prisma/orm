@@ -413,6 +413,8 @@ The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,
 | `mongo/binary@1` | `Binary` | `field.binary()` | `Uint8Array` | unwrapped base64 | `binData` |
 | `mongo/json@1` | `Json` | `field.json()` | `JsonValue` | the same value | none |
 
+The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
+
 The JSON forms of `int64`, `decimal128` and `binary` match the Postgres `int8`, `numeric` and `bytea` codecs. `Decimal128.toString()` prints some values with an exponent (`1E+3`); the codec rewrites them without one (`1000`), keeping trailing zeros, so the text is stable across a round trip. The driver hands a stored `long` that fits in 53 bits back as a `number`, so the `int64` codec accepts `Long`, `number` and `bigint` on decode. Decoding a wire value of the wrong BSON type throws `RUNTIME.DECODE_FAILED`.
 
 `$jsonSchema` validators take each field's `bsonType` from `targetTypes[0]`. A codec that declares no BSON type, such as `mongo/json@1`, gets an empty schema (`{}`), which admits any value; the field stays listed under `properties` because the validator is closed with `additionalProperties: false`.

@@ -83,6 +83,32 @@ export const mongoScalarAuthoringTypes = {
       'Any JSON value, stored as the BSON document, array or scalar it maps to. The collection validator does not constrain its type.',
     output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
   },
+  Int: {
+    kind: 'typeConstructor',
+    documentation: 'Deprecated: use Int32. A signed 32-bit integer, stored as BSON int.',
+    output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
+    deprecated: { replacement: 'Int32' },
+  },
+  Float: {
+    kind: 'typeConstructor',
+    documentation:
+      'Deprecated: use Double. A double-precision floating-point number, stored as BSON double.',
+    output: { codecId: MONGO_DOUBLE_CODEC_ID, nativeType: 'double' },
+    deprecated: { replacement: 'Double' },
+  },
+  Boolean: {
+    kind: 'typeConstructor',
+    documentation: 'Deprecated: use Bool. A true or false value, stored as BSON bool.',
+    output: { codecId: MONGO_BOOLEAN_CODEC_ID, nativeType: 'bool' },
+    deprecated: { replacement: 'Bool' },
+  },
+  DateTime: {
+    kind: 'typeConstructor',
+    documentation:
+      'Deprecated: use Date. A date and time with millisecond precision, stored as BSON date.',
+    output: { codecId: MONGO_DATE_CODEC_ID, nativeType: 'date' },
+    deprecated: { replacement: 'Date' },
+  },
 } as const satisfies AuthoringTypeNamespace;
 
 export const mongoAdapterDescriptor: MongoControlAdapterDescriptor<'mongo'> = {
