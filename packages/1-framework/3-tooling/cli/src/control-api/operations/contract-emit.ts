@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractSourceDiagnostic, PrismaNextConfig } from '@internal/config/config-types';
 import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
@@ -269,8 +269,10 @@ async function resolveContractSource(
   contractConfig: ContractSourceConfig,
   stack: ControlStack,
   signal: AbortSignal,
+  reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined,
 ): Promise<Result<unknown, ContractSourceFailure>> {
   const sourceContext = {
+    ...ifDefined('reportWarning', reportWarning),
     composedExtensions: stack.extensions.map((p) => p.id),
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
@@ -315,7 +317,11 @@ async function resolveContractSource(
  */
 export async function loadContractSource(
   config: PrismaNextConfig,
-  options: { readonly signal?: AbortSignal } = {},
+  options: {
+    readonly signal?: AbortSignal;
+    /** Receives each warning the source reports. */
+    readonly onWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  } = {},
 ): Promise<Result<unknown, ContractSourceFailure>> {
   const contractConfig = requireContractConfig(config);
   requireSourceProvider(contractConfig);
@@ -323,6 +329,7 @@ export async function loadContractSource(
     contractConfig,
     createControlStack(config),
     options.signal ?? new AbortController().signal,
+    options.onWarning,
   );
 }
 
@@ -385,9 +392,12 @@ export async function executeContractEmit(
     const stack = createControlStack(config);
 
     startSpan(onProgress, 'resolveSource', 'Resolving contract source...');
+    const sourceWarnings: ContractSourceDiagnostic[] = [];
     let resolved: Result<unknown, ContractSourceFailure>;
     try {
-      resolved = await resolveContractSource(contractConfig, stack, signal);
+      resolved = await resolveContractSource(contractConfig, stack, signal, (diagnostic) => {
+        sourceWarnings.push(diagnostic);
+      });
     } catch (error) {
       endSpan(onProgress, 'resolveSource', 'error');
       throw error;
@@ -482,6 +492,7 @@ export async function executeContractEmit(
         dts: outputDtsPath,
       },
       ...ifDefined('validationWarning', validationWarning),
+      ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
     };
   });
 }

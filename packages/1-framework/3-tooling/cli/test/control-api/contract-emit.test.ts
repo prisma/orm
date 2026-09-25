@@ -294,6 +294,69 @@ describe('executeContractEmit', () => {
     });
   });
 
+  describe('a source that reports a warning', () => {
+    const warning = {
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message:
+        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      sourceId: 'prisma/schema.prisma',
+      severity: 'warning' as const,
+    };
+
+    async function emitWith(load: (context: { reportWarning?: (d: unknown) => void }) => unknown) {
+      const outputJsonPath = join(tmpDir, 'src/prisma/contract.json');
+      const config = createSuccessfulConfig(outputJsonPath);
+      mockedEmit.mockResolvedValueOnce(createEmitResult('same'));
+      const result = await executeContractEmitWithMock(
+        emitOptions(
+          {
+            ...config,
+            contract: {
+              ...config.contract,
+              source: { load: async (context: never) => load(context) },
+            },
+          } as unknown as configLoader.PrismaNextConfig,
+          join(tmpDir, 'prisma.config.ts'),
+        ),
+      );
+      return { result, json: await readFile(outputJsonPath, 'utf-8') };
+    }
+
+    it('emits the same contract as a source that reports none, and returns the warning', async () => {
+      const withWarning = await emitWith((context) => {
+        context.reportWarning?.(warning);
+        return { ok: true, value: createMockContract() };
+      });
+      const withoutWarning = await emitWith(() => ({ ok: true, value: createMockContract() }));
+
+      expect(withWarning.json).toBe(withoutWarning.json);
+      expect(withWarning.result.sourceWarnings).toEqual([warning]);
+      expect(withoutWarning.result).not.toHaveProperty('sourceWarnings');
+    });
+  });
+
+  it('still fails a source whose diagnostics are all errors', async () => {
+    const source = createSourceProvider(async () => ({
+      ok: false,
+      failure: {
+        summary: 'Schema has 1 error',
+        diagnostics: [
+          {
+            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+            message: 'bad',
+            sourceId: 'schema.prisma',
+            severity: 'error',
+          },
+        ],
+      },
+    }));
+    await expect(
+      executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ),
+    ).rejects.toMatchObject({ code: 'CONTRACT.SOURCE_LOAD_FAILED' });
+  });
+
   it('passes deserializeContract output to emit, not the pre-hydration envelope', async () => {
     const outputJsonPath = join(tmpDir, 'src/prisma/contract.json');
     const plainEnvelope = createMockContract();

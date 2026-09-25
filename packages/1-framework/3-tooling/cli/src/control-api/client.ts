@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { expandContractInputs } from '@internal/config-loader';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
@@ -632,6 +633,7 @@ class ControlClientImpl implements ControlClient {
     }
 
     let contractRaw: unknown;
+    const sourceWarnings: ContractSourceDiagnostic[] = [];
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -650,6 +652,9 @@ class ControlClientImpl implements ControlClient {
         dataTypeLookup: stack.dataTypeLookup,
         resolvedInputs: await expandContractInputs(contractConfig.source.inputs),
         capabilities: stack.capabilities,
+        reportWarning: (diagnostic: ContractSourceDiagnostic) => {
+          sourceWarnings.push(diagnostic);
+        },
       };
       const providerResult = await contractConfig.source.load(sourceContext);
       if (!providerResult.ok) {
@@ -752,6 +757,7 @@ class ControlClientImpl implements ControlClient {
         profileHash: result.profileHash,
         contractJson: result.contractJson,
         contractDts: result.contractDts,
+        ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
       });
     } catch (error) {
       onProgress?.({
