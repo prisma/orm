@@ -38,8 +38,8 @@ import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
   type ModelAccessor,
-  type OrderingExpression,
-  type OrderingOptions,
+  type Orderable,
+  type OrderOptions,
   type RelationFilterAccessor,
   type VariantAwareModelAccessor,
 } from './types';
@@ -482,7 +482,7 @@ function createRelationFilterAccessor<
 
   if (isToOneCardinality(relation.cardinality)) {
     return {
-      ...relatedFieldOrderings(context, relation, relatedTableName, correlate),
+      ...relatedOrderableFields(context, relation, relatedTableName, correlate),
       ...filters,
     };
   }
@@ -490,26 +490,24 @@ function createRelationFilterAccessor<
   return {
     ...filters,
     count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
-      createOrderingExpression(() =>
-        buildRelationCountExpr(context, relation, correlate(), predicate),
-      ),
+      createOrderable(() => buildRelationCountExpr(context, relation, correlate(), predicate)),
   };
 }
 
-function createOrderingExpression(buildExpr: () => AnyExpression): OrderingExpression {
+function createOrderable(buildExpr: () => AnyExpression): Orderable {
   return {
-    asc: (options?: OrderingOptions) => checkedOrderByItem('asc', buildExpr(), options),
-    desc: (options?: OrderingOptions) => checkedOrderByItem('desc', buildExpr(), options),
+    asc: (options?: OrderOptions) => checkedOrderByItem('asc', buildExpr(), options),
+    desc: (options?: OrderOptions) => checkedOrderByItem('desc', buildExpr(), options),
   };
 }
 
-function relatedFieldOrderings<TContract extends Contract<SqlStorage>>(
+function relatedOrderableFields<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
   relation: ResolvedModelRelation,
   relatedTableName: string,
   correlate: () => CorrelatedRelatedRows,
-): Record<string, OrderingExpression> {
-  const orderings: Record<string, OrderingExpression> = {};
+): Record<string, Orderable> {
+  const orderings: Record<string, Orderable> = {};
   const fieldToColumn = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to);
   for (const [fieldName, columnName] of Object.entries(fieldToColumn)) {
     if (RELATION_ACCESSOR_METHOD_NAMES.has(fieldName)) continue;
@@ -520,7 +518,7 @@ function relatedFieldOrderings<TContract extends Contract<SqlStorage>>(
       columnName,
     );
     if (!column || !hasTrait(context, column.codecId, 'order')) continue;
-    orderings[fieldName] = createOrderingExpression(() => {
+    orderings[fieldName] = createOrderable(() => {
       const rows = correlate();
       return SubqueryExpr.of(
         rows.source

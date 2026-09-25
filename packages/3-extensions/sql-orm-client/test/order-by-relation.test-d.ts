@@ -13,7 +13,7 @@ const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'publi
 
 type UserAccessor = ModelAccessor<TestContract, 'User', 'public'>;
 type PostAccessor = ModelAccessor<TestContract, 'Post', 'public'>;
-type OrderingOptions = { readonly nulls?: OrderByNulls } | undefined;
+type OrderOptions = { readonly nulls?: OrderByNulls } | undefined;
 
 describe('ordering through a to-one relation', () => {
   test('an N:1 relation exposes the related scalar columns as ordering expressions', () => {
@@ -21,7 +21,7 @@ describe('ordering through a to-one relation', () => {
     expectTypeOf<PostAccessor['author']['name']['asc']>().returns.toEqualTypeOf<OrderByItem>();
     expectTypeOf<PostAccessor['author']['name']['desc']>()
       .parameter(0)
-      .toEqualTypeOf<OrderingOptions>();
+      .toEqualTypeOf<OrderOptions>();
     expectTypeOf<UserAccessor['invitedBy']>().toHaveProperty('email');
   });
 
@@ -80,7 +80,7 @@ describe('ordering through a to-many relation', () => {
 
 describe('null placement', () => {
   test('asc and desc on a scalar field accept a nulls option', () => {
-    expectTypeOf<PostAccessor['title']['asc']>().parameter(0).toEqualTypeOf<OrderingOptions>();
+    expectTypeOf<PostAccessor['title']['asc']>().parameter(0).toEqualTypeOf<OrderOptions>();
     posts.orderBy((p) => p.title.asc({ nulls: 'last' }));
     posts.orderBy((p) => p.title.desc({ nulls: 'first' }));
     // @ts-expect-error nulls is first or last

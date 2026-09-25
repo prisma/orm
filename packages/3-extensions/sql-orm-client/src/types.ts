@@ -207,18 +207,18 @@ export type ComparisonMethodFns<T, CodecId extends string = never> = {
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
   isNotNull(): AnyExpression;
-  asc: OrderingExpression['asc'];
-  desc: OrderingExpression['desc'];
+  asc: Orderable['asc'];
+  desc: Orderable['desc'];
 };
 
-export type OrderingOptions = {
+export type OrderOptions = {
   readonly nulls?: OrderByNulls;
 };
 
 /** A value the collection can order by: `asc`/`desc`, optionally placing nulls first or last. */
-export type OrderingExpression = {
-  asc(options?: OrderingOptions): OrderByItem;
-  desc(options?: OrderingOptions): OrderByItem;
+export type Orderable = {
+  asc(options?: OrderOptions): OrderByItem;
+  desc(options?: OrderOptions): OrderByItem;
 };
 
 /**
@@ -418,11 +418,11 @@ export const COMPARISON_METHODS_META = {
   },
   asc: {
     traits: ['order'],
-    create: (left) => (options?: OrderingOptions) => checkedOrderByItem('asc', left, options),
+    create: (left) => (options?: OrderOptions) => checkedOrderByItem('asc', left, options),
   },
   desc: {
     traits: ['order'],
-    create: (left) => (options?: OrderingOptions) => checkedOrderByItem('desc', left, options),
+    create: (left) => (options?: OrderOptions) => checkedOrderByItem('desc', left, options),
   },
   isNull: {
     traits: [],
@@ -467,7 +467,7 @@ type RelationAccessorMethodName =
 
 type IsOrderable<Traits> = ['order'] extends [Traits] ? true : false;
 
-type OrderableFieldOrderings<
+type OrderableFields<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string,
@@ -476,7 +476,7 @@ type OrderableFieldOrderings<
     FieldTraits<TContract, ModelName, K, NsId>
   > extends true
     ? K
-    : never]: OrderingExpression;
+    : never]: Orderable;
 };
 
 /**
@@ -487,10 +487,7 @@ export type ToOneRelationAccessor<
   RelatedNsId extends DomainNamespaceId<TContract>,
   RelatedModelName extends string,
 > = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> &
-  Omit<
-    OrderableFieldOrderings<TContract, RelatedModelName, RelatedNsId>,
-    RelationAccessorMethodName
-  >;
+  Omit<OrderableFields<TContract, RelatedModelName, RelatedNsId>, RelationAccessorMethodName>;
 
 /**
  * A to-many relation inside `where`/`orderBy`: the relation filters plus `count`, which orders by the number of related rows matching an optional predicate.
@@ -500,9 +497,7 @@ export type ToManyRelationAccessor<
   RelatedNsId extends DomainNamespaceId<TContract>,
   RelatedModelName extends string,
 > = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> & {
-  count(
-    predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>,
-  ): OrderingExpression;
+  count(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): Orderable;
 };
 
 type ScalarModelAccessor<
