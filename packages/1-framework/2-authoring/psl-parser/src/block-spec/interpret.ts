@@ -20,7 +20,7 @@ import type { PslSources } from '../source-file';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 import type { AstNode } from '../syntax/ast-helpers';
 import { blockSpecFactoryOf } from './descriptor';
-import type { BlockSpec, InferBlock } from './types';
+import type { BlockSpec, EntriesBlockSpec, FixedBlockSpec, InferBlock } from './types';
 
 export interface InterpretExtensionBlockInput<S> {
   readonly block: BlockSymbol;
@@ -36,6 +36,50 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
 ): Result<ParsedPslExtensionBlock<InferBlock<S>>, readonly PslDiagnostic[]> {
   const { block, descriptor, spec, symbols, sources, binder } = input;
   const ctx: BoundCtx = { sources, symbols, binder };
+  const entries =
+    spec.mode === 'fixed'
+      ? interpretFixedBlock(block, spec, ctx)
+      : interpretEntriesBlock(block, spec, ctx);
+
+  const diagnostics = [...entries.diagnostics];
+  const interpretedAttributes = interpretExtensionBlockAttributes({
+    block,
+    descriptor,
+    symbols,
+    sources,
+    binder,
+  });
+  diagnostics.push(...interpretedAttributes.diagnostics);
+
+  if (entries.failed || diagnostics.length > 0) {
+    return notOk<readonly PslDiagnostic[]>(diagnostics);
+  }
+  return ok({
+    kind: descriptor.discriminator,
+    keyword: block.keyword,
+    name: block.name,
+    values: blindCast<
+      InferBlock<S>,
+      'The interpreter builds the output record structurally from the spec; TypeScript cannot relate the dynamically-keyed record to the spec-inferred output type.'
+    >(entries.values),
+    parameterSpans: entries.parameterSpans,
+    attributes: interpretedAttributes.attributes,
+    span: block.span,
+  });
+}
+
+interface InterpretedBlockEntries {
+  readonly values: Record<string, unknown>;
+  readonly parameterSpans: Record<string, PslSpan>;
+  readonly diagnostics: readonly PslDiagnostic[];
+  readonly failed: boolean;
+}
+
+function interpretFixedBlock(
+  block: BlockSymbol,
+  spec: FixedBlockSpec,
+  ctx: BoundCtx,
+): InterpretedBlockEntries {
   const diagnostics: PslDiagnostic[] = [];
   let failed = false;
   const values: Record<string, unknown> = Object.create(null);
@@ -45,27 +89,14 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   for (const entry of block.node.entries()) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
-    const span = nodePslSpan(entry.syntax, sources);
+    const span = nodePslSpan(entry.syntax, ctx.sources);
     if (seen.has(key)) {
-      diagnostics.push(
-        entryDiagnostic(
-          'PSL_EXTENSION_DUPLICATE_PARAMETER',
-          `Duplicate parameter "${key}" in "${block.keyword}" block "${block.name}"; first occurrence wins`,
-          ctx,
-          entry,
-          span,
-        ),
-      );
+      diagnostics.push(duplicateParameterDiagnostic(block, key, ctx, entry, span));
       continue;
     }
     seen.add(key);
 
-    const rule =
-      spec.mode === 'fixed'
-        ? Object.hasOwn(spec.parameters, key)
-          ? spec.parameters[key]?.type
-          : undefined
-        : spec.value.type;
+    const rule = Object.hasOwn(spec.parameters, key) ? spec.parameters[key]?.type : undefined;
     if (rule === undefined) {
       diagnostics.push(
         entryDiagnostic(
@@ -82,19 +113,7 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
     parameterSpans[key] = span;
     const value = entry.value();
     if (value === undefined) {
-      if (spec.mode === 'entries' && spec.allowBare) {
-        values[key] = undefined;
-        continue;
-      }
-      diagnostics.push(
-        entryDiagnostic(
-          'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          `Parameter "${key}" in "${block.keyword}" block "${block.name}" must be written as "${key} = <value>".`,
-          ctx,
-          entry,
-          span,
-        ),
-      );
+      diagnostics.push(bareEntryDiagnostic(block, key, ctx, entry, span));
       continue;
     }
     const parsed = rule.parse(value, ctx);
@@ -106,49 +125,99 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
     }
   }
 
-  if (spec.mode === 'fixed') {
-    for (const [key, param] of Object.entries(spec.parameters)) {
-      if (seen.has(key)) continue;
-      if (isOptionalArgType(param.type)) {
-        if (param.type.hasDefault) values[key] = param.type.defaultValue;
+  for (const [key, param] of Object.entries(spec.parameters)) {
+    if (seen.has(key)) continue;
+    if (isOptionalArgType(param.type)) {
+      if (param.type.hasDefault) values[key] = param.type.defaultValue;
+      continue;
+    }
+    diagnostics.push(
+      entryDiagnostic(
+        'PSL_EXTENSION_MISSING_REQUIRED_PARAMETER',
+        `Required parameter "${key}" is missing from "${block.keyword}" block "${block.name}".`,
+        ctx,
+        block.node,
+        block.span,
+      ),
+    );
+  }
+
+  return { values, parameterSpans, diagnostics, failed };
+}
+
+function interpretEntriesBlock(
+  block: BlockSymbol,
+  spec: EntriesBlockSpec,
+  ctx: BoundCtx,
+): InterpretedBlockEntries {
+  const diagnostics: PslDiagnostic[] = [];
+  let failed = false;
+  const values: Record<string, unknown> = Object.create(null);
+  const parameterSpans: Record<string, PslSpan> = Object.create(null);
+  const seen = new Set<string>();
+
+  for (const entry of block.node.entries()) {
+    const key = entry.key()?.name();
+    if (key === undefined) continue;
+    const span = nodePslSpan(entry.syntax, ctx.sources);
+    if (seen.has(key)) {
+      diagnostics.push(duplicateParameterDiagnostic(block, key, ctx, entry, span));
+      continue;
+    }
+    seen.add(key);
+
+    parameterSpans[key] = span;
+    const value = entry.value();
+    if (value === undefined) {
+      if (spec.allowBare) {
+        values[key] = undefined;
         continue;
       }
-      diagnostics.push(
-        entryDiagnostic(
-          'PSL_EXTENSION_MISSING_REQUIRED_PARAMETER',
-          `Required parameter "${key}" is missing from "${block.keyword}" block "${block.name}".`,
-          ctx,
-          block.node,
-          block.span,
-        ),
-      );
+      diagnostics.push(bareEntryDiagnostic(block, key, ctx, entry, span));
+      continue;
+    }
+    const parsed = spec.value.type.parse(value, ctx);
+    if (parsed.ok) {
+      values[key] = parsed.value;
+    } else {
+      failed = true;
+      diagnostics.push(...parsed.failure);
     }
   }
 
-  const interpretedAttributes = interpretExtensionBlockAttributes({
-    block,
-    descriptor,
-    symbols,
-    sources,
-    binder,
-  });
-  diagnostics.push(...interpretedAttributes.diagnostics);
+  return { values, parameterSpans, diagnostics, failed };
+}
 
-  if (failed || diagnostics.length > 0) {
-    return notOk<readonly PslDiagnostic[]>(diagnostics);
-  }
-  return ok({
-    kind: descriptor.discriminator,
-    keyword: block.keyword,
-    name: block.name,
-    values: blindCast<
-      InferBlock<S>,
-      'The interpreter builds the output record structurally from the spec; TypeScript cannot relate the dynamically-keyed record to the spec-inferred output type.'
-    >(values),
-    parameterSpans,
-    attributes: interpretedAttributes.attributes,
-    span: block.span,
-  });
+function duplicateParameterDiagnostic(
+  block: BlockSymbol,
+  key: string,
+  ctx: AttributeCtx,
+  node: AstNode,
+  span: PslSpan,
+): PslDiagnostic {
+  return entryDiagnostic(
+    'PSL_EXTENSION_DUPLICATE_PARAMETER',
+    `Duplicate parameter "${key}" in "${block.keyword}" block "${block.name}"; first occurrence wins`,
+    ctx,
+    node,
+    span,
+  );
+}
+
+function bareEntryDiagnostic(
+  block: BlockSymbol,
+  key: string,
+  ctx: AttributeCtx,
+  node: AstNode,
+  span: PslSpan,
+): PslDiagnostic {
+  return entryDiagnostic(
+    'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+    `Parameter "${key}" in "${block.keyword}" block "${block.name}" must be written as "${key} = <value>".`,
+    ctx,
+    node,
+    span,
+  );
 }
 
 export interface InterpretExtensionBlockAttributesInput {
