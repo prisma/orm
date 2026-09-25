@@ -1,5 +1,9 @@
 import type { AttributeSpecContext } from '@internal/psl-parser';
-import { assembleAttributeSpecs, buildSymbolTable } from '@internal/psl-parser';
+import {
+  assembleAttributeSpecs,
+  buildSymbolTable,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -16,9 +20,9 @@ function modelSymbolFor(source: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
-  return { symbolTable, model: symbolTable.topLevel.models['Widget'] };
+  const { parsedBlocks } = interpretExtensionBlocks(symbolTable, sources, {});
+  return { symbolTable, parsedBlocks, model: symbolTable.topLevel.models['Widget'] };
 }
 
 describe('postgres attribute specs are consumable from a resolved language-server project', () => {
@@ -40,13 +44,16 @@ describe('postgres attribute specs are consumable from a resolved language-serve
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const { symbolTable, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
+    const { symbolTable, parsedBlocks, model } = modelSymbolFor(
+      'model Widget {\n  id Int @id\n}\n',
+    );
     expect(model).toBeDefined();
     if (model === undefined) return;
 
     const ctx: AttributeSpecContext = {
       symbols: symbolTable,
       model,
+      parsedBlocks,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
         dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
@@ -90,7 +97,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const { symbolTable, model } = modelSymbolFor(
+    const { symbolTable, parsedBlocks, model } = modelSymbolFor(
       'model Widget {\n  id ObjectId @id @map("_id")\n}\n',
     );
     expect(model).toBeDefined();
@@ -99,6 +106,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     const ctx: AttributeSpecContext = {
       symbols: symbolTable,
       model,
+      parsedBlocks,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
         dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
@@ -158,7 +166,9 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const { symbolTable, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
+    const { symbolTable, parsedBlocks, model } = modelSymbolFor(
+      'model Widget {\n  id Int @id\n}\n',
+    );
     const field = model?.fields['id'];
     expect(field).toBeDefined();
     if (model === undefined || field === undefined) return;
@@ -169,6 +179,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       symbols: symbolTable,
       model,
       field,
+      parsedBlocks,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
         dataTypeEntries: interpretation.context.authoringContributions.dataTypes,

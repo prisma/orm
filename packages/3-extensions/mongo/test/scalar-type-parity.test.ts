@@ -40,7 +40,6 @@ function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToMongoContract({
     documents: [document],

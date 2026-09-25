@@ -60,12 +60,10 @@ function interpret(
   >,
 ) {
   const contributions = overrides?.['authoringContributions'] ?? authoringContributions;
-  const descriptors = contributions?.pslBlockDescriptors;
   const { document, sources } = parse(schema, 'mongo-enum-schema.prisma');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: descriptors ?? {},
   });
   return interpretPslDocumentToMongoContract({
     documents: [document],

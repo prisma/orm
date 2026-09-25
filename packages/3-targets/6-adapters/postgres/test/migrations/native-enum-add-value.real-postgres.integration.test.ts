@@ -105,7 +105,6 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 
   const result = interpretPslDocumentToSqlContract({

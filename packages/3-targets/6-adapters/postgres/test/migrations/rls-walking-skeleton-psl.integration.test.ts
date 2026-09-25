@@ -72,7 +72,6 @@ function buildPslContract() {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 
   return interpretPslDocumentToSqlContract({
