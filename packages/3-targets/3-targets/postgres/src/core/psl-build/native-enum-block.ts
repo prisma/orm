@@ -1,7 +1,7 @@
 import { toEnumMemberName } from '@internal/family-sql/psl-build';
 import type {
   PslExtensionBlock,
-  PslExtensionBlockSourceEntry,
+  PslExtensionBlockPrintEntry,
 } from '@internal/framework-components/psl-ast';
 import { NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
 import { escapePslString } from '@internal/sql-relational-core/ast';
@@ -16,7 +16,7 @@ export function buildNativeEnumBlock(
 ): PslExtensionBlock {
   const usedMemberNames = new Set<string>([NAME_THE_PSL_SOURCE_LOSES]);
   const parameters = Object.fromEntries(
-    values.map((value): [string, PslExtensionBlockSourceEntry] => {
+    values.map((value): [string, PslExtensionBlockPrintEntry] => {
       const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
       usedMemberNames.add(memberName);
       return [memberName, { expression: JSON.stringify(value), span: SYNTHETIC_SPAN }];

@@ -1,6 +1,6 @@
 /**
  * Tests for the generic framework printer for extension-contributed PSL
- * blocks. The printer renders each block's ordered source entries and
+ * blocks. The printer renders each block's ordered print entries and
  * printable `@@` attribute lines verbatim — provenance rendering, no value
  * interpretation. Registration and keyword/discriminator consistency checks
  * are the printer's whole use of the descriptor: spec factories are never
@@ -10,7 +10,7 @@
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
   PslExtensionBlock,
-  PslExtensionBlockSourceEntry,
+  PslExtensionBlockPrintEntry,
   PslModel,
 } from '@internal/framework-components/psl-ast';
 import {
@@ -40,11 +40,11 @@ function makeNs(models: PslModel[], extensionBlocks: PslExtensionBlock[]) {
   });
 }
 
-function entry(expression: string): PslExtensionBlockSourceEntry {
+function entry(expression: string): PslExtensionBlockPrintEntry {
   return { expression, span: STUB_SPAN };
 }
 
-function bareEntry(): PslExtensionBlockSourceEntry {
+function bareEntry(): PslExtensionBlockPrintEntry {
   return { span: STUB_SPAN };
 }
 
@@ -177,7 +177,7 @@ describe('generic extension-block printer', () => {
     });
 
     it('renders entries named like Object.prototype keys', () => {
-      const parameters: Record<string, PslExtensionBlockSourceEntry> = Object.create(null);
+      const parameters: Record<string, PslExtensionBlockPrintEntry> = Object.create(null);
       parameters['toString'] = entry('"toString"');
       parameters['constructor'] = entry('"constructor"');
       parameters['plain'] = entry('"plain"');

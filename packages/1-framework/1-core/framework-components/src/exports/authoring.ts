@@ -73,7 +73,7 @@ export type {
   ParsedPslExtensionBlock,
   PslExtensionBlock,
   PslExtensionBlockParsedAttribute,
-  PslExtensionBlockSourceEntry,
+  PslExtensionBlockPrintEntry,
 } from '../shared/psl-extension-block';
 export type { PresetStorageTemplate } from '../shared/temporal-presets';
 export {
