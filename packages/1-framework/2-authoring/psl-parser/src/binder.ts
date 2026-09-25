@@ -184,9 +184,9 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
-  // Types bind in this walk; attributes parse in the next one. The order
-  // matters: @relation(references: [x]) looks x up on the referenced model.
-  // With one walk, a forward reference would find nothing to look it up on.
+  // Attributes are parsed in a second walk once every field type is bound.
+  // @relation(references: [x]) reads the referenced model's fields, and that
+  // model may be declared further down the file.
   walkEntities(symbolTable, stack, (entity) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
