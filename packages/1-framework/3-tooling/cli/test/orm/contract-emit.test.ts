@@ -339,6 +339,35 @@ describe('contract emit', () => {
     });
   });
 
+  it('reports each contract source warning as a warning event with its location', async () => {
+    executeContractEmit.mockResolvedValue(
+      emitResult({
+        sourceWarnings: [
+          {
+            code: 'PSL_DEPRECATED_SCALAR_NAME',
+            message:
+              'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+            sourceId: 'prisma/schema.prisma',
+            span: {
+              start: { offset: 30, line: 3, column: 9 },
+              end: { offset: 33, line: 3, column: 12 },
+            },
+            severity: 'warning',
+          },
+        ],
+      }),
+    );
+
+    const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.events).toContainEqual({
+      kind: 'message',
+      severity: 'warn',
+      text: 'warning prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+    });
+  });
+
   it('keeps the dotted code of an error the operation raised', async () => {
     const { errorRuntime } = await import('@internal/errors/execution');
     executeContractEmit.mockRejectedValue(

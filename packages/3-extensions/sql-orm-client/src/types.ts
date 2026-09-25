@@ -16,7 +16,8 @@ import {
   type LimitOffsetValue,
   ListExpression,
   NullCheckExpr,
-  OrderByItem,
+  type OrderByItem,
+  type OrderByNulls,
   ParamRef,
   type AggregateFn as SqlAggregateFn,
 } from '@internal/sql-relational-core/ast';
@@ -24,6 +25,7 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { RowSelection } from './collection-internal-types';
+import { checkedOrderByItem } from './order-by-guards';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 
@@ -207,8 +209,18 @@ export type ComparisonMethodFns<T, CodecId extends string = never> = {
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
   isNotNull(): AnyExpression;
-  asc(): OrderByItem;
-  desc(): OrderByItem;
+  asc: Orderable['asc'];
+  desc: Orderable['desc'];
+};
+
+export type OrderOptions = {
+  readonly nulls?: OrderByNulls;
+};
+
+/** A value the collection can order by: `asc`/`desc`, optionally placing nulls first or last. */
+export type Orderable = {
+  asc(options?: OrderOptions): OrderByItem;
+  desc(options?: OrderOptions): OrderByItem;
 };
 
 /**
@@ -408,11 +420,11 @@ export const COMPARISON_METHODS_META = {
   },
   asc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.asc(left),
+    create: (left) => (options?: OrderOptions) => checkedOrderByItem('asc', left, options),
   },
   desc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.desc(left),
+    create: (left) => (options?: OrderOptions) => checkedOrderByItem('desc', left, options),
   },
   isNull: {
     traits: [],
@@ -451,6 +463,45 @@ export type RelationFilterAccessor<
   none(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): AnyExpression;
 };
 
+type RelationAccessorMethodName =
+  | keyof RelationFilterAccessor<Contract<SqlStorage>, never, string>
+  | 'count';
+
+type IsOrderable<Traits> = ['order'] extends [Traits] ? true : false;
+
+type OrderableFields<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = {
+  [K in keyof FieldsOf<TContract, ModelName, NsId> & string as IsOrderable<
+    FieldTraits<TContract, ModelName, K, NsId>
+  > extends true
+    ? K
+    : never]: Orderable;
+};
+
+/**
+ * A to-one relation inside `where`/`orderBy`: the relation filters plus each orderable scalar field of the related model. A related field named like a relation method is not exposed.
+ */
+export type ToOneRelationAccessor<
+  TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
+  RelatedModelName extends string,
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> &
+  Omit<OrderableFields<TContract, RelatedModelName, RelatedNsId>, RelationAccessorMethodName>;
+
+/**
+ * A to-many relation inside `where`/`orderBy`: the relation filters plus `count`, which orders by the number of related rows matching an optional predicate.
+ */
+export type ToManyRelationAccessor<
+  TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
+  RelatedModelName extends string,
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> & {
+  count(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): Orderable;
+};
+
 type ScalarModelAccessor<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -473,11 +524,22 @@ type RelationModelAccessor<
   ModelName extends string,
   NsId extends string = never,
 > = {
-  [K in RelationNames<TContract, ModelName, NsId>]: RelationFilterAccessor<
+  [K in RelationNames<TContract, ModelName, NsId>]: RelationCardinality<
     TContract,
-    RelationTargetNamespace<TContract, ModelName, K, NsId>,
-    RelatedModelName<TContract, ModelName, K, NsId> & string
-  >;
+    ModelName,
+    K,
+    NsId
+  > extends '1:1' | 'N:1'
+    ? ToOneRelationAccessor<
+        TContract,
+        RelationTargetNamespace<TContract, ModelName, K, NsId>,
+        RelatedModelName<TContract, ModelName, K, NsId> & string
+      >
+    : ToManyRelationAccessor<
+        TContract,
+        RelationTargetNamespace<TContract, ModelName, K, NsId>,
+        RelatedModelName<TContract, ModelName, K, NsId> & string
+      >;
 };
 
 export type ModelAccessor<

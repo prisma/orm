@@ -1,11 +1,15 @@
 import { computeExecutionHash } from '@internal/contract/hashing';
 import type { ContractExecutionSection, ExecutionMutationDefault } from '@internal/contract/types';
 
+function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function compareRefs(a: ExecutionMutationDefault, b: ExecutionMutationDefault): number {
   return (
-    a.ref.namespace.localeCompare(b.ref.namespace) ||
-    a.ref.entry.localeCompare(b.ref.entry) ||
-    a.ref.field.localeCompare(b.ref.field)
+    compareCodeUnits(a.ref.namespace, b.ref.namespace) ||
+    compareCodeUnits(a.ref.entry, b.ref.entry) ||
+    compareCodeUnits(a.ref.field, b.ref.field)
   );
 }
 

@@ -99,7 +99,7 @@ describe('Mongo temporal presets from PSL and TS', () => {
 
   it('types the emitted execution refs with the collection and stored field names', () => {
     type Refs = Contract['execution']['mutations']['defaults'][number]['ref'];
-    expectTypeOf<Refs['entry']>().toEqualTypeOf<'posts'>();
+    expectTypeOf<Refs['entry']>().toEqualTypeOf<'events' | 'posts'>();
     expectTypeOf<Refs['field']>().toEqualTypeOf<'createdAt' | 'touchedAt' | 'updated_at'>();
     expectTypeOf<Refs['namespace']>().toEqualTypeOf<'__unbound__'>();
   });

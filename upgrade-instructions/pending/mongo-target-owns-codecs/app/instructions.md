@@ -41,10 +41,10 @@ changes:
         - 'createControlStack\(\s*\{(?:(?!adapter)[^}])*mongoTargetDescriptor(?:(?!adapter)[^}])*\}\s*\)'
   - id: mongo-psl-scalar-names
     summary: |
-      Four Mongo PSL scalar types are renamed after the BSON type they store: `Int` → `Int32`,
-      `Float` → `Double`, `Boolean` → `Bool`, `DateTime` → `Date`. A Mongo schema that uses an old
-      name fails `prisma contract emit` with `PSL_UNSUPPORTED_FIELD_TYPE`. Codec ids, `contract.json`
-      and every hash are unchanged.
+      Four Mongo PSL scalar names are deprecated in favour of the name of the BSON type they store:
+      `Int` → `Int32`, `Float` → `Double`, `Boolean` → `Bool`, `DateTime` → `Date`. The old names
+      are still accepted, with a `PSL_DEPRECATED_SCALAR_NAME` warning, and will be removed in a later
+      release; rename them now. Codec ids, `contract.json` and every hash are unchanged.
     detection:
       glob: "**/*.prisma"
       matches:
@@ -107,11 +107,13 @@ Code that goes through the CLI or `defineConfig` already has the adapter on the 
 
 ## `mongo-psl-scalar-names`
 
+`Int`, `Float`, `Boolean` and `DateTime` are deprecated in Mongo schemas. They are still accepted, and they produce the same contract as the new names, but `prisma contract emit` and the language server report a `PSL_DEPRECATED_SCALAR_NAME` warning for each use, and a later release removes them. Rename them now.
+
 Apply this only in a schema whose `prisma.config.ts` uses `@prisma/orm-mongo`. The detection pattern also matches Postgres and SQLite schemas, whose scalar names do not change in this release.
 
-In each field whose type is one of the old names, replace the type name, keeping any `[]` and `?`:
+In each field whose type is one of the deprecated names, replace the type name, keeping any `[]` and `?`:
 
-| Before | After | Stored as |
+| Deprecated | Use | Stored as |
 | --- | --- | --- |
 | `Int` | `Int32` | BSON int |
 | `Float` | `Double` | BSON double |
@@ -140,4 +142,6 @@ model Post {
 }
 ```
 
-This includes the `contract.prisma` copies under `migrations/app/<migration>/`. Then run `prisma contract emit`: `contract.json` and `contract.d.ts` come out the same as before, so no migration or `db sign` is needed. A schema that still uses an old name fails `contract emit` with `Scalar type "Int" was renamed to "Int32" (stored as BSON int). Replace "Int" with "Int32".` at the type.
+This includes the `contract.prisma` copies under `migrations/app/<migration>/`. Then run `prisma contract emit`: `contract.json` and `contract.d.ts` come out the same as before, so no migration or `db sign` is needed. Until the rename, each use reports `warning <file>:<line>:<column> PSL_DEPRECATED_SCALAR_NAME Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).`
+
+Docs: list only `Int32`, `Double`, `Bool`, `Date`; the old names must not appear in the scalar tables.

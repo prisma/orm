@@ -142,6 +142,41 @@ describe('createProjectArtifacts', () => {
     expect(store.symbolDiagnostics()).toEqual([]);
     expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
   });
+  it('shows a warning the interpreter reports at its span, with warning severity', () => {
+    const texts = new Map([[schemaUri, cleanSource]]);
+    const { interpretation } = interpretationDouble((_input, context) => {
+      context.reportWarning?.({
+        code: 'PSL_DEPRECATED_SCALAR_NAME',
+        message:
+          'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+        sourceId: schemaUri,
+        span: {
+          start: { offset: 34, line: 3, column: 6 },
+          end: { offset: 37, line: 3, column: 9 },
+        },
+        severity: 'warning',
+      });
+      return ok({} as never);
+    });
+    const artifacts = createProjectArtifacts({
+      inputs,
+      controlStack,
+      getDocument: (uri) => mirroredDocument(texts, uri),
+      onInterpretationError: vi.fn(),
+      interpretation,
+    });
+
+    expect(artifacts.document(schemaUri)?.interpretDiagnostics()).toEqual([
+      {
+        range: { start: { line: 2, character: 5 }, end: { line: 2, character: 8 } },
+        code: 'PSL_DEPRECATED_SCALAR_NAME',
+        message:
+          'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+        severity: 2,
+      },
+    ]);
+  });
+
   it('parses the mirrored text on first read', () => {
     const { texts, store } = projectWithMirror();
     texts.set(schemaUri, cleanSource);
@@ -652,6 +687,6 @@ describe('interpret slot', () => {
     });
     expect(input?.sources.sourceFileFor(input.documents[0]!.syntax)).toBe(artifacts?.sourceFile);
     expect(input?.symbolTable).toBeDefined();
-    expect(context).toBe(interpretation.context);
+    expect(context).toEqual({ ...interpretation.context, reportWarning: expect.any(Function) });
   });
 });
