@@ -77,6 +77,8 @@ import {
   StreamMessageWriter,
   TextDocumentSyncKind,
   type TextEdit,
+  type UnregistrationParams,
+  UnregistrationRequest,
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
 import { guardedConnection } from '../src/guarded-connection';
@@ -422,6 +424,19 @@ interface Harness {
   readonly notifyConfigChanged: (uri?: string) => void;
   readonly getDocumentAst: (uri: string) => DocumentArtifacts | undefined;
   readonly getProjectSymbolTable: (uri: string) => SymbolTable | undefined;
+  /**
+   * Holds the response to the next schema-watcher (non-config)
+   * `client/registerCapability` request instead of answering it — lets a
+   * test force a registration's own request/response race deliberately.
+   * Returns the registration's id once the request has arrived; the
+   * response is released by calling the returned function.
+   */
+  readonly delayNextSchemaWatcherRegistration: () => Promise<{
+    readonly id: string;
+    readonly release: () => void;
+  }>;
+  readonly schemaWatcherRegistrationIds: () => readonly string[];
+  readonly unregisteredIds: () => readonly string[];
   dispose: () => Promise<void>;
   disconnect: () => void;
 }
@@ -522,17 +537,40 @@ function startHarness(
     params.registrations.some(
       (registration) => registration.method === 'workspace/didChangeWatchedFiles',
     );
+  // The config watcher registers a `prisma.config.ts` pattern; the
+  // schema-glob watcher never does, so this distinguishes the two without
+  // needing the harness to know the server's registration ids.
+  const isSchemaWatcherRegistration = (params: RegistrationParams) =>
+    isWatchedFilesRegistration(params) &&
+    !JSON.stringify(params.registrations).includes('prisma.config.ts');
   interface RegistrationWaiter {
     readonly resolve: () => void;
   }
   const registrationWaiters: RegistrationWaiter[] = [];
+  let pendingSchemaWatcherDelay:
+    | { readonly resolve: (value: { readonly id: string; readonly release: () => void }) => void }
+    | undefined;
+  const unregisteredIds: string[] = [];
   client.onRequest(RegistrationRequest.type, (params) => {
     registrations.push(params);
-    if (!isWatchedFilesRegistration(params)) {
-      return;
+    if (isWatchedFilesRegistration(params)) {
+      for (const waiter of registrationWaiters.splice(0)) {
+        waiter.resolve();
+      }
     }
-    for (const waiter of registrationWaiters.splice(0)) {
-      waiter.resolve();
+    if (pendingSchemaWatcherDelay !== undefined && isSchemaWatcherRegistration(params)) {
+      const waiter = pendingSchemaWatcherDelay;
+      pendingSchemaWatcherDelay = undefined;
+      const id = params.registrations[0]?.id ?? '';
+      return new Promise<void>((releaseResponse) => {
+        waiter.resolve({ id, release: releaseResponse });
+      });
+    }
+    return undefined;
+  });
+  client.onRequest(UnregistrationRequest.type, (params: UnregistrationParams) => {
+    for (const unregistration of params.unregisterations) {
+      unregisteredIds.push(unregistration.id);
     }
   });
 
@@ -666,6 +704,15 @@ function startHarness(
     },
     getDocumentAst: (uri) => server.getDocumentAst(uri),
     getProjectSymbolTable: (uri) => server.getProjectSymbolTable(uri),
+    delayNextSchemaWatcherRegistration: () =>
+      new Promise((resolve) => {
+        pendingSchemaWatcherDelay = { resolve };
+      }),
+    schemaWatcherRegistrationIds: () =>
+      registrations
+        .filter(isSchemaWatcherRegistration)
+        .flatMap((params) => params.registrations.map((registration) => registration.id)),
+    unregisteredIds: () => unregisteredIds,
     dispose: async () => {
       await client.sendRequest(ShutdownRequest.type);
       while (pendingMessages.size > 0) {
@@ -4057,6 +4104,44 @@ describe('language server whole-project push and freshness', {
       changes: [{ uri: memberBUri, type: FileChangeType.Changed }],
     });
     expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+  });
+
+  it('disposes a superseded schema-watcher registration instead of leaking it when two reloads race', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+
+    const activeHarness = startHarness(
+      async () => resolutionForInputs([memberAPath]),
+      watchedFilesCapabilities,
+    );
+    harness = activeHarness;
+    await harness.initialize();
+    await harness.waitForWatchedFilesRegistration(timeouts.default);
+
+    // Holds the first load's schema-watcher registration response so its
+    // resolution can be forced to land after a second, racing reload's own
+    // registration has already completed and been stored.
+    const held = harness.delayNextSchemaWatcherRegistration();
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    const { id: firstRegistrationId, release: releaseFirstResponse } = await held;
+
+    harness.notifyConfigChanged();
+    await waitUntil(() => activeHarness.schemaWatcherRegistrationIds().length === 2);
+    const secondRegistrationId = activeHarness
+      .schemaWatcherRegistrationIds()
+      .find((id) => id !== firstRegistrationId);
+    expect(secondRegistrationId).toBeDefined();
+
+    releaseFirstResponse();
+    await waitUntil(() => activeHarness.unregisteredIds().includes(firstRegistrationId));
+
+    // Exactly one live registration survives the race: the first (now
+    // superseded) call disposed the registration it belatedly received
+    // instead of overwriting the second call's already-stored one.
+    expect(activeHarness.unregisteredIds()).not.toContain(secondRegistrationId);
   });
 
   it('picks up an external edit to a closed member via stat revalidation when no watcher is registered', async () => {

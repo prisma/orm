@@ -139,6 +139,14 @@ function createServerOn(connection: Connection): LanguageServer {
   // change) so a stale entry from before the reload still clears.
   const publishedMembers = new Map<string, ReadonlyMap<string, string>>();
   const schemaWatchRegistrations = new Map<string, Disposable>();
+  // Bumped at the start of every `registerSchemaWatcher` call for a config
+  // path — the same generation-token shape `isCurrentLoad` uses for project
+  // loads, applied here to the separate async chain a registration's own
+  // `connection.client.register` round trip runs on. Two overlapping calls
+  // for the same config (two reloads racing) must not let an
+  // earlier-started, later-resolving call overwrite (and thereby leak) a
+  // newer call's already-stored disposable.
+  const schemaWatchGenerations = new Map<string, number>();
   let rootPath = process.cwd();
   let watchedConfigGlob = join(rootPath, '**', CONFIG_FILENAME);
   let clientCapabilities = noClientCapabilities;
@@ -198,6 +206,11 @@ function createServerOn(connection: Connection): LanguageServer {
    */
   function publishProjectMembers(project: ProjectState, closedOverride?: ClosedOverride): void {
     const nextLedger = new Map<string, string>();
+    // Hoisted once: `symbolDiagnostics()` runs the project's whole-membership
+    // read sweep (O(N) stats). Calling it again per pushed member — as
+    // `combinedDiagnostics` does by default for its single-document callers
+    // — would make this loop O(M×N) instead of O(N).
+    const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
     for (const candidateUri of membersToPush(project)) {
       const artifacts = project.artifacts.document(candidateUri);
       if (artifacts === undefined && getDocument(candidateUri) === undefined) {
@@ -207,7 +220,9 @@ function createServerOn(connection: Connection): LanguageServer {
       sendDiagnostics({
         uri,
         diagnostics:
-          artifacts === undefined ? [] : combinedDiagnostics(project.artifacts, artifacts),
+          artifacts === undefined
+            ? []
+            : combinedDiagnostics(project.artifacts, artifacts, projectSymbolDiagnostics),
       });
       nextLedger.set(canonicalFileIdentity(candidateUri), uri);
     }
@@ -234,8 +249,11 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function registerSchemaWatcher(project: ProjectState): Promise<void> {
-    schemaWatchRegistrations.get(project.configPath)?.dispose();
-    schemaWatchRegistrations.delete(project.configPath);
+    const configPath = project.configPath;
+    const generation = (schemaWatchGenerations.get(configPath) ?? 0) + 1;
+    schemaWatchGenerations.set(configPath, generation);
+    schemaWatchRegistrations.get(configPath)?.dispose();
+    schemaWatchRegistrations.delete(configPath);
     if (!clientCapabilities.watchedFilesRegistration) {
       return;
     }
@@ -247,10 +265,14 @@ function createServerOn(connection: Connection): LanguageServer {
       const disposable = await connection.client.register(DidChangeWatchedFilesNotification.type, {
         watchers: patterns.map((pattern) => ({ globPattern: toWatcherGlobPattern(pattern) })),
       });
-      // A reload that raced this registration may have already superseded
-      // it; the newer disposable already won `schemaWatchRegistrations`.
-      if (managedProjects.get(project.configPath) !== undefined) {
-        schemaWatchRegistrations.set(project.configPath, disposable);
+      // A newer call for this config path — another reload, racing this
+      // one's own `connection.client.register` round trip — may have
+      // started (and possibly already stored its own disposable) while
+      // this call was in flight. Only the current generation's result is
+      // stored; a superseded one is disposed on arrival instead of
+      // overwriting (or being silently overwritten by) a newer one.
+      if (schemaWatchGenerations.get(configPath) === generation) {
+        schemaWatchRegistrations.set(configPath, disposable);
       } else {
         disposable.dispose();
       }
@@ -269,13 +291,23 @@ function createServerOn(connection: Connection): LanguageServer {
 
   // The single diagnostics assembly — push and pull must serve the same
   // combined response, and interpretation runs only from here.
+  //
+  // `projectSymbolDiagnostics` defaults to a fresh `project.symbolDiagnostics()`
+  // call for the single-document callers (the pull path, the config-failure
+  // paths); a caller composing several documents in one pass (the push
+  // sweep) hoists that call once and passes the same array through, so the
+  // project-wide read sweep it triggers runs once per pass, not once per
+  // document.
   function combinedDiagnostics(
     project: ProjectArtifacts,
     artifacts: DocumentArtifacts,
+    projectSymbolDiagnostics: ReturnType<
+      ProjectArtifacts['symbolDiagnostics']
+    > = project.symbolDiagnostics(),
   ): Diagnostic[] {
-    const symbolDiagnostics = project
-      .symbolDiagnostics()
-      .filter((diagnostic) => diagnostic.filename === artifacts.sourceFile.filename);
+    const symbolDiagnostics = projectSymbolDiagnostics.filter(
+      (diagnostic) => diagnostic.filename === artifacts.sourceFile.filename,
+    );
     return toDiagnostics([
       ...artifacts.diagnostics,
       ...mapParseDiagnostics(symbolDiagnostics),
@@ -397,7 +429,15 @@ function createServerOn(connection: Connection): LanguageServer {
             managedProjects.set(configPath, { status: 'failed' });
             unmanageDocuments(configPath);
             // No project is left to watch or push for — a member's edit
-            // from here has nothing to (re)load into.
+            // from here has nothing to (re)load into. The generation bump
+            // also invalidates any registration attempt still in flight for
+            // this config path, so its eventual arrival disposes itself
+            // instead of storing a registration for a project that no
+            // longer exists.
+            schemaWatchGenerations.set(
+              configPath,
+              (schemaWatchGenerations.get(configPath) ?? 0) + 1,
+            );
             schemaWatchRegistrations.get(configPath)?.dispose();
             schemaWatchRegistrations.delete(configPath);
             clearPublishedMembers(configPath);
