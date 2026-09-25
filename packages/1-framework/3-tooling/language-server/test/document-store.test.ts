@@ -1,4 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+import { join } from 'pathe';
+import { afterEach, describe, expect, it } from 'vitest';
 import { DocumentStore } from '../src/document-store';
 
 const uri = 'file:///abs/schema.psl';
@@ -71,5 +75,142 @@ describe('document store', () => {
       `Received document change event for ${uri} without valid version identifier`,
     );
     expect(document.getText()).toBe('first');
+  });
+
+  describe('tagged content: overlay and disk', () => {
+    const tempDirs: string[] = [];
+
+    afterEach(async () => {
+      for (const dir of tempDirs) {
+        await rm(dir, { recursive: true, force: true });
+      }
+      tempDirs.length = 0;
+    });
+
+    async function fixtureFile(content: string): Promise<{ path: string; uri: string }> {
+      const dir = await mkdtemp(join(tmpdir(), 'document-store-'));
+      tempDirs.push(dir);
+      const path = join(dir, 'member.prisma');
+      await writeFile(path, content, 'utf8');
+      return { path, uri: pathToFileURL(path).toString() };
+    }
+
+    it('reads a never-opened member from disk and caches it as a disk entry', async () => {
+      const { uri: fileUri } = await fixtureFile('model Disk {}');
+      const store = new DocumentStore();
+      expect(store.text(fileUri)).toBe('model Disk {}');
+      expect(store.getDocument(fileUri)).toBeUndefined();
+    });
+
+    it('returns a defined miss (never throws) for a nonexistent member', () => {
+      const store = new DocumentStore();
+      const missingUri = pathToFileURL(join(tmpdir(), 'document-store-missing.prisma')).toString();
+      expect(() => store.text(missingUri)).not.toThrow();
+      expect(store.text(missingUri)).toBeUndefined();
+    });
+
+    it('lets the overlay win over a cached disk entry', async () => {
+      const { uri: fileUri } = await fixtureFile('model Disk {}');
+      const store = new DocumentStore();
+      expect(store.text(fileUri)).toBe('model Disk {}');
+      const overlay = store.open({
+        uri: fileUri,
+        languageId: 'prisma',
+        version: 1,
+        text: 'model Overlay {}',
+      });
+      expect(store.text(fileUri)).toBe('model Overlay {}');
+      expect(store.getDocument(fileUri)).toBe(overlay);
+    });
+
+    it('refreshes from disk after close, discarding the overlay text', async () => {
+      const { uri: fileUri } = await fixtureFile('model DiskOriginal {}');
+      const store = new DocumentStore();
+      store.open({ uri: fileUri, languageId: 'prisma', version: 1, text: 'model Edited {}' });
+      expect(store.close(fileUri)?.getText()).toBe('model Edited {}');
+      expect(store.getDocument(fileUri)).toBeUndefined();
+      expect(store.text(fileUri)).toBe('model DiskOriginal {}');
+    });
+
+    it('leaves a disk entry untouched when change targets it (existing unopened-change contract)', async () => {
+      const { uri: fileUri } = await fixtureFile('model Disk {}');
+      const store = new DocumentStore();
+      expect(store.text(fileUri)).toBe('model Disk {}');
+      expect(
+        store.change({ uri: fileUri, version: 2 }, [{ text: 'model Mutated {}' }]),
+      ).toBeUndefined();
+      expect(store.text(fileUri)).toBe('model Disk {}');
+    });
+
+    it('is a no-op invalidating an overlay', async () => {
+      const { uri: fileUri } = await fixtureFile('model Disk {}');
+      const store = new DocumentStore();
+      const overlay = store.open({
+        uri: fileUri,
+        languageId: 'prisma',
+        version: 1,
+        text: 'model Overlay {}',
+      });
+      store.invalidate(fileUri);
+      expect(store.getDocument(fileUri)).toBe(overlay);
+      expect(store.text(fileUri)).toBe('model Overlay {}');
+    });
+
+    it('evicts a disk entry on invalidate, forcing a fresh read on next access', async () => {
+      const { path, uri: fileUri } = await fixtureFile('model Alpha {}');
+      const store = new DocumentStore();
+      const cachedMtime = new Date('2020-01-01T00:00:00Z');
+      await utimes(path, cachedMtime, cachedMtime);
+      expect(store.text(fileUri)).toBe('model Alpha {}');
+
+      // Same size and mtime as the cached entry: stat revalidation alone
+      // would not detect this change, isolating eviction as the mechanism.
+      await writeFile(path, 'model Bravo {}', 'utf8');
+      await utimes(path, cachedMtime, cachedMtime);
+      expect(store.text(fileUri)).toBe('model Alpha {}');
+
+      store.invalidate(fileUri);
+      expect(store.text(fileUri)).toBe('model Bravo {}');
+    });
+
+    it('detects an mtime change with identical size and re-reads', async () => {
+      const { path, uri: fileUri } = await fixtureFile('AAAA');
+      const store = new DocumentStore();
+      const older = new Date('2020-01-01T00:00:00Z');
+      await utimes(path, older, older);
+      expect(store.text(fileUri)).toBe('AAAA');
+
+      await writeFile(path, 'BBBB', 'utf8');
+      const newer = new Date('2020-01-02T00:00:00Z');
+      await utimes(path, newer, newer);
+      expect(store.text(fileUri)).toBe('BBBB');
+    });
+
+    it('detects a size change with an identical mtime and re-reads', async () => {
+      const { path, uri: fileUri } = await fixtureFile('AA');
+      const store = new DocumentStore();
+      const pinned = new Date('2020-01-01T00:00:00Z');
+      await utimes(path, pinned, pinned);
+      expect(store.text(fileUri)).toBe('AA');
+
+      await writeFile(path, 'AAAA', 'utf8');
+      await utimes(path, pinned, pinned);
+      expect(store.text(fileUri)).toBe('AAAA');
+    });
+
+    it('reuses the cached disk entry when mtime and size both match', async () => {
+      const { path, uri: fileUri } = await fixtureFile('cached');
+      const store = new DocumentStore();
+      const pinned = new Date('2020-01-01T00:00:00Z');
+      await utimes(path, pinned, pinned);
+      expect(store.text(fileUri)).toBe('cached');
+
+      // Same size and mtime as the cached entry: a correctly-implemented
+      // cache must not observe this write.
+      await writeFile(path, 'MUTATE', 'utf8');
+      await utimes(path, pinned, pinned);
+
+      expect(store.text(fileUri)).toBe('cached');
+    });
   });
 });
