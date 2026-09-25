@@ -48,8 +48,8 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 
 | Slice | Branch | PR |
 |---|---|---|
-| 1 | `mongo-target-owns-codecs` | #30396, CI green, awaiting review |
-| 2 | `execution-ref-neutral-names` | #30399, CI green, awaiting review |
+| 1 | `mongo-target-owns-codecs` | #30396, merged 2026-09-25 |
+| 2 | `execution-ref-neutral-names` | #30399, merged 2026-09-25 |
 | 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
 | 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
 | 4 | `mongo-generator-runtime-hoist` | #30406, stacked on 5 |
@@ -91,3 +91,6 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 
 The Mongo PSL renames `Int`→`Int32`, `Float`→`Double`, `Boolean`→`Bool`, `DateTime`→`Date` and their diagnostic and `app` fragment (`design/scalar-naming.md` § 3), plus the two other review findings (ADR 198 made self-consistent; codec errors carry collection and field), land in #30396 before merge.
 - From the local review of #30396 (architect pass), left for later: a dependency-cruiser rule for target → adapter to replace `packages/3-mongo-target/1-mongo-target/test/layering.test.ts` (needs the target packages moved out of the `extensions` domain); moving the Mongo runner to the Postgres shape so `MongoRunnerDependencies` and `createRunnerDependencies` retire; deriving `CodecTypes` from the codecs and moving the Mongo TS field helpers into the target; trimming `extractDb`, `mongoStandardCodecs`, and `mongoDescriptorById` from the published exports; renaming `test/integration/test/mongo/target-runner/`.
+- `localeCompare` still orders other emitted or hashed output: `contract-psl/src/interpreter.ts` (~560), `contract-ts/src/contract-builder.ts` (~113), `packages/2-mongo-family/3-tooling/emitter/src/index.ts` (~65, ~78), `mongo-schema-ir/src/schema-ir.ts` (~17), `schema-verify/canonicalize-introspection.ts` (~141), and the framework `mergeCapabilityMatrices` key sort feeding `capabilities`. Each is host-locale dependent in the same way the execution sort was; sweep them in one change with the code-unit comparator.
+- The shared PSL parser reads only `a` or `a.b(` in index-field position, so a Prisma 6 `@@index([address.city])` fails with `PSL_INVALID_MODEL_MEMBER` before the Prisma 6 reader can report its own diagnostic; only the call form gets `PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED`. Teaching the parser dotted references touches every grammar, the formatter, and the language server.
+- Language-server completions now carry the deprecated Mongo scalar aliases last with the Deprecated tag; when the aliases are removed (a later release), delete the alias entries and the `deprecated` field consumers together.
