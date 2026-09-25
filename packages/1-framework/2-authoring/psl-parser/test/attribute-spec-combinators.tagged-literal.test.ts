@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import type { FieldAttributeCtx } from '../src/exports';
 import { taggedLiteral } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
@@ -19,13 +20,17 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
-  return {
-    sources,
-    symbols: symbolTable,
-    selfModel,
-    field,
-    resolveReferencedModel: () => undefined,
-  };
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
 }
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCtx } {

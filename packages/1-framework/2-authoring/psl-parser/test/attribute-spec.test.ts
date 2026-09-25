@@ -1,5 +1,6 @@
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import { diagnosticSource, type PslDiagnostic } from '../src/diagnostic';
 import type { ArgType, AttributeCtx, FieldAttributeCtx } from '../src/exports';
 import {
@@ -28,13 +29,17 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
-  return {
-    sources,
-    symbols: symbolTable,
-    selfModel,
-    field,
-    resolveReferencedModel: () => undefined,
-  };
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
 }
 
 function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttributeCtx } {

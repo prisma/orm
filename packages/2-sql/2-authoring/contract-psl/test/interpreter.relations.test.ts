@@ -690,8 +690,8 @@ model Post {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: expect.stringContaining('Field "missingUserId" does not exist on model "Post"'),
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining('Cannot find field "missingUserId" on "Post"'),
         }),
       ]),
     );
@@ -724,8 +724,10 @@ model Post {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: expect.stringContaining('Field "missingId" does not exist on model "User"'),
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining(
+            'Cannot find field "missingId" on the type of "Post.user"',
+          ),
         }),
       ]),
     );

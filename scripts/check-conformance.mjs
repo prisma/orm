@@ -221,6 +221,35 @@ export function isSectionValidation(returned) {
   return returned.ok === true && 'value' in returned;
 }
 
+const SYNTHETIC_DECLARING_FILE = '/conformance-hostile/prisma.config.ts';
+
+/**
+ * The provenance the engine would supply: every top-level key of a
+ * plain-object section value maps to a declaring file. Any other value, and
+ * any object whose key enumeration throws, gets empty provenance. Mirrors
+ * the sibling prisma-cli conformance checker.
+ *
+ * @param {unknown} value
+ * @returns {{ files: string[]; keys: Record<string, string> }}
+ */
+function provenanceFor(value) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return { files: [], keys: {} };
+  }
+  let names;
+  try {
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return { files: [], keys: {} };
+    names = Object.keys(value);
+  } catch {
+    return { files: [], keys: {} };
+  }
+  return {
+    files: [SYNTHETIC_DECLARING_FILE],
+    keys: Object.fromEntries(names.map((name) => [name, SYNTHETIC_DECLARING_FILE])),
+  };
+}
+
 /**
  * Runs a config section's `validate` over {@link HOSTILE_INPUTS} and
  * returns one violation per hostile input the validator throws on
@@ -235,8 +264,9 @@ export function findValidatorViolations(section) {
   const violations = [];
   for (const hostile of HOSTILE_INPUTS) {
     let returned;
+    const value = hostile.make();
     try {
-      returned = section.validate(hostile.make());
+      returned = section.validate(value, provenanceFor(value));
     } catch (error) {
       violations.push({
         kind: 'threw',

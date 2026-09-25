@@ -40,6 +40,7 @@ import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/can
 import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import type {
   AttributeSpecContext,
+  Binder,
   BlockSymbol,
   CompositeTypeSymbol,
   FieldSymbol,
@@ -74,6 +75,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
 import {
+  createMongoBinder,
   findFieldAttributeNode,
   findModelAttributeNode,
   interpretFieldAttribute,
@@ -117,6 +119,7 @@ export interface InterpretPslDocumentToMongoContractInput {
 function validateNamespaceBlocksForMongoTarget(input: {
   readonly namespaces: readonly NamespaceSymbol[];
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
   for (const namespace of input.namespaces) {
@@ -126,54 +129,6 @@ function validateNamespaceBlocksForMongoTarget(input: {
         message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
         ...diagnosticSource(input.sources, node.syntax).at(span),
       });
-    }
-  }
-}
-
-const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
-  [
-    'updatedAt',
-    'Mongo lowers no automatic timestamp updates; delete the attribute and set the timestamp in application code.',
-  ],
-]);
-
-function unsupportedFieldAttributeMessage(
-  ownerName: string,
-  fieldName: string,
-  attributeName: string,
-): string {
-  const base = `Field "${ownerName}.${fieldName}" uses unsupported attribute "@${attributeName}"`;
-  const hint = UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attributeName);
-  return hint === undefined ? base : `${base}. ${hint}`;
-}
-
-function reportUnknownAttributes(input: {
-  readonly models: readonly ModelSymbol[];
-  readonly compositeTypes: readonly CompositeTypeSymbol[];
-  readonly sources: PslSources;
-  readonly diagnostics: PslDiagnosticCollector;
-}): void {
-  const { sources, diagnostics } = input;
-  for (const model of input.models) {
-    for (const attribute of model.attributes) {
-      if (Object.hasOwn(mongoAttributeSpecs.model, attribute.name)) continue;
-      diagnostics.push({
-        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${model.name}" uses unsupported attribute "@@${attribute.name}"`,
-        ...diagnosticSource(sources, model.node.syntax).at(attribute.span),
-      });
-    }
-  }
-  for (const owner of [...input.models, ...input.compositeTypes]) {
-    for (const field of Object.values(owner.fields)) {
-      for (const attribute of field.attributes) {
-        if (Object.hasOwn(mongoAttributeSpecs.field, attribute.name)) continue;
-        diagnostics.push({
-          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
-          message: unsupportedFieldAttributeMessage(owner.name, field.name, attribute.name),
-          ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
-        });
-      }
     }
   }
 }
@@ -216,9 +171,10 @@ function resolveFieldMappings(input: {
   readonly model: ModelSymbol;
   readonly specContext: AttributeSpecContext;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): FieldMappings {
-  const { model, specContext, sources, diagnostics } = input;
+  const { model, specContext, sources, binder, diagnostics } = input;
   const pslNameToMapped = new Map<string, string>();
   for (const field of Object.values(model.fields)) {
     const mapNode = findFieldAttributeNode(field, 'map');
@@ -231,6 +187,7 @@ function resolveFieldMappings(input: {
             model,
             field,
             sources,
+            binder,
             diagnostics,
           })?.name
         : undefined) ?? field.name;
@@ -243,9 +200,10 @@ function resolveCollectionName(input: {
   readonly model: ModelSymbol;
   readonly specContext: AttributeSpecContext;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): string {
-  const { model, specContext, sources, diagnostics } = input;
+  const { model, specContext, sources, binder, diagnostics } = input;
   const mapNode = findModelAttributeNode(model, 'map');
   const name = mapNode
     ? interpretModelAttribute({
@@ -254,6 +212,7 @@ function resolveCollectionName(input: {
         spec: mongoAttributeSpecs.model.map(specContext),
         model,
         sources,
+        binder,
         diagnostics,
       })?.name
     : undefined;
@@ -291,6 +250,7 @@ function collectPolymorphismDeclarations(
   specContextFor: (model: ModelSymbol) => AttributeSpecContext,
   modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>,
   sources: PslSources,
+  binder: Binder,
   diagnostics: PslDiagnosticCollector,
 ): {
   discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
@@ -309,6 +269,7 @@ function collectPolymorphismDeclarations(
         spec: mongoAttributeSpecs.model.discriminator(specContext),
         model,
         sources,
+        binder,
         diagnostics,
       });
       if (parsed) {
@@ -338,6 +299,7 @@ function collectPolymorphismDeclarations(
         spec: mongoAttributeSpecs.model.base(),
         model,
         sources,
+        binder,
         diagnostics,
       });
       if (parsed) {
@@ -862,6 +824,7 @@ function collectIndexes(
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
   sources: PslSources,
+  binder: Binder,
   diagnostics: PslDiagnosticCollector,
   indexSpans: Map<MongoIndex, PslSpan>,
   indexSources: Map<MongoIndex, DiagnosticSource>,
@@ -884,6 +847,7 @@ function collectIndexes(
       model: pslModel,
       field,
       sources,
+      binder,
       diagnostics,
     });
     if (unique === undefined) continue;
@@ -920,6 +884,7 @@ function collectIndexes(
         spec: mongoAttributeSpecs.model.textIndex(specContext),
         model: pslModel,
         sources,
+        binder,
         diagnostics,
       });
       if (!parsed || parsed.fields.length === 0) continue;
@@ -943,6 +908,7 @@ function collectIndexes(
           : mongoAttributeSpecs.model.index(specContext),
         model: pslModel,
         sources,
+        binder,
         diagnostics,
       });
       if (!parsed) continue;
@@ -1031,6 +997,7 @@ function resolveNonRelationField(
 function processEnumDeclarations(input: {
   readonly enumSymbols: readonly BlockSymbol[];
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly entityContext: AuthoringEntityContext;
   readonly diagnostics: PslDiagnosticCollector;
@@ -1089,22 +1056,27 @@ export function interpretPslDocumentToMongoContract(
 ): Result<Contract, ContractSourceDiagnostics> {
   const { symbolTable, sources, scalarTypeCodecIds, codecLookup } = input;
   const diagnostics = createPslDiagnosticCollector(sources);
+  const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
+    symbolTable,
+    sources,
+    scalarTypeCodecIds,
+    controlMutationDefaults: input.controlMutationDefaults,
+    authoringContributions: input.authoringContributions,
+  });
+  diagnostics.push(
+    ...binderDiagnostics.filter((diagnostic) => diagnostic.data?.['reference'] !== 'type'),
+  );
   const topLevel = symbolTable.topLevel;
   validateNamespaceBlocksForMongoTarget({
     namespaces: Object.values(topLevel.namespaces),
     sources,
+    binder,
     diagnostics,
   });
   const allModels: ModelSymbol[] = Object.values(topLevel.models);
   const allCompositeTypes: CompositeTypeSymbol[] = Object.values(topLevel.compositeTypes);
   const modelNames = new Set(allModels.map((m) => m.name));
   const compositeTypeNames = new Set(allCompositeTypes.map((ct) => ct.name));
-  reportUnknownAttributes({
-    models: allModels,
-    compositeTypes: allCompositeTypes,
-    sources,
-    diagnostics,
-  });
   const specContextFor = (model: ModelSymbol): AttributeSpecContext => ({
     symbols: symbolTable,
     model,
@@ -1118,12 +1090,14 @@ export function interpretPslDocumentToMongoContract(
         model,
         specContext,
         sources,
+        binder,
         diagnostics,
       }),
       fieldMappings: resolveFieldMappings({
         model,
         specContext,
         sources,
+        binder,
         diagnostics,
       }),
     });
@@ -1140,6 +1114,7 @@ export function interpretPslDocumentToMongoContract(
   const builtEnums = processEnumDeclarations({
     enumSymbols: topLevelEnumSymbols,
     sources,
+    binder,
     authoringContributions: input.authoringContributions,
     entityContext: {
       family: 'mongo',
@@ -1201,8 +1176,8 @@ export function interpretPslDocumentToMongoContract(
               model: pslModel,
               field,
               sources,
+              binder,
               diagnostics,
-              resolveReferencedModel: () => allModels.find((m) => m.name === field.typeName),
             })
           : undefined;
 
@@ -1291,6 +1266,7 @@ export function interpretPslDocumentToMongoContract(
             model: pslModel,
             field,
             sources,
+            binder,
             diagnostics,
           }) !== undefined
         );
@@ -1333,6 +1309,7 @@ export function interpretPslDocumentToMongoContract(
       fieldMappings,
       modelNames,
       sources,
+      binder,
       diagnostics,
       indexSpans,
       indexSources,
@@ -1438,6 +1415,7 @@ export function interpretPslDocumentToMongoContract(
     specContextFor,
     modelMetadataByName,
     sources,
+    binder,
     diagnostics,
   );
   const polyResult = resolvePolymorphism({

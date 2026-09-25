@@ -1567,7 +1567,7 @@ describe('MongoMigrationPlanner', () => {
     });
   });
 
-  describe('polymorphic collections (FL-09)', () => {
+  describe('polymorphic collections', () => {
     it('does not createCollection for variant names when contract has only the base collection', () => {
       const contract = makeContract({
         tasks: {
