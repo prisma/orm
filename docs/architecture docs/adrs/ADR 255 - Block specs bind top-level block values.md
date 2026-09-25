@@ -95,23 +95,21 @@ Two binders cover the block shapes PSL has:
 
 Framework core registers descriptors without importing parser types: `AuthoringPslBlockDescriptor.spec` is `unknown`, validated at registration as a function. The parser-facing `PslBlockSpecDescriptor` narrows `spec` to the real factory type, and authoring code declares descriptors with `satisfies PslBlockSpecDescriptor` so the field stays typed at the source. `blockSpecFactoryOf(descriptor)` is the single point that restores the callable type from the erased field. Core stays parser-independent; the parser owns the grammar vocabulary.
 
-### Collect first, interpret second
+### Collect first; consumers resolve
 
-`buildSymbolTable({ documents, sources, pslBlockDescriptors })` collects all declarations with stable symbol identities before any block is interpreted. Spec factories may therefore resolve references — forward references included — because the parse context always holds the complete symbol table. Reference rules (`entityRef`) derive lexical scope from the expression's syntax ancestry; `BlockSpecContext.block` serves attribute interpretation and metadata inspection, not reference resolution.
-
-The result publishes the envelopes alongside the table:
+`buildSymbolTable({ documents, sources })` collects all declarations with stable symbol identities and reports collection-level failures (duplicate declarations, malformed syntax) — it interprets no blocks. Consumers resolve blocks against the collected table, exactly as attributes are resolved by their consumers:
 
 ```ts
-export interface SymbolTableResult {
-  readonly symbolTable: SymbolTable;
-  readonly diagnostics: readonly ParseDiagnostic[];
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
-}
+const { parsedBlocks, diagnostics } = interpretExtensionBlocks(
+  symbolTable,
+  sources,
+  pslBlockDescriptors,
+);
 ```
 
-An invalid block has no `parsedBlocks` entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: `buildSymbolTable` reports every value and attribute failure once, anchored to the original expression and entry spans; downstream consumers never re-validate.
+Because every declaration is collected first, spec factories may resolve references — forward references included — through the complete symbol table. Reference rules (`entityRef`) derive lexical scope from the expression's syntax ancestry; `BlockSpecContext.block` serves attribute interpretation and metadata inspection, not reference resolution.
 
-Interpreter providers thread `SymbolTableResult.parsedBlocks` through `PslInterpretInput.parsedBlocks`. A direct interpreter caller that holds only a symbol table re-derives the same envelopes with `deriveParsedBlocks(symbolTable, sources, pslBlockDescriptors)`, which runs the identical spec pipeline and keeps only successes.
+Only successful blocks enter `parsedBlocks`. An invalid block has no entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: the consumer that resolves the table's blocks. Each family interpreter calls `interpretExtensionBlocks` once at its entry and surfaces the returned diagnostics with its other authoring failures, anchored to the original expression and entry spans; editor metadata consumers compute the same map where they need it, and block-value squiggles reach the editor through the interpreter-diagnostics lane. The map crosses no public boundary: `AttributeSpecContext.parsedBlocks` is a required field supplied by the owner that just resolved.
 
 ### The typed envelope
 
