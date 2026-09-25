@@ -100,16 +100,17 @@ Framework core registers descriptors without importing parser types: `AuthoringP
 `buildSymbolTable({ documents, sources })` collects all declarations with stable symbol identities and reports collection-level failures (duplicate declarations, malformed syntax) — it interprets no blocks. Consumers resolve blocks against the collected table, exactly as attributes are resolved by their consumers:
 
 ```ts
-const { parsedBlocks, diagnostics } = interpretExtensionBlocks(
+const { parsedBlocks, diagnostics } = interpretExtensionBlocks({
   symbolTable,
   sources,
   pslBlockDescriptors,
-);
+  binder,
+});
 ```
 
-Because every declaration is collected first, spec factories may resolve references — forward references included — through the complete symbol table. Reference rules (`entityRef`) derive lexical scope from the expression's syntax ancestry; `BlockSpecContext.block` serves attribute interpretation and metadata inspection, not reference resolution.
+Because every declaration is collected first, references — forward references included — resolve against the complete table. The snapshot's binder (`createBinder`, given the registered `pslBlockDescriptors`) eagerly binds the reference-kinded rules of every registered block's value entries and `@@` attribute arguments in the same pass that binds attribute arguments, under the same scope chain — declaring namespace, then top level, then the universe scope; siblings never. Reference rules (`entityRef`) read the binder's resolutions; an unresolved block-entry reference is reported once in the binder's voice (`PSL_UNRESOLVED_REFERENCE`, `Cannot find entity "..."`), except where the rule's grammar also accepts an unrestricted identifier — an undeclared name is then legal and binds silently. `BlockSpecContext.block` serves attribute interpretation and metadata inspection, not reference resolution.
 
-Only successful blocks enter `parsedBlocks`. An invalid block has no entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: the consumer that resolves the table's blocks. Each family interpreter calls `interpretExtensionBlocks` once at its entry and surfaces the returned diagnostics with its other authoring failures, anchored to the original expression and entry spans; editor metadata consumers compute the same map where they need it, and block-value squiggles reach the editor through the interpreter-diagnostics lane. The map crosses no public boundary: `AttributeSpecContext.parsedBlocks` is a required field supplied by the owner that just resolved.
+Only successful blocks enter `parsedBlocks`. An invalid block has no entry — its symbol keeps its syntax node, keyword, name, and span for recovery and editor tooling, but it cannot lower. An unregistered keyword is never interpreted and gains no grammar. Diagnostics have one owner: the consumer that resolves the table's blocks. Each family interpreter constructs one binder per interpretation snapshot — covering attributes and block entries alike — and calls `interpretExtensionBlocks` once at its entry with that binder, surfacing the returned diagnostics with its other authoring failures, anchored to the original expression and entry spans. Block-value squiggles reach the editor through the interpreter-diagnostics lane; the language server constructs no family binder, because the metadata it serves — block keys, enum member names for `@default` arms — are syntax and symbol facts read from the collected table.
 
 ### The typed envelope
 
@@ -179,7 +180,7 @@ The hook picks only the destination namespace — entity kind and key stay fixed
 
 **A variadic flag on fixed parameter tables.** Marking a descriptor as accepting arbitrary extra keys next to declared ones. Rejected: arbitrary-key blocks and closed-key blocks are different shapes with different output types; `entriesBlock` gives the former its own binder and inferred `Record` output instead of weakening unknown-key rejection for the latter.
 
-**Injected reference resolvers in the spec context.** Passing a resolver object to spec factories. Rejected: the parse context already carries the symbol table, and reference rules derive lexical scope from syntax ancestry, so an injected resolver adds an owner without adding a capability.
+**Injected reference resolvers in the spec context.** Passing a resolver object to spec factories. Rejected: the snapshot's binder already owns every resolution, so an injected resolver adds a second owner without adding a capability.
 
 ---
 
