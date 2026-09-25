@@ -12,7 +12,12 @@ import {
   type SymbolTable,
 } from '@internal/psl-parser';
 import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
-import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type CompletionItem,
+  CompletionItemKind,
+  CompletionItemTag,
+  InsertTextFormat,
+} from 'vscode-languageserver';
 import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
 import type {
   AttributeNameCompletionContext,
@@ -54,7 +59,8 @@ type ModelTypeCompletionCandidateCategory =
   | 'typeAlias'
   | 'namespace'
   | 'namespaceModel'
-  | 'namespaceCompositeType';
+  | 'namespaceCompositeType'
+  | 'deprecatedScalar';
 
 interface DeclarationKeywordCompletionCandidate {
   readonly category: DeclarationKeywordCompletionCandidateCategory;
@@ -72,6 +78,7 @@ interface ModelTypeCompletionCandidate {
   readonly filterText: string;
   readonly detail: string;
   readonly kind: CompletionItemKind;
+  readonly deprecated?: boolean;
 }
 
 const categoryOrder: Record<ModelTypeCompletionCandidateCategory, number> = {
@@ -83,6 +90,7 @@ const categoryOrder: Record<ModelTypeCompletionCandidateCategory, number> = {
   namespace: 5,
   namespaceModel: 6,
   namespaceCompositeType: 7,
+  deprecatedScalar: 8,
 };
 
 const declarationKeywordCategoryOrder: Record<
@@ -536,6 +544,7 @@ function modelTypeCompletionItems(
       range: replacementRange,
       newText: candidate.insertText,
     },
+    ...(candidate.deprecated === true ? { tags: [CompletionItemTag.Deprecated] } : {}),
   }));
 }
 
@@ -543,17 +552,32 @@ function configuredScalarCandidates(
   source: PslCompletionCandidateSource,
 ): readonly ModelTypeCompletionCandidate[] {
   const constructors = source.authoringContributions?.type ?? {};
-  return sortedUnique(source.scalarTypes).map((name) => ({
-    category: 'configuredScalar',
-    label: name,
-    insertText: name,
-    filterText: name,
-    detail:
-      constructors[name] !== undefined && isAuthoringTypeConstructorDescriptor(constructors[name])
-        ? constructors[name].documentation || 'Configured scalar type'
-        : 'Configured scalar type',
-    kind: CompletionItemKind.Keyword,
-  }));
+  return sortedUnique(source.scalarTypes).map((name) => {
+    const descriptor = constructors[name];
+    const typeConstructor =
+      descriptor !== undefined && isAuthoringTypeConstructorDescriptor(descriptor)
+        ? descriptor
+        : undefined;
+    const base = {
+      label: name,
+      insertText: name,
+      filterText: name,
+      kind: CompletionItemKind.Keyword,
+    };
+    if (typeConstructor?.deprecated !== undefined) {
+      return {
+        ...base,
+        category: 'deprecatedScalar',
+        detail: `Deprecated: use ${typeConstructor.deprecated.replacement}.`,
+        deprecated: true,
+      };
+    }
+    return {
+      ...base,
+      category: 'configuredScalar',
+      detail: typeConstructor?.documentation || 'Configured scalar type',
+    };
+  });
 }
 
 function topLevelSymbolCandidates(
