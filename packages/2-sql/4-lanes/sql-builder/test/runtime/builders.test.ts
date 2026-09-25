@@ -290,6 +290,22 @@ describe('orderBy', () => {
     ]);
   });
 
+  it('orderBy refuses a direction outside asc and desc', () => {
+    expect(() =>
+      db()
+        .public.users.select('id')
+        .orderBy('name', { direction: 'asc, (SELECT 1)' as never }),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
+  });
+
+  it('orderBy refuses a null placement outside first and last', () => {
+    expect(() =>
+      db()
+        .public.users.select('id')
+        .orderBy((f) => f.id, { nulls: 'last, (SELECT 1)' as never }),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
+  });
+
   it('orderBy defaults to asc', () => {
     const ast = getAst(db().public.users.select('id').orderBy('id'));
     expect(ast.orderBy![0]!.dir).toBe('asc');

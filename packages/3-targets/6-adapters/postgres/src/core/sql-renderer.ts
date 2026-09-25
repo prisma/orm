@@ -632,13 +632,23 @@ function renderOrderByItems(
   return items
     .map(
       (item) =>
-        `${renderExpr(item.expr, contract, pim)} ${item.dir.toUpperCase()}${renderNullsPlacement(item)}`,
+        `${renderExpr(item.expr, contract, pim)}${ORDER_DIRECTION_SQL[item.dir]}${renderNullsPlacement(item)}`,
     )
     .join(', ');
 }
 
+const ORDER_DIRECTION_SQL: Readonly<Record<OrderByItem['dir'], string>> = {
+  asc: ' ASC',
+  desc: ' DESC',
+};
+
+const ORDER_NULLS_SQL: Readonly<Record<NonNullable<OrderByItem['nulls']>, string>> = {
+  first: ' NULLS FIRST',
+  last: ' NULLS LAST',
+};
+
 function renderNullsPlacement(item: OrderByItem): string {
-  return item.nulls === undefined ? '' : ` NULLS ${item.nulls.toUpperCase()}`;
+  return item.nulls === undefined ? '' : ORDER_NULLS_SQL[item.nulls];
 }
 
 function renderJsonArrayAggExpr(

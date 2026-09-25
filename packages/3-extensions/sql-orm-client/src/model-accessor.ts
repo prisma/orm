@@ -9,7 +9,6 @@ import {
   ColumnRef,
   ExistsExpr,
   JoinAst,
-  OrderByItem,
   ProjectionItem,
   SelectAst,
   SubqueryExpr,
@@ -32,6 +31,7 @@ import {
   type VariantColumnRef,
 } from './collection-contract';
 import { and, not } from './filters';
+import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { storageTableForContract, tableSourceForContract } from './storage-resolution';
 import {
@@ -501,8 +501,8 @@ function createRelationFilterAccessor<
 
 function createOrderingExpression(buildExpr: () => AnyExpression): OrderingExpression {
   return {
-    asc: (options?: OrderingOptions) => OrderByItem.asc(buildExpr(), options),
-    desc: (options?: OrderingOptions) => OrderByItem.desc(buildExpr(), options),
+    asc: (options?: OrderingOptions) => checkedOrderByItem('asc', buildExpr(), options),
+    desc: (options?: OrderingOptions) => checkedOrderByItem('desc', buildExpr(), options),
   };
 }
 

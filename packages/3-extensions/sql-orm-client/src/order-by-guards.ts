@@ -1,4 +1,4 @@
-import type { OrderByItem } from '@internal/sql-relational-core/ast';
+import { type AnyExpression, isOrderByNulls, OrderByItem } from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
 
 export function assertCursorKeyable(orderBy: readonly OrderByItem[] | undefined): void {
@@ -32,4 +32,18 @@ export function assertDistinctOnOrderable(orderBy: readonly OrderByItem[] | unde
       );
     }
   });
+}
+
+export function checkedOrderByItem(
+  dir: OrderByItem['dir'],
+  expr: AnyExpression,
+  options: { readonly nulls?: unknown } | undefined,
+): OrderByItem {
+  const nulls = options?.nulls;
+  if (nulls !== undefined && !isOrderByNulls(nulls)) {
+    throw ormError('ORM.ARGUMENT_INVALID', `${dir}() nulls must be "first" or "last"`, {
+      meta: { method: dir, nulls: String(nulls) },
+    });
+  }
+  return new OrderByItem(expr, dir, nulls);
 }

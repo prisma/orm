@@ -1,7 +1,7 @@
 import { ColumnRef, OrderByItem } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
-import { baseContract, createCollection } from './collection-fixtures';
+import { baseContract, createCollection, createCollectionFor } from './collection-fixtures';
 import { getTestAggregates } from './helpers';
 
 function orderByItemsIn(node: unknown, found: OrderByItem[] = []): OrderByItem[] {
@@ -121,5 +121,24 @@ describe('orderBy null placement', () => {
       OrderByItem.desc(ColumnRef.of('posts__ranked', 'posts__order_0'), { nulls: 'last' }),
       OrderByItem.desc(ColumnRef.of('posts__rows', 'posts__order_0'), { nulls: 'last' }),
     ]);
+  });
+
+  it('refuses a null placement outside first and last on a scalar field', () => {
+    const { collection } = createCollectionFor('Post');
+
+    expect(() =>
+      collection.orderBy((post) => post.title.asc({ nulls: 'last, (SELECT 1)' as never })),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
+  });
+
+  it('refuses a null placement outside first and last on a relation order', () => {
+    const { collection } = createCollectionFor('User');
+
+    expect(() =>
+      collection.orderBy((user) => user.posts.count().desc({ nulls: 'middle' as never })),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
+    expect(() =>
+      collection.orderBy((user) => user.invitedBy.name.asc({ nulls: 'middle' as never })),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
   });
 });

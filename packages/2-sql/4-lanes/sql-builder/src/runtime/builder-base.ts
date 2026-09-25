@@ -8,6 +8,8 @@ import {
   type AnyExpression as AstExpression,
   collectOrderedParamRefs,
   IdentifierRef,
+  isOrderByDirection,
+  isOrderByNulls,
   type LimitOffsetValue,
   OrderByItem,
   ProjectionItem,
@@ -364,8 +366,20 @@ export function resolveOrderBy(
   ctx: BuilderContext,
   useAggregateFns: boolean,
 ): OrderByItem {
+  const direction = options?.direction ?? 'asc';
+  const nulls = options?.nulls;
+  if (!isOrderByDirection(direction)) {
+    throw structuredError('ORM.ARGUMENT_INVALID', 'orderBy direction must be "asc" or "desc"', {
+      meta: { direction: String(direction) },
+    });
+  }
+  if (nulls !== undefined && !isOrderByNulls(nulls)) {
+    throw structuredError('ORM.ARGUMENT_INVALID', 'orderBy nulls must be "first" or "last"', {
+      meta: { nulls: String(nulls) },
+    });
+  }
   const toOrderByItem = (expr: AstExpression): OrderByItem =>
-    new OrderByItem(expr, options?.direction ?? 'asc', options?.nulls);
+    new OrderByItem(expr, direction, nulls);
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);

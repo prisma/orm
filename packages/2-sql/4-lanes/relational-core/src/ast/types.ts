@@ -10,6 +10,14 @@ import type { AnyJsonValueProjection } from './json-value-projection';
 export type Direction = 'asc' | 'desc';
 export type OrderByNulls = 'first' | 'last';
 
+export function isOrderByDirection(value: unknown): value is Direction {
+  return value === 'asc' || value === 'desc';
+}
+
+export function isOrderByNulls(value: unknown): value is OrderByNulls {
+  return value === 'first' || value === 'last';
+}
+
 export type BinaryOp =
   | 'eq'
   | 'neq'
@@ -1099,6 +1107,18 @@ export class OrderByItem extends AstNode {
 
   constructor(expr: AnyExpression, dir: Direction, nulls: OrderByNulls | undefined) {
     super();
+    if (!isOrderByDirection(dir)) {
+      throw structuredError('RUNTIME.AST_INVALID', 'OrderByItem direction must be asc or desc', {
+        meta: { kind: 'order-by-item', field: 'dir' },
+      });
+    }
+    if (nulls !== undefined && !isOrderByNulls(nulls)) {
+      throw structuredError(
+        'RUNTIME.AST_INVALID',
+        'OrderByItem null placement must be first, last or undefined',
+        { meta: { kind: 'order-by-item', field: 'nulls' } },
+      );
+    }
     this.expr = expr;
     this.dir = dir;
     this.nulls = nulls;

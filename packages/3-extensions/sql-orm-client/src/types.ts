@@ -16,7 +16,7 @@ import {
   type LimitOffsetValue,
   ListExpression,
   NullCheckExpr,
-  OrderByItem,
+  type OrderByItem,
   type OrderByNulls,
   ParamRef,
   type AggregateFn as SqlAggregateFn,
@@ -25,6 +25,7 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { RowSelection } from './collection-internal-types';
+import { checkedOrderByItem } from './order-by-guards';
 import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 
@@ -417,11 +418,11 @@ export const COMPARISON_METHODS_META = {
   },
   asc: {
     traits: ['order'],
-    create: (left) => (options?: OrderingOptions) => OrderByItem.asc(left, options),
+    create: (left) => (options?: OrderingOptions) => checkedOrderByItem('asc', left, options),
   },
   desc: {
     traits: ['order'],
-    create: (left) => (options?: OrderingOptions) => OrderByItem.desc(left, options),
+    create: (left) => (options?: OrderingOptions) => checkedOrderByItem('desc', left, options),
   },
   isNull: {
     traits: [],

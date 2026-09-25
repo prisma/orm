@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OrderByItem } from '../../src/ast/types';
+import { isOrderByDirection, isOrderByNulls, OrderByItem } from '../../src/ast/types';
 import { col, lowerExpr } from './test-helpers';
 
 describe('ast/order', () => {
@@ -72,5 +72,34 @@ describe('ast/order', () => {
 
     expect(roundTrip.dir).toBe('desc');
     expect(roundTrip.expr).toBe(desc.expr);
+  });
+
+  it('refuses a direction outside asc and desc', () => {
+    expect(() => new OrderByItem(col('user', 'id'), 'up' as never, undefined)).toThrow(
+      expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }),
+    );
+  });
+
+  it('refuses a null placement outside first and last', () => {
+    expect(() =>
+      OrderByItem.asc(col('user', 'id'), { nulls: 'last, (SELECT 1/0)' as never }),
+    ).toThrow(expect.objectContaining({ code: 'RUNTIME.AST_INVALID' }));
+  });
+
+  it('recognises exactly the allowed directions and null placements', () => {
+    expect(['asc', 'desc', 'ASC', 'up', undefined].map(isOrderByDirection)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
+    expect(['first', 'last', 'LAST', 'middle', undefined].map(isOrderByNulls)).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+    ]);
   });
 });
