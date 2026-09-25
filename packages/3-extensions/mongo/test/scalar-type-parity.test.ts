@@ -27,10 +27,10 @@ function namespaceScalarTypeCodecIds(): ReadonlyMap<string, string> {
 const REPRESENTATIVE_SCHEMA = `model sample {
   id        ObjectId @id @map("_id")
   name      String
-  count     Int
-  active    Boolean
-  ratio     Float
-  createdAt DateTime
+  count     Int32
+  active    Bool
+  ratio     Double
+  createdAt Date
   parentRef ObjectId
 }
 `;
@@ -77,11 +77,11 @@ describe('mongo scalar types derived from the unified namespace', () => {
 
     expect(Object.fromEntries(derived)).toEqual({
       String: { codecId: 'mongo/string@1', nativeType: 'string' },
-      Int: { codecId: 'mongo/int32@1', nativeType: 'int' },
-      Boolean: { codecId: 'mongo/bool@1', nativeType: 'bool' },
-      DateTime: { codecId: 'mongo/date@1', nativeType: 'date' },
+      Int32: { codecId: 'mongo/int32@1', nativeType: 'int' },
+      Bool: { codecId: 'mongo/bool@1', nativeType: 'bool' },
+      Date: { codecId: 'mongo/date@1', nativeType: 'date' },
       ObjectId: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
-      Float: { codecId: 'mongo/double@1', nativeType: 'double' },
+      Double: { codecId: 'mongo/double@1', nativeType: 'double' },
       Int64: { codecId: 'mongo/int64@1', nativeType: 'long' },
       Decimal128: { codecId: 'mongo/decimal128@1', nativeType: 'decimal' },
       Binary: { codecId: 'mongo/binary@1', nativeType: 'binData' },
@@ -92,11 +92,11 @@ describe('mongo scalar types derived from the unified namespace', () => {
   it('exposes the derived scalar names as controlStack.scalarTypes', () => {
     expect([...stack.scalarTypes].sort()).toEqual([
       'Binary',
-      'Boolean',
-      'DateTime',
+      'Bool',
+      'Date',
       'Decimal128',
-      'Float',
-      'Int',
+      'Double',
+      'Int32',
       'Int64',
       'Json',
       'ObjectId',

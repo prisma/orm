@@ -31,12 +31,24 @@ changes:
     summary: |
       `mongoTargetDescriptor.migrations.createRunner(family)` now reaches the database through the
       control adapter on the family's control stack. A family instance created from an empty
-      stack (`createMongoFamilyInstance({} as ...)`) fails with "Mongo family requires an adapter
-      descriptor in ControlStack" when the runner executes.
+      stack (`createMongoFamilyInstance({} as ...)`), or from a `createControlStack(...)` with no
+      `adapter`, fails with "Mongo family requires an adapter descriptor in ControlStack" when the
+      runner executes.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - 'createMongoFamilyInstance\(\s*\{\s*\}'
+        - 'createControlStack\(\s*\{(?:(?!adapter)[^}])*mongoTargetDescriptor(?:(?!adapter)[^}])*\}\s*\)'
+  - id: mongo-psl-scalar-names
+    summary: |
+      Four Mongo PSL scalar types are renamed after the BSON type they store: `Int` → `Int32`,
+      `Float` → `Double`, `Boolean` → `Bool`, `DateTime` → `Date`. A Mongo schema that uses an old
+      name fails `prisma contract emit` with `PSL_UNSUPPORTED_FIELD_TYPE`. Codec ids, `contract.json`
+      and every hash are unchanged.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
 ---
 
 ## `mongo-codec-subpaths-move-to-target`
@@ -92,3 +104,40 @@ const family = createMongoFamilyInstance(
 ```
 
 Code that goes through the CLI or `defineConfig` already has the adapter on the stack and needs no change.
+
+## `mongo-psl-scalar-names`
+
+Apply this only in a schema whose `prisma.config.ts` uses `@prisma/orm-mongo`. The detection pattern also matches Postgres and SQLite schemas, whose scalar names do not change in this release.
+
+In each field whose type is one of the old names, replace the type name, keeping any `[]` and `?`:
+
+| Before | After | Stored as |
+| --- | --- | --- |
+| `Int` | `Int32` | BSON int |
+| `Float` | `Double` | BSON double |
+| `Boolean` | `Bool` | BSON bool |
+| `DateTime` | `Date` | BSON date |
+
+```prisma
+// before
+model Post {
+  id        ObjectId  @id @map("_id")
+  views     Int
+  rating    Float?
+  published Boolean
+  createdAt DateTime
+  tags      Int[]
+}
+
+// after
+model Post {
+  id        ObjectId  @id @map("_id")
+  views     Int32
+  rating    Double?
+  published Bool
+  createdAt Date
+  tags      Int32[]
+}
+```
+
+This includes the `contract.prisma` copies under `migrations/app/<migration>/`. Then run `prisma contract emit`: `contract.json` and `contract.d.ts` come out the same as before, so no migration or `db sign` is needed. A schema that still uses an old name fails `contract emit` with `Scalar type "Int" was renamed to "Int32" (stored as BSON int). Replace "Int" with "Int32".` at the type.

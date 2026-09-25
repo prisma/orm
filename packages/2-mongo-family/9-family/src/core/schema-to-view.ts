@@ -1,6 +1,7 @@
 import type { CoreSchemaView } from '@internal/framework-components/control';
 import { SchemaTreeNode } from '@internal/framework-components/control';
 import type { MongoSchemaCollection, MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 
 export function mongoSchemaToView(schema: MongoSchemaIR): CoreSchemaView {
@@ -54,15 +55,19 @@ function collectionToSchemaNode(name: string, collection: MongoSchemaCollection)
 
   if (collection.validator) {
     const validatorChildren: SchemaTreeNode[] = [];
-    const jsonSchema = collection.validator.jsonSchema as Record<string, unknown>;
-    const properties = jsonSchema['properties'] as
-      | Record<string, Record<string, unknown>>
-      | undefined;
-    const required = new Set((jsonSchema['required'] as string[] | undefined) ?? []);
+    const jsonSchema = blindCast<
+      {
+        readonly properties?: Readonly<Record<string, { readonly bsonType?: unknown }>>;
+        readonly required?: readonly string[];
+      },
+      'a collection validator is a $jsonSchema object'
+    >(collection.validator.jsonSchema);
+    const properties = jsonSchema.properties;
+    const required = new Set(jsonSchema.required ?? []);
 
     if (properties) {
       for (const [propName, propDef] of Object.entries(properties)) {
-        const bsonType = (propDef['bsonType'] as string) ?? 'unknown';
+        const bsonType = propDef.bsonType === undefined ? 'any' : String(propDef.bsonType);
         const suffix = required.has(propName) ? ' (required)' : '';
         validatorChildren.push(
           new SchemaTreeNode({

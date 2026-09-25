@@ -48,11 +48,11 @@ beforeEach(async () => {
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
-  ['Boolean', 'mongo/bool@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Int32', 'mongo/int32@1'],
+  ['Bool', 'mongo/bool@1'],
+  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
-  ['Float', 'mongo/double@1'],
+  ['Double', 'mongo/double@1'],
 ]);
 
 const mongoTargetTypes: Record<string, readonly string[]> = {

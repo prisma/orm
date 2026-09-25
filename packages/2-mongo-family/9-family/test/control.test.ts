@@ -380,6 +380,34 @@ describe('toSchemaView', () => {
     expect(validatorNode.children![3]!.label).toBe('age: int');
   });
 
+  it('labels a property the validator does not constrain as any', () => {
+    const instance = createInstance();
+    const ir = new MongoSchemaIR([
+      new MongoSchemaCollection({
+        name: 'posts',
+        validator: new MongoSchemaValidator({
+          jsonSchema: {
+            bsonType: 'object',
+            required: ['meta'],
+            properties: { meta: {}, notes: {} },
+          },
+          validationLevel: 'strict',
+          validationAction: 'error',
+        }),
+      }),
+    ]);
+
+    const view = instance.toSchemaView(ir);
+
+    const validatorNode = view.root.children![0]!.children!.find(
+      (n) => n.id === 'validator-posts',
+    )!;
+    expect(validatorNode.children!.map((n) => n.label)).toEqual([
+      'meta: any (required)',
+      'notes: any',
+    ]);
+  });
+
   it('maps collection options to a child node', () => {
     const instance = createInstance();
     const ir = new MongoSchemaIR([

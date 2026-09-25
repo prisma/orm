@@ -24,7 +24,7 @@ const authoringContributions = {
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
+  ['Int32', 'mongo/int32@1'],
 ]);
 
 const mongoTargetTypes: Record<string, readonly string[]> = {
