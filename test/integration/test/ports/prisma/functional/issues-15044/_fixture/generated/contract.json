@@ -343,7 +343,7 @@
     "storageHash": "da937682533d5f8748879ad9ea09469efd89334987d6221bf4ef55422ce56020"
   },
   "execution": {
-    "executionHash": "410575bbcd5e8bbc13adc2214b75b8b4df13747b6f1dec7407484f77b1112482",
+    "executionHash": "e0abca3d0e4fa16ac9a94ea3031853b52f2b808f700fdf97d18bb253bcbc1ae8",
     "mutations": {
       "defaults": [
         {
@@ -352,9 +352,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "user"
+            "entry": "user",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -363,9 +363,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "wallet"
+            "entry": "wallet",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -374,9 +374,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "walletLink"
+            "entry": "walletLink",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

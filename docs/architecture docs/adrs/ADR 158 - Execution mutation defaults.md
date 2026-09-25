@@ -48,11 +48,11 @@ Mutation defaults live at:
 
 - `execution.mutations.defaults`
 
-Each default is keyed by a reference to a storage column:
+Each default is keyed by a reference to a stored field:
 
-- `ref: { table, column }`
+- `ref: { namespace, entry, field }`
 
-This makes the feature usable from SQL lanes and other table-centric consumers.
+`entry` names the storage entry that holds the field and `field` the stored field in it. For SQL these are the table and column names; for Mongo they are the collection and the stored document field. The names are family-neutral so every family uses the same framework type.
 
 This ADR defines defaults for create mutations (`onCreate`). Additional scopes (for example, update/upsert behavior) are future work.
 
@@ -155,7 +155,7 @@ The database marker verifies only what the database must satisfy:
     "mutations": {
       "defaults": [
         {
-          "ref": { "table": "user", "column": "id" },
+          "ref": { "namespace": "public", "entry": "user", "field": "id" },
           "onCreate": { "kind": "generator", "id": "cuid" }
         }
       ]
@@ -164,7 +164,7 @@ The database marker verifies only what the database must satisfy:
 }
 ```
 
-Note: the exact JSON layout for defaults can be an array (as shown) or a map keyed by table/column. The requirement is that defaults are addressable by `(table, column)`.
+Note: the exact JSON layout for defaults can be an array (as shown) or a map keyed by entry and field. The requirement is that defaults are addressable by `(namespace, entry, field)`.
 
 ## Diagram (contract branches and verification)
 

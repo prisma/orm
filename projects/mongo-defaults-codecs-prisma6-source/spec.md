@@ -68,7 +68,7 @@ export default definePrismaConfig({
 ## Cross-cutting requirements
 
 1. **Mongo mirrors Postgres and reuses framework primitives.** Authors write `temporal.createdAt()`, `temporal.updatedAt()`, and `temporal.timestamp(onCreate: now, onUpdate: now)` in PSL, and `field.temporal.*` in TS, through the framework's `fieldPreset` descriptors and `instantiateAuthoringFieldPreset`. There is no precision argument: Mongo dates have none. Codec layout follows Postgres: codecs, data types, ids, and descriptors in the target package; the adapter only registers them.
-2. **No SQL vocabulary enters the framework or the Mongo family.** The Mongo execution section references a generated field as `{ namespace, model, field }`. When slice 3 hoists the runtime machinery into `framework-components/src/execution/`, the hoisted types use neutral names and SQL is migrated onto them; the framework's current `ExecutionMutationDefault.ref` with `table`/`column` is replaced, not kept beside a Mongo variant.
+2. **No SQL vocabulary enters the framework or the Mongo family.** The framework's `ExecutionMutationDefault.ref` is renamed to `{ namespace, entry, field }` in its own slice before any Mongo execution work, and SQL is migrated onto it; Mongo then uses the framework contract type unchanged. When the runtime machinery is hoisted, it carries no SQL vocabulary.
 3. **Optional section, unchanged hashes.** `execution` is optional in the Mongo contract schema. Absent means no generators. Storage and profile hashes take no input from it. Mongo gains an `executionHash` computed like SQL's (`packages/1-framework/0-foundation/contract/src/hashing.ts:88-96`) and the emitter writes it as the same separate artifact field. Existing emitted Mongo contracts load, hash, and verify unchanged.
 4. **Runtime enforces the contract.** The Mongo runtime refuses to build an execution context when the contract requires a generator no component provides, and refuses duplicate generator ids. Same error codes as SQL where they already exist in the framework.
 5. **Write semantics identical to SQL.** `onCreate` runs on `create`, `createAll`, `createAndCount`, and the insert half of `upsert`. `onUpdate` runs on `update`, `updateAll`, `updateAndCount`, and the update half of `upsert`. An empty update payload skips all defaults. An explicitly provided value is never overwritten. `'query'` stability yields one value per ORM operation.
@@ -78,12 +78,12 @@ export default definePrismaConfig({
 
 ## Transitional-shape constraints
 
-Slices 1 and 2 land Mongo-local generator machinery in `packages/2-mongo-family/7-runtime`. That duplication of the SQL runtime is deliberate and short-lived: slice 3 hoists it into the framework and deletes both copies. Nothing outside the two runtimes may import the Mongo-local machinery, so the hoist is a package-internal move.
+Slice 3 lands Mongo-local generator machinery in `packages/2-mongo-family/7-runtime`. That duplication of the SQL runtime is deliberate and short-lived: slice 4 hoists it into the framework and deletes both copies. Nothing outside the two runtimes may import the Mongo-local machinery, so the hoist is a package-internal move.
 
 ## Contract impact
 
 - Mongo contract: new optional `execution` section `{ executionHash, mutations: { defaults: [{ ref: { namespace, model, field }, onCreate?, onUpdate? }] } }`; value shape `{ kind: 'generator', id, params? }` reused from the framework. New codec ids `mongo/int64@1`, `mongo/decimal128@1`, `mongo/binary@1`, `mongo/json@1` with data types under the Mongo target. Emitter gains `executionHash` for Mongo.
-- Framework contract (slice 3): `ExecutionMutationDefault.ref` renamed to neutral field names; SQL authoring, validators, emitter, and fixtures with an execution section regenerated.
+- Framework contract (slice 2): `ExecutionMutationDefault.ref` renamed to `{ namespace, entry, field }`; SQL authoring, validators, runtime, ORM client, emitter, and the 123 fixtures with an execution section regenerated.
 
 ## Adapter impact
 
@@ -91,7 +91,7 @@ Mongo target and adapter (codec move, generator registration). Postgres and SQLi
 
 ## ADR pointer
 
-ADR 252 and ADR 163 cover the contract source. The codec conventions are ADR 184 and ADR 254. Slice 3 introduces a durable decision, the framework-owned mutation-default runtime with neutral naming, and writes an ADR at close-out.
+ADR 252 and ADR 163 cover the contract source. The codec conventions are ADR 184 and ADR 254. Slice 4 introduces a durable decision, the framework-owned mutation-default runtime with neutral naming, and writes an ADR at close-out.
 
 ## Project Definition of Done
 

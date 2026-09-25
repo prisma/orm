@@ -197,6 +197,10 @@ On Mongo the imports are `@prisma/orm-mongo/family-contract/types` and `@prisma/
 
 Coming from Prisma 7: `Prisma.User` → `Models.public_User` (note: now carries relations; the scalars-only row is `Scalars<Models.public_User>`); `Prisma.UserGetPayload<{ include: { posts: true } }>` → `Shape<Models.public_User, { '+': 'posts' }>`; `Prisma.UserGetPayload<{ select: { id: true; posts: { select: { title: true } } } }>` → `Shape<Models.public_User, { '+': 'id'; posts: { '+': 'title' } }>`; `Prisma.UserCreateInput` → `CreateInput<Contract, 'User'>`; `Awaited<ReturnType<typeof fn>>` → `ResultType<typeof query>`.
 
+## Ordering by a relation (SQL targets)
+
+Inside an ORM `.orderBy(...)`: a to-one relation's field (`(p) => p.author.name.asc()`), a to-many relation's count (`(u) => u.posts.count().desc()`), a filtered count (`(u) => u.posts.count((p) => p.views.gt(10)).desc()`), and null placement on any `.asc()` / `.desc()` (`(u) => u.invitedBy.name.desc({ nulls: 'last' })`). One hop. `cursor()` rejects these orders with `ORM.ARGUMENT_INVALID`. Details in [`queries-postgres.md`](./queries-postgres.md). Mongo's `.orderBy({ field: 1 | -1 })` has neither.
+
 ## Common Pitfalls (cross-target)
 
 1. **Using Postgres examples on a Mongo project (or vice versa).** Check `db.ts` and load the correct target guide ([`queries-postgres.md`](./queries-postgres.md) or [`queries-mongo.md`](./queries-mongo.md)).

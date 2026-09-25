@@ -531,7 +531,7 @@
     "storageHash": "072869a3b34bd492a7422a29e5d11ebffb7e65d5cb12f2df43f6553c37ea6616"
   },
   "execution": {
-    "executionHash": "9efc661c313e43a807eee998379cab8c40a50123d32e2297e04a19e83fd46b9e",
+    "executionHash": "3dfd8beb2c0690cf749035e4ef192531beeb0d195c7d0ba892fd0d9eb0652b02",
     "mutations": {
       "defaults": [
         {
@@ -540,9 +540,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "token",
-            "namespace": "public",
-            "table": "user_roles"
+            "entry": "user_roles",
+            "field": "token",
+            "namespace": "public"
           }
         }
       ]

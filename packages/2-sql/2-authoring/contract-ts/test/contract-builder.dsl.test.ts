@@ -197,7 +197,7 @@ describe('contract DSL authoring surface', () => {
     ]);
     expect(contract.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'app_user', column: 'id' },
+        ref: { namespace: 'public', entry: 'app_user', field: 'id' },
         onCreate: { kind: 'generator', id: 'uuidv4' },
       },
     ]);

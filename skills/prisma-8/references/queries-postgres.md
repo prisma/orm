@@ -150,7 +150,7 @@ await db.orm.public.User
   .all();
 ```
 
-**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas (each calling `.asc()` / `.desc()` on a field). `.limit(n)` limits; `.offset(n)` offsets.
+**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas. Each calls `.asc()` / `.desc()` on a field, an extension-operation result, a to-one relation's field, or a to-many relation's `count(...)`. Every `.asc()` / `.desc()` takes `{ nulls: 'first' | 'last' }`. `.limit(n)` limits; `.offset(n)` offsets.
 
 ```typescript
 await db.orm.public.Post
@@ -176,7 +176,29 @@ const page2 = await db.orm.public.Post
   .all();
 ```
 
-Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`, pass a value for each ordering column — a partial cursor seeks only on the columns you supply, which gives an incomplete keyset. An empty cursor object is a no-op: you get the unfiltered first page back.
+**Ordering by a relation.** A to-one relation (`1:1`, `N:1`) exposes the related model's orderable fields; a to-many relation (`1:N`, `N:M`) exposes `count(predicate?)`, through the junction for `N:M`. One hop only. Each lowers to a correlated scalar subquery, so the main query gains no join.
+
+```typescript
+await db.orm.public.Post
+  .orderBy([(p) => p.author.name.asc(), (p) => p.id.asc()])
+  .all();
+
+await db.orm.public.User
+  .orderBy((u) => u.posts.count((p) => p.views.gt(10)).desc())
+  .all();
+
+await db.orm.public.User
+  .orderBy((u) => u.tags.count().desc())
+  .all();
+
+await db.orm.public.User
+  .orderBy((u) => u.invitedBy.name.desc({ nulls: 'last' }))
+  .all();
+```
+
+A missing related row (null foreign key) orders as `NULL`. To-one relations have no `count`; to-many relations expose no fields.
+
+Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`, pass a value for each ordering column — a partial cursor seeks only on the columns you supply, which gives an incomplete keyset. An empty cursor object is a no-op: you get the unfiltered first page back. `cursor()` keys on plain columns only: it throws `ORM.ARGUMENT_INVALID` when an active order is a relation field, a relation `count(...)`, an extension-operation result (`fullTextRank`, vector distance) or sets `nulls`. `distinctOn()` throws the same only when one of its leading orders, as many as there are `distinctOn` columns, is not a plain column; relation, count and operation orders after them are fine. Paginate those orders with `.limit(n).offset(n)`.
 
 **`.first()` vs `.first({ pk })` vs `.all()`.** Use `.first()` for a single row (issues a `LIMIT 1`); use `.first({ pk })` for primary-key lookups; reserve `.all()` for the genuine many case (no implicit `LIMIT`).
 
@@ -394,6 +416,8 @@ db.sql.public.post
   .build();
 ```
 
+The SQL builder's `.orderBy(column, { direction, nulls })` takes the same null placement: `.orderBy('invited_by_id', { direction: 'asc', nulls: 'first' })` renders `ORDER BY "invited_by_id" ASC NULLS FIRST`.
+
 ## Workflow — Transactions
 
 The concept: `db.transaction(fn)` opens a transaction and passes a `tx` context to the callback. `tx.orm` and `tx.sql` mirror `db.orm` / `db.sql` but ride the same transaction; `tx.query(plan)` / `tx.execute(plan)` run a SQL-builder plan within it (rows vs affected count, as on the runtime). The transaction commits on the callback's successful return and rolls back on any thrown error.
@@ -446,7 +470,8 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).
 9. **Confabulating a TypedSQL or `.stream()` surface.** Neither exists. Raw SQL does: the client's raw lane, ``db.raw.sql`…` ``. Reusable statements do: `db.prepare(...)` (see *Prepared statements* in [`queries.md`](./queries.md)). Streaming: `for await` over a read terminal or `runtime.query(plan)` — with the caveats in *Streaming* in [`queries.md`](./queries.md).
 10. **Mixing the ORM mutation return with `runtime.query(plan)` / `runtime.execute(plan)`.** ORM terminals issue the query themselves and return rows. The runtime methods are for SQL-builder plans.
-11. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
+11. **Adding a `cursor()` to a relation, count, operation or `nulls` order.** It throws `ORM.ARGUMENT_INVALID`. Use `.limit(n).offset(n)`, or order by plain columns.
+12. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
 
 ## Reference Files
 

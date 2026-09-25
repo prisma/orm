@@ -293,11 +293,11 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
-          readonly ref: { readonly table: 'account'; readonly column: 'id' };
+          readonly ref: { readonly entry: 'account'; readonly field: 'id' };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv4' };
         },
         {
-          readonly ref: { readonly table: 'widget'; readonly column: 'id' };
+          readonly ref: { readonly entry: 'widget'; readonly field: 'id' };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv4' };
         },
       ];

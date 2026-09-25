@@ -8,6 +8,8 @@ import {
   type AnyExpression as AstExpression,
   collectOrderedParamRefs,
   IdentifierRef,
+  isOrderByDirection,
+  isOrderByNulls,
   type LimitOffsetValue,
   OrderByItem,
   ProjectionItem,
@@ -364,7 +366,20 @@ export function resolveOrderBy(
   ctx: BuilderContext,
   useAggregateFns: boolean,
 ): OrderByItem {
-  const dir = options?.direction ?? 'asc';
+  const direction = options?.direction ?? 'asc';
+  const nulls = options?.nulls;
+  if (!isOrderByDirection(direction)) {
+    throw structuredError('ORM.ARGUMENT_INVALID', 'orderBy direction must be "asc" or "desc"', {
+      meta: { direction: String(direction) },
+    });
+  }
+  if (nulls !== undefined && !isOrderByNulls(nulls)) {
+    throw structuredError('ORM.ARGUMENT_INVALID', 'orderBy nulls must be "first" or "last"', {
+      meta: { nulls: String(nulls) },
+    });
+  }
+  const toOrderByItem = (expr: AstExpression): OrderByItem =>
+    new OrderByItem(expr, direction, nulls);
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
@@ -376,8 +391,7 @@ export function resolveOrderBy(
           meta: { column: arg },
         },
       );
-    const expr = IdentifierRef.of(arg);
-    return dir === 'asc' ? OrderByItem.asc(expr) : OrderByItem.desc(expr);
+    return toOrderByItem(IdentifierRef.of(arg));
   }
 
   if (typeof arg === 'function') {
@@ -386,7 +400,7 @@ export function resolveOrderBy(
       ? createAggregateFunctions(ctx.queryOperationTypes, ctx.rawCodecInferer, ctx.aggregates)
       : createFunctions(ctx.queryOperationTypes, ctx.rawCodecInferer);
     const result = (arg as ExprCallback)(createFieldProxy(combined), fns);
-    return dir === 'asc' ? OrderByItem.asc(result.buildAst()) : OrderByItem.desc(result.buildAst());
+    return toOrderByItem(result.buildAst());
   }
 
   throw structuredError('ORM.ARGUMENT_INVALID', 'Invalid orderBy argument');
