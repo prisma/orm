@@ -6,9 +6,9 @@ import {
   transitiveImports,
 } from '@internal/publish-surface/import-roots';
 import { describe, expect, it } from 'vitest';
-import { MongoMigrationPlanner } from '../src/core/mongo-planner';
-import { CreateIndexCall } from '../src/core/op-factory-call';
-import { renderCallsToTypeScript } from '../src/core/render-typescript';
+import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
+import { CreateIndexCall } from '../src/core/migrations/op-factory-call';
+import { renderCallsToTypeScript } from '../src/core/migrations/render-typescript';
 
 const mongoFacade: ImportRoot = { mode: 'facade', facade: '@prisma/orm-mongo' };
 const platform: ImportRoot = { mode: 'platform' };

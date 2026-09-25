@@ -233,8 +233,10 @@ describe('migration file E2E', () => {
     } as const;
 
     it('produces ops.json identical to direct factory invocation', async () => {
-      const { renderCallsToTypeScript } = await import('../src/core/render-typescript');
-      const { CreateCollectionCall, CreateIndexCall } = await import('../src/core/op-factory-call');
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { CreateCollectionCall, CreateIndexCall } = await import(
+        '../src/core/migrations/op-factory-call'
+      );
       const calls = [
         new CreateCollectionCall('users', {
           validator: { $jsonSchema: { required: ['email'] } },
@@ -269,8 +271,8 @@ describe('migration file E2E', () => {
     });
 
     it('round-trips collMod with meta through TypeScript execution', async () => {
-      const { renderCallsToTypeScript } = await import('../src/core/render-typescript');
-      const { CollModCall } = await import('../src/core/op-factory-call');
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { CollModCall } = await import('../src/core/migrations/op-factory-call');
       const calls = [
         new CollModCall(
           'users',
@@ -309,8 +311,8 @@ describe('migration file E2E', () => {
     });
 
     it('round-trips describe() meta through TypeScript execution', async () => {
-      const { renderCallsToTypeScript } = await import('../src/core/render-typescript');
-      const { DropCollectionCall } = await import('../src/core/op-factory-call');
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { DropCollectionCall } = await import('../src/core/migrations/op-factory-call');
       const calls = [new DropCollectionCall('legacy')];
 
       const meta = {
@@ -487,8 +489,10 @@ describe('migration file E2E', () => {
         );
       }
 
-      const { renderCallsToTypeScript } = await import('../src/core/render-typescript');
-      const { CreateCollectionCall, CreateIndexCall } = await import('../src/core/op-factory-call');
+      const { renderCallsToTypeScript } = await import('../src/core/migrations/render-typescript');
+      const { CreateCollectionCall, CreateIndexCall } = await import(
+        '../src/core/migrations/op-factory-call'
+      );
       const calls = [
         new CreateCollectionCall('users'),
         new CreateIndexCall('users', [{ field: 'email', direction: 1 as const }], { unique: true }),

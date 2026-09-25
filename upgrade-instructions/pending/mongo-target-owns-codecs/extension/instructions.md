@@ -42,13 +42,14 @@ changes:
   - id: mongo-create-runner-needs-adapter-on-stack
     summary: |
       `mongoTargetDescriptor.migrations.createRunner(family)` reaches the database through the
-      control adapter on the family's control stack. A family instance created from an empty stack
-      fails with "Mongo family requires an adapter descriptor in ControlStack" when the runner
-      executes.
+      control adapter on the family's control stack. A family instance created from an empty stack,
+      or from a `createControlStack(...)` with no `adapter`, fails with "Mongo family requires an
+      adapter descriptor in ControlStack" when the runner executes.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - 'createMongoFamilyInstance\(\s*\{\s*\}'
+        - 'createControlStack\(\s*\{(?:(?!adapter)[^}])*mongoTargetDescriptor(?:(?!adapter)[^}])*\}\s*\)'
 ---
 
 ## `mongo-codec-subpaths-move-to-target`

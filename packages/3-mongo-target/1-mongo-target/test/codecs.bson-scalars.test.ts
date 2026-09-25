@@ -172,8 +172,13 @@ describe('mongoDecimal128Codec', () => {
     expect(mongoDecimal128Codec.encodeJson(mongoDecimal128Codec.decodeJson('1.50'))).toBe('1.50');
   });
 
-  it('reads exponent-form JSON as canonical text', () => {
-    expect(mongoDecimal128Codec.decodeJson('1E+3')).toBe('1000');
+  it.each([
+    ['exponent form', '1E+3'],
+    ['a huge exponent', '1E+99999'],
+    ['an exponent too large to expand', '1E+1000000000'],
+    ['more digits than a Decimal128 holds', '12345678901234567890123456789012345'],
+  ])('refuses JSON in %s, as encode does', (_label, json) => {
+    expect(() => mongoDecimal128Codec.decodeJson(json)).toThrow(decodeFailed);
   });
 
   it('refuses JSON that is not decimal text', () => {

@@ -121,7 +121,7 @@ describe('deriveJsonSchema', () => {
     });
   });
 
-  it('maps String, Int, Boolean, DateTime, ObjectId to correct BSON types', () => {
+  it('maps String, Int32, Bool, Date, ObjectId to correct BSON types', () => {
     const result = deriveJsonSchema(
       {
         name: scalarField('mongo/string@1'),
@@ -383,7 +383,7 @@ describe('deriveJsonSchema', () => {
     });
   });
 
-  it('maps Float (mongo/double@1) to bsonType "double"', () => {
+  it('maps Double (mongo/double@1) to bsonType "double"', () => {
     const result = deriveJsonSchema(
       { _id: scalarField('mongo/objectId@1'), price: scalarField('mongo/double@1') },
       undefined,

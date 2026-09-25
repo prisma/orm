@@ -21,4 +21,4 @@ export {
   dropIndex,
   setValidation,
   validatedCollection,
-} from '../core/migration-factories';
+} from '../core/migrations/migration-factories';

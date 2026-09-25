@@ -8,7 +8,7 @@ import {
 import { MongoAggLiteral } from '@internal/mongo-query-ast/execution';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { FilterEvaluator } from '../src/core/filter-evaluator';
+import { FilterEvaluator } from '../src/core/migrations/filter-evaluator';
 
 function evaluate(
   filter: Parameters<FilterEvaluator['evaluate']>[0],
