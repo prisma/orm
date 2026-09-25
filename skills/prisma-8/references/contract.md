@@ -183,7 +183,7 @@ Then `pnpm prisma contract emit`. The `field.<scalar>()` helpers are only availa
 
 For Mongo, swap every `@internal/postgres/*` import for `@internal/mongo/*`. The Mongo builder also exposes `index` and `valueObject`.
 
-Mongo scalar types, as PSL name / TS builder / application type: `String` / `field.string()` / `string`; `Int` / `field.int32()` / `number`; `Float` / `field.double()` / `number`; `Boolean` / `field.bool()` / `boolean`; `DateTime` / `field.date()` / `Date`; `ObjectId` / `field.objectId()` / `string`; `Int64` / `field.int64()` / `bigint`; `Decimal128` / `field.decimal128()` / decimal text as a `string`; `Binary` / `field.binary()` / `Uint8Array`; `Json` / `field.json()` / any JSON value. The collection validator checks each field's BSON type, except `Json`, which admits any value.
+Mongo scalar types, as PSL name / TS builder / application type: `String` / `field.string()` / `string`; `Int32` / `field.int32()` / `number`; `Double` / `field.double()` / `number`; `Bool` / `field.bool()` / `boolean`; `Date` / `field.date()` / `Date`; `ObjectId` / `field.objectId()` / `string`; `Int64` / `field.int64()` / `bigint`; `Decimal128` / `field.decimal128()` / decimal text as a `string`; `Binary` / `field.binary()` / `Uint8Array`; `Json` / `field.json()` / any JSON value. The collection validator checks each field's BSON type, except `Json`, which admits any value.
 
 ## Workflow — Add an extension-typed scalar (pgvector)
 

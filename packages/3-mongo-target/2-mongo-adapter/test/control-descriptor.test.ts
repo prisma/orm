@@ -6,11 +6,11 @@ import mongoAdapterDescriptor, { mongoScalarAuthoringTypes } from '../src/export
 // name → codecId pairs below carry the retired map's claims forward.
 const expectedScalars = [
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
-  ['Boolean', 'mongo/bool@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Int32', 'mongo/int32@1'],
+  ['Bool', 'mongo/bool@1'],
+  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
-  ['Float', 'mongo/double@1'],
+  ['Double', 'mongo/double@1'],
   ['Int64', 'mongo/int64@1'],
   ['Decimal128', 'mongo/decimal128@1'],
   ['Binary', 'mongo/binary@1'],

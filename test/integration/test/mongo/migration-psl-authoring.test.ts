@@ -55,11 +55,11 @@ const mongoCodecLookup: CodecLookup = {
 function pslToContract(schema: string): MongoContract {
   const scalarTypeCodecIds = new Map([
     ['String', 'mongo/string@1'],
-    ['Int', 'mongo/int32@1'],
-    ['Boolean', 'mongo/bool@1'],
-    ['DateTime', 'mongo/date@1'],
+    ['Int32', 'mongo/int32@1'],
+    ['Bool', 'mongo/bool@1'],
+    ['Date', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
-    ['Float', 'mongo/double@1'],
+    ['Double', 'mongo/double@1'],
   ]);
   const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
   const { symbolTable } = buildSymbolTable({
@@ -208,7 +208,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model User {
         id    ObjectId @id @map("_id")
         name  String
-        age   Int
+        age   Int32
         bio   String?
       }
     `);
@@ -236,7 +236,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Post {
         id        ObjectId @id @map("_id")
         title     String
-        createdAt DateTime
+        createdAt Date
         @@index([createdAt])
       }
     `);
@@ -321,7 +321,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Events {
         id        ObjectId @id @map("_id")
         status    String
-        createdAt DateTime
+        createdAt Date
         @@index([status, createdAt(sort: Desc)])
       }
     `);

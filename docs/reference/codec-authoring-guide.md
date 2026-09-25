@@ -403,10 +403,10 @@ The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,
 | --- | --- | --- | --- | --- | --- |
 | `mongo/objectId@1` | `ObjectId` | `field.objectId()` | `string` (hex) | the same string | `objectId` |
 | `mongo/string@1` | `String` | `field.string()` | `string` | the same string | `string` |
-| `mongo/int32@1` | `Int` | `field.int32()` | `number` | the same number | `int` |
-| `mongo/double@1` | `Float` | `field.double()` | `number` | the same number | `double` |
-| `mongo/bool@1` | `Boolean` | `field.bool()` | `boolean` | the same boolean | `bool` |
-| `mongo/date@1` | `DateTime` | `field.date()` | `Date` | ISO-8601 text | `date` |
+| `mongo/int32@1` | `Int32` | `field.int32()` | `number` | the same number | `int` |
+| `mongo/double@1` | `Double` | `field.double()` | `number` | the same number | `double` |
+| `mongo/bool@1` | `Bool` | `field.bool()` | `boolean` | the same boolean | `bool` |
+| `mongo/date@1` | `Date` | `field.date()` | `Date` | ISO-8601 text | `date` |
 | `mongo/vector@1` | — | `field.vector()` | `readonly number[]` | the same array | `vector` |
 | `mongo/int64@1` | `Int64` | `field.int64()` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
 | `mongo/decimal128@1` | `Decimal128` | `field.decimal128()` | decimal text without an exponent | the same text | `decimal` |

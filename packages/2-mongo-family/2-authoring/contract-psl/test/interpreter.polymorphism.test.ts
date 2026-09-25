@@ -16,11 +16,11 @@ import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
-  ['Boolean', 'mongo/bool@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Int32', 'mongo/int32@1'],
+  ['Bool', 'mongo/bool@1'],
+  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
-  ['Float', 'mongo/double@1'],
+  ['Double', 'mongo/double@1'],
 ]);
 
 const mongoTargetTypes: Record<string, readonly string[]> = {
@@ -239,7 +239,7 @@ namespace scoped {
 
         model Feature {
           id       ObjectId @id @map("_id")
-          priority Int
+          priority Int32
 
           @@base(Task, "feature")
         }
@@ -380,7 +380,7 @@ namespace scoped {
         model Task {
           id    ObjectId @id @map("_id")
           title String
-          type  Int
+          type  Int32
 
           @@discriminator(type)
         }
@@ -526,7 +526,7 @@ namespace scoped {
 
         model Feature {
           id       ObjectId @id @map("_id")
-          priority Int
+          priority Int32
 
           @@base(Task, "feature")
         }
@@ -771,7 +771,7 @@ namespace scoped {
 
         model Feature {
           id       ObjectId @id @map("_id")
-          priority Int
+          priority Int32
 
           @@base(Task, "feature")
         }

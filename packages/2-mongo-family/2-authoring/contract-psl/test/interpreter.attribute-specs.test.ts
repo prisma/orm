@@ -7,7 +7,7 @@ import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
+  ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
 ]);
 
@@ -150,7 +150,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       diagnosticsOf(`
         model Item {
           id        ObjectId @id @map("_id")
-          createdAt Int      @default(1)
+          createdAt Int32      @default(1)
         }
       `),
     ).toEqual([
@@ -183,7 +183,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       diagnosticsOf(`
         model Item {
           id        ObjectId @id @map("_id")
-          updatedAt Int      @updatedAt
+          updatedAt Int32      @updatedAt
         }
       `),
     ).toEqual([

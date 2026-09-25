@@ -33,48 +33,48 @@ import { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 export const mongoScalarAuthoringTypes = {
   String: {
     kind: 'typeConstructor',
-    documentation: 'Text stored as a BSON string.',
+    documentation: 'Text, stored as BSON string.',
     output: { codecId: MONGO_STRING_CODEC_ID, nativeType: 'string' },
   },
-  Int: {
+  Int32: {
     kind: 'typeConstructor',
-    documentation: 'A signed 32-bit integer stored as BSON int.',
+    documentation: 'A signed 32-bit integer, stored as BSON int.',
     output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
   },
-  Boolean: {
+  Bool: {
     kind: 'typeConstructor',
-    documentation: 'A true or false value stored as BSON bool.',
+    documentation: 'A true or false value, stored as BSON bool.',
     output: { codecId: MONGO_BOOLEAN_CODEC_ID, nativeType: 'bool' },
   },
-  DateTime: {
+  Date: {
     kind: 'typeConstructor',
-    documentation: 'A date and time stored as BSON date with millisecond precision.',
+    documentation: 'A date and time with millisecond precision, stored as BSON date.',
     output: { codecId: MONGO_DATE_CODEC_ID, nativeType: 'date' },
   },
   ObjectId: {
     kind: 'typeConstructor',
-    documentation: 'A 12-byte MongoDB identifier stored as BSON ObjectId.',
+    documentation: 'A 12-byte MongoDB identifier, stored as BSON objectId.',
     output: { codecId: MONGO_OBJECTID_CODEC_ID, nativeType: 'objectId' },
   },
-  Float: {
+  Double: {
     kind: 'typeConstructor',
-    documentation: 'A double-precision floating-point number stored as BSON double.',
+    documentation: 'A double-precision floating-point number, stored as BSON double.',
     output: { codecId: MONGO_DOUBLE_CODEC_ID, nativeType: 'double' },
   },
   Int64: {
     kind: 'typeConstructor',
-    documentation: 'A signed 64-bit integer stored as BSON long, read as a bigint.',
+    documentation: 'A signed 64-bit integer read as a bigint, stored as BSON long.',
     output: { codecId: MONGO_INT64_CODEC_ID, nativeType: 'long' },
   },
   Decimal128: {
     kind: 'typeConstructor',
     documentation:
-      'A 128-bit decimal stored as BSON decimal, read as decimal text without an exponent.',
+      'A 128-bit decimal read as decimal text without an exponent, stored as BSON decimal.',
     output: { codecId: MONGO_DECIMAL128_CODEC_ID, nativeType: 'decimal' },
   },
   Binary: {
     kind: 'typeConstructor',
-    documentation: 'Bytes stored as BSON binData, read as a Uint8Array.',
+    documentation: 'Bytes read as a Uint8Array, stored as BSON binData.',
     output: { codecId: MONGO_BINARY_CODEC_ID, nativeType: 'binData' },
   },
   Json: {
