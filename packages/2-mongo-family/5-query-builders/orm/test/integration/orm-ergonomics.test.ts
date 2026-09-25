@@ -30,7 +30,7 @@ function getUserId(user: Record<string, unknown>): ObjectId {
   return new ObjectId(user['_id'] as string);
 }
 
-describe('ORM ergonomics integration (FL-04, FL-06, FL-08)', {
+describe('ORM ergonomics integration', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
   let replSet: MongoMemoryReplSet;
@@ -105,7 +105,7 @@ describe('ORM ergonomics integration (FL-04, FL-06, FL-08)', {
     });
   });
 
-  describe('FL-06: codec-aware where()', () => {
+  describe('codec-aware where()', () => {
     it('retrieves document by ObjectId field using object where', async () => {
       const orm = mongoOrm({ contract, executor: runtime });
       const user = await orm.users.create(defaultUserData);
@@ -132,7 +132,7 @@ describe('ORM ergonomics integration (FL-04, FL-06, FL-08)', {
     });
   });
 
-  describe('FL-04: field accessor mutations', () => {
+  describe('field accessor mutations', () => {
     it('$push adds element to array field', async () => {
       const orm = mongoOrm({ contract, executor: runtime });
       const user = await orm.users.create(defaultUserData);
@@ -227,7 +227,7 @@ describe('ORM ergonomics integration (FL-04, FL-06, FL-08)', {
     });
   });
 
-  describe('FL-08: 1:N reference relation include', () => {
+  describe('reference relation include', () => {
     it('include() on 1:N relation returns array of related documents', async () => {
       const orm = mongoOrm({ contract, executor: runtime });
       const user = await orm.users.create(defaultUserData);
