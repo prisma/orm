@@ -103,7 +103,8 @@ class LineWriter {
   }
 }
 
-// Qualified-name separators hug; argument/object colons keep the usual value space.
+// Qualified-name separators hug. `[` hugs a type (`String[]`) but keeps the space before a list
+// value after `:`, `,` or `=`.
 function spaceBetween(
   prev: TokenKind | undefined,
   cur: TokenKind,
@@ -115,8 +116,9 @@ function spaceBetween(
   if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
-    case 'LParen':
     case 'LBracket':
+      return prev === 'Colon' || prev === 'Comma' || prev === 'Equals';
+    case 'LParen':
     case 'RParen':
     case 'RBracket':
     case 'Comma':
@@ -236,24 +238,20 @@ type MemberCategory = 'regular' | 'blockAttribute' | 'nestedBlock';
 
 interface BlockMember {
   readonly category: MemberCategory;
-  /** Stays on the source line it shares with the member that follows it. */
-  readonly keepsSourceLine: boolean;
-  emit(trailing: string | undefined, endLine: boolean): number;
+  emit(trailing: string | undefined): number;
 }
 
 function leafMember(
   writer: LineWriter,
   category: MemberCategory,
   print: () => number,
-  keepsSourceLine = false,
 ): BlockMember {
   return {
     category,
-    keepsSourceLine,
-    emit(trailing, endLine) {
+    emit(trailing) {
       const continuation = print();
       if (trailing !== undefined) writer.comment(trailing);
-      else if (endLine) writer.newline();
+      else writer.newline();
       return continuation;
     },
   };
@@ -295,11 +293,6 @@ function emitCompositeType(
   });
 }
 
-/**
- * With the `prisma7` grammar a `view` body holds `FieldDeclaration` members, so they print through
- * the model field path. With the `psl` grammar the same source line reads as several entries with
- * no `=`; those entries keep the source line they share, so `id Int` does not become two lines.
- */
 function emitGenericBlock(
   writer: LineWriter,
   block: GenericBlockDeclarationAst,
@@ -310,13 +303,7 @@ function emitGenericBlock(
     const field = FieldDeclarationAst.cast(node);
     if (field) return leafMember(writer, 'regular', () => emitField(writer, field, alignment));
     const entry = KeyValuePairAst.cast(node);
-    if (entry)
-      return leafMember(
-        writer,
-        'regular',
-        () => emitKeyValue(writer, entry),
-        entry.equals() === undefined,
-      );
+    if (entry) return leafMember(writer, 'regular', () => emitKeyValue(writer, entry));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -361,7 +348,6 @@ type BlockEmitter = (writer: LineWriter, trailing: string | undefined) => void;
 function nestedBlockMember(writer: LineWriter, block: BlockEmitter): BlockMember {
   return {
     category: 'nestedBlock',
-    keepsSourceLine: false,
     emit(trailing) {
       block(writer, trailing);
       return 0;
@@ -398,12 +384,15 @@ function emitBlockBody(
   const children = Array.from(node.children());
   const openIndex = children.findIndex((el) => !(el instanceof SyntaxNode) && el.kind === 'LBrace');
 
-  streamHeader(writer, node);
-  const headerComment = sameLineCommentAfter(children, openIndex);
-  if (headerComment !== undefined) writer.comment(headerComment);
+  const headerComments = streamHeader(writer, node);
+  const openingComment = sameLineCommentAfter(children, openIndex);
+  if (openingComment !== undefined) headerComments.push(openingComment);
+  const [firstComment, ...otherComments] = headerComments;
+  if (firstComment !== undefined) writer.comment(firstComment);
   else writer.newline();
 
   writer.indent();
+  for (const comment of otherComments) writer.comment(comment);
   walkRegion(writer, children, 'RBrace', classify);
   writer.unindent();
 
@@ -412,7 +401,9 @@ function emitBlockBody(
   else writer.newline();
 }
 
-function streamHeader(writer: LineWriter, node: SyntaxNode): void {
+/** Writes the block header through `{` and returns the source comments found before the `{`. */
+function streamHeader(writer: LineWriter, node: SyntaxNode): string[] {
+  const comments: string[] = [];
   let done = false;
   const walk = (parent: SyntaxNode): void => {
     for (const child of parent.children()) {
@@ -421,7 +412,11 @@ function streamHeader(writer: LineWriter, node: SyntaxNode): void {
         walk(child);
         continue;
       }
-      if (child.kind === 'Whitespace' || child.kind === 'Newline' || child.kind === 'Comment') {
+      if (child.kind === 'Comment') {
+        comments.push(child.text);
+        continue;
+      }
+      if (child.kind === 'Whitespace' || child.kind === 'Newline') {
         continue;
       }
       const space = spaceBetween(writer.prevKind(), child.kind, false);
@@ -433,6 +428,7 @@ function streamHeader(writer: LineWriter, node: SyntaxNode): void {
     }
   };
   walk(node);
+  return comments;
 }
 
 function walkRegion(
@@ -467,8 +463,7 @@ function walkRegion(
       }
 
       const trailing = sameLineTrailingComment(elements, i);
-      const endLine = !member.keepsSourceLine || !memberFollowsOnSameLine(elements, i);
-      closeContinuation(writer, member.emit(trailing.text, endLine));
+      closeContinuation(writer, member.emit(trailing.text));
       if (trailing.index !== undefined) i = trailing.index;
       sawContent = true;
       lastWasRegular = member.category !== 'blockAttribute';
@@ -506,17 +501,6 @@ function walkRegion(
       newlines = 0;
     }
   }
-}
-
-function memberFollowsOnSameLine(elements: readonly SyntaxElement[], memberIndex: number): boolean {
-  for (let i = memberIndex + 1; i < elements.length; i++) {
-    const element = elements[i];
-    if (element === undefined) continue;
-    if (element instanceof SyntaxNode) return true;
-    if (element.kind === 'Whitespace') continue;
-    return false;
-  }
-  return false;
 }
 
 function separationBlankWanted(

@@ -1,0 +1,84 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "6130cfbb76a6f392328da91d18689700c40f8c8919ea8f62248e1b01c7254333",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          },
+          "native_enum": {
+            "user_role": {
+              "kind": "postgres-enum",
+              "typeName": "user_role",
+              "members": ["user", "ADMIN"]
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": ["user", "ADMIN"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

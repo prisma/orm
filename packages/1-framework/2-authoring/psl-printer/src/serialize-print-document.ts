@@ -110,8 +110,11 @@ function serializeNamespaceContents(
   codecLookup: CodecLookup | undefined,
 ): string[] {
   const sections: string[] = [];
+  for (const compositeType of namespace.compositeTypes) {
+    sections.push(serializeModel(compositeType, 'type'));
+  }
   for (const model of namespace.models) {
-    sections.push(serializeModel(model));
+    sections.push(serializeModel(model, 'model'));
   }
   for (const extensionBlock of namespace.extensionBlocks) {
     sections.push(serializeExtensionBlock(extensionBlock, blockDispatchMap, codecLookup));
@@ -308,13 +311,13 @@ function serializeTypesBlock(namedTypes: readonly PrinterNamedType[]): string {
   return lines.join('\n');
 }
 
-function serializeModel(model: import('./types').PrinterModel): string {
+function serializeModel(model: import('./types').PrinterModel, keyword: 'model' | 'type'): string {
   const lines: string[] = [];
 
   if (model.comment) {
     lines.push(model.comment);
   }
-  lines.push(`model ${model.name} {`);
+  lines.push(`${keyword} ${model.name} {`);
 
   const idFields = model.fields.filter((f) => f.isId);
   const scalarFields = model.fields.filter((f) => !f.isId && !f.isRelation);

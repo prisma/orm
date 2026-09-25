@@ -92,7 +92,7 @@ export function prisma7Contract(
 ): ContractConfig {
   return {
     source: {
-      format: 'prisma7',
+      format: 'psl',
       inputs: [schemaPath],
       async load(context) {
         const [absolutePath] = context.resolvedInputs;
@@ -153,9 +153,7 @@ export function prisma7Contract(
               },
             });
           }
-          const { document, sources, diagnostics } = parse(schema, file.sourceId, {
-            grammar: 'prisma7',
-          });
+          const { document, sources, diagnostics } = parse(schema, file.sourceId);
           const sourceFile = sources.sourceFileFor(document.syntax);
           seedDiagnostics.push(...mapParseDiagnostics(diagnostics, sourceFile, file.sourceId));
           documents.push({ document, sources, sourceFile, sourceId: file.sourceId });

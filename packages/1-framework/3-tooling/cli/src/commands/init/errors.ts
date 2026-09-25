@@ -1,5 +1,5 @@
 import { docsUrlFor } from '@internal/utils/structured-error';
-import { formatSourceDiagnostic } from '../../control-api/operations/contract-emit';
+import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { CliStructuredError } from '../../utils/cli-errors';
 
 /**

@@ -53,10 +53,12 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
   });
 }
 
-/** Infers and prints PSL from a flat introspection fixture. */
+/** Infers and prints PSL from a flat introspection fixture, with the header `contract infer` writes. */
 export function printPslFromFlat(schemaIR: SqlSchemaIR): string {
   return printPsl(inferPostgresPslContract(treeFromFlat(schemaIR)), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
+    description:
+      'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
   });
 }
 

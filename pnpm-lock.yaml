@@ -2522,6 +2522,9 @@ importers:
       '@internal/family-sql':
         specifier: workspace:8.0.0-rc.12
         version: link:../../9-family
+      '@internal/psl-printer':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/2-authoring/psl-printer
       '@internal/target-postgres':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../3-targets/3-targets/postgres
@@ -4198,6 +4201,9 @@ importers:
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/3-tooling/migration
+      '@internal/psl-printer':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/2-authoring/psl-printer
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../../test/utils
@@ -5453,6 +5459,9 @@ importers:
       '@internal/extension-pgvector':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/3-extensions/pgvector
+      '@internal/extension-postgis':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../packages/3-extensions/postgis
       '@internal/extension-supabase':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/3-extensions/supabase

@@ -35,6 +35,7 @@
     "@internal/config-loader": "workspace:8.0.0-rc.12",
     "@internal/driver-postgres": "workspace:8.0.0-rc.12",
     "@internal/family-sql": "workspace:8.0.0-rc.12",
+    "@internal/psl-printer": "workspace:8.0.0-rc.12",
     "@internal/target-postgres": "workspace:8.0.0-rc.12",
     "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@repo/tsconfig": "workspace:8.0.0-rc.12",

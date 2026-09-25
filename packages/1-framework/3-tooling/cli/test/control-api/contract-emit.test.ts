@@ -32,10 +32,11 @@ function mockConfigWithContract(contractOverrides: Record<string, unknown>) {
 }
 
 function createSourceProvider(load: () => Promise<unknown>): {
+  readonly format: 'typescript';
   readonly inputs?: readonly string[];
   load: () => Promise<unknown>;
 } {
-  return { load };
+  return { format: 'typescript', load };
 }
 
 function createMockContract(): Contract {
@@ -191,6 +192,18 @@ describe('executeContractEmit', () => {
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'malformed success result',
     },
+    {
+      label: 'rejects a success result whose value is undefined',
+      source: createSourceProvider(async () => ({ ok: true, value: undefined }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
+    {
+      label: 'rejects a success result whose value is null',
+      source: createSourceProvider(async () => ({ ok: true, value: null }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
   ])('source provider validation', ({ label, source, expectedCode, expectedSubstring }) => {
     it(label, async () => {
       await expect(
@@ -212,7 +225,7 @@ describe('executeContractEmit', () => {
   describe('a source that fails with diagnostics', () => {
     const sourceDiagnostics = [
       {
-        code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
+        code: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
         message: 'View "ActiveUsers" is not supported; Prisma 8 has no views.',
         sourceId: 'prisma/schema.prisma',
         span: {
@@ -220,7 +233,7 @@ describe('executeContractEmit', () => {
           end: { offset: 90, line: 9, column: 11 },
         },
       },
-      { code: 'PSL.PRISMA7_SCHEMA_READ_FAILED', message: 'ENOENT', sourceId: 'prisma/schema' },
+      { code: 'PSL.FIXTURE_SCHEMA_READ_FAILED', message: 'ENOENT', sourceId: 'prisma/schema' },
       { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'prisma/models.prisma' },
     ];
 
@@ -228,7 +241,7 @@ describe('executeContractEmit', () => {
       const source = createSourceProvider(async () => ({
         ok: false,
         failure: {
-          summary: 'Prisma 7 schema interpretation failed',
+          summary: 'Source interpretation failed',
           diagnostics: sourceDiagnostics,
           meta: { schemaPath: 'prisma/schema.prisma' },
         },
@@ -244,15 +257,15 @@ describe('executeContractEmit', () => {
     it('fails with CONTRACT.SOURCE_LOAD_FAILED', async () => {
       expect(await emitFailure()).toMatchObject({
         code: 'CONTRACT.SOURCE_LOAD_FAILED',
-        why: 'Prisma 7 schema interpretation failed',
-        fix: 'Edit the schema where each finding points, then run contract emit again.',
+        why: 'Source interpretation failed',
+        fix: 'Edit the source where each finding points, then run the command again.',
       });
     });
 
     it('reports a dotted source code as the finding code, and wraps an undotted one', async () => {
       expect(await emitFailure()).toHaveProperty('diagnostics', [
         {
-          code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
+          code: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
           severity: 'error',
           summary:
             'prisma/schema.prisma:9:1 View "ActiveUsers" is not supported; Prisma 8 has no views.',
@@ -260,7 +273,7 @@ describe('executeContractEmit', () => {
           where: { path: 'prisma/schema.prisma', line: 9 },
         },
         {
-          code: 'PSL.PRISMA7_SCHEMA_READ_FAILED',
+          code: 'PSL.FIXTURE_SCHEMA_READ_FAILED',
           severity: 'error',
           summary: 'prisma/schema ENOENT',
           nextActions: [],
@@ -282,11 +295,11 @@ describe('executeContractEmit', () => {
         diagnostics: sourceDiagnostics,
         issues: [
           {
-            kind: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
+            kind: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
             message:
               'View "ActiveUsers" is not supported; Prisma 8 has no views. (prisma/schema.prisma:9:1)',
           },
-          { kind: 'PSL.PRISMA7_SCHEMA_READ_FAILED', message: 'ENOENT (prisma/schema)' },
+          { kind: 'PSL.FIXTURE_SCHEMA_READ_FAILED', message: 'ENOENT (prisma/schema)' },
           { kind: 'PSL_PARSE_ERROR', message: 'Unexpected token (prisma/models.prisma)' },
         ],
         providerMeta: { schemaPath: 'prisma/schema.prisma' },

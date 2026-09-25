@@ -54,7 +54,7 @@ describe('prismaContract given an attribute on an enum member', () => {
     tempDirs.length = 0;
   });
 
-  it('fails with an invalid block entry diagnostic at the attribute and produces no contract', async () => {
+  it('reports the attribute on the enum member and produces no contract', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-enum-'));
     tempDirs.push(tempDir);
     const schemaPath = join(tempDir, 'schema.prisma');
@@ -80,15 +80,16 @@ model User {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure).toEqual({
-      summary: 'Schema has 1 error',
+      summary: 'PSL to SQL contract interpretation failed',
       diagnostics: [
         {
-          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          message: 'Invalid block entry',
+          code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
+          message:
+            'enum "Role": member "USER" carries @map, but an enum member takes no attributes',
           sourceId: schemaPath,
           span: {
             start: { offset: 58, line: 4, column: 9 },
-            end: { offset: 59, line: 4, column: 10 },
+            end: { offset: 70, line: 4, column: 21 },
           },
         },
       ],

@@ -7,7 +7,7 @@ Framework component types, authoring logic, control stack assembly, and emission
 ## What this package provides
 
 - **Component types** (`./components`): Base descriptor and instance interfaces for framework components (family, target, adapter, driver, extension), pack refs, and type renderer system
-- **Authoring types** (`./authoring`): Declarative authoring contribution types, template resolution, and validation for type constructors and field presets
+- **Authoring types** (`./authoring`): Declarative authoring contribution types, template resolution, and validation for type constructors and field presets. `findAuthoringTypeConstructorCall(namespace, output)` is the inverse of `instantiateAuthoringTypeConstructor`: the first call to a constructor in a namespace that produces a given codec, native type and type parameters
 - **Codec base interface** (`./codec`): The cross-family `Codec` base type that SQL `Codec` and Mongo `MongoCodec` extend
 - **Control stack** (`./control`): Assembly functions that combine component descriptors into a unified `ControlStack` with derived state (codec imports, renderers, authoring contributions)
 - **Emission SPI** (`./emission`): Types for the emission pipeline — `TargetFamilyHook`, `ValidationContext`, `GenerateContractTypesOptions`, `TypeRenderEntry`, `TypeRenderer`, `ParameterizedCodecDescriptor`, and related types

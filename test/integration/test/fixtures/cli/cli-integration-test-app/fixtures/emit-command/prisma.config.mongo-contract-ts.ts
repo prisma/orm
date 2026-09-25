@@ -14,6 +14,7 @@ export default definePrismaConfig({
     adapter: mongoAdapter,
     contract: {
       source: {
+        format: 'typescript',
         load: async () => ok(contract as Contract),
       },
       output: 'output/contract.json',

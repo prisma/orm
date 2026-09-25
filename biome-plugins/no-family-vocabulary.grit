@@ -1,5 +1,11 @@
 // Recognise SQL/Mongo/target vocabulary (`table`, `column`, `postgres`,
 // `nativeType`, …) reaching the family-blind `packages/1-framework` domain.
+// Outside the CLI package it also flags the name of any Prisma version before
+// 8 (`prisma7`, `Prisma 6`, `prisma@5.22.0`, …), because the framework reads
+// every PSL document the same way and must not know which product version
+// wrote it. The CLI talks to users about their projects, including a Prisma 7
+// project `orm init` sets Prisma 8 up beside, so it may name the version.
+// `Prisma 8` is never flagged.
 //
 // The scope is enforced by the `$filename` guard below, not by a biome
 // `overrides` entry. Biome 2.5.6 does accept `plugins` inside `overrides` (and
@@ -44,8 +50,8 @@
 // identifier splits on non-alphanumerics and on a lowercase/digit → uppercase
 // hump, then each token is compared case-insensitively, allowing a trailing
 // plural `s`. Reproducing that means the term's own casing decides which
-// boundaries are legal, which is why there are three alternatives instead of
-// one case-insensitive pattern:
+// boundaries are legal, which is why there are three term alternatives instead
+// of one case-insensitive pattern:
 //
 //   1. lowercase head, lowercase tail (`table`) — a lowercase head cannot open
 //      a hump, so the prefix must be empty or end in a non-alphanumeric. This
@@ -59,7 +65,7 @@
 //      stops `SQL` matching inside `SQLQueryPlan`, which the tokenizer reads as
 //      the single token `sqlquery`.
 //
-// Each alternative lists every forbidden term with a literal head character, a
+// Each term alternative lists every forbidden term with a literal head character, a
 // case-insensitive middle, and a literal tail character. The three multi-word
 // terms (`nativeType`, `primaryKey`, `foreignKey`) additionally accept either a
 // separator run or a hump between their two words, so `native-type`,
@@ -101,6 +107,10 @@ or {
   not $filename <: r".*\.(?:test|test-d)\.ts",
   not $filename <: r".*/test/.*\.ts",
   or {
+    and {
+      not $filename <: r".*packages/1-framework/3-tooling/cli/.*",
+      $tok <: r"(?s)(?:(?:|.*[^A-Za-z0-9])p|(?:|.*[^A-Za-z0-9]|.*[a-z0-9])P)(?i:risma)[^A-Za-z0-9]*[1-7](?:|[^A-Za-z0-9].*|[A-Z].*)"
+    },
     $tok <: r"(?s)(?:|.*[^A-Za-z0-9])(?:p(?i:ostgre)s|p(?i:ostgresq)l|s(?i:qlit)e|m(?i:ysq)l|m(?i:ariad)b|m(?i:ssq)l|s(?i:qlserve)r|c(?i:ockroac)h|p(?i:glit)e|m(?i:ong)o|m(?i:ongod)b|c(?i:ollectio)n|c(?i:olum)n|t(?i:abl)e|c(?i:onstrain)t|s(?i:q)l|v(?i:archa)r|j(?i:son)b|d(?i:ialec)t|r(?i:l)s|n(?i:ativ)(?:[eE][^A-Za-z0-9]+[tT]|eT)(?i:yp)e|p(?i:rimar)(?:[yY][^A-Za-z0-9]+[kK]|yK)(?i:e)y|f(?i:oreig)(?:[nN][^A-Za-z0-9]+[kK]|nK)(?i:e)y)[sS]?(?:|[^A-Za-z0-9].*|[A-Z].*)",
     $tok <: r"(?s)(?:|.*[^A-Za-z0-9]|.*[a-z0-9])(?:P(?i:ostgre)s|P(?i:ostgresq)l|S(?i:qlit)e|M(?i:ysq)l|M(?i:ariad)b|M(?i:ssq)l|S(?i:qlserve)r|C(?i:ockroac)h|P(?i:glit)e|M(?i:ong)o|M(?i:ongod)b|C(?i:ollectio)n|C(?i:olum)n|T(?i:abl)e|C(?i:onstrain)t|S(?i:q)l|V(?i:archa)r|J(?i:son)b|D(?i:ialec)t|R(?i:l)s|N(?i:ativ)(?:[eE][^A-Za-z0-9]+[tT]|eT)(?i:yp)e|P(?i:rimar)(?:[yY][^A-Za-z0-9]+[kK]|yK)(?i:e)y|F(?i:oreig)(?:[nN][^A-Za-z0-9]+[kK]|nK)(?i:e)y)[sS]?(?:|[^A-Za-z0-9].*|[A-Z].*)",
     $tok <: r"(?s)(?:|.*[^A-Za-z0-9]|.*[a-z0-9])(?:P(?i:ostgre)S|P(?i:ostgresq)L|S(?i:qlit)E|M(?i:ysq)L|M(?i:ariad)B|M(?i:ssq)L|S(?i:qlserve)R|C(?i:ockroac)H|P(?i:glit)E|M(?i:ong)O|M(?i:ongod)B|C(?i:ollectio)N|C(?i:olum)N|T(?i:abl)E|C(?i:onstrain)T|S(?i:q)L|V(?i:archa)R|J(?i:son)B|D(?i:ialec)T|R(?i:l)S|N(?i:ativ)(?:[eE][^A-Za-z0-9]+[tT]|eT)(?i:yp)E|P(?i:rimar)(?:[yY][^A-Za-z0-9]+[kK]|yK)(?i:e)Y|F(?i:oreig)(?:[nN][^A-Za-z0-9]+[kK]|nK)(?i:e)Y)[sS]?(?:|[^A-Za-z0-9].*)"
@@ -110,5 +120,5 @@ or {
   not $tok <: r"(?s).*(?i:alignment)[^A-Za-z0-9]*(?i:columns).*",
   not $tok <: r"(?s).*(?i:type)[^A-Za-z0-9]*(?i:column).*",
   not $tok <: r"(?s).*(?i:attribute)[^A-Za-z0-9]*(?i:column).*",
-  register_diagnostic(span=$tok, message="no-family-vocabulary: family/target vocabulary in the family-blind framework domain; move the concept into the owning family layer, or suppress with `// biome-ignore lint/plugin/no-family-vocabulary: <why this is family-blind>`", severity="info")
+  register_diagnostic(span=$tok, message="no-family-vocabulary: family, target or product vocabulary in the family-blind framework domain; move the concept into the layer that owns it, or suppress with `// biome-ignore lint/plugin/no-family-vocabulary: <why this is family-blind>`", severity="info")
 }

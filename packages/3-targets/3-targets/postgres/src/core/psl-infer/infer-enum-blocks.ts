@@ -1,15 +1,8 @@
-import { toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
-import type {
-  PslExtensionBlock,
-  PslExtensionBlockParamValue,
-} from '@internal/framework-components/psl-ast';
-import { escapePslString } from '@internal/sql-relational-core/ast';
-import {
-  buildTopLevelNameMap,
-  createUniqueFieldName,
-  type TopLevelNameResult,
-} from './infer-names';
-import { SYNTHETIC_SPAN } from './psl-literals';
+import { toEnumName } from '@internal/family-sql/psl-infer';
+import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
+import { buildNativeEnumBlock } from '../psl-ast/native-enum-block';
+import { createUniqueFieldName } from '../psl-ast/unique-name';
+import { buildTopLevelNameMap, type TopLevelNameResult } from './infer-names';
 
 export const PSL_SCALAR_TYPE_NAMES = new Set([
   'String',
@@ -65,44 +58,4 @@ export function buildNativeEnumBlocks(
   }
 
   return { enumNameMap, enumBlocks };
-}
-
-function buildNativeEnumBlock(
-  name: string,
-  typeName: string,
-  values: readonly string[],
-): PslExtensionBlock {
-  const usedMemberNames = new Set<string>();
-  const parameters: Record<string, PslExtensionBlockParamValue> = {};
-  for (const value of values) {
-    const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
-    usedMemberNames.add(memberName);
-    parameters[memberName] = { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN };
-  }
-
-  return {
-    kind: 'native_enum',
-    keyword: 'native_enum',
-    name,
-    parameters,
-    blockAttributes:
-      name === typeName
-        ? []
-        : [
-            {
-              name: 'map',
-              args: [
-                {
-                  kind: 'positional',
-                  value: `"${escapePslString(typeName)}"`,
-                  span: SYNTHETIC_SPAN,
-                },
-              ],
-              span: SYNTHETIC_SPAN,
-            },
-          ],
-    attributes:
-      name === typeName ? {} : { map: { args: { name: typeName }, span: SYNTHETIC_SPAN } },
-    span: SYNTHETIC_SPAN,
-  };
 }

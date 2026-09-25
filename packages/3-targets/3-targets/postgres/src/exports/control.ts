@@ -21,6 +21,7 @@ import { PostgresContractSerializer } from '../core/postgres-contract-serializer
 import type { PostgresContract } from '../core/postgres-schema';
 import { PostgresSchemaVerifier } from '../core/postgres-schema-verifier';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
+import { buildPostgresPslContract } from '../core/psl-print/psl-contract';
 import { PostgresDatabaseSchemaNode } from '../core/schema-ir/postgres-database-schema-node';
 import {
   postgresDiffSubjectEntityKind,
@@ -42,6 +43,9 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
     inferPslContract(schema, describedContracts) {
       PostgresDatabaseSchemaNode.assert(schema);
       return inferPostgresPslContract(schema, describedContracts);
+    },
+    printPslContract(contract, context) {
+      return buildPostgresPslContract(contract, context);
     },
     diffSchema(input) {
       return diffPostgresSchema(input);

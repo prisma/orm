@@ -28,7 +28,6 @@ import {
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
   isAuthoringModelAttributeDescriptor,
-  isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
 import type {
@@ -42,6 +41,10 @@ import type {
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import {
+  UNBOUND_PSL_NAMESPACE_NAME,
+  UNSPECIFIED_PSL_NAMESPACE_ID,
+} from '@internal/framework-components/psl-ast';
 import type { Binder } from '@internal/psl-parser';
 import {
   type BlockSymbol,
@@ -51,7 +54,6 @@ import {
   diagnosticSource,
   type FieldSymbol,
   findBlockDescriptor,
-  keywordPslSpan,
   type ModelAttributeSpecFactory,
   type ModelSymbol,
   type NamedTypeSymbol,
@@ -62,7 +64,13 @@ import {
   type ResolvedAttribute,
   type SymbolTable,
 } from '@internal/psl-parser';
-import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
+import {
+  claimedBlockKeywords,
+  enumMemberAttributeDiagnostics,
+  fkRelationPairKey,
+  type InvalidFkPairing,
+  unsupportedBlockDiagnostic,
+} from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import type {
@@ -193,17 +201,6 @@ function compareStrings(left: string, right: string): -1 | 0 | 1 {
 }
 
 /**
- * Name of the framework-parser synthesised bucket for top-level
- * declarations. Re-declared here so the per-target dispatch does not
- * have to import from `@internal/framework-components/psl-ast`
- * (which would cross a layer that the interpreter does not otherwise
- * import from). The value is part of the framework parser's contract;
- * if it changes there, the matching test in this package's
- * `interpreter.diagnostics.test.ts` flips first.
- */
-const UNSPECIFIED_PSL_NAMESPACE_NAME = '__unspecified__';
-
-/**
  * Per-target namespace-block validation: walk the AST's namespace buckets and
  * emit diagnostics for syntactic constructs the target does not accept.
  *
@@ -253,10 +250,10 @@ function resolveNamespaceIdForSqlTarget(input: {
   if (input.targetId !== 'postgres') {
     return undefined;
   }
-  if (input.bucketName === UNSPECIFIED_PSL_NAMESPACE_NAME) {
+  if (input.bucketName === UNSPECIFIED_PSL_NAMESPACE_ID) {
     return 'public';
   }
-  if (input.bucketName === 'unbound') {
+  if (input.bucketName === UNBOUND_PSL_NAMESPACE_NAME) {
     return UNBOUND_NAMESPACE_ID;
   }
   return input.bucketName;
@@ -584,6 +581,7 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
 
   for (const symbol of input.enumBlocks) {
     const decl = symbol.block;
+    input.diagnostics.push(...enumMemberAttributeDiagnostics(symbol, input.source.sources));
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
@@ -604,21 +602,6 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
   }
 
   return { enumHandles, enumTypeDescriptors };
-}
-
-/** Generic top-level blocks are supported only when a composed descriptor claims their keyword. */
-function composedBlockKeywords(
-  authoringContributions: AuthoringContributions | undefined,
-): ReadonlySet<string> {
-  const keywords = new Set<string>();
-  const descriptors: AuthoringPslBlockDescriptorNamespace =
-    authoringContributions?.pslBlockDescriptors ?? {};
-  for (const [keyword, value] of Object.entries(descriptors)) {
-    if (isAuthoringPslBlockDescriptor(value)) {
-      keywords.add(keyword);
-    }
-  }
-  return keywords;
 }
 
 interface BuildModelNodeInput {
@@ -1314,7 +1297,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
 
       // Target namespace: use the colon-prefix namespace qualifier, or `__unbound__` when the
       // no-namespace form is used (e.g. `supabase:User` → AC3).
-      const crossTargetNamespaceId = fieldTypeNamespaceId ?? '__unbound__';
+      const crossTargetNamespaceId = fieldTypeNamespaceId ?? UNBOUND_NAMESPACE_ID;
 
       // Target table name: resolved from the extension contract. The get() check above
       // guarantees extContractForSpace is defined here; if the model or namespace is not
@@ -1396,8 +1379,8 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     const normalizedQualifier =
       fieldTypeNamespaceId === undefined
         ? undefined
-        : fieldTypeNamespaceId === 'unbound'
-          ? '__unbound__'
+        : fieldTypeNamespaceId === UNBOUND_PSL_NAMESPACE_NAME
+          ? UNBOUND_NAMESPACE_ID
           : fieldTypeNamespaceId;
     if (
       normalizedQualifier !== undefined &&
@@ -1664,9 +1647,15 @@ function patchModelDomainFields(
         };
       } else if (rf.many && rf.scalarCodecId) {
         needsPatch = true;
+        const builtType = model.fields[rf.field.name]?.type;
+        const typeParams = builtType?.kind === 'scalar' ? builtType.typeParams : undefined;
         patchedFields[rf.field.name] = {
           nullable: rf.field.optional,
-          type: { kind: 'scalar', codecId: rf.scalarCodecId },
+          type: {
+            kind: 'scalar',
+            codecId: rf.scalarCodecId,
+            ...ifDefined('typeParams', typeParams),
+          },
           many: true as const,
         };
       }
@@ -2187,7 +2176,7 @@ export function interpretPslDocumentToSqlContract(
   };
 
   collectScope(
-    UNSPECIFIED_PSL_NAMESPACE_NAME,
+    UNSPECIFIED_PSL_NAMESPACE_ID,
     Object.values(topLevel.models),
     Object.values(topLevel.compositeTypes),
   );
@@ -2218,15 +2207,11 @@ export function interpretPslDocumentToSqlContract(
   }
 
   const isEnumBlock = (block: BlockSymbol): boolean => block.keyword === 'enum';
-  const legitimateBlockKeywords = composedBlockKeywords(input.authoringContributions);
+  const legitimateBlockKeywords = claimedBlockKeywords(
+    input.authoringContributions?.pslBlockDescriptors,
+  );
   const reportUnsupportedTopLevelBlock = (block: BlockSymbol): void => {
-    diagnostics.push({
-      code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
-      message: `Unsupported top-level block "${block.keyword}"`,
-      ...diagnosticSource(input.sources, block.node.syntax).at(
-        keywordPslSpan(block.node.syntax, block.keyword, input.sources),
-      ),
-    });
+    diagnostics.push(unsupportedBlockDiagnostic(block, input.sources));
   };
 
   const topLevelEnums: BlockSymbol[] = [];
@@ -2382,7 +2367,7 @@ export function interpretPslDocumentToSqlContract(
     namespaceExtensionEntities.set(nsId, merged);
   };
   for (const ns of namespaceSymbols) {
-    if (ns.name === UNSPECIFIED_PSL_NAMESPACE_NAME) continue;
+    if (ns.name === UNSPECIFIED_PSL_NAMESPACE_ID) continue;
     const nsId = resolveNamespaceIdForSqlTarget({
       bucketName: ns.name,
       targetId: input.target.targetId,
@@ -2410,7 +2395,7 @@ export function interpretPslDocumentToSqlContract(
   if (Object.keys(topLevelExtensionBlocks).length > 0) {
     const topLevelNsId =
       resolveNamespaceIdForSqlTarget({
-        bucketName: UNSPECIFIED_PSL_NAMESPACE_NAME,
+        bucketName: UNSPECIFIED_PSL_NAMESPACE_ID,
         targetId: input.target.targetId,
       }) ?? defaultNamespaceId;
     mergeNamespaceExtensionEntities(
@@ -2589,6 +2574,13 @@ export function interpretPslDocumentToSqlContract(
     }
     for (const unique of modelNode.uniques ?? []) {
       uniqueColumnSets.push(unique.columns);
+    }
+    // A unique index constrains its columns exactly as a unique constraint
+    // does, so a singular back-relation over those columns is just as sound.
+    for (const index of modelNode.indexes ?? []) {
+      if (index.unique === true && index.columns !== undefined && index.where === undefined) {
+        uniqueColumnSets.push(index.columns);
+      }
     }
     modelUniqueColumnSets.set(modelNode.modelName, uniqueColumnSets);
   }

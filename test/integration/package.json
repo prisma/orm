@@ -34,6 +34,7 @@
     "@internal/extension-arktype-json": "workspace:8.0.0-rc.12",
     "@internal/extension-paradedb": "workspace:8.0.0-rc.12",
     "@internal/extension-pgvector": "workspace:8.0.0-rc.12",
+    "@internal/extension-postgis": "workspace:8.0.0-rc.12",
     "@internal/extension-supabase": "workspace:8.0.0-rc.12",
     "@internal/family-mongo": "workspace:8.0.0-rc.12",
     "@internal/family-sql": "workspace:8.0.0-rc.12",

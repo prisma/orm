@@ -197,6 +197,12 @@ export interface PslTypesBlock {
  */
 export const UNSPECIFIED_PSL_NAMESPACE_ID = '__unspecified__';
 
+/**
+ * The name the unbound namespace is written under in PSL: `namespace unbound { … }`. Readers map it
+ * to the IR's `__unbound__` namespace id, and writers map that id back to it.
+ */
+export const UNBOUND_PSL_NAMESPACE_NAME = 'unbound';
+
 /** A value in {@link PslNamespace.entries}: a built-in entity node or an extension-contributed {@link PslExtensionBlock}. */
 export type PslNamespaceEntry = PslModel | PslCompositeType | PslExtensionBlock;
 

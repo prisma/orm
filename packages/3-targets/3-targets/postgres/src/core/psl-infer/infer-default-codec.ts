@@ -1,11 +1,13 @@
 /**
- * The codec `contract emit` binds to a printed column, and the data type that codec represents.
+ * The codec `contract emit` binds to a column `contract infer` writes, and the data type that codec
+ * represents.
  *
- * `contract emit` binds a codec to each PSL type constructor the printer names, so a default has to
- * be written in the form that codec reads back. The binding itself lives in the adapter's authoring
- * type namespaces, which sit above this package; the table below restates it for the type names the
- * printer emits, and `adapter-postgres/test/printed-type-codecs.test.ts` fails if the two disagree
- * or if the printer gains a type name this table does not cover.
+ * `contract emit` binds a codec to each PSL type constructor `contract infer` names, so a default has
+ * to be written in the form that codec reads back. The binding itself lives in the adapter's
+ * authoring type namespaces, which sit above this package, and `contract infer` has no stack to ask;
+ * the table below restates it for the type names `contract infer` writes, and
+ * `adapter-postgres/test/printed-type-codecs.test.ts` fails if the two disagree or if the type map
+ * gains a type name this table does not cover.
  */
 
 import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';

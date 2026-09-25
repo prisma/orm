@@ -30,10 +30,15 @@ export interface PrintPslOptions {
    * emitted as-is.
    */
   readonly codecLookup?: CodecLookup;
+  /**
+   * One line saying where the file came from. The printed file opens with the
+   * `// use prisma-8` marker, then this line as a comment.
+   */
+  readonly description?: string;
 }
 
 export function printPslFromAst(ast: PslDocumentAst, options: PrintPslOptions = {}): string {
-  const doc = astDocumentToPrintDocument(ast);
+  const doc = astDocumentToPrintDocument(ast, options.description);
   return serializePrintDocument(doc, {
     ...ifDefined('pslBlockDescriptors', options.pslBlockDescriptors),
     ...ifDefined('codecLookup', options.codecLookup),

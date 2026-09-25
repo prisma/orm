@@ -1,6 +1,7 @@
 import type {
   PslAttribute,
   PslAttributeArgument,
+  PslCompositeType,
   PslDocumentAst,
   PslExtensionBlock,
   PslField,
@@ -17,15 +18,16 @@ import type { PrintDocument, PrintNamespaceSection } from './print-document';
 import { escapePslString } from './serialize-print-document';
 import type { PrinterField, PrinterModel, PrinterNamedType } from './types';
 
-// `contract infer` produces a starting-point PSL contract from a live database
-// schema; the user is expected to edit it (rename models/fields, tighten types,
-// add `@id` where introspection couldn't infer one, etc.) and then run
-// `contract emit` to produce the canonical artifacts. The header invites that
-// workflow rather than warning against it.
-const DEFAULT_AST_PRINT_HEADER =
-  '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
+const PRISMA_8_MARKER = '// use prisma-8';
 
-export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
+function headerCommentFor(description: string | undefined): string {
+  return description === undefined ? PRISMA_8_MARKER : `${PRISMA_8_MARKER}\n// ${description}`;
+}
+
+export function astDocumentToPrintDocument(
+  ast: PslDocumentAst,
+  description?: string,
+): PrintDocument {
   // FK dependencies are resolved across the whole document — a model in one
   // namespace can reference a model in another, and the topo-sort needs to
   // see every model to produce a stable order. After sorting, we re-bucket by
@@ -54,15 +56,20 @@ export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   // model or block print it once instead of emitting a duplicate declaration
   // that would not parse back.
   type Section = {
+    readonly compositeTypes: Map<string, PslCompositeType>;
     readonly models: Map<string, PslModel>;
     readonly blocks: Map<string, PslExtensionBlock>;
   };
   const sectionsByName = new Map<string, Section>();
   for (const namespace of ast.namespaces) {
     const section: Section = sectionsByName.get(namespace.name) ?? {
+      compositeTypes: new Map(),
       models: new Map(),
       blocks: new Map(),
     };
+    for (const compositeType of namespace.compositeTypes) {
+      section.compositeTypes.set(compositeType.name, compositeType);
+    }
     for (const model of namespace.models) {
       section.models.set(model.name, model);
     }
@@ -79,6 +86,9 @@ export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   const unranked = sortedModels.length;
   const namespaceSections: PrintNamespaceSection[] = [...sectionsByName].map(([name, section]) => ({
     name,
+    compositeTypes: [...section.compositeTypes.values()]
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      .map((compositeType) => modelToPrinterModel(compositeType)),
     models: [...section.models.values()]
       .sort((a, b) => (modelOrder.get(a.name) ?? unranked) - (modelOrder.get(b.name) ?? unranked))
       .map((m) => modelToPrinterModel(m)),
@@ -98,7 +108,7 @@ export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   });
 
   return {
-    headerComment: DEFAULT_AST_PRINT_HEADER,
+    headerComment: headerCommentFor(description),
     namedTypes,
     namespaces: namespaceSections,
   };
@@ -181,7 +191,7 @@ function unescapePslString(value: string): string {
   return result;
 }
 
-function modelToPrinterModel(model: PslModel): PrinterModel {
+function modelToPrinterModel(model: PslModel | PslCompositeType): PrinterModel {
   let mapName: string | undefined;
   const modelAttrStrings: string[] = [];
 
@@ -204,7 +214,7 @@ function modelToPrinterModel(model: PslModel): PrinterModel {
     mapName,
     fields: printerFields,
     modelAttributes: modelAttrStrings,
-    comment: model.comment,
+    comment: model.kind === 'model' ? model.comment : undefined,
   };
 }
 

@@ -169,6 +169,18 @@ describe('interpretPslDocumentToMongoContract', () => {
         defaultFunctionRegistry: new Map(),
       },
       codecLookup: mongoCodecLookup,
+      authoringContributions: {
+        pslBlockDescriptors: {
+          enum: {
+            kind: 'pslBlock',
+            keyword: 'enum',
+            discriminator: 'enum',
+            name: { required: true },
+            parameters: {},
+            variadicParameters: true,
+          },
+        },
+      },
     });
 
     expect(result.ok).toBe(false);

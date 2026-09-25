@@ -14,7 +14,6 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceFormat,
   ContractSourceProvider,
-  OpaqueContractSourceProvider,
   PslContractSourceProvider,
   TypeScriptContractSourceProvider,
 } from '../src/contract-source-types';
@@ -125,7 +124,7 @@ test('accepts contract source providers with declared inputs', () => {
   };
 
   const result = defineConfig(config);
-  expectTypeOf(result.contract!.source.format).toEqualTypeOf<string | undefined>();
+  expectTypeOf(result.contract!.source.format).toEqualTypeOf<ContractSourceFormat>();
   expectTypeOf(result.contract!.source.inputs).toEqualTypeOf<readonly string[] | undefined>();
   expectTypeOf(result.contract!.source.load).toEqualTypeOf<ContractSourceProvider['load']>();
 });
@@ -146,33 +145,19 @@ test('source diagnostics require a filename but not a span', () => {
   void missingFilename;
 });
 
-test('contract source providers form a format-keyed union', () => {
+test('a contract source is PSL or TypeScript, and nothing else', () => {
   expectTypeOf<ContractSourceProvider>().toEqualTypeOf<
-    PslContractSourceProvider | TypeScriptContractSourceProvider | OpaqueContractSourceProvider
+    PslContractSourceProvider | TypeScriptContractSourceProvider
   >();
+  expectTypeOf<ContractSourceFormat>().toEqualTypeOf<'psl' | 'typescript'>();
   expectTypeOf<PslContractSourceProvider['format']>().toEqualTypeOf<'psl'>();
   expectTypeOf<TypeScriptContractSourceProvider['format']>().toEqualTypeOf<'typescript'>();
-  expectTypeOf<OpaqueContractSourceProvider['format']>().toEqualTypeOf<string | undefined>();
-  expectTypeOf<PslContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
-  expectTypeOf<TypeScriptContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
-});
-
-test('provider literals remain assignable to the union without casts', () => {
-  const load: ContractSourceProvider['load'] = async (_context) => ok({} as never);
-
-  const psl: ContractSourceProvider = {
-    format: 'psl',
-    inputs: ['./schema.prisma'],
-    load,
-  };
-  const typescript: ContractSourceProvider = { format: 'typescript', load };
-  const absent: ContractSourceProvider = { load };
-  const thirdParty: ContractSourceProvider = { format: 'made-up-format', load };
-
-  expectTypeOf(psl).toExtend<ContractSourceProvider>();
-  expectTypeOf(typescript).toExtend<ContractSourceProvider>();
-  expectTypeOf(absent).toExtend<ContractSourceProvider>();
-  expectTypeOf(thirdParty).toExtend<ContractSourceProvider>();
+  // @ts-expect-error every contract source states its format
+  const untagged: ContractSourceProvider = { inputs: [], load: async () => ok({} as never) };
+  void untagged;
+  // @ts-expect-error a source format the framework does not have
+  const other: ContractSourceProvider = { format: 'other', inputs: [], load: async () => ok({}) };
+  void other;
 });
 
 test('carries an optional formatter section', () => {

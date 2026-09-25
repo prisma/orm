@@ -18,6 +18,7 @@ export type { SqlControlFamilyInstance } from '../core/control-instance';
 export type {
   SqlControlTargetDescriptor,
   SqlDescribedContractSpace,
+  SqlPslPrintContext,
 } from '../core/control-target-descriptor';
 export type {
   ContractToSchemaIROptions,

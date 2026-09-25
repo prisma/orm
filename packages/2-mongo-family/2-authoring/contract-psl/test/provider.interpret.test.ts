@@ -366,6 +366,16 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
     ...context,
     authoringContributions: {
       ...context.authoringContributions,
+      pslBlockDescriptors: {
+        enum: {
+          kind: 'pslBlock' as const,
+          keyword: 'enum',
+          discriminator: 'enum',
+          name: { required: true },
+          parameters: {},
+          variadicParameters: true,
+        },
+      },
       entityTypes: {
         ...context.authoringContributions.entityTypes,
         enum: {

@@ -181,7 +181,7 @@ model User {
     });
   });
 
-  it('fails with an invalid block entry diagnostic at an enum member attribute and produces no contract', async () => {
+  it('reports the attribute on the enum member and produces no contract', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-'));
     tempDirs.push(tempDir);
     const schemaPath = join(tempDir, 'schema.prisma');
@@ -221,15 +221,16 @@ model User {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure).toEqual({
-      summary: 'Schema has 1 error',
+      summary: 'PSL to Mongo contract interpretation failed',
       diagnostics: [
         {
-          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          message: 'Invalid block entry',
+          code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
+          message:
+            'enum "Role": member "USER" carries @map, but an enum member takes no attributes',
           sourceId: schemaPath,
           span: {
             start: { offset: 36, line: 3, column: 9 },
-            end: { offset: 37, line: 3, column: 10 },
+            end: { offset: 48, line: 3, column: 21 },
           },
         },
       ],

@@ -46,9 +46,9 @@ import {
 } from '../../../src/core/authoring';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
+import { createPostgresTypeMap } from '../../../src/core/psl-ast/postgres-type-map';
 import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
-import { createPostgresTypeMap } from '../../../src/core/psl-infer/postgres-type-map';
 import { inferPslAstFromFlat } from '../fixtures';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);

@@ -95,6 +95,7 @@ function createLoadedConfig({
   return {
     contract: {
       source: {
+        format: 'typescript',
         ...(inputs === undefined
           ? {}
           : { inputs: inputs.map((input) => toAbsolutePath(input)) as SourceInputs }),

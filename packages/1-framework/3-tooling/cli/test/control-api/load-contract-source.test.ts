@@ -4,10 +4,8 @@ import { tmpdir } from 'node:os';
 import type * as configLoader from '@internal/config-loader';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import {
-  executeContractEmit,
-  loadContractSource,
-} from '../../src/control-api/operations/contract-emit';
+import { executeContractEmit } from '../../src/control-api/operations/contract-emit';
+import { loadContractSource } from '../../src/control-api/operations/load-contract-source';
 
 const VIEW_DIAGNOSTIC = {
   code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
@@ -34,7 +32,7 @@ function configWithSource(output: string, load: () => Promise<unknown>) {
       targetId: 'test-target',
     },
     extensions: [],
-    contract: { source: { load }, output },
+    contract: { source: { format: 'typescript', load }, output },
   } as unknown as configLoader.PrismaNextConfig;
 }
 

@@ -8,7 +8,7 @@ describe('defineConfig with a ContractConfig', () => {
     const config = defineConfig({ contract });
 
     expect(config.contract?.source).toBe(contract.source);
-    expect(config.contract?.source.format).toBe('prisma7');
+    expect(config.contract?.source.format).toBe('psl');
     expect(config.contract?.source.inputs).toEqual(['prisma/schema.prisma']);
     expect(config.contract?.output).toBe('prisma/contract.json');
   });

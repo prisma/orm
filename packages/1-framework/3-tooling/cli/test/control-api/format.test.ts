@@ -100,14 +100,14 @@ describe('executeFormat', () => {
     expect(await readFile(inputPath, 'utf-8')).toBe(original);
   });
 
-  it('leaves an absent-format source untouched', async () => {
+  it('leaves a .prisma input of a typescript source untouched', async () => {
     const inputPath = join(tmpDir, 'schema.prisma');
     await writeFile(inputPath, MESSY_PSL, 'utf-8');
 
     const result = await executeFormat({
       config: mockConfig({
         contract: {
-          source: { inputs: [inputPath], load: () => {} },
+          source: { format: 'typescript', inputs: [inputPath], load: () => {} },
           output: join(tmpDir, 'contract.json'),
         },
       }),

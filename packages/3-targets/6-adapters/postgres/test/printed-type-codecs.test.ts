@@ -6,9 +6,9 @@ import {
 } from '../src/core/control-mutation-defaults';
 
 /**
- * `contract infer` writes a default in the form the codec `contract emit` binds to the printed type
- * name reads back. The printer restates that binding for the type names it prints, because the
- * authoring namespaces that own it sit above the target package; this fails if the two disagree.
+ * `contract infer` writes a default in the form the codec `contract emit` binds to the type name it
+ * writes reads back. It restates that binding for the type names it writes, because the authoring
+ * namespaces that own it sit above the target package; this fails if the two disagree.
  */
 const emitCodecIdByTypeName: ReadonlyMap<string, string> = new Map(
   [

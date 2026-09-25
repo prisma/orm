@@ -10,6 +10,7 @@ export default defineConfig({
     'src/exports/runtime.ts',
     'src/exports/verify.ts',
     'src/exports/diff.ts',
+    'src/exports/psl-ast.ts',
     'src/exports/psl-infer.ts',
   ],
 });

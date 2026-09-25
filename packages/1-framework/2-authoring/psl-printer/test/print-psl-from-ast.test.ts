@@ -1,4 +1,5 @@
 import type {
+  PslCompositeType,
   PslDocumentAst,
   PslModel,
   PslNamedTypeDeclaration,
@@ -68,6 +69,61 @@ describe('printPslFromAst', () => {
       span: span(0),
     };
     expect(printPslFromAst(ast)).toContain('@@map("foo")');
+  });
+
+  it('prints a value-object type block inside its namespace, before the models', () => {
+    const address: PslCompositeType = {
+      kind: 'compositeType',
+      name: 'Address',
+      fields: [
+        {
+          kind: 'field',
+          name: 'street',
+          typeName: 'String',
+          optional: false,
+          list: false,
+          attributes: [],
+          span: span(0),
+        },
+        {
+          kind: 'field',
+          name: 'tags',
+          typeName: 'String',
+          optional: true,
+          list: true,
+          attributes: [],
+          span: span(0),
+        },
+      ],
+      attributes: [],
+      span: span(0),
+    };
+    const shop: PslModel = {
+      kind: 'model',
+      name: 'Shop',
+      fields: [
+        {
+          kind: 'field',
+          name: 'home',
+          typeName: 'Address',
+          optional: true,
+          list: false,
+          attributes: [],
+          span: span(0),
+        },
+      ],
+      attributes: [],
+      span: span(0),
+    };
+    const ast: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 't',
+      namespaces: [makeNs('public', [shop], [address], 0)],
+      span: span(0),
+    };
+    expect(printPslFromAst(ast)).toContain(
+      'namespace public {\n  type Address {\n    street String\n    tags   String[]?\n  }\n\n  model Shop {\n    home Address?\n  }\n}',
+    );
   });
 
   it('prints types block', () => {
@@ -305,5 +361,58 @@ describe('printPslFromAst', () => {
     const out = printPslFromAst(ast);
     expect(out).toMatch(/labels\s+String\[\]\?/);
     expect(out).toMatch(/tags\s+String\[\]\s*$/m);
+  });
+
+  describe('the header comment', () => {
+    const headerAst: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 'header.prisma',
+      namespaces: [
+        makeNs(
+          UNSPECIFIED_PSL_NAMESPACE_ID,
+          [
+            {
+              kind: 'model',
+              name: 'X',
+              fields: [
+                {
+                  kind: 'field',
+                  name: 'id',
+                  typeName: 'Int',
+                  optional: false,
+                  list: false,
+                  attributes: [attr('field', 'id', [], 1)],
+                  span: span(0),
+                },
+              ],
+              attributes: [],
+              span: span(0),
+            },
+          ],
+          [],
+          0,
+        ),
+      ],
+      span: span(0),
+    };
+
+    function headerOf(printed: string): string {
+      return printed.split('\n\n')[0] ?? '';
+    }
+
+    it('opens with only the prisma-8 marker when the caller names no description', () => {
+      expect(headerOf(printPslFromAst(headerAst))).toBe('// use prisma-8');
+    });
+
+    it('opens with the prisma-8 marker, then the description the caller names', () => {
+      const printed = printPslFromAst(headerAst, {
+        description: 'Printed from prisma/schema.prisma by `prisma contract print`.',
+      });
+
+      expect(headerOf(printed)).toBe(
+        '// use prisma-8\n// Printed from prisma/schema.prisma by `prisma contract print`.',
+      );
+      expect(printed).toContain('model X {');
+    });
   });
 });
