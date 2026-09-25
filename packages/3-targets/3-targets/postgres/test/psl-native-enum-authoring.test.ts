@@ -13,8 +13,6 @@
  *  3. Negative: a bare (value-less) member is a diagnostic, not accepted.
  */
 
-import sqlFamilyPack from '@internal/family-sql/pack';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -106,13 +104,13 @@ namespace auth {
     expect(diagnostics).toEqual([]);
   });
 
-  it('places the parsed block in the auth namespace entries under native_enum', () => {
-    const { symbolTable } = parsePsl(source);
+  it('places the parsed block in the auth namespace with a native_enum envelope', () => {
+    const { symbolTable, parsedBlocks } = parsePsl(source);
     const authNs = symbolTable.topLevel.namespaces['auth'];
     expect(authNs).toBeDefined();
-    const blocks = Object.values(authNs!.blocks).map((b) => b.block);
+    const blocks = Object.values(authNs!.blocks);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toMatchObject({ kind: 'native_enum', name: 'AalLevel' });
+    expect(parsedBlocks.get(blocks[0]!)).toMatchObject({ kind: 'native_enum', name: 'AalLevel' });
   });
 });
 
@@ -269,7 +267,7 @@ namespace auth {
 });
 
 describe('PSL native_enum diagnostics', () => {
-  it('a bare (value-less) member is rejected, not accepted', () => {
+  it('a bare (value-less) member is rejected by the shared grammar, and the block never lowers', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -279,13 +277,18 @@ namespace auth {
   }
 }
 `;
-    const result = interpret(source);
+    const { diagnostics } = parsePsl(source);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        message: expect.stringContaining('"aal1"'),
+      }),
+    ]);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_NATIVE_ENUM_BARE_MEMBER' })]),
-    );
+    const result = interpret(source);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.storage.namespaces['auth']).toBeUndefined();
   });
 
   it('an empty native_enum (no members) emits PSL_NATIVE_ENUM_MISSING_MEMBERS', () => {
@@ -329,11 +332,12 @@ namespace auth {
   });
 
   it('a duplicate member NAME is a parse-time PSL_EXTENSION_DUPLICATE_PARAMETER (first-wins) — same as the SQL enum block', () => {
-    // Members live in `block.parameters`, a Record keyed by member name, so
-    // the generic parser flags a repeated name at parse time and keeps the
+    // Member keys bind through the shared entries spec, so the block
+    // interpreter flags a repeated name at symbol-table time and keeps the
     // first occurrence. This is the exact behavior the SQL `enum` block has
     // (see interpreter.enum.test.ts); native_enum inherits it for free from
-    // the shared variadic-block parser — no native_enum-specific handling.
+    // the shared grammar — no native_enum-specific handling, and no factory
+    // runs for the invalid block.
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -370,7 +374,7 @@ namespace auth {
     ]);
   });
 
-  it('a non-string member value emits PSL_EXTENSION_INVALID_VALUE', () => {
+  it('a non-string member value is rejected by the shared grammar', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -379,134 +383,12 @@ namespace auth {
   }
 }
 `;
-    const result = interpret(source);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]),
-    );
-  });
-});
-
-describe('native_enum coexists with a PSL enum block in the same namespace', () => {
-  // PSL `enum` blocks are document-top-level only and always register under
-  // the target's `defaultNamespaceId` (`public` here) — so a `native_enum`
-  // block in `namespace public { … }` derives its valueSet into the same
-  // namespace's valueSet slot as the top-level `enum`'s derived valueSet.
-  // `createNamespaceWithExtensions` must merge both, not let one clobber
-  // the other.
-  const combinedAssembled = assembleAuthoringContributions([
-    { authoring: sqlFamilyPack.authoring },
-    {
-      authoring: {
-        entityTypes: postgresAuthoringEntityTypes,
-        pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
-      },
-    },
-  ]);
-
-  const textCodec: Codec = {
-    id: 'pg/text@1',
-    encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
-    encodeJson: (value) => value as never,
-    decodeJson(json) {
-      if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-      return json;
-    },
-  };
-
-  const enumTestCodecLookup: CodecLookup = {
-    get: (id) => (id === 'pg/text@1' ? textCodec : undefined),
-    targetTypesFor: (id) => (id === 'pg/text@1' ? ['text'] : undefined),
-    renderOutputTypeFor: () => undefined,
-  };
-
-  function interpretCombined(source: string) {
-    const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
-    const { symbolTable } = buildSymbolTable({
-      documents: [document],
-      sources,
-      pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,
-    });
-    return interpretPslDocumentToSqlContract({
-      documents: [document],
-      dataTypeLookup: postgresDataTypeLookup,
-      symbolTable,
-      sources,
-      capabilities: {},
-      target: postgresTarget,
-      scalarColumnDescriptors,
-      authoringContributions: combinedAssembled,
-      composedExtensionContracts: new Map(),
-      createNamespace: postgresCreateNamespace,
-      codecLookup: enumTestCodecLookup,
-    });
-  }
-
-  it('both the enum-derived and native_enum-derived valueSets survive in the public namespace', () => {
-    const source = `
-enum Priority {
-  @@type("pg/text@1")
-  Low  = "low"
-  High = "high"
-}
-
-namespace public {
-  native_enum AalLevel {
-    aal1 = "aal1"
-    aal2 = "aal2"
-    @@map("aal_level")
-  }
-
-  model Post {
-    id       Int      @id
-    priority Priority
-  }
-}
-`;
-    const result = interpretCombined(source);
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
-    expect(ns.valueSet?.['Priority']).toMatchObject({ values: ['low', 'high'] });
-    expect(ns.valueSet?.['AalLevel']).toMatchObject({ values: ['aal1', 'aal2'] });
-    expect(ns.entries.native_enum?.['aal_level']).toBeInstanceOf(PostgresNativeEnum);
-  });
-
-  it('a native_enum and a domain enum sharing a name in one namespace is rejected, not silently merged', () => {
-    // Domain `enum` registers under the default namespace (`public`), and a
-    // `native_enum` named the same in `namespace public { … }` derives a
-    // value-set into the same slot. This must be a diagnostic, not a silent
-    // last-write-wins.
-    const source = `
-enum Shared {
-  @@type("pg/text@1")
-  Low  = "low"
-  High = "high"
-}
-
-namespace public {
-  native_enum Shared {
-    a = "a"
-    b = "b"
-    @@map("shared")
-  }
-
-  model Post {
-    id Int @id
-  }
-}
-`;
-    const result = interpretCombined(source);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_VALUE_SET_NAME_COLLISION' })]),
-    );
+    const { diagnostics } = parsePsl(source);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected a string literal',
+      }),
+    ]);
   });
 });

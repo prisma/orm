@@ -1,9 +1,7 @@
 /**
  * An enumerated-value parameter: the author supplies one of `values`, spelled
- * as a bare token in PSL and a string literal in TypeScript. Shared by the
- * extension-block parameter vocabulary (`PslBlockParamOption`) and the helper
- * argument vocabulary (`AuthoringArgumentDescriptor`) so the option concept is
- * declared once. See ADR 246.
+ * as a bare token in PSL and a string literal in TypeScript. Part of the
+ * helper argument vocabulary (`AuthoringArgumentDescriptor`). See ADR 246.
  */
 export interface AuthoringOption {
   readonly kind: 'option';

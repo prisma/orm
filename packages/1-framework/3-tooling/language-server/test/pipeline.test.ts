@@ -1,5 +1,5 @@
 import * as pslParser from '@internal/psl-parser';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, entityRef, fixedBlock, str } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
@@ -116,5 +116,88 @@ describe('runPipeline', () => {
     expect(diagnostics).toEqual(
       mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
     );
+  });
+});
+
+describe('runPipeline — shared block validation in the parse-plus-symbol pipeline', () => {
+  const guardInputs = {
+    scalarTypes,
+    pslBlockDescriptors: {
+      guard: {
+        kind: 'pslBlock' as const,
+        keyword: 'guard',
+        discriminator: 'fixture-guard',
+        name: { required: true as const },
+        spec: () =>
+          fixedBlock({
+            parameters: {
+              target: { type: entityRef({ kind: 'model' }), documentation: 'The guarded model.' },
+              using: { type: str(), documentation: 'The predicate.' },
+            },
+          }),
+      },
+    },
+  };
+
+  it('resolves a forward reference and publishes the envelope without any family pass', () => {
+    const source = [
+      'guard Rule {',
+      '  target = Widget',
+      '  using  = "true"',
+      '}',
+      'model Widget {',
+      '  id Int',
+      '}',
+    ].join('\n');
+
+    const result = runPipeline('pipeline-test.psl', source, guardInputs);
+
+    expect(result.diagnostics).toEqual([]);
+    const block = result.symbolTable.topLevel.blocks['Rule'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(result.parsedBlocks.get(block)?.values['using']).toBe('true');
+  });
+
+  it('reports a block value failure with its source range and publishes no envelope', () => {
+    const source = [
+      'model Widget {',
+      '  id Int',
+      '}',
+      'guard Rule {',
+      '  target = Widget',
+      '  using  = 42',
+      '}',
+    ].join('\n');
+
+    const result = runPipeline('pipeline-test.psl', source, guardInputs);
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected a string literal',
+        range: {
+          start: { line: 5, character: 11 },
+          end: { line: 5, character: 13 },
+        },
+      }),
+    ]);
+    const block = result.symbolTable.topLevel.blocks['Rule'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(result.parsedBlocks.has(block)).toBe(false);
+    expect(block.keyword).toBe('guard');
+    expect([...block.node.entries()].map((entry) => entry.key()?.name())).toEqual([
+      'target',
+      'using',
+    ]);
+  });
+
+  it('recovers from a half-typed invalid block without throwing', () => {
+    const source = ['guard Rule {', '  target = ', ''].join('\n');
+
+    const result = runPipeline('pipeline-test.psl', source, guardInputs);
+
+    expect(result.symbolTable.topLevel.blocks['Rule']).toBeDefined();
   });
 });

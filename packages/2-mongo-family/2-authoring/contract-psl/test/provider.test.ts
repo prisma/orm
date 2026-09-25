@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { JsonValue } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
-import type { PslExtensionBlock } from '@internal/framework-components/authoring';
+import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
 import {
   type Codec,
   createDataTypeLookup,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
+import { entriesBlock, jsonValue } from '@internal/psl-parser';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
@@ -36,11 +37,11 @@ const enumEntityType = {
   kind: 'entity',
   discriminator: 'enum',
   output: {
-    factory: (block: PslExtensionBlock) =>
+    factory: (block: ParsedPslExtensionBlock) =>
       enumType(
         block.name,
         { codecId: stringCodec.id, nativeType: 'string' },
-        ...Object.keys(block.parameters).map((name) => member(name)),
+        ...Object.keys(block.values).map((name) => member(name)),
       ),
   },
 } as const;
@@ -50,8 +51,11 @@ const enumBlockDescriptor = {
   keyword: 'enum',
   discriminator: 'enum',
   name: { required: true },
-  parameters: {},
-  variadicParameters: true,
+  spec: () =>
+    entriesBlock({
+      value: { type: jsonValue(), documentation: 'The member value.' },
+      allowBare: true,
+    }),
 } as const;
 
 function createMongoTestContext(overrides?: Partial<ContractSourceContext>): ContractSourceContext {

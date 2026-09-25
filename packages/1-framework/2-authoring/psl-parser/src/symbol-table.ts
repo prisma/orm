@@ -1,6 +1,7 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import type { PslExtensionBlock, PslSpan } from '@internal/framework-components/psl-ast';
-import { interpretBlockAttributes, reconstructExtensionBlock } from './block-reconstruction';
+import type { ParsedPslExtensionBlock, PslSpan } from '@internal/framework-components/psl-ast';
+import { blockSpecFactoryOf } from './block-spec/descriptor';
+import { interpretExtensionBlock } from './block-spec/interpret';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
 import {
@@ -78,8 +79,6 @@ export interface BlockSymbol {
   readonly keyword: string;
   readonly node: GenericBlockDeclarationAst;
   readonly span: PslSpan;
-  /** Resolved once so consumers do not independently classify block parameters. */
-  readonly block: PslExtensionBlock;
 }
 
 export interface ResolvedNamedTypeBinding {
@@ -126,6 +125,14 @@ export interface BuildSymbolTableOptions {
 export interface SymbolTableResult {
   readonly symbolTable: SymbolTable;
   readonly diagnostics: readonly ParseDiagnostic[];
+  /**
+   * The typed envelope of every registered block whose value and attribute
+   * interpretation succeeded, keyed by the block's stable symbol. Invalid
+   * blocks have no entry — their symbols keep syntax and source provenance
+   * for recovery and tooling — and unregistered blocks are never
+   * interpreted.
+   */
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 /**
@@ -177,14 +184,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
       } else if (declaration instanceof GenericBlockDeclarationAst) {
         const name = claim(topLevelNames, declaration.name());
         if (name !== undefined) {
-          blocks[name] = buildBlock(
-            name,
-            declaration,
-            sources,
-            pslBlockDescriptors,
-            diagnostics,
-            collectedBlocks,
-          );
+          blocks[name] = buildBlock(name, declaration, sources, collectedBlocks);
         }
       } else if (declaration instanceof NamespaceDeclarationAst) {
         const declaredName = declaration.name()?.name();
@@ -203,14 +203,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
           };
           namespaces[name] = namespace;
         }
-        extendNamespace(
-          namespace,
-          declaration,
-          diagnostics,
-          sources,
-          pslBlockDescriptors,
-          collectedBlocks,
-        );
+        extendNamespace(namespace, declaration, diagnostics, sources, collectedBlocks);
       } else if (declaration instanceof TypesBlockAst) {
         for (const binding of declaration.declarations()) {
           const name = claim(topLevelNames, binding.name());
@@ -226,13 +219,29 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
+  const parsedBlocks = new Map<BlockSymbol, ParsedPslExtensionBlock>();
+  // Every declaration is collected before this walk, so spec factories may
+  // resolve declarations through the complete table. They must not observe
+  // another block's interpreted output: parsedBlocks is still being filled
+  // while factories run.
   for (const block of collectedBlocks) {
     const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
-    if (descriptor !== undefined) {
-      interpretBlockAttributes(block, descriptor, sources, symbolTable, diagnostics);
+    if (descriptor === undefined) continue;
+    const spec = blockSpecFactoryOf(descriptor)({ symbols: symbolTable, block });
+    const parsed = interpretExtensionBlock({
+      block,
+      descriptor,
+      spec,
+      symbols: symbolTable,
+      sources,
+    });
+    if (parsed.ok) {
+      parsedBlocks.set(block, parsed.value);
+    } else {
+      diagnostics.push(...parsed.failure);
     }
   }
-  return { symbolTable, diagnostics };
+  return { symbolTable, diagnostics, parsedBlocks };
 }
 
 function buildModel(
@@ -271,19 +280,14 @@ function buildBlock(
   name: string,
   node: GenericBlockDeclarationAst,
   sources: PslSources,
-  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
-  diagnostics: ParseDiagnostic[],
   collectedBlocks: BlockSymbol[],
 ): BlockSymbol {
-  const keyword = node.keyword()?.text ?? '';
-  const descriptor = findBlockDescriptor(pslBlockDescriptors, keyword);
   const symbol: BlockSymbol = {
     kind: 'block',
     name,
-    keyword,
+    keyword: node.keyword()?.text ?? '',
     node,
     span: nodePslSpan(node.syntax, sources),
-    block: reconstructExtensionBlock(node, descriptor, sources, diagnostics),
   };
   collectedBlocks.push(symbol);
   return symbol;
@@ -294,7 +298,6 @@ function extendNamespace(
   node: NamespaceDeclarationAst,
   diagnostics: ParseDiagnostic[],
   sources: PslSources,
-  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
   collectedBlocks: BlockSymbol[],
 ): void {
   const { models, compositeTypes, blocks } = namespace;
@@ -324,14 +327,7 @@ function extendNamespace(
     } else if (member instanceof CompositeTypeDeclarationAst) {
       compositeTypes[memberName] = buildCompositeType(memberName, member, sources, diagnostics);
     } else if (member instanceof GenericBlockDeclarationAst) {
-      blocks[memberName] = buildBlock(
-        memberName,
-        member,
-        sources,
-        pslBlockDescriptors,
-        diagnostics,
-        collectedBlocks,
-      );
+      blocks[memberName] = buildBlock(memberName, member, sources, collectedBlocks);
     }
   }
 }

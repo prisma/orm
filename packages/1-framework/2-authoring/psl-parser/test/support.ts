@@ -18,6 +18,16 @@ export const frameworkScalarTypes: ReadonlySet<string> = new Set([
   'Bytes',
 ]);
 
+/**
+ * Reads an own property of a record whose key may collide with an
+ * `Object.prototype` name (e.g. `__proto__`), without going through the
+ * deprecated prototype accessor a literal `record['__proto__']` read would
+ * use on ordinary objects.
+ */
+export function ownEntry(record: object, key: string): unknown {
+  return Object.getOwnPropertyDescriptor(record, key)?.value;
+}
+
 function escapeForDebug(text: string): string {
   return text
     .replaceAll('\\', '\\\\')

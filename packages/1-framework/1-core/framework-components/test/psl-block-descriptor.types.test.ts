@@ -6,82 +6,60 @@ import type {
 } from '../src/shared/framework-authoring';
 import { isAuthoringPslBlockDescriptor } from '../src/shared/framework-authoring';
 import type {
-  PslBlockParam,
-  PslBlockParamList,
-  PslBlockParamOption,
-  PslBlockParamRef,
-  PslBlockParamValue,
+  ParsedPslExtensionBlock,
   PslExtensionBlock,
   PslExtensionBlockParsedAttribute,
+  PslExtensionBlockPrintEntry,
+  PslSpan,
 } from '../src/shared/psl-extension-block';
 
-describe('PslBlockParam discriminated union', () => {
-  it('four kinds cover the union exhaustively', () => {
-    function assertExhaustive(param: PslBlockParam): string {
-      switch (param.kind) {
-        case 'ref':
-          return param.refKind;
-        case 'value':
-          return param.codecId;
-        case 'option':
-          return param.values[0] ?? '';
-        case 'list':
-          return assertExhaustive(param.of);
-      }
-    }
-    expectTypeOf(assertExhaustive).toBeFunction();
-  });
-
-  it('ref narrows to PslBlockParamRef', () => {
-    const param = { kind: 'ref', refKind: 'model', scope: 'same-namespace' } as const;
-    expectTypeOf(param).toMatchTypeOf<PslBlockParamRef>();
-    expectTypeOf(param.refKind).toEqualTypeOf<'model'>();
-    expectTypeOf(param.scope).toEqualTypeOf<'same-namespace'>();
-  });
-
-  it('value narrows to PslBlockParamValue', () => {
-    const param = { kind: 'value', codecId: 'String' } as const;
-    expectTypeOf(param).toMatchTypeOf<PslBlockParamValue>();
-    expectTypeOf(param.codecId).toEqualTypeOf<'String'>();
-  });
-
-  it('option narrows to PslBlockParamOption', () => {
-    const param = { kind: 'option', values: ['permissive', 'restrictive'] as const } as const;
-    expectTypeOf(param).toMatchTypeOf<PslBlockParamOption>();
-  });
-
-  it('list narrows to PslBlockParamList and allows nesting', () => {
-    const param = {
-      kind: 'list',
-      of: { kind: 'ref', refKind: 'role', scope: 'cross-space' },
-    } as const;
-    expectTypeOf(param).toMatchTypeOf<PslBlockParamList>();
-    expectTypeOf(param.of).toMatchTypeOf<PslBlockParamRef>();
-  });
-});
-
 describe('AuthoringPslBlockDescriptor', () => {
-  it('a valid declarative descriptor literal satisfies the type', () => {
+  it('a declarative descriptor with an erased callable spec satisfies the type', () => {
     const descriptor = {
       kind: 'pslBlock',
       keyword: 'policy_select',
       discriminator: 'postgres-policy-select',
       name: { required: true },
-      parameters: {
-        target: { kind: 'ref', refKind: 'model', scope: 'same-namespace', required: true },
-        as: { kind: 'option', values: ['permissive', 'restrictive'], required: false },
-        roles: {
-          kind: 'list',
-          of: { kind: 'ref', refKind: 'role', scope: 'cross-space' },
-          required: false,
-        },
-        using: { kind: 'value', codecId: 'String', required: true },
-      },
+      spec: () => ({}),
     } satisfies AuthoringPslBlockDescriptor;
 
     expectTypeOf(descriptor.kind).toEqualTypeOf<'pslBlock'>();
     expectTypeOf(descriptor.keyword).toEqualTypeOf<string>();
     expectTypeOf(descriptor.discriminator).toEqualTypeOf<string>();
+    expectTypeOf<AuthoringPslBlockDescriptor['spec']>().toEqualTypeOf<unknown>();
+  });
+
+  it('the retired parameter DSL fields are not part of the descriptor shape', () => {
+    const base = {
+      kind: 'pslBlock',
+      keyword: 'policy_select',
+      discriminator: 'postgres-policy-select',
+      name: { required: true },
+      spec: () => ({}),
+    };
+    const withParameters = {
+      ...base,
+      // @ts-expect-error — parameters is not part of the descriptor shape any more
+      parameters: {},
+    } satisfies AuthoringPslBlockDescriptor;
+    void withParameters;
+    const withVariadic = {
+      ...base,
+      // @ts-expect-error — variadicParameters is not part of the descriptor shape any more
+      variadicParameters: true,
+    } satisfies AuthoringPslBlockDescriptor;
+    void withVariadic;
+  });
+
+  it('a descriptor without a spec does NOT satisfy the type', () => {
+    const missingSpec = {
+      kind: 'pslBlock',
+      keyword: 'policy_select',
+      discriminator: 'postgres-policy-select',
+      name: { required: true },
+      // @ts-expect-error — spec is required on the descriptor
+    } satisfies AuthoringPslBlockDescriptor;
+    void missingSpec;
   });
 
   it('a descriptor with a parser function field does NOT satisfy the type', () => {
@@ -90,30 +68,14 @@ describe('AuthoringPslBlockDescriptor', () => {
       keyword: 'policy_select',
       discriminator: 'postgres-policy-select',
       name: { required: true },
-      parameters: {},
+      spec: () => ({}),
     };
     const withParser = {
       ...base,
       // @ts-expect-error — parser is not part of the declarative descriptor shape
-      parser: () => ({ kind: 'postgres-policy-select', name: 'x', parameters: {}, span: {} }),
+      parser: () => ({ kind: 'postgres-policy-select', name: 'x', span: {} }),
     } satisfies AuthoringPslBlockDescriptor;
     void withParser;
-  });
-
-  it('a descriptor with a printer function field does NOT satisfy the type', () => {
-    const base = {
-      kind: 'pslBlock',
-      keyword: 'policy_select',
-      discriminator: 'postgres-policy-select',
-      name: { required: true },
-      parameters: {},
-    };
-    const withPrinter = {
-      ...base,
-      // @ts-expect-error — printer is not part of the declarative descriptor shape
-      printer: () => '',
-    } satisfies AuthoringPslBlockDescriptor;
-    void withPrinter;
   });
 
   it('AuthoringContributions accepts a pslBlockDescriptors namespace', () => {
@@ -124,9 +86,7 @@ describe('AuthoringPslBlockDescriptor', () => {
           keyword: 'policy_select',
           discriminator: 'postgres-policy-select',
           name: { required: true },
-          parameters: {
-            target: { kind: 'ref', refKind: 'model', scope: 'same-namespace', required: true },
-          },
+          spec: () => ({}),
         },
       },
     };
@@ -140,7 +100,7 @@ describe('isAuthoringPslBlockDescriptor', () => {
     keyword: 'policy_select',
     discriminator: 'postgres-policy-select',
     name: { required: true },
-    parameters: { target: { kind: 'ref', refKind: 'model', scope: 'same-namespace' } },
+    spec: () => ({}),
   } satisfies AuthoringPslBlockDescriptor;
 
   it('returns true for a declarative descriptor', () => {
@@ -161,13 +121,13 @@ describe('isAuthoringPslBlockDescriptor', () => {
 });
 
 describe('block attributes', () => {
-  it('a descriptor declares its block attributes as erased factories, sibling of parameters', () => {
+  it('a descriptor declares its block attributes as erased factories, sibling of spec', () => {
     const descriptor = {
       kind: 'pslBlock',
       keyword: 'native_enum',
       discriminator: 'native_enum',
       name: { required: true },
-      parameters: {},
+      spec: () => ({}),
       attributes: { map: () => ({ level: 'block', name: 'map' }) },
     } as const;
     expectTypeOf(descriptor).toMatchTypeOf<AuthoringPslBlockDescriptor>();
@@ -175,14 +135,48 @@ describe('block attributes', () => {
       Readonly<Record<string, unknown>> | undefined
     >();
   });
+});
 
-  it('a block node carries its parsed attributes as plain data keyed by attribute name', () => {
-    expectTypeOf<PslExtensionBlock['attributes']>().toEqualTypeOf<
+describe('PslExtensionBlock source shape', () => {
+  it('parameters carry print provenance only: optional expression text plus span', () => {
+    expectTypeOf<PslExtensionBlock['parameters']>().toEqualTypeOf<
+      Record<string, PslExtensionBlockPrintEntry>
+    >();
+    expectTypeOf<PslExtensionBlockPrintEntry['expression']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<PslExtensionBlockPrintEntry['span']>().toEqualTypeOf<PslSpan>();
+  });
+
+  it('carries no interpreted attribute view; only printable blockAttributes remain', () => {
+    expectTypeOf<PslExtensionBlock>().not.toHaveProperty('attributes');
+    expectTypeOf<PslExtensionBlock>().toHaveProperty('blockAttributes');
+  });
+});
+
+describe('ParsedPslExtensionBlock', () => {
+  it('carries typed values under the generic parameter', () => {
+    interface PolicyValues {
+      readonly using: string;
+      readonly permissive?: boolean;
+    }
+    expectTypeOf<ParsedPslExtensionBlock<PolicyValues>['values']>().toEqualTypeOf<PolicyValues>();
+    expectTypeOf<ParsedPslExtensionBlock<PolicyValues>['parameterSpans']>().toEqualTypeOf<
+      Readonly<Record<string, PslSpan>>
+    >();
+    expectTypeOf<ParsedPslExtensionBlock<PolicyValues>['attributes']>().toEqualTypeOf<
       Readonly<Record<string, PslExtensionBlockParsedAttribute>>
     >();
-    expectTypeOf<PslExtensionBlockParsedAttribute['args']>().toEqualTypeOf<
+  });
+
+  it('defaults values to an opaque readonly record', () => {
+    expectTypeOf<ParsedPslExtensionBlock['values']>().toEqualTypeOf<
       Readonly<Record<string, unknown>>
     >();
-    expectTypeOf<Omit<PslExtensionBlock, 'attributes'>>().not.toMatchTypeOf<PslExtensionBlock>();
+  });
+
+  it('keeps kind, keyword, name, and span as the block identity', () => {
+    expectTypeOf<ParsedPslExtensionBlock['kind']>().toEqualTypeOf<string>();
+    expectTypeOf<ParsedPslExtensionBlock['keyword']>().toEqualTypeOf<string>();
+    expectTypeOf<ParsedPslExtensionBlock['name']>().toEqualTypeOf<string>();
+    expectTypeOf<ParsedPslExtensionBlock['span']>().toEqualTypeOf<PslSpan>();
   });
 });

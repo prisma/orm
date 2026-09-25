@@ -27,7 +27,6 @@ function makeExtensionBlock(
     name,
     parameters: {},
     blockAttributes: [],
-    attributes: {},
     span: SPAN,
   };
 }

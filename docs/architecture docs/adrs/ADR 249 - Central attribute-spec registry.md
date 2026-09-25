@@ -162,7 +162,7 @@ An attribute name the registry does not carry is reported, in both families and 
 - SQL model level: `buildModelNodeFromPsl` in `packages/2-sql/2-authoring/contract-psl/src/interpreter.ts` reports a name absent from both `sqlAttributeSpecs.model` and the target-contributed model attributes as `PSL_UNSUPPORTED_MODEL_ATTRIBUTE`.
 - SQL field level: `validateFieldAttributes` in `packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts` reports a name absent from `sqlAttributeSpecs.field` as `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`, after the `db.` prefix and removed-attribute paths have had their say. A module-level check refuses to load if a removed-attribute rule and a registered field attribute claim the same name, so the two name sets cannot overlap.
 - Mongo, both levels: `reportUnknownAttributes` in `packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts` walks every model and composite type and reports names absent from `mongoAttributeSpecs.model` / `.field` with the same two codes.
-- Block level: `parseBlockAttribute` reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
+- Block level: the block-spec interpreter (`interpretExtensionBlock` in `packages/1-framework/2-authoring/psl-parser/src/block-spec/interpret.ts`) reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
 
 This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — argument-less `fieldAttribute` specs with required documentation for the primary-key and uniqueness markers — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.
 
@@ -170,25 +170,26 @@ This makes coverage a correctness requirement, not a nicety: a diagnostic driven
 
 ## Block attributes are declared on their block descriptor
 
-Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to `parameters`:
+Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to the block's value `spec` ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)):
 
 ```ts
 export const sqlFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
     keyword: 'enum',
+    documentation:
+      'Defines an enum with named values and an inferred or explicitly selected storage codec.',
     discriminator: 'enum',
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: sqlFamilyEnumSpec,
     attributes: { type: () => enumTypeBlockAttribute },
-  },
+  } satisfies PslBlockSpecDescriptor,
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 ```
 
 A block's legal attributes are its descriptor's keys, so scoping is structural, and the language server needs no new plumbing: it already receives `pslBlockDescriptors` from the composed stack.
 
-`reconstructExtensionBlock` interprets those attributes while it reconstructs the block, and attaches the typed results to the node as plain data:
+The symbol-table lifecycle interprets those attributes together with the block's values, after complete declaration collection, and attaches the typed results to the block's envelope as plain data:
 
 ```ts
 export interface PslExtensionBlockParsedAttribute {
@@ -197,7 +198,7 @@ export interface PslExtensionBlockParsedAttribute {
 }
 ```
 
-`PslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The block's untyped `blockAttributes` array, whose argument values are flattened source text, remains for consumers that want the raw form.
+`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
 
 ---
 

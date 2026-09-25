@@ -14,10 +14,16 @@ import {
   type AttributeSpecNamespace,
   blockAttribute,
   buildSymbolTable,
+  entityRef,
+  entriesBlock,
   type FieldAttributeSpecContext,
   fieldAttribute,
+  fixedBlock,
+  identifier,
   int,
+  jsonValue,
   modelAttribute,
+  oneOf,
   optional,
   str,
 } from '@internal/psl-parser';
@@ -103,6 +109,24 @@ const attributeContributions = assembleAuthoringContributions([
   },
 ]);
 const controlMutationDefaults = assembleControlMutationDefaults([]);
+const policySpec = () =>
+  fixedBlock({
+    parameters: {
+      on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+      where: { type: optional(str()), documentation: 'The policy predicate.' },
+      mode: {
+        type: optional(
+          oneOf(
+            identifier('permissive', { documentation: 'Combined with OR.' }),
+            identifier('restrictive', { documentation: 'Combined with AND.' }),
+          ),
+        ),
+        documentation: '',
+      },
+      using: { type: optional(str()), documentation: '' },
+    },
+  });
+
 const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   policy: {
     kind: 'pslBlock',
@@ -110,13 +134,20 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     documentation: 'Defines a security policy.',
     discriminator: 'fixture-policy',
     name: { required: true },
-    parameters: {
-      on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1', documentation: 'The policy predicate.' },
-      mode: { kind: 'option', values: ['permissive', 'restrictive'] },
-      using: { kind: 'value', codecId: 'fixture/text@1' },
-    },
+    spec: policySpec,
     attributes: { audit: () => auditAttribute },
+  },
+  inventory: {
+    kind: 'pslBlock',
+    keyword: 'inventory',
+    documentation: 'An arbitrary-key block.',
+    discriminator: 'fixture-inventory',
+    name: { required: true },
+    spec: () =>
+      entriesBlock({
+        value: { type: jsonValue(), documentation: 'The entry value.' },
+        allowBare: true,
+      }),
   },
   access: {
     audit: {
@@ -124,9 +155,12 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
       keyword: 'audit',
       discriminator: 'fixture-audit',
       name: { required: true },
-      parameters: {
-        on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      },
+      spec: () =>
+        fixedBlock({
+          parameters: {
+            on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+          },
+        }),
     },
   },
 };
@@ -230,7 +264,7 @@ function completeWithSource(input: {
   const source = `${input.markedSource.slice(0, cursorOffset)}${input.markedSource.slice(cursorOffset + 1)}`;
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({
+  const { symbolTable, parsedBlocks } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors: input.pslBlockDescriptors,
@@ -249,6 +283,7 @@ function completeWithSource(input: {
         scalarTypes,
         pslBlockDescriptors: input.pslBlockDescriptors,
         symbolTable,
+        parsedBlocks,
         ...(input.authoringContributions === undefined
           ? {}
           : { authoringContributions: input.authoringContributions }),
@@ -367,6 +402,7 @@ describe('providePslCompletionItems', () => {
       'types',
       'namespace',
       'audit',
+      'inventory',
       'policy',
     ]);
     expect(items.map((item) => item.detail)).toEqual([
@@ -375,6 +411,7 @@ describe('providePslCompletionItems', () => {
       'Defines reusable named types.',
       'Groups declarations belonging to the same database schema or database.',
       'Generic block keyword',
+      'An arbitrary-key block.',
       'Defines a security policy.',
     ]);
     expect(items[0]).toMatchObject({
@@ -400,6 +437,7 @@ describe('providePslCompletionItems', () => {
       'types',
       'namespace',
       'audit',
+      'inventory',
       'policy',
     ]);
     expect(items[0]).toMatchObject({
@@ -417,7 +455,13 @@ describe('providePslCompletionItems', () => {
   it('returns namespace-body declaration keywords without document-only native keywords', () => {
     const { items } = complete(['namespace feature {', '  |', '}'].join('\n'));
 
-    expect(items.map((item) => item.label)).toEqual(['model', 'type', 'audit', 'policy']);
+    expect(items.map((item) => item.label)).toEqual([
+      'model',
+      'type',
+      'audit',
+      'inventory',
+      'policy',
+    ]);
     expect(items.map((item) => item.label)).not.toContain('types');
     expect(items.map((item) => item.label)).not.toContain('namespace');
   });
@@ -427,7 +471,13 @@ describe('providePslCompletionItems', () => {
       ['namespace feature {', '  po|', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual(['model', 'type', 'audit', 'policy']);
+    expect(items.map((item) => item.label)).toEqual([
+      'model',
+      'type',
+      'audit',
+      'inventory',
+      'policy',
+    ]);
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       filterText: 'policy',
       textEdit: {
@@ -450,14 +500,17 @@ describe('providePslCompletionItems', () => {
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block keys and attributes}\n}`,
       },
     });
   });
 
   it.each([true, false])(
-    'inserts only required generic block parameters, snippets=%s',
+    'inserts a body placeholder without pre-filled keys, snippets=%s',
     (snippets) => {
+      // A declaration-keyword snippet inserts a block that has no symbol yet,
+      // so no spec can be bound; key candidates come from key completion
+      // inside the authored block instead.
       const { items } = completeWithSource({
         markedSource: '|',
         clientSupportsSnippets: snippets,
@@ -468,18 +521,7 @@ describe('providePslCompletionItems', () => {
               keyword: 'policy',
               discriminator: 'policy',
               name: { required: true },
-              parameters: {
-                target: { kind: 'ref', refKind: 'model', scope: 'same-space', required: true },
-                optional: { kind: 'value', codecId: 'fixture/text@1' },
-                using: { kind: 'value', codecId: 'fixture/text@1', required: true },
-                roles: {
-                  kind: 'list',
-                  of: { kind: 'ref', refKind: 'role', scope: 'same-space' },
-                  required: true,
-                },
-                mode: { kind: 'option', values: ['permissive', 'restrictive'], required: true },
-                omitted: { kind: 'value', codecId: 'fixture/text@1', required: false },
-              },
+              spec: policySpec,
               attributes: { audit: () => auditAttribute },
             },
           },
@@ -490,11 +532,7 @@ describe('providePslCompletionItems', () => {
         snippets
           ? [
               `policy ${nameSnippetPlaceholder} {`,
-              '  target = $' + '{2:target}',
-              '  using = $' + '{3:using}',
-              '  roles = [$' + '{4:roles}]',
-              '  mode = $' + '{5:mode}',
-              '  $0',
+              '  $' + '{0:// Block keys and attributes}',
               '}',
             ].join('\n')
           : 'policy ',
@@ -1095,6 +1133,61 @@ describe('providePslCompletionItems', () => {
     expect(items).toEqual([]);
   });
 
+  it('offers no key candidates for an arbitrary-key block spec', () => {
+    const { items } = complete(['inventory Stock {', '  |', '}'].join('\n'));
+
+    expect(items).toEqual([]);
+  });
+
+  it('keeps key completion available inside an invalid block', () => {
+    const { items } = complete(
+      ['policy Rule {', '  bogus = "not a declared key"', '  |', '}'].join('\n'),
+    );
+
+    expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
+  });
+
+  it('binds the spec with the resolved block symbol and never invokes rule parsing', () => {
+    const factoryContexts: unknown[] = [];
+    const throwingRule = {
+      kind: 'str' as const,
+      label: 'string',
+      value: undefined,
+      parse: () => {
+        throw new Error('metadata inspection must not invoke rule parsing');
+      },
+    };
+    const { items } = completeWithSource({
+      markedSource: ['guard Rule {', '  |', '}'].join('\n'),
+      pslBlockDescriptors: {
+        guard: {
+          kind: 'pslBlock',
+          keyword: 'guard',
+          discriminator: 'fixture-guard',
+          name: { required: true },
+          spec: (ctx: unknown) => {
+            factoryContexts.push(ctx);
+            return fixedBlock({
+              parameters: {
+                shield: { type: throwingRule, documentation: 'The shield key.' },
+              },
+            });
+          },
+        },
+      },
+    });
+
+    expect(items.map((item) => item.label)).toEqual(['shield']);
+    expect(items[0]?.detail).toBe('The shield key.');
+    // Once by the symbol-table lifecycle interpreting the (empty, valid)
+    // block, once by key completion binding metadata.
+    expect(factoryContexts).toHaveLength(2);
+    for (const raw of factoryContexts) {
+      const ctx = raw as { symbols: unknown; block: { name: string } };
+      expect(ctx.block.name).toBe('Rule');
+    }
+  });
+
   it('returns an empty list for unsupported classifier contexts', () => {
     const { items } = complete(['model Post {', '  // @|', '}'].join('\n'));
 
@@ -1139,6 +1232,12 @@ describe('providePslCompletionItems', () => {
         'enum Mood { Top }\nnamespace scoped { enum Mood { Scoped }\nmodel Post { mood scoped.Mood @default(|) } }',
       ),
     ).toEqual(['Scoped']);
+    // A field typed by an INVALID enum (duplicate member keys fail
+    // interpretation upstream) degrades to the generic scalar arms: no
+    // member arms are invented and nothing crashes.
+    const degraded = names('enum Mood { Happy Happy }\nmodel Post { mood Mood @default(|) }');
+    expect(degraded).not.toContain('Happy');
+    expect(degraded).toEqual(['true', 'false']);
   }, 5_000);
 
   it('uses actual adapter default-function signatures through the SQL factory', async () => {

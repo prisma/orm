@@ -6,7 +6,7 @@ import type {
 } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, entriesBlock, jsonValue } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
@@ -54,12 +54,12 @@ function buildInterpretInput(
   filename = SOURCE_ID,
 ): PslInterpretInput {
   const { document, sources } = parse(schema, filename);
-  const { symbolTable } = buildSymbolTable({
+  const { symbolTable, parsedBlocks } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
-  return { documents: [document], sources, symbolTable };
+  return { documents: [document], sources, symbolTable, parsedBlocks };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -379,6 +379,19 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
               return undefined;
             },
           },
+        },
+      },
+      pslBlockDescriptors: {
+        enum: {
+          kind: 'pslBlock' as const,
+          keyword: 'enum',
+          discriminator: 'enum',
+          name: { required: true },
+          spec: () =>
+            entriesBlock({
+              value: { type: jsonValue(), documentation: 'The member value.' },
+              allowBare: true,
+            }),
         },
       },
     },

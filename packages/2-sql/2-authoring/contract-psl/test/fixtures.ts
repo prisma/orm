@@ -15,7 +15,7 @@ import {
   type AuthoringPslBlockDescriptorNamespace,
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
-  type PslExtensionBlock,
+  type ParsedPslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
@@ -23,11 +23,18 @@ import type {
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import type { FuncCallSig, SymbolTable } from '@internal/psl-parser';
+import type {
+  BlockSymbol,
+  FuncCallSig,
+  PslBlockSpecDescriptor,
+  SymbolTable,
+} from '@internal/psl-parser';
 import {
   blockAttribute,
   buildSymbolTable,
+  entriesBlock,
   int,
+  jsonValue,
   num,
   oneOf,
   optional,
@@ -37,13 +44,12 @@ import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/s
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
-import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { postgresCodecLookup } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
-  block: PslExtensionBlock,
+  block: ParsedPslExtensionBlock,
   ctx: AuthoringEntityContext,
 ): EnumTypeHandle | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
@@ -80,9 +86,10 @@ function testEnumFactory(
   let memberError = false;
   const seenValues = new Set<string>();
 
-  for (const [memberName, paramValue] of Object.entries(block.parameters)) {
+  for (const [memberName, memberValue] of Object.entries(block.values)) {
+    const span = block.parameterSpans[memberName] ?? block.span;
     let value: unknown;
-    if (paramValue.kind === 'bare') {
+    if (memberValue === undefined) {
       try {
         value = codec.decodeJson(memberName as unknown as JsonValue);
       } catch {
@@ -90,42 +97,25 @@ function testEnumFactory(
           code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
           message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
           sourceId,
-          span: paramValue.span,
+          span,
         });
         memberError = true;
         continue;
       }
-    } else if (paramValue.kind === 'value') {
-      let jsonValue: unknown;
+    } else {
       try {
-        jsonValue = JSON.parse(paramValue.raw);
-      } catch {
-        diagnostics?.push({
-          code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" member "${memberName}" value "${paramValue.raw}" is not valid JSON`,
-          sourceId,
-          span: paramValue.span,
-        });
-        memberError = true;
-        continue;
-      }
-      try {
-        value = codec.decodeJson(
-          blindCast<JsonValue, 'JSON.parse returns JsonValue-compatible value'>(jsonValue),
-        );
+        value = codec.decodeJson(memberValue as JsonValue);
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" member "${memberName}" was rejected by codec "${codecId}": ${reason}`,
           sourceId,
-          span: paramValue.span,
+          span,
         });
         memberError = true;
         continue;
       }
-    } else {
-      continue;
     }
     const valueKey = String(value);
     if (seenValues.has(valueKey)) {
@@ -133,7 +123,7 @@ function testEnumFactory(
         code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
         message: `enum "${block.name}": duplicate member value "${valueKey}"`,
         sourceId,
-        span: paramValue.span,
+        span,
       });
       memberError = true;
       continue;
@@ -166,8 +156,11 @@ export const testEnumPslBlockDescriptor = {
   keyword: 'enum',
   discriminator: 'enum',
   name: { required: true },
-  parameters: {},
-  variadicParameters: true,
+  spec: () =>
+    entriesBlock({
+      value: { type: jsonValue(), documentation: 'The explicit member value.' },
+      allowBare: true,
+    }),
   attributes: {
     type: () =>
       blockAttribute('type', {
@@ -181,7 +174,7 @@ export const testEnumPslBlockDescriptor = {
         ],
       }),
   },
-};
+} satisfies PslBlockSpecDescriptor;
 
 export const testEnumEntityContributions = {
   enum: {
@@ -452,13 +445,14 @@ export function buildSymbolTableInput(
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
+  parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   enumInferenceCodecs: { readonly text: string; readonly int: string };
 } {
   const sourceId = options?.sourceId ?? 'schema.prisma';
   const pslBlockDescriptors = options?.pslBlockDescriptors ?? {};
   const { document, sources } = parse(schema, sourceId);
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable, diagnostics } = buildSymbolTable({
+  const { symbolTable, diagnostics, parsedBlocks } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors,
@@ -476,6 +470,7 @@ export function buildSymbolTableInput(
     sourceFile,
     sourceId,
     seedDiagnostics,
+    parsedBlocks,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
   };
 }
@@ -491,6 +486,7 @@ export function symbolTableInputFromParseArgs(args: {
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
+  parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   enumInferenceCodecs: { readonly text: string; readonly int: string };
 } {
   return buildSymbolTableInput(args.schema, {

@@ -2,9 +2,10 @@ import {
   type AuthoringTypeNamespace,
   isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
-import type { FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
+import type { BlockSymbol, FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
 import {
   type FieldDeclarationAst,
+  type GenericBlockDeclarationAst,
   type ModelDeclarationAst,
   NamespaceDeclarationAst,
 } from '@internal/psl-parser/syntax';
@@ -22,6 +23,23 @@ export function modelSymbolForNode(
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
     const namespaceMatch = Object.values(namespace.models).find((model) =>
       sameSyntax(model.node.syntax, node.syntax),
+    );
+    if (namespaceMatch !== undefined) return namespaceMatch;
+  }
+  return undefined;
+}
+
+export function blockSymbolForNode(
+  symbolTable: SymbolTable,
+  node: GenericBlockDeclarationAst,
+): BlockSymbol | undefined {
+  const topLevelMatch = Object.values(symbolTable.topLevel.blocks).find((block) =>
+    sameSyntax(block.node.syntax, node.syntax),
+  );
+  if (topLevelMatch !== undefined) return topLevelMatch;
+  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    const namespaceMatch = Object.values(namespace.blocks).find((block) =>
+      sameSyntax(block.node.syntax, node.syntax),
     );
     if (namespaceMatch !== undefined) return namespaceMatch;
   }

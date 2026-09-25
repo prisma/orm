@@ -1,7 +1,15 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import type { EntitySelector } from '../src/exports';
-import { blockAttribute, entityRef, identifier, list, oneOf } from '../src/exports';
+import type { EntitySelector, PslBlockSpecDescriptor } from '../src/exports';
+import {
+  blockAttribute,
+  entityRef,
+  fixedBlock,
+  identifier,
+  interpretExtensionBlockAttributes,
+  list,
+  oneOf,
+} from '../src/exports';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ModelAttributeAst } from '../src/syntax/ast/attributes';
@@ -63,23 +71,31 @@ describe('syntax-scoped entity resolution', () => {
         { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'The selected model.' },
       ],
     });
+    const descriptor = {
+      name: { required: true },
+      kind: 'pslBlock',
+      keyword: 'permission',
+      discriminator: 'permission',
+      spec: () => fixedBlock({ parameters: {} }),
+      attributes: { target: () => target },
+    } satisfies PslBlockSpecDescriptor;
     const result = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {
-        permission: {
-          name: { required: true },
-          kind: 'pslBlock',
-          keyword: 'permission',
-          discriminator: 'permission',
-          parameters: {},
-          attributes: { target: () => target },
-        },
-      },
+      pslBlockDescriptors: { permission: descriptor },
     });
     expect(result.diagnostics).toEqual([]);
     const namespace = result.symbolTable.topLevel.namespaces['Local'];
-    expect(namespace?.blocks['Reader']?.block.attributes['target']?.args).toEqual({
+    const block = namespace?.blocks['Reader'];
+    if (block === undefined) throw new Error('Missing block');
+    const parsed = interpretExtensionBlockAttributes({
+      block,
+      descriptor,
+      symbols: result.symbolTable,
+      sources,
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.attributes['target']?.args).toEqual({
       model: { declaration: namespace?.models['Later'], namespace },
     });
   });

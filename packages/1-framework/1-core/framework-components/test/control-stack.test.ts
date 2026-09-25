@@ -605,9 +605,29 @@ describe('assembleAuthoringContributions', () => {
       keyword,
       discriminator,
       name: { required: true },
-      parameters: {},
+      spec: () => ({}),
     };
   }
+
+  it('rejects a pslBlockDescriptors entry whose spec is not callable', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                spec: 'not-a-factory',
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
 
   it('merges pslBlockDescriptors namespaces from multiple descriptors', () => {
     const result = assembleAuthoringContributions([

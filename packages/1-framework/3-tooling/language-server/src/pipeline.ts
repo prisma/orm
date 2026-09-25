@@ -1,9 +1,12 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  ParsedPslExtensionBlock,
+} from '@internal/framework-components/authoring';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
+import { type BlockSymbol, buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
 import {
   type DocumentAst,
   type PslSources,
@@ -32,6 +35,7 @@ export interface PipelineResult {
   readonly sourceFile: SourceFile;
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly diagnostics: readonly LspDiagnostic[];
   readonly parseDiagnostics: readonly LspDiagnostic[];
 }
@@ -49,7 +53,11 @@ export function runPipeline(
 ): PipelineResult {
   const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+  const {
+    symbolTable,
+    diagnostics: symbolTableDiagnostics,
+    parsedBlocks,
+  } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors: inputs.pslBlockDescriptors,
@@ -60,6 +68,7 @@ export function runPipeline(
     sourceFile,
     sources,
     symbolTable,
+    parsedBlocks,
     parseDiagnostics: mapParseDiagnostics(parseDiagnostics),
     diagnostics: mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
   };
