@@ -45,6 +45,16 @@ function vectorCase(
 }
 
 const cases: readonly PostgresCodecConformanceCase[] = [
+  ...[[1], [1, 2, 3]].map(
+    (value): PostgresCodecConformanceCase => ({
+      codecId: 'pg/vector@1',
+      descriptor: pgVectorDescriptor,
+      label: `variable vector with ${value.length} dimensions`,
+      value,
+      typeParams: {},
+      setupSql: INSTALL_VECTOR,
+    }),
+  ),
   vectorCase('three dimensions', [1, 2, 3]),
   // A vector's text form separates elements with commas and wraps them in
   // brackets, so a value has to carry negatives and fractions before the
