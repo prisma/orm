@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { prismaContract } from '../src/exports/provider';
 import { lowerDefaultForField } from '../src/psl-column-resolution';
+import { createSqlBinder } from '../src/sql-attribute-specs';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import { createPostgresTestContext, postgresTarget, testEnumPslBlockDescriptor } from './fixtures';
 
@@ -209,6 +210,7 @@ model Other {
       fieldName: field.name,
       field,
       model,
+      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
       symbolTable: input.symbolTable,
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },

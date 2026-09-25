@@ -95,6 +95,27 @@ export type {
   TypedFuncCall,
   UnrestrictedIdentifierArgType,
 } from '../attribute-spec/types';
+export type {
+  AttributeSymbol,
+  Binder,
+  BinderResult,
+  BoundSpec,
+  CreateBinderOptions,
+  DescribeUnsupportedAttribute,
+  PslSymbol,
+  Resolution,
+  UnsupportedAttribute,
+} from '../binder';
+export {
+  createBinder,
+  PSL_UNRESOLVED_REFERENCE,
+} from '../binder';
+export type {
+  ContributedMember,
+  ContributedNamespaceSymbol,
+  ContributedTypeScope,
+  ContributedTypeSymbol,
+} from '../contributed-type-scope';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
   createPslDiagnosticCollector,
@@ -117,6 +138,7 @@ export {
   readResolvedConstructorCall,
 } from '../resolve';
 export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
+export type { Scope, ScopeResolution } from '../scope';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,

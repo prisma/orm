@@ -20,6 +20,7 @@
     "@prisma/orm-framework": "workspace:8.0.0-rc.12",
     "@prisma/orm-target-mongo": "workspace:8.0.0-rc.12",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.12",
+    "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:"
   },

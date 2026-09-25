@@ -296,8 +296,10 @@ export interface ResolvedIncludeRelation {
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
   readonly localTableName: string;
-  readonly targetColumn: string;
-  readonly localColumn: string;
+  /** Target-side join columns, positionally paired with `localColumns`. */
+  readonly targetColumns: readonly string[];
+  /** Local-side join columns, positionally paired with `targetColumns`. */
+  readonly localColumns: readonly string[];
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly through?: IncludeThroughDescriptor;
 }
@@ -332,35 +334,30 @@ export function resolveIncludeRelation(
       { meta: { model: baseModelName, relation: relationName } },
     );
   }
-  const localField = relation.on.localFields[0];
-  const targetField = relation.on.targetFields[0];
-  if (!localField || !targetField) {
+  const { localFields, targetFields } = relation.on;
+  if (localFields.length === 0 || localFields.length !== targetFields.length) {
     throw new InternalError(
-      `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
+      `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata: ${localFields.length} local field(s), ${targetFields.length} target field(s)`,
     );
   }
+  const localColumns = localFields.map((field) =>
+    resolveFieldToColumn(contract, namespaceId, declaringModelName, field),
+  );
+  const targetColumns = targetFields.map((field) =>
+    resolveFieldToColumn(contract, relation.toNamespace, relation.to, field),
+  );
 
   const relatedTableName = resolveModelTableName(contract, relation.toNamespace, relation.to);
-  const localColumn = resolveFieldToColumn(contract, namespaceId, declaringModelName, localField);
-  const targetColumn = resolveFieldToColumn(
-    contract,
-    relation.toNamespace,
-    relation.to,
-    targetField,
-  );
 
   let through: IncludeThroughDescriptor | undefined;
   if (relation.through !== undefined) {
-    const parentLocalColumns = relation.on.localFields.map((field) =>
-      resolveFieldToColumn(contract, namespaceId, declaringModelName, field),
-    );
     through = {
       table: relation.through.table,
       namespaceId: relation.through.namespaceId,
       parentColumns: relation.through.parentColumns,
       childColumns: relation.through.childColumns,
       targetColumns: relation.through.targetColumns,
-      parentLocalColumns,
+      parentLocalColumns: localColumns,
     };
   }
 
@@ -369,8 +366,8 @@ export function resolveIncludeRelation(
     relatedNamespaceId: relation.toNamespace,
     relatedTableName,
     localTableName,
-    targetColumn,
-    localColumn,
+    targetColumns,
+    localColumns,
     cardinality: relation.cardinality,
     ...ifDefined('through', through),
   };
@@ -537,13 +534,19 @@ export function resolveModelTableName(
   return table;
 }
 
-export function resolvePrimaryKeyColumn(
+export function resolvePrimaryKeyColumns(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
-): string {
-  const resolved = resolveTableForContract(contract, namespaceId, tableName);
-  return resolved?.table.primaryKey?.columns[0] ?? 'id';
+): readonly string[] {
+  const columns =
+    resolveTableForContract(contract, namespaceId, tableName)?.table.primaryKey?.columns ?? [];
+  if (columns.length === 0) {
+    throw new InternalError(
+      `Table "${tableName}" in namespace "${namespaceId}" has no primary key to join its multi-table variants on`,
+    );
+  }
+  return columns;
 }
 
 export function resolveRowIdentityColumns(
