@@ -14,9 +14,9 @@ import { type LspDiagnostic, mapParseDiagnostics } from './diagnostic-mapping';
 
 /**
  * The pipeline itself consumes none of these fields — they are the
- * control-stack projection that semantic tokens, completions, and block
- * resolution (`interpretExtensionBlocks`) classify against. Block-value
- * diagnostics ride the interpreter-diagnostics lane, not this pipeline.
+ * control-stack projection that semantic tokens and completions classify
+ * against. Block-value diagnostics ride the interpreter-diagnostics lane,
+ * not this pipeline.
  */
 export interface PipelineInputs {
   readonly scalarTypes: readonly string[];
