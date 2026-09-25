@@ -1134,7 +1134,12 @@ export class OrderByItem extends AstNode {
   }
 
   rewrite(rewriter: ExpressionRewriter): OrderByItem {
-    return new OrderByItem(this.expr.rewrite(rewriter), this.dir, this.nulls);
+    return this.withExpr(this.expr.rewrite(rewriter));
+  }
+
+  /** A new frozen item ordering by `expr` with the same direction and null placement. */
+  withExpr(expr: AnyExpression): OrderByItem {
+    return new OrderByItem(expr, this.dir, this.nulls);
   }
 
   /**

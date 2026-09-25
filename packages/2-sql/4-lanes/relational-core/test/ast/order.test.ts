@@ -102,4 +102,12 @@ describe('ast/order', () => {
       false,
     ]);
   });
+
+  it('rebuilds an item around a new expression, keeping direction and null placement', () => {
+    const item = OrderByItem.desc(col('post', 'title'), { nulls: 'first' });
+
+    expect(item.withExpr(col('article', 'title'))).toEqual(
+      new OrderByItem(col('article', 'title'), 'desc', 'first'),
+    );
+  });
 });

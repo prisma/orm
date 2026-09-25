@@ -16,7 +16,7 @@ import {
   JsonObjectExpr,
   LiteralExpr,
   NativeJsonValueProjection,
-  OrderByItem,
+  type OrderByItem,
   type ProjectionExpr,
   ProjectionItem,
   SelectAst,
@@ -245,11 +245,7 @@ function buildIncludeOrderArtifacts(
     if (!orderItem) {
       throw new InternalError(`Missing include order metadata at index ${index}`);
     }
-    return new OrderByItem(
-      ColumnRef.of(rowAlias, projection.alias),
-      orderItem.dir,
-      orderItem.nulls,
-    );
+    return orderItem.withExpr(ColumnRef.of(rowAlias, projection.alias));
   });
 
   return {
@@ -710,13 +706,8 @@ function buildIncludeChildRowsSelect(
     });
     if (childOrderBy) {
       childRows = childRows.withOrderBy(
-        childOrderBy.map(
-          (item, index) =>
-            new OrderByItem(
-              ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-              item.dir,
-              item.nulls,
-            ),
+        childOrderBy.map((item, index) =>
+          item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
         ),
       );
     }
@@ -871,13 +862,8 @@ function buildDistinctNonLeafChildRowsSelect(options: {
     // deterministic. Reference the hidden-order alias columns the
     // wrapper forwarded under their original names from `rankedAlias`.
     innerSelect = innerSelect.withOrderBy(
-      childOrderBy.map(
-        (item, index) =>
-          new OrderByItem(
-            ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-            item.dir,
-            item.nulls,
-          ),
+      childOrderBy.map((item, index) =>
+        item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
       ),
     );
   }
@@ -1151,13 +1137,8 @@ function buildIncludeChildScalarSelect(
     });
     if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {
       inner = inner.withOrderBy(
-        remappedOrderBy.map(
-          (item, index) =>
-            new OrderByItem(
-              ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-              item.dir,
-              item.nulls,
-            ),
+        remappedOrderBy.map((item, index) =>
+          item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
         ),
       );
     }
