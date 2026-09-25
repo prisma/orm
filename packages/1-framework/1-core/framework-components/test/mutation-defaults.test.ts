@@ -165,6 +165,17 @@ describe('applyMutationDefaults', () => {
     ).toEqual([{ field: 'id', value: 'xxxxxxxx' }]);
   });
 
+  it('applies only the defaults of the requested namespace', () => {
+    expect(
+      applyMutationDefaults(userDefaults, registry, {
+        op: 'create',
+        namespace: 'other',
+        entry: 'user',
+        values: {},
+      }),
+    ).toEqual([{ field: 'id', value: 'xx' }]);
+  });
+
   it('applies update defaults from onUpdate', () => {
     expect(
       applyMutationDefaults(userDefaults, registry, {
