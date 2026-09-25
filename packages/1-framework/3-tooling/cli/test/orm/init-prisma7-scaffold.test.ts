@@ -149,7 +149,7 @@ describe('the Prisma 7 scaffold', () => {
         'contract: prisma7Schema("prisma/schema.prisma"),\n    output: "src/prisma",',
       );
       expect(readProjectFile('src/prisma/db.ts')).toContain(
-        "import type { Contract } from './contract.d';",
+        "import type { Contract } from './contract.js';",
       );
       expect(readProjectFile('src/prisma/db.ts')).toContain(
         "from './contract.json' with { type: 'json' };",

@@ -199,6 +199,16 @@ describe('templates', () => {
       const prismaNextImports = db.split('\n').filter((l) => l.includes("from '@internal/"));
       expect(prismaNextImports).toHaveLength(1);
     });
+
+    it.each(['postgres', 'mongo'] as const)(
+      'imports the contract type as ./contract.js so it resolves under nodenext and bundler (%s)',
+      (target) => {
+        const db = dbFile(target);
+
+        expect(db).toContain("from './contract.js'");
+        expect(db).not.toContain("from './contract.d'");
+      },
+    );
   });
 
   describe('targetPackageName', () => {
