@@ -2394,17 +2394,12 @@ function buildContractFromDefinition<
     ...mongoContractCanonicalizationHooks,
   });
 
-  const storage = blindCast<
-    MongoStorageShape<string>,
-    'MongoStorage is the Mongo storage class; it structurally satisfies the storage shape the contract type names'
-  >(
-    new MongoStorage({
-      storageHash,
-      namespaces: {
-        [UNBOUND_NAMESPACE_ID]: unboundNamespace,
-      },
-    }),
-  );
+  const storage: MongoStorageShape<string> = new MongoStorage({
+    storageHash,
+    namespaces: {
+      [UNBOUND_NAMESPACE_ID]: unboundNamespace,
+    },
+  });
 
   const builtEnums: Record<string, ContractEnum> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {

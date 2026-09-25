@@ -1500,10 +1500,10 @@ export function interpretPslDocumentToMongoContract(
       'arktype-validated JSON shapes satisfy MongoCollectionInput by construction'
     >(raw);
   }
-  const storage = blindCast<
-    Contract['storage'],
-    'MongoStorage is the Mongo family concrete storage class; it structurally satisfies the Contract storage slot.'
-  >(buildMongoStorage({ collections: collectionInputs, valueSets: storageValueSets }));
+  const storage: Contract['storage'] = buildMongoStorage({
+    collections: collectionInputs,
+    valueSets: storageValueSets,
+  });
   const capabilities: Record<string, Record<string, boolean>> = {};
 
   const hasEnums = Object.keys(builtEnums).length > 0;

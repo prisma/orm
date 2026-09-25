@@ -1225,15 +1225,10 @@ function assembleContract(input: {
   for (const [name, collection] of Object.entries(input.collections)) {
     collections[name] = collection.indexes.length > 0 ? { indexes: collection.indexes } : {};
   }
-  const storage = blindCast<
-    Contract['storage'],
-    'MongoStorage is the Mongo family concrete storage class; it structurally satisfies the Contract storage slot.'
-  >(
-    buildMongoStorage({
-      collections,
-      valueSets: encodeMongoValueSets(Object.fromEntries(input.enums), input.codecLookup),
-    }),
-  );
+  const storage: Contract['storage'] = buildMongoStorage({
+    collections,
+    valueSets: encodeMongoValueSets(Object.fromEntries(input.enums), input.codecLookup),
+  });
 
   const models: Record<string, unknown> = {};
   for (const [modelName, build] of input.builds) {

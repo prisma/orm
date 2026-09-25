@@ -22,12 +22,7 @@ import {
   type StorageHashBase,
   type ValueSetRef,
 } from '@internal/contract/types';
-import {
-  type CapabilityMatrix,
-  type EnumTypeHandle,
-  mergeCapabilityMatrices,
-  resolveToOneRelationNullable,
-} from '@internal/contract-authoring';
+import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
 import type {
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
@@ -44,6 +39,7 @@ import {
   type ColumnTypeDescriptor,
   materializeCodec,
 } from '@internal/framework-components/codec';
+import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
@@ -1619,21 +1615,10 @@ export function buildSqlContractFromDefinition(
     }
   }
 
-  const extensionPackCapabilitySources = definition.extensions
-    ? Object.values(definition.extensions).map((pack) =>
-        blindCast<
-          CapabilityMatrix | undefined,
-          'pack capabilities are declared as a capability matrix'
-        >(pack.capabilities),
-      )
-    : [];
-  const capabilities = mergeCapabilityMatrices(
-    blindCast<
-      CapabilityMatrix | undefined,
-      'target capabilities are declared as a capability matrix'
-    >(definition.target.capabilities),
-    ...extensionPackCapabilitySources,
-  );
+  const capabilities = mergeCapabilityMatrices({}, [
+    definition.target,
+    ...Object.values(definition.extensions ?? {}),
+  ]);
   // Internal `profileHash` computation is unchanged from `origin/main`: it
   // continues to fingerprint the author-declared capability subset. With
   // `capabilities` removed from the `defineContract` input that subset is
