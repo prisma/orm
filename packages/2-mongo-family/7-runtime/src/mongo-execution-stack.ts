@@ -14,9 +14,9 @@ import {
   applyMutationDefaults,
   assertMutationDefaultGeneratorsAvailable,
   collectMutationDefaultGenerators,
+  type MutationDefaultGeneratorContributor,
   type MutationDefaults,
   type MutationDefaultsOptions,
-  type RuntimeMutationDefaultGenerator,
   runtimeError,
 } from '@internal/framework-components/runtime';
 import type { MongoCodec } from '@internal/mongo-codec';
@@ -29,9 +29,9 @@ import { blindCast } from '@internal/utils/casts';
  *
  * Mirrors `SqlStaticContributions` in shape: a `codecs()` getter that yields a `MongoCodecRegistry` populated with this contributor's codecs. The registry is then walked by `createMongoExecutionContext` and folded into the single per-execution registry the runtime reads from at decode time.
  */
-export interface MongoStaticContributions {
+export interface MongoStaticContributions
+  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {
   readonly codecs: () => MongoCodecRegistry;
-  readonly mutationDefaultGenerators?: () => ReadonlyArray<RuntimeMutationDefaultGenerator>;
 }
 
 export interface MongoRuntimeTargetDescriptor<

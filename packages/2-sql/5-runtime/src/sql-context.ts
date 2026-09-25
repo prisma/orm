@@ -28,7 +28,7 @@ import {
   applyMutationDefaults,
   assertMutationDefaultGeneratorsAvailable,
   collectMutationDefaultGenerators,
-  type RuntimeMutationDefaultGenerator,
+  type MutationDefaultGeneratorContributor,
   runtimeError,
 } from '@internal/framework-components/runtime';
 import { canonicalizeJson } from '@internal/framework-components/utils';
@@ -78,10 +78,10 @@ export type RuntimeParameterizedCodecDescriptor<P = Record<string, unknown>> =
 /**
  * Contributor protocol for SQL components (target, adapter, extension pack). The unified `codecs:` slot returns the full {@link CodecDescriptor} list — non-parameterized and parameterized descriptors live side-by-side in the same array. The framework dispatches every codec id through the unified descriptor map without branching on parameterization.
  */
-export interface SqlStaticContributions {
+export interface SqlStaticContributions
+  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {
   readonly codecs: () => ReadonlyArray<AnyCodecDescriptor>;
   readonly queryOperations?: () => SqlOperationDescriptors;
-  readonly mutationDefaultGenerators?: () => ReadonlyArray<RuntimeMutationDefaultGenerator>;
 }
 
 export interface SqlRuntimeTargetDescriptor<
