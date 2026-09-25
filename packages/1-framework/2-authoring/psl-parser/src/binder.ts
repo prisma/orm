@@ -184,9 +184,9 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
-  // Field types must be fully bound before attributes parse:
-  // @relation(references: [x]) resolves x against the referenced model's
-  // fields, which forward references leave unknown until this walk finishes.
+  // Types bind in this walk; attributes parse in the next one. The order
+  // matters: @relation(references: [x]) looks x up on the referenced model.
+  // With one walk, a forward reference would find nothing to look it up on.
   walkEntities(symbolTable, stack, (entity) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
