@@ -158,7 +158,7 @@ async function printAndVerify(ctx: JourneyContext, connectionString: string): Pr
     0,
   );
 
-  const print = await runContractPrint(ctx, ['--json']);
+  const print = await runContractPrint(ctx, ['--output', 'contract.prisma', '--json']);
   expect(print.exitCode, `contract print\n${output(print)}`).toBe(0);
   expect(print.presented?.data).toMatchObject({
     ok: true,
@@ -241,7 +241,11 @@ withTempDir(({ createTempDir }) => {
       expect(typeScriptEmit.exitCode, output(typeScriptEmit)).toBe(0);
       expect(emittedContractJson(testDir)).toMatchObject({ defaultControlPolicy: 'external' });
 
-      const print = await runContractPrint(onTypeScript, ['--json']);
+      const print = await runContractPrint(onTypeScript, [
+        '--output',
+        'prisma/contract.prisma',
+        '--json',
+      ]);
       expect(print.exitCode, output(print)).toBe(0);
       expect(print.presented?.data).toMatchObject({
         psl: { path: 'prisma/contract.prisma' },
@@ -284,7 +288,7 @@ withTempDir(({ createTempDir }) => {
     it('reports what the Prisma 7 source reports about a view and writes nothing', async () => {
       const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, { text: VIEW_SCHEMA });
 
-      const print = await runContractPrint(ctx, ['--json']);
+      const print = await runContractPrint(ctx, ['--output', 'contract.prisma', '--json']);
 
       expect(print.exitCode, output(print)).toBe(2);
       expect(errorOf(print).code).toBe('CONTRACT.SOURCE_LOAD_FAILED');

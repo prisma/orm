@@ -283,11 +283,11 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE
 
-`prisma contract print` was asked to write its output over a file the project needs: `prisma.config.ts` in the invocation directory, or one of the files `contract emit` writes (the JSON `contract.output` names, and the `.d.ts` beside it). Writing there would put PSL where the CLI reads its config when `--config` names no other file, or the next `contract emit` would write over the printed PSL. The check compares the files the paths name: a path through a symbolic link, or one that differs only in case on a volume that ignores case, counts as the same file. Raised before the source is read, so nothing is written. Pick another `--output` path. Payload: `output` and `file`, both relative to the invocation directory.
+`prisma contract print --output` was asked to write over a file the project needs: `prisma.config.ts` in the invocation directory, or one of the files `contract emit` writes (the JSON `contract.output` names, and the `.d.ts` beside it). Writing there would put PSL where the CLI reads its config when `--config` names no other file, or the next `contract emit` would write over the printed PSL. The check compares the files the paths name: a path through a symbolic link, or one that differs only in case on a volume that ignores case, counts as the same file. Raised before the source is read, so nothing is written. Pick another `--output` path. Payload: `output` and `file`, both relative to the invocation directory.
 
 ### CONTRACT.PRINT_OUTPUT_IS_SOURCE
 
-`prisma contract print` was asked to write its output over a file it reads: the resolved output path is one of the contract source's inputs, or sits inside a directory of source files. Writing there would destroy the source the printed contract is made from. Pick another `--output` path, outside the files the config names. Raised before the source is read, so nothing is written and the source file is untouched. Payload: `output` and `source`, both relative to the invocation directory.
+`prisma contract print --output` was asked to write over a file it reads: the resolved `--output` path is one of the contract source's inputs, or sits inside a directory of source files. Writing there would destroy the source the printed contract is made from. Pick another `--output` path, outside the files the config names. Raised before the source is read, so nothing is written and the source file is untouched. Payload: `output` and `source`, both relative to the invocation directory.
 
 ### CONTRACT.PRINT_UNSUPPORTED
 

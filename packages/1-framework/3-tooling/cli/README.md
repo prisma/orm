@@ -422,7 +422,7 @@ prisma db schema -v
 
 ### `prisma contract print`
 
-Load the contract from the source the config names and write the Prisma 8 PSL that reads back as the same contract. The source can be a Prisma 7 schema (`prisma7Schema(...)`), a TypeScript contract, or a PSL contract. The common use is cutover: a project on `prisma7Schema(...)` is ready to stop reading the Prisma 7 file and author in Prisma 8 PSL instead.
+Load the contract from the source the config names and print the Prisma 8 PSL that reads back as the same contract, or write it to a file with `--output`. The source can be a Prisma 7 schema (`prisma7Schema(...)`), a TypeScript contract, or a PSL contract. The common use is cutover: a project on `prisma7Schema(...)` is ready to stop reading the Prisma 7 file and author in Prisma 8 PSL instead.
 
 **Command:**
 ```bash
@@ -431,32 +431,38 @@ prisma contract print [--config <path>] [--output <path>] [--json] [-v] [-q] [--
 
 Options:
 - `--config <path>`: Optional. Path to `prisma.config.ts` (defaults to `./prisma.config.ts` if present)
-- `--output <path>`: Write the printed PSL contract to the specified path
-- `--json`: Output a JSON result envelope (includes `psl.path` and the `source` files it read)
+- `--output <path>`: Write the PSL to this file instead of printing it
+- `--json`: Output a JSON result envelope (includes the PSL as `psl.text`, or `psl.path` with `--output`, and the `source` files it read)
 - `-q, --quiet`: Quiet mode (errors only)
 - `-v, --verbose`: Verbose output (debug info, timings)
 - `-vv, --trace`: Trace output (deep internals, stack traces)
 - `--color/--no-color`: Force/disable color output
 
-The command needs no database connection: it reads the source files, not the server. The output path is chosen the same way `contract infer` chooses one, and an existing file there is overwritten with a warning.
+The command needs no database connection: it reads the source files, not the server. Without `--output`, it prints the PSL and writes no file. In a terminal the PSL is shown on screen. A pipe receives the JSON result, as with every command, unless you pass `--format human`, which sends the PSL alone to standard output:
 
-The written file opens with two comment lines: the `// use prisma-8` marker, and a line naming the source files it was printed from:
+```bash
+prisma contract print --format human > prisma/contract.prisma
+```
+
+With `--output`, an existing file at that path is overwritten with a warning.
+
+The printed PSL opens with two comment lines: the `// use prisma-8` marker, and a line naming the source files it was printed from:
 
 ```prisma
 // use prisma-8
 // Printed from prisma/schema.prisma by `prisma contract print`.
 ```
 
-The written file reads back as the identical contract. Where PSL has no form for part of the contract, the command refuses, names that part, and writes nothing. It exits `2` and writes nothing in these cases:
+The printed PSL reads back as the identical contract. Where PSL has no form for part of the contract, the command refuses, names that part, and prints and writes nothing. It exits `2` in these cases:
 - `CONTRACT.PRINT_UNSUPPORTED`: part of the contract cannot be written as PSL that reads back the same. The full list of cases is under that code in `docs/reference/error-reference.md`. A column type an extension contributes, such as pgvector's `Vector`, prints only when that extension is in the config.
 - `CONTRACT.SOURCE_LOAD_FAILED`: the source cannot be read, reported exactly as `contract emit` reports it.
 - The loaded contract fails the structure check `contract emit` applies, as a hand-written TypeScript contract can. The command runs the same check before it prints, so it reports the same error as `contract emit`.
-- `CONTRACT.PRINT_OUTPUT_IS_SOURCE`: the output path is a source file the config reads, or sits inside a directory of source files. Pick another path.
-- `CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE`: the output path is `prisma.config.ts` in the invocation directory, or one of the files `contract emit` writes (`contract.json` and `contract.d.ts`, or whatever `contract.output` names). Pick another path.
+- `CONTRACT.PRINT_OUTPUT_IS_SOURCE`: the `--output` path is a source file the config reads, or sits inside a directory of source files. Pick another path.
+- `CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE`: the `--output` path is `prisma.config.ts` in the invocation directory, or one of the files `contract emit` writes (`contract.json` and `contract.d.ts`, or whatever `contract.output` names). Pick another path.
 
 These checks compare the files the paths name, not the text of the paths: a path through a symbolic link, or one that differs only in case on a volume that ignores case (the macOS default), counts as the same file.
 
-A PSL file cannot carry the contract's default control policy. When the contract has one, the command prints a warning, names it in the JSON result (`defaultControlPolicy`) and in the next step, and the config must set it on the new PSL source. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed. The facade `defineConfig` has no option for it, so build the PSL source with `prismaContract`, which comes from `@prisma/orm-family-sql` (add that package to the project's dependencies). For Postgres, with the default output path of a Prisma 7 cutover:
+A PSL file cannot carry the contract's default control policy. When the contract has one, the command prints a warning, names it in the JSON result (`defaultControlPolicy`) and in the next step, and the config must set it on the new PSL source. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed. The facade `defineConfig` has no option for it, so build the PSL source with `prismaContract`, which comes from `@prisma/orm-family-sql` (add that package to the project's dependencies). For Postgres, with the PSL written to `prisma/contract.prisma`:
 
 ```typescript
 // prisma.config.ts

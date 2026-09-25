@@ -17,16 +17,18 @@ Output begins:
 
 ## Chosen design
 
-- **Contract-to-PSL printer.** A target-descriptor hook beside `inferPslContract`, implemented for Postgres, that takes the family contract and the configured stack's PSL types and returns a `PslDocumentAst` that reads back as the same contract. Text comes from the existing `printPslFromAst`, which gains a `headerComment` option the command passes; its default leaves `contract infer` output unchanged.
-- **Command** `contract print` in `packages/1-framework/3-tooling/cli/src/orm/contract/print.ts`, registered in `family.ts` and `cli.ts`. It loads the contract through whatever source the config names, prints, and writes with `publishTextArtifact`. Output path resolution uses `pslOutputPathFor`, shared with `contract infer`. Refusals exit 2 and write nothing.
+- **Contract-to-PSL printer.** A target-descriptor hook beside `inferPslContract`, implemented for Postgres, that takes the family contract and the configured stack's PSL types and returns a `PslDocumentAst` that reads back as the same contract. Text comes from the existing `printPslFromAst`, which always writes the `// use prisma-8` marker and takes a `description` line from each caller.
+- **Command** `contract print` in `packages/1-framework/3-tooling/cli/src/orm/contract/print.ts`, registered in `family.ts` and `cli.ts`. It loads the contract through whatever source the config names and prints the PSL: on screen in a terminal, to standard output with `--format human`, or as `psl.text` in the JSON result. With `--output <path>` it writes the file with `publishTextArtifact` instead. Refusals exit 2 and print and write nothing.
 - **Round trip test.** For every fixture from slices 1 and 2: interpret the Prisma 7 file, print, interpret the output with the PSL source, compare the serialized contracts and the storage hash.
 
 ## Edge cases
 
 | Case | Disposition |
 |---|---|
-| Output file exists | Warn and overwrite, as `contract infer` does. |
-| Output path is a source file the config reads | Exit 2 with `CONTRACT.PRINT_OUTPUT_IS_SOURCE`; nothing is written. |
+| No `--output` | Print the PSL; write no file. |
+| `--output` file exists | Warn and overwrite, as `contract infer` does. |
+| `--output` path is a source file the config reads | Exit 2 with `CONTRACT.PRINT_OUTPUT_IS_SOURCE`; nothing is written. |
+| `--output` path is the config file or an emitted contract file | Exit 2 with `CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE`; nothing is written. |
 | Part of the contract PSL cannot carry | Exit 2 with `CONTRACT.PRINT_UNSUPPORTED` naming it; nothing is written. Two Prisma 7 fixtures meet this: one model name in two namespaces. |
 | The contract has a default control policy | The PSL file cannot carry it; the result names it so the config sets it on the PSL source. |
 
@@ -37,4 +39,4 @@ Inherits `drive/calibration/dod.md`. Slice-specific:
 - [ ] Round trip hash equality holds for every fixture from slices 1 and 2 that `contract print` can write.
 - [ ] The printed output for the end-to-end fixtures emits with the PSL source and `db verify` reports zero findings.
 - [ ] `packages/1-framework/3-tooling/cli/README.md` documents `contract print`.
-- [ ] `--json` output carries the written path.
+- [ ] `--json` output carries the written path with `--output`, and the PSL text without it.

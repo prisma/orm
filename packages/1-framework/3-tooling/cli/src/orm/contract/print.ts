@@ -19,13 +19,14 @@ import { publishTextArtifact } from '../../utils/publish-text-artifact';
 import { defineOrmCommand } from '../define-command';
 import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
-import { emittedJsonPathFor, filePathKey, pslOutputPathFor } from './paths';
+import { emittedJsonPathFor, filePathKey } from './paths';
 
 interface PrintDocument {
   readonly ok: true;
   readonly summary: string;
   readonly target: { readonly familyId: string; readonly id: string };
-  readonly psl: { readonly path: string };
+  /** The file the PSL was written to, or the PSL itself when no --output was given. */
+  readonly psl: { readonly path: string } | { readonly text: string };
   readonly source: readonly string[];
   /**
    * The contract's default control policy. A PSL file cannot carry it; the
@@ -41,18 +42,29 @@ interface EmittedFilesMove {
   readonly after: { readonly json: string; readonly dts: string };
 }
 
+function sourceSettingsClause(policy: string | undefined): string {
+  return policy === undefined
+    ? ''
+    : `, through a PSL source that sets defaultControlPolicy: '${policy}'`;
+}
+
 function switchToPrintedActions(
   document: PrintDocument,
   emittedFilesMove: EmittedFilesMove | undefined,
 ): readonly NextAction[] {
+  const policyClause = sourceSettingsClause(document.defaultControlPolicy);
+  const emit = runCommandAction('Emit the printed contract', '{bin} contract emit');
+  if (!('path' in document.psl)) {
+    return [
+      chooseAction(
+        `Write the PSL to a file with --output <path>, then point contract in prisma.config.ts at that file${policyClause}`,
+      ),
+      emit,
+    ];
+  }
   const path = document.psl.path;
-  const policy = document.defaultControlPolicy;
   return [
-    chooseAction(
-      policy === undefined
-        ? `Point contract in prisma.config.ts at ${path}`
-        : `Point contract in prisma.config.ts at ${path}, through a PSL source that sets defaultControlPolicy: '${policy}'`,
-    ),
+    chooseAction(`Point contract in prisma.config.ts at ${path}${policyClause}`),
     ...(emittedFilesMove === undefined
       ? []
       : [
@@ -60,7 +72,7 @@ function switchToPrintedActions(
             `With contract: './${path}' and no output in prisma.config.ts, contract emit writes ${emittedFilesMove.after.json} and ${emittedFilesMove.after.dts}, not ${emittedFilesMove.before.json} and ${emittedFilesMove.before.dts}`,
           ),
         ]),
-    runCommandAction('Emit the printed contract', '{bin} contract emit'),
+    emit,
   ];
 }
 
@@ -68,20 +80,34 @@ function defaultControlPolicyWarning(policy: string): string {
   return `The contract's default control policy is '${policy}', and a PSL file cannot carry it. Set defaultControlPolicy: '${policy}' on the PSL source in prisma.config.ts. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed.`;
 }
 
+/** The lines of `text`, without the empty line after its final newline. */
+function linesOf(text: string): readonly string[] {
+  return text.replace(/\n$/, '').split('\n');
+}
+
 function printPresentations(
   document: PrintDocument,
   emittedFilesMove: EmittedFilesMove | undefined,
 ): Presentations {
   return {
-    stdout: () => [],
+    stdout: () => ('text' in document.psl ? linesOf(document.psl.text) : []),
     next: () => switchToPrintedActions(document, emittedFilesMove),
-    human: (): readonly Block[] => [
-      {
-        kind: 'summary',
-        status: 'ok',
-        text: [{ text: 'Contract written to ' }, { text: document.psl.path, tone: 'identifier' }],
-      },
-    ],
+    human: (): readonly Block[] =>
+      'path' in document.psl
+        ? [
+            {
+              kind: 'summary',
+              status: 'ok',
+              text: [
+                { text: 'Contract written to ' },
+                { text: document.psl.path, tone: 'identifier' },
+              ],
+            },
+          ]
+        : [
+            { kind: 'summary', status: 'ok', text: [{ text: 'Contract printed as Prisma 8 PSL' }] },
+            { kind: 'drawing', lines: linesOf(document.psl.text) },
+          ],
     json: () => document,
   };
 }
@@ -196,17 +222,20 @@ function emittedFilesMoveFor(inputs: {
 export function createContractPrintCommand({ printPsl }: ContractPrintCommandDeps) {
   return defineOrmCommand({
     help: {
-      summary: 'Write the configured contract as Prisma 8 PSL',
+      summary: 'Print the configured contract as Prisma 8 PSL',
       description:
         'Loads the contract from contract.source in your config, whatever kind\n' +
-        'of source that is, and writes it as a Prisma 8 PSL file. Emitting that\n' +
-        'file produces the same contract: same hashes, same domain. If the\n' +
-        'contract holds something PSL cannot express, the command refuses,\n' +
-        'names it, and writes nothing. The command only writes the PSL file;\n' +
-        'switch the config to it, then run `contract emit`. An existing file at\n' +
-        'the output path is overwritten, with a warning.',
+        'of source that is, and prints it as Prisma 8 PSL, or writes it to the\n' +
+        'file --output names. Emitting that PSL produces the same contract: same\n' +
+        'hashes, same domain. If the contract holds something PSL cannot\n' +
+        'express, the command refuses, names it, and prints nothing. A pipe\n' +
+        'receives the JSON result unless you pass --format human. The command\n' +
+        'does not change your config: point it at the written file, then run\n' +
+        '`contract emit`. An existing file at the --output path is overwritten,\n' +
+        'with a warning.',
       examples: [
         'contract print',
+        'contract print --format human > ./src/prisma/contract.prisma',
         'contract print --output ./src/prisma/contract.prisma',
         'contract print --json',
       ],
@@ -214,7 +243,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
     args: {
       flags: {
         output: flag.string({
-          brief: 'Write the printed PSL contract to the specified path',
+          brief: 'Write the PSL to this file instead of standard output',
           placeholder: 'path',
         }),
       },
@@ -237,21 +266,19 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
       const emittedJsonPath =
         contractConfig.output === undefined ? undefined : resolve(ctx.cwd, contractConfig.output);
 
-      const outputPath = pslOutputPathFor({
-        config: ctx.config,
-        cwd: ctx.cwd,
-        output: args.flags.output,
-      });
-      const displayPath = relative(ctx.cwd, outputPath);
-      const refusal = await outputPathRefusal({
-        cwd: ctx.cwd,
-        outputPath,
-        sourceInputs,
-        configPath: resolve(baseDirFor(ctx.config), 'prisma.config.ts'),
-        emittedJsonPath,
-      });
-      if (refusal !== undefined) {
-        return notOk(normalizeError(refusal));
+      const outputPath =
+        args.flags.output === undefined ? undefined : resolve(ctx.cwd, args.flags.output);
+      if (outputPath !== undefined) {
+        const refusal = await outputPathRefusal({
+          cwd: ctx.cwd,
+          outputPath,
+          sourceInputs,
+          configPath: resolve(baseDirFor(ctx.config), 'prisma.config.ts'),
+          emittedJsonPath,
+        });
+        if (refusal !== undefined) {
+          return notOk(normalizeError(refusal));
+        }
       }
 
       let printed: ContractPrintResult;
@@ -270,18 +297,20 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
       }
       ctx.signal.throwIfAborted();
 
-      if (existsSync(outputPath)) {
-        ctx.report({
-          kind: 'message',
-          severity: 'warn',
-          text: `Overwriting existing file: ${displayPath}`,
+      if (outputPath !== undefined) {
+        if (existsSync(outputPath)) {
+          ctx.report({
+            kind: 'message',
+            severity: 'warn',
+            text: `Overwriting existing file: ${relative(ctx.cwd, outputPath)}`,
+          });
+        }
+        await publishTextArtifact({
+          path: outputPath,
+          content: printed.psl,
+          publicationToken: String(process.hrtime.bigint()),
         });
       }
-      await publishTextArtifact({
-        path: outputPath,
-        content: printed.psl,
-        publicationToken: String(process.hrtime.bigint()),
-      });
 
       const { defaultControlPolicy } = printed.sourceSettings;
       if (defaultControlPolicy !== undefined) {
@@ -296,7 +325,10 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
         ok: true,
         summary: 'Contract printed successfully',
         target: { familyId: ctx.config.family.familyId, id: ctx.config.target.targetId },
-        psl: { path: displayPath },
+        psl:
+          outputPath === undefined
+            ? { text: printed.psl }
+            : { path: relative(ctx.cwd, outputPath) },
         source: sourcePaths,
         ...ifDefined('defaultControlPolicy', defaultControlPolicy),
         timings: { total: Date.now() - startedAt },
@@ -307,7 +339,9 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
           { data: document },
           printPresentations(
             document,
-            emittedFilesMoveFor({ cwd: ctx.cwd, outputPath, emittedJsonPath }),
+            outputPath === undefined
+              ? undefined
+              : emittedFilesMoveFor({ cwd: ctx.cwd, outputPath, emittedJsonPath }),
           ),
         ),
       );

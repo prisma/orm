@@ -18,10 +18,68 @@ import {
 useContractPrintDoubles();
 
 describe('contract print', () => {
-  it('settles as a completed envelope carrying the written path and the schema it read', async () => {
+  it('shows the contract in the terminal and writes no file when no --output is given', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print'], {
+      cwd: dir,
+      isTty: { stdout: true, stderr: true },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.presentation.human).toEqual([
+      { kind: 'summary', status: 'ok', text: [{ text: 'Contract printed as Prisma 8 PSL' }] },
+      { kind: 'drawing', lines: ['model User {', '  id Int @id', '}'] },
+    ]);
+    expect(stripAnsi(run.stderr)).toContain('model User {');
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'user-choice',
+        label:
+          'Write the PSL to a file with --output <path>, then point contract in prisma.config.ts at that file',
+      },
+      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+    ]);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('pipes the PSL alone to standard output with --format human', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--format', 'human'], {
+      cwd: dir,
+      isTty: { stdout: false, stderr: true },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toBe(PSL);
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('carries the printed text in the JSON result when no --output is given', async () => {
     const dir = await projectDir();
 
     const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toEqual({
+      ok: true,
+      summary: 'Contract printed successfully',
+      target: { familyId: 'sql', id: 'postgres' },
+      psl: { text: PSL },
+      source: ['prisma/schema.prisma'],
+      timings: { total: expect.any(Number) },
+    });
+    expect(await readdir(dir)).toEqual([]);
+  });
+
+  it('settles as a completed envelope carrying the written path and the schema it read', async () => {
+    const dir = await projectDir();
+
+    const run = await harness(ormConfig(dir)).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
+      { cwd: dir },
+    );
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toEqual({
@@ -37,7 +95,10 @@ describe('contract print', () => {
   it('describes the written file as printed from the source it read', async () => {
     const dir = await projectDir();
 
-    await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+    await harness(ormConfig(dir)).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
+      { cwd: dir },
+    );
 
     expect(mocks.printPsl).toHaveBeenCalledWith(
       { kind: 'psl-document' },
@@ -66,7 +127,10 @@ describe('contract print', () => {
   it('publishes through a staged rename, leaving no temporary file behind', async () => {
     const dir = await projectDir();
 
-    await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+    await harness(ormConfig(dir)).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
+      { cwd: dir },
+    );
 
     expect(await readdir(join(dir, 'generated'))).toEqual(['contract.prisma']);
   });
@@ -79,10 +143,13 @@ describe('contract print', () => {
       return ok({ roots: {}, domain: {} });
     });
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], {
-      cwd: dir,
-      abort: controller.signal,
-    });
+    const run = await harness(ormConfig(dir)).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
+      {
+        cwd: dir,
+        abort: controller.signal,
+      },
+    );
 
     expect(run.exitCode).not.toBe(0);
     expect(await readdir(dir)).not.toContain('generated');
@@ -126,10 +193,10 @@ describe('contract print', () => {
   it('ships the written path and the next step as blocks', async () => {
     const dir = await projectDir();
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'print'], {
-      cwd: dir,
-      isTty: { stdout: true, stderr: true },
-    });
+    const run = await harness(ormConfig(dir)).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma'],
+      { cwd: dir, isTty: { stdout: true, stderr: true } },
+    );
 
     expect(run.presented?.presentation.human).toEqual([
       {
@@ -160,7 +227,10 @@ describe('contract print', () => {
       sourceSettings: { defaultControlPolicy: 'external' },
     });
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+    const run = await harness(ormConfig(dir)).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
+      { cwd: dir },
+    );
 
     expect(run.exitCode).toBe(0);
     expect(run.events).toContainEqual({
@@ -196,7 +266,10 @@ describe('contract print', () => {
       },
     });
 
-    const run = await harness(config).run(['contract', 'print', '--json'], { cwd: dir });
+    const run = await harness(config).run(
+      ['contract', 'print', '--output', 'prisma/contract.prisma', '--json'],
+      { cwd: dir },
+    );
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.presentation.next).toEqual([
@@ -222,7 +295,10 @@ describe('contract print', () => {
       },
     });
 
-    const run = await harness(config).run(['contract', 'print', '--json'], { cwd: dir });
+    const run = await harness(config).run(
+      ['contract', 'print', '--output', 'generated/contract.prisma', '--json'],
+      { cwd: dir },
+    );
 
     expect(run.exitCode).toBe(0);
     expect(mocks.load).toHaveBeenCalled();
