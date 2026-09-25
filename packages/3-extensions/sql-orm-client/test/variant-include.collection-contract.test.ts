@@ -17,8 +17,8 @@ describe('resolveIncludeRelation() with a selected parent variant', () => {
       relatedNamespaceId: 'public',
       relatedTableName: 'assignees',
       localTableName: 'features',
-      localColumn: 'assignee_id',
-      targetColumn: 'id',
+      localColumns: ['assignee_id'],
+      targetColumns: ['id'],
       cardinality: 'N:1',
     });
   });
@@ -37,8 +37,8 @@ describe('resolveIncludeRelation() with a selected parent variant', () => {
       relatedNamespaceId: 'public',
       relatedTableName: 'assignees',
       localTableName: 'tasks',
-      localColumn: 'assignee_id',
-      targetColumn: 'id',
+      localColumns: ['assignee_id'],
+      targetColumns: ['id'],
       cardinality: 'N:1',
     });
   });
@@ -57,8 +57,8 @@ describe('resolveIncludeRelation() with a selected parent variant', () => {
       relatedNamespaceId: 'public',
       relatedTableName: 'tasks',
       localTableName: 'tasks',
-      localColumn: 'id',
-      targetColumn: 'parent_id',
+      localColumns: ['id'],
+      targetColumns: ['parent_id'],
       cardinality: '1:N',
     });
   });

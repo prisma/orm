@@ -30,6 +30,7 @@ A stacked PR is justified only when its base PR is independently valuable to mer
 - Linear Project status: update at slice-merge (`drive-deliver-workflow` does this implicitly via `drive-check-health`).
 - Wider-team comms: optional, operator-set. Use `drive-post-update` for the cadence the project needs.
 - Cross-team dependencies: surface in the project plan's `Dependencies` section; ping owners explicitly when a dependency is blocking.
+- Release dependencies: when users get a feature only through a package release, the plan's `Dependencies` section names that release (package, version, and whether it is published yet), so the plan says when users can use the feature, not only when it merges. (Added 2026-09-24, orm-init-prisma7-detection final retro: the Prisma 7 path of `orm init` merged while the published `@prisma/orm-postgres` still predated the Prisma 7 contract source it needs.)
 
 ## ADR cadence
 

@@ -48,12 +48,6 @@ const COMPATIBILITY_SITES = new Set([
   'docs/Telemetry.md',
 ]);
 
-/** Files that name the retired directive spelling because they rename it into the current one. */
-const DIRECTIVE_RENAME_CODEMODS = new Set([
-  'upgrade-instructions/pending/multifile-psl/app/instructions.md',
-  'upgrade-instructions/pending/multifile-psl/app/scripts/add-use-prisma-8-directive.mjs',
-]);
-
 /**
  * An occurrence that is allowed, with the reason. Each returns true when it
  * recognises the occurrence as its own kind.
@@ -68,9 +62,9 @@ const DIRECTIVE_RENAME_CODEMODS = new Set([
  */
 const ALLOWED = [
   {
-    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the shipped upgrade instructions, the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
+    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the shipped upgrade instructions and their archived sources, the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
     matches: (relPath) =>
-      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|projects\/|drive\/)/.test(
+      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/releases\/|projects\/|drive\/)/.test(
         relPath,
       ) ||
       /(^|\/)gotchas\.md$/.test(relPath) ||
@@ -95,10 +89,6 @@ const ALLOWED = [
   {
     why: 'compatibility with what earlier releases wrote into user projects and shells — the language server still serves a schema headed `// use prisma-next` (and formatting renames it), and the telemetry opt-out still honours `PRISMA_NEXT_DISABLE_TELEMETRY`',
     matches: (relPath) => COMPATIBILITY_SITES.has(relPath),
-  },
-  {
-    why: 'the codemod that renames a schema headed `// use prisma-next` to the current directive, and its instructions — both must name the retired spelling to find it',
-    matches: (relPath) => DIRECTIVE_RENAME_CODEMODS.has(relPath),
   },
 ];
 

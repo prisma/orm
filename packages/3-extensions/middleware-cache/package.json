@@ -1,7 +1,7 @@
 {
   "name": "@internal/middleware-cache",
   "private": true,
-  "version": "8.0.0-rc.11",
+  "version": "8.0.0-rc.12",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,12 +16,12 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/framework-components": "workspace:8.0.0-rc.11"
+    "@internal/framework-components": "workspace:8.0.0-rc.12"
   },
   "devDependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.11",
-    "@repo/tsconfig": "workspace:8.0.0-rc.11",
-    "@repo/tsdown": "workspace:8.0.0-rc.11",
+    "@internal/contract": "workspace:8.0.0-rc.12",
+    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/tsdown": "workspace:8.0.0-rc.12",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
