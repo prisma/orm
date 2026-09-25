@@ -74,7 +74,7 @@ export interface RuntimeMutationDefaultGenerator {
 | `'row'` | record of one call, across its fields | a fresh cache per `applyMutationDefaults` call |
 | `'query'` | ORM operation, across its records and fields | the caller's `defaultValueCache`, shared by every call of one operation |
 
-`'field'` suits identifiers (`uuidv4`, `nanoid`, `cuid2`). `'row'` suits a correlation id stamped into several fields of one record. `'query'` suits `timestampNow`: a bulk `createAll` writes one timestamp into every record. A `'query'` generator called without a cache yields a value per field.
+`'field'` suits identifiers (`uuidv4`, `nanoid`, `cuid2`). `'row'` suits a correlation id stamped into several fields of one record; no built-in generator uses it yet. `'query'` suits `timestampNow`: a bulk `createAll` writes one timestamp into every record. A `'query'` generator called without a cache yields a value per field.
 
 ## The availability check
 
@@ -121,7 +121,7 @@ A default's `ref` is `{ namespace, entry, field }` ([ADR 158](ADR%20158%20-%20Ex
 ## Consequences
 
 - A new family gets mutation defaults by listing its contributors and calling the three functions; it writes no registry, check, or loop.
-- Generators are portable across families: `timestampNow` has the same type and semantics in the SQL family and the Mongo family, and an extension's generator works in either.
+- Generators are portable across families: `timestampNow` has the same type and semantics in the SQL family and the Mongo family, and an extension's generator is typed identically in either family; its value must still suit the target field's codec.
 - The explicit-key rule is one rule. A caller that wants `undefined` to mean "not set" filters before the call, where it knows what its payload means.
 - The option and result names are family-neutral (`entry`, `field`), matching the contract ref.
 
