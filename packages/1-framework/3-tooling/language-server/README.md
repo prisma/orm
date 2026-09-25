@@ -2,6 +2,14 @@
 
 The Prisma 8 language server provides diagnostics, formatting, code completion, and attribute signature help for PSL schemas through the Language Server Protocol.
 
+## Project membership and diagnostics
+
+A project's schema is every file matching the config's `contract.source.inputs` glob(s) whose current text carries `// use prisma-8` — the same gate `contract emit` applies, so the two surfaces agree on what the schema is. Membership is re-expanded on load and reload, not fixed at config-read time: a file created after the server started joins on the next reload without a config edit.
+
+Unopened members are read from disk and interpreted alongside open ones — the project symbol table and diagnostics span the whole membership set, not just currently-open documents. A member's disk content re-checks its modification time and size on every read, so an external edit to a closed file is picked up on the next validation pass even without a file watcher; where the client supports `workspace/didChangeWatchedFiles`, the server also registers a watcher scoped to the project's glob and reacts to member create/change/delete events directly.
+
+Diagnostics are pushed (`textDocument/publishDiagnostics`) to every current member, closed files included — a client that pulls diagnostics still receives push for its closed members, since pull only ever serves open documents. `interFileDependencies: true` reflects this honestly: an edit in one file can change diagnostics anywhere else in the project. A member that leaves the schema (directive removed, file deleted, glob no longer matches) is cleared with an empty diagnostics publish.
+
 ## Completion
 
 Attribute, argument, function, identifier-value, registered scalar, generic block, and block parameter completions use contribution documentation as their detail when available. Scalar constructors, generic block descriptors, and block parameter descriptors can supply this text through their optional `documentation` property. Undocumented descriptors retain their generic completion details.
