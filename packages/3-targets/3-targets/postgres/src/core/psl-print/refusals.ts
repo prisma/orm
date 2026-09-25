@@ -165,7 +165,7 @@ export function refuseUnwrittenExecutionDefaults(
 ): void {
   for (const entry of contract.execution?.mutations.defaults ?? []) {
     if (written.has(entry)) continue;
-    const coordinate = `"${entry.ref.namespace}"."${entry.ref.table}"."${entry.ref.column}"`;
+    const coordinate = `"${entry.ref.namespace}"."${entry.ref.entry}"."${entry.ref.field}"`;
     throw unsupported(
       `a generated value names column ${coordinate}, which no field is stored in, so it cannot be written in Prisma 8 PSL.`,
       'PSL writes a generated value on the field stored in its column.',

@@ -341,7 +341,7 @@ describe('shared contract definition lowering', () => {
 
     expect(contract.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'app_user', column: 'updated_at' },
+        ref: { namespace: 'public', entry: 'app_user', field: 'updated_at' },
         onCreate: { kind: 'generator', id: 'timestampNow' },
         onUpdate: { kind: 'generator', id: 'timestampNow' },
       },

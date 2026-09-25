@@ -21,11 +21,13 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { assertDefined } from '@internal/utils/assertions';
+import { InternalError } from '@internal/utils/internal-error';
 import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumns,
 } from './collection-contract';
+import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
@@ -92,9 +94,12 @@ function buildCursorWhere(
     return undefined;
   }
 
+  assertCursorCompatibleOrder(orderBy);
   const entries: CursorOrderEntry[] = [];
   for (const order of orderBy) {
-    if (order.expr.kind !== 'column-ref') continue;
+    if (order.expr.kind !== 'column-ref') {
+      throw new InternalError('assertCursorCompatibleOrder admits only column orders');
+    }
     const column = order.expr.column;
     const value = cursor[column];
     if (value === undefined) {
@@ -370,13 +375,16 @@ function buildAggregateInput(
       : [];
 
   const where = buildStateWhere(contract, tableName, state, { namespaceId });
+  const hiddenOrders = hasEntries(state.distinct)
+    ? projectExpressionOrders(tableName, state.orderBy)
+    : undefined;
   const { source, where: effectiveWhere } = buildDedupedTableSource(
     contract,
     namespaceId,
     tableName,
     state,
     where,
-    projection,
+    [...projection, ...(hiddenOrders?.projection ?? [])],
     variantJoins,
   );
 
@@ -392,8 +400,9 @@ function buildAggregateInput(
   if (hasEntries(state.distinctOn)) {
     inner = inner.withDistinctOn(state.distinctOn.map((column) => ColumnRef.of(tableName, column)));
   }
-  if (hasEntries(state.orderBy)) {
-    inner = inner.withOrderBy(state.orderBy);
+  const orderBy = hiddenOrders?.orderBy ?? state.orderBy;
+  if (hasEntries(orderBy)) {
+    inner = inner.withOrderBy(orderBy);
   }
   if (state.limit !== undefined) {
     inner = inner.withLimit(state.limit);
@@ -403,6 +412,25 @@ function buildAggregateInput(
   }
 
   return { source: DerivedTableSource.as(tableName, inner) };
+}
+
+/**
+ * The dedup wrap exposes only its projection, so an order over an expression (a relation order, a count, an operation result) cannot be evaluated above it. Each such order is projected inside the wrap as a hidden `__order_N` column and the outer order reads that column.
+ */
+function projectExpressionOrders(
+  tableName: string,
+  orderBy: readonly OrderByItem[] | undefined,
+): { readonly projection: ProjectionItem[]; readonly orderBy: OrderByItem[] } {
+  const projection: ProjectionItem[] = [];
+  const outerOrderBy = (orderBy ?? []).map((item, index) => {
+    if (item.expr.kind === 'column-ref') {
+      return item;
+    }
+    const alias = `__order_${index}`;
+    projection.push(ProjectionItem.of(alias, item.expr));
+    return item.withExpr(ColumnRef.of(tableName, alias));
+  });
+  return { projection, orderBy: outerOrderBy };
 }
 
 export {

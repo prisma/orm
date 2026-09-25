@@ -36,7 +36,7 @@ export function executionDefaultsByColumn(
 ): ReadonlyMap<string, ExecutionMutationDefault> {
   const byColumn = new Map<string, ExecutionMutationDefault>();
   for (const entry of contract.execution?.mutations.defaults ?? []) {
-    byColumn.set(JSON.stringify([entry.ref.namespace, entry.ref.table, entry.ref.column]), entry);
+    byColumn.set(JSON.stringify([entry.ref.namespace, entry.ref.entry, entry.ref.field]), entry);
   }
   return byColumn;
 }

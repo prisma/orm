@@ -36,7 +36,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'eb8b33ce3462e3fd3f95971b3d4820e8f3ec7cb3e5ff02dbff741f028b06eb1c'>;
 export type ExecutionHash =
-  ExecutionHashBase<'c49e85731de7b2f517dcfae075137c4a18f76ccbfb755a6b14a0cd3f41a69db0'>;
+  ExecutionHashBase<'cb5920d1539620a0cc34be80def320ed2a7a2507350ebb5eebd8d51847f18961'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -578,25 +578,25 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'media';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'media';
           };
         },
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'post';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'post';
           };
         },
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'postMedia';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'postMedia';
           };
         },
       ];

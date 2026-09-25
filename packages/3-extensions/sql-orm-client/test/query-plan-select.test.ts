@@ -233,7 +233,7 @@ describe('compileSelectWithIncludes', () => {
     expect(params[0]).toMatchObject({ name: 'searchVec', codec: { codecId: 'pg/vector@1' } });
   });
 
-  it('cursor pagination ignores expression-based orders', () => {
+  it('cursor pagination rejects an expression-based order instead of dropping it from the keyset', () => {
     const opExpr = new OperationExpr({
       method: 'cosineDistance',
       self: ColumnRef.of('posts', 'embedding'),
@@ -249,16 +249,11 @@ describe('compileSelectWithIncludes', () => {
       cursor: { id: 5 },
     };
 
-    const plan = compileSelect(baseContract, 'public', 'posts', state);
-    expectSelectAst(plan.ast);
-
-    expect(plan.ast.orderBy).toEqual([
-      new OrderByItem(ColumnRef.of('posts', 'id'), 'asc'),
-      new OrderByItem(opExpr, 'desc'),
-    ]);
-
-    expect(plan.ast.where).toEqual(
-      bindWhereExpr(baseContract, BinaryExpr.gt(ColumnRef.of('posts', 'id'), LiteralExpr.of(5))),
+    expect(() => compileSelect(baseContract, 'public', 'posts', state)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: expect.stringContaining('orderBy item 2'),
+      }),
     );
   });
 
@@ -579,7 +574,11 @@ describe('compileSelectWithIncludes', () => {
       expectDerivedTableSource(innerSelect.from);
       expect(innerSelect.from.alias).toBe('posts__scalar_distinct');
       expect(innerSelect.orderBy).toEqual([
-        new OrderByItem(ColumnRef.of('posts__scalar_distinct', 'posts__order_0'), 'desc'),
+        new OrderByItem(
+          ColumnRef.of('posts__scalar_distinct', 'posts__order_0'),
+          'desc',
+          undefined,
+        ),
       ]);
     });
 

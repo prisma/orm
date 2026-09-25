@@ -22,7 +22,7 @@ describe('generated values', () => {
       },
       execution: {
         mutations: {
-          defaults: [{ ref: { namespace: 'public', table: 'Widget', column: 'value' }, ...phases }],
+          defaults: [{ ref: { namespace: 'public', entry: 'Widget', field: 'value' }, ...phases }],
         },
       },
     });

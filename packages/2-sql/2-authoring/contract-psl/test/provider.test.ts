@@ -686,15 +686,15 @@ model User {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'User', column: 'cuid2' },
+              ref: { namespace: 'public', entry: 'User', field: 'cuid2' },
               onCreate: { kind: 'generator', id: 'cuid2' },
             },
             {
-              ref: { namespace: 'public', table: 'User', column: 'nanoid16' },
+              ref: { namespace: 'public', entry: 'User', field: 'nanoid16' },
               onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
             },
             {
-              ref: { namespace: 'public', table: 'User', column: 'uuidV7' },
+              ref: { namespace: 'public', entry: 'User', field: 'uuidV7' },
               onCreate: { kind: 'generator', id: 'uuidv7' },
             },
           ],

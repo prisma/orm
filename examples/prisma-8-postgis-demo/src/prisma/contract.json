@@ -274,7 +274,7 @@
     }
   },
   "execution": {
-    "executionHash": "47143d9289826bb6f4e6f1d14b77111d1e59175b581c9432def271e308f74c76",
+    "executionHash": "73426d737fd7fe88107a86f2a5602ff842560bf4a193aaf5ae7355b79f511658",
     "mutations": {
       "defaults": [
         {
@@ -283,9 +283,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "cafe"
+            "entry": "cafe",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -294,9 +294,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "neighborhood"
+            "entry": "neighborhood",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -305,9 +305,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "route"
+            "entry": "route",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

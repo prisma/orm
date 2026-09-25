@@ -227,7 +227,7 @@ describe('defaults and generated values', () => {
           mutations: {
             defaults: [
               blindCast<never, 'test generator phases'>({
-                ref: { namespace: 'public', table: 'Widget', column: 'value' },
+                ref: { namespace: 'public', entry: 'Widget', field: 'value' },
                 ...phases,
               }),
             ],
@@ -266,7 +266,7 @@ describe('defaults and generated values', () => {
             mutations: {
               defaults: [
                 {
-                  ref: { namespace: 'public', table: 'Widget', column: 'missing' },
+                  ref: { namespace: 'public', entry: 'Widget', field: 'missing' },
                   onCreate: { kind: 'generator', id: 'uuidv4' },
                 },
               ],
