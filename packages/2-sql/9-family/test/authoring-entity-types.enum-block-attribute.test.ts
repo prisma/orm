@@ -1,4 +1,4 @@
-import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
@@ -6,11 +6,20 @@ import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types
 function build(source: string) {
   const { document, sources } = parse(source, 'schema.prisma');
   const result = buildSymbolTable({ documents: [document], sources });
-  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
-    result.symbolTable,
+  const { binder } = createBinder({
     sources,
-    sqlFamilyPslBlockDescriptors,
-  );
+    symbolTable: result.symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+  });
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
+    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+    binder,
+  });
   return { ...result, blockDiagnostics, parsedBlocks };
 }
 

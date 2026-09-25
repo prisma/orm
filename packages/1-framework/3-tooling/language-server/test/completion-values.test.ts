@@ -14,7 +14,6 @@ import {
   funcCall,
   identifier,
   int,
-  interpretExtensionBlocks,
   json,
   list,
   modelAttribute,
@@ -209,7 +208,6 @@ function complete(markedSource: string, snippets = false, parameterHints = false
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const { parsedBlocks } = interpretExtensionBlocks(symbolTable, sources, pslBlockDescriptors);
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
       document,
@@ -221,7 +219,6 @@ function complete(markedSource: string, snippets = false, parameterHints = false
       scalarTypes: ['String'],
       pslBlockDescriptors,
       symbolTable,
-      parsedBlocks,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
     },

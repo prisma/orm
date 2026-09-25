@@ -1,7 +1,4 @@
-import type {
-  AuthoringPslBlockDescriptorNamespace,
-  ParsedPslExtensionBlock,
-} from '@internal/framework-components/authoring';
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -10,7 +7,6 @@ import {
   type AttributeSpec,
   assembleAttributeSpecs,
   type BlockAttributeSpecFactory,
-  type BlockSymbol,
   findBlockDescriptor,
   type SymbolTable,
 } from '@internal/psl-parser';
@@ -25,7 +21,6 @@ import { blockSymbolForNode, fieldSymbolForNode, modelSymbolForNode } from './co
 export interface AttributeSpecSource {
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly symbolTable: SymbolTable;
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly authoringContributions?: AssembledAuthoringContributions;
   readonly controlMutationDefaults?: ControlMutationDefaults;
 }
@@ -71,7 +66,6 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        parsedBlocks: source.parsedBlocks,
         controlMutationDefaults: {
           ...source.controlMutationDefaults,
           dataTypeEntries: source.authoringContributions.dataTypes ?? {},
@@ -91,7 +85,6 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        parsedBlocks: source.parsedBlocks,
         controlMutationDefaults: {
           ...source.controlMutationDefaults,
           dataTypeEntries: source.authoringContributions.dataTypes ?? {},

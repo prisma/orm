@@ -1,6 +1,6 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
-import { fieldRef, list, fixedBlock, modelAttribute, optional, str } from '@internal/psl-parser';
+import { fieldRef, fixedBlock, list, modelAttribute, optional, str } from '@internal/psl-parser';
 import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -57,16 +57,11 @@ const stampAuthoringContributions: AuthoringContributions = {
   },
 };
 
-function interpretWith(
-  schema: string,
-  authoringContributions?: AuthoringContributions,
-  pslBlockDescriptors?: Parameters<typeof symbolTableInputFromParseArgs>[0]['pslBlockDescriptors'],
-) {
+function interpretWith(schema: string, authoringContributions?: AuthoringContributions) {
   const capturedEntries: Record<string, Record<string, Record<string, unknown>>> = {};
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    ...(pslBlockDescriptors !== undefined ? { pslBlockDescriptors } : {}),
   });
   const createNamespace = (input: SqlNamespaceInput) => {
     capturedEntries[input.id] = { ...(capturedEntries[input.id] ?? {}), ...input.entries };
@@ -329,7 +324,6 @@ model Gadget {
   }
 }`,
         collidingContributions,
-        stampBlockDescriptors,
       ),
     ).toThrow(/entries slot "stamp".*contributed by both/s);
   });

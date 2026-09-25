@@ -1,6 +1,7 @@
 import * as pslParser from '@internal/psl-parser';
 import {
   buildSymbolTable,
+  createBinder,
   entityRef,
   fixedBlock,
   interpretExtensionBlocks,
@@ -141,6 +142,26 @@ describe('runPipeline — block resolution stays out of the parse-plus-symbol pi
     },
   };
 
+  function resolveGuardBlocks(result: ReturnType<typeof runPipeline>) {
+    const { binder, diagnostics: binderDiagnostics } = createBinder({
+      sources: result.sources,
+      symbolTable: result.symbolTable,
+      typeConstructors: {
+        Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+      },
+      attributeSpecs: { model: {}, field: {} },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      pslBlockDescriptors: guardDescriptors,
+    });
+    expect(binderDiagnostics).toEqual([]);
+    return interpretExtensionBlocks({
+      symbolTable: result.symbolTable,
+      sources: result.sources,
+      pslBlockDescriptors: guardDescriptors,
+      binder,
+    });
+  }
+
   it('carries no envelope side channel; consumers resolve against the returned table', () => {
     const source = [
       'guard Rule {',
@@ -159,7 +180,7 @@ describe('runPipeline — block resolution stays out of the parse-plus-symbol pi
     const block = result.symbolTable.topLevel.blocks['Rule'];
     expect(block).toBeDefined();
     if (block === undefined) return;
-    const resolved = interpretExtensionBlocks(result.symbolTable, result.sources, guardDescriptors);
+    const resolved = resolveGuardBlocks(result);
     expect(resolved.diagnostics).toEqual([]);
     expect(resolved.parsedBlocks.get(block)?.values['using']).toBe('true');
   });
@@ -181,7 +202,7 @@ describe('runPipeline — block resolution stays out of the parse-plus-symbol pi
     const block = result.symbolTable.topLevel.blocks['Rule'];
     expect(block).toBeDefined();
     if (block === undefined) return;
-    const resolved = interpretExtensionBlocks(result.symbolTable, result.sources, guardDescriptors);
+    const resolved = resolveGuardBlocks(result);
     expect(resolved.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',

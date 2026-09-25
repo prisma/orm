@@ -25,7 +25,7 @@ import {
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
 import type { BlockSymbol, PslDiagnostic, SymbolTable } from '@internal/psl-parser';
-import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { printPslFromAst } from '../src/print-psl';
@@ -71,12 +71,24 @@ function parsePolicySelect(schema: string): ParsedPolicySelect {
     documents: [document],
     sources,
   });
-  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
+  const { binder, diagnostics: binderDiagnostics } = createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {
+      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+    },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  });
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,
     sources,
-    assembled.pslBlockDescriptors,
-  );
-  const diagnostics = [...collectionDiagnostics, ...blockDiagnostics];
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+    binder,
+  });
+  const diagnostics = [...collectionDiagnostics, ...binderDiagnostics, ...blockDiagnostics];
   const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(
     (block) => block.keyword === POLICY_SELECT_KEYWORD,
   );
@@ -238,12 +250,13 @@ policy_select BadBlock {
 }
 `;
 
-    it('surfaces the parser reference diagnostic and publishes no envelope', () => {
+    it("surfaces the binder's unresolved-reference diagnostic and publishes no envelope", () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
       expect(parsed.diagnostics).toEqual([
         expect.objectContaining({
-          message: 'Unknown model reference "NonExistentModel"',
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find entity "NonExistentModel"',
         }),
       ]);
       expect(parsed.parsedBlocks.has(block)).toBe(false);
