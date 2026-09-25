@@ -3,9 +3,10 @@
   "private": true,
   "type": "module",
   "version": "8.0.0-rc.12",
-  "description": "The CLI journeys. Its own manifest because it names the published packages a user's project installs, while the rest of test/integration names the workspace packages it exercises directly — two dependency shapes, so two manifests.",
+  "description": "The CLI journeys. Its own manifest because it names the published packages a user's project installs, while the rest of test/integration names the workspace packages it exercises directly — two dependency shapes, so two manifests. integration-tests declares this package as a devDependency because its tsconfig typechecks the journeys: that dependency is how Turbo learns to build the published packages before integration-tests#typecheck runs.",
   "dependencies": {
     "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.12",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.12",
     "@prisma/orm-mongo": "workspace:8.0.0-rc.12",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.12"
   }
