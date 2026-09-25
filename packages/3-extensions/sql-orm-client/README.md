@@ -171,7 +171,7 @@ SELECT "users"."id" AS "id" FROM "public"."users" ORDER BY (SELECT COUNT(*) AS "
 
 The reach is one hop: the related model's own relations are not exposed. A to-one relation has no `count`, and a to-many relation exposes no fields. If a related field is named `some`, `every`, `none` or `count`, the relation method wins and that field cannot be ordered through the relation.
 
-`cursor()` builds its keyset from plain columns only. It throws `ORM.ARGUMENT_INVALID`, naming the `orderBy` position, when an active order is a relation column, a relation count, an extension-operation result, or sets `nulls`. `distinctOn()` throws the same error for an order that is not a plain column. Paginate such orders with `.limit(...)` / `.offset(...)`.
+`cursor()` builds its keyset from plain columns only. It throws `ORM.ARGUMENT_INVALID`, naming the `orderBy` position, when an active order is a relation column, a relation count, an extension-operation result, or sets `nulls`. `distinctOn()` throws the same error when one of its leading orders (as many as there are `distinctOn` columns) is not a plain column, because Postgres needs those orders to match the `DISTINCT ON` columns; a relation order after them is accepted. Paginate such orders with `.limit(...)` / `.offset(...)`.
 
 ## Codec Roundtrip
 

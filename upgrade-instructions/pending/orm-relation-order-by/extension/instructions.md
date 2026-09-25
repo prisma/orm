@@ -31,7 +31,7 @@ For each `.cursor(` call in a chain that also calls `.orderBy(`, look at every `
 - Paginate with `.limit(n).offset(n)` and remove `.cursor(...)`.
 - Keep the cursor and order by plain columns only, for example `(p) => p.createdAt.desc()` and `(p) => p.id.desc()`.
 
-`distinctOn()` throws the same error when an active order is not a plain column. Order by the `distinctOn` columns first, using plain column orders.
+`distinctOn()` throws the same error when one of the first N orders, where N is the number of `distinctOn` columns, is not a plain column: Postgres needs those leading orders to match the `DISTINCT ON` columns. Put the `distinctOn` columns first; a relation order, a count or an operation result may follow them. For example, `.orderBy([(post) => post.title.asc(), (post) => post.author.name.asc()]).distinctOn('title')` is accepted.
 
 ## `order-by-item-nulls`
 

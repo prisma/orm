@@ -198,7 +198,7 @@ await db.orm.public.User
 
 A missing related row (null foreign key) orders as `NULL`. To-one relations have no `count`; to-many relations expose no fields.
 
-Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`, pass a value for each ordering column — a partial cursor seeks only on the columns you supply, which gives an incomplete keyset. An empty cursor object is a no-op: you get the unfiltered first page back. `cursor()` keys on plain columns only: it throws `ORM.ARGUMENT_INVALID` when an active order is a relation field, a relation `count(...)`, an extension-operation result (`fullTextRank`, vector distance) or sets `nulls`. `distinctOn()` throws the same for any order that is not a plain column. Paginate those orders with `.limit(n).offset(n)`.
+Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`, pass a value for each ordering column — a partial cursor seeks only on the columns you supply, which gives an incomplete keyset. An empty cursor object is a no-op: you get the unfiltered first page back. `cursor()` keys on plain columns only: it throws `ORM.ARGUMENT_INVALID` when an active order is a relation field, a relation `count(...)`, an extension-operation result (`fullTextRank`, vector distance) or sets `nulls`. `distinctOn()` throws the same only when one of its leading orders, as many as there are `distinctOn` columns, is not a plain column; relation, count and operation orders after them are fine. Paginate those orders with `.limit(n).offset(n)`.
 
 **`.first()` vs `.first({ pk })` vs `.all()`.** Use `.first()` for a single row (issues a `LIMIT 1`); use `.first({ pk })` for primary-key lookups; reserve `.all()` for the genuine many case (no implicit `LIMIT`).
 
