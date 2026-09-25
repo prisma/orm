@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import type {
@@ -5,14 +6,20 @@ import type {
   EntitySelector,
   ResolvedEntityReference,
 } from '../../entity-reference';
-import { resolveEntityReference } from '../../entity-reference';
+import { describeResolution, entityReference, matchesSelector } from '../../entity-reference';
 import { IdentifierAst } from '../../syntax/ast/identifier';
-import type { AttributeCtx, EntityRefArgType } from '../types';
+import type { EntityRefArgType, ModelAttributeCtx } from '../types';
 import { leafDiagnostic } from './diagnostic';
+
+function unbound(name: string): never {
+  throw new InternalError(
+    `The binder on this attribute context bound nothing for "${name}". A reference argument is always examined, so the binder must be built over the same snapshot - the same symbol table and sources - as the interpretation consuming it.`,
+  );
+}
 
 export function entityRef<const S extends EntitySelector>(
   expected: S,
-): EntityRefArgType<DeclarationFor<S>, AttributeCtx> {
+): EntityRefArgType<DeclarationFor<S>, ModelAttributeCtx> {
   const label = `${expected.kind === 'block' ? expected.keyword : expected.kind} reference`;
   return {
     kind: 'entityRef',
@@ -26,28 +33,19 @@ export function entityRef<const S extends EntitySelector>(
       if (name === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Expected ${label}`)]);
       }
-      const reference = resolveEntityReference(arg, name, ctx.symbols);
-      if (reference === undefined) {
-        return notOk([leafDiagnostic(ctx, arg, `Unknown ${label} "${name}"`)]);
-      }
-      if (!matchesSelector(reference, expected)) {
-        const actual = reference.declaration;
-        const kind = actual.kind === 'block' ? actual.keyword : actual.kind;
-        return notOk([leafDiagnostic(ctx, arg, `Expected ${label} "${name}", found ${kind}`)]);
+      const resolution = ctx.binder.symbolForNode(arg.syntax) ?? unbound(name);
+      if (resolution.kind === 'unresolved') return notOk([]);
+      const reference = entityReference(resolution);
+      if (reference === undefined || !matchesSelector(reference, expected)) {
+        return notOk([
+          leafDiagnostic(
+            ctx,
+            arg,
+            `Expected ${label} "${name}", found ${describeResolution(resolution)}`,
+          ),
+        ]);
       }
       return ok(reference);
     },
   };
-}
-
-function matchesSelector<S extends EntitySelector>(
-  reference: ResolvedEntityReference,
-  expected: S,
-): reference is ResolvedEntityReference<DeclarationFor<S>> {
-  const declaration = reference.declaration;
-  return (
-    declaration.kind === expected.kind &&
-    (expected.kind !== 'block' ||
-      (declaration.kind === 'block' && declaration.keyword === expected.keyword))
-  );
 }

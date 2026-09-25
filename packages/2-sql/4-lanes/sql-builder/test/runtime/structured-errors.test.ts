@@ -98,6 +98,26 @@ describe('sql() builder structured error codes', () => {
     });
   });
 
+  it('a NaN limit raises ORM.ARGUMENT_INVALID when the query is built', () => {
+    expect(() => db().public.users.select('id').limit(Number.NaN).build()).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: `limit must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got NaN`,
+        meta: { argument: 'limit' },
+      }),
+    );
+  });
+
+  it('a negative offset raises ORM.ARGUMENT_INVALID when the query is built', () => {
+    expect(() => db().public.users.select('id').offset(-1).build()).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: `offset must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got -1`,
+        meta: { argument: 'offset' },
+      }),
+    );
+  });
+
   it('empty insert row array raises ORM.MUTATION_DATA_MISSING', () => {
     const error = capture(() => db().public.users.insert([]).build());
     expect(isStructuredError(error)).toBe(true);

@@ -304,8 +304,8 @@ model User {
 }
 `,
       {
-        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-        message: 'Field "missingId" does not exist on model "Membership"',
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find field "missingId" on "Membership"',
       },
     );
   });
@@ -805,6 +805,24 @@ model User {
     );
   });
 
+  it('leaves an uncomposed namespace to the composition diagnostic alone', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: 'model Document {\n  id Int @id\n  embedding pgvector.Vector(1536)\n}',
+      sourceId: 'schema.prisma',
+    });
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
+      'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+    ]);
+  });
+
   it('rejects @@id referencing an unknown field', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Thing {
@@ -824,8 +842,8 @@ model User {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: expect.stringContaining('Field "nope" does not exist on model "Thing"'),
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining('Cannot find field "nope" on "Thing"'),
         }),
       ]),
     );

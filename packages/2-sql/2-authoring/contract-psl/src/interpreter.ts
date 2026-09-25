@@ -42,6 +42,7 @@ import type {
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import type { Binder } from '@internal/psl-parser';
 import {
   type BlockSymbol,
   type CompositeTypeSymbol,
@@ -94,12 +95,12 @@ import type { ColumnDescriptor } from './psl-column-resolution';
 import {
   checkUncomposedNamespace,
   getAuthoringEntity,
-  reportUncomposedNamespace,
   resolveFieldTypeDescriptor,
 } from './psl-column-resolution';
 import {
   buildModelMappings,
   collectResolvedFields,
+  describeUnsupportedSqlAttribute,
   type ModelNameMapping,
   type ModelNamespaceEntry,
   modelCoordinateKey,
@@ -116,8 +117,10 @@ import {
   validateBackrelationFieldAttributes,
 } from './psl-relation-resolution';
 import {
+  createSqlBinder,
   findModelAttributeNode,
   interpretModelAttribute,
+  modelAttributeSpecsFrom,
   PSL_CHECK_ON_STI_VARIANT,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
@@ -275,6 +278,7 @@ function validateNamespaceBlocksForSqlTarget(input: {
   readonly targetId: string;
   readonly source: DiagnosticSource;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
   if (input.targetId === 'sqlite') {
@@ -642,6 +646,7 @@ interface BuildModelNodeInput {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: PslDiagnosticCollector;
   /** Resolved namespace id keyed by model name — used to stamp the target namespace on FKs. */
@@ -663,6 +668,7 @@ interface BuildModelNodeInput {
   readonly codecLookup?: CodecLookup;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
+  readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
   /** The target's default namespace id — the lowering context's `namespaceId` fallback for a model with no explicit PSL namespace. */
   readonly defaultNamespaceId: string;
 }
@@ -753,6 +759,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sources: input.sources,
+    binder: input.binder,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     ...ifDefined('enumHandles', input.enumHandles),
     capabilities: input.capabilities,
@@ -802,6 +809,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       modelName: model.name,
       field,
       sources: input.sources,
+      binder: input.binder,
       composedExtensions: input.composedExtensions,
       authoringContributions: input.authoringContributions,
       diagnostics,
@@ -815,6 +823,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         field,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (!parsedRelation) {
@@ -880,30 +889,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       !Object.hasOwn(sqlAttributeSpecs.model, modelAttribute.name) &&
       !input.modelAttributesByName.has(modelAttribute.name)
     ) {
-      const uncomposedNamespace = checkUncomposedNamespace(
-        modelAttribute.name,
-        input.composedExtensions,
-        {
-          familyId: input.familyId,
-          targetId: input.targetId,
-          authoringContributions: input.authoringContributions,
-        },
-      );
-      if (uncomposedNamespace) {
-        reportUncomposedNamespace({
-          subjectLabel: `Attribute "@@${modelAttribute.name}"`,
-          namespace: uncomposedNamespace,
-          source,
-          span: modelAttribute.span,
-          diagnostics,
-        });
-        continue;
-      }
-      diagnostics.push({
-        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${model.name}" uses unsupported attribute "@@${modelAttribute.name}"`,
-        ...source.at(modelAttribute.span),
-      });
       continue;
     }
     if (modelAttribute.name === 'map') {
@@ -935,6 +920,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         model,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -971,6 +957,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         model,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1016,6 +1003,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         model,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1050,6 +1038,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         model,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1110,6 +1099,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         model,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1143,10 +1133,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (node === undefined) {
         continue;
       }
-      const specFactory = blindCast<
-        ModelAttributeSpecFactory,
-        'contributed model-attribute descriptors carry an ADR-231 attribute-spec factory by construction'
-      >(contributedModelAttribute.spec);
+      const specFactory = input.contributedModelAttributeSpecs[contributedModelAttribute.attribute];
+      if (specFactory === undefined) {
+        continue;
+      }
       const parsed = interpretModelAttribute({
         node,
         spec: specFactory({
@@ -1160,6 +1150,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         model,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1265,6 +1256,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         field: relationAttribute.field,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (!parsedRelation) {
@@ -1424,6 +1416,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       field: relationAttribute.field,
       symbols: input.symbolTable,
       sources: input.sources,
+      binder: input.binder,
       diagnostics,
     });
     if (!parsedRelation) {
@@ -1583,6 +1576,7 @@ interface BuildValueObjectsInput {
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
+  readonly binder: Binder;
 }
 
 function buildValueObjects(input: BuildValueObjectsInput): Record<string, ContractValueObject> {
@@ -1709,6 +1703,7 @@ function collectPolymorphismDeclarations(
   identities: ReadonlyMap<ModelSymbol, ModelIdentity>,
   symbols: SymbolTable,
   sources: PslSources,
+  binder: Binder,
   diagnostics: PslDiagnosticCollector,
 ): {
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
@@ -1727,6 +1722,7 @@ function collectPolymorphismDeclarations(
         spec: sqlAttributeSpecs.model.discriminator(),
         model,
         sources,
+        binder,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -1752,6 +1748,7 @@ function collectPolymorphismDeclarations(
         spec: sqlAttributeSpecs.model.base(),
         model,
         sources,
+        binder,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -2084,6 +2081,22 @@ function stripStorageOnlyDomainFields(
   return { ...model, fields, storage: { ...storage, fields: storageFields } };
 }
 
+function voicedAsUncomposedNamespace(
+  diagnostic: PslDiagnostic,
+  composedExtensions: ReadonlySet<string>,
+  context: {
+    readonly familyId?: string;
+    readonly targetId?: string;
+    readonly authoringContributions?: AuthoringContributions | undefined;
+  },
+): boolean {
+  const data = diagnostic.data;
+  if (data?.['reference'] !== 'type') return false;
+  const name = data['name'];
+  if (typeof name !== 'string') return false;
+  return checkUncomposedNamespace(name, composedExtensions, context) !== undefined;
+}
+
 export function interpretPslDocumentToSqlContract(
   input: InterpretPslDocumentToSqlContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
@@ -2099,6 +2112,37 @@ export function interpretPslDocumentToSqlContract(
   assertDefined(anchorDocument, 'interpretPslDocumentToSqlContract requires at least one document');
   const source = diagnosticSource(input.sources, anchorDocument.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
+  const composedExtensionNames = new Set(input.composedExtensions ?? []);
+  const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
+  const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
+  const { binder, diagnostics: binderDiagnostics } = createSqlBinder({
+    symbolTable: input.symbolTable,
+    sources: input.sources,
+    authoringContributions: input.authoringContributions,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
+      dataTypeEntries: input.authoringContributions?.dataTypes ?? {},
+    },
+    scalarColumnDescriptors: input.scalarColumnDescriptors,
+    contributedModelAttributeSpecs: contributedModelSpecs,
+    describeUnsupportedAttribute: describeUnsupportedSqlAttribute({
+      composedExtensions: composedExtensionNames,
+      authoringContributions: input.authoringContributions,
+      sources: input.sources,
+      familyId: input.target.familyId,
+      targetId: input.target.targetId,
+    }),
+  });
+  diagnostics.push(
+    ...binderDiagnostics.filter(
+      (diagnostic) =>
+        !voicedAsUncomposedNamespace(diagnostic, composedExtensionNames, {
+          familyId: 'sql',
+          targetId: input.target.targetId,
+          authoringContributions: input.authoringContributions,
+        }),
+    ),
+  );
 
   const { topLevel } = input.symbolTable;
   const namespaceSymbols = Object.values(topLevel.namespaces);
@@ -2107,6 +2151,7 @@ export function interpretPslDocumentToSqlContract(
     targetId: input.target.targetId,
     source,
     sources: input.sources,
+    binder,
     diagnostics,
   });
   validateBlockModelAttributeRequirements({
@@ -2261,7 +2306,6 @@ export function interpretPslDocumentToSqlContract(
   // already-lowered extension entity — see `namespaceExtensionEntities`
   // threaded into `collectResolvedFields` below.
   const entityTypesByDiscriminator = buildEntityTypesByDiscriminator(input.authoringContributions);
-  const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   // Warnings pushed by entity factories run ahead of
   // `buildSqlContractFromDefinition`; handed to the build via the definition
   // so its one per-build flush covers the whole build.
@@ -2294,6 +2338,7 @@ export function interpretPslDocumentToSqlContract(
     defaultNamespaceId,
     createPslDiagnosticCollector(input.sources),
     input.sources,
+    binder,
   );
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
   const namespaceExtensionEntities = new Map<
@@ -2445,6 +2490,7 @@ export function interpretPslDocumentToSqlContract(
     defaultNamespaceId,
     diagnostics,
     input.sources,
+    binder,
   );
   // Bare-name view for unqualified relation targets, where
   // resolution is by bare model name. When a bare name is shared across
@@ -2495,6 +2541,7 @@ export function interpretPslDocumentToSqlContract(
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sources: input.sources,
+      binder,
       symbolTable: input.symbolTable,
       diagnostics,
       modelNamespaceIds,
@@ -2503,6 +2550,7 @@ export function interpretPslDocumentToSqlContract(
       ...(namespaceExtensionEntities.size > 0 ? { namespaceExtensionEntities } : {}),
       ...ifDefined('codecLookup', input.codecLookup),
       modelAttributesByName,
+      contributedModelAttributeSpecs: contributedModelSpecs,
       defaultNamespaceId,
     });
     modelNodes.push(
@@ -2584,6 +2632,7 @@ export function interpretPslDocumentToSqlContract(
     modelIdentities,
     input.symbolTable,
     input.sources,
+    binder,
     diagnostics,
   );
 
@@ -2656,6 +2705,7 @@ export function interpretPslDocumentToSqlContract(
     authoringContributions: input.authoringContributions,
     diagnostics,
     sources: input.sources,
+    binder,
   });
 
   if (diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {

@@ -31,6 +31,7 @@
     "@internal/mongo-runtime": "workspace:8.0.0-rc.12",
     "@internal/target-mongo": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
+    "mongodb-connection-string-url": "catalog:",
     "pathe": "^2.0.3",
     "tinyglobby": "catalog:"
   },

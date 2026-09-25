@@ -1,3 +1,4 @@
+import { textColumn } from '@internal/adapter-postgres/column-types';
 import { SqlQueryError, UNIQUE_VIOLATION_SQLSTATE } from '@internal/sql-errors';
 import {
   type AnyExpression,
@@ -9,14 +10,16 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   assertJunctionParentMetadataLength,
   assertJunctionTargetMetadataLength,
-  buildPrimaryKeyFilterFromRow,
+  buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
   type JunctionRelationDefinition,
 } from '../src/mutation-executor';
+import { defineContract, field, model } from './contract-builder';
 import type { MockRuntime } from './helpers';
 import {
+  buildCompositeForeignKeyContract,
   buildCustomPrimaryKeyContract,
   buildExecutionDefaultJunctionContract,
   buildManyToManyContract,
@@ -148,22 +151,44 @@ describe('mutation-executor', () => {
     ).toBe(false);
   });
 
-  it('buildPrimaryKeyFilterFromRow() resolves mapped keys and throws when missing', () => {
+  it('buildRowIdentityFilterFromRow() resolves mapped keys and throws when missing', () => {
     const contract = getTestContract();
 
-    expect(buildPrimaryKeyFilterFromRow(contract, 'public', 'User', { id: 7 })).toEqual({ id: 7 });
+    expect(buildRowIdentityFilterFromRow(contract, 'public', 'User', { id: 7 })).toEqual({ id: 7 });
 
-    expect(() => buildPrimaryKeyFilterFromRow(contract, 'public', 'User', {})).toThrow(
-      /Missing primary key field "id"/,
+    expect(() => buildRowIdentityFilterFromRow(contract, 'public', 'User', {})).toThrow(
+      /Missing identity field "id"/,
     );
   });
 
-  it('buildPrimaryKeyFilterFromRow() resolves custom primary key columns', () => {
+  it('buildRowIdentityFilterFromRow() resolves custom primary key columns', () => {
     const withCustomPk = buildCustomPrimaryKeyContract();
 
-    expect(buildPrimaryKeyFilterFromRow(withCustomPk, 'public', 'User', { pk_id: 99 })).toEqual({
+    expect(buildRowIdentityFilterFromRow(withCustomPk, 'public', 'User', { pk_id: 99 })).toEqual({
       pk_id: 99,
     });
+  });
+
+  it('buildRowIdentityFilterFromRow() uses every column of a composite primary key', () => {
+    const contract = buildCompositeForeignKeyContract();
+
+    expect(
+      buildRowIdentityFilterFromRow(contract, 'public', 'Customer', {
+        tenantId: 1,
+        id: 2,
+        name: 'Grace',
+      }),
+    ).toEqual({ tenantId: 1, id: 2 });
+  });
+
+  it('buildRowIdentityFilterFromRow() throws ORM.ROW_IDENTITY_MISSING for a table without a key', () => {
+    const contract = defineContract({
+      models: { Log: model('Log', { fields: { message: field.column(textColumn) } }) },
+    });
+
+    expect(() =>
+      buildRowIdentityFilterFromRow(contract, 'public', 'Log', { message: 'hello' }),
+    ).toThrow(expect.objectContaining({ code: 'ORM.ROW_IDENTITY_MISSING' }));
   });
 
   it('executeNestedCreateMutation() commits transactions on success', async () => {
