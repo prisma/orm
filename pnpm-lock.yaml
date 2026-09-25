@@ -3794,7 +3794,7 @@ importers:
         specifier: 'catalog:'
         version: 2.2.3
       bson:
-        specifier: ^7.3.1
+        specifier: ^7.2.0
         version: 7.3.1
     devDependencies:
       '@internal/mongo-contract-psl':
@@ -5092,7 +5092,7 @@ importers:
         specifier: 'catalog:'
         version: 2.2.3
       bson:
-        specifier: ^7.3.1
+        specifier: ^7.2.0
         version: 7.3.1
       mongodb:
         specifier: ^7.0.0

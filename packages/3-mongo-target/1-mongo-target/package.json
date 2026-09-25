@@ -32,7 +32,7 @@
     "@internal/mongo-value": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
     "arktype": "catalog:",
-    "bson": "^7.3.1"
+    "bson": "^7.2.0"
   },
   "devDependencies": {
     "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
