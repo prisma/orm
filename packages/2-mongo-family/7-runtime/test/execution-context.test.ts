@@ -1,4 +1,5 @@
 import type { ExecutionMutationDefault } from '@internal/contract/types';
+import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { describe, expect, it } from 'vitest';
 import {
@@ -6,7 +7,6 @@ import {
   createMongoExecutionStack,
   type MongoRuntimeAdapterDescriptor,
   type MongoRuntimeExtensionDescriptor,
-  type MongoRuntimeMutationDefaultGenerator,
   type MongoRuntimeTargetDescriptor,
 } from '../src/mongo-execution-stack';
 
@@ -35,7 +35,7 @@ function target(): MongoRuntimeTargetDescriptor<'mongo'> {
 }
 
 function adapter(
-  generators: readonly MongoRuntimeMutationDefaultGenerator[] = [],
+  generators: readonly RuntimeMutationDefaultGenerator[] = [],
 ): MongoRuntimeAdapterDescriptor<'mongo'> {
   return {
     kind: 'adapter',
@@ -55,7 +55,7 @@ function extension(
   id: string,
   options: {
     readonly codecIds?: readonly string[];
-    readonly generators?: readonly MongoRuntimeMutationDefaultGenerator[];
+    readonly generators?: readonly RuntimeMutationDefaultGenerator[];
   },
 ): MongoRuntimeExtensionDescriptor<'mongo'> {
   return {
@@ -70,9 +70,9 @@ function extension(
   };
 }
 
-function counter(id: string, stability: MongoRuntimeMutationDefaultGenerator['stability']) {
+function counter(id: string, stability: RuntimeMutationDefaultGenerator['stability']) {
   let next = 0;
-  return { id, stability, generate: () => ++next } satisfies MongoRuntimeMutationDefaultGenerator;
+  return { id, stability, generate: () => ++next } satisfies RuntimeMutationDefaultGenerator;
 }
 
 function contractWith(defaults: readonly ExecutionMutationDefault[]) {
@@ -81,7 +81,7 @@ function contractWith(defaults: readonly ExecutionMutationDefault[]) {
 
 function contextFor(
   defaults: readonly ExecutionMutationDefault[],
-  generators: readonly MongoRuntimeMutationDefaultGenerator[] = [counter('clock', 'query')],
+  generators: readonly RuntimeMutationDefaultGenerator[] = [counter('clock', 'query')],
 ) {
   const stack = createMongoExecutionStack({ target: target(), adapter: adapter(generators) });
   return createMongoExecutionContext({ contract: contractWith(defaults), stack });
@@ -167,6 +167,17 @@ describe('createMongoExecutionContext composition', () => {
     );
   });
 
+  it('checks mutation default generators before collecting codecs', () => {
+    const stack = createMongoExecutionStack({
+      target: target(),
+      adapter: adapter(),
+      extensions: [extension('test-extension', { codecIds: ['test/adapter@1'] })],
+    });
+    expect(() =>
+      createMongoExecutionContext({ contract: contractWith([createdAt]), stack }),
+    ).toThrow(expect.objectContaining({ code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING' }));
+  });
+
   it('applies nothing for a contract without an execution section', () => {
     const stack = createMongoExecutionStack({ target: target(), adapter: adapter() });
     const context = createMongoExecutionContext({ contract: {}, stack });
@@ -176,91 +187,14 @@ describe('createMongoExecutionContext composition', () => {
   });
 });
 
-describe('applyMutationDefaults', () => {
-  it('fills onCreate defaults on create', () => {
+describe('context.applyMutationDefaults', () => {
+  it('fills defaults with the generators the stack contributes', () => {
     expect(fields(contextFor([createdAt, updatedAt]), 'create', { title: 'x' })).toEqual([
       'createdAt',
       'updatedAt',
     ]);
-  });
-
-  it('never overwrites a field the write sets explicitly', () => {
-    expect(
-      fields(contextFor([createdAt, updatedAt]), 'create', { updatedAt: new Date(0) }),
-    ).toEqual(['createdAt']);
-  });
-
-  it('treats a field set to undefined as absent', () => {
-    expect(fields(contextFor([updatedAt]), 'create', { updatedAt: undefined })).toEqual([
+    expect(fields(contextFor([createdAt, updatedAt]), 'update', { title: 'y' })).toEqual([
       'updatedAt',
     ]);
-  });
-
-  it('applies onUpdate defaults only to a non-empty update', () => {
-    const context = contextFor([createdAt, updatedAt]);
-    expect(fields(context, 'update', {})).toEqual([]);
-    expect(fields(context, 'update', { title: undefined })).toEqual([]);
-    expect(fields(context, 'update', { title: 'y' })).toEqual(['updatedAt']);
-  });
-
-  it('applies only the defaults of the targeted namespace and collection', () => {
-    const context = contextFor([
-      { ...createdAt, ref: { ...createdAt.ref, entry: 'comments' } },
-      { ...createdAt, ref: { ...createdAt.ref, namespace: 'other' } },
-    ]);
-    expect(fields(context, 'create', {})).toEqual([]);
-  });
-
-  it('applies a ref declared twice only once', () => {
-    expect(fields(contextFor([createdAt, createdAt]), 'create', {})).toEqual(['createdAt']);
-  });
-});
-
-describe('applyMutationDefaults stability', () => {
-  const twoFields: ExecutionMutationDefault[] = [
-    {
-      ref: { namespace: NS, entry: 'posts', field: 'a' },
-      onCreate: { kind: 'generator', id: 'seq' },
-    },
-    {
-      ref: { namespace: NS, entry: 'posts', field: 'b' },
-      onCreate: { kind: 'generator', id: 'seq' },
-    },
-  ];
-  const values = (
-    context: ReturnType<typeof contextFor>,
-    defaultValueCache?: Map<string, unknown>,
-  ) =>
-    context
-      .applyMutationDefaults({
-        op: 'create',
-        namespace: NS,
-        entry: 'posts',
-        values: {},
-        ...(defaultValueCache ? { defaultValueCache } : {}),
-      })
-      .map((d) => d.value);
-
-  it("'field' yields a value per field", () => {
-    expect(values(contextFor(twoFields, [counter('seq', 'field')]))).toEqual([1, 2]);
-  });
-
-  it("'row' shares one value across the fields of one call and regenerates on the next", () => {
-    const context = contextFor(twoFields, [counter('seq', 'row')]);
-    expect(values(context)).toEqual([1, 1]);
-    expect(values(context)).toEqual([2, 2]);
-  });
-
-  it("'query' shares one value across calls through the caller's cache", () => {
-    const context = contextFor(twoFields, [counter('seq', 'query')]);
-    const cache = new Map<string, unknown>();
-    expect(values(context, cache)).toEqual([1, 1]);
-    expect(values(context, cache)).toEqual([1, 1]);
-    expect(values(context, new Map())).toEqual([2, 2]);
-  });
-
-  it("'query' without a cache yields a value per field", () => {
-    const context = contextFor(twoFields, [counter('seq', 'query')]);
-    expect(values(context)).toEqual([1, 2]);
   });
 });

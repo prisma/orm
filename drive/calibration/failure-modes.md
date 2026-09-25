@@ -678,3 +678,13 @@ Per-repo stop conditions beyond the canonical ones:
 - The reviewer checks each fake's possible outcomes against the real implementation, not only the code under test.
 
 **Reference incident.** prisma/orm#30291 (2026-09-24): a scripted prompt returned `false` from `consent`, and a test showed that a declined consent printed the command to remove packages init had installed. The engine's `consent` with a token never returns `false`: it returns `true` or throws `CLI.CONSENT_REQUIRED`, a token mismatch, or `CLI.PROMPT_CANCELLED`. Real users never saw the command. An independent review found it; the fix attached the command to whatever error follows the install.
+
+### F34. Stacked PR fails upgrade coverage because the fragment lives on its base branch
+
+**Symptom.** A stacked PR's local `pnpm check:upgrade-coverage --mode pr` passes, but CI's `Lint` job fails it with `[per-pr-declaration] ... requires a new declaration relative to --prev`.
+
+**Root cause.** CI passes `--prev <PR base sha>`; for a stacked PR that is the previous slice's head, which already carries the earlier fragment. Fragments inherited from the base do not count, so the stacked PR needs its own declaration even for an additive change. Locally the default base is `origin/main`, where the inherited fragment masks the gap.
+
+**Fix.** Run the check with `--prev $(git rev-parse <base-branch>)` in every dispatch gate on a stacked branch, and add a `changes: []` declaration for additive changes under `packages/3-extensions/**` or `examples/**`.
+
+**Reference incident.** 2026-09-24, the Mongo defaults project's slice 5 PR (#30405, stacked on #30403): the facade widening `contract: string | ContractConfig` was additive, the slice 3 fragment sat on the base branch, and CI refused the PR until a `changes: []` extension declaration was added. Same project, slice 3 (#30403): CI `Lint` failed on biome `no-bare-cast` and `noBannedTypes` because the dispatch briefs never listed the always-run per-package `pnpm lint` from `dod.md`; the F14 rule was already on file, the orchestrator did not thread it into the briefs.

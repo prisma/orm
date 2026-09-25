@@ -28,6 +28,12 @@ Outcome: registry, checks, and apply loop live once in `framework-components/src
 
 Builds on: slice 3. Hands to: close-out.
 
+### 6. `Json` means JSON; `Bson` means any BSON value
+
+Outcome: `mongo/json@1` validates and enforces the JSON-representable subset; new `mongo/bson@1` with `Bson` PSL name, `field.bson()`, structural `BsonValue`, Extended JSON canonical form, unconstrained validator; validator derivation reads the whole `targetTypes` list; `docs/reference/scalar-types.md` written for Mongo; upgrade fragments. Specification: `design/scalar-naming.md` § 5, § 6, § 8, § 9.
+
+Builds on: slice 4 (branch order) and slice 1 (validator mechanism). Hands to: close-out.
+
 ### 5. `prisma6Schema` contract source for Mongo
 
 Outcome: package `packages/2-mongo-family/2-authoring/contract-prisma6`; `defineConfig` in the Mongo facade accepts `contract: string | ContractConfig`; rule table from `projects/prisma7-contract-source/slices/02-mongo-source/spec.md` with `Json`/`Bytes`/`Decimal`/`BigInt` mapped to the slice 1 codecs and `@default(now())`/`@updatedAt` mapped to the slice 3 presets under the ADR 252 hard-error rules; unknown-top-level-block diagnostic in the Mongo PSL interpreter; end-to-end emit and sign against Prisma 6 shaped collections.
@@ -42,11 +48,12 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 
 | Slice | Branch | PR |
 |---|---|---|
-| 1 | `mongo-target-owns-codecs` | #30396, CI green, awaiting review |
-| 2 | `execution-ref-neutral-names` | #30399, CI green, awaiting review |
+| 1 | `mongo-target-owns-codecs` | #30396, merged 2026-09-25 |
+| 2 | `execution-ref-neutral-names` | #30399, merged 2026-09-25 |
 | 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
-| 5 | `mongo-prisma6-source` | in progress, stacked on 3 |
-| 4 | | not started |
+| 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
+| 4 | `mongo-generator-runtime-hoist` | #30406, stacked on 5 |
+| 6 | | not started; stacked on 4 |
 
 ## Dependencies
 
@@ -54,16 +61,15 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 
 ## Close-out (required)
 
-- [ ] Verify every project DoD item in `spec.md`.
-- [ ] Write the ADR for the framework-owned mutation-default runtime.
-- [ ] Update `docs/reference/codec-authoring-guide.md`, the Mongo authoring reference, and the Mongo facade config reference.
-- [ ] Delete or update `projects/prisma7-contract-source/slices/02-mongo-source/` and the filled "Deferred gaps" entries.
+- [x] Verify every project DoD item in `spec.md` (verification block in `wip/closeout-dod.md`, to be copied into the close-out PR).
+- [x] Write the ADR for the framework-owned mutation-default runtime (ADR 255, in #30406).
+- [x] Update `docs/reference/codec-authoring-guide.md` (#30396), the Mongo authoring references (#30403), and the Mongo facade config reference (#30405).
+- [x] Delete `projects/prisma7-contract-source/slices/02-mongo-source/` and update the filled "Deferred gaps" entries (#30405).
 - [ ] Strip repo-wide references to `projects/mongo-defaults-codecs-prisma6-source/**`.
 - [ ] Delete `projects/mongo-defaults-codecs-prisma6-source/`.
 
 ## Open items
 
-- ADR 198 describes a `MongoCommandExecutor` DDL visitor and a `MarkerOperations` without a `space` parameter; neither matches the code, and the drift predates this project. Slice 1 corrected only the composition-site example. Rewriting the DDL dispatch text is its own change; do it at close-out or as a separate direct change.
 - `architecture.config.json` maps the Postgres, SQLite, and Mongo target packages to the `extensions` domain, which may import from `targets` (the adapters). So `lint:deps` accepts a target importing its adapter, the direction ADR 198 forbids. Correcting the domain mapping touches all three targets and is its own change.
 - `mongo/binary@1` round-trips every BSON Binary subtype as subtype 0. Slice 4 must decide how Prisma 6 `Bytes` (subtype 0) and any other subtype found in existing collections are handled.
 - A field whose codec id the lookup does not know is left out of the closed `$jsonSchema` validator, so every write carrying that field is rejected. Pre-existing; decide whether unknown ids should be an authoring error instead.
@@ -75,3 +81,16 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 - Mongo TS `field.temporal.timestamp(undefined, 'now')`: TypeScript infers both option arguments as optional, so the create-input type keeps such a field required even though the runtime fills it. `timestamp()` and `timestamp('now', 'now')` resolve exactly. Consider named-object arguments for the TS form; check what SQL's TS `temporal.timestamp` signature does.
 - Mongo update defaults treat every top-level field the update document touches (`$set`, `$unset`, `$inc`, `$push`) as explicit, and an operator-only update as non-empty. Document this beside SQL's `$set`-only rule when the runtime machinery is hoisted (slice 4).
 - The Mongo TypeScript contract builder keeps its own enum encoding and storage hashing; slice 5 unified the PSL interpreter and the Prisma 6 reader on `buildMongoStorage` in `@internal/mongo-contract` but did not move the TS builder onto it. It is part of the pre-existing PSL/TS storage-hash gap above.
+
+## Follow-on projects specified in `design/`
+
+- `target-named-scalars-sql`: Postgres and SQLite PSL and TS helper names follow the token rule (`design/scalar-naming.md` § 4, § 7, § 8, § 9). Before general availability.
+- `mongo-driver-wire-contract`: the transport layer names the BSON wire vocabulary and `mongodb` types stop leaking past the driver (`design/driver-wire-contract.md`).
+
+## Amendment to slice 1 (PR #30396)
+
+The Mongo PSL renames `Int`→`Int32`, `Float`→`Double`, `Boolean`→`Bool`, `DateTime`→`Date` and their diagnostic and `app` fragment (`design/scalar-naming.md` § 3), plus the two other review findings (ADR 198 made self-consistent; codec errors carry collection and field), land in #30396 before merge.
+- From the local review of #30396 (architect pass), left for later: a dependency-cruiser rule for target → adapter to replace `packages/3-mongo-target/1-mongo-target/test/layering.test.ts` (needs the target packages moved out of the `extensions` domain); moving the Mongo runner to the Postgres shape so `MongoRunnerDependencies` and `createRunnerDependencies` retire; deriving `CodecTypes` from the codecs and moving the Mongo TS field helpers into the target; trimming `extractDb`, `mongoStandardCodecs`, and `mongoDescriptorById` from the published exports; renaming `test/integration/test/mongo/target-runner/`.
+- `localeCompare` still orders other emitted or hashed output: `contract-psl/src/interpreter.ts` (~560), `contract-ts/src/contract-builder.ts` (~113), `packages/2-mongo-family/3-tooling/emitter/src/index.ts` (~65, ~78), `mongo-schema-ir/src/schema-ir.ts` (~17), `schema-verify/canonicalize-introspection.ts` (~141), and the framework `mergeCapabilityMatrices` key sort feeding `capabilities`. Each is host-locale dependent in the same way the execution sort was; sweep them in one change with the code-unit comparator.
+- The shared PSL parser reads only `a` or `a.b(` in index-field position, so a Prisma 6 `@@index([address.city])` fails with `PSL_INVALID_MODEL_MEMBER` before the Prisma 6 reader can report its own diagnostic; only the call form gets `PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED`. Teaching the parser dotted references touches every grammar, the formatter, and the language server.
+- Language-server completions now carry the deprecated Mongo scalar aliases last with the Deprecated tag; when the aliases are removed (a later release), delete the alias entries and the `deprecated` field consumers together.

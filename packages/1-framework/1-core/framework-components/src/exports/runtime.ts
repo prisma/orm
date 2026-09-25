@@ -11,6 +11,20 @@ export {
   runBeforeExecuteChain,
   runBeforeQueryChain,
 } from '../execution/before-execute-chain';
+export type {
+  AppliedMutationDefault,
+  GeneratorStability,
+  MutationDefaultGeneratorContributor,
+  MutationDefaults,
+  MutationDefaultsOp,
+  MutationDefaultsOptions,
+  RuntimeMutationDefaultGenerator,
+} from '../execution/mutation-defaults';
+export {
+  applyMutationDefaults,
+  assertMutationDefaultGeneratorsAvailable,
+  collectMutationDefaultGenerators,
+} from '../execution/mutation-defaults';
 export type { ExecutionPlan, QueryPlan, ResultType } from '../execution/query-plan';
 export { checkAborted, raceAgainstAbort } from '../execution/race-against-abort';
 export {

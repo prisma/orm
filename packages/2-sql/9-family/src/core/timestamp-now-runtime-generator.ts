@@ -1,5 +1,5 @@
 import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
-import type { RuntimeMutationDefaultGenerator } from '@internal/sql-runtime';
+import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 
 /**
  * Builds the canonical runtime-plane generator for the wall-clock-now
@@ -11,9 +11,9 @@ import type { RuntimeMutationDefaultGenerator } from '@internal/sql-runtime';
  * every timestamp-defaulted column. Matches Prisma 6's `@updatedAt`
  * semantics: one `new Date()` per lowered mutation, not per row.
  *
- * Lives in a runtime-plane-only module so the control-plane
- * `timestamp-now-generator.ts` (descriptor + authoring presets) stays
- * free of `@internal/sql-runtime` imports.
+ * Lives in its own module, exported only through `exports/runtime.ts`,
+ * so the control-plane `timestamp-now-generator.ts` (descriptor +
+ * authoring presets) stays free of runtime-plane imports.
  */
 export function timestampNowRuntimeGenerator(): RuntimeMutationDefaultGenerator {
   return {

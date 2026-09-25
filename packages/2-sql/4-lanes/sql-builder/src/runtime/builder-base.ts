@@ -1,6 +1,11 @@
 import type { PlanMeta } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import type { AnnotationValue, OperationKind } from '@internal/framework-components/runtime';
+import type {
+  AnnotationValue,
+  AppliedMutationDefault,
+  MutationDefaultsOptions,
+  OperationKind,
+} from '@internal/framework-components/runtime';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { SqlOperationEntry } from '@internal/sql-operations';
 import {
@@ -19,11 +24,7 @@ import {
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import type {
-  AppliedMutationDefault,
-  MutationDefaultsOptions,
-  SqlAggregateDescriptorRegistry,
-} from '@internal/sql-relational-core/query-lane-context';
+import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import type {

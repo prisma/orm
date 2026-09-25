@@ -98,6 +98,28 @@ describe('capability contribution at authoring time', () => {
     });
   });
 
+  it('drops capability values that are not booleans', () => {
+    const contract = buildOneModelContract({
+      family: sqlFamilyPack,
+      target: {
+        ...bareTargetPack,
+        capabilities: { sql: { returning: true, limit: 'yes' }, postgres: 'lateral' },
+      },
+      extensions: {
+        pgvector: {
+          ...extensionWithCapabilities,
+          capabilities: { postgres: { 'pgvector.cosine': true, 'pgvector.dimensions': 3 } },
+        },
+      },
+      createNamespace: createTestSqlNamespace,
+    });
+
+    expect(contract.capabilities).toEqual({
+      sql: { returning: true },
+      postgres: { 'pgvector.cosine': true },
+    });
+  });
+
   it('rejects an author-supplied `capabilities` block at the type level', () => {
     // Negative-type assertion: the `defineContract` input shape no longer
     // accepts a `capabilities` field. Capabilities flow exclusively through

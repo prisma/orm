@@ -62,11 +62,11 @@ Mutation defaults are applied in the execution plane, not in adapters.
 
 Conceptually, the execution context provides:
 
-- a pre-indexed lookup keyed by `(table, column)` derived from `execution.mutations.defaults`
+- a lookup of `execution.mutations.defaults` by `(namespace, entry)`
 - a single helper:
-  - `applyMutationDefaults({ op, table, values }) → valuesWithDefaults`
+  - `applyMutationDefaults({ op, namespace, entry, values }) → appliedDefaults`, where each applied default is `{ field, value }`
 
-Lanes call this once per mutation and then build a Plan normally.
+Lanes call this once per mutation and then build a Plan normally. The helper, the generator registry, and the availability check are framework runtime code shared by every family; see [ADR 255](ADR%20255%20-%20Mutation-default%20generators%20are%20a%20framework%20runtime%20concern.md).
 
 ### 3) Generator registry + compatibility validation
 

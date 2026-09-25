@@ -1,8 +1,8 @@
+import type { MutationDefaults } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
   MongoContract,
   MongoContractWithTypeMaps,
-  MongoMutationDefaults,
   RootModelName,
 } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
@@ -15,7 +15,7 @@ export interface MongoOrmOptions<TContract extends MongoContract> {
   readonly contract: TContract;
   readonly executor: MongoQueryExecutor;
   /** Fills the contract's execution defaults on writes. Without it, no generated values are applied. */
-  readonly mutationDefaults?: MongoMutationDefaults;
+  readonly mutationDefaults?: MutationDefaults;
 }
 
 export type MongoOrmClient<
@@ -53,5 +53,8 @@ export function mongoOrm<
     );
   }
 
-  return client as MongoOrmClient<TContract>;
+  return blindCast<
+    MongoOrmClient<TContract>,
+    'the client holds a collection for every root the contract names'
+  >(client);
 }

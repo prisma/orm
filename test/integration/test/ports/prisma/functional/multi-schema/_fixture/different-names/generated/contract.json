@@ -234,20 +234,9 @@
     "storageHash": "aede3a2efea99253a03bdaa4679ec79f5000d06f8a853ed6f0c08f2f891aa479"
   },
   "execution": {
-    "executionHash": "0861888f952daa9ef395a4b80736a1a4fc84563b786c9d8187afafb383e25f8a",
+    "executionHash": "fcf5b5610bfe1a583de72d24a6198e26e343a1dac89ecc6baac2dc706cee79f5",
     "mutations": {
       "defaults": [
-        {
-          "onCreate": {
-            "id": "cuid2",
-            "kind": "generator"
-          },
-          "ref": {
-            "entry": "some_table_post",
-            "field": "id",
-            "namespace": "transactional"
-          }
-        },
         {
           "onCreate": {
             "id": "cuid2",
@@ -257,6 +246,17 @@
             "entry": "some_table_user",
             "field": "id",
             "namespace": "base"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "cuid2",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "some_table_post",
+            "field": "id",
+            "namespace": "transactional"
           }
         }
       ]

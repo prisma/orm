@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { computeProfileHash } from '@internal/contract/hashing';
+import { buildExecutionSection, computeProfileHash } from '@internal/contract/hashing';
 import {
   type Contract,
   type ContractEnum,
@@ -27,7 +27,6 @@ import type { CodecLookup } from '@internal/framework-components/codec';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
-  buildMongoExecutionSection,
   buildMongoStorage,
   encodeMongoValueSets,
   type MongoCollectionInput,
@@ -1226,15 +1225,10 @@ function assembleContract(input: {
   for (const [name, collection] of Object.entries(input.collections)) {
     collections[name] = collection.indexes.length > 0 ? { indexes: collection.indexes } : {};
   }
-  const storage = blindCast<
-    Contract['storage'],
-    'MongoStorage is the Mongo family concrete storage class; it structurally satisfies the Contract storage slot.'
-  >(
-    buildMongoStorage({
-      collections,
-      valueSets: encodeMongoValueSets(Object.fromEntries(input.enums), input.codecLookup),
-    }),
-  );
+  const storage: Contract['storage'] = buildMongoStorage({
+    collections,
+    valueSets: encodeMongoValueSets(Object.fromEntries(input.enums), input.codecLookup),
+  });
 
   const models: Record<string, unknown> = {};
   for (const [modelName, build] of input.builds) {
@@ -1245,7 +1239,11 @@ function assembleContract(input: {
     };
   }
   const capabilities: Record<string, Record<string, boolean>> = {};
-  const execution = buildMongoExecutionSection(input.executionDefaults);
+  const execution = buildExecutionSection({
+    target,
+    targetFamily,
+    defaults: input.executionDefaults,
+  });
   return {
     targetFamily,
     target,

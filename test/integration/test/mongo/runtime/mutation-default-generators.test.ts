@@ -1,11 +1,11 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
 import type { ExecutionMutationDefault } from '@internal/contract/types';
+import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,
   type MongoRuntimeExtensionDescriptor,
-  type MongoRuntimeMutationDefaultGenerator,
 } from '@internal/mongo-runtime';
 import mongoRuntimeTarget from '@internal/target-mongo/runtime';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +22,7 @@ function generator(id: string) {
 
 function extensionWith(
   id: string,
-  generators: readonly MongoRuntimeMutationDefaultGenerator[],
+  generators: readonly RuntimeMutationDefaultGenerator[],
 ): MongoRuntimeExtensionDescriptor<'mongo'> {
   return {
     kind: 'extension',
@@ -36,14 +36,14 @@ function extensionWith(
   };
 }
 
-function counter(id: string, stability: MongoRuntimeMutationDefaultGenerator['stability']) {
+function counter(id: string, stability: RuntimeMutationDefaultGenerator['stability']) {
   let next = 0;
-  return { id, stability, generate: () => ++next } satisfies MongoRuntimeMutationDefaultGenerator;
+  return { id, stability, generate: () => ++next } satisfies RuntimeMutationDefaultGenerator;
 }
 
 function contextFor(
   defaults: readonly ExecutionMutationDefault[],
-  generators: readonly MongoRuntimeMutationDefaultGenerator[] = [],
+  generators: readonly RuntimeMutationDefaultGenerator[] = [],
 ) {
   const stack = createMongoExecutionStack({
     target: mongoRuntimeTarget,
@@ -114,16 +114,6 @@ describe('Mongo runtime mutation default generators', () => {
     expect(applied.map((d) => d.field)).toEqual(['createdAt']);
   });
 
-  it('treats a field set to undefined as absent', () => {
-    const applied = contextFor([updatedAt]).applyMutationDefaults({
-      op: 'create',
-      namespace: NS,
-      entry: 'posts',
-      values: { updatedAt: undefined },
-    });
-    expect(applied.map((d) => d.field)).toEqual(['updatedAt']);
-  });
-
   it('applies onUpdate defaults only to a non-empty update', () => {
     const context = contextFor([createdAt, updatedAt]);
     const update = (values: Record<string, unknown>) =>
@@ -131,7 +121,6 @@ describe('Mongo runtime mutation default generators', () => {
         .applyMutationDefaults({ op: 'update', namespace: NS, entry: 'posts', values })
         .map((d) => d.field);
     expect(update({})).toEqual([]);
-    expect(update({ title: undefined })).toEqual([]);
     expect(update({ title: 'y' })).toEqual(['updatedAt']);
   });
 

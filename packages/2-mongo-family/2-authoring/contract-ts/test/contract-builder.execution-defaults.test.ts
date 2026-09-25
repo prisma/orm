@@ -90,6 +90,33 @@ describe('Mongo TS temporal presets', () => {
     });
   });
 
+  it('hashes the execution section for the target the contract binds', () => {
+    const otherTarget = {
+      ...mongoTargetPack,
+      id: 'mongo-other',
+      targetId: 'mongo-other',
+    } as const satisfies TargetPackRef<'mongo', 'mongo-other'>;
+    const bound = defineContract(
+      { family: mongoFamilyPack, target: otherTarget },
+      ({ field, model }) => ({
+        models: {
+          Post: model('Post', {
+            collection: 'posts',
+            fields: { _id: field.objectId(), createdAt: field.temporal.createdAt() },
+          }),
+        },
+      }),
+    );
+    expect(bound.target).toBe('mongo-other');
+    expect(bound.execution?.executionHash).toBe(
+      computeExecutionHash({
+        target: 'mongo-other',
+        targetFamily: 'mongo',
+        execution: { mutations: { defaults: bound.execution?.mutations.defaults ?? [] } },
+      }),
+    );
+  });
+
   it('omits the execution section when no field has execution defaults', () => {
     const plain = defineContract(scaffold, ({ field, model }) => ({
       models: {

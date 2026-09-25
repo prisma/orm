@@ -156,13 +156,13 @@ function applyCreateDefaults(
   for (const row of rows) {
     const applied = ctx.context.applyMutationDefaults({
       op: 'create',
-      table: tableName,
+      entry: tableName,
       namespace: namespaceId,
       values: row,
       defaultValueCache,
     });
     for (const def of applied) {
-      row[def.column] = def.value;
+      row[def.field] = def.value;
     }
   }
 }
@@ -175,12 +175,12 @@ function applyUpdateDefaults(
 ): void {
   const applied = ctx.context.applyMutationDefaults({
     op: 'update',
-    table: tableName,
+    entry: tableName,
     namespace: namespaceId,
     values,
   });
   for (const def of applied) {
-    values[def.column] = def.value;
+    values[def.field] = def.value;
   }
 }
 

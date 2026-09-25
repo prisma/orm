@@ -2,7 +2,7 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import { computeProfileHash } from '@internal/contract/hashing';
+import { buildExecutionSection, computeProfileHash } from '@internal/contract/hashing';
 import {
   type Contract,
   type ContractEnum,
@@ -33,7 +33,6 @@ import type { ControlDefaultRegistries } from '@internal/framework-components/co
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
-  buildMongoExecutionSection,
   buildMongoStorage,
   encodeMongoValueSets,
   type MongoCollectionInput,
@@ -1523,7 +1522,13 @@ export function interpretPslDocumentToMongoContract(
   const resolvedModels = polyResult.models;
   const resolvedCollections = polyResult.collections;
 
-  const execution = buildMongoExecutionSection(executionDefaults);
+  const target = 'mongo';
+  const targetFamily = 'mongo';
+  const execution = buildExecutionSection({
+    target,
+    targetFamily,
+    defaults: executionDefaults,
+  });
 
   // The storage value set is the source of truth for both the emit typing and the validator's
   // `enum` keyword. Built once, ahead of validator derivation, from each enum's codec-encoded member
@@ -1571,8 +1576,6 @@ export function interpretPslDocumentToMongoContract(
     }
   }
 
-  const target = 'mongo';
-  const targetFamily = 'mongo';
   const collectionInputs: Record<string, MongoCollectionInput> = {};
   for (const [name, coll] of Object.entries(resolvedCollections)) {
     const raw: Record<string, unknown> = {};
@@ -1584,10 +1587,10 @@ export function interpretPslDocumentToMongoContract(
       'arktype-validated JSON shapes satisfy MongoCollectionInput by construction'
     >(raw);
   }
-  const storage = blindCast<
-    Contract['storage'],
-    'MongoStorage is the Mongo family concrete storage class; it structurally satisfies the Contract storage slot.'
-  >(buildMongoStorage({ collections: collectionInputs, valueSets: storageValueSets }));
+  const storage: Contract['storage'] = buildMongoStorage({
+    collections: collectionInputs,
+    valueSets: storageValueSets,
+  });
   const capabilities: Record<string, Record<string, boolean>> = {};
 
   const hasEnums = Object.keys(builtEnums).length > 0;

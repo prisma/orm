@@ -96,58 +96,11 @@ describe('composed runtime mutation default generators', () => {
 
     const applied = context.applyMutationDefaults({
       op: 'create',
-      table: 'user',
+      entry: 'user',
       namespace: '__unbound__',
       values: {},
     });
-    expect(applied).toEqual([{ column: 'id', value: 'slug-from-pack' }]);
-  });
-
-  it('skips generated default when user provides an explicit value', () => {
-    const extension: SqlRuntimeExtensionDescriptor<'postgres'> = {
-      kind: 'extension',
-      id: 'test-mutation-defaults',
-      version: '0.0.1',
-      familyId: 'sql',
-      targetId: 'postgres',
-      codecs: () => [],
-      mutationDefaultGenerators: () => [
-        {
-          id: 'slugid',
-          generate: () => 'slug-from-pack',
-          stability: 'field',
-        },
-      ],
-      create() {
-        return { familyId: 'sql', targetId: 'postgres' };
-      },
-    };
-
-    const context = createExecutionContext({
-      contract: {
-        ...testContract,
-        execution: {
-          executionHash: executionHash('test'),
-          mutations: {
-            defaults: [
-              {
-                ref: { namespace: '__unbound__', entry: 'user', field: 'id' },
-                onCreate: { kind: 'generator', id: 'slugid' },
-              },
-            ],
-          },
-        },
-      },
-      stack: createStack([extension]),
-    });
-
-    const applied = context.applyMutationDefaults({
-      op: 'create',
-      table: 'user',
-      namespace: '__unbound__',
-      values: { id: 'user-provided-value' },
-    });
-    expect(applied).toEqual([]);
+    expect(applied).toEqual([{ field: 'id', value: 'slug-from-pack' }]);
   });
 
   it('throws error naming both owners when duplicate generator ids are composed', () => {
@@ -191,35 +144,6 @@ describe('composed runtime mutation default generators', () => {
         details: expect.objectContaining({
           existingOwner: 'first-pack',
           incomingOwner: 'second-pack',
-        }),
-      }),
-    );
-  });
-
-  it('throws RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING at context creation when generator id is missing', () => {
-    expect(() =>
-      createExecutionContext({
-        contract: {
-          ...testContract,
-          execution: {
-            executionHash: executionHash('test'),
-            mutations: {
-              defaults: [
-                {
-                  ref: { namespace: '__unbound__', entry: 'user', field: 'id' },
-                  onCreate: { kind: 'generator', id: 'unknown-generator' },
-                },
-              ],
-            },
-          },
-        },
-        stack: createStack([]),
-      }),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-        details: expect.objectContaining({
-          ids: ['unknown-generator'],
         }),
       }),
     );

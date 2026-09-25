@@ -1,4 +1,8 @@
-import { computeProfileHash, computeStorageHash } from '@internal/contract/hashing';
+import {
+  buildExecutionSection,
+  computeProfileHash,
+  computeStorageHash,
+} from '@internal/contract/hashing';
 import {
   type ContractEmbedRelation,
   type ContractEnum,
@@ -51,7 +55,6 @@ import { extractCodecLookup } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
-  buildMongoExecutionSection,
   buildMongoNamespace,
   type MongoCollection,
   type MongoCollectionInput,
@@ -109,7 +112,7 @@ function stableStringify(value: unknown): string {
   }
 
   if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
+    return `{${Object.entries(value)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
       .join(',')}}`;
@@ -1212,14 +1215,17 @@ function createScalarFieldBuilder<
   false
 > {
   return createFieldBuilder({
-    type: {
+    type: blindCast<
+      {
+        readonly kind: 'scalar';
+        readonly codecId: CodecId;
+      } & ([TypeParams] extends [undefined] ? EmptyObject : { readonly typeParams: TypeParams }),
+      'normalizeOptionalTypeParams adds typeParams exactly when TypeParams is not undefined'
+    >({
       kind: 'scalar',
       codecId,
       ...normalizeOptionalTypeParams(options?.typeParams),
-    } as {
-      readonly kind: 'scalar';
-      readonly codecId: CodecId;
-    } & ([TypeParams] extends [undefined] ? EmptyObject : { readonly typeParams: TypeParams }),
+    }),
     nullable: false,
     many: false,
   });
@@ -1264,13 +1270,16 @@ export const field = {
   },
   valueObject<const ValueObject extends ValueObjectNameInput>(valueObjectName: ValueObject) {
     return createFieldBuilder({
-      type: {
+      type: blindCast<
+        {
+          readonly kind: 'valueObject';
+          readonly name: NormalizeValueObjectName<ValueObject>;
+        },
+        'resolveValueObjectName returns the normalized name the type computes'
+      >({
         kind: 'valueObject',
         name: resolveValueObjectName(valueObjectName),
-      } as {
-        readonly kind: 'valueObject';
-        readonly name: NormalizeValueObjectName<ValueObject>;
-      },
+      }),
       nullable: false,
       many: false,
     });
@@ -1458,14 +1467,20 @@ function createReferenceRelationBuilder<
   const targetModelName = resolveModelName(target);
 
   return createRelationBuilder({
-    to: targetModelName as NormalizeModelName<Target>,
+    to: blindCast<
+      NormalizeModelName<Target>,
+      'resolveModelName returns the normalized name the type computes'
+    >(targetModelName),
     cardinality,
     on: {
-      localFields: normalizeStringList(options.from) as NormalizeStringList<From>,
-      targetFields: normalizeTargetFields(
-        targetModelName,
-        options.to,
-      ) as NormalizeTargetFieldList<To>,
+      localFields: blindCast<
+        NormalizeStringList<From>,
+        'normalizeStringList returns the normalized list the type computes'
+      >(normalizeStringList(options.from)),
+      targetFields: blindCast<
+        NormalizeTargetFieldList<To>,
+        'normalizeTargetFields returns the normalized list the type computes'
+      >(normalizeTargetFields(targetModelName, options.to)),
     },
     nullable,
   });
@@ -1479,7 +1494,10 @@ function createEmbedRelationBuilder<
   cardinality: Cardinality,
 ): RelationBuilder<NormalizeModelName<Target>, Cardinality, undefined, undefined> {
   return createRelationBuilder({
-    to: resolveModelName(target) as NormalizeModelName<Target>,
+    to: blindCast<
+      NormalizeModelName<Target>,
+      'resolveModelName returns the normalized name the type computes'
+    >(resolveModelName(target)),
     cardinality,
     on: undefined,
     nullable: undefined,
@@ -1650,30 +1668,43 @@ export function model<
     __kind: 'model',
     __name: name,
     __fields: input.fields,
-    __relations: (input.relations ?? {}) as Relations extends Record<string, AnyRelationBuilder>
-      ? Relations
-      : Record<never, never>,
+    __relations: blindCast<
+      Relations extends Record<string, AnyRelationBuilder> ? Relations : Record<never, never>,
+      'an omitted relations input is the empty record the type names'
+    >(input.relations ?? {}),
     __indexes: input.indexes,
     __collectionOptions: input.collectionOptions,
     __controlPolicy: input.controlPolicy,
-    __collection: input.collection as Collection,
-    __owner: (input.owner
-      ? resolveModelName(input.owner)
-      : undefined) as NormalizeModelNameOrUndefined<Owner>,
-    __base: (input.base
-      ? resolveModelName(input.base)
-      : undefined) as NormalizeModelNameOrUndefined<Base>,
-    __storageRelations: input.storageRelations as StorageRelations,
-    __discriminator: (input.discriminator
-      ? { field: input.discriminator.field }
-      : undefined) as Discriminator extends { readonly field: infer Field extends string }
-      ? { readonly field: Field }
-      : undefined,
-    __variants: input.discriminator?.variants as Discriminator extends {
-      readonly variants: infer Variants extends Record<string, VariantSpec>;
-    }
-      ? Variants
-      : undefined,
+    __collection: blindCast<
+      Collection,
+      'the collection input carries the Collection type parameter'
+    >(input.collection),
+    __owner: blindCast<
+      NormalizeModelNameOrUndefined<Owner>,
+      'resolveModelName returns the normalized name the type computes'
+    >(input.owner ? resolveModelName(input.owner) : undefined),
+    __base: blindCast<
+      NormalizeModelNameOrUndefined<Base>,
+      'resolveModelName returns the normalized name the type computes'
+    >(input.base ? resolveModelName(input.base) : undefined),
+    __storageRelations: blindCast<
+      StorageRelations,
+      'the storageRelations input carries the StorageRelations type parameter'
+    >(input.storageRelations),
+    __discriminator: blindCast<
+      Discriminator extends { readonly field: infer Field extends string }
+        ? { readonly field: Field }
+        : undefined,
+      'the discriminator field is copied from the Discriminator input'
+    >(input.discriminator ? { field: input.discriminator.field } : undefined),
+    __variants: blindCast<
+      Discriminator extends {
+        readonly variants: infer Variants extends Record<string, VariantSpec>;
+      }
+        ? Variants
+        : undefined,
+      'the variants are copied from the Discriminator input'
+    >(input.discriminator?.variants),
     ref(fieldName) {
       return createFieldReference(name, fieldName);
     },
@@ -1980,7 +2011,9 @@ function toStorageIndex(index: MongoIndexAuthoringInput): MongoIndex {
       }
     }
   }
-  return new MongoIndex(input as unknown as MongoIndexInput);
+  return new MongoIndex(
+    blindCast<MongoIndexInput, 'the keys and options above are the MongoIndex input fields'>(input),
+  );
 }
 
 function toStorageCollectionOptions(
@@ -2345,7 +2378,11 @@ function buildContractFromDefinition<
   const capabilities: Record<string, Record<string, boolean>> = {};
   const collections = buildCollections(definition.models);
   assertNoValueObjectExecutionDefaults(definition.valueObjects);
-  const execution = buildMongoExecutionSection(buildExecutionDefaults(definition.models));
+  const execution = buildExecutionSection({
+    target: definition.target.targetId,
+    targetFamily: definition.family.familyId,
+    defaults: buildExecutionDefaults(definition.models),
+  });
 
   // Resolve the target's codecs by id from the pack the contract binds, then encode each enum's
   // member values through `codec.encodeJson` — the same real codecs the runtime/control stacks use.
@@ -2387,12 +2424,12 @@ function buildContractFromDefinition<
     ...mongoContractCanonicalizationHooks,
   });
 
-  const storage = new MongoStorage({
+  const storage: MongoStorageShape<string> = new MongoStorage({
     storageHash,
     namespaces: {
       [UNBOUND_NAMESPACE_ID]: unboundNamespace,
     },
-  }) as unknown as MongoStorageShape<string>;
+  });
 
   const builtEnums: Record<string, ContractEnum> = {};
   for (const [enumName, handle] of Object.entries(definition.enums ?? {})) {

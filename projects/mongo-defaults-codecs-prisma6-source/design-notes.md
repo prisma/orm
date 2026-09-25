@@ -25,6 +25,10 @@ The contract carries an `execution` section listing, per field, a generator to r
 
 10. **`Json` fields get an empty validator schema.** Found in slice 1 D3: the collection validator is closed, so omitting a field rejects writes. `{}` is the one schema that admits any BSON value. Canonicalisation keeps that empty object. The original assumption (omit the field) is recorded as falsified.
 
+11. **Scalar types are named after the target, on every surface** (2026-09-25, from the review of PR #30396): one token per type, codec ids are the source of the token and do not change, PSL names are the token in PascalCase, TS helpers are `field.<token>()`. Mongo renames `Int`, `Float`, `Boolean`, `DateTime` to `Int32`, `Double`, `Bool`, `Date` in #30396. Postgres and SQLite follow in their own project. Full specification: `design/scalar-naming.md`.
+12. **`Json` means JSON; `Bson` means any BSON value** (2026-09-25). Decision 10's empty-schema `Json` validator is reversed: `Json` validates the JSON-representable BSON types and refuses the rest on encode and decode; a new `Bson` scalar carries the unconstrained validator and a structural `BsonValue` application type with an Extended JSON v2 canonical JSON form. Slice 6. Specification: `design/scalar-naming.md` § 5 and § 6.
+13. **The Mongo driver interface owns the wire-type contract** (2026-09-25). Project candidate, not a slice. Specification: `design/driver-wire-contract.md`.
+
 ## Alternatives considered
 
 - **Adding Prisma 6 attributes to Prisma 8 Mongo authoring.** Rejected outright. It diverges Mongo from Postgres and imports a frozen dialect into Prisma 8.
@@ -35,3 +39,6 @@ The contract carries an `execution` section listing, per field, a generator to r
 
 - `spec.md`, `plan.md`.
 - `projects/prisma7-contract-source/design-notes.md` § "Unspellable shapes are hard errors" for the optional-field and default-plus-generator rules.
+- **Naming Mongo scalars with MongoDB's query-language aliases (`Int`, `Long`, `Decimal`, `BinData`) and renaming codec ids to match.** Rejected: the BSON specification's names are what the codec ids already use, the aliases add nothing users can see, and renaming codec ids re-hashes every Mongo contract and re-signs every database.
+- **Keeping Prisma 6/7 scalar names for cross-target symmetry.** Rejected: they are symmetric in spelling and wrong about storage (`Int` is 32-bit on Mongo, int4 on Postgres, 64-bit on SQLite). Symmetry is the naming rule and the grammar, not the spelling.
+- **`Json` on Mongo admitting any BSON value with an empty validator.** Rejected after the review: it signs no structure and lies about the application type. Split into `Json` (JSON only) and `Bson` (anything).

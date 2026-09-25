@@ -342,12 +342,12 @@ async function updateFirstGraph(
     const tableName = resolveModelTableName(contract, namespaceId, modelName);
     const appliedUpdateDefaults = context.applyMutationDefaults({
       op: 'update',
-      table: tableName,
+      entry: tableName,
       namespace: namespaceId,
       values: mappedUpdateData,
     });
     for (const def of appliedUpdateDefaults) {
-      mappedUpdateData[def.column] = def.value;
+      mappedUpdateData[def.field] = def.value;
     }
     const identityFilter = buildRowIdentityFilterFromRow(
       contract,
@@ -1045,12 +1045,12 @@ async function insertJunctionLink(
   // database.
   const applied = context.applyMutationDefaults({
     op: 'create',
-    table: through.table,
+    entry: through.table,
     namespace: through.namespaceId,
     values: junctionRow,
   });
   for (const def of applied) {
-    junctionRow[def.column] = def.value;
+    junctionRow[def.field] = def.value;
   }
 
   const compiled = compileInsertCount(context.contract, through.namespaceId, through.table, [
@@ -1172,13 +1172,13 @@ async function insertSingleRow(
   const mappedData = mapModelDataToStorageRow(contract, namespaceId, modelName, data);
   const applied = context.applyMutationDefaults({
     op: 'create',
-    table: tableName,
+    entry: tableName,
     namespace: namespaceId,
     values: mappedData,
   });
 
   for (const def of applied) {
-    mappedData[def.column] = def.value;
+    mappedData[def.field] = def.value;
   }
 
   const compiled = compileInsertReturning(

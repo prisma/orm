@@ -1,5 +1,5 @@
 import {
-  computeExecutionHash,
+  buildExecutionSection,
   computeProfileHash,
   computeStorageHash,
 } from '@internal/contract/hashing';
@@ -22,12 +22,7 @@ import {
   type StorageHashBase,
   type ValueSetRef,
 } from '@internal/contract/types';
-import {
-  type CapabilityMatrix,
-  type EnumTypeHandle,
-  mergeCapabilityMatrices,
-  resolveToOneRelationNullable,
-} from '@internal/contract-authoring';
+import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
 import type {
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
@@ -44,6 +39,7 @@ import {
   type ColumnTypeDescriptor,
   materializeCodec,
 } from '@internal/framework-components/codec';
+import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
@@ -196,7 +192,8 @@ function assertStorageSemantics(
     if (
       typeof registration !== 'object' ||
       registration === null ||
-      !Array.isArray((registration as { entries?: unknown }).entries)
+      !('entries' in registration) ||
+      !Array.isArray(registration.entries)
     ) {
       throw contractError(
         'CONTRACT.PACK_CONTRIBUTION_INVALID',
@@ -204,7 +201,10 @@ function assertStorageSemantics(
         { meta: { packId: pack.id, contribution: 'indexTypes', reason: 'invalid-shape' } },
       );
     }
-    for (const entry of (registration as IndexTypeRegistration<IndexTypeMap>).entries) {
+    for (const entry of blindCast<
+      IndexTypeRegistration<IndexTypeMap>,
+      'checked above to be an object with an entries array; each entry is validated when registered'
+    >(registration).entries) {
       indexTypeRegistry.register(entry);
     }
   }
@@ -1495,13 +1495,13 @@ export function buildSqlContractFromDefinition(
   const rawStorageTypes = definition.storageTypes ?? {};
   const documentTypes: Record<string, StorageTypeInstance> = Object.fromEntries(
     Object.entries(rawStorageTypes).map(([name, entry]) => {
-      if ((entry as { kind?: unknown }).kind === 'codec-instance') return [name, entry];
+      if ('kind' in entry && entry.kind === 'codec-instance') return [name, entry];
       return [
         name,
         toStorageTypeInstance({
           codecId: entry.codecId,
           nativeType: entry.nativeType,
-          typeParams: (entry as { typeParams?: Record<string, unknown> }).typeParams ?? {},
+          typeParams: ('typeParams' in entry ? entry.typeParams : undefined) ?? {},
         }),
       ];
     }),
@@ -1594,25 +1594,13 @@ export function buildSqlContractFromDefinition(
     : computeStorageHash({
         target,
         targetFamily,
-        storage: storageWithoutHash as Record<string, unknown>,
+        storage: blindCast<
+          Record<string, unknown>,
+          'the storage envelope is a plain object of namespaces; hashing reads it as a record'
+        >(storageWithoutHash),
         ...sqlContractCanonicalizationHooks,
       });
   const storage = new SqlStorage({ ...storageWithoutHash, storageHash });
-
-  const executionSection =
-    executionDefaults.length > 0
-      ? {
-          mutations: {
-            defaults: executionDefaults.sort((a, b) => {
-              const entryCompare = a.ref.entry.localeCompare(b.ref.entry);
-              if (entryCompare !== 0) {
-                return entryCompare;
-              }
-              return a.ref.field.localeCompare(b.ref.field);
-            }),
-          },
-        }
-      : undefined;
 
   const extensionNamespaces = definition.extensions
     ? Object.values(definition.extensions).map((pack) => pack.id)
@@ -1627,15 +1615,10 @@ export function buildSqlContractFromDefinition(
     }
   }
 
-  const extensionPackCapabilitySources = definition.extensions
-    ? Object.values(definition.extensions).map(
-        (pack) => pack.capabilities as CapabilityMatrix | undefined,
-      )
-    : [];
-  const capabilities = mergeCapabilityMatrices(
-    definition.target.capabilities as CapabilityMatrix | undefined,
-    ...extensionPackCapabilitySources,
-  );
+  const capabilities = mergeCapabilityMatrices({}, [
+    definition.target,
+    ...Object.values(definition.extensions ?? {}),
+  ]);
   // Internal `profileHash` computation is unchanged from `origin/main`: it
   // continues to fingerprint the author-declared capability subset. With
   // `capabilities` removed from the `defineContract` input that subset is
@@ -1646,12 +1629,11 @@ export function buildSqlContractFromDefinition(
     capabilities: {},
   });
 
-  const executionWithHash = executionSection
-    ? {
-        ...executionSection,
-        executionHash: computeExecutionHash({ target, targetFamily, execution: executionSection }),
-      }
-    : undefined;
+  const executionWithHash = buildExecutionSection({
+    target,
+    targetFamily,
+    defaults: executionDefaults,
+  });
 
   const valueObjects: Record<string, ContractValueObject> | undefined =
     definition.valueObjects && definition.valueObjects.length > 0

@@ -1,3 +1,4 @@
+import { computeExecutionHash } from '@internal/contract/hashing';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { structuredError } from '@internal/utils/structured-error';
@@ -56,6 +57,27 @@ describe('prisma6Contract', () => {
     const failure = new TypeError('codec bug');
     await expect(loadEnumSchema(lookupWithFailingEncode('mongo/string@1', failure))).rejects.toBe(
       failure,
+    );
+  });
+
+  it('hashes the execution section for the target the binding names', async () => {
+    const timestampsSchema = join(fixturesDir, 'timestamps', 'schema.prisma');
+    const binding = {
+      ...prisma6MongoBinding,
+      target: { ...prisma6MongoBinding.target, targetId: 'mongo-other' },
+    };
+    const result = await prisma6Contract('timestamps/schema.prisma', { binding }).source.load(
+      mongoSourceContext([timestampsSchema]),
+    );
+    if (!result.ok) throw new Error('Expected the load to succeed');
+    const contract = result.value;
+    expect(contract.target).toBe('mongo-other');
+    expect(contract.execution?.executionHash).toBe(
+      computeExecutionHash({
+        target: 'mongo-other',
+        targetFamily: 'mongo',
+        execution: { mutations: { defaults: contract.execution?.mutations.defaults ?? [] } },
+      }),
     );
   });
 });

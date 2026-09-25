@@ -1,6 +1,7 @@
 import type { GeneratedValueSpec } from '@internal/contract/types';
 import { timestampNowRuntimeGenerator } from '@internal/family-sql/runtime';
 import type { RuntimeAdapterInstance } from '@internal/framework-components/execution';
+import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { builtinGeneratorIds } from '@internal/ids';
 import { generateId } from '@internal/ids/runtime';
 import type { Adapter, AnyQueryAst } from '@internal/sql-relational-core/ast';
@@ -21,26 +22,28 @@ export interface SqlRuntimeAdapter
   extends RuntimeAdapterInstance<'sql', 'postgres'>,
     Adapter<AnyQueryAst, PostgresContract, PostgresLoweredStatement> {}
 
-function createPostgresMutationDefaultGenerators() {
+function createPostgresMutationDefaultGenerators(): ReadonlyArray<RuntimeMutationDefaultGenerator> {
   return [
-    ...builtinGeneratorIds.map((id) => ({
-      id,
-      generate: (params?: Record<string, unknown>) => {
-        const spec: GeneratedValueSpec = params ? { id, params } : { id };
-        return generateId(spec);
-      },
-      stability: 'field' as const,
-    })),
+    ...builtinGeneratorIds.map(
+      (id): RuntimeMutationDefaultGenerator => ({
+        id,
+        generate: (params?: Record<string, unknown>) => {
+          const spec: GeneratedValueSpec = params ? { id, params } : { id };
+          return generateId(spec);
+        },
+        stability: 'field',
+      }),
+    ),
     timestampNowRuntimeGenerator(),
     {
       id: INSTANT_NOW_GENERATOR_ID,
       generate: () => instantNow(),
-      stability: 'query' as const,
+      stability: 'query',
     },
     {
       id: PLAIN_DATE_TIME_NOW_GENERATOR_ID,
       generate: () => plainDateTimeNow(),
-      stability: 'query' as const,
+      stability: 'query',
     },
   ];
 }
