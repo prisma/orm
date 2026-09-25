@@ -83,6 +83,15 @@ import {
 } from './pair-back-relations';
 import { defaultCollectionName, getAttribute } from './psl-helpers';
 
+/** Scalar names Mongo PSL used before its scalars were named after the BSON types they store. */
+const RENAMED_SCALARS: ReadonlyMap<string, { readonly name: string; readonly bsonType: string }> =
+  new Map([
+    ['Int', { name: 'Int32', bsonType: 'int' }],
+    ['Float', { name: 'Double', bsonType: 'double' }],
+    ['Boolean', { name: 'Bool', bsonType: 'bool' }],
+    ['DateTime', { name: 'Date', bsonType: 'date' }],
+  ]);
+
 export interface InterpretPslDocumentToMongoContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
@@ -1012,6 +1021,17 @@ function resolveNonRelationField(
   }
 
   const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
+  const renamed =
+    field.typeConstructor === undefined ? RENAMED_SCALARS.get(field.typeName) : undefined;
+  if (!codecId && renamed !== undefined) {
+    const typeNode = field.node.typeAnnotation()?.name()?.syntax ?? field.node.syntax;
+    diagnostics.push({
+      code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+      message: `Scalar type "${field.typeName}" was renamed to "${renamed.name}" (stored as BSON ${renamed.bsonType}). Replace "${field.typeName}" with "${renamed.name}".`,
+      ...diagnosticSource(sources, typeNode).at(),
+    });
+    return undefined;
+  }
   if (!codecId) {
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',

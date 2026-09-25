@@ -14,7 +14,7 @@ enum OrderType {
 }
 
 type Price {
-  amount   Float
+  amount   Double
   currency String
 }
 
@@ -33,7 +33,7 @@ type CartItem {
   productId String
   name      String
   brand     String
-  amount    Int
+  amount    Int32
   price     Price
   image     Image
 }
@@ -42,21 +42,21 @@ type OrderLineItem {
   productId String
   name      String
   brand     String
-  amount    Int
+  amount    Int32
   price     Price
   image     Image
 }
 
 type StatusEntry {
   status    String
-  timestamp DateTime
+  timestamp Date
 }
 
 type InvoiceLineItem {
   name      String
-  amount    Int
-  unitPrice Float
-  lineTotal Float
+  amount    Int32
+  unitPrice Double
+  lineTotal Double
 }
 
 model Product {
@@ -70,7 +70,7 @@ model Product {
   articleType    String
   price          Price
   image          Image
-  embedding      Float[]?
+  embedding      Double[]?
   status         ProductStatus
   @@map("products")
   @@textIndex([name, description], weights: { name: 10, description: 1 })
@@ -126,10 +126,10 @@ model Invoice {
   id       ObjectId          @id @map("_id")
   orderId  ObjectId
   items    InvoiceLineItem[]
-  subtotal Float
-  tax      Float
-  total    Float
-  issuedAt DateTime
+  subtotal Double
+  tax      Double
+  total    Double
+  issuedAt Date
   order    Order             @relation(fields: [orderId], references: [id])
   @@map("invoices")
   @@index([orderId])
@@ -141,7 +141,7 @@ model Event {
   userId    String
   sessionId String
   type      String
-  timestamp DateTime
+  timestamp Date
   @@map("events")
   @@discriminator(type)
   @@index([userId, timestamp(sort: Desc)])

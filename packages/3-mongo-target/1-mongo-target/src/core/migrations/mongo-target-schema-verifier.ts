@@ -7,7 +7,7 @@ import { MongoSchemaVerifierBase } from '@internal/family-mongo/ir';
 import type { SchemaDiffIssue, SchemaVerifyOptions } from '@internal/framework-components/control';
 import type { Namespace } from '@internal/framework-components/ir';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
-import type { MongoTargetContract } from './mongo-target-contract';
+import type { MongoTargetContract } from '../mongo-target-contract';
 
 /**
  * Mongo target `SchemaVerifier` concretion. Extends the family base's

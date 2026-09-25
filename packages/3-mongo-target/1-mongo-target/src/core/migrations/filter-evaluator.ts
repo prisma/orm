@@ -11,7 +11,7 @@ import type {
 import { deepEqual } from '@internal/mongo-schema-ir';
 import type { MongoValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
-import { mongoTargetError } from './mongo-target-errors';
+import { mongoTargetError } from '../mongo-target-errors';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object';

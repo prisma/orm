@@ -4,7 +4,10 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
-import { entityNamesDeclaredBy, scopeVerifyResultToSpace } from '../src/core/scope-verify-result';
+import {
+  entityNamesDeclaredBy,
+  scopeVerifyResultToSpace,
+} from '../src/core/migrations/scope-verify-result';
 
 const NODE = { id: 'x', nodeKind: 'mongo-collection', isEqualTo: () => true, children: () => [] };
 /** An extra (live-only) finding — a drop, by presence. */

@@ -40,11 +40,11 @@ function buildSymbolTableInput(
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
-  ['Boolean', 'mongo/bool@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Int32', 'mongo/int32@1'],
+  ['Bool', 'mongo/bool@1'],
+  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
-  ['Float', 'mongo/double@1'],
+  ['Double', 'mongo/double@1'],
 ]);
 
 const mongoTargetTypes: Record<string, readonly string[]> = {
@@ -186,9 +186,9 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Item {
           id     ObjectId @id @map("_id")
           name   String
-          count  Int
-          active Boolean
-          at     DateTime
+          count  Int32
+          active Bool
+          at     Date
         }
       `);
 
@@ -1002,8 +1002,8 @@ describe('interpretPslDocumentToMongoContract', () => {
       const ir = interpretOk(
         `
         type GeoPoint {
-          lat Float
-          lng Float
+          lat Double
+          lng Double
         }
 
         type Address {
@@ -1067,7 +1067,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           title     String
           content   String
           authorId  ObjectId
-          createdAt DateTime
+          createdAt Date
           author    User @relation(fields: [authorId], references: [id])
           @@map("posts")
         }
@@ -1268,7 +1268,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const ir = interpretOk(`
         model Session {
           id        ObjectId @id @map("_id")
-          expiresAt DateTime
+          expiresAt Date
           @@index([expiresAt], sparse: true, expireAfterSeconds: 3600)
         }
       `);
@@ -1375,7 +1375,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const ir = interpretOk(`
         model Events {
           id        ObjectId @id @map("_id")
-          createdAt DateTime
+          createdAt Date
           @@index([createdAt(sort: Desc)])
         }
       `);
@@ -1388,7 +1388,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id        ObjectId @id @map("_id")
           status    String
-          createdAt DateTime
+          createdAt Date
           @@index([status, createdAt(sort: Desc)])
         }
       `);
@@ -2007,7 +2007,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model User {
           id    ObjectId @id @map("_id")
           name  String
-          age   Int
+          age   Int32
         }
       `);
       const validator = getValidator(ir, 'User');

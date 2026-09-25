@@ -48,7 +48,7 @@ import {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
-import { mongoTargetError } from './mongo-target-errors';
+import { mongoTargetError } from '../mongo-target-errors';
 
 const IndexKeyDirection = type('1 | -1 | "text" | "2dsphere" | "2d" | "hashed"');
 const IndexKeyJson = type({ field: 'string', direction: IndexKeyDirection });

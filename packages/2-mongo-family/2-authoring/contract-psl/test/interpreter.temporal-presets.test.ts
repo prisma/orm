@@ -26,7 +26,7 @@ const authoringContributions: AuthoringContributions = {
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
   ['String', 'mongo/string@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Date', 'mongo/date@1'],
 ]);
 
 const targetTypes: Record<string, readonly string[]> = {
@@ -150,7 +150,7 @@ describe('Mongo PSL temporal presets', () => {
   it('omits the execution section when no field uses a preset', () => {
     const result = interpret(`model Post {
   id        ObjectId @id @map("_id")
-  createdAt DateTime
+  createdAt Date
 }
 `);
     if (!result.ok) throw new Error(JSON.stringify(result.failure));
