@@ -31,7 +31,7 @@ pnpm check:upgrade-coverage --mode pr --prev <PR base sha> --head HEAD   # when 
 ```
 
 > **Upgrade coverage runs against the PR's base, not `main`.** CI passes `--prev <base sha>`. For a stacked PR the base is the previous slice's head, so a fragment on that base branch does not count and every stacked PR needs its own `upgrade-instructions/pending/<name>/` declaration (an `extension` or `app` file with `changes: []` when the change is additive). The local default base is `origin/main`, which hides this; pass `--prev $(git rev-parse <base-branch>)`. See [`failure-modes.md § F34`](./failure-modes.md#f34-stacked-pr-fails-upgrade-coverage-because-the-fragment-lives-on-its-base-branch).
-
+>
 > **Per-package test invocation.** To gate a single package, use `pnpm --filter <pkg> test` (e.g. `pnpm --filter @internal/migration-tools test`). `pnpm test:packages -- <name>` is **not** a package filter — the `-- <arg>` is a workspace-wide vitest *path* filter, so it matches every path containing `<name>` (adapters, CLI, …) and red-fails on unrelated infra (e.g. a postgres `ECONNRESET`, a missing `prisma-next` bin). Use the `--filter` form for a per-package gate; pair it with `cd <pkg> && pnpm typecheck` for a package-scoped typecheck.
 
 ### Brief-specified
