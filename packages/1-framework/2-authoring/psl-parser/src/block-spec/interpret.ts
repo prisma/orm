@@ -1,4 +1,7 @@
-import type { AuthoringPslBlockDescriptor } from '@internal/framework-components/authoring';
+import type {
+  AuthoringPslBlockDescriptor,
+  AuthoringPslBlockDescriptorNamespace,
+} from '@internal/framework-components/authoring';
 import type {
   ParsedPslExtensionBlock,
   PslExtensionBlockParsedAttribute,
@@ -10,10 +13,12 @@ import { interpretAttribute, isOptionalArgType } from '../attribute-spec/interpr
 import type { BlockAttributeSpecFactory } from '../attribute-spec/spec-context';
 import type { AttributeCtx } from '../attribute-spec/types';
 import { diagnosticSource, type PslDiagnostic } from '../diagnostic';
+import { findBlockDescriptor } from '../extension-block';
 import { nodePslSpan } from '../resolve';
 import type { PslSources } from '../source-file';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 import type { AstNode } from '../syntax/ast-helpers';
+import { blockSpecFactoryOf } from './descriptor';
 import type { BlockSpec, InferBlock } from './types';
 
 export interface InterpretExtensionBlockInput<S> {
@@ -217,4 +222,46 @@ function entryDiagnostic(
   span: PslSpan,
 ): PslDiagnostic {
   return { code, message, ...diagnosticSource(ctx.sources, node.syntax).at(span) };
+}
+
+export interface InterpretExtensionBlocksResult {
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
+  readonly diagnostics: readonly PslDiagnostic[];
+}
+
+/**
+ * The canonical block-resolution function: consumers resolve registered
+ * blocks against an already-collected table, exactly as attributes are
+ * resolved by their consumers. Binds each registered block's spec and
+ * interprets its values and `@@` attributes; only successes enter the map,
+ * and every value/attribute failure is returned once as diagnostics — the
+ * caller owns their reporting. Unregistered keywords are skipped. Spec
+ * factories see the complete table and never observe another block's
+ * interpreted output.
+ */
+export function interpretExtensionBlocks(
+  symbolTable: SymbolTable,
+  sources: PslSources,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
+): InterpretExtensionBlocksResult {
+  const parsedBlocks = new Map<BlockSymbol, ParsedPslExtensionBlock>();
+  const diagnostics: PslDiagnostic[] = [];
+  const scopes = [symbolTable.topLevel, ...Object.values(symbolTable.topLevel.namespaces)];
+  for (const scope of scopes) {
+    for (const block of Object.values(scope.blocks)) {
+      const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
+      if (descriptor === undefined) continue;
+      const spec = blockSpecFactoryOf(descriptor)({ symbols: symbolTable, block });
+      const parsed = interpretExtensionBlock({
+        block,
+        descriptor,
+        spec,
+        symbols: symbolTable,
+        sources,
+      });
+      if (parsed.ok) parsedBlocks.set(block, parsed.value);
+      else diagnostics.push(...parsed.failure);
+    }
+  }
+  return { parsedBlocks, diagnostics };
 }

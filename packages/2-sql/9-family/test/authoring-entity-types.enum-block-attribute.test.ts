@@ -1,15 +1,17 @@
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
 
 function build(source: string) {
   const { document, sources } = parse(source, 'schema.prisma');
-  return buildSymbolTable({
-    documents: [document],
+  const result = buildSymbolTable({ documents: [document], sources });
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
+    result.symbolTable,
     sources,
-    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
-  });
+    sqlFamilyPslBlockDescriptors,
+  );
+  return { ...result, blockDiagnostics, parsedBlocks };
 }
 
 describe('enum @@type through the family descriptor', () => {
@@ -25,10 +27,10 @@ describe('enum @@type through the family descriptor', () => {
     });
   });
 
-  it('rejects a non-string argument at symbol-table time', () => {
+  it('rejects a non-string argument when the blocks are resolved', () => {
     const result = build('enum Role {\n  @@type(foo)\n  Admin\n}');
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blockDiagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Expected a string literal',

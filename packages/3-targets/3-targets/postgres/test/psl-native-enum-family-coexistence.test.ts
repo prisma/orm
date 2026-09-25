@@ -78,7 +78,6 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,
     });
     return interpretPslDocumentToSqlContract({
       dataTypeLookup: postgresDataTypeLookup,

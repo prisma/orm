@@ -8,6 +8,7 @@ import {
   fieldAttribute,
   fieldRef,
   funcCall,
+  interpretExtensionBlocks,
   list,
   modelAttribute,
   referencedFieldRef,
@@ -56,7 +57,6 @@ function complete(markedSource: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
@@ -69,6 +69,7 @@ function complete(markedSource: string) {
       scalarTypes: ['String'],
       symbolTable,
       pslBlockDescriptors: {},
+      parsedBlocks: interpretExtensionBlocks(symbolTable, sources, {}).parsedBlocks,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
     },

@@ -10,6 +10,7 @@ import {
   fieldAttribute,
   fixedBlock,
   funcCall,
+  interpretExtensionBlocks,
   list,
   modelAttribute,
   oneOf,
@@ -124,7 +125,8 @@ function help(markedSource: string, labelOffsets = true) {
   expect(offset).toBeGreaterThanOrEqual(0);
   const { document, sources } = parse(markedSource.replace('|', ''), 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { parsedBlocks } = interpretExtensionBlocks(symbolTable, sources, pslBlockDescriptors);
   parseArgument.mockClear();
   const result = providePslSignatureHelp({
     document,
@@ -134,6 +136,7 @@ function help(markedSource: string, labelOffsets = true) {
     candidates: {
       pslBlockDescriptors,
       symbolTable,
+      parsedBlocks,
       authoringContributions,
       controlMutationDefaults: assembleControlMutationDefaults([]),
     },

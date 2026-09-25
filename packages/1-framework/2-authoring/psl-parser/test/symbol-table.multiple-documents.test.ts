@@ -12,7 +12,7 @@ function build(...texts: string[]) {
     ),
   );
   return {
-    ...buildSymbolTable({ documents, sources, pslBlockDescriptors: {} }),
+    ...buildSymbolTable({ documents, sources }),
     documents,
     sources,
   };
@@ -61,7 +61,6 @@ describe('multiple-document symbol tables', () => {
     const reversed = buildSymbolTable({
       documents: [...documents].reverse(),
       sources,
-      pslBlockDescriptors: {},
     });
     expect(reversed.symbolTable.topLevel.models['User']?.node.syntax.root()).toBe(
       documents[2]?.syntax,
@@ -92,14 +91,11 @@ describe('multiple-document symbol tables', () => {
   });
 
   it('accepts no documents as an empty scope', () => {
-    expect(
-      buildSymbolTable({ documents: [], sources: new PslSources([]), pslBlockDescriptors: {} }),
-    ).toEqual({
+    expect(buildSymbolTable({ documents: [], sources: new PslSources([]) })).toEqual({
       symbolTable: {
         topLevel: { namespaces: {}, namedTypes: {}, blocks: {}, models: {}, compositeTypes: {} },
       },
       diagnostics: [],
-      parsedBlocks: new Map(),
     });
   });
 
@@ -112,7 +108,6 @@ describe('multiple-document symbol tables', () => {
         buildSymbolTable({
           documents: [foreign.document],
           sources: registered.sources,
-          pslBlockDescriptors: {},
         }),
       ).toThrow(/No SourceFile registered/);
     },

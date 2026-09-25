@@ -56,6 +56,7 @@ import {
   diagnosticSource,
   type FieldSymbol,
   findBlockDescriptor,
+  interpretExtensionBlocks,
   deriveParsedBlocks,
   type ModelAttributeSpecFactory,
   type ModelSymbol,
@@ -142,12 +143,6 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
-  /**
-   * Typed envelopes from the `buildSymbolTable` lifecycle. Provider paths
-   * thread this through; a direct caller that omits it falls back to the
-   * parser's `deriveParsedBlocks`.
-   */
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly target: TargetPackRef<'sql', string>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions?: readonly string[];
@@ -458,8 +453,9 @@ function buildModelAttributesByName(
  * level), lowers every successfully interpreted extension block into an IR
  * entity via the registered factory for each block's discriminator, and
  * returns the lowered rows. Invalid blocks have no envelope in
- * `parsedBlocks` and are skipped — the parser's diagnostics own their
- * failures — and unregistered discriminators are skipped silently.
+ * `parsedBlocks` and are skipped — their failures were reported once when
+ * this interpreter resolved the table's blocks — and unregistered
+ * discriminators are skipped silently.
  *
  * This pass is intentionally generic: no discriminator value is named here.
  * The factory (registered by the target pack) owns all block-specific logic.
@@ -1124,6 +1120,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: specFactory({
           symbols: input.symbolTable,
           model,
+          parsedBlocks: input.parsedBlocks,
           controlMutationDefaults: {
             defaultFunctionRegistry: input.defaultFunctionRegistry,
             dataTypeEntries: input.dataTypeSupport.entries,
@@ -2143,9 +2140,12 @@ export function interpretPslDocumentToSqlContract(
     diagnostics,
   });
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
-  const parsedBlocks =
-    input.parsedBlocks ??
-    deriveParsedBlocks(input.symbolTable, input.sources, composedPslBlockDescriptors);
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
+    input.symbolTable,
+    input.sources,
+    composedPslBlockDescriptors,
+  );
+  diagnostics.push(...blockDiagnostics);
   validateBlockModelAttributeRequirements({
     parsedBlocks,
     pslBlockDescriptors: composedPslBlockDescriptors,

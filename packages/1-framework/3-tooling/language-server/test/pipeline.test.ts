@@ -1,12 +1,18 @@
 import * as pslParser from '@internal/psl-parser';
-import { buildSymbolTable, entityRef, fixedBlock, str } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  entityRef,
+  fixedBlock,
+  interpretExtensionBlocks,
+  str,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import { runPipeline } from '../src/pipeline';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
-const pipelineInputs = { scalarTypes, pslBlockDescriptors: {} };
+void scalarTypes;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -16,7 +22,7 @@ describe('runPipeline', () => {
   it('registers the returned document root under the entry filename', () => {
     const source = ['model User {', '  id Int @id', '}'].join('\n');
 
-    const result = runPipeline('file:///workspace/schema.prisma', source, pipelineInputs);
+    const result = runPipeline('file:///workspace/schema.prisma', source);
 
     expect(result.sourceFile.filename).toBe('file:///workspace/schema.prisma');
     expect(result.sources.sourceFileFor(result.document.syntax)).toBe(result.sourceFile);
@@ -33,7 +39,7 @@ describe('runPipeline', () => {
       '}',
     ].join('\n');
 
-    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain('PSL_DUPLICATE_DECLARATION');
   });
@@ -41,7 +47,7 @@ describe('runPipeline', () => {
   it('reports an over-qualified field type as PSL_INVALID_QUALIFIED_TYPE', () => {
     const source = ['model Profile {', '  user a.b.c', '}'].join('\n');
 
-    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
       'PSL_INVALID_QUALIFIED_TYPE',
@@ -51,7 +57,7 @@ describe('runPipeline', () => {
   it('produces no symbol-table diagnostics for a clean schema', () => {
     const source = ['model User {', '  id Int @id', '}', ''].join('\n');
 
-    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source);
 
     expect(diagnostics).toEqual([]);
   });
@@ -59,7 +65,7 @@ describe('runPipeline', () => {
   it('does not throw on malformed, half-typed input and still exposes the artifacts', () => {
     const source = 'model User {\n  id ';
 
-    const result = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const result = runPipeline('pipeline-test.psl', source);
 
     expect(result.document).toBeDefined();
     expect(result.sourceFile).toBeDefined();
@@ -79,7 +85,7 @@ describe('runPipeline', () => {
     const { diagnostics: parseDiagnostics } = parse(source, 'pipeline-test.psl');
     const buildSymbolTableSpy = vi.spyOn(pslParser, 'buildSymbolTable');
 
-    const result = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const result = runPipeline('pipeline-test.psl', source);
     const [symbolTableCallResult] = buildSymbolTableSpy.mock.results;
 
     expect(buildSymbolTableSpy).toHaveBeenCalledTimes(1);
@@ -108,10 +114,9 @@ describe('runPipeline', () => {
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
 
-    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source);
 
     expect(diagnostics).toEqual(
       mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
@@ -119,27 +124,24 @@ describe('runPipeline', () => {
   });
 });
 
-describe('runPipeline — shared block validation in the parse-plus-symbol pipeline', () => {
-  const guardInputs = {
-    scalarTypes,
-    pslBlockDescriptors: {
-      guard: {
-        kind: 'pslBlock' as const,
-        keyword: 'guard',
-        discriminator: 'fixture-guard',
-        name: { required: true as const },
-        spec: () =>
-          fixedBlock({
-            parameters: {
-              target: { type: entityRef({ kind: 'model' }), documentation: 'The guarded model.' },
-              using: { type: str(), documentation: 'The predicate.' },
-            },
-          }),
-      },
+describe('runPipeline — block resolution stays out of the parse-plus-symbol pipeline', () => {
+  const guardDescriptors = {
+    guard: {
+      kind: 'pslBlock' as const,
+      keyword: 'guard',
+      discriminator: 'fixture-guard',
+      name: { required: true as const },
+      spec: () =>
+        fixedBlock({
+          parameters: {
+            target: { type: entityRef({ kind: 'model' }), documentation: 'The guarded model.' },
+            using: { type: str(), documentation: 'The predicate.' },
+          },
+        }),
     },
   };
 
-  it('resolves a forward reference and publishes the envelope without any family pass', () => {
+  it('carries no envelope side channel; consumers resolve against the returned table', () => {
     const source = [
       'guard Rule {',
       '  target = Widget',
@@ -150,16 +152,19 @@ describe('runPipeline — shared block validation in the parse-plus-symbol pipel
       '}',
     ].join('\n');
 
-    const result = runPipeline('pipeline-test.psl', source, guardInputs);
+    const result = runPipeline('pipeline-test.psl', source);
 
     expect(result.diagnostics).toEqual([]);
+    expect('parsedBlocks' in result).toBe(false);
     const block = result.symbolTable.topLevel.blocks['Rule'];
     expect(block).toBeDefined();
     if (block === undefined) return;
-    expect(result.parsedBlocks.get(block)?.values['using']).toBe('true');
+    const resolved = interpretExtensionBlocks(result.symbolTable, result.sources, guardDescriptors);
+    expect(resolved.diagnostics).toEqual([]);
+    expect(resolved.parsedBlocks.get(block)?.values['using']).toBe('true');
   });
 
-  it('reports a block value failure with its source range and publishes no envelope', () => {
+  it('keeps a block value failure out of the pipeline lane; the resolver reports it with the source span', () => {
     const source = [
       'model Widget {',
       '  id Int',
@@ -170,9 +175,14 @@ describe('runPipeline — shared block validation in the parse-plus-symbol pipel
       '}',
     ].join('\n');
 
-    const result = runPipeline('pipeline-test.psl', source, guardInputs);
+    const result = runPipeline('pipeline-test.psl', source);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.diagnostics).toEqual([]);
+    const block = result.symbolTable.topLevel.blocks['Rule'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    const resolved = interpretExtensionBlocks(result.symbolTable, result.sources, guardDescriptors);
+    expect(resolved.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Expected a string literal',
@@ -182,10 +192,7 @@ describe('runPipeline — shared block validation in the parse-plus-symbol pipel
         },
       }),
     ]);
-    const block = result.symbolTable.topLevel.blocks['Rule'];
-    expect(block).toBeDefined();
-    if (block === undefined) return;
-    expect(result.parsedBlocks.has(block)).toBe(false);
+    expect(resolved.parsedBlocks.has(block)).toBe(false);
     expect(block.keyword).toBe('guard');
     expect([...block.node.entries()].map((entry) => entry.key()?.name())).toEqual([
       'target',
@@ -196,7 +203,7 @@ describe('runPipeline — shared block validation in the parse-plus-symbol pipel
   it('recovers from a half-typed invalid block without throwing', () => {
     const source = ['guard Rule {', '  target = ', ''].join('\n');
 
-    const result = runPipeline('pipeline-test.psl', source, guardInputs);
+    const result = runPipeline('pipeline-test.psl', source);
 
     expect(result.symbolTable.topLevel.blocks['Rule']).toBeDefined();
   });

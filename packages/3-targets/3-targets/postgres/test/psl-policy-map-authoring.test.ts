@@ -10,7 +10,7 @@
 
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -62,11 +62,16 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 
 function parsePsl(source: string) {
   const { document, sources } = parse(source, 'psl-policy-map-authoring.test.psl');
-  return buildSymbolTable({
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
+  const blocks = interpretExtensionBlocks(symbolTable, sources, assembled.pslBlockDescriptors);
+  return {
+    symbolTable,
+    parsedBlocks: blocks.parsedBlocks,
+    diagnostics: [...collectionDiagnostics, ...blocks.diagnostics],
+  };
 }
 
 function interpret(source: string) {
@@ -74,7 +79,6 @@ function interpret(source: string) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   expect(diagnostics).toEqual([]);
   return interpretPslDocumentToSqlContract({

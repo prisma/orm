@@ -1,4 +1,4 @@
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { expect, it, vi } from 'vitest';
 import { lowerDefaultForField } from '../src/psl-column-resolution';
@@ -15,7 +15,6 @@ it('pushes owned default diagnostics with filename and range rather than a provi
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const model = symbolTable.topLevel.models['User'];
   const field = model?.fields['id'];
@@ -32,6 +31,7 @@ it('pushes owned default diagnostics with filename and range rather than a provi
     fieldName: field.name,
     field,
     model,
+    parsedBlocks: interpretExtensionBlocks(symbolTable, sources, {}).parsedBlocks,
     symbolTable,
     sources,
     binder: createSqlBinder({ symbolTable, sources }).binder,

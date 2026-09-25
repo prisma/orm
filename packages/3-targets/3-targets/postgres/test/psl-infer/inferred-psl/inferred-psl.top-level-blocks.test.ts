@@ -117,7 +117,6 @@ function parseAndInterpret(source: string) {
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
     documents: [document],

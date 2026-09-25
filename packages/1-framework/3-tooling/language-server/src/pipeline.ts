@@ -1,12 +1,9 @@
-import type {
-  AuthoringPslBlockDescriptorNamespace,
-  ParsedPslExtensionBlock,
-} from '@internal/framework-components/authoring';
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import { type BlockSymbol, buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
 import {
   type DocumentAst,
   type PslSources,
@@ -16,12 +13,10 @@ import {
 import { type LspDiagnostic, mapParseDiagnostics } from './diagnostic-mapping';
 
 /**
- * `pslBlockDescriptors` is kept complete on the live path so extension-block
- * validation matches the build; the structural diagnostics (duplicate
- * declaration, invalid qualified type) hold even without descriptors.
- * `scalarTypes`, `authoringContributions`, and `controlMutationDefaults` are not
- * consumed by the pipeline itself — they are the control-stack projection
- * semantic tokens and completions classify against.
+ * The pipeline itself consumes none of these fields — they are the
+ * control-stack projection that semantic tokens, completions, and block
+ * resolution (`interpretExtensionBlocks`) classify against. Block-value
+ * diagnostics ride the interpreter-diagnostics lane, not this pipeline.
  */
 export interface PipelineInputs {
   readonly scalarTypes: readonly string[];
@@ -35,7 +30,6 @@ export interface PipelineResult {
   readonly sourceFile: SourceFile;
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly diagnostics: readonly LspDiagnostic[];
   readonly parseDiagnostics: readonly LspDiagnostic[];
 }
@@ -46,21 +40,12 @@ export interface PipelineResult {
  * of symbol-table diagnostics. Never throws on malformed input — `parse`
  * recovers and `buildSymbolTable` is documented not to throw.
  */
-export function runPipeline(
-  filename: string,
-  text: string,
-  inputs: PipelineInputs,
-): PipelineResult {
+export function runPipeline(filename: string, text: string): PipelineResult {
   const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const {
-    symbolTable,
-    diagnostics: symbolTableDiagnostics,
-    parsedBlocks,
-  } = buildSymbolTable({
+  const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: inputs.pslBlockDescriptors,
   });
 
   return {
@@ -68,7 +53,6 @@ export function runPipeline(
     sourceFile,
     sources,
     symbolTable,
-    parsedBlocks,
     parseDiagnostics: mapParseDiagnostics(parseDiagnostics),
     diagnostics: mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
   };

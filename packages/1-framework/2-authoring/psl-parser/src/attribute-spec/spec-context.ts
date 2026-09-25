@@ -10,11 +10,13 @@ export interface AttributeSpecContext {
   readonly controlMutationDefaults: ControlDefaultRegistries;
   /**
    * Typed block envelopes for spec factories whose grammar depends on an
-   * interpreted block (e.g. enum member default arms). Optional: callers
-   * without the lifecycle result build specs that offer no block-derived
-   * candidates.
+   * interpreted block (e.g. enum member default arms). Required: the owner
+   * building the context has just resolved the table's blocks
+   * (`interpretExtensionBlocks`) and supplies the map, so a spec can rely
+   * on it. Absence semantics exist only per block: an invalid or
+   * unregistered block has no envelope in the map.
    */
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {

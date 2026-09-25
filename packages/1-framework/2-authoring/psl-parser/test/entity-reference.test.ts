@@ -38,7 +38,6 @@ function fixture(value: string, local = true) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   expect(diagnostics).toEqual([]);
   const namespace = symbolTable.topLevel.namespaces['Local'];
@@ -82,7 +81,6 @@ describe('syntax-scoped entity resolution', () => {
     const result = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: { permission: descriptor },
     });
     expect(result.diagnostics).toEqual([]);
     const namespace = result.symbolTable.topLevel.namespaces['Local'];
@@ -163,7 +161,6 @@ describe('syntax-scoped entity resolution', () => {
     const { symbolTable, diagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     expect(diagnostics).toEqual([]);
     expect(Object.hasOwn(symbolTable.topLevel.models, '__proto__')).toBe(true);

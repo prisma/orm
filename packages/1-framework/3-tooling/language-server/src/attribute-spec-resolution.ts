@@ -25,7 +25,7 @@ import { blockSymbolForNode, fieldSymbolForNode, modelSymbolForNode } from './co
 export interface AttributeSpecSource {
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly symbolTable: SymbolTable;
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly authoringContributions?: AssembledAuthoringContributions;
   readonly controlMutationDefaults?: ControlMutationDefaults;
 }
@@ -71,7 +71,7 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        ...(source.parsedBlocks !== undefined ? { parsedBlocks: source.parsedBlocks } : {}),
+        parsedBlocks: source.parsedBlocks,
         controlMutationDefaults: {
           ...source.controlMutationDefaults,
           dataTypeEntries: source.authoringContributions.dataTypes ?? {},
@@ -91,7 +91,7 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        ...(source.parsedBlocks !== undefined ? { parsedBlocks: source.parsedBlocks } : {}),
+        parsedBlocks: source.parsedBlocks,
         controlMutationDefaults: {
           ...source.controlMutationDefaults,
           dataTypeEntries: source.authoringContributions.dataTypes ?? {},

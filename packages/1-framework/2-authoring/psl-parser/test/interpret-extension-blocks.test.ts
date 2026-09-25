@@ -9,8 +9,8 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
 import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
-import { deriveParsedBlocks } from '../src/block-spec/derive';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
+import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import type { BlockSymbol, ModelSymbol } from '../src/symbol-table';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -76,7 +76,12 @@ const DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
 
 function build(source: string) {
   const { document, sources } = parse(source, 'test.psl');
-  return buildSymbolTable({ documents: [document], sources, pslBlockDescriptors: DESCRIPTORS });
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
+  });
+  const { parsedBlocks, diagnostics } = interpretExtensionBlocks(symbolTable, sources, DESCRIPTORS);
+  return { symbolTable, sources, collectionDiagnostics, parsedBlocks, diagnostics };
 }
 
 function blockNamed(
@@ -107,7 +112,7 @@ function modelNamed(
   return model;
 }
 
-describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
+describe('interpretExtensionBlocks() — consumer-resolved envelopes', () => {
   it('publishes typed envelopes for registered valid blocks, keyed by symbol identity', () => {
     const result = build(
       [
@@ -345,7 +350,7 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
     ]);
   });
 
-  it('reports each failure exactly once with its original span', () => {
+  it('reports each failure exactly once with its original span, owned by the resolver', () => {
     const result = build(
       [
         'model Post {',
@@ -361,6 +366,7 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
       ].join('\n'),
     );
 
+    expect(result.collectionDiagnostics).toEqual([]);
     const codes = result.diagnostics.map((diagnostic) => diagnostic.code);
     const count = (code: string) => codes.filter((candidate) => candidate === code).length;
     expect(count('PSL_INVALID_ATTRIBUTE_SYNTAX')).toBe(1);
@@ -377,8 +383,8 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
     });
   });
 
-  it('deriveParsedBlocks reproduces the lifecycle result for unthreaded callers', () => {
-    const { document, sources } = parse(
+  it('resolves deterministically: a second resolution of the same table is equal', () => {
+    const result = build(
       [
         'model Post {',
         '  id Int',
@@ -390,19 +396,14 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
         'mystery Thing {',
         '}',
       ].join('\n'),
-      'test.psl',
     );
-    const result = buildSymbolTable({
-      documents: [document],
-      sources,
-      pslBlockDescriptors: DESCRIPTORS,
-    });
 
-    const derived = deriveParsedBlocks(result.symbolTable, sources, DESCRIPTORS);
+    const again = interpretExtensionBlocks(result.symbolTable, result.sources, DESCRIPTORS);
 
-    expect([...derived.keys()]).toEqual([...result.parsedBlocks.keys()]);
-    const block = blockNamed({ ...result, diagnostics: [] }, 'ReadPosts');
-    expect(derived.get(block)).toEqual(result.parsedBlocks.get(block));
+    expect([...again.parsedBlocks.keys()]).toEqual([...result.parsedBlocks.keys()]);
+    const block = blockNamed(result, 'ReadPosts');
+    expect(again.parsedBlocks.get(block)).toEqual(result.parsedBlocks.get(block));
+    expect(again.diagnostics).toEqual(result.diagnostics);
   });
 
   it('publishes envelopes for prototype-named blocks and members through the map', () => {

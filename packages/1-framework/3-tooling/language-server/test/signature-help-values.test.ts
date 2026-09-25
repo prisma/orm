@@ -8,6 +8,7 @@ import {
   fieldAttribute,
   funcCall,
   identifier,
+  interpretExtensionBlocks,
   list,
   oneOf,
   optional,
@@ -54,7 +55,6 @@ it.each([
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     parseIdentifier.mockClear();
     const result = providePslSignatureHelp({
@@ -65,6 +65,7 @@ it.each([
       candidates: {
         symbolTable,
         pslBlockDescriptors: {},
+        parsedBlocks: interpretExtensionBlocks(symbolTable, sources, {}).parsedBlocks,
         controlMutationDefaults: assembleControlMutationDefaults([]),
         authoringContributions: assembleAuthoringContributions([
           {

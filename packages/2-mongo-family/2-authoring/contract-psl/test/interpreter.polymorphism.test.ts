@@ -67,7 +67,6 @@ function buildSymbolTableInput(schema: string): {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { documents: [document], symbolTable, sources };
 }

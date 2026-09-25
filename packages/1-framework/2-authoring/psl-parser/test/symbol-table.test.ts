@@ -5,6 +5,7 @@ import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { str } from '../src/attribute-spec/combinators/str';
 import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import {
@@ -19,14 +20,16 @@ import { ownEntry } from './support';
 
 function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {}) {
   const { document, sources } = parse(source, 'test.psl');
-  return buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
+  const result = buildSymbolTable({ documents: [document], sources });
+  const blocks = interpretExtensionBlocks(result.symbolTable, sources, pslBlockDescriptors);
+  return { ...result, blocks };
 }
 
 describe('buildSymbolTable() — fault tolerance', () => {
   it('returns the symbol table under its explicit name without a table alias', () => {
     const result = build('model User { id Int }');
 
-    expect(Object.keys(result).sort()).toEqual(['diagnostics', 'parsedBlocks', 'symbolTable']);
+    expect(Object.keys(result).sort()).toEqual(['blocks', 'diagnostics', 'symbolTable']);
     expect(Object.keys(result.symbolTable.topLevel.models)).toEqual(['User']);
   });
 
@@ -645,7 +648,7 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
       ENUM_DESCRIPTORS,
     );
     const symbol = result.symbolTable.topLevel.blocks['Role'];
-    const envelope = symbol === undefined ? undefined : result.parsedBlocks.get(symbol);
+    const envelope = symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol);
 
     expect(envelope?.kind).toBe('enum');
     expect(envelope?.name).toBe('Role');
@@ -670,8 +673,12 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
     );
     const symbol = result.symbolTable.topLevel.blocks['ReadPosts'];
 
-    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_EXTENSION_UNKNOWN_PARAMETER');
-    expect(symbol === undefined ? undefined : result.parsedBlocks.get(symbol)).toBeUndefined();
+    expect(result.blocks.diagnostics.map((d) => d.code)).toContain(
+      'PSL_EXTENSION_UNKNOWN_PARAMETER',
+    );
+    expect(
+      symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol),
+    ).toBeUndefined();
     expect(symbol?.keyword).toBe('policy_select');
     expect(symbol?.name).toBe('ReadPosts');
     expect([...(symbol?.node.entries() ?? [])].map((entry) => entry.key()?.name())).toEqual([
@@ -687,7 +694,7 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
 
     expect(symbol?.keyword).toBe('mystery');
     expect(symbol?.name).toBe('Thing');
-    expect(result.parsedBlocks.size).toBe(0);
+    expect(result.blocks.parsedBlocks.size).toBe(0);
     const entries = [...(symbol?.node.entries() ?? [])];
     expect(entries.map((entry) => entry.key()?.name())).toEqual(['on', 'flag']);
     expect(entries[0]?.value()).toBeDefined();
@@ -698,8 +705,12 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
     const result = build(['enum Role {', '  Admin', '  Admin', '}'].join('\n'), ENUM_DESCRIPTORS);
     const symbol = result.symbolTable.topLevel.blocks['Role'];
 
-    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_EXTENSION_DUPLICATE_PARAMETER');
-    expect(symbol === undefined ? undefined : result.parsedBlocks.get(symbol)).toBeUndefined();
+    expect(result.blocks.diagnostics.map((d) => d.code)).toContain(
+      'PSL_EXTENSION_DUPLICATE_PARAMETER',
+    );
+    expect(
+      symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol),
+    ).toBeUndefined();
     expect([...(symbol?.node.entries() ?? [])].map((entry) => entry.key()?.name())).toEqual([
       'Admin',
       'Admin',
@@ -712,9 +723,9 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
       ENUM_DESCRIPTORS,
     );
     const symbol = result.symbolTable.topLevel.blocks['Role'];
-    const envelope = symbol === undefined ? undefined : result.parsedBlocks.get(symbol);
+    const envelope = symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol);
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.blocks.diagnostics).toEqual([]);
     expect(envelope).toBeDefined();
     if (envelope === undefined) return;
     expect(Object.getPrototypeOf(envelope.values)).toBeNull();
@@ -731,7 +742,7 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
       ENUM_DESCRIPTORS,
     );
     const symbol = result.symbolTable.topLevel.namespaces['ns']?.blocks['Role'];
-    const envelope = symbol === undefined ? undefined : result.parsedBlocks.get(symbol);
+    const envelope = symbol === undefined ? undefined : result.blocks.parsedBlocks.get(symbol);
 
     expect(envelope?.kind).toBe('enum');
     expect(envelope !== undefined && Object.hasOwn(envelope.values, 'Admin')).toBe(true);
@@ -766,14 +777,14 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
       SHAPE_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.blocks.diagnostics).toEqual([]);
     const round = result.symbolTable.topLevel.blocks['Round'];
     const boxy = result.symbolTable.topLevel.blocks['Boxy'];
 
     expect(round?.keyword).toBe('shape_circle');
     expect(boxy?.keyword).toBe('shape_square');
-    const roundEnvelope = round === undefined ? undefined : result.parsedBlocks.get(round);
-    const boxyEnvelope = boxy === undefined ? undefined : result.parsedBlocks.get(boxy);
+    const roundEnvelope = round === undefined ? undefined : result.blocks.parsedBlocks.get(round);
+    const boxyEnvelope = boxy === undefined ? undefined : result.blocks.parsedBlocks.get(boxy);
     expect(roundEnvelope?.kind).toBe('shape');
     expect(boxyEnvelope?.kind).toBe('shape');
     expect(roundEnvelope?.keyword).toBe('shape_circle');
@@ -818,13 +829,13 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.blocks.diagnostics).toEqual([]);
   });
 
   it('diagnoses an attribute the descriptor does not declare, anchored on the attribute', () => {
     const result = build(['widget Gear {', '  @@schema("x")', '}'].join('\n'), WIDGET_DESCRIPTORS);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       {
         filename: 'test.psl',
         code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
@@ -837,7 +848,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
   it('treats every attribute as unknown when the descriptor declares none', () => {
     const result = build(['widget Gear {', '  @@map("x")', '}'].join('\n'), BARE_DESCRIPTORS);
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+    expect(result.blocks.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
     ]);
   });
@@ -848,7 +859,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
         message: 'Duplicate attribute "@@map" in "widget" block "Gear"; first occurrence wins',
@@ -860,7 +871,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
   it('surfaces a kit binding failure as a symbol-table diagnostic and omits the attribute', () => {
     const result = build(['widget Gear {', '  @@map()', '}'].join('\n'), WIDGET_DESCRIPTORS);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       {
         filename: 'test.psl',
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
@@ -876,7 +887,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       {
         filename: 'test.psl',
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
@@ -898,7 +909,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       WIDGET_DESCRIPTORS,
     );
 
-    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+    expect(result.blocks.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
       'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
     ]);
@@ -907,7 +918,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
   it('carries a refine diagnostic code contributed by the spec', () => {
     const result = build(['widget Gear {', '  @@map("")', '}'].join('\n'), WIDGET_DESCRIPTORS);
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blocks.diagnostics).toEqual([
       expect.objectContaining({ code: 'PSL_FIXTURE_EMPTY_MAP', message: 'empty' }),
     ]);
   });
@@ -915,6 +926,6 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
   it('parses nothing for a block whose keyword has no descriptor', () => {
     const result = build(['gizmo Gear {', '  @@map("x")', '}'].join('\n'), {});
 
-    expect(result.diagnostics).toEqual([]);
+    expect(result.blocks.diagnostics).toEqual([]);
   });
 });
