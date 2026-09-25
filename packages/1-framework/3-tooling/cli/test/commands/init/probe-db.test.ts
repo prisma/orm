@@ -6,7 +6,6 @@ import {
   type ProbeOverrides,
   parsePostgresVersion,
   probeServerVersion,
-  redactDatabaseUrlSecrets,
 } from '../../../src/commands/init/probe-db';
 
 // ---------------------------------------------------------------------------
@@ -68,18 +67,6 @@ describe('parsePostgresVersion (FR8.3)', () => {
     }
     expect(isStructuredError(thrown)).toBe(true);
     expect(thrown).toMatchObject({ code: 'CLI.INIT_PROBE_FAILED' });
-  });
-});
-
-describe('redactDatabaseUrlSecrets (FR8.3)', () => {
-  it('strips userinfo from any URL-shaped substring', () => {
-    expect(redactDatabaseUrlSecrets('failed: postgres://alice:hunter2@localhost:5432')).toBe(
-      'failed: postgres://***@localhost:5432',
-    );
-  });
-
-  it('passes empty input through untouched', () => {
-    expect(redactDatabaseUrlSecrets('')).toBe('');
   });
 });
 
@@ -172,11 +159,10 @@ describe('probeServerVersion (FR8.3)', () => {
       },
     );
 
-    expect(outcome.kind).toBe('connection-failed');
-    if (outcome.kind === 'connection-failed') {
-      expect(outcome.cause).not.toContain('hunter2');
-      expect(outcome.cause).toContain('***@');
-    }
+    expect(outcome).toMatchObject({
+      kind: 'connection-failed',
+      cause: 'connect ECONNREFUSED postgres://****:****@localhost:5432',
+    });
   });
 
   it('returns driver-missing when require() cannot resolve the peer driver', async () => {

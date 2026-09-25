@@ -62,12 +62,37 @@ test('checked reference selectors and wrappers preserve inferred outputs', () =>
   expectTypeOf<OutOf<typeof alternative>>().toEqualTypeOf<
     ResolvedEntityReference<ModelSymbol> | string
   >();
-  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<AttributeCtx>();
+  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<ModelAttributeCtx>();
   expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sources' | 'symbols'>();
   // @ts-expect-error checked references require an expected selector
   entityRef();
   // @ts-expect-error checked references do not accept injected resolvers
   entityRef({ kind: 'model' }, () => undefined);
+});
+
+test('a block attribute cannot name a reference combinator', () => {
+  blockAttribute('target', {
+    documentation: 'Names a model.',
+    positional: [
+      {
+        key: 'model',
+        // @ts-expect-error a block attribute context carries no binder, so it cannot resolve a reference
+        type: entityRef({ kind: 'model' }),
+        documentation: 'The selected model.',
+      },
+    ],
+  });
+  blockAttribute('column', {
+    documentation: 'Names a field.',
+    positional: [
+      {
+        key: 'field',
+        // @ts-expect-error a block attribute context carries no binder, so it cannot resolve a reference
+        type: fieldRef(),
+        documentation: 'The selected field.',
+      },
+    ],
+  });
 });
 
 test('identifier requires semantic value documentation', () => {

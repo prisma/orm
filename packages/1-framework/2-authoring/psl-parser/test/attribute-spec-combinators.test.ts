@@ -1,5 +1,6 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import type { ArgType, AttributeCtx, FieldAttributeCtx, ModelAttributeCtx } from '../src/exports';
 import {
   bool,
@@ -26,7 +27,7 @@ import { Cursor, parse, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
-import type { ExpressionAst } from '../src/syntax/ast/expressions';
+import { ArrayLiteralAst, type ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
 
 function makeCtx(sources: PslSources): FieldAttributeCtx {
@@ -40,13 +41,69 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
-  return {
-    sources,
-    symbols: symbolTable,
-    selfModel,
-    field,
-    resolveReferencedModel: () => undefined,
-  };
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
+}
+
+function schemaArg(schema: string, attribute: string, argName?: string) {
+  const { document, sources } = parse(schema, 'schema.psl');
+  const registry = new PslSources([[document.syntax, sources.sourceFileFor(document.syntax)]]);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: registry,
+    pslBlockDescriptors: {},
+  });
+  const model = symbolTable.topLevel.models['Post'];
+  if (!model) throw new Error('expected model Post');
+  const field = model.fields['author'];
+  if (!field) throw new Error('expected field author');
+  const { binder } = createBinder({
+    sources: registry,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: {
+      model: {},
+      field: {
+        [attribute]: () =>
+          fieldAttribute(attribute, {
+            documentation: 'fixture',
+            positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+            named: {
+              fields: { type: list(fieldRef()), documentation: 'fixture' },
+              references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+            },
+          }),
+      },
+    },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  for (const node of field.node.attributes()) {
+    if (node.name()?.path().join('.') !== attribute) continue;
+    for (const arg of node.argList()?.args() ?? []) {
+      if (arg.name()?.name() !== argName) continue;
+      const value = arg.value();
+      const array = value === undefined ? undefined : ArrayLiteralAst.cast(value.syntax);
+      const element = Array.from(array?.elements() ?? [])[0];
+      if (element === undefined) throw new Error('expected a list element');
+      return {
+        expr: element,
+        ctx: { sources: registry, symbols: symbolTable, selfModel: model, field, binder },
+      };
+    }
+  }
+  throw new Error('expected the attribute argument');
 }
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCtx } {
@@ -625,47 +682,56 @@ describe('oneOf', () => {
 });
 
 describe('fieldRef', () => {
-  it('resolves a field that exists on the self model', () => {
-    const { expr, ctx } = argOf('id');
+  it('resolves a field the binder bound on the self model', () => {
+    const { expr, ctx } = schemaArg(
+      'model User {\n  id Int\n}\nmodel Post {\n  authorId Int\n  author User @relation(fields: [authorId])\n}',
+      'relation',
+      'fields',
+    );
 
     const result = fieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('id');
+    if (result.ok) expect(result.value).toBe('authorId');
   });
 
-  it('emits an existence diagnostic for a field missing from the self model', () => {
-    const { expr, ctx } = argOf('ghostField');
+  it('fails without a diagnostic when the binder bound nothing', () => {
+    const { expr, ctx } = schemaArg(
+      'model User {\n  id Int\n}\nmodel Post {\n  authorId Int\n  author User @relation(fields: [ghostField])\n}',
+      'relation',
+      'fields',
+    );
 
     const result = fieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure).toHaveLength(1);
-      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-    }
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
-  it('resolves a field against the referenced model when it is in scope', () => {
-    const { expr, ctx } = argOf('id');
-    const referencedCtx: FieldAttributeCtx = {
-      ...ctx,
-      resolveReferencedModel: () => ctx.selfModel,
-    };
+  it('resolves a referenced field the binder bound on the target model', () => {
+    const { expr, ctx } = schemaArg(
+      'model User {\n  id Int\n}\nmodel Post {\n  authorId Int\n  author User @relation(references: [id])\n}',
+      'relation',
+      'references',
+    );
 
-    const result = referencedFieldRef().parse(expr, referencedCtx);
+    const result = referencedFieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('id');
   });
 
-  it('carries a referenced name through when the referenced model is out of scope', () => {
-    const { expr, ctx } = argOf('ghostField');
+  it('carries a cross-space referenced name through without a diagnostic', () => {
+    const { expr, ctx } = schemaArg(
+      'model Post {\n  authorId Int\n  author auth:User @relation(references: [id])\n}',
+      'relation',
+      'references',
+    );
 
     const result = referencedFieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('ghostField');
+    if (result.ok) expect(result.value).toBe('id');
   });
 
   it('labels both scopes as a field name', () => {
@@ -696,7 +762,25 @@ describe('entityRef', () => {
     const attribute = field?.node.attributes()[Symbol.iterator]().next().value;
     const expr = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
     if (!selfModel || !expr) throw new Error('Missing reference argument');
-    return { expr, ctx: { sources, symbols: symbolTable, selfModel } };
+    const { binder } = createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: {},
+      attributeSpecs: {
+        model: {},
+        field: {
+          x: () =>
+            fieldAttribute('x', {
+              documentation: 'fixture',
+              positional: [
+                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+              ],
+            }),
+        },
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    });
+    return { expr, ctx: { sources, symbols: symbolTable, selfModel, binder } };
   }
 
   it('parses a bare identifier into its resolved model', () => {

@@ -221,4 +221,68 @@ describe('ast/select', () => {
     expect(ast.collectColumnRefs()).toContainEqual(fromCol);
     expect(ast.collectColumnRefs()).toContainEqual(joinCol);
   });
+
+  describe('limit and offset values', () => {
+    const base = SelectAst.from(table('user')).addProjection('id', col('user', 'id'));
+
+    const invalidArgument = (argument: 'limit' | 'offset', value: number) =>
+      expect.objectContaining({
+        name: 'StructuredError',
+        code: 'ORM.ARGUMENT_INVALID',
+        message: `${argument} must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got ${String(value)}`,
+        meta: { argument },
+      });
+
+    const rejected = [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -1,
+      1.5,
+      1e21,
+      Number.MAX_SAFE_INTEGER + 1,
+    ];
+
+    it.each([0, 25, Number.MAX_SAFE_INTEGER])('accepts %s', (value) => {
+      expect(base.withLimit(value).withOffset(value)).toMatchObject({
+        limit: value,
+        offset: value,
+      });
+    });
+
+    it('accepts expressions', () => {
+      const take = param(0, 'take');
+      const skip = param(1, 'skip');
+      expect(base.withLimit(take).withOffset(skip)).toMatchObject({ limit: take, offset: skip });
+    });
+
+    it.each(rejected)('withLimit rejects %s', (value) => {
+      expect(() => base.withLimit(value)).toThrow(invalidArgument('limit', value));
+    });
+
+    it.each(rejected)('withOffset rejects %s', (value) => {
+      expect(() => base.withOffset(value)).toThrow(invalidArgument('offset', value));
+    });
+
+    it('the constructor rejects an invalid limit and an invalid offset', () => {
+      const options = {
+        from: table('user'),
+        joins: undefined,
+        projection: [ProjectionItem.of('id', col('user', 'id'))],
+        where: undefined,
+        orderBy: undefined,
+        distinct: undefined,
+        distinctOn: undefined,
+        groupBy: undefined,
+        having: undefined,
+        limit: undefined,
+        offset: undefined,
+        selectAllIntent: undefined,
+      };
+      expect(() => new SelectAst({ ...options, limit: -5 })).toThrow(invalidArgument('limit', -5));
+      expect(() => new SelectAst({ ...options, offset: 2.5 })).toThrow(
+        invalidArgument('offset', 2.5),
+      );
+    });
+  });
 });

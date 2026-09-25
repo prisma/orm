@@ -73,6 +73,9 @@ export function compileMongoQuery<Row = unknown>(
     for (const field of state.selectedFields) {
       projection[field] = 1;
     }
+    for (const inc of state.includes) {
+      projection[inc.relationName] = 1;
+    }
     if (!Object.hasOwn(projection, '_id')) {
       projection['_id'] = 0;
     }

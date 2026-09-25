@@ -145,3 +145,22 @@ const OK_VOID: Ok<void> = ResultImpl.ok<void>(undefined);
 export function okVoid(): Ok<void> {
   return OK_VOID;
 }
+
+export function or<T, U, E>(
+  left: Result<T, readonly E[]>,
+  right: Result<U, readonly E[]>,
+): Result<T | U, readonly E[]> {
+  if (left.ok) return left;
+  if (right.ok) return right;
+  if (left.failure.length === 0 || right.failure.length === 0) return notOk([]);
+  return notOk([...left.failure, ...right.failure]);
+}
+
+export function and<T, U, E>(
+  left: Result<T, readonly E[]>,
+  right: Result<U, readonly E[]>,
+): Result<void, readonly E[]> {
+  if (left.ok) return right.ok ? okVoid() : notOk(right.failure);
+  if (right.ok) return notOk(left.failure);
+  return notOk([...left.failure, ...right.failure]);
+}

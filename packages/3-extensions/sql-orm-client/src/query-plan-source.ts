@@ -10,6 +10,7 @@ import {
   DerivedTableSource,
   EqColJoinOn,
   JoinAst,
+  type JoinOnExpr,
   LiteralExpr,
   OrderByItem,
   OrExpr,
@@ -23,7 +24,7 @@ import { assertDefined } from '@internal/utils/assertions';
 import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
 } from './collection-contract';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
@@ -276,6 +277,25 @@ function buildDedupedTableSource(
   };
 }
 
+function buildPrimaryKeyJoinOn(
+  leftTable: string,
+  rightTable: string,
+  primaryKeyColumns: readonly string[],
+): JoinOnExpr {
+  const [firstColumn] = primaryKeyColumns;
+  if (primaryKeyColumns.length === 1 && firstColumn !== undefined) {
+    return EqColJoinOn.of(
+      ColumnRef.of(leftTable, firstColumn),
+      ColumnRef.of(rightTable, firstColumn),
+    );
+  }
+  return AndExpr.of(
+    primaryKeyColumns.map((column) =>
+      BinaryExpr.eq(ColumnRef.of(leftTable, column), ColumnRef.of(rightTable, column)),
+    ),
+  );
+}
+
 function buildMtiJoins(
   contract: Contract<SqlStorage>,
   namespaceId: string,
@@ -285,18 +305,18 @@ function buildMtiJoins(
 ): { joins: JoinAst[]; projection: ProjectionItem[] } {
   const joins: JoinAst[] = [];
   const projection: ProjectionItem[] = [];
-  const pkColumn = resolvePrimaryKeyColumn(contract, namespaceId, polyInfo.baseTable);
 
   const variantsToJoin = variantName
     ? polyInfo.mtiVariants.filter((v) => v.modelName === variantName)
     : polyInfo.mtiVariants;
+  if (variantsToJoin.length === 0) {
+    return { joins, projection };
+  }
+  const pkColumns = resolvePrimaryKeyColumns(contract, namespaceId, polyInfo.baseTable);
 
   for (const variant of variantsToJoin) {
     const joinType = variantName ? 'inner' : 'left';
-    const joinOn = EqColJoinOn.of(
-      ColumnRef.of(polyInfo.baseTable, pkColumn),
-      ColumnRef.of(variant.table, pkColumn),
-    );
+    const joinOn = buildPrimaryKeyJoinOn(polyInfo.baseTable, variant.table, pkColumns);
     const join =
       joinType === 'inner'
         ? JoinAst.inner(tableSourceForContract(contract, namespaceId, variant.table), joinOn)
@@ -306,7 +326,7 @@ function buildMtiJoins(
     const variantColumns = resolveTableColumns(contract, namespaceId, variant.table);
     const selectedVariantColumns = selectedColumnsByTable?.get(variant.table);
     for (const col of variantColumns) {
-      if (col === pkColumn) continue;
+      if (pkColumns.includes(col)) continue;
       if (selectedColumnsByTable !== undefined && selectedVariantColumns?.has(col) !== true) {
         continue;
       }
@@ -389,6 +409,7 @@ export {
   buildAggregateInput,
   buildDedupedTableSource,
   buildMtiJoins,
+  buildPrimaryKeyJoinOn,
   buildStateWhere,
   createTableRefRemapper,
   wrapWithRowNumberDedup,

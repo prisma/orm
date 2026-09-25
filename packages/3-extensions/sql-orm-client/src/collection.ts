@@ -43,7 +43,7 @@ import {
   resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
@@ -86,7 +86,7 @@ import {
 } from './include-descriptors';
 import { createModelAccessor } from './model-accessor';
 import {
-  buildPrimaryKeyFilterFromRow,
+  buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
@@ -248,7 +248,7 @@ interface MtiCreateContext {
   variant: MtiVariantInfo;
   baseFieldToColumn: Record<string, string>;
   variantFieldToColumn: Record<string, string>;
-  pkColumn: string;
+  pkColumns: readonly string[];
 }
 
 class CollectionImpl<
@@ -764,8 +764,8 @@ class CollectionImpl<
       relatedNamespaceId: relation.relatedNamespaceId,
       relatedTableName: relation.relatedTableName,
       localTableName: relation.localTableName,
-      targetColumn: relation.targetColumn,
-      localColumn: relation.localColumn,
+      targetColumns: relation.targetColumns,
+      localColumns: relation.localColumns,
       cardinality: relation.cardinality,
       ...ifDefined('through', relation.through),
       nested: nestedState,
@@ -1456,13 +1456,13 @@ class CollectionImpl<
         >(data),
       });
 
-      const pkCriterion = buildPrimaryKeyFilterFromRow(
+      const identityCriterion = buildRowIdentityFilterFromRow(
         this.contract,
         this.namespaceId,
         this.modelName,
         createdRow,
       );
-      const reloaded = await this.#reloadMutationRowByPrimaryKey(pkCriterion);
+      const reloaded = await this.#reloadMutationRowByIdentity(identityCriterion);
       if (!reloaded) {
         throw ormError(
           'ORM.MUTATION_ROW_MISSING',
@@ -1693,14 +1693,14 @@ class CollectionImpl<
       this.namespaceId,
       variant.modelName,
     );
-    const pkColumn = resolvePrimaryKeyColumn(this.contract, this.namespaceId, this.tableName);
+    const pkColumns = resolvePrimaryKeyColumns(this.contract, this.namespaceId, this.tableName);
 
     return {
       polyInfo,
       variant,
       baseFieldToColumn,
       variantFieldToColumn,
-      pkColumn,
+      pkColumns,
     };
   }
 
@@ -1708,7 +1708,7 @@ class CollectionImpl<
     data: readonly Record<string, unknown>[],
     mtiCtx: MtiCreateContext,
   ): AsyncIterableResult<Row> {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumn } = mtiCtx;
+    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumns } = mtiCtx;
     const contract = this.contract;
     const collectionCtx = this.ctx;
     const runtime = collectionCtx.runtime;
@@ -1771,8 +1771,9 @@ class CollectionImpl<
             );
           }
 
-          const pkValue = baseCreated[pkColumn];
-          variantRow[pkColumn] = pkValue;
+          for (const pkColumn of pkColumns) {
+            variantRow[pkColumn] = baseCreated[pkColumn];
+          }
           applyCreateDefaults(
             collectionCtx,
             namespaceId,
@@ -1809,7 +1810,7 @@ class CollectionImpl<
 
           const prefixedVariant: Record<string, unknown> = {};
           for (const [col, val] of Object.entries(variantCreated)) {
-            if (col === pkColumn) continue;
+            if (pkColumns.includes(col)) continue;
             prefixedVariant[`${variant.table}__${col}`] = val;
           }
 
@@ -2155,13 +2156,13 @@ class CollectionImpl<
         return null;
       }
 
-      const pkCriterion = buildPrimaryKeyFilterFromRow(
+      const identityCriterion = buildRowIdentityFilterFromRow(
         this.contract,
         this.namespaceId,
         this.modelName,
         updatedRow,
       );
-      return this.#reloadMutationRowByPrimaryKey(pkCriterion);
+      return this.#reloadMutationRowByIdentity(identityCriterion);
     }
 
     return withMutationScope(this.ctx.runtime, async (scope) => {
@@ -2612,8 +2613,8 @@ class CollectionImpl<
     );
   }
 
-  async #reloadMutationRowByPrimaryKey(criterion: Record<string, unknown>): Promise<Row | null> {
-    return this.#reloadMutationRowByCriterion(criterion, 'primary key');
+  async #reloadMutationRowByIdentity(criterion: Record<string, unknown>): Promise<Row | null> {
+    return this.#reloadMutationRowByCriterion(criterion, 'row identity');
   }
 
   async #reloadMutationRowByCriterion(
