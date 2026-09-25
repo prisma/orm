@@ -1,4 +1,5 @@
 export type {
+  ParsedPslExtensionBlock,
   PslAttribute,
   PslAttributeArgument,
   PslAttributeNamedArgument,
@@ -13,12 +14,8 @@ export type {
   PslExtensionBlock,
   PslExtensionBlockAttribute,
   PslExtensionBlockAttributeArg,
-  PslExtensionBlockParamBare,
-  PslExtensionBlockParamList,
-  PslExtensionBlockParamOption,
-  PslExtensionBlockParamRef,
-  PslExtensionBlockParamScalarValue,
-  PslExtensionBlockParamValue,
+  PslExtensionBlockParsedAttribute,
+  PslExtensionBlockSourceEntry,
   PslField,
   PslFieldAttribute,
   PslModel,
@@ -46,6 +43,7 @@ export { funcCall } from '../attribute-spec/combinators/func-call';
 export { identifier } from '../attribute-spec/combinators/identifier';
 export { int } from '../attribute-spec/combinators/int';
 export { json } from '../attribute-spec/combinators/json';
+export { jsonValue } from '../attribute-spec/combinators/json-value';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
 export { num } from '../attribute-spec/combinators/num';
@@ -81,6 +79,7 @@ export type {
   IdentifierArgType,
   InferAttr,
   InspectableArgType,
+  JsonValueArgType,
   ModelAttributeCtx,
   NamedOut,
   NumLiteral,
@@ -110,6 +109,26 @@ export {
   createBinder,
   PSL_UNRESOLVED_REFERENCE,
 } from '../binder';
+export { entriesBlock, fixedBlock } from '../block-spec/binders';
+export type { PslBlockSpecDescriptor } from '../block-spec/descriptor';
+export { blockSpecFactoryOf } from '../block-spec/descriptor';
+export type {
+  InterpretExtensionBlockAttributesInput,
+  InterpretExtensionBlockInput,
+} from '../block-spec/interpret';
+export {
+  interpretExtensionBlock,
+  interpretExtensionBlockAttributes,
+} from '../block-spec/interpret';
+export type {
+  BlockEntryValueSpec,
+  BlockSpec,
+  BlockSpecContext,
+  BlockSpecFactory,
+  EntriesBlockSpec,
+  FixedBlockSpec,
+  InferBlock,
+} from '../block-spec/types';
 export type {
   ContributedMember,
   ContributedNamespaceSymbol,
@@ -129,7 +148,7 @@ export type {
   EntitySelector,
   ResolvedEntityReference,
 } from '../entity-reference';
-export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
+export { findBlockDescriptor } from '../extension-block';
 export {
   keywordPslSpan,
   nodePslSpan,
