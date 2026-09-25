@@ -691,7 +691,7 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/3-mongo-target/1-mongo-target/src/core/**",
+      "glob": "packages/3-mongo-target/1-mongo-target/src/core/*.ts",
       "domain": "extensions",
       "layer": "targets",
       "plane": "shared"

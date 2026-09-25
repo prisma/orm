@@ -22,16 +22,16 @@ import {
   createIndex,
   dropCollection,
   dropIndex,
-} from '../src/core/migration-factories';
-import { MongoMigrationPlanner } from '../src/core/mongo-planner';
+} from '../src/core/migrations/migration-factories';
+import { MongoMigrationPlanner } from '../src/core/migrations/mongo-planner';
 import {
   CollModCall,
   CreateCollectionCall,
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
-} from '../src/core/op-factory-call';
-import { renderOps } from '../src/core/render-ops';
+} from '../src/core/migrations/op-factory-call';
+import { renderOps } from '../src/core/migrations/render-ops';
 
 const ALL_CLASSES_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'],

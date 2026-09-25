@@ -17,11 +17,11 @@ import type {
 import type { MongoContract } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok } from '@internal/utils/result';
-import { mongoTargetDescriptorMeta } from './descriptor-meta';
+import { mongoTargetDescriptorMeta } from '../descriptor-meta';
+import type { MongoTargetContract } from '../mongo-target-contract';
+import { MongoTargetContractSerializer } from '../mongo-target-contract-serializer';
 import { MongoMigrationPlanner } from './mongo-planner';
 import { MongoMigrationRunner, type MongoMigrationRunnerExecuteOptions } from './mongo-runner';
-import type { MongoTargetContract } from './mongo-target-contract';
-import { MongoTargetContractSerializer } from './mongo-target-contract-serializer';
 import { MongoTargetSchemaVerifier } from './mongo-target-schema-verifier';
 import { entityNamesDeclaredBy, scopeVerifyResultToSpace } from './scope-verify-result';
 

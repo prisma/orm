@@ -57,7 +57,7 @@ createRunnerDependencies(options): MongoRunnerDependencies {
   return getControlAdapter().createRunnerDependencies(asMongoDriver(options.driver));
 }
 
-// target-mongo/src/core/control-target.ts, inside createRunner(family)
+// target-mongo/src/core/migrations/control-target.ts, inside createRunner(family)
 cachedDeps ??= family.createRunnerDependencies({ driver });
 return new MongoMigrationRunner(cachedDeps).execute({ ... });
 ```
