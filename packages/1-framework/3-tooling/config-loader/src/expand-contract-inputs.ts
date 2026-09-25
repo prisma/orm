@@ -2,6 +2,25 @@ import { matchesGlob, resolve } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
 
 /**
+ * A Windows UNC path's authority (`\\server\share\...` or its
+ * forward-slash-normalized form `//server/share/...`) is not a path
+ * segment `resolve()` can touch: `pathe.resolve('\\\\server\\share\\x')`
+ * (like `node:path`'s POSIX `resolve`) collapses the leading `\\`/`//` into
+ * a single separator, turning the authority into a local directory name
+ * (`/server/share/x`). Every entry point that runs a literal through
+ * `resolve()` must skip UNC-shaped entries instead.
+ */
+const UNC_PREFIX_RE = /^(?:\\\\|\/\/)/;
+
+function isUncLike(entry: string): boolean {
+  return UNC_PREFIX_RE.test(entry);
+}
+
+function resolveLiteral(entry: string): string {
+  return isUncLike(entry) ? entry : resolve(entry);
+}
+
+/**
  * Expands a finalized contract source input list into its member file set:
  * absolute, deduped by canonical path, sorted. `patterns` must already be
  * absolute (the `orm` config schema resolves each entry against the config
@@ -10,11 +29,11 @@ import { glob, isDynamicPattern } from 'tinyglobby';
  * A wildcard-free entry (per tinyglobby's own magic-character check) passes
  * through verbatim — no globbing, no existence check, no directory
  * expansion — so a literal file, a nonexistent path (its read error
- * surfaces downstream), and a directory (`contract-prisma7`'s adoption
- * surface) all reach the result unchanged. Only entries containing glob
- * magic run through `tinyglobby`, directories-not-auto-expanded and
- * files-only; a glob matching nothing contributes nothing — no diagnostic
- * here.
+ * surfaces downstream), a directory (`contract-prisma7`'s adoption
+ * surface), and a UNC path all reach the result unchanged. Only entries
+ * containing glob magic run through `tinyglobby`, directories-not-auto-
+ * expanded and files-only; a glob matching nothing contributes nothing —
+ * no diagnostic here.
  */
 export async function expandContractInputs(
   patterns: readonly string[] | undefined,
@@ -31,7 +50,7 @@ export async function expandContractInputs(
     globPatterns.length === 0
       ? []
       : await glob(globPatterns, { absolute: true, onlyFiles: true, expandDirectories: false });
-  const canonical = new Set([...literals, ...globMatches].map((entry) => resolve(entry)));
+  const canonical = new Set([...literals, ...globMatches].map(resolveLiteral));
   return Array.from(canonical).sort();
 }
 

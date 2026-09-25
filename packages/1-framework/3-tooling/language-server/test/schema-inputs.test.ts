@@ -77,19 +77,14 @@ describe('resolveSchemaInputs', () => {
     expect(set.includes('file:///d%3A/project%20files/schema%20%231.PRISMA')).toBe(true);
   });
 
-  it('normalizes a Windows UNC input to a local path through the shared glob-expansion helper', async () => {
-    // Known behavior change from routing every input through
-    // expandContractInputs's pathe-based resolve(): a UNC path's leading
-    // `\\server\` no longer round-trips to a `file://server/...` authority
-    // URI (the pre-glob-expansion behavior) and instead normalizes to a
-    // local `file:///server/...` path, matching what the shared helper
-    // already does for CLI/vite-plugin consumers.
+  it('matches Windows UNC inputs', async () => {
     useWindowsPlatform();
     const set = await resolveSchemaInputs(
       configWith(['\\\\server\\share\\schema.prisma']),
       alwaysMember,
     );
-    expect([...set.uris()]).toEqual(['file:///server/share/schema.prisma']);
+    expect([...set.uris()]).toEqual(['file://server/share/schema.prisma']);
+    expect(set.includes('file://SERVER/share/SCHEMA.prisma')).toBe(true);
   });
 
   it.runIf(process.platform !== 'win32')(

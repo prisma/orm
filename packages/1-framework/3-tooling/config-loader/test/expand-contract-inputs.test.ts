@@ -129,4 +129,31 @@ describe('globContractInputMatching', () => {
       globContractInputMatching(['/app/prisma/contract.prisma'], '/app/prisma/contract.prisma'),
     ).toBeUndefined();
   });
+
+  it('passes a Windows UNC literal through byte-intact, without collapsing the authority', async () => {
+    const uncPath = '\\\\server\\share\\schema.prisma';
+
+    expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
+  });
+
+  it('passes a forward-slash-normalized UNC literal through byte-intact', async () => {
+    const uncPath = '//server/share/schema.prisma';
+
+    expect(await expandContractInputs([uncPath])).toEqual([uncPath]);
+  });
+
+  it('reaches resolvedInputs intact through the same assembly every emit consumer uses', async () => {
+    // Mirrors `resolvedInputs: await expandContractInputs(source.inputs)` in
+    // contract-emit.ts, client.ts, and format.ts — every consumer beyond the
+    // LSP builds `resolvedInputs` from this exact call, with no further
+    // transformation, so this pins the UNC authority survives that path too.
+    const dir = await createFixtureDir();
+    const ordinary = join(dir, 'schema.prisma');
+    await writeFile(ordinary, 'model User {}\n', 'utf-8');
+    const uncPath = '\\\\server\\share\\sibling.prisma';
+
+    const resolvedInputs = await expandContractInputs([ordinary, uncPath]);
+
+    expect(resolvedInputs).toEqual([ordinary, uncPath].sort());
+  });
 });
