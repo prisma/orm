@@ -1,7 +1,7 @@
 import pg from 'pg'
 import { describe, expect, it } from 'vitest'
 
-import { customParsers, mapArg } from '../conversion'
+import { customParsers, mapArg, normalize_timestamp, normalize_timestamptz } from '../conversion'
 
 describe('mapArg', () => {
   it('converts a date with a 4-digit year (value >= 1000-01-01) to the correct date', () => {
@@ -65,4 +65,25 @@ describe('customParsers', () => {
       expect(() => customParsers[MONEY](input)).toThrow('Unsupported money format')
     },
   )
+})
+
+describe('normalize_timestamp', () => {
+  it('leaves standard 4-digit years unaffected', () => {
+    expect(normalize_timestamp('2026-09-02 05:00:00')).toBe('2026-09-02T05:00:00+00:00')
+  })
+
+  it('prepends + to expanded years (>9999) to satisfy ISO 8601', () => {
+    expect(normalize_timestamp('202609-02-05 05:00:00')).toBe('+202609-02-05T05:00:00+00:00')
+  })
+})
+
+describe('normalize_timestamptz', () => {
+  it('leaves standard 4-digit years unaffected', () => {
+    // Note: Postgres timestamptz wire format includes the timezone offset
+    expect(normalize_timestamptz('2026-09-02 05:00:00+00')).toBe('2026-09-02T05:00:00+00:00')
+  })
+
+  it('prepends + to expanded years (>9999) to satisfy ISO 8601', () => {
+    expect(normalize_timestamptz('202609-02-05 05:00:00+00')).toBe('+202609-02-05T05:00:00+00:00')
+  })
 })
