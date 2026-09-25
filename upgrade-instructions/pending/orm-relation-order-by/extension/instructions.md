@@ -6,6 +6,13 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '\.cursor\('
+  - id: order-by-item-nulls
+    summary: "OrderByItem from @internal/sql-relational-core/ast carries a nulls placement: its constructor takes a required third argument, withExpr rebuilds an item around a new expression, and every renderer must emit nulls wherever it emits dir"
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      matches:
+        - 'new OrderByItem\('
+        - '\.dir\.toUpperCase\('
 ---
 
 ## `cursor-rejects-expression-orders`
@@ -25,3 +32,15 @@ For each `.cursor(` call in a chain that also calls `.orderBy(`, look at every `
 - Keep the cursor and order by plain columns only, for example `(p) => p.createdAt.desc()` and `(p) => p.id.desc()`.
 
 `distinctOn()` throws the same error when an active order is not a plain column. Order by the `distinctOn` columns first, using plain column orders.
+
+## `order-by-item-nulls`
+
+`OrderByItem` has a `nulls` field of type `'first' | 'last' | undefined`, and `undefined` means the database default. The constructor refuses any other value, and any direction other than `'asc'` / `'desc'`, with `RUNTIME.AST_INVALID`.
+
+Constructing an item:
+
+- `new OrderByItem(expr, dir)` no longer compiles. Pass the placement as the third argument, `new OrderByItem(expr, dir, undefined)`, or use `OrderByItem.asc(expr, { nulls })` / `OrderByItem.desc(expr, { nulls })`.
+- To reorder by a different expression while keeping an existing item's direction and placement, write `item.withExpr(expr)` instead of `new OrderByItem(expr, item.dir)`. The hand-written form drops `nulls`.
+
+Rendering an item: an adapter or renderer that writes `ORDER BY` itself must write the placement after the direction, `NULLS FIRST` for `'first'` and `NULLS LAST` for `'last'`, in every position it renders an `OrderByItem` (query, window and aggregate `ORDER BY`). A renderer that ignores `nulls` compiles and returns rows in the wrong order. Map `dir` and `nulls` through a fixed table rather than interpolating the string. A dialect without `NULLS FIRST` / `NULLS LAST` must emulate the placement, for example with a leading `expr IS NULL` key, and must not drop it.
+
