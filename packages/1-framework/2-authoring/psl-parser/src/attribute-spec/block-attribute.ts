@@ -1,28 +1,28 @@
 import type { PslDiagnostic } from '../diagnostic';
 import type { AstNode } from '../syntax/ast-helpers';
-import type { AttributeOut, AttributeSpec, BoundCtx, Param, PositionalParam } from './types';
+import type { AttributeCtx, AttributeOut, AttributeSpec, Param, PositionalParam } from './types';
 
 interface BlockAttributeConfig<
-  Pos extends readonly PositionalParam<unknown, BoundCtx>[],
-  Named extends Record<string, Param<unknown, BoundCtx>>,
+  Pos extends readonly PositionalParam<unknown, AttributeCtx>[],
+  Named extends Record<string, Param<unknown, AttributeCtx>>,
 > {
   readonly documentation: string;
   readonly positional?: Pos;
   readonly named?: Named;
   readonly refine?: (
     parsed: AttributeOut<Pos, Named>,
-    ctx: BoundCtx,
+    ctx: AttributeCtx,
     attributeNode: AstNode,
   ) => readonly PslDiagnostic[];
 }
 
 export function blockAttribute<
-  const Pos extends readonly PositionalParam<unknown, BoundCtx>[] = readonly [],
-  const Named extends Record<string, Param<unknown, BoundCtx>> = Record<never, never>,
+  const Pos extends readonly PositionalParam<unknown, AttributeCtx>[] = readonly [],
+  const Named extends Record<string, Param<unknown, AttributeCtx>> = Record<never, never>,
 >(
   name: string,
   config: BlockAttributeConfig<Pos, Named>,
-): AttributeSpec<AttributeOut<Pos, Named>, BoundCtx> {
+): AttributeSpec<AttributeOut<Pos, Named>, AttributeCtx> {
   return {
     level: 'block',
     name,

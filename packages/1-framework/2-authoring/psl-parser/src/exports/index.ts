@@ -72,7 +72,6 @@ export type {
   AttributeLevel,
   AttributeOut,
   AttributeSpec,
-  BoundCtx,
   EntityRefArgType,
   FieldAttributeCtx,
   FixedIdentifierArgType,

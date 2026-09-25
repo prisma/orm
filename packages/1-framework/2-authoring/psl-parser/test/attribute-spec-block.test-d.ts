@@ -4,7 +4,6 @@ import type {
   AttributeCtx,
   AttributeSpec,
   BlockAttributeSpecFactory,
-  BoundCtx,
   FieldAttributeCtx,
   InferAttr,
   ModelAttributeCtx,
@@ -129,7 +128,7 @@ test('a block spec is accepted where a binder-ctx spec is expected', () => {
       { key: 'name', type: str(), documentation: 'The value bound to this positional slot.' },
     ],
   });
-  expectTypeOf(blockSpec).toMatchTypeOf<AttributeSpec<{ name: string }, BoundCtx>>();
+  expectTypeOf(blockSpec).toMatchTypeOf<AttributeSpec<{ name: string }, AttributeCtx>>();
 });
 
 test('model and field factories preserve their level-specific contexts', () => {

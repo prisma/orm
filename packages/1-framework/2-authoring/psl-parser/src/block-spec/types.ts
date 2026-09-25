@@ -1,4 +1,4 @@
-import type { ArgType, BoundCtx, Param } from '../attribute-spec/types';
+import type { ArgType, AttributeCtx, Param } from '../attribute-spec/types';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 
 export interface BlockSpecContext {
@@ -7,13 +7,13 @@ export interface BlockSpecContext {
 }
 
 export interface BlockEntryValueSpec {
-  readonly type: ArgType<unknown, BoundCtx>;
+  readonly type: ArgType<unknown, AttributeCtx>;
   readonly documentation: string;
 }
 
 export interface FixedBlockSpec<Out = unknown> {
   readonly mode: 'fixed';
-  readonly parameters: Readonly<Record<string, Param<unknown, BoundCtx>>>;
+  readonly parameters: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
   readonly _out?: Out;
 }
 

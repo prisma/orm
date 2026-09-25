@@ -11,7 +11,7 @@ import { blindCast } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { interpretAttribute, isOptionalArgType } from '../attribute-spec/interpret';
 import type { BlockAttributeSpecFactory } from '../attribute-spec/spec-context';
-import type { AttributeCtx, BoundCtx } from '../attribute-spec/types';
+import type { AttributeCtx } from '../attribute-spec/types';
 import type { Binder } from '../binder';
 import { diagnosticSource, type PslDiagnostic } from '../diagnostic';
 import { findBlockDescriptor } from '../extension-block';
@@ -35,7 +35,7 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   input: InterpretExtensionBlockInput<S>,
 ): Result<ParsedPslExtensionBlock<InferBlock<S>>, readonly PslDiagnostic[]> {
   const { block, descriptor, spec, symbols, sources, binder } = input;
-  const ctx: BoundCtx = { sources, symbols, binder };
+  const ctx: AttributeCtx = { sources, symbols, binder };
   const entries =
     spec.mode === 'fixed'
       ? interpretFixedBlock(block, spec, ctx)
@@ -78,7 +78,7 @@ interface InterpretedBlockEntries {
 function interpretFixedBlock(
   block: BlockSymbol,
   spec: FixedBlockSpec,
-  ctx: BoundCtx,
+  ctx: AttributeCtx,
 ): InterpretedBlockEntries {
   const diagnostics: PslDiagnostic[] = [];
   let failed = false;
@@ -148,7 +148,7 @@ function interpretFixedBlock(
 function interpretEntriesBlock(
   block: BlockSymbol,
   spec: EntriesBlockSpec,
-  ctx: BoundCtx,
+  ctx: AttributeCtx,
 ): InterpretedBlockEntries {
   const diagnostics: PslDiagnostic[] = [];
   let failed = false;

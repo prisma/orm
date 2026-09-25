@@ -7,7 +7,7 @@ import { PslSources } from '../src/source-file';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
-import { ownEntry } from './support';
+import { ownEntry, supportBinder } from './support';
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   const cursor = new Cursor('schema.prisma', `@x(${exprSource})`);
@@ -17,14 +17,13 @@ function argOf(exprSource: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   const first = [...(node.argList()?.args() ?? [])][0];
   const expr = first?.value();
   if (!expr) throw new Error('expected an argument expression');
+  const sources = new PslSources([[root, cursor.sourceFile]]);
+  const symbols = {
+    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+  };
   return {
     expr,
-    ctx: {
-      sources: new PslSources([[root, cursor.sourceFile]]),
-      symbols: {
-        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
-      },
-    },
+    ctx: { sources, symbols, binder: supportBinder({ sources, symbolTable: symbols }) },
   };
 }
 

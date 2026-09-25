@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BoundCtx } from '../src/exports';
+import type { AttributeCtx } from '../src/exports';
 import { blockAttribute, interpretAttribute, leafDiagnostic, str } from '../src/exports';
 import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
@@ -7,7 +7,7 @@ import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { createSyntaxTree } from '../src/syntax/red';
 import { supportBinder } from './support';
 
-function blockAttr(source: string): { node: ModelAttributeAst; ctx: BoundCtx } {
+function blockAttr(source: string): { node: ModelAttributeAst; ctx: AttributeCtx } {
   const cursor = new Cursor('schema.prisma', source);
   const root = createSyntaxTree(parseAttribute(cursor));
   const node = ModelAttributeAst.cast(root);

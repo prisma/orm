@@ -20,13 +20,10 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 export interface AttributeCtx {
   readonly sources: PslSources;
   readonly symbols: SymbolTable;
-}
-
-export interface BoundCtx extends AttributeCtx {
   readonly binder: Binder;
 }
 
-export interface ModelAttributeCtx extends BoundCtx {
+export interface ModelAttributeCtx extends AttributeCtx {
   readonly selfModel: ModelSymbol;
 }
 

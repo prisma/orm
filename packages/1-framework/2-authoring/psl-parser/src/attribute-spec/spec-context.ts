@@ -1,7 +1,7 @@
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { BlockSpecContext } from '../block-spec/types';
 import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
-import type { AttributeSpec, BoundCtx, FieldAttributeCtx, ModelAttributeCtx } from './types';
+import type { AttributeCtx, AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './types';
 
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
@@ -26,4 +26,6 @@ export interface AttributeSpecNamespace {
   readonly field: Readonly<Record<string, FieldAttributeSpecFactory>>;
 }
 
-export type BlockAttributeSpecFactory = (ctx: BlockSpecContext) => AttributeSpec<never, BoundCtx>;
+export type BlockAttributeSpecFactory = (
+  ctx: BlockSpecContext,
+) => AttributeSpec<never, AttributeCtx>;
