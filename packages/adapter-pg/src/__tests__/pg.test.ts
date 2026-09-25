@@ -152,4 +152,70 @@ describe('PrismaPgAdapterFactory', () => {
 
     await adapter.dispose()
   })
+
+  it('should destroy connection on rollback if transaction was poisoned by a database error', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn(),
+      release: vi.fn(),
+    }
+
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    // 1. Start Transaction (BEGIN)
+    mockConnection.query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
+    const transaction = await adapter.startTransaction()
+
+    // 2. Simulate a fatal Database Error (e.g., Duplicate Key)
+    const dbError = new Error('duplicate key value violates unique constraint')
+    mockConnection.query.mockRejectedValueOnce(dbError)
+
+    await expect(transaction.executeRaw({ sql: 'INSERT INTO "User"...', args: [], argTypes: [] })).rejects.toThrow()
+
+    // 3. Rollback the transaction
+    mockConnection.query.mockResolvedValueOnce({ rows: [], rowCount: 0 }) // mock the ROLLBACK query success
+    await transaction.rollback()
+
+    // 4. VERIFY: Ensure release was called with an Error, destroying the socket
+    expect(mockConnection.release).toHaveBeenCalledWith(expect.any(Error))
+    expect(mockConnection.release.mock.calls[0][0].message).toMatch(/poisoned transaction connection/i)
+
+    await adapter.dispose()
+  })
+
+  it('should release connection normally on rollback if transaction was healthy', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn(),
+      release: vi.fn(),
+    }
+
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    mockConnection.query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
+    const transaction = await adapter.startTransaction()
+
+    // Execute a successful query
+    mockConnection.query.mockResolvedValueOnce({ rows: [], rowCount: 1 })
+    await transaction.executeRaw({ sql: 'SELECT 1', args: [], argTypes: [] })
+
+    // User triggers a manual rollback
+    mockConnection.query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
+    await transaction.rollback()
+
+    // VERIFY: Ensure release was called cleanly with undefined (no error)
+    expect(mockConnection.release).toHaveBeenCalledWith(undefined)
+
+    await adapter.dispose()
+  })
 })

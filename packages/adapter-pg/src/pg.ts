@@ -31,6 +31,7 @@ type TransactionClient = pg.PoolClient
 class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQueryable {
   readonly provider = 'postgres'
   readonly adapterName = packageName
+  protected isPoisoned = false
 
   constructor(
     protected readonly client: ClientT,
@@ -126,6 +127,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
   }
 
   protected onError(error: unknown): never {
+    this.isPoisoned = true
     debug('Error in performIO: %O', error)
     throw new DriverAdapterError(convertDriverError(error))
   }
@@ -145,14 +147,16 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     debug(`[js::commit]`)
 
     this.cleanup?.()
-    this.client.release()
+    const err = this.isPoisoned ? new Error('Prisma: Destroying poisoned transaction connection') : undefined
+    this.client.release(err)
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
     this.cleanup?.()
-    this.client.release()
+    const err = this.isPoisoned ? new Error('Prisma: Destroying poisoned transaction connection') : undefined
+    this.client.release(err)
   }
 
   async createSavepoint(name: string): Promise<void> {
