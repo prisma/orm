@@ -184,6 +184,12 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
+  // Two walks, not one: this first walk resolves every field's type, and the
+  // second walk's attribute arguments read those results — `@relation(references:
+  // [id])` looks `id` up on the fields of the referenced model, so the field's
+  // type must already be bound to know which model's fields to search. Fused
+  // into one loop, an attribute on an early model pointing at a later model
+  // would query a resolution that does not exist yet.
   walkEntities(symbolTable, stack, (entity) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
