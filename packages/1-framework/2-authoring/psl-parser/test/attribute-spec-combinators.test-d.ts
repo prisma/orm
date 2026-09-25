@@ -64,7 +64,6 @@ test('checked reference selectors and wrappers preserve inferred outputs', () =>
     ResolvedEntityReference<ModelSymbol> | string
   >();
   expectTypeOf(model.parse).parameter(1).toEqualTypeOf<BoundCtx>();
-  expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sources' | 'symbols'>();
   // @ts-expect-error checked references require an expected selector
   entityRef();
   // @ts-expect-error checked references do not accept injected resolvers

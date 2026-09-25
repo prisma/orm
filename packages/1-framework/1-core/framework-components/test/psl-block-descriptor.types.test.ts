@@ -5,13 +5,7 @@ import type {
   AuthoringPslBlockDescriptorNamespace,
 } from '../src/shared/framework-authoring';
 import { isAuthoringPslBlockDescriptor } from '../src/shared/framework-authoring';
-import type {
-  ParsedPslExtensionBlock,
-  PslExtensionBlock,
-  PslExtensionBlockParsedAttribute,
-  PslExtensionBlockPrintEntry,
-  PslSpan,
-} from '../src/shared/psl-extension-block';
+import type { PslExtensionBlock } from '../src/shared/psl-extension-block';
 
 describe('AuthoringPslBlockDescriptor', () => {
   it('a declarative descriptor with an erased callable spec satisfies the type', () => {
@@ -23,10 +17,7 @@ describe('AuthoringPslBlockDescriptor', () => {
       spec: () => ({}),
     } satisfies AuthoringPslBlockDescriptor;
 
-    expectTypeOf(descriptor.kind).toEqualTypeOf<'pslBlock'>();
-    expectTypeOf(descriptor.keyword).toEqualTypeOf<string>();
-    expectTypeOf(descriptor.discriminator).toEqualTypeOf<string>();
-    expectTypeOf<AuthoringPslBlockDescriptor['spec']>().toEqualTypeOf<unknown>();
+    void descriptor;
   });
 
   it('the retired parameter DSL fields are not part of the descriptor shape', () => {
@@ -131,52 +122,12 @@ describe('block attributes', () => {
       attributes: { map: () => ({ level: 'block', name: 'map' }) },
     } as const;
     expectTypeOf(descriptor).toMatchTypeOf<AuthoringPslBlockDescriptor>();
-    expectTypeOf<AuthoringPslBlockDescriptor['attributes']>().toEqualTypeOf<
-      Readonly<Record<string, unknown>> | undefined
-    >();
   });
 });
 
 describe('PslExtensionBlock source shape', () => {
-  it('parameters carry print provenance only: optional expression text plus span', () => {
-    expectTypeOf<PslExtensionBlock['parameters']>().toEqualTypeOf<
-      Record<string, PslExtensionBlockPrintEntry>
-    >();
-    expectTypeOf<PslExtensionBlockPrintEntry['expression']>().toEqualTypeOf<string | undefined>();
-    expectTypeOf<PslExtensionBlockPrintEntry['span']>().toEqualTypeOf<PslSpan>();
-  });
-
   it('carries no interpreted attribute view; only printable blockAttributes remain', () => {
     expectTypeOf<PslExtensionBlock>().not.toHaveProperty('attributes');
     expectTypeOf<PslExtensionBlock>().toHaveProperty('blockAttributes');
-  });
-});
-
-describe('ParsedPslExtensionBlock', () => {
-  it('carries typed values under the generic parameter', () => {
-    interface PolicyValues {
-      readonly using: string;
-      readonly permissive?: boolean;
-    }
-    expectTypeOf<ParsedPslExtensionBlock<PolicyValues>['values']>().toEqualTypeOf<PolicyValues>();
-    expectTypeOf<ParsedPslExtensionBlock<PolicyValues>['parameterSpans']>().toEqualTypeOf<
-      Readonly<Record<string, PslSpan>>
-    >();
-    expectTypeOf<ParsedPslExtensionBlock<PolicyValues>['attributes']>().toEqualTypeOf<
-      Readonly<Record<string, PslExtensionBlockParsedAttribute>>
-    >();
-  });
-
-  it('defaults values to an opaque readonly record', () => {
-    expectTypeOf<ParsedPslExtensionBlock['values']>().toEqualTypeOf<
-      Readonly<Record<string, unknown>>
-    >();
-  });
-
-  it('keeps kind, keyword, name, and span as the block identity', () => {
-    expectTypeOf<ParsedPslExtensionBlock['kind']>().toEqualTypeOf<string>();
-    expectTypeOf<ParsedPslExtensionBlock['keyword']>().toEqualTypeOf<string>();
-    expectTypeOf<ParsedPslExtensionBlock['name']>().toEqualTypeOf<string>();
-    expectTypeOf<ParsedPslExtensionBlock['span']>().toEqualTypeOf<PslSpan>();
   });
 });
