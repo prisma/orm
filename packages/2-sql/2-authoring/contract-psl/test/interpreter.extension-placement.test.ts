@@ -103,7 +103,6 @@ function interpretWith(schema: string, contributions: AuthoringContributions) {
   const symbolTableInput = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    pslBlockDescriptors: contributions.pslBlockDescriptors ?? {},
   });
   const result = interpretPslDocumentToSqlContract({
     ...symbolTableInput,
@@ -322,12 +321,15 @@ model Widget {
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ message: 'Unknown model reference "Missing"' }),
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find entity "Missing"',
+        }),
       ]),
     );
     expect(
       result.failure.diagnostics.filter((diagnostic) =>
-        String(diagnostic.message).includes('Unknown model reference "Missing"'),
+        String(diagnostic.message).includes('Cannot find entity "Missing"'),
       ),
     ).toHaveLength(1);
     expect(capturedEntries['audit']?.['guard']).toBeUndefined();

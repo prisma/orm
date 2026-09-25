@@ -740,7 +740,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
 
   const resolvedFields = collectResolvedFields({
     model,
-    parsedBlocks: input.parsedBlocks,
     symbolTable: input.symbolTable,
     mapping,
     enumTypeDescriptors: input.enumTypeDescriptors,
@@ -1139,7 +1138,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: specFactory({
           symbols: input.symbolTable,
           model,
-          parsedBlocks: input.parsedBlocks,
           controlMutationDefaults: {
             defaultFunctionRegistry: input.defaultFunctionRegistry,
             dataTypeEntries: input.dataTypeSupport.entries,
@@ -2113,9 +2111,11 @@ export function interpretPslDocumentToSqlContract(
   const composedExtensionNames = new Set(input.composedExtensions ?? []);
   const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
+  const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
   const { binder, diagnostics: binderDiagnostics } = createSqlBinder({
     symbolTable: input.symbolTable,
     sources: input.sources,
+    pslBlockDescriptors: composedPslBlockDescriptors,
     authoringContributions: input.authoringContributions,
     controlMutationDefaults: {
       defaultFunctionRegistry: input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
@@ -2152,12 +2152,12 @@ export function interpretPslDocumentToSqlContract(
     binder,
     diagnostics,
   });
-  const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
-  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
-    input.symbolTable,
-    input.sources,
-    composedPslBlockDescriptors,
-  );
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+    symbolTable: input.symbolTable,
+    sources: input.sources,
+    pslBlockDescriptors: composedPslBlockDescriptors,
+    binder,
+  });
   diagnostics.push(...blockDiagnostics);
   validateBlockModelAttributeRequirements({
     parsedBlocks,

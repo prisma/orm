@@ -1066,11 +1066,12 @@ export function interpretPslDocumentToMongoContract(
   diagnostics.push(
     ...binderDiagnostics.filter((diagnostic) => diagnostic.data?.['reference'] !== 'type'),
   );
-  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
     symbolTable,
     sources,
-    input.authoringContributions?.pslBlockDescriptors ?? {},
-  );
+    pslBlockDescriptors: input.authoringContributions?.pslBlockDescriptors ?? {},
+    binder,
+  });
   diagnostics.push(...blockDiagnostics);
   const topLevel = symbolTable.topLevel;
   validateNamespaceBlocksForMongoTarget({
@@ -1087,7 +1088,6 @@ export function interpretPslDocumentToMongoContract(
     symbols: symbolTable,
     model,
     controlMutationDefaults: input.controlMutationDefaults,
-    parsedBlocks,
   });
   const modelMetadataByName = new Map<string, MongoModelMetadata>();
   for (const model of allModels) {

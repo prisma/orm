@@ -14,7 +14,7 @@
 import type { Contract } from '@internal/contract/types';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -44,6 +44,20 @@ const assembled = assembleAuthoringContributions([
   },
 ]);
 
+function blockResolutionBinder(
+  symbolTable: Parameters<typeof interpretExtensionBlocks>[0]['symbolTable'],
+  sources: Parameters<typeof interpretExtensionBlocks>[0]['sources'],
+) {
+  return createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  }).binder;
+}
+
 const postgresTarget = {
   kind: 'target' as const,
   familyId: 'sql' as const,
@@ -70,7 +84,12 @@ function interpretWithSymbolDiagnostics(
   });
   const diagnostics = [
     ...collectionDiagnostics,
-    ...interpretExtensionBlocks(symbolTable, sources, assembled.pslBlockDescriptors).diagnostics,
+    ...interpretExtensionBlocks({
+      symbolTable,
+      sources,
+      pslBlockDescriptors: assembled.pslBlockDescriptors,
+      binder: blockResolutionBinder(symbolTable, sources),
+    }).diagnostics,
   ];
 
   const result = interpretPslDocumentToSqlContract({
@@ -308,7 +327,7 @@ namespace public {
 });
 
 describe('a policy whose target does not resolve to a declared model', () => {
-  it("is the parser's unknown-reference diagnostic; the invalid block never lowers", () => {
+  it("is the binder's unresolved-reference diagnostic; the invalid block never lowers", () => {
     const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(`
 namespace public {
   model profile {
@@ -324,13 +343,14 @@ namespace public {
   }
 }
 `);
-    expect(symbolTableDiagnostics).toEqual([
-      expect.objectContaining({ message: 'Unknown model reference "porfile"' }),
-    ]);
+    expect(symbolTableDiagnostics).toEqual([]);
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
-      expect.objectContaining({ message: 'Unknown model reference "porfile"' }),
+      expect.objectContaining({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find entity "porfile"',
+      }),
     ]);
   });
 });

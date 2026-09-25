@@ -1,16 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { ContractSourceContext } from '@internal/config/config-types';
-import type {
-  AuthoringEntityContext,
-  ParsedPslExtensionBlock,
-} from '@internal/framework-components/authoring';
-import type { BlockSymbol } from '@internal/psl-parser';
-import {
-  buildSymbolTable,
-  createPslDiagnosticCollector,
-  interpretExtensionBlocks,
-} from '@internal/psl-parser';
+import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
+import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
@@ -29,21 +20,10 @@ const baseOptions = {
 
 const SOURCE_ID = './schema.prisma';
 
-function buildInterpretInput(
-  schema: string,
-  context: ContractSourceContext,
-  filename = SOURCE_ID,
-): PslInterpretInput & {
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
-} {
+function buildInterpretInput(schema: string, filename = SOURCE_ID): PslInterpretInput {
   const { document, sources } = parse(schema, filename);
   const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const { parsedBlocks } = interpretExtensionBlocks(
-    symbolTable,
-    sources,
-    context.authoringContributions.pslBlockDescriptors,
-  );
-  return { documents: [document], sources, symbolTable, parsedBlocks };
+  return { documents: [document], sources, symbolTable };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -95,10 +75,7 @@ model User {
     if (loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(
-      buildInterpretInput(schema, context, schemaPath),
-      context,
-    );
+    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
 
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
@@ -137,10 +114,7 @@ model User {
     if (!loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(
-      buildInterpretInput(schema, context, schemaPath),
-      context,
-    );
+    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
 
     expect(interpretResult.ok).toBe(true);
     if (!interpretResult.ok) return;
@@ -164,7 +138,7 @@ model Other {
 `;
     const source = interpretCapableSource(SOURCE_ID);
     const context = createPostgresTestContext();
-    const input = buildInterpretInput(schema, context);
+    const input = buildInterpretInput(schema);
 
     let result: ReturnType<typeof source.interpret> | undefined;
     expect(() => {
@@ -188,7 +162,7 @@ model Other {
 `;
     const source = interpretCapableSource(SOURCE_ID);
     const context = createPostgresTestContext();
-    const input = buildInterpretInput(schema, context);
+    const input = buildInterpretInput(schema);
 
     let result: ReturnType<typeof source.interpret> | undefined;
     expect(() => {
@@ -206,7 +180,6 @@ model Other {
   id String @id @default(cuid(2))
 }
 `,
-      context,
       'memory-schema.prisma',
     );
     const model = input.symbolTable.topLevel.models['User'];
@@ -222,7 +195,6 @@ model Other {
       field,
       model,
       binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
-      parsedBlocks: input.parsedBlocks,
       symbolTable: input.symbolTable,
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
@@ -315,7 +287,7 @@ model Profile {
 
     for (const testCase of cases) {
       const result = source.interpret(
-        buildInterpretInput(testCase.schema, context, 'memory-schema.prisma'),
+        buildInterpretInput(testCase.schema, 'memory-schema.prisma'),
         context,
       );
 
@@ -367,10 +339,7 @@ model Other {
     if (loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(
-      buildInterpretInput(schema, context, schemaPath),
-      context,
-    );
+    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
 
@@ -452,7 +421,6 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
   };
   const input = buildInterpretInput(
     'enum Role { User }\nmodel User { id Int @id }',
-    customContext,
     'owned.prisma',
   );
   const entry = parse('', 'entry.prisma');

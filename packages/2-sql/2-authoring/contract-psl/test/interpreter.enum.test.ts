@@ -99,11 +99,9 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSqlContractInput>) {
   const contributions = overrides?.authoringContributions ?? authoringContributions;
-  const descriptors = contributions.pslBlockDescriptors;
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    ...(descriptors !== undefined ? { pslBlockDescriptors: descriptors } : {}),
   });
   return interpretPslDocumentToSqlContract({
     ...document,

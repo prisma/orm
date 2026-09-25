@@ -21,7 +21,6 @@ import {
   fixedBlock,
   identifier,
   int,
-  interpretExtensionBlocks,
   jsonValue,
   modelAttribute,
   oneOf,
@@ -266,11 +265,6 @@ function completeWithSource(input: {
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const { parsedBlocks } = interpretExtensionBlocks(
-    symbolTable,
-    sources,
-    input.pslBlockDescriptors,
-  );
   const context = classifyPslCompletionContext({
     document,
     sourceFile,
@@ -285,7 +279,6 @@ function completeWithSource(input: {
         scalarTypes,
         pslBlockDescriptors: input.pslBlockDescriptors,
         symbolTable,
-        parsedBlocks,
         ...(input.authoringContributions === undefined
           ? {}
           : { authoringContributions: input.authoringContributions }),
@@ -633,8 +626,6 @@ describe('providePslCompletionItems', () => {
         scalarTypes,
         pslBlockDescriptors,
         symbolTable: observedSymbolTable,
-        parsedBlocks: interpretExtensionBlocks(symbolTable, sources, pslBlockDescriptors)
-          .parsedBlocks,
         authoringContributions: observedAuthoringContributions,
         controlMutationDefaults,
       },
@@ -1179,9 +1170,9 @@ describe('providePslCompletionItems', () => {
 
     expect(items.map((item) => item.label)).toEqual(['shield']);
     expect(items[0]?.detail).toBe('The shield key.');
-    // Once by the symbol-table lifecycle interpreting the (empty, valid)
-    // block, once by key completion binding metadata.
-    expect(factoryContexts).toHaveLength(2);
+    // Collection interprets no blocks, so key completion binding metadata
+    // is the only factory run.
+    expect(factoryContexts).toHaveLength(1);
     for (const raw of factoryContexts) {
       const ctx = raw as { symbols: unknown; block: { name: string } };
       expect(ctx.block.name).toBe('Rule');
@@ -1232,12 +1223,12 @@ describe('providePslCompletionItems', () => {
         'enum Mood { Top }\nnamespace scoped { enum Mood { Scoped }\nmodel Post { mood scoped.Mood @default(|) } }',
       ),
     ).toEqual(['Scoped']);
-    // A field typed by an INVALID enum (duplicate member keys fail
-    // interpretation upstream) degrades to the generic scalar arms: no
-    // member arms are invented and nothing crashes.
+    // Member arms are syntax facts: a field typed by an enum whose VALUES
+    // are invalid (duplicate member keys fail interpretation) still offers
+    // the declared member names, first occurrence winning, and nothing
+    // crashes; no candidates beyond the declared names are invented.
     const degraded = names('enum Mood { Happy Happy }\nmodel Post { mood Mood @default(|) }');
-    expect(degraded).not.toContain('Happy');
-    expect(degraded).toEqual(['true', 'false']);
+    expect(degraded).toEqual(['Happy']);
   }, 5_000);
 
   it('uses actual adapter default-function signatures through the SQL factory', async () => {

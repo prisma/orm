@@ -2,15 +2,13 @@ import type {
   AuthoringContributions,
   AuthoringFieldNamespace,
   AuthoringModelAttributeDescriptor,
+  AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import { isAuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type {
-  ContributedPslDiagnosticCode,
-  ParsedPslExtensionBlock,
-} from '@internal/framework-components/psl-ast';
+import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
   ArgType,
   AttributeCtx,
@@ -19,7 +17,6 @@ import type {
   AttributeSpecNamespace,
   Binder,
   DescribeUnsupportedAttribute,
-  BlockSymbol,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -152,6 +149,7 @@ export function createSqlBinder(input: {
   readonly authoringContributions?: AuthoringContributions | undefined;
   readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
   readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
   readonly contributedModelAttributeSpecs?:
     | Readonly<Record<string, ModelAttributeSpecFactory>>
@@ -164,6 +162,9 @@ export function createSqlBinder(input: {
   return createBinder({
     sources: input.sources,
     symbolTable: input.symbolTable,
+    ...(input.pslBlockDescriptors === undefined
+      ? {}
+      : { pslBlockDescriptors: input.pslBlockDescriptors }),
     typeConstructors: {
       ...scalars,
       ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
@@ -348,9 +349,19 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  const envelope = ctx.parsedBlocks.get(block);
-  if (envelope === undefined) return undefined;
-  return Object.keys(envelope.values);
+  // Member names are syntax facts: the declared entry keys, first
+  // occurrence winning. The grammar needs no envelope — value failures
+  // surface once from block resolution, and lowering still gates on
+  // envelopes.
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of block.node.entries()) {
+    const key = entry.key()?.name();
+    if (key === undefined || seen.has(key)) continue;
+    seen.add(key);
+    names.push(key);
+  }
+  return names;
 }
 
 function enumDefaultArms(
@@ -761,13 +772,11 @@ export function modelSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }): AttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
     controlMutationDefaults: input.controlMutationDefaults,
-    parsedBlocks: input.parsedBlocks,
   };
 }
 
@@ -776,14 +785,12 @@ export function fieldSpecContext(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
-  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }): FieldAttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
     field: input.field,
     controlMutationDefaults: input.controlMutationDefaults,
-    parsedBlocks: input.parsedBlocks,
   };
 }
 

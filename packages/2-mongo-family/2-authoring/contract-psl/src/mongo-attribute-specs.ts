@@ -139,6 +139,7 @@ export function createMongoBinder(input: {
     typeConstructors: { ...scalars, ...(input.authoringContributions?.type ?? {}) },
     attributeSpecs: mongoAttributeSpecs,
     controlMutationDefaults: input.controlMutationDefaults,
+    pslBlockDescriptors: input.authoringContributions?.pslBlockDescriptors ?? {},
     describeUnsupportedAttribute: describeUnsupportedMongoAttribute(input.sources),
   });
 }

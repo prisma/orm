@@ -15,7 +15,7 @@
 
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -42,6 +42,20 @@ const assembled = assembleAuthoringContributions([
     },
   },
 ]);
+
+function blockResolutionBinder(
+  symbolTable: Parameters<typeof interpretExtensionBlocks>[0]['symbolTable'],
+  sources: Parameters<typeof interpretExtensionBlocks>[0]['sources'],
+) {
+  return createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  }).binder;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,11 +94,12 @@ namespace public {
   function buildInput() {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
     const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
-    const { parsedBlocks } = interpretExtensionBlocks(
+    const { parsedBlocks } = interpretExtensionBlocks({
       symbolTable,
       sources,
-      assembled.pslBlockDescriptors,
-    );
+      pslBlockDescriptors: assembled.pslBlockDescriptors,
+      binder: blockResolutionBinder(symbolTable, sources),
+    });
     return { document, sources, symbolTable, diagnostics, parsedBlocks };
   }
 

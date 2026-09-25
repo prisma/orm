@@ -8,7 +8,6 @@ import {
   fieldAttribute,
   funcCall,
   identifier,
-  interpretExtensionBlocks,
   list,
   oneOf,
   optional,
@@ -65,7 +64,6 @@ it.each([
       candidates: {
         symbolTable,
         pslBlockDescriptors: {},
-        parsedBlocks: interpretExtensionBlocks(symbolTable, sources, {}).parsedBlocks,
         controlMutationDefaults: assembleControlMutationDefaults([]),
         authoringContributions: assembleAuthoringContributions([
           {

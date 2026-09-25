@@ -9,11 +9,7 @@ import type {
   Param,
   ResolvedEntityReference,
 } from '@internal/psl-parser';
-import {
-  buildSymbolTable,
-  createPslDiagnosticCollector,
-  interpretExtensionBlocks,
-} from '@internal/psl-parser';
+import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
@@ -101,7 +97,6 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const modelContext: AttributeSpecContext = {
     symbols: symbolTable,
     model,
-    parsedBlocks: interpretExtensionBlocks(symbolTable, sources, {}).parsedBlocks,
     controlMutationDefaults: {
       dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),

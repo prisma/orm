@@ -1327,7 +1327,6 @@ namespace auth {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: rolePslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({

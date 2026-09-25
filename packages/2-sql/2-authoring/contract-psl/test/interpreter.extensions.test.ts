@@ -580,7 +580,6 @@ namespace public {
 }
 `,
       sourceId: 'schema.prisma',
-      pslBlockDescriptors,
     });
 
     const result = interpretPslDocumentToSqlContract({
@@ -649,7 +648,6 @@ model Foo {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: topThingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -697,7 +695,6 @@ namespace auth {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: topThingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -746,7 +743,6 @@ namespace auth {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: topThingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -805,7 +801,6 @@ namespace __unbound__ {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: thingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -848,7 +843,6 @@ namespace __unbound__ {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: thingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
