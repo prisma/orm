@@ -9,7 +9,7 @@ import type {
   ParsedPslExtensionBlock,
   PslExtensionBlock,
   PslExtensionBlockParsedAttribute,
-  PslExtensionBlockSourceEntry,
+  PslExtensionBlockPrintEntry,
   PslSpan,
 } from '../src/shared/psl-extension-block';
 
@@ -140,10 +140,10 @@ describe('block attributes', () => {
 describe('PslExtensionBlock source shape', () => {
   it('parameters carry print provenance only: optional expression text plus span', () => {
     expectTypeOf<PslExtensionBlock['parameters']>().toEqualTypeOf<
-      Record<string, PslExtensionBlockSourceEntry>
+      Record<string, PslExtensionBlockPrintEntry>
     >();
-    expectTypeOf<PslExtensionBlockSourceEntry['expression']>().toEqualTypeOf<string | undefined>();
-    expectTypeOf<PslExtensionBlockSourceEntry['span']>().toEqualTypeOf<PslSpan>();
+    expectTypeOf<PslExtensionBlockPrintEntry['expression']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<PslExtensionBlockPrintEntry['span']>().toEqualTypeOf<PslSpan>();
   });
 
   it('carries no interpreted attribute view; only printable blockAttributes remain', () => {

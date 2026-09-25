@@ -15,7 +15,7 @@ export type {
   PslExtensionBlockAttribute,
   PslExtensionBlockAttributeArg,
   PslExtensionBlockParsedAttribute,
-  PslExtensionBlockSourceEntry,
+  PslExtensionBlockPrintEntry,
   PslField,
   PslFieldAttribute,
   PslModel,
