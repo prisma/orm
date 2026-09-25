@@ -31,12 +31,14 @@ changes:
     summary: |
       `mongoTargetDescriptor.migrations.createRunner(family)` now reaches the database through the
       control adapter on the family's control stack. A family instance created from an empty
-      stack (`createMongoFamilyInstance({} as ...)`) fails with "Mongo family requires an adapter
-      descriptor in ControlStack" when the runner executes.
+      stack (`createMongoFamilyInstance({} as ...)`), or from a `createControlStack(...)` with no
+      `adapter`, fails with "Mongo family requires an adapter descriptor in ControlStack" when the
+      runner executes.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - 'createMongoFamilyInstance\(\s*\{\s*\}'
+        - 'createControlStack\(\s*\{(?:(?!adapter)[^}])*mongoTargetDescriptor(?:(?!adapter)[^}])*\}\s*\)'
   - id: mongo-psl-scalar-names
     summary: |
       Four Mongo PSL scalar types are renamed after the BSON type they store: `Int` → `Int32`,
