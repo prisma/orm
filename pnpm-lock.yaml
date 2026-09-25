@@ -27,6 +27,9 @@ catalogs:
     mongodb:
       specifier: ^7.4.0
       version: 7.5.0
+    mongodb-connection-string-url:
+      specifier: ^7.0.1
+      version: 7.0.1
     mongodb-memory-server:
       specifier: 11.2.0
       version: 11.2.0
@@ -3083,6 +3086,9 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/0-foundation/utils
+      mongodb-connection-string-url:
+        specifier: 'catalog:'
+        version: 7.0.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -4977,6 +4983,9 @@ importers:
       mongodb:
         specifier: ^7.0.0
         version: 7.5.0(socks@2.8.9)
+      mongodb-connection-string-url:
+        specifier: 'catalog:'
+        version: 7.0.1
       pathe:
         specifier: ^2.0.3
         version: 2.0.3

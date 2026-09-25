@@ -644,3 +644,37 @@ Per-repo stop conditions beyond the canonical ones:
 - An implementer's claim "predates this dispatch" about a journey is verified by the reviewer with `git log -1 origin/main -- <file>` and by asking whether `dist` was rebuilt after the last source change.
 
 **Reference incident.** remove-dbgenerated slice C dispatch 1 (2026-09-22): `infer-roundtrip-fidelity.prisma7-defaults` failed on a stale `family-sql` dist; the reviewer accepted the "red on main" claim in round 1 and corrected it in dispatch 3 after the implementer rebuilt the package.
+
+### F32. A brief restates an operator ruling in its own words, and the restatement is stricter than the ruling
+
+**Symptom.** An implementer builds work, or asks the operator a round of questions, on a premise the operator never held. The operator's answer to the first question is "this is wrong", and every question built on the premise has to be asked again.
+
+**Detection signal.**
+
+- The brief or design notes state a ruling as a rule ("init must be target-agnostic") without the operator's words, date, or context.
+- Several open questions in the brief depend on that one rule.
+- The rule forbids something the codebase already does in many places, and the brief treats those places as debt to remove.
+
+**Mitigation.**
+
+- Record a ruling as a quote, with speaker and date, and write the interpretation separately under it.
+- In the first question round, restate the interpretation in one sentence and ask the operator to confirm it before asking any question that depends on it.
+
+**Reference incident.** orm-init-prisma7-detection (2026-09-23): the ruling "Our init command cannot be target specific" was recorded as "init must be target-agnostic". The brief planned to stop choosing the target from the Prisma 7 schema's provider and asked whether to remove 17 existing target branches. Will's intent was narrower: init must not be coupled to one database, and choosing among known targets is fine.
+
+### F33. A test double returns what the real dependency never returns, so the test covers a path production cannot reach
+
+**Symptom.** A test passes, and the behaviour it names never happens for a user. The fake that drives the test answers with a value or outcome the real implementation cannot produce.
+
+**Detection signal.**
+
+- A fake implements an interface whose real implementation lives in another package (for example `PromptSurface` from `@prisma/cli-engine`).
+- The fake's return values were chosen for the test's convenience, not read from the real implementation.
+- A reviewer asks "can the real surface return this?" and nobody has checked.
+
+**Mitigation.**
+
+- When writing a fake for another package's surface, read the real implementation and make the fake return and throw exactly what it does. When the behaviour depends on the real surface's outcomes, drive it through that package's own test harness (for the CLI engine, `createTestCli` with scripted `answers`).
+- The reviewer checks each fake's possible outcomes against the real implementation, not only the code under test.
+
+**Reference incident.** prisma/orm#30291 (2026-09-24): a scripted prompt returned `false` from `consent`, and a test showed that a declined consent printed the command to remove packages init had installed. The engine's `consent` with a token never returns `false`: it returns `true` or throws `CLI.CONSENT_REQUIRED`, a token mismatch, or `CLI.PROMPT_CANCELLED`. Real users never saw the command. An independent review found it; the fix attached the command to whatever error follows the install.

@@ -22,9 +22,10 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { resolvePolymorphismInfo, resolvePrimaryKeyColumn } from './collection-contract';
+import { resolvePolymorphismInfo, resolvePrimaryKeyColumns } from './collection-contract';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
+import { buildPrimaryKeyJoinOn } from './query-plan-source';
 import { storageTableForContract, tableSourceForContract } from './storage-resolution';
 import { combineWhereExprs } from './where-utils';
 
@@ -232,21 +233,19 @@ function buildCountMutationWhere(
     return combineWhereExprs(filters);
   }
 
-  const pkColumn = resolvePrimaryKeyColumn(contract, namespaceId, tableName);
+  const pkColumns = resolvePrimaryKeyColumns(contract, namespaceId, tableName);
   const baseTableRef = `${tableName}__write_filter`;
   const remapper = createTableRefRemapper(tableName, baseTableRef);
   const innerFilters = filters.map((filter) => filter.rewrite(remapper));
-  const correlation = BinaryExpr.eq(
-    ColumnRef.of(baseTableRef, pkColumn),
-    ColumnRef.of(tableName, pkColumn),
+  const correlation = pkColumns.map((column) =>
+    BinaryExpr.eq(ColumnRef.of(baseTableRef, column), ColumnRef.of(tableName, column)),
   );
-  const where = combineWhereExprs([correlation, ...innerFilters]);
-  const joinOn = EqColJoinOn.of(
-    ColumnRef.of(baseTableRef, pkColumn),
-    ColumnRef.of(variant.table, pkColumn),
-  );
+  const where = combineWhereExprs([...correlation, ...innerFilters]);
+  const joinOn = buildPrimaryKeyJoinOn(baseTableRef, variant.table, pkColumns);
   let subquery = SelectAst.from(TableSource.named(tableName, baseTableRef, namespaceId))
-    .withProjection([ProjectionItem.of('_write_filter', ColumnRef.of(baseTableRef, pkColumn))])
+    .withProjection(
+      pkColumns.map((column) => ProjectionItem.of(column, ColumnRef.of(baseTableRef, column))),
+    )
     .withJoins([
       JoinAst.inner(tableSourceForContract(contract, namespaceId, variant.table), joinOn),
     ]);

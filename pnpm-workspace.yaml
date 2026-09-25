@@ -22,6 +22,7 @@ catalog:
   arktype: ^2.2.2
   gray-matter: ^4.0.3
   mongodb: ^7.4.0
+  mongodb-connection-string-url: ^7.0.1
   mongodb-memory-server: 11.2.0
   pg: 8.22.0
   tinyglobby: ^0.2.17

@@ -505,7 +505,7 @@ namespace scoped {
     });
   });
 
-  describe('FL-09: variant collection suppression', () => {
+  describe('variant collection suppression', () => {
     it('does not create separate storage collection entries for variant models', () => {
       const ir = interpretOk(`
         model Task {
@@ -619,7 +619,7 @@ namespace scoped {
     });
   });
 
-  describe('FL-09: polymorphic index scoping', () => {
+  describe('polymorphic index scoping', () => {
     it('AND-merges a user-supplied filter on other keys with the discriminator scope', () => {
       const ir = interpretOk(`
         model Task {
@@ -750,7 +750,7 @@ namespace scoped {
     });
   });
 
-  describe('FL-10: polymorphic validators', () => {
+  describe('polymorphic validators', () => {
     it('generates validator with oneOf for variant-specific fields', () => {
       const ir = interpretOk(`
         model Task {

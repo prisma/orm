@@ -262,7 +262,26 @@ interface IncludeParentSource {
 }
 
 function localColumnsForRowInclude(include: IncludeExpr): readonly string[] {
-  return include.through?.parentLocalColumns ?? [include.localColumn];
+  return include.through?.parentLocalColumns ?? include.localColumns;
+}
+
+function buildIncludeJoinExpr(
+  include: IncludeExpr,
+  childTableRef: string,
+  parentLocalRefs: readonly ColumnRef[],
+): AnyExpression {
+  invariant(
+    parentLocalRefs.length === include.targetColumns.length,
+    `Include '${include.relationName}' has mismatched join column counts: ${parentLocalRefs.length} local, ${include.targetColumns.length} target`,
+  );
+  const joinExprs = include.targetColumns.map((targetColumn, i) => {
+    const parentLocalRef = parentLocalRefs[i];
+    assertDefined(parentLocalRef, `Include '${include.relationName}': no local column at ${i}`);
+    return BinaryExpr.eq(ColumnRef.of(childTableRef, targetColumn), parentLocalRef);
+  });
+  const [firstExpr] = joinExprs;
+  assertDefined(firstExpr, `Include '${include.relationName}' has no join columns`);
+  return joinExprs.length === 1 ? firstExpr : AndExpr.of(joinExprs);
 }
 
 function resolveParentLocalRefs(
@@ -580,15 +599,7 @@ function buildIncludeChildRowsSelect(
     whereExpr = childWhere ? AndExpr.of([artifacts.whereExpr, childWhere]) : artifacts.whereExpr;
     junctionJoins = [artifacts.junctionJoin];
   } else {
-    const parentLocalRef = parentLocalRefs[0];
-    assertDefined(
-      parentLocalRef,
-      `Include '${include.relationName}' has no parent-local column ref`,
-    );
-    const joinExpr = BinaryExpr.eq(
-      ColumnRef.of(childTableRef, include.targetColumn),
-      parentLocalRef,
-    );
+    const joinExpr = buildIncludeJoinExpr(include, childTableRef, parentLocalRefs);
     whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
   }
 
@@ -1014,15 +1025,7 @@ function buildIncludeChildScalarSelect(
     whereExpr = childWhere ? AndExpr.of([artifacts.whereExpr, childWhere]) : artifacts.whereExpr;
     junctionJoins = [artifacts.junctionJoin];
   } else {
-    const parentLocalRef = parentLocalRefs[0];
-    assertDefined(
-      parentLocalRef,
-      `Include '${include.relationName}' has no parent-local column ref`,
-    );
-    const joinExpr = BinaryExpr.eq(
-      ColumnRef.of(childTableRef, include.targetColumn),
-      parentLocalRef,
-    );
+    const joinExpr = buildIncludeJoinExpr(include, childTableRef, parentLocalRefs);
     whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
   }
 
