@@ -70,7 +70,6 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 
 ## Open items
 
-- ADR 198 describes a `MongoCommandExecutor` DDL visitor and a `MarkerOperations` without a `space` parameter; neither matches the code, and the drift predates this project. Slice 1 corrected only the composition-site example. Rewriting the DDL dispatch text is its own change; do it at close-out or as a separate direct change.
 - `architecture.config.json` maps the Postgres, SQLite, and Mongo target packages to the `extensions` domain, which may import from `targets` (the adapters). So `lint:deps` accepts a target importing its adapter, the direction ADR 198 forbids. Correcting the domain mapping touches all three targets and is its own change.
 - `mongo/binary@1` round-trips every BSON Binary subtype as subtype 0. Slice 4 must decide how Prisma 6 `Bytes` (subtype 0) and any other subtype found in existing collections are handled.
 - A field whose codec id the lookup does not know is left out of the closed `$jsonSchema` validator, so every write carrying that field is rejected. Pre-existing; decide whether unknown ids should be an authoring error instead.
@@ -91,3 +90,4 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 ## Amendment to slice 1 (PR #30396)
 
 The Mongo PSL renames `Int`→`Int32`, `Float`→`Double`, `Boolean`→`Bool`, `DateTime`→`Date` and their diagnostic and `app` fragment (`design/scalar-naming.md` § 3), plus the two other review findings (ADR 198 made self-consistent; codec errors carry collection and field), land in #30396 before merge.
+- From the local review of #30396 (architect pass), left for later: a dependency-cruiser rule for target → adapter to replace `packages/3-mongo-target/1-mongo-target/test/layering.test.ts` (needs the target packages moved out of the `extensions` domain); moving the Mongo runner to the Postgres shape so `MongoRunnerDependencies` and `createRunnerDependencies` retire; deriving `CodecTypes` from the codecs and moving the Mongo TS field helpers into the target; trimming `extractDb`, `mongoStandardCodecs`, and `mongoDescriptorById` from the published exports; renaming `test/integration/test/mongo/target-runner/`.
