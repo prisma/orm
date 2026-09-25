@@ -691,7 +691,7 @@ describe('interpret slot', () => {
 
   it('filters semantic findings from sibling files before mapping their local spans', async () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
-    const { interpretation } = interpretationDouble(() =>
+    const { interpretation, spy } = interpretationDouble(() =>
       notOk({
         summary: 'Two source errors',
         diagnostics: [
@@ -717,6 +717,10 @@ describe('interpret slot', () => {
       onInterpretationError: vi.fn(),
       interpretation,
     });
+    // Matches how server.ts's combinedDiagnostics actually calls this:
+    // symbolDiagnostics() (reading every member into the registry) runs
+    // before any file's interpretDiagnostics() is pulled.
+    store.symbolDiagnostics();
     expect(
       store
         .document(schemaUri)
@@ -729,6 +733,10 @@ describe('interpret slot', () => {
         ?.interpretDiagnostics()
         .map(({ code }) => code),
     ).toEqual(['SIBLING_ERROR']);
+    // One project-wide interpret call serves both files' distributed
+    // diagnostics — not one call per open document.
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]?.[0].documents).toHaveLength(2);
   });
 
   it('returns no diagnostics for a successful interpretation', () => {

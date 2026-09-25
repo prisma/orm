@@ -67,6 +67,12 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
   const documents = new Map<string, DocumentArtifacts>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
+  let interpretMemo:
+    | {
+        readonly sources: PslSources;
+        readonly bySourceId: ReadonlyMap<string, readonly LspDiagnostic[]>;
+      }
+    | undefined;
 
   function refreshSources(): void {
     sources = new PslSources(
@@ -76,46 +82,74 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       ),
     );
     symbolTableResult = undefined;
+    interpretMemo = undefined;
+  }
+
+  /**
+   * One interpret call over every member currently read into this project,
+   * distributed by `sourceId` — replacing a once-per-open-document loop that
+   * called `interpret` once per file with a `documents` array of just that
+   * file. Memoized on `sources` identity, the same invalidation signal the
+   * symbol table uses.
+   */
+  function projectInterpretDiagnostics(): ReadonlyMap<string, readonly LspDiagnostic[]> {
+    if (interpretation === undefined) {
+      return new Map();
+    }
+    if (interpretMemo === undefined || interpretMemo.sources !== sources) {
+      interpretMemo = { sources, bySourceId: computeInterpretDistribution(interpretation) };
+    }
+    return interpretMemo.bySourceId;
+  }
+
+  function computeInterpretDistribution(
+    activeInterpretation: ProjectInterpretation,
+  ): ReadonlyMap<string, readonly LspDiagnostic[]> {
+    const currentSymbolTable = readSymbolTable();
+    const allDocuments = Array.from(documents.values(), ({ document }) => document);
+    const warnings: ContractSourceDiagnostic[] = [];
+    const result = activeInterpretation.source.interpret(
+      { documents: allDocuments, sources, symbolTable: currentSymbolTable },
+      {
+        ...activeInterpretation.context,
+        reportWarning: (diagnostic) => {
+          warnings.push({ ...diagnostic, severity: 'warning' });
+        },
+      },
+    );
+    const sourceFileByFilename = new Map<string, SourceFile>();
+    for (const artifacts of documents.values()) {
+      sourceFileByFilename.set(artifacts.sourceFile.filename, artifacts.sourceFile);
+    }
+    const grouped = new Map<string, ContractSourceDiagnostic[]>();
+    for (const diagnostic of [...warnings, ...(result.ok ? [] : result.failure.diagnostics)]) {
+      const group = grouped.get(diagnostic.sourceId);
+      if (group === undefined) {
+        grouped.set(diagnostic.sourceId, [diagnostic]);
+      } else {
+        group.push(diagnostic);
+      }
+    }
+    const bySourceId = new Map<string, readonly LspDiagnostic[]>();
+    for (const [sourceId, diagnostics] of grouped) {
+      const sourceFile = sourceFileByFilename.get(sourceId);
+      if (sourceFile !== undefined) {
+        bySourceId.set(sourceId, mapInterpreterDiagnostics(diagnostics, sourceFile));
+      }
+    }
+    return bySourceId;
   }
 
   function createInterpretSlot(
     uri: string,
-    document: DocumentAst,
     sourceFile: SourceFile,
   ): () => readonly LspDiagnostic[] {
     if (interpretation === undefined) {
       return () => [];
     }
-    let memo: readonly LspDiagnostic[] | undefined;
-    let memoSources: PslSources | undefined;
-    const interpretDiagnostics = (): readonly LspDiagnostic[] => {
-      const currentSymbolTable = readSymbolTable();
-      if (memo === undefined || memoSources !== sources) {
-        const warnings: ContractSourceDiagnostic[] = [];
-        const result = interpretation.source.interpret(
-          {
-            documents: [document],
-            sources,
-            symbolTable: currentSymbolTable,
-          },
-          {
-            ...interpretation.context,
-            reportWarning: (diagnostic) => {
-              warnings.push({ ...diagnostic, severity: 'warning' });
-            },
-          },
-        );
-        const diagnostics = [...warnings, ...(result.ok ? [] : result.failure.diagnostics)].filter(
-          (diagnostic) => diagnostic.sourceId === sourceFile.filename,
-        );
-        memo = mapInterpreterDiagnostics(diagnostics, sourceFile);
-        memoSources = sources;
-      }
-      return memo;
-    };
     return () => {
       try {
-        return interpretDiagnostics();
+        return projectInterpretDiagnostics().get(sourceFile.filename) ?? [];
       } catch (error) {
         if (
           error instanceof ResponseError &&
@@ -168,11 +202,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       document: computed.document,
       sourceFile: computed.sourceFile,
       diagnostics: computed.parseDiagnostics,
-      interpretDiagnostics: createInterpretSlot(
-        resolvedUri,
-        computed.document,
-        computed.sourceFile,
-      ),
+      interpretDiagnostics: createInterpretSlot(resolvedUri, computed.sourceFile),
     };
     documents.set(identity, artifacts);
     refreshSources();
@@ -185,7 +215,10 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       const artifacts = readDocument(uri);
       if (artifacts !== undefined) currentDocuments.push(artifacts.document);
     }
-    symbolTableResult ??= buildSymbolTable({ documents: currentDocuments, sources });
+    symbolTableResult ??= buildSymbolTable({
+      documents: currentDocuments,
+      sources,
+    });
     return symbolTableResult;
   }
 

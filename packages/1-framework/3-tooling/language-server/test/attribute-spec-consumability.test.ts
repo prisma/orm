@@ -4,15 +4,42 @@ import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
-import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl-parser';
-import { assembleAttributeSpecs, fieldAttribute, modelAttribute } from '@internal/psl-parser';
+import type {
+  AttributeSpecContext,
+  AttributeSpecNamespace,
+  SymbolTable,
+} from '@internal/psl-parser';
+import {
+  assembleAttributeSpecs,
+  buildSymbolTable,
+  fieldAttribute,
+  modelAttribute,
+} from '@internal/psl-parser';
 import { ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
-import { runPipeline } from '../src/pipeline';
+import { type PipelineResult, runPipeline } from '../src/pipeline';
 import { providePslSignatureHelp } from '../src/signature-help';
 
 vi.mock('@internal/config-loader', { spy: true });
+
+/**
+ * `runPipeline` is parse-only (the symbol table is a project-wide concern
+ * built once over every member); these attribute-spec-consumption tests
+ * still want a symbol table for a single document, so they build one
+ * directly, the way `ProjectArtifacts` builds its project-wide one.
+ */
+function pipelineWithSymbolTable(
+  filename: string,
+  text: string,
+): PipelineResult & { readonly symbolTable: SymbolTable } {
+  const pipeline = runPipeline(filename, text);
+  const { symbolTable } = buildSymbolTable({
+    documents: [pipeline.document],
+    sources: pipeline.sources,
+  });
+  return { ...pipeline, symbolTable };
+}
 
 const rlsSpec = modelAttribute('rls', {
   documentation: 'Enables row-level security on the model.',
@@ -89,7 +116,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     ]);
     const controlMutationDefaults = assembleControlMutationDefaults([]);
     const source = 'model Variant {\n @@base(Missing, "v")\n}\nmodel Base { id Int }';
-    const pipeline = runPipeline('schema.prisma', source);
+    const pipeline = pipelineWithSymbolTable('schema.prisma', source);
     const model = pipeline.symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
     const spec = assembleAttributeSpecs(authoringContributions).model['base']?.({
@@ -110,7 +137,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
         { key: 'value', type: { kind: 'str' } },
       ],
     });
-    expect(pipeline.diagnostics).toEqual([]);
+    expect(pipeline.parseDiagnostics).toEqual([]);
     const signature = providePslSignatureHelp({
       document: pipeline.document,
       sourceFile: pipeline.sourceFile,
@@ -171,7 +198,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline(
+    const pipeline = pipelineWithSymbolTable(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
     );
@@ -209,7 +236,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline(
+    const pipeline = pipelineWithSymbolTable(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
     );
