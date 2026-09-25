@@ -1,14 +1,11 @@
+import type { Resolution } from './binder';
 import type {
   BlockSymbol,
   CompositeTypeSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   NamespaceSymbol,
-  SymbolTable,
-  TopLevelScope,
 } from './symbol-table';
-import { NamespaceDeclarationAst } from './syntax/ast/declarations';
-import type { ExpressionAst } from './syntax/ast/expressions';
 
 export type EntitySelector =
   | { readonly kind: 'model' }
@@ -28,62 +25,54 @@ export interface ResolvedEntityReference<D extends EntityDeclaration = EntityDec
   readonly namespace: NamespaceSymbol | undefined;
 }
 
-const references = new WeakMap<
-  TopLevelScope | NamespaceSymbol,
-  WeakMap<EntityDeclaration, ResolvedEntityReference>
->();
+const references = new WeakMap<EntityDeclaration, ResolvedEntityReference>();
 
-export function resolveEntityReference(
-  expression: ExpressionAst,
-  name: string,
-  symbols: SymbolTable,
-): ResolvedEntityReference | undefined {
-  const namespaceName = expression.syntax
-    .findAncestor(NamespaceDeclarationAst.cast)
-    ?.name()
-    ?.name();
-  const namespace =
-    namespaceName === undefined ? undefined : ownValue(symbols.topLevel.namespaces, namespaceName);
-  if (namespace !== undefined) {
-    const declaration = declarationIn(namespace, name);
-    if (declaration !== undefined) return referenceFor(namespace, declaration, namespace);
+export function entityReference(resolution: Resolution): ResolvedEntityReference | undefined {
+  switch (resolution.kind) {
+    case 'model':
+    case 'compositeType':
+    case 'namedType':
+    case 'block':
+      return interned(resolution.symbol, resolution.namespace);
+    default:
+      return undefined;
   }
-  const declaration = declarationIn(symbols.topLevel, name);
-  return declaration === undefined
-    ? undefined
-    : referenceFor(symbols.topLevel, declaration, undefined);
 }
 
-function ownValue<T>(values: Readonly<Record<string, T>>, name: string): T | undefined {
-  return Object.hasOwn(values, name) ? values[name] : undefined;
-}
-
-function declarationIn(
-  scope: TopLevelScope | NamespaceSymbol,
-  name: string,
-): EntityDeclaration | undefined {
-  return (
-    ownValue(scope.models, name) ??
-    ownValue(scope.compositeTypes, name) ??
-    ownValue(scope.blocks, name) ??
-    ('namedTypes' in scope ? ownValue(scope.namedTypes, name) : undefined)
-  );
-}
-
-function referenceFor(
-  scope: TopLevelScope | NamespaceSymbol,
+function interned(
   declaration: EntityDeclaration,
   namespace: NamespaceSymbol | undefined,
 ): ResolvedEntityReference {
-  let byDeclaration = references.get(scope);
-  if (byDeclaration === undefined) {
-    byDeclaration = new WeakMap();
-    references.set(scope, byDeclaration);
-  }
-  let reference = byDeclaration.get(declaration);
-  if (reference === undefined) {
-    reference = { declaration, namespace };
-    byDeclaration.set(declaration, reference);
-  }
+  const existing = references.get(declaration);
+  if (existing !== undefined) return existing;
+  const reference: ResolvedEntityReference = { declaration, namespace };
+  references.set(declaration, reference);
   return reference;
+}
+
+export function matchesSelector<S extends EntitySelector>(
+  reference: ResolvedEntityReference,
+  expected: S,
+): reference is ResolvedEntityReference<DeclarationFor<S>> {
+  const declaration = reference.declaration;
+  if (declaration.kind !== expected.kind) return false;
+  return (
+    expected.kind !== 'block' ||
+    (declaration.kind === 'block' && declaration.keyword === expected.keyword)
+  );
+}
+
+export function describeResolution(resolution: Resolution): string {
+  switch (resolution.kind) {
+    case 'block':
+      return resolution.symbol.keyword;
+    case 'contributedType':
+      return 'scalar type';
+    case 'crossSpace':
+      return 'cross-space reference';
+    case 'unresolved':
+      return 'unresolved name';
+    default:
+      return resolution.kind;
+  }
 }

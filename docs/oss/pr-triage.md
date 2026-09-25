@@ -1,10 +1,16 @@
 # Triaging external contributor PRs
 
-This page is the criteria a maintainer — or an agent working for one — applies to an unsolicited pull request from outside the maintainer team. It covers the decision, not the mechanics of reviewing code: once a PR passes triage it goes into ordinary review.
+This page is the criteria a maintainer — or an agent working for one — applies to an unsolicited pull request from [outside the maintainer team](#who-counts-as-external). It covers the decision, not the mechanics of reviewing code: once a PR passes triage it goes into ordinary review.
 
 The companion runnable form is the [`triage-contributor-pr` skill](../../skills-contrib/triage-contributor-pr/SKILL.md), which turns these criteria into an ordered checklist with the commands to answer each one. The criteria live here; the skill executes them. Change the criteria here and the skill follows.
 
 Two facts shape everything below. First, **our CI does not run on a fork PR until a maintainer approves it**, so the first decision is always a safety decision, and it is ours to make before we know whether the change is any good. Second, **a contributor cannot see our roadmap the way we can**. Direction-fit is our job to judge and our job to explain, quickly, before they spend another week on it.
+
+## Who counts as external
+
+A PR is external when its author does not hold `admin` or `write` permission on `prisma/orm`. Most external PRs come from forks, but not all of them: former staff keep branches they pushed while they had write access, so their PRs come from the repository itself and still need triage.
+
+An agent account that belongs to a team member is team, whatever its own permission and whether or not it works from a fork. Its profile bio usually says so (for example "Belongs to @<maintainer>"), but the account's owner writes the bio, so it is a lead, not evidence. Treat the account as external until a maintainer confirms it belongs to a team member who holds `admin` or `write`.
 
 ## Step 0 — Is it safe to run CI?
 
@@ -70,12 +76,12 @@ A change that adds a new option, method, or behaviour is a feature even when the
 
 These are objective. Check them early, because they can be fixed by the contributor while direction is being decided, and none of them require you to have read the code.
 
-- **DCO sign-off on every commit.** Each commit needs a `Signed-off-by:` trailer matching its author. See [`CONTRIBUTING.md`](../../CONTRIBUTING.md#developer-certificate-of-origin-dco). Merge commits created by GitHub's web UI are the common false positive — check what the DCO app reports rather than reading trailers yourself.
-- **CLA signed.** The CLA assistant bot posts its status as a PR comment. It is separate from the DCO and both apply.
+- **DCO sign-off on every commit.** Each commit needs a `Signed-off-by:` trailer matching its author. See [`CONTRIBUTING.md`](../../CONTRIBUTING.md#developer-certificate-of-origin-dco). The [DCO app](https://github.com/apps/dco) checks this on every PR and reports a required check named `DCO`. It is an app rather than a workflow, so it runs on a fork PR before anyone approves CI. It skips merge commits, so a merge commit made in GitHub's web UI does not fail it.
+- **No CLA.** This repository uses the DCO instead of a Contributor License Agreement ([governance](./governance.md#contributor-provenance)). A CLA-assistant comment on an older `v7` PR is left over from the `prisma/prisma` repository and does not apply.
 - **CI green.** On a fork PR this is unanswerable until step 0 has been decided and the run approved, so do not record "CI failing" for a PR that has never been allowed to run. Distinguish *failing* from *not yet run*.
 - **Conventional commit title**, one logical change, tests updated in the same PR.
 
-Note that CodeRabbit does not review PRs whose base is not the default branch. On a `v7` or `7.9.x` PR its "success" status means it skipped, not that it approved. Those PRs arrive with no automated review at all and need proportionally more human attention.
+CodeRabbit reviews PRs based on `main` and `v7`, but not `7.9.x`. On a `7.9.x` PR it posts a "Review skipped" comment, and its "success" status means it skipped, not that it approved. Those PRs arrive with no automated review at all and need proportionally more human attention.
 
 ## Step 5 — Direction fit
 
@@ -102,7 +108,7 @@ Once the wait is genuinely theirs, roughly a week without a response or a fix is
 
 ## Whose comments count
 
-Check a commenter's repository permission before treating their feedback as a maintainer decision. `admin` and `write` are the maintainer team; `read` is a member of the public whose comments carry no more authority than any other bystander's.
+Check a commenter's repository permission before treating their feedback as a maintainer decision. `admin` and `write` are the maintainer team; `read` is a member of the public whose comments carry no more authority than any other bystander's. The exception is a team member's agent account (see [Who counts as external](#who-counts-as-external)).
 
 This matters more than it sounds. Contributors reasonably assume that a confident review comment on their PR speaks for the project, and they change their implementation in response. We have already seen a comment assert a "maintainer decision" that had never been taken — from someone who did hold write access — and a contributor rewrite their change on the strength of it. Permission is therefore necessary but not sufficient: the claim has to be true as well. So:
 
@@ -118,7 +124,7 @@ Every triaged PR ends in exactly one of:
 | --- | --- |
 | **Report** | Malicious or suspected malicious. Do not comment on the PR; follow [`SECURITY.md`](../../SECURITY.md). |
 | **Close** | Out of scope for the line, contradicts a recorded decision, or a direction question rather than a change. Always with a reason and a next step. |
-| **Blocked on contributor** | Wants DCO, CLA, a rebase, a fix for failing CI, or an answer. Say precisely what, in one comment. |
+| **Blocked on contributor** | Wants DCO sign-off, a rebase, a fix for failing CI, or an answer. Say precisely what, in one comment. |
 | **Blocked on us** | Wants a direction call, a maintainer review, or CI approval. Name who decides. |
 | **Approve CI and review** | Safe to run, in scope, worth a maintainer's reading time. |
 | **Merge candidate** | Reviewed, verified, green, and directionally fine. |

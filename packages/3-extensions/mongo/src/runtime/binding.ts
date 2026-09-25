@@ -1,5 +1,6 @@
 import { InternalError } from '@internal/utils/internal-error';
 import type { MongoClient as MongoDriverClient } from 'mongodb';
+import { ConnectionString } from 'mongodb-connection-string-url';
 import { mongoError } from './mongo-errors';
 
 export type MongoBinding =
@@ -48,35 +49,43 @@ type MongoBindingFields = {
   readonly mongoClient?: MongoDriverClient;
 };
 
-function validateMongoUrl(url: string): URL {
+const URL_SCHEME_PATTERN = /^([a-z][a-z\d+.-]*):\/\//i;
+const MONGO_SCHEMES = new Set(['mongodb', 'mongodb+srv']);
+
+function validateMongoUrl(url: string): ConnectionString {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
     throw mongoError('RUNTIME.BINDING_INVALID', 'Mongo URL must be a non-empty string');
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(trimmed);
-  } catch {
+  const scheme = URL_SCHEME_PATTERN.exec(trimmed)?.[1];
+  if (scheme === undefined) {
     throw mongoError('RUNTIME.BINDING_INVALID', 'Mongo URL must be a valid URL');
   }
-
-  if (parsed.protocol !== 'mongodb:' && parsed.protocol !== 'mongodb+srv:') {
+  if (!MONGO_SCHEMES.has(scheme)) {
     throw mongoError('RUNTIME.BINDING_INVALID', 'Mongo URL must use mongodb:// or mongodb+srv://');
   }
 
-  return parsed;
+  try {
+    return new ConnectionString(trimmed);
+  } catch {
+    throw mongoError('RUNTIME.BINDING_INVALID', 'Mongo URL must be a valid URL');
+  }
 }
 
-function extractDbNameFromUrl(parsed: URL): string | undefined {
-  // pathname is "/dbname" or "" — strip the leading slash. Anything past
-  // a second slash is invalid for our purposes (auth-source style paths).
-  const path = parsed.pathname.startsWith('/') ? parsed.pathname.slice(1) : parsed.pathname;
-  if (path.length === 0) {
+function extractDbNameFromUrl(parsed: ConnectionString): string | undefined {
+  // pathname is "/dbname" or "/". Anything past a second slash is invalid
+  // for our purposes (auth-source style paths).
+  const [encodedDbName = ''] = parsed.pathname.slice(1).split('/');
+  if (encodedDbName.length === 0) {
     return undefined;
   }
-  const slash = path.indexOf('/');
-  return slash === -1 ? path : path.slice(0, slash);
+  // The driver decodes the path too; the control plane uses the name it produces.
+  try {
+    return decodeURIComponent(encodedDbName);
+  } catch {
+    throw mongoError('RUNTIME.BINDING_INVALID', 'Mongo URL must be a valid URL');
+  }
 }
 
 export function resolveMongoBinding(options: MongoBindingInput): MongoBinding {

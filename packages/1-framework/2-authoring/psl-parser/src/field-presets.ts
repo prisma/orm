@@ -5,7 +5,7 @@ import {
 } from '@internal/framework-components/authoring';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { mapPslHelperArgs } from './authoring-arguments';
-import type { DiagnosticSource, PslDiagnosticCollector } from './diagnostic';
+import type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from './diagnostic';
 import type { ResolvedTypeConstructorCall } from './resolve';
 
 /**
@@ -13,6 +13,20 @@ import type { ResolvedTypeConstructorCall } from './resolve';
  *
  * The `data` payload carries the missing namespace so machine consumers (agents, IDE extensions, CLI auto-fix) don't have to parse the prose.
  */
+export function uncomposedNamespaceDiagnostic(input: {
+  readonly subjectLabel: string;
+  readonly namespace: string;
+  readonly source: DiagnosticSource;
+  readonly span: PslSpan;
+}): PslDiagnostic {
+  return {
+    code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+    message: `${input.subjectLabel} uses unrecognized namespace "${input.namespace}". Add extension pack "${input.namespace}" to extensions in prisma.config.ts.`,
+    ...input.source.at(input.span),
+    data: { namespace: input.namespace, suggestedPack: input.namespace },
+  };
+}
+
 export function reportUncomposedNamespace(input: {
   readonly subjectLabel: string;
   readonly namespace: string;
@@ -20,12 +34,14 @@ export function reportUncomposedNamespace(input: {
   readonly span: PslSpan;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
-  input.diagnostics.push({
-    code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-    message: `${input.subjectLabel} uses unrecognized namespace "${input.namespace}". Add extension pack "${input.namespace}" to extensions in prisma.config.ts.`,
-    ...input.source.at(input.span),
-    data: { namespace: input.namespace, suggestedPack: input.namespace },
-  });
+  input.diagnostics.push(
+    uncomposedNamespaceDiagnostic({
+      subjectLabel: input.subjectLabel,
+      namespace: input.namespace,
+      source: input.source,
+      span: input.span,
+    }),
+  );
 }
 
 /**
