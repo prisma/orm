@@ -227,7 +227,7 @@ describe('ORM ergonomics integration (FL-04, FL-06, FL-08)', {
     });
   });
 
-  describe('FL-08: reference relation include', () => {
+  describe('FL-08: 1:N reference relation include', () => {
     it('include() on 1:N relation returns array of related documents', async () => {
       const orm = mongoOrm({ contract, executor: runtime });
       const user = await orm.users.create(defaultUserData);
