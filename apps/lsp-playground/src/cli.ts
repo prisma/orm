@@ -78,6 +78,11 @@ async function main(): Promise<void> {
   // document's own path, so it cannot be pointed at an arbitrary config, and
   // the scratch project is the one place that walk-up is guaranteed to land.
   const { configPath, members: scratchMembers } = await ensureScratchProject();
+  if (scratchMembers.length === 0) {
+    console.error(`Scratch directory has no .prisma files: ${SCRATCH_DIR}`);
+    console.error(`Delete it to re-seed the default multi-file project: rm -rf "${SCRATCH_DIR}"`);
+    process.exit(1);
+  }
   console.log(`Opening scratch project: ${SCRATCH_DIR}`);
 
   const cliEntry = resolveCliEntry();

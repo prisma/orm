@@ -72,6 +72,11 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+async function isEmptyDir(path: string): Promise<boolean> {
+  const entries = await readdir(path);
+  return entries.length === 0;
+}
+
 async function seedScratchProject(): Promise<void> {
   await mkdir(SCRATCH_DIR, { recursive: true });
   for (const [name, contents] of Object.entries(SEED_FILES)) {
@@ -119,12 +124,23 @@ export default definePrismaConfig({
  * never overwriting an existing one) and its config is up to date. Returns
  * the config path and every member file currently under {@link SCRATCH_DIR},
  * read fresh so added/removed/edited files are reflected on every restart.
+ *
+ * An entirely empty directory (created but never populated) is seeded just
+ * like a missing one — there is nothing in it to preserve, so there is no
+ * difference from a first run. A directory that exists and has *something*
+ * in it but zero `.prisma` files (every schema file was deleted, leaving
+ * other content, or a non-`.prisma` file was placed there) is left alone:
+ * seeding it would write files into a directory whose contents the caller
+ * evidently manages by hand. That case comes back with an empty `members`
+ * list; the caller (`cli.ts`) turns it into an actionable startup error
+ * instead of the browser discovering it as an empty sidebar.
  */
 export async function ensureScratchProject(): Promise<{
   readonly configPath: string;
   readonly members: readonly { readonly path: string; readonly text: string }[];
 }> {
-  if (!(await pathExists(SCRATCH_DIR))) {
+  const scratchDirExists = await pathExists(SCRATCH_DIR);
+  if (!scratchDirExists || (await isEmptyDir(SCRATCH_DIR))) {
     await seedScratchProject();
   }
   const configPath = await generateScratchProjectConfig();

@@ -133,6 +133,17 @@ function basename(path: string): string {
 }
 
 /**
+ * A member's display label: its path relative to the scratch root. For a
+ * flat file this is identical to its basename (no visual change from a
+ * plain filename); for a file under a subdirectory it disambiguates members
+ * that would otherwise share a basename across sibling directories.
+ */
+function relativeLabel(path: string, scratchRootPath: string): string {
+  const prefix = scratchRootPath.endsWith('/') ? scratchRootPath : `${scratchRootPath}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : basename(path);
+}
+
+/**
  * One scratch-project member as the client tracks it: its Monaco-facing
  * identity (`uri`/`path`), the text last known for it (the seed text until
  * its file is opened and edited, then whatever the editor model held when
@@ -182,6 +193,7 @@ async function main(): Promise<void> {
     throw new InternalError('#file-picker mount point not found');
   }
 
+  const scratchRootPath = vscode.Uri.parse(runtimeConfig.scratchRootUri).path;
   const fileSystemProvider = new RegisteredFileSystemProvider(false);
   const entries: FileEntry[] = runtimeConfig.members.map((member) => {
     const uri = vscode.Uri.parse(member.uri);
@@ -189,7 +201,9 @@ async function main(): Promise<void> {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'file-entry';
-    button.textContent = basename(uri.path);
+    const label = relativeLabel(uri.path, scratchRootPath);
+    button.textContent = label;
+    button.title = label;
     filePicker.appendChild(button);
     return {
       uri: member.uri,
@@ -335,29 +349,54 @@ async function main(): Promise<void> {
     if (entry === activeEntry) {
       return;
     }
-    // Capture the outgoing file's live edits so switching back later restores
-    // them instead of the stale seed text (updateCodeResources below writes
-    // whatever text it is given back into the file-system overlay).
-    const outgoingModel = editorApp.getEditor()?.getModel();
-    if (outgoingModel !== null && outgoingModel !== undefined) {
-      activeEntry.text = outgoingModel.getValue();
-    }
     if (!entry.opened) {
       await openEntry(entry);
+    }
+    // Capture the outgoing entry's live edits as close to the swap as
+    // possible — right before `updateCodeResources`, not before the
+    // `openEntry` await above, so edits typed while that await was pending
+    // are not lost. `activeEntry` here is still the outgoing entry: this
+    // call is serialized (see `enqueueSelectEntry`), so nothing else can have
+    // reassigned it since this call started.
+    const outgoingEntry = activeEntry;
+    const outgoingModel = editorApp.getEditor()?.getModel();
+    if (outgoingModel !== null && outgoingModel !== undefined) {
+      outgoingEntry.text = outgoingModel.getValue();
     }
     await editorApp.updateCodeResources({ modified: { text: entry.text, uri: entry.path } });
     activeEntry = entry;
     setActiveStyling();
   }
 
+  // Every activation (the startup open below and every click) is serialized
+  // through one in-flight chain. Without this, two rapid clicks could both
+  // pass `selectEntry`'s `!entry.opened` check before either's `openEntry`
+  // resolves — racing `createModelReference` writes to the same `pin` field,
+  // and letting whichever `updateCodeResources` call happens to resolve last
+  // win the visible model regardless of click order. Serializing makes
+  // activations complete strictly in request order, so the last click always
+  // ends up active and no two opens for the same entry ever overlap.
+  let pendingSelection: Promise<void> = openEntry(firstEntry);
+
+  function enqueueSelectEntry(entry: FileEntry): void {
+    pendingSelection = pendingSelection
+      .then(
+        () => selectEntry(entry),
+        () => selectEntry(entry),
+      )
+      .catch((error: unknown) => {
+        console.error(error);
+      });
+  }
+
   for (const entry of entries) {
-    entry.button.addEventListener('click', () => void selectEntry(entry));
+    entry.button.addEventListener('click', () => enqueueSelectEntry(entry));
   }
 
   // The first file opens on startup exactly as the single-schema playground
-  // always has; every other file stays unmanaged until its own first
-  // selection.
-  await openEntry(firstEntry);
+  // always has (queued above, ahead of any click); every other file stays
+  // unmanaged until its own first selection.
+  await pendingSelection;
   setActiveStyling();
 
   formatButton.addEventListener('click', async () => {
