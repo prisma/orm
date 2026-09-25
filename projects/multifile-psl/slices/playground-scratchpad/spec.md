@@ -4,7 +4,7 @@ Parent project: `projects/multifile-psl/`. Outcome contributed: the playground b
 
 ## At a glance
 
-`psl-playground` stops taking a schema path and always opens a gitignored scratch directory seeded with a multi-file schema behind a glob config. Monaco renders a tab strip; a tab's document opens (and sends `didOpen`) only on first click, so untouched tabs remain unmanaged — today they visibly drop out of the symbol table, which is exactly the gap slice 3 closes and the demo this slice stages.
+`psl-playground` stops taking a schema path and always opens a gitignored scratch directory seeded with a multi-file schema behind a glob config. A file-picker sidebar lists the member files (operator amendment 2026-09-25: sidebar instead of the originally-specified tab strip); a file's document opens (and sends `didOpen`) only when first selected, so untouched files remain unmanaged — the staged gap slice 3 closes.
 
 ## Chosen design
 
@@ -13,7 +13,7 @@ Decided in project [`design-decisions.md`](../../design-decisions.md) entry 10; 
 - **CLI (`apps/lsp-playground/src/cli.ts`):** positional schema arguments are removed (usage becomes `psl-playground` with the existing flags). `stageSchema` becomes scratch-directory seeding: ensure `<pkg>/.playground/scratch/` exists; on first run seed it with three files — two directive-carrying files with a cross-file relation and a namespace reopened across both, plus one directive-less file that demonstrates membership exclusion. An existing scratch directory is left untouched (the user's edits persist across restarts). (S2-D1 amendment: the original wording kept "the discovered-config branch of `cli.ts` as is" — that branch only ever triggered from a positional schema argument and is unreachable once arguments are removed; the branch's call site is deleted and the now-orphaned `find-config.ts` is removed in dispatch 2. Dead code is removed, not kept.)
 - **Config (`src/default-config.ts`):** the generated `prisma.config.ts` uses `contract: './scratch/**/*.prisma'`. The discovered-config branch of `cli.ts` stays as is for repos that carry their own config.
 - **Runtime contract (`cli.ts` `RuntimeConfig` + the `/__psl_playground_runtime.json` endpoint + the validator mirror in `src/client/main.ts`):** the singular `documentUri`/`schemaPath`/`schemaText` fields become a list of `{ uri, text }` members plus the scratch-root URI. The bridge (`src/bridge.ts`) is file-count-agnostic and stays untouched.
-- **Client (`src/client/main.ts` + `index.html`):** one `RegisteredMemoryFile` per member in the existing filesystem overlay; a tab strip replaces the single `#schema-path` label; the first tab opens on startup, every other tab calls `vscode.workspace.openTextDocument` + editor swap on first click only. The format button keeps acting on the active document.
+- **Client (`src/client/main.ts` + `index.html`):** one `RegisteredMemoryFile` per member in the existing filesystem overlay; a file-picker sidebar (left of the editor) replaces the single `#schema-path` label, listing member basenames with an active highlight; the first file opens on startup, every other file calls `vscode.workspace.openTextDocument` + editor swap on first selection only (pinned model references preserved). The format button keeps acting on the active document.
 - **README (`apps/lsp-playground/README.md`):** usage and architecture sections updated; the lazy-open/unmanaged demonstration and the interim single-slice limitation stated plainly.
 
 ## Coherence rationale
@@ -35,8 +35,8 @@ One outcome — "the playground opens a multi-file scratch project" — across o
 
 ## Slice-specific done conditions
 
-- [ ] `psl-playground` with no arguments serves the scratch project; all member files appear as tabs. (Amended by operator ruling 2026-09-24, falsified assumption: the pre-slice-3 language server treats config `inputs` as literal paths, so a glob config makes it entirely silent — no diagnostics for any file, opened or not. Cross-file-resolution and membership-exclusion verification move wholly to slice 3; the README states the full silence as the staged gap.)
-- [ ] A never-clicked tab has sent no `didOpen` (verifiable from the ws bridge's LSP traffic or server logs).
+- [ ] `psl-playground` with no arguments serves the scratch project; all member files appear in the sidebar. (Amended by operator ruling 2026-09-24, falsified assumption: the pre-slice-3 language server treats config `inputs` as literal paths, so a glob config makes it entirely silent — no diagnostics for any file, opened or not. Cross-file-resolution and membership-exclusion verification move wholly to slice 3; the README states the full silence as the staged gap.)
+- [ ] A never-selected sidebar file has sent no `didOpen` (verifiable from the ws bridge's LSP traffic or server logs).
 - [ ] Passing a positional schema path exits with a clear error pointing at the scratch directory workflow.
 
 ## Open Questions
