@@ -17,7 +17,7 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { describe, expect, it } from 'vitest';
 import type { PostgresContract } from '../../../3-targets/6-adapters/postgres/src/core/types';
-import { compileAggregate } from '../src/query-plan-aggregate';
+import { compileAggregate, compileGroupedAggregate } from '../src/query-plan-aggregate';
 import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import type { CollectionState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
@@ -273,6 +273,51 @@ describe('orderBy a relation under a paginated aggregate', () => {
 
     expect(sqlOf(plan)).toMatchInlineSnapshot(
       `"SELECT SUM("posts"."views") AS "totalViews" FROM (SELECT "posts"."views" AS "views" FROM "public"."posts" ORDER BY (SELECT "users"."name" AS "name" FROM "public"."users" WHERE "users"."id" = "posts"."user_id") ASC LIMIT 2) AS "posts""`,
+    );
+  });
+});
+
+describe('orderBy a relation under an aggregate over distinct rows', () => {
+  it('carries the relation order through the dedup wrap as a hidden column', () => {
+    const { collection } = createCollectionFor('Post');
+    const state = collection
+      .orderBy((post) => post.author.name.asc({ nulls: 'last' }))
+      .distinct('title')
+      .limit(2).state;
+
+    const plan = compileAggregate(
+      baseContract,
+      getTestAggregates(),
+      'public',
+      'posts',
+      state,
+      { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
+      'Post',
+    );
+
+    expect(sqlOf(plan)).toMatchInlineSnapshot(
+      `"SELECT SUM("posts"."views") AS "totalViews" FROM (SELECT "posts"."views" AS "views" FROM (SELECT "posts"."views" AS "views", (SELECT "users"."name" AS "name" FROM "public"."users" WHERE "users"."id" = "posts"."user_id") AS "__order_0", ROW_NUMBER() OVER (PARTITION BY "posts"."title" ORDER BY (SELECT "users"."name" AS "name" FROM "public"."users" WHERE "users"."id" = "posts"."user_id") ASC NULLS LAST) AS "__prisma_distinct_rn" FROM "public"."posts") AS "posts" WHERE "posts"."__prisma_distinct_rn" = 1 ORDER BY "posts"."__order_0" ASC NULLS LAST LIMIT 2) AS "posts""`,
+    );
+  });
+
+  it('carries the relation order through the dedup wrap under groupBy', () => {
+    const { collection } = createCollectionFor('Post');
+    const state = collection.orderBy((post) => post.author.name.asc()).distinct('title').state;
+
+    const plan = compileGroupedAggregate(
+      baseContract,
+      getTestAggregates(),
+      'public',
+      'posts',
+      state,
+      ['user_id'],
+      { totalViews: { kind: 'aggregate', fn: 'sum', column: 'views' } },
+      undefined,
+      'Post',
+    );
+
+    expect(sqlOf(plan)).toMatchInlineSnapshot(
+      `"SELECT "posts"."user_id" AS "user_id", SUM("posts"."views") AS "totalViews" FROM (SELECT "posts"."user_id" AS "user_id", "posts"."views" AS "views" FROM (SELECT "posts"."user_id" AS "user_id", "posts"."views" AS "views", (SELECT "users"."name" AS "name" FROM "public"."users" WHERE "users"."id" = "posts"."user_id") AS "__order_0", ROW_NUMBER() OVER (PARTITION BY "posts"."title" ORDER BY (SELECT "users"."name" AS "name" FROM "public"."users" WHERE "users"."id" = "posts"."user_id") ASC) AS "__prisma_distinct_rn" FROM "public"."posts") AS "posts" WHERE "posts"."__prisma_distinct_rn" = 1 ORDER BY "posts"."__order_0" ASC) AS "posts" GROUP BY "posts"."user_id""`,
     );
   });
 });

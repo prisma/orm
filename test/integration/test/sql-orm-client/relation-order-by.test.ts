@@ -14,7 +14,12 @@
 //   4     Bob    Alice        2 (60, 70)           —
 
 import { describe, expect, it } from 'vitest';
-import { createUsersCollection, timeouts, withCollectionRuntime } from './integration-helpers';
+import {
+  createPostsCollection,
+  createUsersCollection,
+  timeouts,
+  withCollectionRuntime,
+} from './integration-helpers';
 import type { PgIntegrationRuntime } from './runtime-helpers';
 import { seedPosts, seedTags, seedUsers, seedUserTags } from './runtime-helpers';
 
@@ -200,6 +205,45 @@ describe('integration/relation-order-by', () => {
           .all();
 
         expect(rows).toEqual([ALICE, ZOE, BOB, CARA]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  // Proves an aggregate over distinct rows keeps a relation order: distinct
+  // keeps each title's post by the first author name, the page keeps the
+  // first such post, and the sum reads it. Ordering by id instead would keep
+  // posts 1 and 3 and sum 10.
+  it(
+    'aggregates distinct rows paged by a to-one relation order',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedUsers(runtime, [
+          { ...ALICE, email: 'alice@example.com' },
+          { ...ZOE, email: 'zoe@example.com' },
+          { ...CARA, email: 'cara@example.com' },
+          { ...BOB, email: 'bob@example.com' },
+        ]);
+        await seedPosts(runtime, [
+          { id: 1, title: 'x', userId: ZOE.id, views: 10 },
+          { id: 2, title: 'x', userId: ALICE.id, views: 100 },
+          { id: 3, title: 'y', userId: CARA.id, views: 5 },
+          { id: 4, title: 'y', userId: BOB.id, views: 60 },
+        ]);
+        const posts = createPostsCollection(runtime);
+
+        const all = await posts
+          .orderBy((p) => p.author.name.asc())
+          .distinct('title')
+          .aggregate((aggregate) => ({ totalViews: aggregate.sum('views') }));
+        const firstPage = await posts
+          .orderBy((p) => p.author.name.asc())
+          .distinct('title')
+          .limit(1)
+          .aggregate((aggregate) => ({ totalViews: aggregate.sum('views') }));
+
+        expect(all).toEqual({ totalViews: 160 });
+        expect(firstPage).toEqual({ totalViews: 100 });
       });
     },
     timeouts.spinUpPpgDev,
