@@ -1,4 +1,3 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { bool } from '../src/attribute-spec/combinators/bool';
@@ -36,14 +35,6 @@ function policySpec() {
   });
 }
 
-const ROLE_DESCRIPTOR = {
-  kind: 'pslBlock',
-  keyword: 'role',
-  discriminator: 'fixture-role',
-  name: { required: true },
-  spec: () => fixedBlock({ parameters: {} }),
-} satisfies PslBlockSpecDescriptor;
-
 const POLICY_DESCRIPTOR = {
   kind: 'pslBlock',
   keyword: 'policy_select',
@@ -72,19 +63,11 @@ const FAMILY_ENUM_DESCRIPTOR = {
     }),
 } satisfies PslBlockSpecDescriptor;
 
-const DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
-  role: ROLE_DESCRIPTOR,
-  policy_select: POLICY_DESCRIPTOR,
-  native_enum: NATIVE_ENUM_DESCRIPTOR,
-  enum: FAMILY_ENUM_DESCRIPTOR,
-};
-
 function setup(source: string) {
   const { document, sources } = parse(source, 'test.psl');
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: DESCRIPTORS,
   });
   return { symbolTable, sources, diagnostics };
 }

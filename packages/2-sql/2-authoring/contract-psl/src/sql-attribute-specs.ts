@@ -348,7 +348,7 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  const envelope = ctx.parsedBlocks?.get(block);
+  const envelope = ctx.parsedBlocks.get(block);
   if (envelope === undefined) return undefined;
   return Object.keys(envelope.values);
 }
@@ -761,11 +761,13 @@ export function modelSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }): AttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
     controlMutationDefaults: input.controlMutationDefaults,
+    parsedBlocks: input.parsedBlocks,
   };
 }
 
@@ -774,14 +776,14 @@ export function fieldSpecContext(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }): FieldAttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
     field: input.field,
     controlMutationDefaults: input.controlMutationDefaults,
-    ...(input.parsedBlocks !== undefined ? { parsedBlocks: input.parsedBlocks } : {}),
+    parsedBlocks: input.parsedBlocks,
   };
 }
 

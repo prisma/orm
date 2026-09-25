@@ -25,7 +25,7 @@ import {
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
 import type { BlockSymbol, PslDiagnostic, SymbolTable } from '@internal/psl-parser';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { printPslFromAst } from '../src/print-psl';
@@ -67,11 +67,16 @@ interface ParsedPolicySelect {
 
 function parsePolicySelect(schema: string): ParsedPolicySelect {
   const { document, sources } = parse(schema, 'declarative-policy-select.round-trip.test.psl');
-  const { symbolTable, diagnostics, parsedBlocks } = buildSymbolTable({
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
+    symbolTable,
+    sources,
+    assembled.pslBlockDescriptors,
+  );
+  const diagnostics = [...collectionDiagnostics, ...blockDiagnostics];
   const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(
     (block) => block.keyword === POLICY_SELECT_KEYWORD,
   );

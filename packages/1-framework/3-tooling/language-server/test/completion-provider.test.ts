@@ -21,6 +21,7 @@ import {
   fixedBlock,
   identifier,
   int,
+  interpretExtensionBlocks,
   jsonValue,
   modelAttribute,
   oneOf,
@@ -264,11 +265,12 @@ function completeWithSource(input: {
   const source = `${input.markedSource.slice(0, cursorOffset)}${input.markedSource.slice(cursorOffset + 1)}`;
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable, parsedBlocks } = buildSymbolTable({
-    documents: [document],
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { parsedBlocks } = interpretExtensionBlocks(
+    symbolTable,
     sources,
-    pslBlockDescriptors: input.pslBlockDescriptors,
-  });
+    input.pslBlockDescriptors,
+  );
   const context = classifyPslCompletionContext({
     document,
     sourceFile,
@@ -579,11 +581,7 @@ describe('providePslCompletionItems', () => {
     const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
     const { document, sources } = parse(source, 'language-server-test.psl');
     const sourceFile = sources.sourceFileFor(document.syntax);
-    const { symbolTable } = buildSymbolTable({
-      documents: [document],
-      sources,
-      pslBlockDescriptors,
-    });
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
     const context = classifyPslCompletionContext({
       document,
       sourceFile,
@@ -635,6 +633,8 @@ describe('providePslCompletionItems', () => {
         scalarTypes,
         pslBlockDescriptors,
         symbolTable: observedSymbolTable,
+        parsedBlocks: interpretExtensionBlocks(symbolTable, sources, pslBlockDescriptors)
+          .parsedBlocks,
         authoringContributions: observedAuthoringContributions,
         controlMutationDefaults,
       },

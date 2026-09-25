@@ -1,6 +1,4 @@
-import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
 import {
-  type BlockSymbol,
   buildSymbolTable,
   type PslDiagnostic,
   type SymbolTable,
@@ -17,7 +15,6 @@ import {
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
 import { computeDocumentDiagnostics } from './document-diagnostics';
-import type { PipelineInputs } from './pipeline';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 export interface DocumentArtifacts {
@@ -33,7 +30,6 @@ export interface DocumentArtifacts {
 
 export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
-  readonly controlStack: PipelineInputs;
   readonly getDocument: (uri: string) => TextDocument | undefined;
   readonly interpretation?: ProjectInterpretation;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
@@ -54,14 +50,13 @@ export interface ProjectArtifacts {
    */
   document(uri: string): DocumentArtifacts | undefined;
   symbolTable(): SymbolTable;
-  parsedBlocks(): ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   symbolDiagnostics(): readonly PslDiagnostic[];
   documentChanged(uri: string): void;
   documentClosed(uri: string): void;
 }
 
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const { inputs, controlStack, getDocument, interpretation } = options;
+  const { inputs, getDocument, interpretation } = options;
   const documents = new Map<string, DocumentArtifacts>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
@@ -94,7 +89,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
             documents: [document],
             sources,
             symbolTable: currentSymbolTable,
-            parsedBlocks: readSymbolTableResult().parsedBlocks,
           },
           interpretation.context,
         );
@@ -150,12 +144,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (textDocument === undefined) {
       return undefined;
     }
-    const computed = computeDocumentDiagnostics(
-      textDocument.uri,
-      textDocument.getText(),
-      inputs,
-      controlStack,
-    );
+    const computed = computeDocumentDiagnostics(textDocument.uri, textDocument.getText(), inputs);
     if (computed === null) {
       return undefined;
     }
@@ -185,11 +174,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         'invariant violated: project has no readable configured input — callers must check document artifacts first',
       );
     }
-    symbolTableResult ??= buildSymbolTable({
-      documents: currentDocuments,
-      sources,
-      pslBlockDescriptors: controlStack.pslBlockDescriptors,
-    });
+    symbolTableResult ??= buildSymbolTable({ documents: currentDocuments, sources });
     return symbolTableResult;
   }
 
@@ -203,7 +188,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     },
     document: readDocument,
     symbolTable: readSymbolTable,
-    parsedBlocks: () => readSymbolTableResult().parsedBlocks,
     symbolDiagnostics: () => readSymbolTableResult().diagnostics,
     documentChanged: drop,
     documentClosed: drop,

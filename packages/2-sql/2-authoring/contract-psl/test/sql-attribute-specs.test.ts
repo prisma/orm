@@ -165,16 +165,22 @@ namespace scoped {
 });
 
 describe('sqlAttributeSpecs', () => {
-  const { symbolTable, model } = project(
+  const { symbolTable, model, parsedBlocks } = project(
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
     'Post',
   );
-  const modelCtx = modelSpecContext({ symbols: symbolTable, model, controlMutationDefaults });
+  const modelCtx = modelSpecContext({
+    symbols: symbolTable,
+    model,
+    controlMutationDefaults,
+    parsedBlocks,
+  });
   const fieldCtx = fieldSpecContext({
     symbols: symbolTable,
     model,
     field: field(model, 'id'),
     controlMutationDefaults,
+    parsedBlocks,
   });
 
   it('registers every model factory under its own attribute name at model level', () => {
@@ -272,7 +278,7 @@ describe('sqlAttributeSpecs', () => {
 });
 
 describe('sqlAttributeSpecs.field.default', () => {
-  const { symbolTable, model } = project(
+  const { symbolTable, model, parsedBlocks } = project(
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
     'Post',
   );
@@ -281,6 +287,7 @@ describe('sqlAttributeSpecs.field.default', () => {
     model,
     field: field(model, 'id'),
     controlMutationDefaults,
+    parsedBlocks,
   });
 
   it('exposes scalar default alternatives from the actual registry-backed factory', () => {
@@ -325,6 +332,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: symbolTable,
       model,
       field: field(model, 'id'),
+      parsedBlocks,
       controlMutationDefaults: {
         defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
         dataTypeEntries: {},
@@ -341,6 +349,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       model,
       field: field(model, 'tags'),
       controlMutationDefaults,
+      parsedBlocks,
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
 

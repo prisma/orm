@@ -14,7 +14,7 @@
 import type { Contract } from '@internal/contract/types';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
@@ -58,11 +58,14 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 
 function interpretWithSymbolDiagnostics(source: string) {
   const { document, sources } = parse(source, 'psl-rls-operations.test.psl');
-  const { symbolTable, diagnostics } = buildSymbolTable({
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
+  const diagnostics = [
+    ...collectionDiagnostics,
+    ...interpretExtensionBlocks(symbolTable, sources, assembled.pslBlockDescriptors).diagnostics,
+  ];
   const result = interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,

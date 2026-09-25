@@ -15,7 +15,7 @@
 
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -79,11 +79,12 @@ namespace public {
 
   function buildInput() {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { symbolTable, diagnostics, parsedBlocks } = buildSymbolTable({
-      documents: [document],
+    const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
+    const { parsedBlocks } = interpretExtensionBlocks(
+      symbolTable,
       sources,
-      pslBlockDescriptors: assembled.pslBlockDescriptors,
-    });
+      assembled.pslBlockDescriptors,
+    );
     return { document, sources, symbolTable, diagnostics, parsedBlocks };
   }
 
@@ -203,11 +204,7 @@ namespace public {
 
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { symbolTable, diagnostics } = buildSymbolTable({
-      documents: [document],
-      sources,
-      pslBlockDescriptors: assembled.pslBlockDescriptors,
-    });
+    const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
 
     expect(diagnostics).toEqual([]);
 

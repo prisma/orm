@@ -8,7 +8,6 @@ function specContext() {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
   const block = symbolTable.topLevel.blocks['docs_probe'];
   if (block === undefined) throw new Error('expected the probe role block in the symbol table');

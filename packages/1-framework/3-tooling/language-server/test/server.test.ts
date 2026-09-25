@@ -377,7 +377,6 @@ function parseAndSymbolTableDiagnostics(source: string): {
   const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { parseDiagnostics, symbolTableDiagnostics };
 }
@@ -944,7 +943,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const completions = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(completions.map(({ label }) => label)).toContain('Post');
     expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
-    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(alias, updated, expect.any(Object));
+    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(alias, updated);
     expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
     expect(harness.publishCount(schemaUri)).toBe(0);
     expect(harness.publishCount(alias)).toBe(0);
@@ -1329,11 +1328,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     ]);
     await republished;
     expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledWith(
-      schemaUri,
-      updated.source,
-      expect.any(Object),
-    );
+    expect(pipelineMock.runPipeline).toHaveBeenCalledWith(schemaUri, updated.source);
   });
 
   it('returns generic block parameter completions for configured PSL descriptors', async () => {

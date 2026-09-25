@@ -34,6 +34,7 @@ import {
   buildSymbolTable,
   entriesBlock,
   int,
+  interpretExtensionBlocks,
   jsonValue,
   num,
   oneOf,
@@ -452,11 +453,8 @@ export function buildSymbolTableInput(
   const pslBlockDescriptors = options?.pslBlockDescriptors ?? {};
   const { document, sources } = parse(schema, sourceId);
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable, diagnostics, parsedBlocks } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors,
-  });
+  const { symbolTable, diagnostics } = buildSymbolTable({ documents: [document], sources });
+  const { parsedBlocks } = interpretExtensionBlocks(symbolTable, sources, pslBlockDescriptors);
   const seedDiagnostics: ContractSourceDiagnostic[] = diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
     message: diagnostic.message,

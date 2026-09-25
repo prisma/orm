@@ -217,7 +217,6 @@ describe('emitted PSL parses', () => {
     const { diagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     });
     return diagnostics;
   }

@@ -6,29 +6,21 @@ import type {
   PslContractSourceProvider,
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import type { ParsedPslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { notOk, type Result } from '@internal/utils/result';
 import type { PslSources } from './source-file';
-import type { BlockSymbol, SymbolTable } from './symbol-table';
+import type { SymbolTable } from './symbol-table';
 import type { DocumentAst } from './syntax/ast/declarations';
 
 /**
  * Lets editor tooling that already parses incrementally (e.g. the language
  * server) hand cached artifacts to the interpreter instead of forcing a
- * disk re-parse.
+ * disk re-parse. Blocks are resolved by the interpreter itself, against the
+ * collected table (`interpretExtensionBlocks`) — no envelope threading.
  */
 export interface PslInterpretInput {
   readonly documents: readonly DocumentAst[];
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
-  /**
-   * The typed envelopes `buildSymbolTable` published for this table. Callers
-   * that hold a `SymbolTableResult` thread it through so interpreters
-   * consume the parser-owned lifecycle directly; a direct caller that holds
-   * only a symbol table may omit it, and interpreters then re-derive the
-   * envelopes with `deriveParsedBlocks`.
-   */
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 /**

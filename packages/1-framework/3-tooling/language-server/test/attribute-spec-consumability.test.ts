@@ -5,7 +5,12 @@ import {
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
 import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl-parser';
-import { assembleAttributeSpecs, fieldAttribute, modelAttribute } from '@internal/psl-parser';
+import {
+  assembleAttributeSpecs,
+  fieldAttribute,
+  interpretExtensionBlocks,
+  modelAttribute,
+} from '@internal/psl-parser';
 import { ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
@@ -89,17 +94,14 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     ]);
     const controlMutationDefaults = assembleControlMutationDefaults([]);
     const source = 'model Variant {\n @@base(Missing, "v")\n}\nmodel Base { id Int }';
-    const pipeline = runPipeline('schema.prisma', source, {
-      scalarTypes: ['Int'],
-      pslBlockDescriptors: {},
-      authoringContributions,
-      controlMutationDefaults,
-    });
+    const pipeline = runPipeline('schema.prisma', source);
     const model = pipeline.symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
     const spec = assembleAttributeSpecs(authoringContributions).model['base']?.({
       symbols: pipeline.symbolTable,
       model,
+      parsedBlocks: interpretExtensionBlocks(pipeline.symbolTable, pipeline.sources, {})
+        .parsedBlocks,
       controlMutationDefaults: {
         defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
         dataTypeEntries: {},
@@ -124,6 +126,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       candidates: {
         symbolTable: pipeline.symbolTable,
         pslBlockDescriptors: {},
+        parsedBlocks: interpretExtensionBlocks(pipeline.symbolTable, pipeline.sources, {})
+          .parsedBlocks,
         authoringContributions,
         controlMutationDefaults,
       },
@@ -179,7 +183,6 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const pipeline = runPipeline(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
-      result.controlStack,
     );
     const model = pipeline.symbolTable.topLevel.models['Widget'];
     const field = model?.fields['id'];
@@ -193,6 +196,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       symbols: pipeline.symbolTable,
       model,
       field,
+      parsedBlocks: interpretExtensionBlocks(pipeline.symbolTable, pipeline.sources, {})
+        .parsedBlocks,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
         dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
@@ -218,7 +223,6 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const pipeline = runPipeline(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
-      result.controlStack,
     );
     const model = pipeline.symbolTable.topLevel.models['Widget'];
     expect(model).toBeDefined();
@@ -227,6 +231,8 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const ctx: AttributeSpecContext = {
       symbols: pipeline.symbolTable,
       model,
+      parsedBlocks: interpretExtensionBlocks(pipeline.symbolTable, pipeline.sources, {})
+        .parsedBlocks,
       controlMutationDefaults: {
         ...interpretation.context.controlMutationDefaults,
         dataTypeEntries: interpretation.context.authoringContributions.dataTypes,

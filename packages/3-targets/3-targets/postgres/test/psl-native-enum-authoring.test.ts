@@ -15,7 +15,7 @@
 
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -55,20 +55,21 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 
 function parsePsl(source: string) {
   const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
-  return buildSymbolTable({
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
+  const blocks = interpretExtensionBlocks(symbolTable, sources, assembled.pslBlockDescriptors);
+  return {
+    symbolTable,
+    diagnostics: [...collectionDiagnostics, ...blocks.diagnostics],
+    parsedBlocks: blocks.parsedBlocks,
+  };
 }
 
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
-  });
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
   return interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
@@ -267,7 +268,7 @@ namespace auth {
 });
 
 describe('PSL native_enum diagnostics', () => {
-  it('a bare (value-less) member is rejected by the shared grammar, and the block never lowers', () => {
+  it('a bare (value-less) member is rejected by the shared grammar, and interpretation fails without lowering', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -286,9 +287,14 @@ namespace auth {
     ]);
 
     const result = interpret(source);
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.storage.namespaces['auth']).toBeUndefined();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        message: expect.stringContaining('"aal1"'),
+      }),
+    ]);
   });
 
   it('an empty native_enum (no members) emits PSL_NATIVE_ENUM_MISSING_MEMBERS', () => {

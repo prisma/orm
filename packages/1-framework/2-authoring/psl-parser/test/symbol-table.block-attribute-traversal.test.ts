@@ -1,6 +1,6 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it, vi } from 'vitest';
-import { blockAttribute, fixedBlock, str } from '../src/exports';
+import { blockAttribute, fixedBlock, interpretExtensionBlocks, str } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
 
@@ -49,13 +49,20 @@ function fixture(
   const result = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: descriptors,
   });
+  const blocks = interpretExtensionBlocks(result.symbolTable, sources, descriptors);
   const scope =
     namespace === undefined
       ? result.symbolTable.topLevel
       : result.symbolTable.topLevel.namespaces[namespace];
-  return { ...result, scope, block: scope?.blocks[name], factory, interpretedSymbols };
+  return {
+    ...result,
+    diagnostics: [...result.diagnostics, ...blocks.diagnostics],
+    scope,
+    block: scope?.blocks[name],
+    factory,
+    interpretedSymbols,
+  };
 }
 
 describe.each(locations)(

@@ -782,7 +782,7 @@ export function lowerDefaultForField(input: {
   readonly fieldName: string;
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly binder: Binder;
@@ -804,7 +804,7 @@ export function lowerDefaultForField(input: {
       symbols: input.symbolTable,
       model: input.model,
       field: input.field,
-      ...(input.parsedBlocks !== undefined ? { parsedBlocks: input.parsedBlocks } : {}),
+      parsedBlocks: input.parsedBlocks,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
         dataTypeEntries: input.dataTypeSupport.entries,

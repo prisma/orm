@@ -1,8 +1,16 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
-import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
-import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
+import type {
+  AuthoringEntityContext,
+  ParsedPslExtensionBlock,
+} from '@internal/framework-components/authoring';
+import type { BlockSymbol } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createPslDiagnosticCollector,
+  interpretExtensionBlocks,
+} from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
@@ -25,14 +33,17 @@ function buildInterpretInput(
   schema: string,
   context: ContractSourceContext,
   filename = SOURCE_ID,
-): PslInterpretInput {
+): PslInterpretInput & {
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
+} {
   const { document, sources } = parse(schema, filename);
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { parsedBlocks } = interpretExtensionBlocks(
+    symbolTable,
     sources,
-    pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
-  });
-  return { documents: [document], sources, symbolTable };
+    context.authoringContributions.pslBlockDescriptors,
+  );
+  return { documents: [document], sources, symbolTable, parsedBlocks };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -211,6 +222,7 @@ model Other {
       field,
       model,
       binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
+      parsedBlocks: input.parsedBlocks,
       symbolTable: input.symbolTable,
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
@@ -382,7 +394,6 @@ it('attributes multi-document semantic failures to the owning file, not the entr
   const { symbolTable } = buildSymbolTable({
     documents: [entry.document, owned.document],
     sources,
-    pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
   const result = interpretCapableSource('provider.prisma').interpret(
     { documents: [entry.document], sources, symbolTable },

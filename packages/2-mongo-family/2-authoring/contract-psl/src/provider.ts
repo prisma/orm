@@ -33,7 +33,6 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         documents: input.documents,
         symbolTable: input.symbolTable,
         sources: input.sources,
-        ...ifDefined('parsedBlocks', input.parsedBlocks),
         seedDiagnostics: [],
         scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
         controlMutationDefaults: {
@@ -104,14 +103,9 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       const [firstSources, ...restSources] = parsed.map(({ sources }) => sources);
       assertDefined(firstSources, 'mongoContract requires at least one parsed schema file');
       const sources = firstSources.merge(...restSources);
-      const {
-        symbolTable,
-        diagnostics: symbolTableDiagnostics,
-        parsedBlocks,
-      } = buildSymbolTable({
+      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents,
         sources,
-        pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
       });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
@@ -125,7 +119,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       ];
 
       return withSeedDiagnostics(
-        this.interpret({ documents, sources, symbolTable, parsedBlocks }, context),
+        this.interpret({ documents, sources, symbolTable }, context),
         seedDiagnostics,
       );
     },

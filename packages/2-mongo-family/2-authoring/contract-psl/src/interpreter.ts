@@ -55,8 +55,8 @@ import type {
 import {
   createPslDiagnosticCollector,
   type DiagnosticSource,
-  deriveParsedBlocks,
   diagnosticSource,
+  interpretExtensionBlocks,
   nodePslSpan,
   type PslDiagnostic,
   type PslDiagnosticCollector,
@@ -102,12 +102,6 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
-  /**
-   * Typed envelopes from the `buildSymbolTable` lifecycle. Provider paths
-   * thread this through; a direct caller that omits it falls back to the
-   * parser's `deriveParsedBlocks`.
-   */
-  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly controlMutationDefaults: ControlDefaultRegistries;
   readonly codecLookup?: CodecLookup;
@@ -1072,6 +1066,12 @@ export function interpretPslDocumentToMongoContract(
   diagnostics.push(
     ...binderDiagnostics.filter((diagnostic) => diagnostic.data?.['reference'] !== 'type'),
   );
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks(
+    symbolTable,
+    sources,
+    input.authoringContributions?.pslBlockDescriptors ?? {},
+  );
+  diagnostics.push(...blockDiagnostics);
   const topLevel = symbolTable.topLevel;
   validateNamespaceBlocksForMongoTarget({
     namespaces: Object.values(topLevel.namespaces),
@@ -1087,6 +1087,7 @@ export function interpretPslDocumentToMongoContract(
     symbols: symbolTable,
     model,
     controlMutationDefaults: input.controlMutationDefaults,
+    parsedBlocks,
   });
   const modelMetadataByName = new Map<string, MongoModelMetadata>();
   for (const model of allModels) {
@@ -1111,13 +1112,6 @@ export function interpretPslDocumentToMongoContract(
 
   const topLevelEnumSymbols = Object.values(topLevel.blocks).filter((b) => b.keyword === 'enum');
 
-  const parsedBlocks =
-    input.parsedBlocks ??
-    deriveParsedBlocks(
-      symbolTable,
-      sources,
-      input.authoringContributions?.pslBlockDescriptors ?? {},
-    );
   const builtEnums = processEnumDeclarations({
     enumSymbols: topLevelEnumSymbols,
     parsedBlocks,

@@ -135,7 +135,6 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const emitted = interpretPslDocumentToSqlContract({
     documents: [document],

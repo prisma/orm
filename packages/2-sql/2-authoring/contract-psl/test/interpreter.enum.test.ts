@@ -414,7 +414,7 @@ model Post {
     );
   });
 
-  it('duplicate member names emits PSL_EXTENSION_DUPLICATE_PARAMETER from the parser', () => {
+  it('duplicate member names emit PSL_EXTENSION_DUPLICATE_PARAMETER from the interpreter that resolves the blocks', () => {
     const result = interpret(`
 enum Priority {
   @@type("pg/text@1")
