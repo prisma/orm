@@ -1425,20 +1425,32 @@ export type ResolvedScalarCreateInput<
       : never
     : ScalarCreateInput<TContract, ModelName, NsId>;
 
-type ModelStorageTableDef<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  ModelTableName<TContract, ModelName> extends infer TableName extends string
-    ? NamespaceTableDef<TContract, TableName>
+type ModelStorageTableDef<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  ModelTableName<TContract, ModelName, NsId> extends infer TableName extends string
+    ? NamespaceTableDef<TContract, TableName, ResolvedNsId<TContract, ModelName, NsId>>
     : never;
 
-type PrimaryKeyConstraintColumns<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  ModelStorageTableDef<TContract, ModelName> extends {
+type PrimaryKeyConstraintColumns<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  ModelStorageTableDef<TContract, ModelName, NsId> extends {
     readonly primaryKey: { readonly columns: infer Columns extends readonly string[] };
   }
     ? Columns
     : never;
 
-type UniqueConstraintColumns<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  ModelStorageTableDef<TContract, ModelName> extends {
+type UniqueConstraintColumns<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  ModelStorageTableDef<TContract, ModelName, NsId> extends {
     readonly uniques: infer Uniques;
   }
     ? Uniques extends ReadonlyArray<infer Unique>
@@ -1452,15 +1464,17 @@ type FieldNameForColumn<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   ColumnName extends string,
+  NsId extends string = never,
 > = {
-  [K in keyof DefaultModelRow<TContract, ModelName> & string]: FieldColumnName<
+  [K in keyof DefaultModelRow<TContract, ModelName, NsId> & string]: FieldColumnName<
     TContract,
     ModelName,
-    K
+    K,
+    NsId
   > extends ColumnName
     ? K
     : never;
-}[keyof DefaultModelRow<TContract, ModelName> & string] extends infer Matched
+}[keyof DefaultModelRow<TContract, ModelName, NsId> & string] extends infer Matched
   ? Matched extends string
     ? Matched
     : ColumnName
@@ -1470,37 +1484,59 @@ type RowValueForField<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,
-> = FieldName extends keyof DefaultModelRow<TContract, ModelName>
-  ? DefaultModelRow<TContract, ModelName>[FieldName]
+  NsId extends string = never,
+> = FieldName extends keyof DefaultModelRow<TContract, ModelName, NsId>
+  ? DefaultModelRow<TContract, ModelName, NsId>[FieldName]
   : unknown;
 
 type CriterionFromConstraintColumns<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   Columns extends readonly string[],
+  NsId extends string = never,
 > = string extends Columns[number]
   ? Record<string, unknown>
   : {
-      [C in Columns[number] as FieldNameForColumn<TContract, ModelName, C>]: RowValueForField<
+      [C in Columns[number] as FieldNameForColumn<TContract, ModelName, C, NsId>]: RowValueForField<
         TContract,
         ModelName,
-        FieldNameForColumn<TContract, ModelName, C>
+        FieldNameForColumn<TContract, ModelName, C, NsId>,
+        NsId
       >;
     };
 
-type ConstraintColumnsUnion<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  | PrimaryKeyConstraintColumns<TContract, ModelName>
-  | UniqueConstraintColumns<TContract, ModelName>;
+type ConstraintColumnsUnion<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> =
+  | PrimaryKeyConstraintColumns<TContract, ModelName, NsId>
+  | UniqueConstraintColumns<TContract, ModelName, NsId>;
 
 export type UniqueConstraintCriterion<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
+  NsId extends string = never,
 > =
-  ConstraintColumnsUnion<TContract, ModelName> extends infer Columns
+  ConstraintColumnsUnion<TContract, ModelName, NsId> extends infer Columns
     ? Columns extends readonly string[]
-      ? CriterionFromConstraintColumns<TContract, ModelName, Columns>
+      ? CriterionFromConstraintColumns<TContract, ModelName, Columns, NsId>
       : never
     : never;
+
+type NonNullableValues<T> = T extends unknown ? { [K in keyof T]: NonNullable<T[K]> } : never;
+
+/**
+ * A shorthand `where` filter that binds every column of the primary key or of one unique constraint to a non-null value, so it matches at most one row. `null` is excluded because the filter compiles it to `IS NULL`, which can match many rows; `undefined` because the filter drops it. Constraints are read from the collection's own namespace; a collection with no literal namespace (`nsId` is `never` or `string`) falls back to scanning every namespace.
+ */
+export type UniqueWhereFilter<
+  TContract extends Contract<SqlStorage>,
+  NsId extends DomainNamespaceId<TContract>,
+  ModelName extends string,
+> = NonNullableValues<
+  UniqueConstraintCriterion<TContract, ModelName, string extends NsId ? never : NsId>
+> &
+  ShorthandWhereFilter<TContract, NsId, ModelName>;
 
 type RelationConnectCriterion<TContract extends Contract<SqlStorage>, ModelName extends string> = [
   UniqueConstraintCriterion<TContract, ModelName>,

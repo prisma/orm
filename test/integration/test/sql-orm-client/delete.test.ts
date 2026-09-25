@@ -83,36 +83,6 @@ describe('integration/delete', () => {
   );
 
   it(
-    'delete() affects only one row even when where() matches several',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Remove', email: 'a@example.com' },
-          { id: 2, name: 'Remove', email: 'b@example.com' },
-          { id: 3, name: 'Keep', email: 'c@example.com' },
-        ]);
-
-        const returned = await users.where({ name: 'Remove' }).delete();
-
-        expect(returned).not.toBeNull();
-        expect(returned?.name).toBe('Remove');
-        expect([1, 2]).toContain(returned?.id);
-
-        const rows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users order by id',
-        );
-        const remainingRemove = rows.filter((row) => row.name === 'Remove');
-        expect(remainingRemove).toHaveLength(1);
-        expect(remainingRemove[0]?.id).not.toBe(returned?.id);
-        expect(rows).toContainEqual({ id: 3, name: 'Keep' });
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'deleteAll() returns all deleted rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {

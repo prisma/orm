@@ -240,17 +240,24 @@ const summary = await db.orm.public.User
   .select('id', 'email', 'kind')
   .create({ id, email, displayName, kind, createdAt });
 
-// Update by predicate.
+// Update ONE row — the first match — by unique key. Returns `Row | null`.
 await db.orm.public.User.where({ id }).update({ email: newEmail });
 
-// Update with selected return.
+// Update one row with selected return.
 await db.orm.public.User
   .where({ id })
   .select('id', 'email', 'kind')
   .update({ email: newEmail });
 
-// Delete by predicate.
+// Delete ONE row — the first match — by unique key. Returns `Row | null`.
 await db.orm.public.User.where({ id }).delete();
+
+// Update / delete EVERY matching row — `await` the result for `Row[]` (or `for await` over it).
+const published = await db.orm.public.Post.where({ authorId }).updateAll({ published: true });
+const removed = await db.orm.public.Post.where({ authorId }).deleteAll();
+
+// Only need the count? `updateAndCount` / `deleteAndCount` resolve to a number.
+const n = await db.orm.public.Post.where({ authorId }).deleteAndCount();
 
 // Upsert — typed by the create branch's shape.
 await db.orm.public.User
@@ -260,6 +267,8 @@ await db.orm.public.User
     update: { email, displayName, kind },
   });
 ```
+
+**`delete()` / `update()` touch one row; `deleteAll()` / `updateAll()` touch every match.** The single-row terminals only type-check after a shorthand `.where({ ... })` that binds the primary key or a unique constraint (every column of it, to a non-null value). `.where({ userId })` followed by `.delete()` is a compile error, not a delete of one arbitrary row. A callback filter (`.where((u) => u.id.eq(id))`) doesn't count either, because the types can't prove it's unique; write `.where({ id })`. For "delete everything matching" (account deletion, cleanup jobs, cascades done in app code) use `deleteAll()` or `deleteAndCount()`, and await the result: an un-awaited `deleteAll()` never runs.
 
 The ORM returns inserted / updated rows by default. The `.returning(...)` selector lives on the SQL builder (next section), where you build a plan and execute it explicitly.
 
@@ -446,7 +455,8 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).
 9. **Confabulating a TypedSQL or `.stream()` surface.** Neither exists. Raw SQL does: the client's raw lane, ``db.raw.sql`…` ``. Reusable statements do: `db.prepare(...)` (see *Prepared statements* in [`queries.md`](./queries.md)). Streaming: `for await` over a read terminal or `runtime.query(plan)` — with the caveats in *Streaming* in [`queries.md`](./queries.md).
 10. **Mixing the ORM mutation return with `runtime.query(plan)` / `runtime.execute(plan)`.** ORM terminals issue the query themselves and return rows. The runtime methods are for SQL-builder plans.
-11. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
+11. **Reaching for `delete()` / `update()` to change many rows, then "fixing" the type error.** When `.where({ userId }).delete()` fails to compile with `'this' ... is not assignable to ... 'never'` (or `update(...)`'s argument is typed `never`), the filter isn't unique. Don't cast it away: that deletes one arbitrary row. Switch to `deleteAll()` / `updateAll()` (await the result) or `deleteAndCount()` / `updateAndCount()`. If you meant one row, filter on the primary key or a unique field with the shorthand object form.
+12. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
 
 ## Reference Files
 
@@ -464,6 +474,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 - [ ] Expressed ranges as chained `.where(...)` clauses or a single `and(...)` clause — did NOT reach for a non-existent `.between(...)` operator.
 - [ ] For cursor pagination, used `.orderBy(...).cursor({ field: lastValue }).limit(n).all()` — did NOT hand-write a `.where(p => p.field.lt(cursor))` workaround when the `.cursor()` API serves the same purpose.
 - [ ] For ORM combinators, imported `and` / `or` / `not` from `@prisma/orm-postgres/orm-client`.
+- [ ] Used `deleteAll()` / `updateAll()` (awaited) or `deleteAndCount()` / `updateAndCount()` wherever every matching row must change; used `delete()` / `update()` only after a shorthand `.where({ ... })` on the primary key or a unique field, and did NOT cast around the type error they raise for any other filter.
 - [ ] Ran SQL-builder plans via `db.runtime().query(plan)` when they return rows and `db.runtime().execute(plan)` only for non-returning writes (`tx.query` / `tx.execute` inside a transaction). Passed `insert()` an array of rows.
 - [ ] Wrapped multi-statement work in `db.transaction(async (tx) => { ... })` where atomicity matters.
 - [ ] For top-N grouped aggregates at meaningful scale, dropped to `db.sql.<ns>.<table>` rather than JS-side sort + slice over `groupBy(...).aggregate(...)`.

@@ -201,7 +201,8 @@ Coming from Prisma 7: `Prisma.User` → `Models.public_User` (note: now carries 
 
 1. **Using Postgres examples on a Mongo project (or vice versa).** Check `db.ts` and load the correct target guide ([`queries-postgres.md`](./queries-postgres.md) or [`queries-mongo.md`](./queries-mongo.md)).
 2. **Writing a `collect()` / `toArray()` helper to convert `.all()` to an array.** `.all()` returns an `AsyncIterableResult<Row>` which *is* a `PromiseLike<Row[]>` — `await collection.all()` directly yields `Row[]`. See *Consuming the result* above.
-3. **Consuming an `AsyncIterableResult` twice.** Each result is single-use. The second consumer throws `RUNTIME.ITERATOR_CONSUMED`. Buffer once into a variable and reuse the variable.
+3. **Reading `.where(filter).delete()` as "delete everything matching".** `delete()` and `update()` change one row and return `Row | null`. Bulk writes are `deleteAll()` / `updateAll()` (lazy: await or iterate the result) or `deleteAndCount()` / `updateAndCount()`. On Postgres and SQLite, `delete()` / `update()` only compile after a `.where({ ... })` on the primary key or a unique field. On Mongo nothing stops you: a non-unique filter changes one document and silently leaves the rest, which in an account-deletion flow means user data left behind. Details in the per-target guide.
+4. **Consuming an `AsyncIterableResult` twice.** Each result is single-use. The second consumer throws `RUNTIME.ITERATOR_CONSUMED`. Buffer once into a variable and reuse the variable.
 
 Target-specific pitfalls live in the per-target guides.
 
@@ -233,5 +234,6 @@ This skill is split for selective loading. Target-specific reference paths live 
 - [ ] Chose the right lane (ORM by default; lower-level builder for shapes the ORM doesn't express).
 - [ ] Used `.first()` / `.first({ pk })` (Postgres) or `.where({ ... }).first()` (Mongo) for single-row reads — not `.all()`.
 - [ ] Consumed `.all()` with plain `await` (not a `collect()` / `toArray()` helper). Used `for await` only when per-row handling is actually wanted — and did not promise it bounds memory on the long-lived façade — and never iterated the same result twice.
+- [ ] Used `deleteAll()` / `updateAll()` (or the `*AndCount` terminals) for every write meant to change all matching rows; kept `delete()` / `update()` for primary-key or unique filters.
 - [ ] Did NOT use `db.sql` on a Mongo project or `db.query` where the Postgres SQL builder is meant.
 - [ ] Completed the target-specific checklist in the loaded guide.
