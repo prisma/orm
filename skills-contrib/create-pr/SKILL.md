@@ -69,7 +69,7 @@ The PR description must follow a **decision-led, narrative** structure. A teamma
 
 #### Consult the PR template
 
-Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's required headers (today: `## Linked issue`, `## Summary`, `## Testing performed`, `## Skill update`, `## Checklist`, `## Notes for the reviewer`) must appear in the final body even when the skill's recommended structure below doesn't list them. Where the template and the skill overlap, use the template's richer header (e.g. `## Linked issue` — with a `Refs:` link and any prerequisite-PR / follow-up-PR context — replaces the bare close-line at the top).
+Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's required headers (today: `## Linked issue`, `## At a glance`, `## Summary`, `## Testing performed`, `## Skill update`, `## Checklist`, `## Notes for the reviewer`) must appear in the final body even when the skill's recommended structure below doesn't list them. Where the template and the skill overlap, use the template's richer header (e.g. `## Linked issue` — with a `Refs:` link and any prerequisite-PR / follow-up-PR context — replaces the bare close-line at the top).
 
 #### Required structure (in this order)
 

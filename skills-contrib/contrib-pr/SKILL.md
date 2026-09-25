@@ -121,6 +121,7 @@ PR titles are the raw material the release-notes author triages when a version s
 Fill in the [pull request template](../../.github/PULL_REQUEST_TEMPLATE.md) sections in order:
 
 - **Linked issue**: `Fixes #N` / `Refs #N`. If no issue exists because the change is small, write `n/a — small change`.
+- **At a glance**: a short, real example of the change that a reviewer can take in within ten seconds: a code sample, a command and its output, or a before/after. Use code from your branch, not pseudocode. For a docs-only change, one line is enough.
 - **Summary**: one or two sentences focused on *why*, not file-by-file *what*. "Adds X because Y was broken" rather than "Adds X function in foo.ts and modifies bar.ts".
 - **Testing performed**: list the actual `pnpm test:*` commands you ran. If you ran a manual repro (e.g. against the demo), say so.
 - **Skill update**: say which agent skill the change teaches. Write `n/a — internal only` only when the change is purely internal or a refactor with no user-visible delta. A user-facing change that teaches no existing skill still needs a sentence saying why no skill update is required. The checklist below asks you to confirm this section.

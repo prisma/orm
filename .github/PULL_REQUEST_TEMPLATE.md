@@ -12,6 +12,10 @@ Before you submit:
 <!-- Link the GitHub issue this PR addresses, e.g. "Fixes #123" or "Refs #123".
      If the change is small enough that no issue exists, put: "n/a — small change". -->
 
+## At a glance
+
+<!-- Show the change before explaining it: a short code sample, a command and its output, or a before/after that lets a reviewer see what changes in ten seconds. Use real code from the branch, not pseudocode. For a docs-only or internal change, one line is enough. -->
+
 ## Summary
 
 <!-- One or two sentences focused on *why* the change exists, not file-by-file *what*. -->
