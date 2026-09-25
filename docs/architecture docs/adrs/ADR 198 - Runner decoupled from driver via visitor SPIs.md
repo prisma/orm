@@ -90,7 +90,7 @@ Inspection commands (`ListIndexesCommand`, `ListCollectionsCommand`) follow the 
 
 Data-transform operations (backfills, field renames, etc.) do not go through the DDL visitor. They use the same adapter + driver transport that runtime queries use: the runner calls `adapter.lower(plan)` to get a wire command, then `driver.execute(wireCommand)` to run it. This is the standard query-execution path — no bespoke executor needed.
 
-An earlier design had a separate `MongoDmlExecutor` class that called `db.collection(...)` directly for data transforms. That class duplicated the command-dispatch logic already in the adapter and driver, and it added another `Db` dependency to the runner's interface. It was deleted. Both DDL and DML now flow through existing abstractions.
+A separate DML executor that called `db.collection(...)` directly for data transforms would duplicate the command dispatch the adapter and driver already perform, and would add a `Db` dependency to the runner's interface. Both DDL and DML go through the existing abstractions instead.
 
 ### MarkerOperations
 
@@ -154,11 +154,9 @@ The simplest option: pass `Db` to the runner's constructor and let it instantiat
 - It makes the runner untestable without a live MongoDB instance.
 - It couples the runner to a specific driver version — swapping driver implementations (e.g., for Atlas serverless) would require modifying the runner.
 
-### A DDL command visitor in the runner (superseded 2026-09-25)
+### A DDL command visitor in the runner
 
-This ADR first chose a DDL command visitor: the runner called `step.command.accept(commandExecutor)`, and an adapter-side `MongoCommandExecutor` implemented one visitor method per command kind, so a new kind failed to compile at the executor. A single `executeDdl(command)` function was rejected at the time because it seemed to give up that exhaustiveness check.
-
-The decision was reversed. DDL execution now goes through the same lowering the adapter already does for every other command: `executeDdl` lowers the command with the adapter and runs the wire command on the driver. The exhaustiveness check moved rather than disappeared: `lowerDdlCommand` ends in a `never` check over `command.kind`. A separate executor duplicated the per-kind dispatch that lowering already performs. The inspection commands keep the visitor, because they return documents rather than lowering to a wire command.
+The runner could dispatch each DDL command to an adapter-side executor through a visitor, `step.command.accept(commandExecutor)`, with one visitor method per command kind so that a new kind fails to compile at the executor. That executor would duplicate the per-kind dispatch the adapter's lowering already performs. `executeDdl` lowers the command and runs the wire command on the driver, and `lowerDdlCommand` ends in a `never` check over `command.kind`, which keeps the exhaustiveness guarantee. Inspection commands keep a visitor, because they return documents rather than lowering to a wire command.
 
 ### Marker operations as a separate service
 
