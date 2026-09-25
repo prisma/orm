@@ -32,16 +32,17 @@
     "@internal/mongo-value": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
     "arktype": "catalog:",
-    "bson": "^7.2.0"
+    "bson": "catalog:"
   },
   "devDependencies": {
     "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
     "@internal/mongo-wire": "workspace:8.0.0-rc.12",
     "@internal/psl-parser": "workspace:8.0.0-rc.12",
-    "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@internal/publish-surface": "workspace:8.0.0-rc.12",
+    "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@repo/tsconfig": "workspace:8.0.0-rc.12",
     "@repo/tsdown": "workspace:8.0.0-rc.12",
+    "mongodb": "catalog:",
     "pathe": "^2.0.3",
     "tsdown": "catalog:",
     "typescript": "catalog:",
