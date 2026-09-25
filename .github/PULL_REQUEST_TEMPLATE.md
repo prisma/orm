@@ -12,6 +12,10 @@ Before you submit:
 <!-- Link the GitHub issue this PR addresses, e.g. "Fixes #123" or "Refs #123".
      If the change is small enough that no issue exists, put: "n/a — small change". -->
 
+## At a glance
+
+<!-- Show the change before explaining it: a short code sample, a command and its output, or a before/after that lets a reviewer see what changes in ten seconds. Use real code from the branch, not pseudocode. For a docs-only or internal change, one line is enough. -->
+
 ## Summary
 
 <!-- One or two sentences focused on *why* the change exists, not file-by-file *what*. -->
@@ -37,7 +41,7 @@ Before you submit:
 - [ ] All commits are signed off (`git commit -s`) per the [DCO](../CONTRIBUTING.md#developer-certificate-of-origin-dco). The DCO status check will block merge if any commit is missing a `Signed-off-by:` trailer.
 - [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md) and the change is scoped to one logical concern.
 - [ ] Tests are updated (or `n/a` if the change is doc-only / refactor with no behavioural delta).
-- [ ] The PR title is in `TML-NNNN: <sentence-case title>` form (Linear ticket prefix + concise title naming the concrete deliverable). See `.claude/skills/create-pr/SKILL.md` for the full convention.
+- [ ] The PR title is a conventional commit title that names the change, e.g. `fix(sql-orm-client): correlate includes on every key column`. PR titles become the release notes.
 - [ ] The **Skill update** section above is filled in (or stated `n/a — internal only`).
 
 ## Notes for the reviewer
