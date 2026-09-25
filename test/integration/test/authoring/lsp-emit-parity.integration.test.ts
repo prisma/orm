@@ -1,4 +1,4 @@
-import { copyFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
 import { timeouts } from '@repo/test-utils';
@@ -8,8 +8,8 @@ import { resolveConfigInputs } from '../../../../packages/1-framework/3-tooling/
 import { DocumentStore } from '../../../../packages/1-framework/3-tooling/language-server/src/document-store';
 import { createProjectArtifacts } from '../../../../packages/1-framework/3-tooling/language-server/src/project-artifacts';
 import { startServer } from '../../../../packages/1-framework/3-tooling/language-server/src/start-server';
-import { withTempDir } from '../utils/cli-test-helpers';
-import { runContractEmit, setupJourney } from '../utils/journey-test-helpers';
+import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
+import { type JourneyContext, runContractEmit, setupJourney } from '../utils/journey-test-helpers';
 
 const schema = `// use prisma-8
 
@@ -200,6 +200,170 @@ model Widget {
           diagnosticCodes,
         );
         expect(onInterpretationError).not.toHaveBeenCalled();
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
+  describe('language-server diagnostics agree with contract emit across multiple files', () => {
+    const directive = '// use prisma-8\n';
+
+    const userSchema = `${directive}model User {
+  id Int @id
+  posts Post[]
+}
+
+namespace billing {
+  model Account {
+    id Int @id
+  }
+}
+`;
+    const validPostSchema = `${directive}model Post {
+  id Int @id
+  authorId Int
+  author User @relation(fields: [authorId], references: [id])
+}
+`;
+    const invalidPostSchema = `${directive}model Post {
+  id Int @id
+  authorId Int
+  author User @relation(fields: [authorId], references: [id])
+  slug String @map("")
+}
+`;
+    const extraNamespaceSchema = `${directive}namespace billing {
+  model Invoice {
+    id Int @id
+  }
+}
+`;
+    // No directive: matches the glob but must be quietly excluded on both
+    // surfaces (design decision 2).
+    const draftSchema = 'model Draft {\n  id Int @id\n}\n';
+
+    function multiFileProject(
+      createTempDir: () => string,
+      postSchema: string,
+    ): JourneyContext & { readonly paths: Record<'user' | 'post' | 'extra' | 'draft', string> } {
+      const testDir = createTempDir();
+      writeProjectManifest(testDir);
+      const configPath = join(testDir, 'prisma.config.ts');
+      writeFileSync(
+        configPath,
+        `import { definePrismaConfig } from '@prisma/cli-engine';
+import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+
+export default definePrismaConfig({
+  orm: ormConfig({ contract: './*.prisma' }),
+});
+`,
+      );
+      const paths = {
+        user: join(testDir, 'user.prisma'),
+        post: join(testDir, 'post.prisma'),
+        extra: join(testDir, 'extra-namespace.prisma'),
+        draft: join(testDir, 'draft.prisma'),
+      };
+      writeFileSync(paths.user, userSchema);
+      writeFileSync(paths.post, postSchema);
+      writeFileSync(paths.extra, extraNamespaceSchema);
+      writeFileSync(paths.draft, draftSchema);
+      return { testDir, configPath, outputDir: join(testDir, 'output'), paths };
+    }
+
+    async function lspProjectFor(configPath: string) {
+      const documents = new DocumentStore();
+      const readText = (uri: string): string | undefined => documents.text(uri);
+      const resolution = await resolveConfigInputs(configPath, readText);
+      const onInterpretationError = vi.fn();
+      const project = createProjectArtifacts({
+        ...resolution,
+        onInterpretationError,
+        getDocument: documents.getDocument,
+        readText,
+      });
+      return { project, onInterpretationError };
+    }
+
+    function diagnosticsFor(
+      project: Awaited<ReturnType<typeof lspProjectFor>>['project'],
+      uri: string,
+    ): readonly string[] {
+      const document = project.document(uri);
+      if (document === undefined) return [];
+      const symbolCodes = project
+        .symbolDiagnostics()
+        .filter((diagnostic) => diagnostic.filename === document.sourceFile.filename)
+        .map((diagnostic) => diagnostic.code);
+      return [
+        ...document.diagnostics.map((diagnostic) => diagnostic.code),
+        ...symbolCodes,
+        ...document.interpretDiagnostics().map((diagnostic) => diagnostic.code),
+      ];
+    }
+
+    it(
+      'resolves the cross-file relation and the namespace reopened across files, and excludes the directive-less member, on both surfaces',
+      async () => {
+        const ctx = multiFileProject(createTempDir, validPostSchema);
+
+        const emitted = await runContractEmit(ctx);
+        expect(emitted.exitCode, emitted.stderr).toBe(0);
+        const contract = JSON.parse(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')) as {
+          readonly domain: { readonly namespaces: Record<string, { readonly models?: object }> };
+        };
+        expect(Object.keys(contract.domain.namespaces['public']?.models ?? {}).sort()).toEqual([
+          'Post',
+          'User',
+        ]);
+        expect(Object.keys(contract.domain.namespaces['billing']?.models ?? {}).sort()).toEqual([
+          'Account',
+          'Invoice',
+        ]);
+
+        const { project } = await lspProjectFor(ctx.configPath);
+        for (const uri of [ctx.paths.user, ctx.paths.post, ctx.paths.extra].map((p) =>
+          pathToFileURL(p).toString(),
+        )) {
+          expect(diagnosticsFor(project, uri)).toEqual([]);
+        }
+        const models = Object.keys(project.symbolTable().topLevel.models);
+        expect(models.sort()).toEqual(['Post', 'User']);
+
+        // Directive-less: excluded from the emitted contract (no Draft model
+        // in any namespace) and unreadable through the LSP project (no
+        // document, so nothing to publish diagnostics for and nothing in
+        // the symbol table).
+        const namespaceModels = Object.values(contract.domain.namespaces).flatMap((namespace) =>
+          Object.keys(namespace.models ?? {}),
+        );
+        expect(namespaceModels).not.toContain('Draft');
+        const draftUri = pathToFileURL(ctx.paths.draft).toString();
+        expect(project.document(draftUri)).toBeUndefined();
+        expect(models).not.toContain('Draft');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'attributes an invalid mapping in one member to that member only, matching emit and the LSP',
+      async () => {
+        const ctx = multiFileProject(createTempDir, invalidPostSchema);
+
+        const emitted = await runContractEmit(ctx);
+        expect(emitted.exitCode).not.toBe(0);
+
+        const { project } = await lspProjectFor(ctx.configPath);
+        const userUri = pathToFileURL(ctx.paths.user).toString();
+        const postUri = pathToFileURL(ctx.paths.post).toString();
+        const extraUri = pathToFileURL(ctx.paths.extra).toString();
+
+        expect(diagnosticsFor(project, userUri)).toEqual([]);
+        expect(diagnosticsFor(project, extraUri)).toEqual([]);
+        expect(diagnosticsFor(project, postUri)).toEqual(
+          expect.arrayContaining(['PSL_INVALID_ATTRIBUTE_SYNTAX']),
+        );
       },
       timeouts.coldTransformImport,
     );
