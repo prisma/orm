@@ -34,9 +34,11 @@ function decodeFailed(codecId: string, message: string, received: unknown): neve
   });
 }
 
+const RECEIVED_PREVIEW_LIMIT = 100;
+
 function encodeFailed(codecId: string, message: string, received: unknown): never {
   throw mongoTargetError('RUNTIME.ENCODE_FAILED', `${codecId} ${message}`, {
-    meta: { codecId, received: String(received) },
+    meta: { codecId, received: String(received).slice(0, RECEIVED_PREVIEW_LIMIT) },
   });
 }
 
@@ -158,10 +160,23 @@ export function decimal128EncodeJson(codecId: string, value: string): string {
   return requireCanonicalDecimalText(codecId, value);
 }
 
+/**
+ * The JSON form is what `encodeJson` writes, so it follows the encode rule: canonical decimal text (no exponent), or `NaN`, `Infinity` or `-Infinity`, that a Decimal128 holds exactly.
+ */
 export function decimal128DecodeJson(codecId: string, json: JsonValue): string {
-  const text = typeof json === 'string' ? canonicalDecimalText(json) : undefined;
-  if (text === undefined) return decodeFailed(codecId, 'JSON value must be decimal text', json);
-  return text;
+  if (typeof json !== 'string' || !CANONICAL_DECIMAL_TEXT.test(json)) {
+    return decodeFailed(
+      codecId,
+      'JSON value must be decimal text without an exponent, or NaN, Infinity or -Infinity',
+      json,
+    );
+  }
+  try {
+    Decimal128.fromString(json);
+  } catch {
+    return decodeFailed(codecId, 'JSON value cannot be stored as a Decimal128 exactly', json);
+  }
+  return json;
 }
 
 export function binaryEncode(codecId: string, value: Uint8Array): Binary {
