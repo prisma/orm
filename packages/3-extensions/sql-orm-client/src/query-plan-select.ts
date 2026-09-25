@@ -38,7 +38,7 @@ import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
 } from './collection-contract';
-import { assertDistinctOnOrderable } from './order-by-guards';
+import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
 import {
@@ -535,7 +535,7 @@ function buildIncludeChildRowsSelect(
   const childState = include.nested;
   if (childState.distinctOn !== undefined && childState.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
-    assertDistinctOnOrderable(childState.orderBy);
+    assertDistinctOnCompatibleOrder(childState.orderBy, childState.distinctOn.length);
   }
   const parentLocalRefs = resolveParentLocalRefs(
     parentSource,
@@ -995,7 +995,7 @@ function buildIncludeChildScalarSelect(
   const state = scalar.state;
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
-    assertDistinctOnOrderable(state.orderBy);
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
   const childWhere = buildStateWhere(contract, childTableRef, state, {
     filterTableName: include.relatedTableName,
@@ -1387,7 +1387,7 @@ function buildSelectAst(
   const namespaceId = options.namespaceId;
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
-    assertDistinctOnOrderable(state.orderBy);
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
   const scalarProjection = buildProjection(
     contract,
@@ -1449,7 +1449,6 @@ export function compileSelect(
 ): SqlQueryPlan<Record<string, unknown>> {
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
-    assertDistinctOnOrderable(state.orderBy);
   }
 
   const polyInfo = modelName

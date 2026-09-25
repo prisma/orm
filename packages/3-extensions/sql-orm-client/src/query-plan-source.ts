@@ -26,7 +26,7 @@ import {
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumn,
 } from './collection-contract';
-import { assertCursorKeyable } from './order-by-guards';
+import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
@@ -93,11 +93,11 @@ function buildCursorWhere(
     return undefined;
   }
 
-  assertCursorKeyable(orderBy);
+  assertCursorCompatibleOrder(orderBy);
   const entries: CursorOrderEntry[] = [];
   for (const order of orderBy) {
     if (order.expr.kind !== 'column-ref') {
-      throw new InternalError('assertCursorKeyable admits only column orders');
+      throw new InternalError('assertCursorCompatibleOrder admits only column orders');
     }
     const column = order.expr.column;
     const value = cursor[column];

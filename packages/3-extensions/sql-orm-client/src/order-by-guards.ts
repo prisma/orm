@@ -1,7 +1,10 @@
 import { type AnyExpression, isOrderByNulls, OrderByItem } from '@internal/sql-relational-core/ast';
 import { ormError } from './orm-errors';
 
-export function assertCursorKeyable(orderBy: readonly OrderByItem[] | undefined): void {
+/**
+ * A keyset needs a cursor value for every order axis, so each active order must be a plain column without null placement.
+ */
+export function assertCursorCompatibleOrder(orderBy: readonly OrderByItem[] | undefined): void {
   (orderBy ?? []).forEach((item, index) => {
     const position = index + 1;
     if (item.expr.kind !== 'column-ref') {
@@ -21,14 +24,20 @@ export function assertCursorKeyable(orderBy: readonly OrderByItem[] | undefined)
   });
 }
 
-export function assertDistinctOnOrderable(orderBy: readonly OrderByItem[] | undefined): void {
-  (orderBy ?? []).forEach((item, index) => {
+/**
+ * Postgres requires the leading `ORDER BY` items to match the `DISTINCT ON` expressions, so the first `distinctOnCount` items must be plain columns; later items only choose which row represents each group and may be any expression.
+ */
+export function assertDistinctOnCompatibleOrder(
+  orderBy: readonly OrderByItem[] | undefined,
+  distinctOnCount: number,
+): void {
+  (orderBy ?? []).slice(0, distinctOnCount).forEach((item, index) => {
     const position = index + 1;
     if (item.expr.kind !== 'column-ref') {
       throw ormError(
         'ORM.ARGUMENT_INVALID',
-        `distinctOn() cannot be combined with orderBy item ${position}: it orders by an expression rather than a column, and relation orders, relation counts and operation results are not distinct-on-able. Order by the model's own columns when using distinctOn().`,
-        { meta: { method: 'distinctOn', position } },
+        `distinctOn() needs its ${distinctOnCount} column(s) as the first orderBy items, but orderBy item ${position} orders by an expression rather than a column. Put the distinctOn columns first; relation orders, relation counts and operation results may follow them.`,
+        { meta: { method: 'distinctOn', position, distinctOnCount } },
       );
     }
   });

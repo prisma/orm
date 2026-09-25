@@ -92,7 +92,7 @@ import {
   hasNestedMutationCallbacks,
   withMutationScope,
 } from './mutation-executor';
-import { assertCursorKeyable, assertDistinctOnOrderable } from './order-by-guards';
+import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import {
@@ -1024,7 +1024,7 @@ class CollectionImpl<
       ? Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>
       : never,
   ): Collection<TContract, ModelName, Row, State> {
-    assertCursorKeyable(this.state.orderBy);
+    assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
       this.contract,
       this.namespaceId,
@@ -1100,7 +1100,7 @@ class CollectionImpl<
       : never
   ): Collection<TContract, ModelName, Row, State> {
     assertDistinctOnCapability(this.contract, 'distinctOn');
-    assertDistinctOnOrderable(this.state.orderBy);
+    assertDistinctOnCompatibleOrder(this.state.orderBy, fields.length);
     const distinctOnFields = mapFieldsToColumns(
       this.contract,
       this.namespaceId,
