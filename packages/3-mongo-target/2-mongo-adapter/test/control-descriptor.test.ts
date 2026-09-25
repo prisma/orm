@@ -16,10 +16,21 @@ const expectedScalars = [
   ['Binary', 'mongo/binary@1'],
 ] as const;
 
+const deprecatedAliases = [
+  ['Int', 'Int32'],
+  ['Float', 'Double'],
+  ['Boolean', 'Bool'],
+  ['DateTime', 'Date'],
+] as const;
+
 describe('mongoScalarAuthoringTypes', () => {
   it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
     expect(Object.keys(mongoScalarAuthoringTypes).sort()).toEqual(
-      [...expectedScalars.map(([name]) => name), 'Json'].sort(),
+      [
+        ...expectedScalars.map(([name]) => name),
+        'Json',
+        ...deprecatedAliases.map(([name]) => name),
+      ].sort(),
     );
     for (const [name, codecId] of expectedScalars) {
       expect(mongoScalarAuthoringTypes[name]).toEqual({
@@ -29,6 +40,17 @@ describe('mongoScalarAuthoringTypes', () => {
       });
     }
   });
+
+  it.each(deprecatedAliases)(
+    'keeps %s as a deprecated alias of %s with the same codec and native type',
+    (alias, replacement) => {
+      expect(mongoScalarAuthoringTypes[alias]).toEqual({
+        ...mongoScalarAuthoringTypes[replacement],
+        documentation: expect.stringContaining(`Deprecated: use ${replacement}.`),
+        deprecated: { replacement },
+      });
+    },
+  );
 
   it('pins Json, whose codec has no BSON type, to the json native type', () => {
     expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([]);
