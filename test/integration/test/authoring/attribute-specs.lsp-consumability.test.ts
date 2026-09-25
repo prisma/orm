@@ -22,7 +22,7 @@ function modelSymbolFor(source: string) {
 
 describe('postgres attribute specs are consumable from a resolved language-server project', () => {
   it("enumerates the postgres pack's @@rls by its attribute name", async () => {
-    const resolution = await resolveConfigInputs(configPath);
+    const resolution = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
 
     const contributions = resolution.interpretation?.context.authoringContributions;
     expect(contributions).toBeDefined();
@@ -34,7 +34,7 @@ describe('postgres attribute specs are consumable from a resolved language-serve
   });
 
   it("invokes the postgres pack's factory to obtain the @@rls spec", async () => {
-    const resolution = await resolveConfigInputs(configPath);
+    const resolution = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
     const interpretation = resolution.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
@@ -66,7 +66,7 @@ describe('postgres attribute specs are consumable from a resolved language-serve
 
 describe('mongo attribute specs are consumable from a resolved language-server project', () => {
   it("enumerates the Mongo family's built-ins by attribute name", async () => {
-    const resolution = await resolveConfigInputs(mongoConfigPath);
+    const resolution = await resolveConfigInputs(mongoConfigPath, () => '// use prisma-8\n');
 
     const contributions = resolution.interpretation?.context.authoringContributions;
     expect(contributions).toBeDefined();
@@ -84,7 +84,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
   });
 
   it("invokes the Mongo family's per-model index factory to obtain the @@index spec", async () => {
-    const resolution = await resolveConfigInputs(mongoConfigPath);
+    const resolution = await resolveConfigInputs(mongoConfigPath, () => '// use prisma-8\n');
     const interpretation = resolution.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
@@ -122,7 +122,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
   });
 
   it("enumerates the SQL family's built-in attribute surface", async () => {
-    const resolution = await resolveConfigInputs(configPath);
+    const resolution = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
     const contributions = resolution.interpretation?.context.authoringContributions;
     expect(contributions).toBeDefined();
     if (contributions === undefined) return;
@@ -152,7 +152,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
   });
 
   it("invokes the SQL family's @relation factory and enumerates its named arguments", async () => {
-    const resolution = await resolveConfigInputs(configPath);
+    const resolution = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
     const interpretation = resolution.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;

@@ -184,10 +184,9 @@ function createServerOn(connection: Connection): LanguageServer {
       return project;
     }
     // Only the config's declared inputs are managed: a stray document beside
-    // a config keeps no association, so reads and events never reach it — and
-    // a project it alone caused to load is dropped again.
+    // a config keeps no association, so reads and events never reach it. The
+    // project itself survives regardless (design decision 8).
     documentConfigPaths.delete(canonicalFileIdentity(uri));
-    dropProjectWithoutManagedDocuments(project.configPath);
     return undefined;
   }
 
@@ -254,15 +253,11 @@ function createServerOn(connection: Connection): LanguageServer {
       .then(
         (project) => {
           // Entry replacement is synchronous, so a superseded load's own
-          // continuation stays silent.
+          // continuation stays silent. A project survives regardless of
+          // whether any of its documents are currently open (design
+          // decision 8) — disk reads keep it alive.
           if (isCurrentLoad(configPath, load)) {
-            if (hasManagedDocuments(configPath)) {
-              managedProjects.set(configPath, { status: 'loaded', project });
-            } else {
-              // A load that outlives the last association must not keep a
-              // project entry alive.
-              managedProjects.delete(configPath);
-            }
+            managedProjects.set(configPath, { status: 'loaded', project });
             // Unconditional: clients keep per-server diagnostic state, so an
             // empty publish is harmless when no marker is outstanding.
             clearConfigFailure(configPath);
@@ -273,19 +268,13 @@ function createServerOn(connection: Connection): LanguageServer {
           // Same guard as above. All failure consequences live here — the
           // queue orders this handler strictly before any successor load.
           if (isCurrentLoad(configPath, load)) {
-            if (!hasManagedDocuments(configPath)) {
-              // No resurrection of the last-good project, no zombie marker.
-              managedProjects.delete(configPath);
-              clearConfigFailure(configPath);
-            } else {
-              publishConfigFailure(configPath, error);
-              if (lastGood !== undefined) {
-                managedProjects.set(configPath, { status: 'loaded', project: lastGood });
-                return lastGood;
-              }
-              managedProjects.set(configPath, { status: 'failed' });
-              unmanageDocuments(configPath);
+            publishConfigFailure(configPath, error);
+            if (lastGood !== undefined) {
+              managedProjects.set(configPath, { status: 'loaded', project: lastGood });
+              return lastGood;
             }
+            managedProjects.set(configPath, { status: 'failed' });
+            unmanageDocuments(configPath);
           }
           throw error;
         },
@@ -326,13 +315,15 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function loadProject(configPath: string): Promise<ProjectState> {
-    const resolution = await resolveConfigInputs(configPath);
+    const readText = (uri: string): string | undefined => documents.text(uri);
+    const resolution = await resolveConfigInputs(configPath, readText);
     // A fresh store per load: a config reload can change what a parse
     // produces (inputs, control stack), so later reads must derive from the
     // new resolution rather than anything computed under the old one.
     const artifacts = createProjectArtifacts({
       inputs: resolution.inputs,
       getDocument,
+      readText,
       onInterpretationError: (uri, error) => {
         const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
         connection.console.error(`PSL interpretation failed for ${uri}: ${detail}`);
@@ -680,15 +671,10 @@ function createServerOn(connection: Connection): LanguageServer {
     const document = documents.close(event.textDocument.uri);
     if (document === undefined) return;
     const uri = document.uri;
-    const configPath = documentConfigPaths.get(canonicalFileIdentity(uri));
     artifactsForDocument(uri)?.documentClosed(uri);
     documentConfigPaths.delete(canonicalFileIdentity(uri));
-    // A live project always has at least one open input; when the last one
-    // closes the project is dropped, and a reopen re-resolves and reloads the
-    // config from scratch.
-    if (configPath !== undefined) {
-      dropProjectWithoutManagedDocuments(configPath);
-    }
+    // The project survives the close (design decision 8): the member's text
+    // is still readable from disk, so its project keeps computing.
     if (!clientCapabilities.pullDiagnostics) {
       sendDiagnostics({ uri, diagnostics: [] });
     }
@@ -706,29 +692,6 @@ function createServerOn(connection: Connection): LanguageServer {
       return entry.project.artifacts;
     }
     return entry?.status === 'loading' ? entry.lastGood?.artifacts : undefined;
-  }
-
-  function hasManagedDocuments(configPath: string): boolean {
-    for (const managedConfigPath of documentConfigPaths.values()) {
-      if (managedConfigPath === configPath) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Deletes only settled entries: an in-flight load settles through the
-  // association check in startProjectLoad and cleans up after itself.
-  function dropProjectWithoutManagedDocuments(configPath: string): void {
-    if (hasManagedDocuments(configPath)) {
-      return;
-    }
-    const entry = managedProjects.get(configPath);
-    if (entry === undefined || entry.status === 'loading') {
-      return;
-    }
-    managedProjects.delete(configPath);
-    clearConfigFailure(configPath);
   }
 
   return {

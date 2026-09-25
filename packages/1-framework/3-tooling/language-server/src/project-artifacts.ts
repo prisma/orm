@@ -6,7 +6,6 @@ import {
   type SymbolTableResult,
 } from '@internal/psl-parser';
 import { type DocumentAst, PslSources, type SourceFile } from '@internal/psl-parser/syntax';
-import { InternalError } from '@internal/utils/internal-error';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from './config-resolution';
@@ -31,7 +30,14 @@ export interface DocumentArtifacts {
 
 export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
+  /**
+   * The open overlay, if any — consulted only for its own URI spelling
+   * (a client's live document URI can differ in encoding/casing from the
+   * configured input string that names the same file).
+   */
   readonly getDocument: (uri: string) => TextDocument | undefined;
+  /** Overlay text if the member is open, disk text otherwise; `undefined` on a miss. */
+  readonly readText: (uri: string) => string | undefined;
   readonly interpretation?: ProjectInterpretation;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
@@ -46,8 +52,8 @@ export interface ProjectArtifactsOptions {
 export interface ProjectArtifacts {
   readonly sources: PslSources;
   /**
-   * `undefined` when the document is not open in the text mirror or is not
-   * one of the project's configured inputs.
+   * `undefined` when the member has no readable text (open or on disk) or is
+   * not one of the project's configured inputs.
    */
   document(uri: string): DocumentArtifacts | undefined;
   symbolTable(): SymbolTable;
@@ -57,7 +63,7 @@ export interface ProjectArtifacts {
 }
 
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const { inputs, getDocument, interpretation } = options;
+  const { inputs, getDocument, readText, interpretation } = options;
   const documents = new Map<string, DocumentArtifacts>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
@@ -145,11 +151,16 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (existing !== undefined) {
       return existing;
     }
-    const textDocument = getDocument(uri);
-    if (textDocument === undefined) {
+    // An open overlay keeps its own URI spelling (a client's live document
+    // URI can differ in encoding/casing from the configured input string);
+    // a disk-only member has no such live spelling, so it uses `uri` as
+    // given by the membership set.
+    const resolvedUri = getDocument(uri)?.uri ?? uri;
+    const text = readText(uri);
+    if (text === undefined) {
       return undefined;
     }
-    const computed = computeDocumentDiagnostics(textDocument.uri, textDocument.getText(), inputs);
+    const computed = computeDocumentDiagnostics(resolvedUri, text, inputs);
     if (computed === null) {
       return undefined;
     }
@@ -158,7 +169,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       sourceFile: computed.sourceFile,
       diagnostics: computed.parseDiagnostics,
       interpretDiagnostics: createInterpretSlot(
-        textDocument.uri,
+        resolvedUri,
         computed.document,
         computed.sourceFile,
       ),
@@ -173,11 +184,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     for (const uri of inputs.uris()) {
       const artifacts = readDocument(uri);
       if (artifacts !== undefined) currentDocuments.push(artifacts.document);
-    }
-    if (currentDocuments.length === 0) {
-      throw new InternalError(
-        'invariant violated: project has no readable configured input — callers must check document artifacts first',
-      );
     }
     symbolTableResult ??= buildSymbolTable({ documents: currentDocuments, sources });
     return symbolTableResult;

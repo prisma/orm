@@ -26,7 +26,10 @@ const emptyPipelineInputs: PipelineInputs = {
   pslBlockDescriptors: {},
 };
 
-export async function resolveConfigInputs(configPath: string): Promise<ConfigResolution> {
+export async function resolveConfigInputs(
+  configPath: string,
+  readText: (uri: string) => string | undefined,
+): Promise<ConfigResolution> {
   // The language server keeps its established failure channel: a config that
   // cannot serve the project is thrown and published as a document diagnostic.
   const loaded = await loadConfig(configPath);
@@ -38,7 +41,7 @@ export async function resolveConfigInputs(configPath: string): Promise<ConfigRes
     throw projectSections.failure;
   }
   const config = projectSections.value;
-  const inputs = resolveSchemaInputs(config);
+  const inputs = await resolveSchemaInputs(config, readText);
   if (!hasPslInputs(config)) {
     return {
       inputs,

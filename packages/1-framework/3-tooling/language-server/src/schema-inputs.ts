@@ -1,5 +1,7 @@
 import { normalize } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { expandContractInputs } from '@internal/config-loader';
+import { isPrismaNextSchema } from '@internal/psl-parser';
 
 export interface SchemaInputConfig {
   readonly contract?: {
@@ -20,22 +22,43 @@ export function hasPslInputs(config: SchemaInputConfig): boolean {
   return source?.format === 'psl' && source.inputs !== undefined;
 }
 
-export function resolveSchemaInputs(config: SchemaInputConfig): SchemaInputSet {
-  const inputs = hasPslInputs(config) ? config.contract?.source.inputs : undefined;
-  const uris = inputs?.map(configuredInputUri) ?? [];
-  const identities = new Set(uris.map(canonicalFileIdentity));
+/**
+ * A member is in the schema when it matches the configured glob/literal
+ * inputs and its current text carries the `// use prisma-8` directive
+ * (design decision 2) — `readText` answers the latter from whatever the
+ * document store currently holds (overlay first, disk otherwise).
+ */
+export async function resolveSchemaInputs(
+  config: SchemaInputConfig,
+  readText: (uri: string) => string | undefined,
+): Promise<SchemaInputSet> {
+  const rawInputs = hasPslInputs(config) ? config.contract?.source.inputs : undefined;
+  const patterns = rawInputs?.map(toExpandablePath);
+  const expanded = await expandContractInputs(patterns);
+  const windows = isWindowsPlatform();
+  const candidates = expanded.map((path) => pathToFileURL(path, { windows }).toString());
+  const identities = new Set(candidates.map(canonicalFileIdentity));
+
+  // The glob expansion above runs once per resolution pass (config
+  // load/reload); the directive gate below re-reads live on every call so an
+  // edit toggling the directive is reflected immediately, without waiting
+  // for the next resolution pass.
+  function isMember(uri: string): boolean {
+    if (!identities.has(canonicalFileIdentity(uri))) {
+      return false;
+    }
+    const text = readText(uri);
+    return text !== undefined && isPrismaNextSchema(text);
+  }
 
   return {
-    includes: (uri) => identities.has(canonicalFileIdentity(uri)),
-    uris: () => uris,
+    includes: isMember,
+    uris: () => candidates.filter(isMember),
   };
 }
 
-function configuredInputUri(input: string): string {
-  if (isFileUri(input)) {
-    return input;
-  }
-  return pathToFileURL(input, { windows: isWindowsPlatform() }).toString();
+function toExpandablePath(input: string): string {
+  return isFileUri(input) ? fileURLToPath(new URL(input), { windows: isWindowsPlatform() }) : input;
 }
 
 function isFileUri(input: string): boolean {

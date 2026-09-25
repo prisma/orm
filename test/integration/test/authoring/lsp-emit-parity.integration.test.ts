@@ -181,15 +181,17 @@ model Widget {
         const emitted = await runContractEmit(ctx);
         expect(emitted.exitCode, emitted.stderr).toBe(exitCode);
 
-        const resolution = await resolveConfigInputs(ctx.configPath);
-        expect(resolution.interpretation).toBeDefined();
         const onInterpretationError = vi.fn();
         const documents = new DocumentStore();
+        const readText = (readUri: string): string | undefined => documents.text(readUri);
+        const resolution = await resolveConfigInputs(ctx.configPath, readText);
+        expect(resolution.interpretation).toBeDefined();
         documents.open({ uri, languageId: 'prisma', version: 1, text });
         const project = createProjectArtifacts({
           ...resolution,
           onInterpretationError,
           getDocument: documents.getDocument,
+          readText,
         });
         const document = project.document(uri);
         expect(document).toBeDefined();

@@ -206,23 +206,28 @@ const completionInterpretationContext = {
   controlMutationDefaults: assembleControlMutationDefaults([]),
 } as unknown as ContractSourceContext;
 
-function resolutionForInputs(
+const alwaysMember = (): string => '// use prisma-8\n';
+
+async function resolutionForInputs(
   inputs: readonly string[],
   formatter?: FormatOptions,
   descriptors: AuthoringPslBlockDescriptorNamespace = {},
-): ConfigResolutionWithFormatter {
+): Promise<ConfigResolutionWithFormatter> {
   const resolution = {
-    inputs: resolveSchemaInputs({
-      contract: { source: { format: 'psl', inputs } },
-    }),
+    inputs: await resolveSchemaInputs(
+      {
+        contract: { source: { format: 'psl', inputs } },
+      },
+      alwaysMember,
+    ),
     controlStack: { scalarTypes: [...scalarTypes], pslBlockDescriptors: descriptors },
   };
   return formatter === undefined ? resolution : { ...resolution, formatter };
 }
 
-function emptyResolution(): ConfigResolution {
+async function emptyResolution(): Promise<ConfigResolution> {
   return {
-    inputs: resolveSchemaInputs({}),
+    inputs: await resolveSchemaInputs({}, alwaysMember),
     controlStack: { scalarTypes: [...scalarTypes], pslBlockDescriptors: {} },
   };
 }
@@ -238,7 +243,7 @@ const completionInterpretationSource = {
 } as unknown as PslInterpretCapable;
 
 const resolveToSchemaWithAttributeContributions: ResolveInputs = async () => {
-  const resolution = resolutionForInputs([schemaPath], undefined, pslBlockDescriptors);
+  const resolution = await resolutionForInputs([schemaPath], undefined, pslBlockDescriptors);
   return {
     ...resolution,
     controlStack: {
@@ -299,7 +304,7 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
       attributes: { probe: () => probeBlock },
     },
   };
-  const resolution = resolutionForInputs([schemaPath], undefined, descriptors);
+  const resolution = await resolutionForInputs([schemaPath], undefined, descriptors);
   return {
     ...resolution,
     controlStack: {
@@ -897,7 +902,9 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     await harness.waitForDiagnostics(schemaUri);
     expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
     expect(Object.keys(harness.getProjectSymbolTable(alias)!.topLevel.models)).toEqual(['User']);
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
+    // The project survives the close (design decision 8), so reopening the
+    // same input reuses it rather than triggering a second config load.
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
   it('replaces simultaneous alias opens and clears the superseded URI', async () => {
@@ -2127,7 +2134,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: '// use prisma-8\nmodel Invoice {\n  id Int @id\n}\n' }],
     });
-    load.resolve(resolutionForInputs([schemaPath]));
+    load.resolve(await resolutionForInputs([schemaPath]));
     await currentDiagnostics;
 
     await expect(requestSemanticTokens(harness, schemaUri)).resolves.toEqual({
@@ -2937,7 +2944,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
 });
 
 describe('language server project lifecycle', { timeout: timeouts.databaseOperation }, () => {
-  it('drops the project when its last open input closes and reopening re-evaluates the config', async () => {
+  it('keeps the project after its last open input closes and reopening reuses it (design decision 8)', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
     openDocument(harness, schemaUri, duplicateModelSource);
@@ -2957,7 +2964,8 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     );
     openDocument(harness, schemaUri, duplicateModelSource, 2);
     await rediagnosed;
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
+    // The project survived the close, so reopening reuses it — no second load.
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the project while another open input remains', async () => {
@@ -2983,7 +2991,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves no project behind when only a stray document was opened', async () => {
+  it('reuses the project a stray document caused to load once a real input opens', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
     const otherUri = pathToFileURL(join(root, 'not-a-schema.psl')).toString();
@@ -2997,7 +3005,9 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     );
     openDocument(harness, schemaUri, duplicateModelSource);
     await diagnosed;
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
+    // The project the stray document's own resolution created survives
+    // (design decision 8), so the real input's open reuses it.
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the project when a stray document opens beside an open input', async () => {
@@ -3014,7 +3024,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
-  it('does not reload a dropped project when its config changes', async () => {
+  it('reloads the surviving project when its config changes after the last close', async () => {
     harness = startHarness(resolveToSchema, watchedFilesCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, duplicateModelSource);
@@ -3029,7 +3039,9 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
 
     harness.notifyConfigChanged();
     await settle();
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
+    // The project survived the close (design decision 8) and keeps reacting
+    // to config changes, so this is a real second load.
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -3085,7 +3097,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     closeDocument(harness, schemaUri);
     await closed;
 
-    load.resolve(resolutionForInputs([schemaPath]));
+    load.resolve(await resolutionForInputs([schemaPath]));
     await requestFormatting(harness, schemaUri);
 
     expect(harness.latestDiagnostics(schemaUri)).toEqual([]);
@@ -3224,7 +3236,8 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
   }
 
   it('does not reject when an in-flight publish resolves after dispose', async () => {
-    await assertNoUnhandledRejection((load) => load.resolve(resolutionForInputs([schemaPath])));
+    const resolution = await resolutionForInputs([schemaPath]);
+    await assertNoUnhandledRejection((load) => load.resolve(resolution));
   });
 
   it('does not reject when an in-flight publish rejects after dispose', async () => {
@@ -3285,10 +3298,10 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
     source: 'prisma',
   };
 
-  function interpretationResolution(interpret: PslInterpretCapable['interpret']): {
+  async function interpretationResolution(interpret: PslInterpretCapable['interpret']): Promise<{
     readonly resolveInputs: ResolveInputs;
     readonly spy: ReturnType<typeof vi.fn>;
-  } {
+  }> {
     const spy = vi.fn(interpret);
     const source = {
       format: 'psl',
@@ -3297,7 +3310,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
       interpret: spy,
     } as unknown as PslInterpretCapable;
     const resolution: ConfigResolution = {
-      ...resolutionForInputs([schemaPath]),
+      ...(await resolutionForInputs([schemaPath])),
       interpretation: { source, context: {} as unknown as ContractSourceContext },
     };
     return { resolveInputs: async () => resolution, spy };
@@ -3312,7 +3325,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
 
   it('recovers from an interpreter exception on a same-version pull and logs its original stack', async () => {
     const error = new Error('private interpreter detail');
-    const { resolveInputs, spy } = interpretationResolution(() => ok({} as never));
+    const { resolveInputs, spy } = await interpretationResolution(() => ok({} as never));
     spy.mockImplementationOnce(() => {
       throw error;
     });
@@ -3344,7 +3357,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
 
   it.each([false, true])('recovers diagnostics after edits for pull=%s', async (pull) => {
     const interpret = fixAwareInterpret();
-    const { resolveInputs } = interpretationResolution((input, context) => {
+    const { resolveInputs } = await interpretationResolution((input, context) => {
       if (input.sources.sourceFileFor(input.documents[0]!.syntax).text.includes('// crash'))
         throw new Error('interpreter failed');
       return interpret(input, context);
@@ -3377,7 +3390,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('pull serves the interpreter diagnostic at its mapped range and clears it after a fix', async () => {
-    const { resolveInputs } = interpretationResolution(fixAwareInterpret());
+    const { resolveInputs } = await interpretationResolution(fixAwareInterpret());
     harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
@@ -3395,7 +3408,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('push publishes the combined parse and interpreter diagnostics', async () => {
-    const { resolveInputs } = interpretationResolution(fixAwareInterpret());
+    const { resolveInputs } = await interpretationResolution(fixAwareInterpret());
     harness = startHarness(resolveInputs);
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
@@ -3405,7 +3418,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('anchors a span-less interpreter diagnostic at document start', async () => {
-    const { resolveInputs } = interpretationResolution(() =>
+    const { resolveInputs } = await interpretationResolution(() =>
       notOk({
         summary: 'Schema has 1 error',
         diagnostics: [{ code: 'PSL_SPANLESS', message: 'no span available', sourceId: schemaUri }],
@@ -3454,7 +3467,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('interprets only for diagnostics: never for tokens, folding, or completion; memoized per version', async () => {
-    const { resolveInputs, spy } = interpretationResolution(fixAwareInterpret());
+    const { resolveInputs, spy } = await interpretationResolution(fixAwareInterpret());
     harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
@@ -3489,7 +3502,7 @@ describe('language server config failure surfacing', {
     source: 'prisma',
   });
 
-  function interpretingResolution(): ConfigResolution {
+  async function interpretingResolution(): Promise<ConfigResolution> {
     const source = {
       format: 'psl',
       inputs: [schemaPath],
@@ -3503,7 +3516,7 @@ describe('language server config failure surfacing', {
         }),
     } as unknown as PslInterpretCapable;
     return {
-      ...resolutionForInputs([schemaPath]),
+      ...(await resolutionForInputs([schemaPath])),
       interpretation: { source, context: {} as unknown as ContractSourceContext },
     };
   }
@@ -3625,10 +3638,13 @@ describe('language server config failure surfacing', {
       const siblingPath = join(root, 'sibling.psl');
       const siblingUri = pathToFileURL(siblingPath).toString();
       const resolution = {
-        ...interpretingResolution(),
-        inputs: resolveSchemaInputs({
-          contract: { source: { format: 'psl', inputs: [schemaPath, siblingPath] } },
-        }),
+        ...(await interpretingResolution()),
+        inputs: await resolveSchemaInputs(
+          {
+            contract: { source: { format: 'psl', inputs: [schemaPath, siblingPath] } },
+          },
+          alwaysMember,
+        ),
       };
       const spy = vi.spyOn(resolution.interpretation!.source, 'interpret');
       const gate = deferredSettleable<ConfigResolution>();
@@ -3670,7 +3686,7 @@ describe('language server config failure surfacing', {
     },
   );
 
-  it('clears the config diagnostic when the last managed document closes', async () => {
+  it('keeps the config diagnostic after the last managed document closes (design decision 8)', async () => {
     let broken = false;
     harness = startHarness(async () => {
       if (broken) {
@@ -3689,11 +3705,14 @@ describe('language server config failure surfacing', {
     harness.client.sendNotification(DidCloseTextDocumentNotification.type, {
       textDocument: { uri: schemaUri },
     });
+    await settle();
 
-    await harness.waitForDiagnosticsMatching(configUri, (diagnostics) => diagnostics.length === 0);
+    // The project survives the close (design decision 8): nothing clears its
+    // failed marker, so the config diagnostic stays published.
+    expect(harness.latestDiagnostics(configUri)?.length).toBeGreaterThan(0);
   });
 
-  it('drops the project without resurrection or zombie marker when a reload fails after the last document closed', async () => {
+  it('publishes a reload failure even when it settles after the last document closed', async () => {
     const gate = deferredSettleable<ConfigResolution>();
     let call = 0;
     harness = startHarness(() => {
@@ -3713,8 +3732,10 @@ describe('language server config failure surfacing', {
     gate.reject(new Error('config exploded'));
     await settle();
 
-    expect(harness.nonEmptyPublishCount(configUri)).toBe(0);
-    expect(harness.latestDiagnostics(configUri) ?? []).toEqual([]);
+    // The project survives the close (design decision 8) and keeps
+    // publishing for it even though nothing is open to see it.
+    expect(harness.nonEmptyPublishCount(configUri)).toBe(1);
+    expect(harness.latestDiagnostics(configUri)?.length).toBeGreaterThan(0);
   });
 
   it('leaves a newer load untouched when a superseded load fails', async () => {
