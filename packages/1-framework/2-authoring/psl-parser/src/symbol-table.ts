@@ -1,6 +1,7 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type { PslExtensionBlock, PslSpan } from '@internal/framework-components/psl-ast';
-import { interpretBlockAttributes, reconstructExtensionBlock } from './block-reconstruction';
+import { reconstructExtensionBlock } from './block-reconstruction';
+import { interpretExtensionBlockAttributes } from './block-spec/interpret';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
 import {
@@ -229,7 +230,10 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   for (const block of collectedBlocks) {
     const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
     if (descriptor !== undefined) {
-      interpretBlockAttributes(block, descriptor, sources, symbolTable, diagnostics);
+      diagnostics.push(
+        ...interpretExtensionBlockAttributes({ block, descriptor, symbols: symbolTable, sources })
+          .diagnostics,
+      );
     }
   }
   return { symbolTable, diagnostics };

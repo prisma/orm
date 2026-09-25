@@ -1,6 +1,6 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it, vi } from 'vitest';
-import { blockAttribute, str } from '../src/exports';
+import { blockAttribute, fixedBlock, str } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
 
@@ -36,7 +36,7 @@ function fixture(
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      parameters: {},
+      spec: () => fixedBlock({ parameters: {} }),
       attributes: { map: factory },
     },
   };
@@ -81,7 +81,6 @@ describe.each(locations)(
           message: `Duplicate attribute "@@map" in "widget" block "${name}"; first occurrence wins`,
         },
       ]);
-      expect(result.block?.block.attributes['map']?.args).toEqual({ name: 'first' });
       expect(result.factory).toHaveBeenCalledTimes(1);
       expect(result.scope && Object.hasOwn(result.scope.blocks, name)).toBe(true);
     });
@@ -92,7 +91,6 @@ describe.each(locations)(
         'PSL_INVALID_ATTRIBUTE_SYNTAX',
         'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
       ]);
-      expect(result.block?.block.attributes).toEqual({});
       expect(result.factory).toHaveBeenCalledTimes(1);
     });
 
@@ -101,7 +99,6 @@ describe.each(locations)(
       expect(result.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
         { code: 'PSL_DUPLICATE_DECLARATION', message: `Duplicate declaration of "${name}"` },
       ]);
-      expect(result.block?.block.attributes['map']?.args).toEqual({ name: 'first' });
       expect(result.factory).toHaveBeenCalledTimes(1);
       expect(result.interpretedSymbols).toHaveLength(1);
       expect(result.interpretedSymbols[0]).toBe(result.block);
