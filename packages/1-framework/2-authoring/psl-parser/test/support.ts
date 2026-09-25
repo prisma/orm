@@ -1,4 +1,7 @@
-import type { Range, SourceFile } from '../src/source-file';
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { type Binder, createBinder } from '../src/binder';
+import type { PslSources, Range, SourceFile } from '../src/source-file';
+import type { SymbolTable } from '../src/symbol-table';
 import type { GreenElement, GreenNode } from '../src/syntax/green';
 
 /**
@@ -84,4 +87,26 @@ export function highlight(sourceFile: SourceFile, range: Range): string {
   // Trail with a newline too so the closing quote sits on its own line,
   // mirroring the opening quote (the underline line no longer ends in `~"`).
   return `\n${rendered.join('\n')}\n`;
+}
+
+/**
+ * A binder over the given snapshot with no attribute specs registered —
+ * for tests whose contexts need a binder but exercise no bound references,
+ * or whose block descriptors carry every rule the test binds.
+ */
+export function supportBinder(input: {
+  readonly sources: PslSources;
+  readonly symbolTable: SymbolTable;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
+}): Binder {
+  return createBinder({
+    sources: input.sources,
+    symbolTable: input.symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    ...(input.pslBlockDescriptors === undefined
+      ? {}
+      : { pslBlockDescriptors: input.pslBlockDescriptors }),
+  }).binder;
 }

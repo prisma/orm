@@ -4,6 +4,7 @@ import type {
   AttributeCtx,
   AttributeSpec,
   BlockAttributeSpecFactory,
+  BoundCtx,
   FieldAttributeCtx,
   InferAttr,
   ModelAttributeCtx,
@@ -121,14 +122,14 @@ test('fieldRef and referencedFieldRef expose distinct context metadata', () => {
   expectTypeOf(referencedField.kind).toEqualTypeOf<'referencedFieldRef'>();
 });
 
-test('a block spec is accepted where a bare-ctx spec is expected', () => {
+test('a block spec is accepted where a binder-ctx spec is expected', () => {
   const blockSpec = blockAttribute('map', {
     documentation: 'Declares a block attribute for argument binding.',
     positional: [
       { key: 'name', type: str(), documentation: 'The value bound to this positional slot.' },
     ],
   });
-  expectTypeOf(blockSpec).toMatchTypeOf<AttributeSpec<{ name: string }, AttributeCtx>>();
+  expectTypeOf(blockSpec).toMatchTypeOf<AttributeSpec<{ name: string }, BoundCtx>>();
 });
 
 test('model and field factories preserve their level-specific contexts', () => {

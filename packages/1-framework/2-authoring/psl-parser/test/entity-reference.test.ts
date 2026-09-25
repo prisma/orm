@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import type { EntitySelector, PslBlockSpecDescriptor } from '../src/exports';
 import {
   blockAttribute,
+  createBinder,
   entityRef,
   fixedBlock,
   identifier,
   interpretExtensionBlockAttributes,
   list,
+  modelAttribute,
   oneOf,
 } from '../src/exports';
 import { parse } from '../src/parse';
@@ -42,6 +44,30 @@ function fixture(value: string, local = true) {
   expect(diagnostics).toEqual([]);
   const namespace = symbolTable.topLevel.namespaces['Local'];
   if (!namespace) throw new Error('Missing namespace');
+  const owner = namespace.models['Owner'] ?? symbolTable.topLevel.models['Owner'];
+  if (!owner) throw new Error('Missing owner');
+  const { binder, diagnostics: binderDiagnostics } = createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: {
+      model: {
+        test: () =>
+          modelAttribute('test', {
+            documentation: 'fixture',
+            positional: [
+              {
+                key: 'model',
+                type: oneOf(entityRef({ kind: 'model' }), list(entityRef({ kind: 'model' }))),
+                documentation: 'fixture',
+              },
+            ],
+          }),
+      },
+      field: {},
+    },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+  });
   for (const syntax of document.syntax.descendants()) {
     if (!(syntax instanceof SyntaxNode)) continue;
     const attribute = ModelAttributeAst.cast(syntax);
@@ -49,7 +75,8 @@ function fixture(value: string, local = true) {
     if (expression)
       return {
         expression,
-        ctx: { sources, symbols: symbolTable },
+        ctx: { sources, symbols: symbolTable, binder, selfModel: owner },
+        binderDiagnostics,
         sources,
         table: symbolTable,
         namespace,
@@ -59,7 +86,7 @@ function fixture(value: string, local = true) {
 }
 
 describe('syntax-scoped entity resolution', () => {
-  it('supplies the completed table to existing block attribute rules', () => {
+  it('supplies the completed table and binder to existing block attribute rules', () => {
     const { document, sources } = parse(
       'namespace Local {\n permission Reader {\n @@target(Later)\n }\n model Later {}\n}',
       'references.prisma',
@@ -83,6 +110,15 @@ describe('syntax-scoped entity resolution', () => {
       sources,
     });
     expect(result.diagnostics).toEqual([]);
+    const { binder, diagnostics: binderDiagnostics } = createBinder({
+      sources,
+      symbolTable: result.symbolTable,
+      typeConstructors: {},
+      attributeSpecs: { model: {}, field: {} },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      pslBlockDescriptors: { permission: descriptor },
+    });
+    expect(binderDiagnostics).toEqual([]);
     const namespace = result.symbolTable.topLevel.namespaces['Local'];
     const block = namespace?.blocks['Reader'];
     if (block === undefined) throw new Error('Missing block');
@@ -91,12 +127,14 @@ describe('syntax-scoped entity resolution', () => {
       descriptor,
       symbols: result.symbolTable,
       sources,
+      binder,
     });
     expect(parsed.diagnostics).toEqual([]);
     expect(parsed.attributes['target']?.args).toEqual({
       model: { declaration: namespace?.models['Later'], namespace },
     });
   });
+
   it('selects the local declaration, including forward references', () => {
     const { expression, ctx, namespace } = fixture('Shared');
     expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
@@ -133,23 +171,16 @@ describe('syntax-scoped entity resolution', () => {
   });
 
   it.each(['Hidden', 'Missing', 'toString', 'constructor', '__proto__'])(
-    'rejects unavailable and inherited names: %s',
+    'rejects unavailable and inherited names, leaving the voice to the binder: %s',
     (name) => {
-      const { expression, ctx, sources } = fixture(name);
-      const sourceFile = sources.sourceFileFor(expression.syntax);
+      const { expression, ctx, binderDiagnostics } = fixture(name);
       expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toMatchObject({
         ok: false,
-        failure: [
-          {
-            message: `Unknown model reference "${name}"`,
-            filename: 'references.prisma',
-            range: {
-              start: sourceFile.positionAt(expression.syntax.offset),
-              end: sourceFile.positionAt(expression.syntax.endOffset),
-            },
-          },
-        ],
+        failure: [],
       });
+      expect(binderDiagnostics.map(({ code, message }) => [code, message])).toEqual([
+        ['PSL_UNRESOLVED_REFERENCE', `Cannot find entity "${name}"`],
+      ]);
     },
   );
 
@@ -173,7 +204,27 @@ describe('syntax-scoped entity resolution', () => {
       const attribute = ModelAttributeAst.cast(syntax);
       const expression = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
       if (!expression) continue;
-      const ctx = { sources, symbols: symbolTable };
+      const { binder } = createBinder({
+        sources,
+        symbolTable,
+        typeConstructors: {},
+        attributeSpecs: {
+          model: {
+            test: () =>
+              modelAttribute('test', {
+                documentation: 'fixture',
+                positional: [
+                  { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+                ],
+              }),
+          },
+          field: {},
+        },
+        controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      });
+      const selfModel = symbolTable.topLevel.models['Owner'];
+      if (!selfModel) throw new Error('Missing owner');
+      const ctx = { sources, symbols: symbolTable, binder, selfModel };
       expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
         ok({ declaration, namespace: undefined }),
       );

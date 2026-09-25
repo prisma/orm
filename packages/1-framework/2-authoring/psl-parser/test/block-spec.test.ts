@@ -15,7 +15,7 @@ import type { BlockSpec, BlockSpecContext } from '../src/block-spec/types';
 import { parse } from '../src/parse';
 import type { BlockSymbol } from '../src/symbol-table';
 import { buildSymbolTable } from '../src/symbol-table';
-import { ownEntry } from './support';
+import { ownEntry, supportBinder } from './support';
 
 function policySpec() {
   return fixedBlock({
@@ -98,6 +98,11 @@ function interpret<S extends BlockSpec<unknown>>(
     spec,
     symbols: setupResult.symbolTable,
     sources: setupResult.sources,
+    binder: supportBinder({
+      sources: setupResult.sources,
+      symbolTable: setupResult.symbolTable,
+      pslBlockDescriptors: { [descriptor.keyword]: descriptor },
+    }),
   });
 }
 

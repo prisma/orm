@@ -1,5 +1,4 @@
 import type {
-  AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
@@ -32,17 +31,6 @@ import {
 } from '../src/symbol-table';
 import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
-
-const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
-  enum: {
-    kind: 'pslBlock',
-    keyword: 'enum',
-    discriminator: 'enum',
-    name: { required: true },
-    parameters: {},
-    variadicParameters: true,
-  },
-};
 
 function scalar(nativeType: string): AuthoringTypeConstructorDescriptor {
   return { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType } };
@@ -142,7 +130,6 @@ function build(...texts: string[]) {
   const { symbolTable } = buildSymbolTable({
     documents,
     sources,
-    pslBlockDescriptors: ENUM_DESCRIPTORS,
   });
   return { sources, symbolTable };
 }

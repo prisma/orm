@@ -59,7 +59,6 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: registry,
-    pslBlockDescriptors: {},
   });
   const model = symbolTable.topLevel.models['Post'];
   if (!model) throw new Error('expected model Post');

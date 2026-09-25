@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import type { AttributeCtx } from '../src/exports';
+import type { BoundCtx } from '../src/exports';
 import { blockAttribute, interpretAttribute, leafDiagnostic, str } from '../src/exports';
 import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { createSyntaxTree } from '../src/syntax/red';
+import { supportBinder } from './support';
 
-function blockAttr(source: string): { node: ModelAttributeAst; ctx: AttributeCtx } {
+function blockAttr(source: string): { node: ModelAttributeAst; ctx: BoundCtx } {
   const cursor = new Cursor('schema.prisma', source);
   const root = createSyntaxTree(parseAttribute(cursor));
   const node = ModelAttributeAst.cast(root);
   if (!node) throw new Error('expected a block attribute');
+  const sources = new PslSources([[root, cursor.sourceFile]]);
+  const symbols = {
+    topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+  };
   return {
     node,
-    ctx: {
-      sources: new PslSources([[root, cursor.sourceFile]]),
-      symbols: {
-        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
-      },
-    },
+    ctx: { sources, symbols, binder: supportBinder({ sources, symbolTable: symbols }) },
   };
 }
 

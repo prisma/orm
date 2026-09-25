@@ -1,11 +1,11 @@
-import type { ArgType, AttributeCtx, Param } from '../attribute-spec/types';
+import type { ArgType, BoundCtx, Param } from '../attribute-spec/types';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 
 /**
  * Context handed to block spec factories and block attribute spec factories.
  * `symbols` feeds the parse context; `block` serves attribute interpretation
- * and metadata inspection, not reference resolution — reference rules derive
- * lexical scope from the expression's syntax ancestry.
+ * and metadata inspection, not reference resolution — reference rules read
+ * the snapshot's binder, which resolved every block entry eagerly.
  */
 export interface BlockSpecContext {
   readonly symbols: SymbolTable;
@@ -14,7 +14,7 @@ export interface BlockSpecContext {
 
 /** The one reusable rule an entries block applies to every arbitrary key. */
 export interface BlockEntryValueSpec {
-  readonly type: ArgType<unknown, AttributeCtx>;
+  readonly type: ArgType<unknown, BoundCtx>;
   readonly documentation: string;
 }
 
@@ -25,7 +25,7 @@ export interface BlockEntryValueSpec {
  */
 export interface FixedBlockSpec<Out = unknown> {
   readonly mode: 'fixed';
-  readonly parameters: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
+  readonly parameters: Readonly<Record<string, Param<unknown, BoundCtx>>>;
   readonly _out?: Out;
 }
 

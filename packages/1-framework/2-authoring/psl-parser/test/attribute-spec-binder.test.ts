@@ -1,7 +1,4 @@
-import type {
-  AuthoringPslBlockDescriptorNamespace,
-  AuthoringTypeNamespace,
-} from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { fieldRef, referencedFieldRef } from '../src/attribute-spec/combinators/field-ref';
@@ -16,17 +13,6 @@ import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable, type FieldSymbol, type ModelSymbol } from '../src/symbol-table';
 import type { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
-
-const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
-  enum: {
-    kind: 'pslBlock',
-    keyword: 'enum',
-    discriminator: 'enum',
-    name: { required: true },
-    parameters: {},
-    variadicParameters: true,
-  },
-};
 
 const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
   Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'integer' } },
@@ -69,7 +55,6 @@ function bind(text: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: ENUM_DESCRIPTORS,
   });
   const { binder, diagnostics } = createBinder({
     sources,

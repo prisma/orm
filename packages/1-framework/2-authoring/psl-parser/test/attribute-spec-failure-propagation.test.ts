@@ -25,7 +25,6 @@ function build(text: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const model = symbolTable.topLevel.models['User']!;
   const { binder } = createBinder({
