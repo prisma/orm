@@ -1,7 +1,7 @@
 import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import type { ModelSymbol } from '../../symbol-table';
-import type { ExpressionAst } from '../../syntax/ast/expressions';
+import { type ExpressionAst, FunctionCallAst } from '../../syntax/ast/expressions';
 import { IdentifierAst } from '../../syntax/ast/identifier';
 import type {
   AttributeCtx,
@@ -19,6 +19,16 @@ function parseFieldName(
 ): Result<string, readonly PslDiagnostic[]> {
   const identifier = IdentifierAst.cast(arg.syntax);
   if (identifier === undefined) {
+    if (FunctionCallAst.cast(arg.syntax) !== undefined) {
+      return notOk([
+        leafDiagnostic(
+          ctx,
+          arg,
+          'Expected a field name, but found a function call. ' +
+            'Field lists only accept bare field names; per-field options such as sort are not supported.',
+        ),
+      ]);
+    }
     return notOk([leafDiagnostic(ctx, arg, 'Expected a field name')]);
   }
   const name = identifier.name();

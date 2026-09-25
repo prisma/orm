@@ -1661,4 +1661,20 @@ describe('@@index parameter matrix diagnostics', () => {
       { code: 'PSL_INVALID_ATTRIBUTE_SYNTAX' },
     );
   });
+
+  it('a field call with options draws a descriptive diagnostic, not "Expected a field name"', () => {
+    const schema = `model Doc {
+  id Int @id
+  createdAt DateTime @default(now())
+  @@index([createdAt(sort: Desc)])
+}`;
+    const diagnostics = indexDiagnosticsFor(schema);
+    const diagnostic = diagnostics.find((d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX');
+    expect(diagnostic).toMatchObject({
+      code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      message:
+        'Expected a field name, but found a function call. Field lists only accept bare field names; per-field options such as sort are not supported.',
+    });
+    expect(schema.slice(diagnostic?.span?.start.offset ?? 0)).toMatch(/^createdAt\(sort/);
+  });
 });
