@@ -118,6 +118,22 @@ describe('rewriteWorkspaceDeps', () => {
     assert.equal(pkg.optionalDependencies!['@internal/d'], 'workspace:1.0.0');
   });
 
+  it('keeps the package name of an aliased workspace spec', () => {
+    const pkg: MutablePackageJson = {
+      name: 'aliased',
+      version: '0.7.0',
+      devDependencies: {
+        prisma: 'workspace:@internal/cli@0.7.0',
+        other: 'workspace:@internal/other@*',
+      },
+    };
+    rewriteWorkspaceDeps(pkg, '0.8.0');
+    assert.deepEqual(pkg.devDependencies, {
+      prisma: 'workspace:@internal/cli@0.8.0',
+      other: 'workspace:@internal/other@0.8.0',
+    });
+  });
+
   it('does not rewrite a non-workspace @internal/* spec (e.g. a published-version pin)', () => {
     // An extension package installs a published @internal/* dep via
     // its own author's `extension-upgrade-skill` flow. That spec is an

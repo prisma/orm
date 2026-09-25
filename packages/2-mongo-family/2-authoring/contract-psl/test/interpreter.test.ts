@@ -23,7 +23,10 @@ import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
-import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
+import {
+  expectInvalidAttributeSyntax,
+  expectUnresolvedReference,
+} from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
@@ -716,7 +719,16 @@ describe('interpretPslDocumentToMongoContract', () => {
           author   User @relation(fields: [missing], references: [id])
         }
       `);
-      expectInvalidAttributeSyntax(result, /missing.*does not exist/i);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find field "missing"'),
+          }),
+        ]),
+      );
     });
   });
 
@@ -1850,7 +1862,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([nonexistent])
         }
       `);
-      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      const diag = expectUnresolvedReference(result, /Cannot find field "nonexistent"/);
       expect(diag.span?.start.offset).toBeGreaterThan(0);
       expect(diag.span?.end.offset).toBeGreaterThan(diag.span?.start.offset ?? 0);
     });
@@ -1863,7 +1875,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([nonexistent])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expectUnresolvedReference(result, /Cannot find field/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1874,7 +1886,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([nonexistent])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expectUnresolvedReference(result, /Cannot find field "nonexistent"/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {
@@ -1906,9 +1918,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const result = interpret(source);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diags = result.failure.diagnostics.filter(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
+      const diags = result.failure.diagnostics.filter((d) => d.code === 'PSL_UNRESOLVED_REFERENCE');
       expect(diags).toHaveLength(1);
       expect(diags[0]?.span).toMatchObject({
         start: { offset: source.indexOf('nonexistent') },

@@ -13,6 +13,7 @@ import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-pa
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  createMongoBinder,
   findModelAttributeNode,
   interpretModelAttribute,
   mongoAttributeSpecs,
@@ -129,6 +130,12 @@ model Base { id String }`,
       spec: mongoAttributeSpecs.model.base(),
       model,
       sources,
+      binder: createMongoBinder({
+        symbolTable,
+        sources,
+        scalarTypeCodecIds: new Map(),
+        controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      }).binder,
       diagnostics,
     });
     expectTypeOf(value).toEqualTypeOf<

@@ -118,18 +118,21 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
       'type Base { value String }',
       'model Variant { id Int @id\n @@base(Base, "v") }',
       'Expected model reference "Base", found compositeType',
+      'PSL_INVALID_ATTRIBUTE_SYNTAX',
     ],
     [
       'namespace sibling { model Base { id Int @id } }',
       'namespace local { model Variant { id Int @id\n @@base(Base, "v") } }',
-      'Unknown model reference "Base"',
+      'Cannot find entity "Base"',
+      'PSL_UNRESOLVED_REFERENCE',
     ],
     [
       'model Base { id Int @id }',
       'namespace local { type Base { value String }\n model Variant { id Int @id\n @@base(Base, "v") } }',
       'Expected model reference "Base", found compositeType',
+      'PSL_INVALID_ATTRIBUTE_SYNTAX',
     ],
-  ])('reports checked-reference failure for %s', (base, variant, message) => {
+  ])('reports checked-reference failure for %s', (base, variant, message, code) => {
     const schema = `${base}\n${variant}`;
     const result = interpretPslDocumentToSqlContract({
       ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
@@ -139,7 +142,7 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
     if (!result.ok)
       expect(result.failure.diagnostics).toEqual([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          code,
           message,
           sourceId: 'schema.prisma',
           span: expect.objectContaining({
@@ -868,8 +871,8 @@ model Bug {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: expect.stringContaining('does not exist'),
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find field'),
           }),
         ]),
       );
@@ -967,8 +970,8 @@ model Bug {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: 'Unknown model reference "NonExistent"',
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find entity "NonExistent"'),
           }),
         ]),
       );

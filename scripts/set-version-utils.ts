@@ -45,7 +45,8 @@ export function rewriteWorkspaceDeps(packageJson: MutablePackageJson, version: s
     if (!deps) continue;
     for (const [name, spec] of Object.entries(deps)) {
       if (typeof spec !== 'string' || !spec.startsWith('workspace:')) continue;
-      deps[name] = `workspace:${version}`;
+      const alias = /^workspace:((?:@[^/@]+\/)?[^@]+)@/.exec(spec)?.[1];
+      deps[name] = alias ? `workspace:${alias}@${version}` : `workspace:${version}`;
     }
   }
 }

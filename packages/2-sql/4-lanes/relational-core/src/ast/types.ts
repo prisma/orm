@@ -1540,6 +1540,16 @@ export class ProjectionItem extends AstNode {
 
 export type LimitOffsetValue = number | AnyExpression;
 
+function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void {
+  if (typeof value === 'number' && !(Number.isSafeInteger(value) && value >= 0)) {
+    throw structuredError(
+      'ORM.ARGUMENT_INVALID',
+      `${argument} must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got ${String(value)}`,
+      { meta: { argument } },
+    );
+  }
+}
+
 export interface SelectAstOptions {
   readonly from?: AnyFromSource;
   readonly joins: ReadonlyArray<JoinAst> | undefined;
@@ -1572,6 +1582,8 @@ export class SelectAst extends QueryAst {
 
   constructor(options: SelectAstOptions) {
     super();
+    checkLimitOffset('limit', options.limit);
+    checkLimitOffset('offset', options.offset);
     this.from = options.from;
     this.joins =
       options.joins && options.joins.length > 0 ? frozenArrayCopy(options.joins) : undefined;

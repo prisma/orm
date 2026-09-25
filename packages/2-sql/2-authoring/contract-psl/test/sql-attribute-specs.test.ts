@@ -13,6 +13,7 @@ import type {
 import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import {
+  createSqlBinder,
   fieldSpecContext,
   findFieldAttributeNode,
   findModelAttributeNode,
@@ -116,6 +117,7 @@ function interpretDefault(schema: string, fieldName: string) {
     model,
     field: target,
     sources,
+    binder: createSqlBinder({ symbolTable, sources }).binder,
     diagnostics,
   });
   return { value, diagnostics: diagnostics.toExternal() };
@@ -140,6 +142,7 @@ namespace scoped {
       spec: sqlAttributeSpecs.model.base(),
       model,
       sources: input.sources,
+      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
       diagnostics,
     });
     expect(diagnostics.toExternal()).toEqual([]);

@@ -1096,7 +1096,7 @@ export function planIssues(
     ...byCategory('index'),
     ...byCategory('foreignKey'),
     // Enablement changes run after all relational DDL (the table must exist)
-    // and before the policy calls the planner appends after `planIssues` —
+    // and before the policy creates the planner appends after `planIssues` —
     // the same position the retired imperative enable-on-first-policy used.
     ...byCategory('rlsEnable'),
   ];

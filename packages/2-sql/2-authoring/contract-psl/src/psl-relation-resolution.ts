@@ -1,5 +1,5 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import type { FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
+import type { Binder, FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
 import {
   diagnosticSource,
   type PslDiagnostic,
@@ -72,25 +72,12 @@ export function normalizeReferentialAction(actionToken: string): ReferentialActi
   return REFERENTIAL_ACTION_MAP[actionToken];
 }
 
-function resolveReferencedModel(symbols: SymbolTable, field: FieldSymbol): ModelSymbol | undefined {
-  const topLevel = symbols.topLevel.models[field.typeName];
-  if (topLevel !== undefined) {
-    return topLevel;
-  }
-  for (const namespace of Object.values(symbols.topLevel.namespaces)) {
-    const model = namespace.models[field.typeName];
-    if (model !== undefined) {
-      return model;
-    }
-  }
-  return undefined;
-}
-
 export function interpretRelationAttribute(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly symbols: SymbolTable;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): SqlRelationOutput | undefined {
   const node = findFieldAttributeNode(input.field, 'relation');
@@ -102,8 +89,8 @@ export function interpretRelationAttribute(input: {
     model: input.selfModel,
     field: input.field,
     sources: input.sources,
+    binder: input.binder,
     diagnostics: input.diagnostics,
-    resolveReferencedModel: () => resolveReferencedModel(input.symbols, input.field),
   });
 }
 
@@ -495,6 +482,7 @@ export function validateBackrelationFieldAttributes(input: {
   readonly modelName: string;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
