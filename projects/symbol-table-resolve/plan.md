@@ -22,6 +22,7 @@ Four slices: one foundation slice delivering the eager binder in `psl-parser` (w
    - **Builds on:** `binder-core`'s hand-off; sequenced after the interpreter conversions by operator decree.
    - **Hands to:** project close-out; the reverse-binding API proven, ready for the follow-on features project (go-to-definition and kin, out of scope here).
    - **Focus:** conversion of existing surfaces only — no new LSP features (spec non-goal).
+   - **Binder-side API decreed for this slice (operator, 2026-09-25):** completion runs on the binder — `Scope` gains enumeration (`entries()`-shaped; one entry per name, nearest declaration suppressing parents, mirroring `lookup`'s shadowing exactly) and the binder retains its scopes from the walk, exposing a position-shaped retrieval (`scopeAt(node)`; Roslyn's `LookupSymbols`/`GetEnclosingBinder` precedent). This deletes the LSP's hand-rolled candidate enumerations; contributed types join completions through the chain; qualified completion reads the namespace symbol's members.
 
 ### Parallel group A (after `binder-core`, independent of group B)
 
