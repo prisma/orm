@@ -41,7 +41,7 @@ Before you submit:
 - [ ] All commits are signed off (`git commit -s`) per the [DCO](../CONTRIBUTING.md#developer-certificate-of-origin-dco). The DCO status check will block merge if any commit is missing a `Signed-off-by:` trailer.
 - [ ] I read [CONTRIBUTING.md](../CONTRIBUTING.md) and the change is scoped to one logical concern.
 - [ ] Tests are updated (or `n/a` if the change is doc-only / refactor with no behavioural delta).
-- [ ] The PR title is in `TML-NNNN: <sentence-case title>` form (Linear ticket prefix + concise title naming the concrete deliverable). See `.claude/skills/create-pr/SKILL.md` for the full convention.
+- [ ] The PR title is a conventional commit title that names the change, e.g. `fix(sql-orm-client): correlate includes on every key column`. PR titles become the release notes.
 - [ ] The **Skill update** section above is filled in (or stated `n/a — internal only`).
 
 ## Notes for the reviewer

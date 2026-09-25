@@ -5,9 +5,9 @@ description: Open a high-quality external contributor PR against prisma/orm. Use
 
 # Contributor PR skill (external)
 
-This skill is for **external contributors** to `prisma/orm` who are using an LLM-based agent to author or finalize a PR. It is intentionally separate from the maintainer-facing `create-pr` skill: it does not depend on Linear access, internal plan/spec documents, or any private context. It encodes the expectations laid out in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) as a runnable workflow, so the PR you produce matches the shape maintainers expect on the first review round.
+This skill is for **external contributors** to `prisma/orm` who are using an LLM-based agent to author or finalize a PR. It is intentionally separate from the maintainer-facing `create-pr` skill: it depends on no internal plan or spec documents and no private context. It encodes the expectations laid out in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) as a runnable workflow, so the PR you produce matches the shape maintainers expect on the first review round.
 
-If the user is a maintainer with access to internal Linear tickets, use `create-pr` instead.
+If the user is a Prisma maintainer, use `create-pr` instead.
 
 ## When to use
 
