@@ -13,13 +13,6 @@ import { IdentifierAst } from '../../syntax/ast/identifier';
 import type { AttributeCtx, JsonValueArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-/**
- * Reads a native JSON-compatible literal from the expression AST: strings,
- * numbers, booleans, the `null` identifier, arrays, and object literals,
- * recursively. Any other expression — a non-null identifier, a call, a
- * tagged literal — is a diagnostic, as are duplicate or malformed object
- * fields. Contrast with `json()`, which reads a quoted JSON object string.
- */
 export function jsonValue(): JsonValueArgType<AttributeCtx> {
   return {
     kind: 'jsonValue',

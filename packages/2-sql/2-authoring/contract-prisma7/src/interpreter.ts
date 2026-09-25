@@ -167,12 +167,6 @@ function parameterSpan(source: SourceBlock, key: string): PslSpan {
   return entry === undefined ? source.block.span : nodePslSpan(entry.syntax, source.sources);
 }
 
-/**
- * Prisma 7's dialect reads its blocks structurally, so it owns duplicate-key
- * reporting for them: the parser collects unregistered blocks as symbols
- * without interpreting them, so no shared pass sees these entries. First
- * occurrence wins, matching the shared grammar's convention.
- */
 function reportDuplicateBlockEntries(
   source: SourceBlock,
   diagnostics: ContractSourceDiagnostic[],
@@ -773,10 +767,6 @@ function lowerNativeEnums(
       values[member.name] = member.value;
       parameterSpans[member.name] = member.span;
     }
-    // A trusted alternate producer: the members are already decoded strings
-    // with real spans, so this constructs the typed envelope directly and
-    // the target factory applies the same semantic checks it applies to
-    // parsed blocks (duplicate values, nonempty membership).
     const block: ParsedPslExtensionBlock<Record<string, string>> & {
       readonly namespaceId: string;
     } = {

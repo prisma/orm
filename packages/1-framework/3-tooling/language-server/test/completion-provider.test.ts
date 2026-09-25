@@ -511,9 +511,6 @@ describe('providePslCompletionItems', () => {
   it.each([true, false])(
     'inserts a body placeholder without pre-filled keys, snippets=%s',
     (snippets) => {
-      // A declaration-keyword snippet inserts a block that has no symbol yet,
-      // so no spec can be bound; key candidates come from key completion
-      // inside the authored block instead.
       const { items } = completeWithSource({
         markedSource: '|',
         clientSupportsSnippets: snippets,
@@ -1178,8 +1175,6 @@ describe('providePslCompletionItems', () => {
 
     expect(items.map((item) => item.label)).toEqual(['shield']);
     expect(items[0]?.detail).toBe('The shield key.');
-    // Collection interprets no blocks, so key completion binding metadata
-    // is the only factory run.
     expect(factoryContexts).toHaveLength(1);
     for (const raw of factoryContexts) {
       const ctx = raw as { symbols: unknown; block: { name: string } };
@@ -1276,10 +1271,6 @@ describe('providePslCompletionItems', () => {
         'enum Mood { Top }\nnamespace scoped { enum Mood { Scoped }\nmodel Post { mood scoped.Mood @default(|) } }',
       ),
     ).toEqual(['Scoped']);
-    // Member arms are syntax facts: a field typed by an enum whose VALUES
-    // are invalid (duplicate member keys fail interpretation) still offers
-    // the declared member names, first occurrence winning, and nothing
-    // crashes; no candidates beyond the declared names are invented.
     const degraded = names('enum Mood { Happy Happy }\nmodel Post { mood Mood @default(|) }');
     expect(degraded).toEqual(['Happy']);
   }, 5_000);

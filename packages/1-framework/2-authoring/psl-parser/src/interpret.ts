@@ -14,8 +14,7 @@ import type { DocumentAst } from './syntax/ast/declarations';
 /**
  * Lets editor tooling that already parses incrementally (e.g. the language
  * server) hand cached artifacts to the interpreter instead of forcing a
- * disk re-parse. Blocks are resolved by the interpreter itself, against the
- * collected table (`interpretExtensionBlocks`) — no envelope threading.
+ * disk re-parse.
  */
 export interface PslInterpretInput {
   readonly documents: readonly DocumentAst[];

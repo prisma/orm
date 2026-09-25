@@ -1,15 +1,3 @@
-/**
- * Shape-only types for the PSL source-position primitives, diagnostic
- * codes, the producer-only extension-block print shape, and the typed
- * extension-block envelope.
- *
- * These live in the shared plane so an extension's authoring descriptor
- * (`AuthoringPslBlockDescriptor` in `framework-authoring`) can reference
- * them without crossing the shared → migration-plane boundary. The
- * migration-plane `psl-ast.ts` re-exports everything here for consumers
- * that import PSL AST types from the control entrypoint.
- */
-
 export interface PslPosition {
   readonly offset: number;
   readonly line: number;
@@ -93,11 +81,6 @@ export type PslDiagnosticCode =
    * A required parameter declared in the descriptor is absent from the parsed block.
    */
   | 'PSL_EXTENSION_MISSING_REQUIRED_PARAMETER'
-  /**
-   * A parameter value was rejected by its interpreting consumer — e.g. an
-   * enum member value the selected codec's `decodeJson` refused, or an
-   * unregistered codec id.
-   */
   | 'PSL_EXTENSION_INVALID_VALUE'
   /**
    * A parameter key appears more than once in an extension block body.
@@ -127,16 +110,6 @@ export type PslDiagnosticCode =
  */
 export type ContributedPslDiagnosticCode = `PSL_${string}`;
 
-/**
- * One entry of the producer-only print shape of an extension block: the
- * entry's expression text and its span. A missing `expression` is a bare
- * line — a key with no `= value`.
- *
- * The text is born from a producer's own values (e.g. database inference),
- * never from parsed source — parsed AST is not stringified into this shape.
- * No validator, classifier, or lowering may read it; validated values travel
- * through {@link ParsedPslExtensionBlock} instead.
- */
 export interface PslExtensionBlockPrintEntry {
   readonly expression?: string;
   readonly span: PslSpan;
@@ -169,27 +142,6 @@ export interface PslExtensionBlockParsedAttribute {
   readonly span: PslSpan;
 }
 
-/**
- * Producer-only print-document shape of an extension-contributed top-level
- * PSL block. It exists for producers that hold no AST — inference and other
- * generators whose text is born from introspected or computed values — and
- * the printer is its only consumer. Parsed source is never converted into
- * this shape, and validated values never travel here.
- *
- * - `kind` is the routing discriminant, equal to the descriptor's
- *   `discriminator`. Several keywords may share one discriminator (e.g.
- *   `policy_select`/`policy_insert` both route to `kind: 'policy'`) —
- *   `kind` identifies the entity/storage kind, not the source syntax.
- * - `keyword` is the source PSL keyword the block was declared with
- *   (`policy_select`, `policy_insert`, …) — the parse-dispatch identity.
- * - `name` is the block's declared name (the identifier after the keyword).
- * - `parameters` maps entry keys to their print entries in the producer's
- *   order. Each entry carries expression text and span for printing only; a
- *   missing `expression` renders as a bare line.
- * - `blockAttributes` are `@@`-prefixed attribute lines inside the block, in
- *   the producer's order.
- * - `span` covers the full block from keyword to closing brace.
- */
 export interface PslExtensionBlock {
   readonly kind: string;
   /**
@@ -205,15 +157,6 @@ export interface PslExtensionBlock {
   readonly span: PslSpan;
 }
 
-/**
- * The parser-independent typed envelope of one successfully interpreted
- * extension block. `Values` is the output the block's spec inferred — it can
- * carry parser-owned reference results without this shared type depending on
- * them. `parameterSpans` maps each present entry key to its entry span so
- * consumers can anchor diagnostics without reparsing; `attributes` are the
- * block's interpreted `@@` attributes. Identity fields (`kind`, `keyword`,
- * `name`, `span`) mirror {@link PslExtensionBlock}.
- */
 export interface ParsedPslExtensionBlock<Values = Readonly<Record<string, unknown>>> {
   readonly kind: string;
   readonly keyword: string;

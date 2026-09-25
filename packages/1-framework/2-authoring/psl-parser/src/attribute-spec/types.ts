@@ -22,11 +22,6 @@ export interface AttributeCtx {
   readonly symbols: SymbolTable;
 }
 
-/**
- * The narrowest context a reference rule reads: the snapshot's binder.
- * Generic-block value entries and `@@` block attributes parse at this level;
- * model and field attributes extend it.
- */
 export interface BoundCtx extends AttributeCtx {
   readonly binder: Binder;
 }

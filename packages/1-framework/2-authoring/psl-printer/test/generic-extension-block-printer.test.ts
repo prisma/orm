@@ -1,12 +1,3 @@
-/**
- * Tests for the generic framework printer for extension-contributed PSL
- * blocks. The printer renders each block's ordered print entries and
- * printable `@@` attribute lines verbatim — provenance rendering, no value
- * interpretation. Registration and keyword/discriminator consistency checks
- * are the printer's whole use of the descriptor: spec factories are never
- * executed.
- */
-
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
   PslExtensionBlock,
@@ -57,10 +48,6 @@ function astWithBlocks(blocks: PslExtensionBlock[]) {
   };
 }
 
-/**
- * Descriptors for printer-only fixtures: the spec factory THROWS, pinning
- * that provenance rendering never executes spec factories.
- */
 function printOnlyDescriptor(keyword: string, discriminator: string) {
   return {
     kind: 'pslBlock' as const,
@@ -105,9 +92,6 @@ describe('generic extension-block printer', () => {
     });
 
     it('preserves authored order rather than restoring the retired descriptor order', () => {
-      // The retired descriptor-driven renderer reordered entries into the
-      // descriptor's declared order; provenance rendering keeps the authored
-      // order. This pins the deliberate old-vs-new difference.
       const block: PslExtensionBlock = {
         kind: 'fixture-policy-select',
         keyword: 'policy_select',

@@ -1,11 +1,3 @@
-/**
- * `native_enum` + PSL family `enum` coexistence in one namespace. Depends on
- * the SQL family pack's `enum` block contribution, whose typed-spec
- * migration is the family packages' slice work — until that lands, the
- * family descriptor cannot compose against the typed registration contract
- * and this suite cannot run.
- */
-
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
@@ -40,12 +32,6 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 describe('native_enum coexists with a PSL enum block in the same namespace', () => {
-  // PSL `enum` blocks are document-top-level only and always register under
-  // the target's `defaultNamespaceId` (`public` here) — so a `native_enum`
-  // block in `namespace public { … }` derives its valueSet into the same
-  // namespace's valueSet slot as the top-level `enum`'s derived valueSet.
-  // `createNamespaceWithExtensions` must merge both, not let one clobber
-  // the other.
   const combinedAssembled = assembleAuthoringContributions([
     { authoring: sqlFamilyPack.authoring },
     {
@@ -127,10 +113,6 @@ namespace public {
   });
 
   it('a native_enum and a domain enum sharing a name in one namespace is rejected, not silently merged', () => {
-    // Domain `enum` registers under the default namespace (`public`), and a
-    // `native_enum` named the same in `namespace public { … }` derives a
-    // value-set into the same slot. This must be a diagnostic, not a silent
-    // last-write-wins.
     const source = `
 enum Shared {
   @@type("pg/text@1")

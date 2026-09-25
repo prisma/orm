@@ -1,18 +1,3 @@
-/**
- * Round-trip test for the declarative extension-block mechanism.
- *
- * Exercises the full pipeline for a declarative extension contribution:
- *
- *   text → parse → collect → spec-interpret (typed envelope) → lower via
- *   entityTypes factory → PolicySelectIr → serialize → hydrate → IR
- *   → print (source provenance) → re-parse → equivalent IR
- *
- * The fixture (`./fixtures/declarative-policy-select-extension.ts`)
- * contributes NO parser or printer code: parsing, value interpretation, and
- * printing are framework-owned. Lowering consumes only typed envelopes; the
- * printer consumes only source entries.
- */
-
 import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
@@ -276,8 +261,6 @@ policy_select ProfilesSelect {
 }
 `;
 
-    // The test is the producer here: the print shape's text is written from
-    // the values the block means to carry, never rendered from parsed AST.
     function producedPolicyBlock(): PslExtensionBlock {
       return {
         kind: POLICY_SELECT_DISCRIMINATOR,
@@ -324,9 +307,6 @@ policy_select ProfilesSelect {
       expect(reParsed.diagnostics).toEqual([]);
       const reParsedBlock = onlyBlockSymbol(reParsed);
 
-      // Semantic equivalence: lower both typed envelopes to their IR and
-      // compare. The IR is the contract-bound artifact, so identical IR after
-      // print → re-parse is the round-trip guarantee that matters.
       const lower = getFactory();
       const originalIr = lower(envelopeOf(firstParsed, firstBlock), {
         family: 'fixture',

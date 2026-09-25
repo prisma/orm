@@ -110,14 +110,6 @@ function serializeNamespaceContents(
   return sections;
 }
 
-/**
- * Renders one extension block from its source provenance: ordered entries
- * exactly as authored (or as inference synthesized them) and printable `@@`
- * attribute lines. Provenance rendering only — no value interpretation, no
- * reference resolution, and no spec factory execution; the registration and
- * keyword/discriminator consistency checks are the printer's whole use of
- * the descriptor.
- */
 function serializeExtensionBlock(
   extensionBlock: PslExtensionBlock,
   blockDispatchMap: PslBlockDispatchMap,

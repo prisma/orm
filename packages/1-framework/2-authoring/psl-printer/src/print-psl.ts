@@ -9,11 +9,6 @@ export type PslBlockDescriptorsNamespace = AuthoringPslBlockDescriptorNamespace;
 export interface PrintPslOptions {
   /**
    * Extension-contributed PSL block descriptors, indexed by user-facing path.
-   * Typically an `AssembledAuthoringContributions.pslBlockDescriptors` namespace
-   * produced by `assembleAuthoringContributions`. Phase 2 checks each
-   * extension-contributed AST node against its keyword's descriptor
-   * (registration and discriminator consistency) and renders the block's
-   * source entries verbatim.
    *
    * When absent, an AST that contains extension-contributed blocks throws —
    * silently dropping blocks would lose user-authored content without a

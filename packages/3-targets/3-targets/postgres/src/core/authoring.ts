@@ -138,16 +138,6 @@ export const postgresAuthoringTypes = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
-/**
- * Shared parameter rules for the five `policy_<op>` keywords. Supported
- * predicates are optional strings — omission is currently accepted authoring
- * and inference emits predicates only when present — while an unsupported
- * predicate for the operation is simply an unknown key its keyword's fixed
- * spec rejects. Roles prefer a declared `role` block reference and fall back
- * to an unchecked identifier for external database roles (including roles
- * physically declared in the sibling `namespace unbound`, which the lexical
- * resolver intentionally does not see).
- */
 const policyTargetParam = {
   type: entityRef({ kind: 'model' }),
   documentation: 'The model protected by this policy; it must declare @@rls.',
@@ -204,22 +194,10 @@ export function policyBothPredicatesSpec() {
   });
 }
 
-/**
- * The one factory input shape all five policy keywords share: the both-
- * predicates spec's inferred output is the superset every narrower keyword's
- * output is assignable to (`using`/`withCheck` are optional throughout).
- */
 type PolicyBlockValues = InferBlock<ReturnType<typeof policyBothPredicatesSpec>>;
 
 export interface RlsPolicyExtensionBlock extends ParsedPslExtensionBlock<PolicyBlockValues> {
-  /** The block's lexical owner namespace; policy placement uses the selected target coordinate instead. */
   readonly namespaceId: string;
-  /**
-   * Storage coordinates the family interpreter projected from the block's
-   * checked model references before invoking this factory (keyed by
-   * parameter name). An invalid reference never reaches the factory — the
-   * block has no typed envelope at all.
-   */
   readonly resolvedModelRefs?: ResolvedPslModelRefs;
 }
 
@@ -312,10 +290,6 @@ function lowerRlsPolicyFromBlock(
 ): PostgresRlsPolicy | undefined {
   const prefix = block.name;
   const operation = policyOperationOfKeyword(block.keyword) ?? 'select';
-  // The interpreter projects the checked `target` reference onto its storage
-  // coordinate before invoking this factory (an invalid reference means the
-  // block has no envelope and never lowers), so a missing coordinate here is
-  // structurally impossible.
   const target = block.resolvedModelRefs?.['target'];
   assertDefined(
     target,
@@ -365,13 +339,6 @@ function lowerRlsPolicyFromBlock(
   });
 }
 
-/**
- * The `policy` entity-type factory output: `pslPlacement` is SQL-family
- * surface ({@link SqlPslEntityPlacementOutput}), checked against the
- * intersection like the native-enum output below — the SQL walk files each
- * policy row at its selected target coordinate rather than the block's
- * lexical owner.
- */
 const policyEntityTypeOutput = {
   factory: lowerRlsPolicyFromBlock,
   pslPlacement: (entity: PostgresRlsPolicy) => ({ namespaceId: entity.namespaceId }),
@@ -381,15 +348,6 @@ const policyEntityTypeOutput = {
 > &
   SqlPslEntityPlacementOutput;
 
-/**
- * Lowers a `native_enum { memberName = "value" … @@map("type_name") }` block
- * into a {@link PostgresNativeEnum}. The spec admits only explicit
- * `key = "string"` members — a bare or non-string member never produces an
- * envelope — so this factory owns only the collection semantics: nonempty
- * membership and duplicate member VALUES (member keys are unique by
- * grammar). The lowered entity carries just the member values; `typeName`
- * comes from `@@map` or defaults to the block name verbatim.
- */
 function lowerNativeEnumFromBlock(
   block: ParsedPslExtensionBlock<NativeEnumValues>,
   ctx: AuthoringEntityContext,
@@ -560,11 +518,6 @@ const nativeEnumMapAttribute = blockAttribute('map', {
 });
 
 export const postgresAuthoringPslBlockDescriptors = {
-  // The predicate key set per keyword mirrors Postgres: SELECT/DELETE take
-  // USING only; INSERT takes WITH CHECK only; UPDATE/ALL take both. Each
-  // keyword's fixed spec declares exactly its operation's keys, so a
-  // predicate the operation does not take is rejected as an unknown key at
-  // interpretation.
   [POLICY_BLOCK_KEYWORDS.select]: {
     kind: 'pslBlock',
     keyword: POLICY_BLOCK_KEYWORDS.select,
@@ -616,11 +569,6 @@ export const postgresAuthoringPslBlockDescriptors = {
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
   } satisfies PslBlockSpecDescriptor,
-  /**
-   * PSL block descriptor for `native_enum`: the body is an open
-   * `memberName = "value"` list bound through the shared entries spec —
-   * explicit string values only, no bare members.
-   */
   native_enum: {
     kind: 'pslBlock',
     keyword: 'native_enum',
@@ -632,9 +580,9 @@ export const postgresAuthoringPslBlockDescriptors = {
   } satisfies PslBlockSpecDescriptor,
   /**
    * PSL block descriptor for `role` (e.g. `role anon {}`). Name-only, no
-   * body keys. Declared inside `namespace unbound { }` — see
-   * {@link lowerRoleFromBlock} for the placement check and the coordinate
-   * the lowered entity carries.
+   * parameters and no body content. Declared inside `namespace unbound { }`
+   * — see {@link lowerRoleFromBlock} for the placement check and the
+   * coordinate the lowered entity carries.
    */
   role: {
     kind: 'pslBlock',

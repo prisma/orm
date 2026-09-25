@@ -13,10 +13,6 @@ const SPAN = {
   end: { offset: 0, line: 1, column: 1 },
 };
 
-/**
- * A bare member is a present key with an `undefined` value — the shared
- * grammar's bare sentinel; an explicit member carries its typed JSON value.
- */
 function enumBlock(input: {
   readonly name: string;
   readonly values: Record<string, JsonValue | undefined>;
@@ -254,8 +250,6 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
       makeContext(diagnostics),
     );
 
-    // A float member would fail inference, but an explicit @@type bypasses
-    // the classifier and hits the codec's own decodeJson instead.
     expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]);
     expect(handle).toBeUndefined();
   });

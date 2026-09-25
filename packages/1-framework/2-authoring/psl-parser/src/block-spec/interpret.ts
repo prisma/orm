@@ -28,20 +28,9 @@ export interface InterpretExtensionBlockInput<S> {
   readonly spec: S;
   readonly symbols: SymbolTable;
   readonly sources: PslSources;
-  /** The snapshot's binder; reference rules read entry resolutions from it. */
   readonly binder: Binder;
 }
 
-/**
- * Binds one registered block's entries and `@@` attributes directly from the
- * AST against its spec. Successful interpretation yields the typed envelope;
- * any failure yields the full diagnostic list instead — an invalid block has
- * no partially-valid envelope.
- *
- * Span ownership: an expression failure carries the expression's own span
- * (minted by the value rule), duplicate/unknown/bare-key failures carry the
- * entry span, and a missing required key carries the block span.
- */
 export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   input: InterpretExtensionBlockInput<S>,
 ): Result<ParsedPslExtensionBlock<InferBlock<S>>, readonly PslDiagnostic[]> {
@@ -112,9 +101,6 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
     if (parsed.ok) {
       values[key] = parsed.value;
     } else {
-      // A failure may carry no diagnostics of its own: an unresolved
-      // reference was already reported in the binder's voice. The envelope
-      // is still suppressed.
       failed = true;
       diagnostics.push(...parsed.failure);
     }
@@ -170,16 +156,9 @@ export interface InterpretExtensionBlockAttributesInput {
   readonly descriptor: AuthoringPslBlockDescriptor;
   readonly symbols: SymbolTable;
   readonly sources: PslSources;
-  /** The snapshot's binder; attribute reference arguments read it. */
   readonly binder: Binder;
 }
 
-/**
- * Interprets the `@@` attributes a block declares against the descriptor's
- * attribute spec factories, each bound with the complete
- * `{ symbols, block }` context. Failed attributes surface as diagnostics and
- * leave no entry; the first occurrence of a duplicate name wins.
- */
 export function interpretExtensionBlockAttributes(input: InterpretExtensionBlockAttributesInput): {
   readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
   readonly diagnostics: readonly PslDiagnostic[];
@@ -244,26 +223,10 @@ export interface InterpretExtensionBlocksResult {
   readonly diagnostics: readonly PslDiagnostic[];
 }
 
-/**
- * The canonical block-resolution function: consumers resolve registered
- * blocks against an already-collected table, exactly as attributes are
- * resolved by their consumers. Binds each registered block's spec and
- * interprets its values and `@@` attributes; only successes enter the map,
- * and every value/attribute failure is returned once as diagnostics — the
- * caller owns their reporting. Unregistered keywords are skipped. Spec
- * factories see the complete table and never observe another block's
- * interpreted output.
- */
 export interface InterpretExtensionBlocksInput {
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
-  /**
-   * The snapshot's binder — the same one that bound the table's attributes
-   * and block entries. One binder per interpretation snapshot: reference
-   * rules read its eager resolutions, and unresolved block-entry references
-   * were already reported in the binder's voice.
-   */
   readonly binder: Binder;
 }
 

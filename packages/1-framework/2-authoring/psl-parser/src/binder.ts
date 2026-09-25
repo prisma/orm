@@ -91,12 +91,6 @@ export interface CreateBinderOptions {
   readonly typeConstructors: AuthoringTypeNamespace;
   readonly attributeSpecs: AttributeSpecNamespace;
   readonly controlMutationDefaults: ControlDefaultRegistries;
-  /**
-   * Registered generic-block descriptors. Reference-kinded rules in each
-   * block's value spec (and its `@@` attribute specs) are bound in the same
-   * eager pass as attribute arguments, so one binder per snapshot covers
-   * attributes and block entries alike.
-   */
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
 }
@@ -289,14 +283,6 @@ interface BlockBindContext {
   readonly diagnostics: ParseDiagnostic[];
 }
 
-/**
- * Binds a registered block's reference-kinded value entries and `@@`
- * attribute arguments against the block's lexical scope — declaring
- * namespace, then top level, then the universe scope; siblings never. A rule
- * whose grammar also accepts a plain identifier (e.g. a checked role
- * reference with an unrestricted fallback) binds an unresolved name
- * silently, because the spec declares that an undeclared name is legal.
- */
 function bindBlock(block: BlockSymbol, scope: Scope, ctx: BlockBindContext): void {
   const descriptor = findBlockDescriptor(ctx.pslBlockDescriptors, block.keyword);
   if (descriptor === undefined) return;
@@ -364,11 +350,6 @@ function bindBlockExpression(
   }
 }
 
-/**
- * Whether the rule's grammar accepts a name the scope cannot resolve: a
- * `oneOf` carrying a non-reference alternative (an unrestricted identifier)
- * parses successfully without a resolution, so binding stays silent.
- */
 function allowsUnresolvedName(type: unknown): boolean {
   if (typeof type !== 'object' || type === null) return false;
   if ('alternatives' in type && Array.isArray(type.alternatives)) {

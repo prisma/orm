@@ -395,12 +395,6 @@ export interface ParsePslDocumentInput {
    * descriptors that teach the parser how to read those blocks.
    */
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
-  /**
-   * Codec lookup surfaced to family interpreters that decode explicit-codec
-   * values (e.g. enum members) while lowering the parsed document. The
-   * parser itself never decodes; block values are validated through the
-   * parser-owned block specs.
-   */
   readonly codecLookup?: CodecLookup;
 }
 

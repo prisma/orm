@@ -1,27 +1,3 @@
-/**
- * Test-only fixture extension: a DECLARATIVE `policy_select` block descriptor.
- *
- * This extension contributes NO parser or printer code. The framework owns
- * the generic parser, block interpreter, and printer. The extension supplies
- * only:
- *
- *  - A declarative descriptor with keyword, discriminator, name.required,
- *    and a typed block spec over the shared expression grammar.
- *  - A matching `entityTypes` factory that reads the typed envelope
- *    (`ParsedPslExtensionBlock`) and returns a `PolicySelectIr` instance.
- *
- * Block shape exercised:
- *
- * ```
- * policy_select <name> {
- *   target = <ModelRef>
- *   as     = permissive | restrictive        (optional)
- *   roles  = [<RoleRef | identifier>, …]     (optional)
- *   using  = "<predicate>"
- * }
- * ```
- */
-
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
@@ -71,11 +47,8 @@ export type PolicySelectBlockValues = InferBlock<ReturnType<typeof policySelectS
 
 export interface PolicySelectIrInput {
   readonly name: string;
-  /** The selected target model's declared name. */
   readonly target: string;
-  /** Chosen token, or undefined when the `as` parameter was omitted. */
   readonly as?: 'permissive' | 'restrictive' | undefined;
-  /** The decoded predicate string. */
   readonly using: string;
 }
 

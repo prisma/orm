@@ -1,12 +1,3 @@
-/**
- * Placement regression for policies whose selected target lives in a
- * different physical namespace than the block's lexical owner: the policy
- * row files at the selected coordinate, the lexical namespace materializes
- * no policy bucket, and schema projection attaches the policy to the
- * selected table. The infer → print → reparse round trip of this fixture is
- * printer-side work and lives with the inference round-trip suites.
- */
-
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';

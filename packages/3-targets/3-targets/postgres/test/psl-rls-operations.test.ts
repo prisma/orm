@@ -281,9 +281,6 @@ ${MODEL}
 });
 
 describe('wrong-predicate-for-operation is an unknown fixed key', () => {
-  // Each keyword's fixed spec declares exactly its operation's predicate
-  // keys, so a predicate the operation does not take is rejected by the
-  // shared grammar at symbol-table time and the block never lowers.
   function expectWrongPredicate(source: string, predicate: string): void {
     const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(source);
     expect(symbolTableDiagnostics).toEqual(

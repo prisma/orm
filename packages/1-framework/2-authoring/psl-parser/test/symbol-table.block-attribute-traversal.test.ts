@@ -98,9 +98,6 @@ describe.each(locations)(
           message: `Duplicate attribute "@@map" in "widget" block "${name}"; first occurrence wins`,
         },
       ]);
-      // One instantiation per declared occurrence while the binder binds
-      // arguments (both @@map lines), plus one for the accepted first
-      // occurrence at interpretation.
       expect(result.factory).toHaveBeenCalledTimes(3);
       expect(result.interpretedSymbols).toHaveLength(1);
       expect(result.scope && Object.hasOwn(result.scope.blocks, name)).toBe(true);

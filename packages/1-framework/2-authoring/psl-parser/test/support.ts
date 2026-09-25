@@ -21,12 +21,6 @@ export const frameworkScalarTypes: ReadonlySet<string> = new Set([
   'Bytes',
 ]);
 
-/**
- * Reads an own property of a record whose key may collide with an
- * `Object.prototype` name (e.g. `__proto__`), without going through the
- * deprecated prototype accessor a literal `record['__proto__']` read would
- * use on ordinary objects.
- */
 export function ownEntry(record: object, key: string): unknown {
   return Object.getOwnPropertyDescriptor(record, key)?.value;
 }
@@ -89,11 +83,6 @@ export function highlight(sourceFile: SourceFile, range: Range): string {
   return `\n${rendered.join('\n')}\n`;
 }
 
-/**
- * A binder over the given snapshot with no attribute specs registered —
- * for tests whose contexts need a binder but exercise no bound references,
- * or whose block descriptors carry every rule the test binds.
- */
 export function supportBinder(input: {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;

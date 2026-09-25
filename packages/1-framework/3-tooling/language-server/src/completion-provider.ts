@@ -407,12 +407,6 @@ function genericBlockDeclarationKeywordCandidates(
   });
 }
 
-/**
- * A declaration-keyword snippet inserts a block that does not exist yet, so
- * there is no symbol to bind the block's spec with — the snippet carries no
- * pre-filled key lines; key completion inside the authored block offers them
- * from the bound spec instead.
- */
 function genericBlockSnippet(keyword: string): string {
   const cursor = '$' + '{0:// Block keys and attributes}';
   return [`${keyword} ${nameSnippetPlaceholder} {`, `  ${cursor}`, '}'].join('\n');
@@ -452,14 +446,11 @@ function provideGenericBlockKeyCompletionItems(
   if (descriptor === undefined) {
     return [];
   }
-  // An incomplete declaration without a collected symbol offers no
-  // contextual keys, mirroring the model tooling's recovery behavior.
   const block = blockSymbolForNode(source.symbolTable, context.block);
   if (block === undefined) {
     return [];
   }
   const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
-  // Arbitrary-key blocks invent no key candidates.
   if (spec.mode !== 'fixed') {
     return [];
   }

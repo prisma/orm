@@ -357,12 +357,6 @@ namespace auth {
   });
 
   it('a duplicate member NAME is a parse-time PSL_EXTENSION_DUPLICATE_PARAMETER (first-wins) — same as the SQL enum block', () => {
-    // Member keys bind through the shared entries spec, so the block
-    // interpreter flags a repeated name at symbol-table time and keeps the
-    // first occurrence. This is the exact behavior the SQL `enum` block has
-    // (see interpreter.enum.test.ts); native_enum inherits it for free from
-    // the shared grammar — no native_enum-specific handling, and no factory
-    // runs for the invalid block.
     const source = `
 namespace auth {
   native_enum AalLevel {

@@ -349,10 +349,6 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  // Member names are syntax facts: the declared entry keys, first
-  // occurrence winning. The grammar needs no envelope — value failures
-  // surface once from block resolution, and lowering still gates on
-  // envelopes.
   const names: string[] = [];
   const seen = new Set<string>();
   for (const entry of block.node.entries()) {

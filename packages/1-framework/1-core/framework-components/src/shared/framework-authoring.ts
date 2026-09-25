@@ -285,18 +285,6 @@ export interface AuthoringEntityContext {
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
 }
 
-/**
- * Classifies an `enum` block's interpreted member values (before codec
- * decoding, which needs the codec chosen first) into which default codec an
- * omitted `@@type` should resolve to:
- *
- * - every member is bare (`undefined`, the typed envelope's bare-entry
- *   sentinel) or a string → `'text'`
- * - every member is an integer number → `'int'`
- * - anything else (float, boolean, null, structured values, or a mix of
- *   text and int) → `null`, meaning the caller must require an explicit
- *   `@@type`.
- */
 export function classifyEnumMemberType(
   values: Readonly<Record<string, unknown>>,
 ): 'text' | 'int' | null {
@@ -415,12 +403,6 @@ export type AuthoringEntityTypeNamespace = {
  *   after the keyword. Currently always `true` — anonymous blocks are
  *   not part of the closed-grammar premise — but the field is explicit
  *   so the type can evolve without a breaking change.
- * - `spec` is the block's value-spec factory, erased to `unknown` here
- *   because the framework core cannot name parser types. The parser owns
- *   the concrete factory type — `(ctx) => BlockSpec` — and restores it at
- *   a single boundary, exactly as block-attribute factories already
- *   transit `attributes` erased. Registration validates that the value is
- *   callable.
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';

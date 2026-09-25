@@ -1,10 +1,3 @@
-/**
- * Prisma 7's dialect reads its blocks structurally, so duplicate-key
- * reporting for those blocks belongs to this package — the parser collects
- * unregistered keywords as symbols without interpreting them, so no shared
- * pass sees their entries.
- */
-
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';

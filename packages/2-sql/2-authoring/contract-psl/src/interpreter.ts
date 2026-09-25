@@ -373,11 +373,6 @@ function duplicateModelAttributeDiagnostic(input: {
   };
 }
 
-/**
- * Narrows one interpreted block value to a checked model reference. The
- * reference was selected by the parser's shared resolution; consumers here
- * only project its identity — never a second name lookup.
- */
 function isResolvedModelReference(value: unknown): value is ResolvedEntityReference<ModelSymbol> {
   if (typeof value !== 'object' || value === null || !('declaration' in value)) return false;
   const declaration = value.declaration;
@@ -389,13 +384,6 @@ function isResolvedModelReference(value: unknown): value is ResolvedEntityRefere
   );
 }
 
-/**
- * Enforces `AuthoringPslBlockDescriptor.requiresModelAttribute` over every
- * successfully interpreted block: the selected target declaration —
- * including a top-level fallback selection — must carry the required bare
- * `@@` attribute. Invalid blocks have no envelope and are skipped; the
- * parser's value diagnostics own those failure modes.
- */
 function validateBlockModelAttributeRequirements(input: {
   readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
@@ -449,32 +437,8 @@ function buildModelAttributesByName(
 }
 
 /**
- * For a single lexical scope (a named PSL namespace, or the document top
- * level), lowers every successfully interpreted extension block into an IR
- * entity via the registered factory for each block's discriminator, and
- * returns the lowered rows. Invalid blocks have no envelope in
- * `parsedBlocks` and are skipped — their failures were reported once when
- * this interpreter resolved the table's blocks — and unregistered
- * discriminators are skipped silently.
- *
  * This pass is intentionally generic: no discriminator value is named here.
  * The factory (registered by the target pack) owns all block-specific logic.
- * After construction, the walk asks the descriptor output where to file the
- * row: an output carrying the SQL `pslPlacement` hook picks the destination
- * namespace; every other output keeps the block's lexical owner. A derived
- * value-set (the `deriveValueSet` hook) files at the same chosen destination
- * under the block key.
- *
- * The block's own lexical `namespaceId` stays annotated on the factory input
- * regardless of placement — factories that validate lexical position (e.g.
- * role placement) depend on it.
- *
- * Reference projection is this pass's job, over typed data: each top-level
- * envelope value that is a checked model reference is projected onto its
- * storage coordinate ({@link ResolvedPslModelRefs}) from the selected
- * declaration's identity through the coordinate-keyed model mappings —
- * never a bare-name lookup — and attached as `resolvedModelRefs` before the
- * factory runs.
  */
 function lowerExtensionBlocksForNamespace(
   blocks: Readonly<Record<string, BlockSymbol>>,
@@ -646,7 +610,6 @@ interface BuildModelNodeInput {
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
   /** The target's default namespace id — the lowering context's `namespaceId` fallback for a model with no explicit PSL namespace. */
   readonly defaultNamespaceId: string;
-  /** Typed envelopes for spec factories whose grammar reads interpreted blocks (enum default arms). */
   readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
@@ -2314,13 +2277,6 @@ export function interpretPslDocumentToSqlContract(
     },
     warnings: authoringWarnings,
   };
-  // Diagnostics-free resolution of every model's declared storage name,
-  // feeding the extension-block pass's reference projection (a checked model
-  // reference projects onto its declaration's storage coordinate before the
-  // factory runs). The authoritative resolution (which reports a malformed
-  // `@@map`) still runs at its usual point in the pass ordering, via
-  // `modelMappingsByCoordinate` further down; this call discards its own
-  // diagnostics so nothing is reported twice.
   const earlyModelMappingsByCoordinate = buildModelMappings(
     input.symbolTable,
     modelEntries,
@@ -2342,10 +2298,6 @@ export function interpretPslDocumentToSqlContract(
   }
   const modelCoordinateOf = (model: ModelSymbol) => modelCoordinates.get(model);
   const namespaceExtensionEntities = new Map<string, Record<string, Record<string, unknown>>>();
-  // Files each lowered row at its destination coordinate. A row relocated by
-  // the placement hook may land in a bucket another lexical namespace owns —
-  // an occupied kind/key there is a genuine authoring collision (last-write-
-  // wins would silently drop one), so flag it rather than merge over it.
   const fileExtensionEntityRows = (
     rows: readonly LoweredPackEntity[],
     blocks: Readonly<Record<string, BlockSymbol>>,
