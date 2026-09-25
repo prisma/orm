@@ -109,7 +109,7 @@ describe('integration/relation-order-by on SQLite', () => {
         const rows = await users
           .select('id')
           .where((u) => u.id.gt(0))
-          .orderBy([(u) => u.posts.count((p) => p.views.gt(10)).desc(), (u) => u.id.asc()])
+          .orderBy([(u) => u.posts.count((p) => p['views']!.gt(10)).desc(), (u) => u.id.asc()])
           .all();
 
         expect(rows).toEqual([{ id: 2 }, { id: 1 }, { id: 3 }]);
