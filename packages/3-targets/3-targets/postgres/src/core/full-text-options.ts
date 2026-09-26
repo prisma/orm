@@ -92,6 +92,8 @@ function checkWordCount(method: string, argument: string, value: number): void {
   }
 }
 
+const DEFAULT_MAX_WORDS = 35;
+
 /** Non-empty, and none of `"` `,` `=` `\` or whitespace. */
 const MARKER = /^[^"=,\\\s]+$/;
 
@@ -130,14 +132,17 @@ export function headlineOptionsLiteral(
   }
   if (options.minWords !== undefined) {
     checkWordCount(method, 'minWords', options.minWords);
-    if (options.maxWords !== undefined && options.minWords >= options.maxWords) {
-      throw invalid(
-        method,
-        'minWords',
-        options.minWords,
-        `minWords (${options.minWords}) must be below maxWords (${options.maxWords}).`,
-        'Postgres requires MinWords strictly below MaxWords. Lower minWords, or raise maxWords.',
-      );
+    if (options.highlightAll !== true) {
+      const maxWords = options.maxWords ?? DEFAULT_MAX_WORDS;
+      if (options.minWords >= maxWords) {
+        throw invalid(
+          method,
+          'minWords',
+          options.minWords,
+          `minWords (${options.minWords}) must be below maxWords (${maxWords}).`,
+          'Postgres requires MinWords strictly below MaxWords. Lower minWords, or raise maxWords.',
+        );
+      }
     }
     pairs.push(`MinWords=${options.minWords}`);
   }
