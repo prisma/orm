@@ -3,6 +3,7 @@ import type { AnnotationValue, OperationKind } from '@internal/framework-compone
 import type {
   ExtractAggregateTypes,
   ExtractCodecTypes,
+  ExtractFieldInputTypes,
   ExtractFieldOutputTypes,
   ExtractQueryOperationTypes,
   SqlStorage,
@@ -588,6 +589,24 @@ export type DefaultModelRow<
   NsId extends string = never,
 > = {
   [K in keyof FieldsOf<TContract, ModelName, NsId> & string]: FieldJsType<
+    TContract,
+    ModelName,
+    K,
+    NsId
+  >;
+};
+
+/**
+ * The flat input row of a single model: the shape mutation inputs accept.
+ * Same fields as `DefaultModelRow`, but each field is typed by what its codec
+ * encodes (`FieldInputTypes`) rather than what it decodes (`FieldOutputTypes`).
+ */
+export type DefaultModelInputRow<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = {
+  [K in keyof FieldsOf<TContract, ModelName, NsId> & string]: FieldInputJsType<
     TContract,
     ModelName,
     K,
@@ -1240,6 +1259,32 @@ type NamespaceFieldOutputType<
       : never
     : never;
 
+// The write-side counterpart of `NamespaceFieldOutputType`: the refined input
+// type of a field, read from the emitter's `FieldInputTypes[ns][model][field]`
+// map. Mutation inputs (`create`, `update`, `upsert`) accept what the codec
+// encodes, not what it decodes.
+type NamespaceFieldInputType<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> =
+  ResolvedNsId<TContract, ModelName, NsId> extends infer Ns extends string
+    ? ExtractFieldInputTypes<TContract> extends infer Inputs
+      ? Ns extends keyof Inputs
+        ? Inputs[Ns] extends infer NamespaceInputs
+          ? ModelName extends keyof NamespaceInputs
+            ? NamespaceInputs[ModelName] extends infer ModelInputs
+              ? FieldName extends keyof ModelInputs
+                ? ModelInputs[FieldName]
+                : never
+              : never
+            : never
+          : never
+        : never
+      : never
+    : never;
+
 // The emitter's per-namespace `FieldOutputTypes` is the source of truth (refined
 // codecs + value objects + nullability); for a column-mapped field absent from
 // that map (e.g. a namespace not present in the emitted output map) it falls
@@ -1254,6 +1299,20 @@ type FieldJsType<
     ? unknown
     : FieldStorageJsType<TContract, ModelName, FieldName, NsId>
   : NamespaceFieldOutputType<TContract, ModelName, FieldName, NsId>;
+
+// Write-side counterpart of `FieldJsType`: prefers the emitter's
+// `FieldInputTypes` map and keeps the same storage fallback for fields absent
+// from the emitted maps.
+type FieldInputJsType<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> = [NamespaceFieldInputType<TContract, ModelName, FieldName, NsId>] extends [never]
+  ? [FieldStorageJsType<TContract, ModelName, FieldName, NsId>] extends [never]
+    ? unknown
+    : FieldStorageJsType<TContract, ModelName, FieldName, NsId>
+  : NamespaceFieldInputType<TContract, ModelName, FieldName, NsId>;
 
 type FieldStorageColumn<
   TContract extends Contract<SqlStorage>,
@@ -1408,12 +1467,12 @@ type ScalarCreateInput<
   ModelName extends string,
   NsId extends string = never,
 > = Pick<
-  DefaultModelRow<TContract, ModelName, NsId>,
+  DefaultModelInputRow<TContract, ModelName, NsId>,
   RequiredCreateFieldNames<TContract, ModelName, NsId>
 > &
   Partial<
     Pick<
-      DefaultModelRow<TContract, ModelName, NsId>,
+      DefaultModelInputRow<TContract, ModelName, NsId>,
       OptionalCreateFieldNames<TContract, ModelName, NsId>
     >
   >;
@@ -1878,7 +1937,7 @@ export type MutationUpdateInput<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-> = Partial<DefaultModelRow<TContract, ModelName, NsId>> &
+> = Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
   RelationMutationFields<TContract, ModelName, 'update'>;
 
 type ModelRelations<
