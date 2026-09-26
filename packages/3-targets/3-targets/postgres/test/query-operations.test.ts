@@ -191,6 +191,21 @@ describe('postgres target query operations', () => {
       ).toThrow(expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }));
     });
 
+    it('rejects minWords above the default maxWords', () => {
+      expect(() => buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { minWords: 36 })).toThrow(
+        expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
+      );
+    });
+
+    it('ignores minWords validation when highlightAll is true', () => {
+      expect(() =>
+        buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', {
+          minWords: 36,
+          highlightAll: true,
+        }),
+      ).not.toThrow();
+    });
+
     it('accepts minWords below maxWords', () => {
       expect(() =>
         buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { minWords: 5, maxWords: 10 }),
