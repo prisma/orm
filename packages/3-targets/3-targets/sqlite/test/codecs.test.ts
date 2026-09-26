@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { sqliteBigintDescriptor } from '../src/core/codecs';
+import { DatabaseSync } from 'node:sqlite';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { sqliteBigintDescriptor, sqliteDatetimeDescriptor } from '../src/core/codecs';
+import { buildColumnDefaultSql } from '../src/core/migrations/planner-ddl-builders';
 
 describe('SQLite codec JSON representations', () => {
   const bigintCodec = sqliteBigintDescriptor.factory()({ name: 'test' });
@@ -30,5 +32,58 @@ describe('SQLite codec JSON representations', () => {
       message: 'sqlite/bigint@1 wire value must be a decimal string',
       meta: { codecId: 'sqlite/bigint@1' },
     });
+  });
+});
+
+describe('SQLite datetime codec', () => {
+  const datetimeCodec = sqliteDatetimeDescriptor.factory()({ name: 'test' });
+  const originalTimeZone = process.env['TZ'];
+
+  beforeAll(() => {
+    process.env['TZ'] = 'America/New_York';
+  });
+
+  afterAll(() => {
+    if (originalTimeZone === undefined) {
+      delete process.env['TZ'];
+    } else {
+      process.env['TZ'] = originalTimeZone;
+    }
+  });
+
+  it('reads the UTC text a now() default writes as UTC, whatever the process time zone', async () => {
+    const db = new DatabaseSync(':memory:');
+    const nowDefault = buildColumnDefaultSql({ kind: 'function', expression: 'now()' });
+    db.exec(`CREATE TABLE post (id INTEGER PRIMARY KEY, created_at TEXT NOT NULL ${nowDefault})`);
+    db.exec('INSERT INTO post (id) VALUES (1)');
+    const row = db
+      .prepare('SELECT created_at, unixepoch(created_at) AS epoch FROM post WHERE id = 1')
+      .get() as { created_at: string; epoch: number };
+    db.close();
+
+    const decoded = await datetimeCodec.decode(row.created_at, {});
+
+    expect(decoded.getTime()).toBe(row.epoch * 1000);
+  });
+
+  it('decodes SQLite datetime text, with or without fractional seconds, as UTC', async () => {
+    expect(await datetimeCodec.decode('2026-07-23 12:34:56', {})).toEqual(
+      new Date('2026-07-23T12:34:56Z'),
+    );
+    expect(await datetimeCodec.decode('2026-07-23 12:34:56.789', {})).toEqual(
+      new Date('2026-07-23T12:34:56.789Z'),
+    );
+    expect(datetimeCodec.decodeJson('2026-07-23 12:34:56')).toEqual(
+      new Date('2026-07-23T12:34:56Z'),
+    );
+  });
+
+  it('keeps decoding ISO-8601 text with a designator unchanged', async () => {
+    expect(await datetimeCodec.decode('2026-07-23T12:34:56.789Z', {})).toEqual(
+      new Date('2026-07-23T12:34:56.789Z'),
+    );
+    expect(await datetimeCodec.decode('2026-07-23T14:34:56+02:00', {})).toEqual(
+      new Date('2026-07-23T12:34:56Z'),
+    );
   });
 });

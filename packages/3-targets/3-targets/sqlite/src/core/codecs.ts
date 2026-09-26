@@ -125,6 +125,8 @@ const isJsonRetag = (expression: ProjectionExpr): boolean =>
   expression.fn === JSON_RETAG_FN &&
   expression.args.length === 1;
 
+/** `datetime('now')` and `CURRENT_TIMESTAMP` text: UTC with no designator, which `new Date` would read as local time. */
+const SQLITE_UTC_DATETIME_TEXT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
 const DECIMAL_INTEGER = /^-?\d+$/;
 const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
 
@@ -459,7 +461,9 @@ export class SqliteDatetimeCodec extends CodecImpl<
 > {
   // Reject `Invalid Date` (NaN-time) at every decode ingress so consumers never receive a Date object whose downstream operations silently produce NaN. Mirrors the stricter ISO-8601 validation on the postgres timestamp helpers.
   private parseDate(value: string): Date {
-    const date = new Date(value);
+    const date = new Date(
+      SQLITE_UTC_DATETIME_TEXT.test(value) ? `${value.replace(' ', 'T')}Z` : value,
+    );
     if (Number.isNaN(date.getTime())) {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
