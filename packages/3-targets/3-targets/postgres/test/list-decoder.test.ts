@@ -67,12 +67,6 @@ describe('decodePostgresListText', () => {
     expect(result).toEqual(['1:1', '2:2']);
   });
 
-  it('rejects non-string wire values', async () => {
-    await expect(decodePostgresListText(['not', 'text'], async (value) => value)).rejects.toThrow(
-      'expected raw text for a Postgres array',
-    );
-  });
-
   it('decodes raw int2/int4 element text through the bound scalar codecs', async () => {
     const int2 = pgInt2Descriptor.factory()(instanceCtx) as NumericWireDecoder;
     const int4 = pgInt4Descriptor.factory()(instanceCtx) as NumericWireDecoder;
@@ -123,4 +117,18 @@ describe('decodePostgresListText', () => {
       decodePostgresListText('{t,f,t}', (value) => bool.decode(value as string, callCtx)),
     ).resolves.toEqual([true, false, true]);
   });
+});
+
+it('rejects wire values that are neither string nor array', async () => {
+  await expect(decodePostgresListText(42, async (value) => value)).rejects.toThrow(
+    /expected a Postgres array \(string or array\)/,
+  );
+  await expect(decodePostgresListText({ not: 'array' }, async (value) => value)).rejects.toThrow(
+    /expected a Postgres array \(string or array\)/,
+  );
+});
+
+it('parses enum-like array text', async () => {
+  const result = await decodePostgresListText('{ADMIN,MEMBER}', async (value) => value);
+  expect(result).toEqual(['ADMIN', 'MEMBER']);
 });
