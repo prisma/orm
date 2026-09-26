@@ -417,8 +417,8 @@ function hasExecutionCreateDefault(
     contract.execution?.mutations.defaults.some(
       (mutationDefault) =>
         mutationDefault.ref.namespace === namespace &&
-        mutationDefault.ref.table === table &&
-        mutationDefault.ref.column === column &&
+        mutationDefault.ref.entry === table &&
+        mutationDefault.ref.field === column &&
         mutationDefault.onCreate !== undefined,
     ) ?? false
   );

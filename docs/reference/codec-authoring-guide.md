@@ -386,6 +386,39 @@ The descriptor is the only place a target's behaviour for a codec is declared. `
 
 An identity `jsonProjection` is a claim, not a placeholder: it says this codec's stored form *is* its canonical JSON, as it is for `pg/text@1` and `pg/int4@1`. Write one only when that holds. A codec whose stored form cannot survive JSON — a wide integer, a byte string, a value whose text depends on a session setting — needs a projection that converts it, because the renderer will ask and then use the answer.
 
+## Target-owned Mongo codecs
+
+The Mongo target package owns every built-in Mongo codec, as the Postgres target owns its codecs. The adapter depends on the target and never the reverse.
+
+| Module | Holds |
+| --- | --- |
+| `@internal/target-mongo/codec-ids` | the codec id constants (`MONGO_INT64_CODEC_ID`, …) |
+| `@internal/target-mongo/codecs` | the codecs built with `mongoCodec(...)`, their descriptors (`mongoCodecDescriptors`, `mongoDescriptorById`), `mongoStandardCodecs` and `buildStandardCodecRegistry` |
+| `@internal/target-mongo/data-types` | the data type each codec represents |
+| `@internal/target-mongo/codec-types` | the `CodecTypes` map emitted `contract.d.ts` files import |
+
+The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The adapter's runtime descriptor registers `buildStandardCodecRegistry()`, and its control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step.
+
+| Codec id | PSL | TS builder | Application value | JSON form | BSON type (`targetTypes[0]`) |
+| --- | --- | --- | --- | --- | --- |
+| `mongo/objectId@1` | `ObjectId` | `field.objectId()` | `string` (hex) | the same string | `objectId` |
+| `mongo/string@1` | `String` | `field.string()` | `string` | the same string | `string` |
+| `mongo/int32@1` | `Int32` | `field.int32()` | `number` | the same number | `int` |
+| `mongo/double@1` | `Double` | `field.double()` | `number` | the same number | `double` |
+| `mongo/bool@1` | `Bool` | `field.bool()` | `boolean` | the same boolean | `bool` |
+| `mongo/date@1` | `Date` | `field.date()` | `Date` | ISO-8601 text | `date` |
+| `mongo/vector@1` | — | `field.vector()` | `readonly number[]` | the same array | `vector` |
+| `mongo/int64@1` | `Int64` | `field.int64()` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
+| `mongo/decimal128@1` | `Decimal128` | `field.decimal128()` | decimal text without an exponent | the same text | `decimal` |
+| `mongo/binary@1` | `Binary` | `field.binary()` | `Uint8Array` | unwrapped base64 | `binData` |
+| `mongo/json@1` | `Json` | `field.json()` | `JsonValue` | the same value | none |
+
+The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
+
+The JSON forms of `int64`, `decimal128` and `binary` match the Postgres `int8`, `numeric` and `bytea` codecs. `Decimal128.toString()` prints some values with an exponent (`1E+3`); the codec rewrites them without one (`1000`), keeping trailing zeros, so the text is stable across a round trip. The driver hands a stored `long` that fits in 53 bits back as a `number`, so the `int64` codec accepts `Long`, `number` and `bigint` on decode. Decoding a wire value of the wrong BSON type throws `RUNTIME.DECODE_FAILED`.
+
+`$jsonSchema` validators take each field's `bsonType` from `targetTypes[0]`. A codec that declares no BSON type, such as `mongo/json@1`, gets an empty schema (`{}`), which admits any value; the field stays listed under `properties` because the validator is closed with `additionalProperties: false`.
+
 ## The data type a codec represents
 
 Every codec descriptor names the data type it is one representation of. A data type is a stored type made first-class — `pg/int8`, `sqlite/text`, `pgvector/vector` — owned by the pack that registers it. It names the one JSON shape `contract.json` stores for its values, its canonical form, and it declares the casts that say which other types' values it takes. `dataType` is abstract on `CodecDescriptorImpl` and on the target-owned bases, so a descriptor that names no data type does not compile, and one that names a type no pack in the assembled stack registers is an assembly error.

@@ -441,7 +441,7 @@
     "storageHash": "50526240b042b64dd79da6bbbc88aadff9fe50735a63f4dbe6500b2795d256ac"
   },
   "execution": {
-    "executionHash": "30ebfbea7aa45b1212ce68dec5a81126d06fe25e1160d572d7575ee73fed7406",
+    "executionHash": "234c8133ca8a6e5499fa5b9cd3ed0b00671267082dd7f7071e0ad769de2ee3ee",
     "mutations": {
       "defaults": [
         {
@@ -450,9 +450,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "contact"
+            "entry": "contact",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -461,9 +461,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "contactAnalytics"
+            "entry": "contactAnalytics",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

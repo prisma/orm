@@ -1,3 +1,7 @@
+import type {
+  MarkerOperations,
+  MongoRunnerDependencies,
+} from '@internal/family-mongo/control-adapter';
 import type { CodecCallContext } from '@internal/framework-components/codec';
 import type {
   MigrationOperationPolicy,
@@ -36,13 +40,9 @@ import type {
   AnyMongoWireCommand,
 } from '@internal/mongo-wire';
 import { describe, expect, it } from 'vitest';
-import { createCollection, dataTransform } from '../src/core/migration-factories';
-import { serializeMongoOps } from '../src/core/mongo-ops-serializer';
-import {
-  type MarkerOperations,
-  MongoMigrationRunner,
-  type MongoRunnerDependencies,
-} from '../src/core/mongo-runner';
+import { createCollection, dataTransform } from '../src/core/migrations/migration-factories';
+import { serializeMongoOps } from '../src/core/migrations/mongo-ops-serializer';
+import { MongoMigrationRunner } from '../src/core/migrations/mongo-runner';
 
 type Row = Record<string, unknown>;
 type WireCommand = AnyMongoWireCommand;

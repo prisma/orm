@@ -1,8 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { createMongoRunnerDeps, extractDb } from '@prisma/orm-mongo/adapter/control';
-import { MongoDriverImpl } from '@prisma/orm-mongo/driver';
+import { MongoControlAdapterImpl } from '@prisma/orm-mongo/adapter/control';
 import mongoControlDriver from '@prisma/orm-mongo/driver/control';
-import { createMongoFamilyInstance } from '@prisma/orm-mongo/family/control';
 import type { MongoContract } from '@prisma/orm-mongo/family-contract';
 import { deserializeMongoOps, MongoMigrationRunner } from '@prisma/orm-mongo/target/control';
 import { timeouts } from '@repo/test-utils';
@@ -15,13 +13,6 @@ import AddUserRoleEnum from '../migrations/app/20260626T1605_add_user_role_enum/
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these examples.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 const migrationDir = resolve(
   import.meta.dirname,
@@ -87,11 +78,7 @@ describe('planner-generated migration (20260626T1605_add_user_role_enum)', {
     const controlDriver = await mongoControlDriver.create(replSet.getUri(dbName));
     try {
       const runner = new MongoMigrationRunner(
-        createMongoRunnerDeps(
-          controlDriver,
-          MongoDriverImpl.fromDb(extractDb(controlDriver)),
-          makeFamily(),
-        ),
+        new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
       );
       const result = await runner.execute({
         plan: {

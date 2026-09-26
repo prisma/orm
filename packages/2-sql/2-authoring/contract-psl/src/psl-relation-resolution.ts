@@ -1,4 +1,5 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
+import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
 import type { Binder, FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
 import {
   diagnosticSource,
@@ -9,6 +10,7 @@ import {
   consumeInvalidFkPairing,
   fkRelationPairKey,
   type InvalidFkPairing,
+  reportUncomposedNamespace,
   requiredOneToOneBackrelationDiagnostic,
 } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
@@ -17,7 +19,6 @@ import type { RelationNode } from '@internal/sql-contract-ts/contract-builder';
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 
-import { checkUncomposedNamespace, reportUncomposedNamespace } from './psl-column-resolution';
 import {
   findFieldAttributeNode,
   interpretFieldAttribute,

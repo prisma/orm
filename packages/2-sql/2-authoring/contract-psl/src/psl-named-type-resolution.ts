@@ -1,17 +1,17 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
+import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
 import type {
   DiagnosticSource,
   NamedTypeSymbol,
   PslDiagnosticCollector,
 } from '@internal/psl-parser';
 import { diagnosticSource } from '@internal/psl-parser';
+import { reportUncomposedNamespace } from '@internal/psl-parser/interpret';
 import type { StorageTypeInstance } from '@internal/sql-contract/types';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
   type ColumnDescriptor,
-  checkUncomposedNamespace,
   instantiatePslTypeConstructor,
-  reportUncomposedNamespace,
   resolvePslTypeConstructorDescriptor,
   toNamedTypeFieldDescriptor,
 } from './psl-column-resolution';

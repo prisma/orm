@@ -1,0 +1,332 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "events": {
+      "model": "Event",
+      "namespace": "__unbound__"
+    },
+    "posts": {
+      "model": "Post",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Click": {
+            "base": {
+              "model": "Event",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "url": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "events"
+            }
+          },
+          "Event": {
+            "discriminator": {
+              "field": "kind"
+            },
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "events"
+            },
+            "variants": {
+              "Click": {
+                "value": "click"
+              },
+              "View": {
+                "value": "view"
+              }
+            }
+          },
+          "Post": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "createdAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "touchedAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "updated_at": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "posts"
+            }
+          },
+          "View": {
+            "base": {
+              "model": "Event",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "path": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "events"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "events": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "createdAt": {
+                          "bsonType": "date"
+                        },
+                        "kind": {
+                          "enum": [
+                            "click"
+                          ]
+                        },
+                        "url": {
+                          "bsonType": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "url"
+                      ]
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "createdAt": {
+                          "bsonType": "date"
+                        },
+                        "kind": {
+                          "enum": [
+                            "view"
+                          ]
+                        },
+                        "path": {
+                          "bsonType": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "path"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "kind": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "createdAt",
+                    "kind"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "posts": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "createdAt": {
+                      "bsonType": "date"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    },
+                    "touchedAt": {
+                      "bsonType": "date"
+                    },
+                    "updated_at": {
+                      "bsonType": "date"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "createdAt",
+                    "title",
+                    "touchedAt",
+                    "updated_at"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "f00103a374af650f981aa1c58701ad19ffa4eec3cf0e42c937b561543bb8dcb3"
+  },
+  "execution": {
+    "executionHash": "fc6b534a4d35b72e0713e30332f0ff28c10df68fcbbeea311c0df1a82cacb080",
+    "mutations": {
+      "defaults": [
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "events",
+            "field": "createdAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "posts",
+            "field": "createdAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "posts",
+            "field": "touchedAt",
+            "namespace": "__unbound__"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "entry": "posts",
+            "field": "updated_at",
+            "namespace": "__unbound__"
+          }
+        }
+      ]
+    }
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

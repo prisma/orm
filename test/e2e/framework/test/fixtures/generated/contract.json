@@ -1101,7 +1101,7 @@
     "storageHash": "0c1077bafff654086b3061835717977f48bde28bec901e0ec7751ca741c8873c"
   },
   "execution": {
-    "executionHash": "5629682c0d69cfa236e08de82a20c1a4fdcf1163a78ac2f17ffaf993caf4f8f4",
+    "executionHash": "ea437be9a5579f915d397cc5e3df495136323e0a43ec0df5da760b862c22489b",
     "mutations": {
       "defaults": [
         {
@@ -1110,9 +1110,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "event"
+            "entry": "event",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

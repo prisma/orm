@@ -1,6 +1,9 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { withMarkerReadErrorHandling } from '@internal/errors/execution';
-import type { MongoControlAdapter } from '@internal/family-mongo/control-adapter';
+import type {
+  MongoControlAdapter,
+  MongoRunnerDependencies,
+} from '@internal/family-mongo/control-adapter';
 import type { ControlDriverInstance } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
@@ -20,6 +23,7 @@ import { blindCast } from '@internal/utils/casts';
 import type { Document } from 'mongodb';
 import { createMongoAdapter } from '../mongo-adapter';
 import { describeReceivedValue, mongoAdapterError } from './errors';
+import { MongoInspectionExecutor } from './inspection-executor';
 import { introspectSchema } from './introspect-schema';
 import {
   MONGO_LEDGER_COLLECTION,
@@ -27,8 +31,7 @@ import {
   parseMongoMarkerDocSafely,
 } from './marker-ledger';
 import { MARKER_LEDGER_COLLECTION, type MarkerLedgerDocShape } from './marker-ledger-collection';
-import { isMongoControlDriver } from './mongo-control-driver';
-import { extractDb } from './runner-deps';
+import { extractDb, isMongoControlDriver, requireMongoControlDriver } from './mongo-control-driver';
 
 /**
  * Mongo control adapter for control-plane operations like introspection
@@ -299,5 +302,25 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
 
   async introspectSchema(driver: ControlDriverInstance<'mongo', 'mongo'>): Promise<MongoSchemaIR> {
     return introspectSchema(extractDb(driver));
+  }
+
+  createRunnerDependencies(
+    driver: ControlDriverInstance<'mongo', 'mongo'>,
+  ): MongoRunnerDependencies {
+    const controlDriver = requireMongoControlDriver(driver);
+    return {
+      inspectionExecutor: new MongoInspectionExecutor(controlDriver.db),
+      adapter: this.#adapter,
+      driver: controlDriver,
+      executeDdl: (command) => this.executeDdl(controlDriver, command),
+      markerOps: {
+        readMarker: (space) => this.readMarker(controlDriver, space),
+        initMarker: (space, destination) => this.initMarker(controlDriver, space, destination),
+        updateMarker: (space, expectedFrom, destination) =>
+          this.updateMarker(controlDriver, space, expectedFrom, destination),
+        writeLedgerEntry: (space, entry) => this.writeLedgerEntry(controlDriver, space, entry),
+      },
+      introspectSchema: () => this.introspectSchema(controlDriver),
+    };
   }
 }

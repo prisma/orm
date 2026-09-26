@@ -1,4 +1,4 @@
-import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import mongoAdapterDescriptor, { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
 import mongoControlDriver, { MongoControlDriver } from '@internal/driver-mongo/control';
 import { contractToMongoSchemaIR, createMongoFamilyInstance } from '@internal/family-mongo/control';
@@ -198,14 +198,14 @@ describe('codec-rehydration guardrail', { timeout: timeouts.spinUpMongoMemorySer
   });
 
   it('runs a rehydrated aggregate across spaces without consulting codec runtime instances', async () => {
-    // Family stack carries NO codec runtime instances — empty
-    // `controlStack` means no `extensions`, no codec
-    // descriptors, nothing for the runner to consult. If the runner
-    // ever needed to resolve a codec instance at apply time, this
-    // call would surface a missing-codec failure (or throw).
-    const family = createMongoFamilyInstance(
-      {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-    );
+    // Family stack carries NO codec runtime instances — the stack holds
+    // only the control adapter the runner reaches the database through: no
+    // `extensions`, no codec descriptors, nothing for the runner to
+    // consult. If the runner ever needed to resolve a codec instance at
+    // apply time, this call would surface a missing-codec failure (or throw).
+    const family = createMongoFamilyInstance({
+      adapter: mongoAdapterDescriptor,
+    } as unknown as Parameters<typeof createMongoFamilyInstance>[0]);
     if (!hasMigrations(mongoTargetDescriptor)) throw new Error('expected migrations capability');
     const runner = mongoTargetDescriptor.migrations.createRunner(family);
 

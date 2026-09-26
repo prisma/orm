@@ -1,11 +1,7 @@
 import type { StructuredError, StructuredErrorOptions } from '@internal/utils/structured-error';
 import { structuredError } from '@internal/utils/structured-error';
 
-export type MongoAdapterErrorCode =
-  | 'CONFIG.VALIDATION_FAILED'
-  | 'CONTRACT.MARKER_ROW_CORRUPT'
-  | 'RUNTIME.DECODE_FAILED'
-  | 'RUNTIME.TYPE_PARAMS_INVALID';
+export type MongoAdapterErrorCode = 'CONFIG.VALIDATION_FAILED' | 'CONTRACT.MARKER_ROW_CORRUPT';
 
 export function mongoAdapterError(
   code: MongoAdapterErrorCode,

@@ -1,8 +1,12 @@
 import {
+  composePackAuthoringNamespace,
   createEntityHelpersFromNamespace,
+  createFieldHelpersFromNamespace,
   type EntityHelpersFromNamespace,
   type ExtractAuthoringNamespaceFromPack,
   type MergeExtensionAuthoringNamespaces,
+  type ResolveTemplateValue,
+  type TupleFromArgumentDescriptors,
 } from '@internal/contract-authoring';
 import type {
   AuthoringArgumentDescriptor,
@@ -11,25 +15,17 @@ import type {
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
-import {
-  assertNoCrossRegistryCollisions,
-  mergeAuthoringNamespaces,
-} from '@internal/framework-components/authoring';
+import { assertNoCrossRegistryCollisions } from '@internal/framework-components/authoring';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
 import {
-  createFieldHelpersFromNamespace,
   createFieldPresetHelper,
   createTypeHelpersFromNamespace,
 } from './authoring-helper-runtime';
-import type {
-  FieldHelpersFromNamespace,
-  ResolveTemplateValue,
-  TupleFromArgumentDescriptors,
-} from './authoring-type-utils';
+import type { FieldHelpersFromNamespace } from './authoring-type-utils';
 import type {
   AnyRelationBuilder,
   ContractModelBuilder,
@@ -153,21 +149,6 @@ export type ComposedAuthoringHelpers<
   >;
 };
 
-function extractTypeNamespace<Pack>(pack: Pack): ExtractTypeNamespaceFromPack<Pack> {
-  return ((pack as { readonly authoring?: { readonly type?: unknown } }).authoring?.type ??
-    {}) as ExtractTypeNamespaceFromPack<Pack>;
-}
-
-function extractFieldNamespace<Pack>(pack: Pack): ExtractFieldNamespaceFromPack<Pack> {
-  return ((pack as { readonly authoring?: { readonly field?: unknown } }).authoring?.field ??
-    {}) as ExtractFieldNamespaceFromPack<Pack>;
-}
-
-function extractEntitiesNamespace<Pack>(pack: Pack): ExtractEntitiesNamespaceFromPack<Pack> {
-  return ((pack as { readonly authoring?: { readonly entityTypes?: unknown } }).authoring
-    ?.entityTypes ?? {}) as ExtractEntitiesNamespaceFromPack<Pack>;
-}
-
 type AuthoringComponent = {
   readonly authoring?: {
     readonly type?: unknown;
@@ -177,38 +158,17 @@ type AuthoringComponent = {
 };
 
 function composeTypeNamespace(components: readonly AuthoringComponent[]): AuthoringTypeNamespace {
-  const merged: Record<string, unknown> = {};
-  for (const component of components) {
-    const ns = extractTypeNamespace(component);
-    if (Object.keys(ns).length > 0) {
-      mergeAuthoringNamespaces(merged, ns, [], 'typeConstructor', 'type');
-    }
-  }
-  return merged as AuthoringTypeNamespace;
+  return composePackAuthoringNamespace(components, 'type');
 }
 
 function composeFieldNamespace(components: readonly AuthoringComponent[]): AuthoringFieldNamespace {
-  const merged: Record<string, unknown> = {};
-  for (const component of components) {
-    const ns = extractFieldNamespace(component);
-    if (Object.keys(ns).length > 0) {
-      mergeAuthoringNamespaces(merged, ns, [], 'fieldPreset', 'field');
-    }
-  }
-  return merged as AuthoringFieldNamespace;
+  return composePackAuthoringNamespace(components, 'field');
 }
 
 function composeEntityNamespace(
   components: readonly AuthoringComponent[],
 ): AuthoringEntityTypeNamespace {
-  const merged: Record<string, unknown> = {};
-  for (const component of components) {
-    const ns = extractEntitiesNamespace(component);
-    if (Object.keys(ns).length > 0) {
-      mergeAuthoringNamespaces(merged, ns, [], 'entity', 'entity');
-    }
-  }
-  return merged as AuthoringEntityTypeNamespace;
+  return composePackAuthoringNamespace(components, 'entityTypes');
 }
 
 /**

@@ -6,8 +6,8 @@ import {
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
-} from '../src/core/op-factory-call';
-import { renderCallsToTypeScript } from '../src/core/render-typescript';
+} from '../src/core/migrations/op-factory-call';
+import { renderCallsToTypeScript } from '../src/core/migrations/render-typescript';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
 const FROM_HEX = 'a'.repeat(64);

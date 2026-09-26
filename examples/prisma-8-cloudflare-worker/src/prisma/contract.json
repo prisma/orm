@@ -744,7 +744,7 @@
     "storageHash": "60b95ce10b31fa8eee53c62e8196ce66f04ff6f79bab00590b12eb56a8b26e4b"
   },
   "execution": {
-    "executionHash": "d5124fa06e1417dd4575e0b5a868a0216ec0ed912c7b5f652225db35e038dee4",
+    "executionHash": "0a7f0d7c621b64f307b872110f0effe4cd04d5410d04e913f6550ef107d46788",
     "mutations": {
       "defaults": [
         {
@@ -753,9 +753,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "post"
+            "entry": "post",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -764,9 +764,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "task"
+            "entry": "task",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -775,9 +775,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "user"
+            "entry": "user",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

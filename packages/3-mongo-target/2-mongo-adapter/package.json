@@ -30,10 +30,10 @@
     "@internal/mongo-schema-ir": "workspace:8.0.0-rc.12",
     "@internal/mongo-value": "workspace:8.0.0-rc.12",
     "@internal/mongo-wire": "workspace:8.0.0-rc.12",
+    "@internal/target-mongo": "workspace:8.0.0-rc.12",
     "@internal/operations": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
-    "arktype": "catalog:",
-    "bson": "^7.3.1"
+    "arktype": "catalog:"
   },
   "devDependencies": {
     "mongodb": "catalog:",
@@ -65,11 +65,7 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
-    "./codec-ids": "./dist/codec-ids.mjs",
-    "./codec-types": "./dist/codec-types.mjs",
-    "./codecs": "./dist/codecs.mjs",
     "./control": "./dist/control.mjs",
-    "./data-types": "./dist/data-types.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./package.json": "./package.json"
   },

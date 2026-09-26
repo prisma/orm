@@ -1,8 +1,8 @@
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { MongoMigrationPlanOperation } from '@internal/mongo-query-ast/control';
 import { describe, expect, it } from 'vitest';
-import { CreateIndexCall, DropIndexCall } from '../src/core/op-factory-call';
-import { PlannerProducedMongoMigration } from '../src/core/planner-produced-migration';
+import { CreateIndexCall, DropIndexCall } from '../src/core/migrations/op-factory-call';
+import { PlannerProducedMongoMigration } from '../src/core/migrations/planner-produced-migration';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
 const META = {

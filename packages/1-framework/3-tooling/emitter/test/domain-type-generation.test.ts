@@ -538,15 +538,15 @@ describe('generateImportLines', () => {
   it('merges multiple named imports from the same package onto one line', () => {
     const imports: TypesImportSpec[] = [
       {
-        package: '@internal/adapter-mongo/codec-types',
+        package: '@test/mongo/codec-types',
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
-      { package: '@internal/adapter-mongo/codec-types', named: 'Vector', alias: 'Vector' },
+      { package: '@test/mongo/codec-types', named: 'Vector', alias: 'Vector' },
     ];
     const lines = generateImportLines(imports);
     expect(lines).toEqual([
-      "import type { CodecTypes as MongoCodecTypes, Vector } from '@internal/adapter-mongo/codec-types';",
+      "import type { CodecTypes as MongoCodecTypes, Vector } from '@test/mongo/codec-types';",
     ]);
   });
 

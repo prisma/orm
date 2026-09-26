@@ -26,6 +26,8 @@ export type {
   IncludeExpr,
   ModelAccessor,
   NumericFieldNames,
+  Orderable,
+  OrderOptions,
   RelatedModelName,
   RelationFilterAccessor,
   RelationMutator,
@@ -35,6 +37,8 @@ export type {
   RelationsOf,
   RuntimeQueryable,
   ShorthandWhereFilter,
+  ToManyRelationAccessor,
+  ToOneRelationAccessor,
   UniqueConstraintCriterion,
 } from '../types';
 export { emptyState } from '../types';

@@ -1,4 +1,4 @@
-import { CrossReferenceSchema } from '@internal/contract/types';
+import { ContractExecutionSectionSchema, CrossReferenceSchema } from '@internal/contract/types';
 import { type Type, type } from 'arktype';
 import type { MongoJsonObject, MongoJsonPrimitive, MongoJsonValue } from './contract-types';
 
@@ -452,6 +452,7 @@ export function createMongoContractSchema(
     'extensions?': 'Record<string, unknown>',
     'meta?': 'Record<string, unknown>',
     'defaultControlPolicy?': ControlPolicySchema,
+    'execution?': ContractExecutionSectionSchema,
     'sources?': 'Record<string, unknown>',
     '_generated?': 'Record<string, unknown>',
     domain: type({

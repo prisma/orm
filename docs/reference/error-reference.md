@@ -307,7 +307,7 @@ Two authoring entries claim the same written form — the same literal tag, or t
 
 ### CONTRACT.DEFAULT_INVALID
 
-A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or is exactly `now()` or `autoincrement()` (`` Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. ``; meta: `reason: 'reserved-function'`, `expression`), or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
+A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. The Mongo TypeScript builder raises it for execution defaults it cannot key to one collection field: on a variant model's field (`reason: 'executionDefaults-on-variant'`; declare the field on the base model, whose defaults apply to every variant), or with different phases on two models stored in the same collection (`reason: 'executionDefaults-conflict'`; identical ones are merged). The PSL interpreter reports the same cases as `PSL_PRESET_ON_VARIANT_FIELD` and `PSL_PRESET_CONFLICT`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or is exactly `now()` or `autoincrement()` (`` Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. ``; meta: `reason: 'reserved-function'`, `expression`), or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
 
 ### CONTRACT.DEFAULT_SQL_INTERPOLATION
 
@@ -631,6 +631,10 @@ A backtick string appears somewhere other than after a tag, for example `` @map(
 
 A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
 
+### PSL_DEPRECATED_SCALAR_NAME
+
+A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float`, `Boolean` or `DateTime`: `Scalar type "<old>" is deprecated and will be removed; use "<new>" (stored as BSON <bsonType>).` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double`, `Bool` or `Date`.
+
 ### PSL_DEFAULT_TYPE_INCOMPATIBLE
 
 A written `@default` value has a data type the column's type neither is nor casts from: `Field "<Model>.<field>": <column type> has no cast from <value type>; it casts from <types>`, or `; it casts from nothing` when the column's type declares no cast at all. A written value has a data type of its own — a number's comes from its own size and precision, so on Postgres `42` is `pg/int2` and `100000000000000099` is `pg/int8` — and a data type declares which other types' values it takes. Inside a written list the message names the element: `Field "<Model>.<field>" at element 2: ...`.
@@ -662,6 +666,14 @@ A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is 
 ### PSL_INVALID_DEFAULT_SQL
 
 A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The message names the tag as written (`sql`, `pg.sql` or `sqlite.sql`). Reported at the literal.
+
+### PSL_PRESET_ON_VARIANT_FIELD
+
+A Mongo field preset that sets execution defaults, such as `temporal.createdAt()`, is declared on a field of a polymorphic variant model (one with `@@base`): `Preset "<preset>" on variant "<Model>" field "<field>": execution defaults apply to every document in collection "<collection>", so declare them on the base model.` Execution defaults are keyed by collection and field, so a default on one variant would also fill that field on the base model and every sibling variant. Declare the field on the base model; variants inherit it. Reported at the preset.
+
+### PSL_PRESET_CONFLICT
+
+Two Mongo models stored in the same collection declare field presets with different execution defaults for the same stored field, for example `temporal.createdAt()` on one and `temporal.updatedAt()` on the other. Execution defaults are keyed by collection and field, so the collection can have only one. Identical presets are merged. Use the same preset on both models. Reported at the second preset.
 
 ## ORM
 
@@ -736,6 +748,10 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 ### ORM.MUTATION_DATA_MISSING
 
 `create()` or `createAndCount()` was called with zero rows; at least one row of data is required. Payload: `method`, `namespaceId`, `tableName`.
+
+### ORM.MUTATION_DEFAULTS_MISSING
+
+`mongoOrm()` was built over a contract with execution defaults (fields such as `temporal.createdAt()` that the ORM fills on write) without `mutationDefaults`, so those fields would never be written. Pass the execution context, `mongoOrm({ contract, executor, mutationDefaults: context })`, or create the client with `mongo()`. Payload: `fields` (`<collection>.<field>` for each default).
 
 ### ORM.MUTATION_ROW_MISSING
 
@@ -861,7 +877,7 @@ At SQL context construction, the contract's target (e.g. `sqlite`) does not matc
 
 ### RUNTIME.DECODE_FAILED
 
-A codec's `decode` threw while converting a wire value into its output type during result decoding, surfaces per column (SQL), per document field (Mongo), or per included-relation column (ORM client), with the original error attached as `cause`. Also thrown when a returned row is missing an expected projection alias, or when the JSON array for an include alias fails to parse. Payload: `table`, `column` (or `alias` / `collection` + `path`), `codec`, `wirePreview`.
+A codec's `decode` threw while converting a wire value into its output type during result decoding, surfaces per column (SQL), per document field (Mongo), or per included-relation column (ORM client), with the original error attached as `cause`. Also thrown when a returned row is missing an expected projection alias, or when the JSON array for an include alias fails to parse. Payload: `table`, `column` (or `alias` / `collection` + `path`), `codec`, `wirePreview`. When a Mongo codec raised the code itself, its own details (for the target's codecs, `codecId` and `received`) are kept alongside.
 
 Codecs also raise this code directly, as a structured envelope with `meta.codecId` and `meta.received`. The integer guards: `pg/int8number@1` and `sqlite/bigintnumber@1` (the `BigIntNumber` type) refuse a stored value outside the safe integer range ±(2^53 − 1) and any non-integral value rather than rounding it; `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` refuse a wire or JSON value that is not a decimal integer. On a flat read the codec's envelope surfaces unchanged; on an `.include()` read the ORM client wraps it in a fresh `RUNTIME.DECODE_FAILED` carrying `table`, `column`, and `codec`, with the codec's envelope on `cause`. One SQLite caveat: on a flat read, `node:sqlite` itself refuses an INTEGER outside the safe range before any codec runs, so for an out-of-band stored value the structured envelope is guaranteed on the include/JSON path, not the flat path.
 
@@ -881,11 +897,11 @@ Two runtime stack contributors (target pack, extension packs) register a codec w
 
 ### RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR
 
-Two runtime stack contributors register a mutation default generator with the same id while the SQL context collects them. Payload: `id`, `existingOwner`, `incomingOwner`.
+Two runtime stack contributors register a mutation default generator with the same id while the SQL context or the Mongo execution context collects them. Payload: `id`, `existingOwner`, `incomingOwner`.
 
 ### RUNTIME.ENCODE_FAILED
 
-A codec's `encode` threw while converting a user-supplied parameter value to driver wire format during query execution (SQL param encoding, or Mongo param-ref resolution), with the original error attached as `cause`. Payload: `label`, `codec`; SQL path also `paramIndex`.
+A codec's `encode` threw while converting a user-supplied parameter value to driver wire format during query execution (SQL param encoding, or Mongo param-ref resolution), with the original error attached as `cause`. Payload: `label`, `codec`; SQL path also `paramIndex`. When a Mongo codec raised the code itself, its own details (for the target's codecs, `codecId` and `received`) are kept alongside.
 
 Codecs also raise this code directly, as a structured envelope with `meta.codecId` and `meta.received`, which surfaces unchanged: writing a value outside ±(2^53 − 1), or a non-integral number, through `pg/int8number@1` or `sqlite/bigintnumber@1` (the `BigIntNumber` type) raises it before any SQL executes.
 
@@ -935,7 +951,7 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 
-The contract declares column defaults produced by a mutation default generator (e.g. a nanoid/uuid generator) that no runtime component provides, detected up front when the SQL context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. Payload: `ids` (validation pass) or `id` (resolution).
+The contract declares column or field defaults produced by a mutation default generator (e.g. a nanoid/uuid generator, or `timestampNow` behind `temporal.createdAt()`) that no runtime component provides, detected up front when the SQL context or the Mongo execution context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. Payload: `ids` (validation pass) or `id` (resolution).
 
 ### RUNTIME.NAMESPACE_UNKNOWN
 

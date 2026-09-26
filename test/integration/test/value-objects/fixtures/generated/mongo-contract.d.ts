@@ -1,4 +1,4 @@
-import type { CodecTypes as MongoCodecTypes } from '@internal/adapter-mongo/codec-types';
+import type { CodecTypes as MongoCodecTypes } from '@internal/target-mongo/codec-types';
 
 import type { MongoContractWithTypeMaps, MongoTypeMaps } from '@internal/mongo-contract';
 import type { NamespaceId, ProfileHashBase, StorageHashBase } from '@internal/contract/types';

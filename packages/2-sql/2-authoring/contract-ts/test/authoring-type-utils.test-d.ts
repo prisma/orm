@@ -1,12 +1,14 @@
+import type {
+  ArgTypeFromDescriptor,
+  ObjectArgumentType,
+  TupleFromArgumentDescriptors,
+} from '@internal/contract-authoring';
 import type { AuthoringArgumentDescriptor } from '@internal/framework-components/authoring';
 import { expectTypeOf, test } from 'vitest';
 import type {
-  ArgTypeFromDescriptor,
   FieldHelperFunctionWithNamedConstraint,
   FieldHelperFunctionWithoutNamedConstraint,
   NamedConstraintSpec,
-  ObjectArgumentType,
-  TupleFromArgumentDescriptors,
 } from '../src/authoring-type-utils';
 import { nanoidOptionsArgumentMirror } from './nanoid-preset-mirror';
 

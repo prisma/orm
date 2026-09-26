@@ -43,6 +43,7 @@ export type {
   UnionFieldType,
   ValueObjectFieldType,
 } from '../domain-types';
+export { ContractExecutionSectionSchema } from '../execution-section-schema';
 export type { NamespaceId } from '../namespace-id';
 export { asNamespaceId } from '../namespace-id';
 export { type ResolvedDomainModel, resolveDomainModel } from '../resolve-domain-model';

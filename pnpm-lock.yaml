@@ -21,6 +21,9 @@ catalogs:
     arktype:
       specifier: ^2.2.2
       version: 2.2.3
+    bson:
+      specifier: ^7.2.0
+      version: 7.3.1
     gray-matter:
       specifier: ^4.0.3
       version: 4.0.3
@@ -2222,6 +2225,9 @@ importers:
       '@internal/mongo-codec':
         specifier: workspace:8.0.0-rc.12
         version: link:../1-foundation/mongo-codec
+      '@internal/mongo-contract':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../1-foundation/mongo-contract
       '@internal/mongo-lowering':
         specifier: workspace:8.0.0-rc.12
         version: link:../6-transport/mongo-lowering
@@ -2238,24 +2244,9 @@ importers:
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/0-foundation/utils
     devDependencies:
-      '@internal/adapter-mongo':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../../3-mongo-target/2-mongo-adapter
-      '@internal/driver-mongo':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../../3-mongo-target/3-mongo-driver
-      '@internal/family-mongo':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../9-family
-      '@internal/mongo-contract':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../1-foundation/mongo-contract
       '@internal/mongo-query-builder':
         specifier: workspace:8.0.0-rc.12
         version: link:../5-query-builders/query-builder
-      '@internal/target-mongo':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../../3-mongo-target/1-mongo-target
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../test/utils
@@ -2268,9 +2259,6 @@ importers:
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
-      mongodb-memory-server:
-        specifier: 'catalog:'
-        version: 11.2.0(socks@2.8.9)
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -2310,9 +2298,15 @@ importers:
       '@internal/mongo-emitter':
         specifier: workspace:8.0.0-rc.12
         version: link:../3-tooling/emitter
+      '@internal/mongo-lowering':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../6-transport/mongo-lowering
       '@internal/mongo-query-ast':
         specifier: workspace:8.0.0-rc.12
         version: link:../4-query/query-ast
+      '@internal/mongo-runtime':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../7-runtime
       '@internal/mongo-schema-ir':
         specifier: workspace:8.0.0-rc.12
         version: link:../3-tooling/mongo-schema-ir
@@ -3748,18 +3742,12 @@ importers:
 
   packages/3-mongo-target/1-mongo-target:
     dependencies:
-      '@internal/adapter-mongo':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../2-mongo-adapter
       '@internal/cli':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/3-tooling/cli
       '@internal/contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/0-foundation/contract
-      '@internal/driver-mongo':
-        specifier: workspace:8.0.0-rc.12
-        version: link:../3-mongo-driver
       '@internal/errors':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/1-core/errors
@@ -3802,6 +3790,9 @@ importers:
       arktype:
         specifier: 'catalog:'
         version: 2.2.3
+      bson:
+        specifier: 'catalog:'
+        version: 7.3.1
     devDependencies:
       '@internal/mongo-contract-psl':
         specifier: workspace:8.0.0-rc.12
@@ -3827,9 +3818,6 @@ importers:
       mongodb:
         specifier: 'catalog:'
         version: 7.5.0(socks@2.8.9)
-      mongodb-memory-server:
-        specifier: 'catalog:'
-        version: 11.2.0(socks@2.8.9)
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -3890,15 +3878,15 @@ importers:
       '@internal/operations':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/1-core/operations
+      '@internal/target-mongo':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../1-mongo-target
       '@internal/utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-framework/0-foundation/utils
       arktype:
         specifier: 'catalog:'
         version: 2.2.3
-      bson:
-        specifier: ^7.3.1
-        version: 7.3.1
     devDependencies:
       '@internal/driver-mongo':
         specifier: workspace:8.0.0-rc.12
@@ -5107,7 +5095,7 @@ importers:
         specifier: 'catalog:'
         version: 2.2.3
       bson:
-        specifier: ^7.3.1
+        specifier: 'catalog:'
         version: 7.3.1
       mongodb:
         specifier: ^7.0.0
@@ -5495,9 +5483,15 @@ importers:
       '@internal/mongo-runtime':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/2-mongo-family/7-runtime
+      '@internal/mongo-schema-ir':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../packages/2-mongo-family/3-tooling/mongo-schema-ir
       '@internal/mongo-value':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/2-mongo-family/1-foundation/mongo-value
+      '@internal/mongo-wire':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../packages/2-mongo-family/6-transport/mongo-wire
       '@internal/operations':
         specifier: workspace:8.0.0-rc.12
         version: link:../../packages/1-framework/1-core/operations

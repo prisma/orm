@@ -1,5 +1,5 @@
+import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
 import type { RuntimeMutationDefaultGenerator } from '@internal/sql-runtime';
-import { TIMESTAMP_NOW_GENERATOR_ID } from './timestamp-now-generator';
 
 /**
  * Builds the canonical runtime-plane generator for the wall-clock-now

@@ -90,7 +90,7 @@ function makeContext(adapter: MongoAdapter): MongoExecutionContext {
     driver: undefined,
     extensions: [],
   };
-  return Object.freeze({ contract: {}, codecs, stack });
+  return Object.freeze({ contract: {}, codecs, stack, applyMutationDefaults: () => [] });
 }
 
 function rowsDriver(rows: Record<string, unknown>[] = []): MongoDriver {

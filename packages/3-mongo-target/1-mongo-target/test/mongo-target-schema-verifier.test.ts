@@ -4,8 +4,8 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { MongoTargetSchemaVerifier } from '../src/core/migrations/mongo-target-schema-verifier';
 import { MongoTargetContractSerializer } from '../src/core/mongo-target-contract-serializer';
-import { MongoTargetSchemaVerifier } from '../src/core/mongo-target-schema-verifier';
 
 function deserializedContract() {
   const json = {

@@ -110,7 +110,7 @@ describe('mongoAttributeSpecs', () => {
   it('returns the selected forward base declaration instead of a name', () => {
     const { document, sources } = parse(
       `model Variant { @@base(Base, "v") }
-model Other { id Int }
+model Other { id Int32 }
 model Base { id String }`,
       'test.prisma',
     );

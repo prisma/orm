@@ -33,7 +33,7 @@ function readingContract(updatedAt: StorageColumn, defaults: readonly ExecutionM
   });
 }
 
-const updatedAtRef = { namespace: UNBOUND_NAMESPACE_ID, table: 'reading', column: 'updatedAt' };
+const updatedAtRef = { namespace: UNBOUND_NAMESPACE_ID, entry: 'reading', field: 'updatedAt' };
 
 describe('validateSqlContractFully and execution defaults', () => {
   it('accepts a column with a storage default and generators on create and update', () => {
@@ -70,6 +70,20 @@ describe('validateSqlContractFully and execution defaults', () => {
       blindCast<ExecutionMutationDefault, 'deliberately malformed generator kind'>({
         ref: updatedAtRef,
         onCreate: { kind: 'sequence', id: 'instantNow' },
+      }),
+    ];
+
+    expect(() => validateSqlContractFully(readingContract(column, defaults))).toThrow(
+      ContractValidationError,
+    );
+  });
+
+  it('rejects a ref that still names a table and a column', () => {
+    const column = col('timestamp', 'pg/timestamp-temporal@1', true);
+    const defaults = [
+      blindCast<ExecutionMutationDefault, 'the ref shape before entry and field'>({
+        ref: { namespace: UNBOUND_NAMESPACE_ID, table: 'reading', column: 'updatedAt' },
+        onCreate: instantNow,
       }),
     ];
 

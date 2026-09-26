@@ -1,3 +1,10 @@
+export type {
+  ArgTypeFromDescriptor,
+  ObjectArgumentType,
+  OptionalObjectArgumentKeys,
+  ResolveTemplateValue,
+  TupleFromArgumentDescriptors,
+} from './authoring-argument-types';
 export type { CapabilityMatrix } from './capability-registry';
 export { mergeCapabilityMatrices } from './capability-registry';
 export type {
@@ -25,6 +32,11 @@ export {
   isEnumTypeHandle,
   member,
 } from './enum-type';
+export {
+  assertSafeAuthoringHelperKey,
+  composePackAuthoringNamespace,
+  createFieldHelpersFromNamespace,
+} from './field-preset-helpers';
 export type {
   LocalFieldNullabilityLookup,
   ToOneRelationNullability,

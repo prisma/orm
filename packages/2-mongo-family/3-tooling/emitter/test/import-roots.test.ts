@@ -18,7 +18,7 @@ const hashes = { storageHash: 'storage', profileHash: 'profile' };
 
 const codecTypeImports: TypesImportSpec[] = [
   {
-    package: '@internal/adapter-mongo/codec-types',
+    package: '@internal/target-mongo/codec-types',
     named: 'CodecTypes',
     alias: 'MongoCodecTypes',
   },
@@ -39,17 +39,17 @@ function emit(root: ImportRoot): string {
 describe('emitted contract types under each import root', () => {
   it('names workspace packages under the internal root', () => {
     expect(importedSpecifiers(emit(internalImportRoot)).sort()).toEqual([
-      '@internal/adapter-mongo/codec-types',
       '@internal/contract/types',
       '@internal/mongo-contract',
+      '@internal/target-mongo/codec-types',
     ]);
   });
 
   it('names the facade under the facade root', () => {
     expect(importedSpecifiers(emit(mongoFacade)).sort()).toEqual([
-      '@prisma/orm-mongo/adapter/codec-types',
       '@prisma/orm-mongo/contract/types',
       '@prisma/orm-mongo/family-contract',
+      '@prisma/orm-mongo/target/codec-types',
     ]);
   });
 
@@ -57,7 +57,7 @@ describe('emitted contract types under each import root', () => {
     expect(importedSpecifiers(emit(platform)).sort()).toEqual([
       '@prisma/orm-family-mongo/contract',
       '@prisma/orm-framework/contract/types',
-      '@prisma/orm-target-mongo/adapter/codec-types',
+      '@prisma/orm-target-mongo/target/codec-types',
     ]);
   });
 

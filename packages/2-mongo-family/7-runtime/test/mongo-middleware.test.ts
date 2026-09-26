@@ -66,7 +66,7 @@ function makeContext(
     driver: undefined,
     extensions: [],
   };
-  return Object.freeze({ contract: {}, codecs, stack });
+  return Object.freeze({ contract: {}, codecs, stack, applyMutationDefaults: () => [] });
 }
 
 const baseMeta: PlanMeta = {
