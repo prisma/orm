@@ -35,6 +35,7 @@ import { InteractiveTransactionInfo } from '../common/types/Transaction'
 import { getBatchRequestPayload } from '../common/utils/getBatchRequestPayload'
 import { getErrorMessageWithLink as genericGetErrorMessageWithLink } from '../common/utils/getErrorMessageWithLink'
 import type { Executor } from './Executor'
+import { isAllRawBatch } from './is-all-raw-batch'
 import { LocalExecutor } from './LocalExecutor'
 import { QueryPlanCache } from './query-plan-cache'
 import { RemoteExecutor } from './RemoteExecutor'
@@ -549,7 +550,7 @@ export class ClientEngine implements Engine {
       throw this.#transformRequestError(err, request)
     })
 
-    const hasRawQueries = firstModelName === undefined
+    const hasRawQueries = isAllRawBatch(queries)
     let batchResponse: BatchResponse
     let placeholderValues: Record<string, unknown> = {}
     let queryInfoQueries = queries.map((query) => query.query)
