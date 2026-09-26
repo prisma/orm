@@ -299,7 +299,7 @@ All meta-frameworks enforce a server/client boundary. Prisma 8's runtime package
 
 ### NestJS dependency injection
 
-NestJS (~5M/week) is the only framework that structurally requires a DI wrapper — a `PrismaNextModule` with `forRoot()` configuration and an injectable provider. This is trivial to build (see [Appendix A: NestJS integration pattern](#nestjs-integration-pattern)), but it does need to be published as a package.
+NestJS (~5M/week) requires a DI wrapper, but a dedicated package is not strictly necessary. The standard NestJS value-provider pattern works perfectly with Prisma 8's lazy client. See [examples/nestjs-demo](../../examples/nestjs-demo) for a complete, runnable implementation demonstrating the recommended pattern: a `@Global()` module with a `Symbol` token, `useValue: db`, and `OnApplicationShutdown` calling `db.close()` exactly once. Tests can override the DI token with `.overrideProvider(DB).useValue(fakeDb)`.
 
 ---
 
