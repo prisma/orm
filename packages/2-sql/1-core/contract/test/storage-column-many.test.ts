@@ -162,4 +162,84 @@ describe('StorageColumn many', () => {
       expect(() => validateStorage(raw)).toThrow();
     });
   });
+
+  describe('StorageColumn optional fields', () => {
+    it('accepts noCheck and sets the field', () => {
+      const column = new StorageColumn({
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+        noCheck: ['membership'],
+      });
+      expect(column.noCheck).toEqual(['membership']);
+    });
+
+    it('leaves noCheck undefined when not provided', () => {
+      const column = new StorageColumn({
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+      });
+      expect(column.noCheck).toBeUndefined();
+    });
+
+    it('accepts typeParams and sets the field', () => {
+      const column = new StorageColumn({
+        nativeType: 'varchar',
+        codecId: 'pg/varchar@1',
+        nullable: false,
+        typeParams: { length: 255 },
+      });
+      expect(column.typeParams).toEqual({ length: 255 });
+    });
+
+    it('leaves typeParams undefined when not provided', () => {
+      const column = new StorageColumn({
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+      });
+      expect(column.typeParams).toBeUndefined();
+    });
+
+    it('accepts typeRef and sets the field', () => {
+      const column = new StorageColumn({
+        nativeType: 'user_status',
+        codecId: 'pg/enum@1',
+        nullable: false,
+        typeRef: 'UserStatus',
+      });
+      expect(column.typeRef).toBe('UserStatus');
+    });
+
+    it('leaves typeRef undefined when not provided', () => {
+      const column = new StorageColumn({
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+      });
+      expect(column.typeRef).toBeUndefined();
+    });
+  });
+
+  describe('StorageColumn.from', () => {
+    it('constructs a new instance from plain input', () => {
+      const column = StorageColumn.from({
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+      });
+      expect(column).toBeInstanceOf(StorageColumn);
+    });
+
+    it('passes an existing instance through unchanged', () => {
+      const original = new StorageColumn({
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+      });
+      const result = StorageColumn.from(original);
+      expect(result).toBe(original);
+    });
+  });
 });
