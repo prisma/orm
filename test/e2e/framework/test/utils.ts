@@ -14,7 +14,7 @@ import type { SqlStorage } from '@prisma/orm-postgres/family-contract/types';
 import type { ExecutionContext, Runtime } from '@prisma/orm-postgres/family-runtime';
 import { materialiseMigrationPackage } from '@prisma/orm-postgres/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@prisma/orm-postgres/migration-tools/spaces';
-import postgres from '@prisma/orm-postgres/runtime';
+import postgres, { type PostgresClient } from '@prisma/orm-postgres/runtime';
 import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { withClient, withDevDatabase } from '@repo/test-utils';
 import type { Client } from 'pg';
@@ -213,6 +213,8 @@ export interface TestRuntimeContext<TContract extends Contract<SqlStorage>> {
   readonly runtime: Runtime;
   /** The sql-builder proxy for building and executing queries */
   readonly db: Db<TContract>;
+  /** The raw SQL lane for statements the builder does not express */
+  readonly raw: PostgresClient<TContract>['raw'];
   /** The raw pg client for direct SQL queries */
   readonly client: Client;
   /** The DDL SQL generated for the contract */
@@ -268,6 +270,7 @@ export async function withTestRuntime<TContract extends Contract<SqlStorage>>(
             context: postgresClient.context,
             runtime,
             db: postgresClient.sql,
+            raw: postgresClient.raw,
             client,
             sql,
           });

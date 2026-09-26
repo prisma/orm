@@ -27,6 +27,23 @@ describe('transaction E2E', { timeout: 30000 }, () => {
     });
   });
 
+  it('runs no statement between BEGIN and the first user statement on a fresh runtime', async () => {
+    await withTestRuntime<Contract>(contractJsonPath, async ({ raw, runtime }) => {
+      const level = await withTransaction(runtime, async (tx) => {
+        await tx.execute(
+          raw.sql`SET TRANSACTION ISOLATION LEVEL SERIALIZABLE`.affectedCount().build(),
+        );
+        return tx.query(
+          raw.sql`SHOW transaction_isolation`
+            .returnsRow({ transaction_isolation: 'pg/text@1' })
+            .build(),
+        );
+      });
+
+      expect(level).toEqual([{ transaction_isolation: 'serializable' }]);
+    });
+  });
+
   it('rolls back all writes on error', async () => {
     await withTestRuntime<Contract>(contractJsonPath, async ({ db, runtime, client }) => {
       await expect(

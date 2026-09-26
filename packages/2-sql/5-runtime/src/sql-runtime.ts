@@ -363,18 +363,28 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
    * issued on it runs below the middleware/codec/telemetry pipeline. It carries
    * its own lifecycle (`release`/`destroy`/`beginTransaction`); the caller owns
    * disposal.
+   *
+   * The contract marker gate resolves before the connection is acquired: the marker is read
+   * through the driver, which is this connection's socket on a single-connection driver and a
+   * second client on a pool. The read therefore never runs inside a transaction begun on the
+   * connection and never waits on a pool whose only client is already held.
    */
-  protected acquireRawConnection(): Promise<SqlConnection> {
+  protected async acquireRawConnection(): Promise<SqlConnection> {
+    await this.ensureMarkerVerified();
     return this.driver.acquireConnection();
+  }
+
+  private ensureMarkerVerified(): Promise<void> {
+    if (this.verifyMarkerPromise === null) {
+      this.verifyMarkerPromise = this.verifyMarker();
+    }
+    return this.verifyMarkerPromise;
   }
 
   private async setupDriverExecution(exec: SqlExecutionPlan): Promise<void> {
     this.familyAdapter.validatePlan(exec, this.contract);
     this._telemetry = null;
-    if (this.verifyMarkerPromise === null) {
-      this.verifyMarkerPromise = this.verifyMarker();
-    }
-    await this.verifyMarkerPromise;
+    await this.ensureMarkerVerified();
   }
 
   protected getListDecoder(): ListDecoder {
@@ -763,7 +773,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   }
 
   async connection(): Promise<RuntimeConnection> {
-    const driverConn = await this.driver.acquireConnection();
+    const driverConn = await this.acquireRawConnection();
     const self = this;
 
     const wrappedConnection: RuntimeConnection &

@@ -25,6 +25,7 @@ import type {
   SqlRuntimeTargetDescriptor,
 } from '../src/sql-context';
 import { createExecutionContext, createSqlExecutionStack } from '../src/sql-context';
+import { withTransaction } from '../src/sql-runtime';
 import { defineTestCodec } from './test-codec';
 import { createTestRuntime as createRuntime, descriptorsFromCodecs } from './utils';
 
@@ -374,5 +375,103 @@ describe('verifyMarker', () => {
 
     expect(readMarkerSpy).toHaveBeenCalledTimes(1);
     expect(log.warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('verifyMarker and transactions', () => {
+  function createTransactionalDriver(events: string[]): SqlDriver {
+    const transaction = {
+      execute: vi.fn().mockResolvedValue({ affectedRows: 0 }),
+      query: vi.fn().mockImplementation(async function* (_request: SqlExecuteRequest) {
+        events.push('statement');
+        yield {} as Record<string, unknown>;
+      }),
+      commit: vi.fn().mockResolvedValue(undefined),
+      rollback: vi.fn().mockResolvedValue(undefined),
+    };
+    const connection = {
+      execute: vi.fn().mockResolvedValue({ affectedRows: 0 }),
+      query: vi.fn(),
+      release: vi.fn().mockImplementation(async () => {
+        events.push('release');
+      }),
+      destroy: vi.fn().mockResolvedValue(undefined),
+      beginTransaction: vi.fn().mockImplementation(async () => {
+        events.push('begin');
+        return transaction;
+      }),
+    };
+    return {
+      ...createDriver(),
+      acquireConnection: vi.fn().mockImplementation(async () => {
+        events.push('acquire');
+        return connection;
+      }),
+    };
+  }
+
+  it('reads the marker before acquiring the connection when a transaction is the first operation', async () => {
+    const events: string[] = [];
+    const readMarkerSpy = vi.fn().mockImplementation(async () => {
+      events.push('marker');
+      return { kind: 'absent' };
+    });
+    const runtime = buildRuntime({
+      markerResult: { kind: 'absent' },
+      driver: createTransactionalDriver(events),
+      readMarkerSpy,
+    });
+
+    await withTransaction(runtime, (tx) => tx.query(createPlan()).toArray());
+
+    expect(events).toEqual(['marker', 'acquire', 'begin', 'statement', 'release']);
+  });
+
+  it('reads the marker once across transactions and plain queries', async () => {
+    const events: string[] = [];
+    const readMarkerSpy = vi.fn().mockResolvedValue({ kind: 'absent' });
+    const runtime = buildRuntime({
+      markerResult: { kind: 'absent' },
+      driver: createTransactionalDriver(events),
+      readMarkerSpy,
+    });
+
+    await withTransaction(runtime, (tx) => tx.query(createPlan()).toArray());
+    await withTransaction(runtime, (tx) => tx.query(createPlan()).toArray());
+    await runtime.query(createPlan()).toArray();
+
+    expect(readMarkerSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('begins the transaction without a marker read when verifyMarker is false', async () => {
+    const events: string[] = [];
+    const readMarkerSpy = vi.fn().mockResolvedValue({ kind: 'absent' });
+    const runtime = buildRuntime({
+      markerResult: { kind: 'absent' },
+      verifyMarker: false,
+      driver: createTransactionalDriver(events),
+      readMarkerSpy,
+    });
+
+    await withTransaction(runtime, (tx) => tx.query(createPlan()).toArray());
+
+    expect(readMarkerSpy).not.toHaveBeenCalled();
+    expect(events).toEqual(['acquire', 'begin', 'statement', 'release']);
+  });
+
+  it('acquires no connection when the marker read fails', async () => {
+    const events: string[] = [];
+    const readMarkerSpy = vi.fn().mockRejectedValue(new Error('marker read failed'));
+    const runtime = buildRuntime({
+      markerResult: { kind: 'absent' },
+      driver: createTransactionalDriver(events),
+      readMarkerSpy,
+    });
+
+    await expect(
+      withTransaction(runtime, (tx) => tx.query(createPlan()).toArray()),
+    ).rejects.toThrow('marker read failed');
+
+    expect(events).toEqual([]);
   });
 });
