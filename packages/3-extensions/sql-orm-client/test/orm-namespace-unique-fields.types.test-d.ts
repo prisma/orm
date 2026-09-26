@@ -276,3 +276,9 @@ test('each User facet rejects the unique field of the other namespace in create/
   // @ts-expect-error `token` belongs to auth.User, not public.User
   writeDb.public.User.where({ token: 'tok' });
 });
+
+test('the auth-namespace User facet resolves upsert update inputs to its own field `token`', async () => {
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { token: 'next' } });
+  // @ts-expect-error `email` belongs to public.User, not auth.User
+  await writeDb.auth.User.upsert({ create: { token: 'tok' }, update: { email: 'a@example.com' } });
+});

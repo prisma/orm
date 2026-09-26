@@ -7,7 +7,7 @@
  * Coverage:
  * - **Row shape**: `DefaultModelRow` / `InferRootRow` carry plain `T` for both `.first()` and `for await` consumption paths.
  * - **Write surfaces**: `CreateInput`, `MutationUpdateInput`, `UniqueConstraintCriterion`, and `ShorthandWhereFilter` carry plain `T` for field positions.
- * - **Negative tests**: no `Promise<T>` form leaks into a row-shape position (read or write). The ORM client uses one field type-map (rooted in `DefaultModelRow`); there is no read/write split for codec output types.
+ * - **Negative tests**: no `Promise<T>` form leaks into a row-shape position (read or write). Reads are rooted in `DefaultModelRow` (codec `output` types) and writes in `DefaultModelInputRow` (codec `input` types); neither carries `Promise<T>`.
  */
 
 import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
@@ -164,15 +164,15 @@ test('no ShorthandWhereFilter field position resolves to a Promise<T>', () => {
   expectTypeOf<IsPromiseLike<NonNullable<UserWhere['id']>>>().toEqualTypeOf<false>();
 });
 
-// One field type-map shared by read and write surfaces: `CreateInput` and `MutationUpdateInput` are both derived from `DefaultModelRow`, which means the field-type source of truth is identical for reads and writes. The assertions below pin the field types to a single shape so that any future drift (e.g. introducing a `DefaultModelInputRow` with `Promise<T>` shapes) would break this test.
+// Read and write surfaces resolve to the same plain field types here: `CreateInput` and `MutationUpdateInput` are derived from `DefaultModelInputRow` (the codec `input` map) and `DefaultModelRow` from the `output` map, which agree for these codecs. The assertions below pin the field types to a single shape so that any future drift (e.g. `Promise<T>` shapes on the write side) would break this test.
 
-test('CreateInput field types match DefaultModelRow field types (one type-map)', () => {
+test('CreateInput field types match DefaultModelRow field types for these codecs', () => {
   expectTypeOf<NonNullable<UserCreate['name']>>().toEqualTypeOf<UserRow['name']>();
   expectTypeOf<NonNullable<UserCreate['email']>>().toEqualTypeOf<UserRow['email']>();
   expectTypeOf<UserCreate['address']>().toEqualTypeOf<UserRow['address'] | undefined>();
 });
 
-test('MutationUpdateInput field types match DefaultModelRow field types (one type-map)', () => {
+test('MutationUpdateInput field types match DefaultModelRow field types for these codecs', () => {
   expectTypeOf<NonNullable<UserUpdate['name']>>().toEqualTypeOf<UserRow['name']>();
   expectTypeOf<NonNullable<UserUpdate['email']>>().toEqualTypeOf<UserRow['email']>();
   expectTypeOf<UserUpdate['address']>().toEqualTypeOf<UserRow['address'] | undefined>();

@@ -1,7 +1,7 @@
 import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
 import { uuidv4 } from '@internal/ids';
 import { expectTypeOf, test } from 'vitest';
-import type { MutationCreateInput, MutationUpdateInput } from '../src/types';
+import type { DefaultModelRow, MutationCreateInput, MutationUpdateInput } from '../src/types';
 import { defineContract, field, model, rel } from './contract-builder';
 import type { Contract } from './fixtures/generated/contract';
 import type { Contract as JunctionNsContract } from './fixtures/junction-namespaces/generated/contract';
@@ -12,8 +12,8 @@ type RoleUpdate = MutationUpdateInput<Contract, 'Role'>;
 
 const roleCreate = { id: 'admin', name: 'Admin' } as RoleCreate;
 const tagCreate = { id: 'featured', name: 'Featured' } as TagCreate;
-const roleCriterion = { id: 'admin' } as { readonly id: NonNullable<RoleCreate['id']> };
-const tagCriterion = { id: 'featured' } as { readonly id: NonNullable<TagCreate['id']> };
+const roleCriterion = { id: 'admin' } as { readonly id: DefaultModelRow<Contract, 'Role'>['id'] };
+const tagCriterion = { id: 'featured' } as { readonly id: DefaultModelRow<Contract, 'Tag'>['id'] };
 const roleUpdate = { name: 'Admin' } as RoleUpdate;
 
 // An execution-only-defaulted junction payload column: `level` is NOT NULL with

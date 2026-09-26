@@ -48,7 +48,7 @@ Concretely:
 
 4. **Build-time stays synchronous.** `validateContract<Contract>(contractJson)` returns synchronously. `postgres({...})` and equivalent client constructors stay synchronous. Build-time `decodeJson` / `encodeJson` are not awaited anywhere on the load path.
 
-5. **ORM client type surfaces are uniform.** `DefaultModelRow` / `InferRootRow` field types are plain `T`. Write surfaces (`MutationUpdateInput`, `CreateInput`, `UniqueConstraintCriterion`, `ShorthandWhereFilter`, `DefaultModelInputRow`) accept plain `T`. Read and write share **one** field type-map.
+5. **ORM client type surfaces are uniform.** `DefaultModelRow` / `InferRootRow` field types are plain `T`. Write surfaces (`MutationUpdateInput`, `CreateInput`, `UniqueConstraintCriterion`, `ShorthandWhereFilter`, `DefaultModelInputRow`) accept plain `T`. Reads, where filters and unique criteria take each field's type from `FieldOutputTypes`; create and update inputs (`CreateInput`, `MutationUpdateInput`, `DefaultModelInputRow`) take it from `FieldInputTypes`. Neither map carries `Promise<T>`, so this is not the sync-only input split rejected above.
 
 6. **Cross-family portability.** The `Codec` interface in SQL (`framework-components` / `relational-core`) and Mongo (`mongo-codec`) is structurally identical: same generics, same Promise-returning query-time methods, same synchronous build-time methods. A single `defineCodec({...})` value is structurally usable in both runtimes.
 
