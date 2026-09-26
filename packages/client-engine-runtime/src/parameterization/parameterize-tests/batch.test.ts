@@ -406,4 +406,48 @@ describe('parameterizeBatch', () => {
       }
     `)
   })
+
+  it('parameterizes a model query that follows a raw statement', () => {
+    const batch: JsonBatchQuery = {
+      batch: [
+        {
+          action: 'executeRaw',
+          query: {
+            arguments: {
+              query: "SELECT set_config('app.user_id', $1, true)",
+              parameters: '["1"]',
+            },
+            selection: { $scalars: true },
+          },
+        },
+        {
+          modelName: 'User',
+          action: 'findUnique',
+          query: {
+            arguments: { where: { id: 1 } },
+            selection: { $scalars: true },
+          },
+        },
+      ],
+    }
+
+    const result = parameterizeBatch(batch, paramGraph)
+
+    expect(result.parameterizedBatch.batch[0].query.arguments).toEqual({
+      query: "SELECT set_config('app.user_id', $1, true)",
+      parameters: '["1"]',
+    })
+    expect(result.parameterizedBatch.batch[1].query.arguments).toEqual({
+      where: {
+        id: {
+          $type: 'Param',
+          value: {
+            name: '%1',
+            type: 'Int',
+          },
+        },
+      },
+    })
+    expect(result.placeholderValues).toEqual({ '%1': 1 })
+  })
 })
