@@ -1,10 +1,11 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { EOL } from 'node:os';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { expandContractInputs } from '@internal/config-loader';
 import { type FormatOptions, format } from '@internal/psl-parser/format';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
+import { join } from 'pathe';
 import { type CliStructuredError, errorRuntime, errorUnexpected } from '../../utils/cli-errors';
 
 export interface FormatOperationOptions {
@@ -78,6 +79,20 @@ async function formatOneFile(
   return ok(inputPath);
 }
 
+/** The input itself, or every `.prisma` file under it when the input is a directory. */
+async function pslFilesOf(inputPath: string): Promise<readonly string[]> {
+  const isDirectory = await stat(inputPath).then(
+    (stats) => stats.isDirectory(),
+    () => false,
+  );
+  if (!isDirectory) return [inputPath];
+  const entries = await readdir(inputPath, { recursive: true });
+  return entries
+    .filter((entry) => entry.endsWith('.prisma'))
+    .sort()
+    .map((entry) => join(inputPath, entry));
+}
+
 export async function executeFormat(
   options: FormatOperationOptions,
 ): Promise<Result<FormatOperationResult, CliStructuredError>> {
@@ -101,7 +116,8 @@ export async function executeFormat(
 
   const paths: string[] = [];
   const failures: CliStructuredError[] = [];
-  for (const inputPath of resolvedInputs) {
+  const files = (await Promise.all(resolvedInputs.map(pslFilesOf))).flat();
+  for (const inputPath of files) {
     const outcome = await formatOneFile(inputPath, formatOptions);
     if (outcome.ok) {
       paths.push(outcome.value);
