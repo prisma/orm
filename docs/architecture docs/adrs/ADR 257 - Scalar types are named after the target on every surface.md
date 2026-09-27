@@ -20,6 +20,7 @@ export const mongoScalarAuthoringTypes = {
     documentation: 'A signed 32-bit integer, stored as BSON int.',
     output: { codecId: MONGO_INT32_CODEC_ID, nativeType: 'int' },
   },
+  // …
   Json: {
     kind: 'typeConstructor',
     documentation:
@@ -87,8 +88,7 @@ A codec id is never renamed under this decision. If one ever has to change, the 
 
 ## Consequences
 
-- Every target's PSL names follow its own storage vocabulary. MongoDB's are `String`, `Int32`, `Int64`, `Double`, `Decimal128`, `Bool`, `Date`, `ObjectId`, `Binary`, `Json` and `Bson`, with `Int`, `Float`, `Boolean` and `DateTime` as deprecated aliases. PostgreSQL and SQLite still use names shared with other targets (`Int`, `BigInt`, `Float`, `DateTime`, `Bytes` and others) and are renamed the same way before general availability, with the same deprecation path.
-- The per-target lists and the cross-target concept table live in [Scalar types](../../reference/scalar-types.md); other docs link there instead of repeating them.
+- Every target follows the same rule and the same deprecation path for a renamed PSL name. The current per-target names and the cross-target concept table are listed in [Scalar types](../../reference/scalar-types.md); other docs link there instead of repeating them.
 - Readers of Prisma 6 and Prisma 7 schemas map the old names to codec ids through their target bindings and are unaffected by PSL names.
 - An extension that contributes a codec names its PSL type and TypeScript helper after the codec id's token, and declares every BSON type its codec stores in `targetTypes`; the MongoDB validator derivation reads the whole list.
 
