@@ -99,6 +99,33 @@ describe('version and format helpers', () => {
   });
 });
 
+describe('repository size', () => {
+  it('reads a head whose tree listing is larger than a child process buffers by default', () => {
+    const base = commit();
+    const emptyBlob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+      cwd: repo,
+      input: '',
+      encoding: 'utf8',
+    }).trim();
+    const entries = Array.from(
+      { length: 12_000 },
+      (_, index) => `100644 ${emptyBlob}\tbulk/${'x'.repeat(60)}-${index}.txt`,
+    );
+    execFileSync('git', ['update-index', '--index-info'], {
+      cwd: repo,
+      input: `${entries.join('\n')}\n`,
+    });
+    git('commit', '-qm', 'bulk');
+    const listing = execFileSync('git', ['ls-tree', '-r', '-z', 'HEAD'], {
+      cwd: repo,
+      maxBuffer: 16 * 1024 * 1024,
+    });
+    assert.ok(listing.length > 1024 * 1024);
+
+    passes(base);
+  });
+});
+
 describe('independent PR declarations', () => {
   for (const [audience, changedFile] of [
     ['app', 'examples/demo.ts'],

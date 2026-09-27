@@ -54,10 +54,13 @@ const COVERED_DIRECTORIES = [
   { audience: 'app', directory: 'examples/' },
   { audience: 'extension', directory: 'packages/3-extensions/' },
 ];
+/** Room for a whole-repository tree listing, which outgrew the 1 MiB child-process default. */
+const GIT_OUTPUT_LIMIT_BYTES = 256 * 1024 * 1024;
 function git(repoRoot, ...args) {
   return execFileSync('git', args, {
     cwd: repoRoot,
     encoding: 'utf8',
+    maxBuffer: GIT_OUTPUT_LIMIT_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
