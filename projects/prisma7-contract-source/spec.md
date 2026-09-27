@@ -95,7 +95,7 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 2. `now()` default equality against Prisma 7's `CURRENT_TIMESTAMP` (slice 1).
 3. Contract validator acceptance of a column default together with execution generators, and of generators on nullable columns (slice 1).
 4. The version at which the implicit junction gained a primary key (slice 1). Resolved: Prisma 6.0.0; 7.10.0 emits `_AToB_AB_pkey`.
-5. Whether Mongo verify compares index names (resolved by the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)): it does not).
+5. Whether Mongo verify compares index names. Resolved by the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)): it does not.
 6. The exact Prisma 7 Postgres native type table (slice 1). Resolved: `test/integration/test/fixtures/prisma7-source/reference/migration.sql`.
 7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key, which `@ignore` and `@@ignore` rely on because Prisma 7 still creates that schema (slice 1).
 
@@ -104,8 +104,8 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 Recorded so they are not lost; each becomes its own project when scheduled.
 
 - Views: no schema node, introspection selects `BASE TABLE` only (`control-adapter.ts:702-709`), verify reports a missing table.
-- Mongo execution defaults: filled by PRs [#30403](https://github.com/prisma/orm/pull/30403) and [#30406](https://github.com/prisma/orm/pull/30406), and the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)).
-- Mongo codecs for BSON binary, Decimal128, Int64, embedded documents: filled by PRs [#30396](https://github.com/prisma/orm/pull/30396) and [#30439](https://github.com/prisma/orm/pull/30439), and the Prisma 6 MongoDB reader (`prisma6Schema`, PR [#30405](https://github.com/prisma/orm/pull/30405)).
+- Mongo execution defaults: filled by PRs [#30403](https://github.com/prisma/orm/pull/30403) and [#30406](https://github.com/prisma/orm/pull/30406); the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)), maps Prisma 6 schemas onto them.
+- Mongo codecs for BSON binary, Decimal128, Int64, embedded documents: filled by PRs [#30396](https://github.com/prisma/orm/pull/30396) and [#30439](https://github.com/prisma/orm/pull/30439); the Prisma 6 MongoDB reader, `prisma6Schema` ([#30405](https://github.com/prisma/orm/pull/30405)), maps Prisma 6 schemas onto them.
 - A `pg/opaque` codec carrying the native type name, which also repairs `contract infer` emitting `Unsupported(...)` that nothing reads back.
 - A cuid v1 generator, if mapping `cuid()` to cuid2 turns out to matter.
 - Referential-action emulation on Mongo.
