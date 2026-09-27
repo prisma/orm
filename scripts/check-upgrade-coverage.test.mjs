@@ -100,7 +100,7 @@ describe('version and format helpers', () => {
 });
 
 describe('repository size', () => {
-  it('reads a head whose tree listing is larger than a child process buffers by default', () => {
+  it('checks a repository whose files outside the instruction directories list to more than 1 MiB', () => {
     const base = commit();
     const emptyBlob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
       cwd: repo,

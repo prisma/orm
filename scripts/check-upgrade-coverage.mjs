@@ -49,18 +49,16 @@ export function transitionLabel(prev, head) {
 const PENDING = 'upgrade-instructions/pending/';
 const PENDING_INSTRUCTIONS =
   /^upgrade-instructions\/pending\/[^/]+\/(app|extension)\/instructions\.md$/;
+const PUBLISHED_ROOT = 'skills/prisma-8/upgrading/';
 const PUBLISHED_DIRECTORY = /^(skills\/prisma-8\/upgrading\/(?:app|extension)\/upgrades\/[^/]+)\//;
 const COVERED_DIRECTORIES = [
   { audience: 'app', directory: 'examples/' },
   { audience: 'extension', directory: 'packages/3-extensions/' },
 ];
-/** Room for a whole-repository tree listing, which outgrew the 1 MiB child-process default. */
-const GIT_OUTPUT_LIMIT_BYTES = 256 * 1024 * 1024;
 function git(repoRoot, ...args) {
   return execFileSync('git', args, {
     cwd: repoRoot,
     encoding: 'utf8',
-    maxBuffer: GIT_OUTPUT_LIMIT_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
@@ -78,9 +76,10 @@ function readFile(repoRoot, ref, path) {
     return null;
   }
 }
+/** The files under the pending and published instruction directories, the only ones the check reads. */
 function tree(repoRoot, ref) {
   return new Map(
-    git(repoRoot, 'ls-tree', '-r', '-z', ref)
+    git(repoRoot, 'ls-tree', '-r', '-z', ref, '--', PENDING, PUBLISHED_ROOT)
       .split('\0')
       .filter(Boolean)
       .map((entry) => {
