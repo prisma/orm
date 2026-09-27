@@ -411,7 +411,7 @@ The PSL name, TS helper and application type of every Mongo scalar are listed in
 | `mongo/date@1` | `Date` | ISO-8601 text | `date` |
 | `mongo/vector@1` | `readonly number[]` | the same array | `vector` |
 | `mongo/int64@1` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
-| `mongo/decimal128@1` | decimal text without an exponent | the same text | `decimal` |
+| `mongo/decimal128@1` | decimal text without an exponent; a value with an extreme exponent such as `1E-6176` decodes to a plain digit string of about 6,100 characters | the same text | `decimal` |
 | `mongo/binary@1` | `Uint8Array` | unwrapped base64 | `binData` |
 | `mongo/json@1` | `JsonValue` | the same value | `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null` |
 | `mongo/bson@1` | `BsonValue`, including `Code`, `MinKey`, `MaxKey`, `BSONSymbol` and a native `RegExp` (what a stored regex reads back as; `BSONRegExp` only with a driver configured for it); a write also accepts a `Uint8Array`; a `DBRef` reads back as its `{ $ref, $id }` document | canonical Extended JSON v2 (`EJSON.serialize(value, { relaxed: false })`) | none; the validator does not constrain it |

@@ -25,6 +25,11 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
 
+Two limitations to know about:
+
+- `Binary` reads every binData subtype back as its bytes and writes subtype 0, so a UUID stored as subtype 4 round-trips as subtype 0. Use `Bson` to keep the subtype.
+- `field.temporal.timestamp(undefined, 'now')` keeps the field required on the create input type, although the runtime fills it on create. `field.temporal.timestamp()` and `field.temporal.timestamp('now', 'now')` are typed exactly.
+
 ## PostgreSQL
 
 These are the current names. The Postgres and SQLite rename project will change several of them to the target's own type names and update this table.
