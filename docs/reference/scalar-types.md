@@ -1,6 +1,6 @@
 # Scalar types
 
-Each target names its scalar types after what the database stores. This page lists every scalar type per target, then maps the types across targets by concept, with the Prisma 6/7 name for readers migrating a schema. Other docs link here rather than repeat the lists.
+Each target names its scalar types after what the database stores ([ADR 256](../architecture%20docs/adrs/ADR%20256%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md)). This page lists every scalar type per target, then maps the types across targets by concept, with the Prisma 6/7 name for readers migrating a schema. Other docs link here rather than repeat the lists.
 
 Columns: the PSL name, the TypeScript builder helper (inside the `defineContract` callback), the codec id recorded in `contract.json`, the storage type, and the application type a query reads and writes.
 
