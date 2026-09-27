@@ -1,9 +1,14 @@
-import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import mongoAdapterDescriptor, { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
 import mongoControlDriver, { MongoControlDriver } from '@internal/driver-mongo/control';
-import { contractToMongoSchemaIR, createMongoFamilyInstance } from '@internal/family-mongo/control';
+import {
+  contractToMongoSchemaIR,
+  createMongoFamilyInstance,
+  mongoFamilyDescriptor,
+} from '@internal/family-mongo/control';
 import {
   APP_SPACE_ID,
+  createControlStack,
   hasMigrations,
   type MigrationRunnerPerSpaceOptions,
 } from '@internal/framework-components/control';
@@ -38,7 +43,11 @@ function withSynthEdges(entry: Omit<PerSpaceOptions, 'migrationEdges'>): PerSpac
 
 function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
   return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
+    createControlStack({
+      family: mongoFamilyDescriptor,
+      target: mongoTargetDescriptor,
+      adapter: mongoAdapterDescriptor,
+    }),
   );
 }
 

@@ -50,7 +50,7 @@ describe('extractCodecTypeImports', () => {
         types: {
           codecTypes: {
             import: {
-              package: '@internal/adapter-mongo/codec-types',
+              package: '@test/mongo/codec-types',
               named: 'CodecTypes',
               alias: 'MongoCodecTypes',
             },
@@ -60,7 +60,7 @@ describe('extractCodecTypeImports', () => {
     ]);
     expect(result).toEqual([
       {
-        package: '@internal/adapter-mongo/codec-types',
+        package: '@test/mongo/codec-types',
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
@@ -1381,7 +1381,7 @@ describe('createControlStack', () => {
           types: {
             codecTypes: {
               import: {
-                package: '@internal/adapter-mongo/codec-types',
+                package: '@test/mongo/codec-types',
                 named: 'CodecTypes',
                 alias: 'MongoCodecTypes',
               },

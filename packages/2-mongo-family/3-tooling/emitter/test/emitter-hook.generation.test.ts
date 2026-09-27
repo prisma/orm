@@ -61,14 +61,14 @@ describe('mongoEmission.generateContractTypes', () => {
     const contract = createMongoContract();
     const codecImports: TypesImportSpec[] = [
       {
-        package: '@internal/adapter-mongo/codec-types',
+        package: '@internal/target-mongo/codec-types',
         named: 'CodecTypes',
         alias: 'MongoCodecTypes',
       },
     ];
     const types = generateContractDts(contract, mongoEmission, codecImports, testHashes);
     expect(types).toContain(
-      "import type { CodecTypes as MongoCodecTypes } from '@internal/adapter-mongo/codec-types'",
+      "import type { CodecTypes as MongoCodecTypes } from '@internal/target-mongo/codec-types'",
     );
     expect(types).toContain('export type CodecTypes = MongoCodecTypes');
   });

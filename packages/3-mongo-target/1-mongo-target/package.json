@@ -16,10 +16,8 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/adapter-mongo": "workspace:8.0.0-rc.12",
     "@internal/cli": "workspace:8.0.0-rc.12",
     "@internal/contract": "workspace:8.0.0-rc.12",
-    "@internal/driver-mongo": "workspace:8.0.0-rc.12",
     "@internal/errors": "workspace:8.0.0-rc.12",
     "@internal/family-mongo": "workspace:8.0.0-rc.12",
     "@internal/framework-components": "workspace:8.0.0-rc.12",
@@ -33,18 +31,18 @@
     "@internal/mongo-schema-ir": "workspace:8.0.0-rc.12",
     "@internal/mongo-value": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
-    "arktype": "catalog:"
+    "arktype": "catalog:",
+    "bson": "catalog:"
   },
   "devDependencies": {
-    "mongodb": "catalog:",
     "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
     "@internal/mongo-wire": "workspace:8.0.0-rc.12",
     "@internal/psl-parser": "workspace:8.0.0-rc.12",
-    "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@internal/publish-surface": "workspace:8.0.0-rc.12",
+    "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@repo/tsconfig": "workspace:8.0.0-rc.12",
     "@repo/tsdown": "workspace:8.0.0-rc.12",
-    "mongodb-memory-server": "catalog:",
+    "mongodb": "catalog:",
     "pathe": "^2.0.3",
     "tsdown": "catalog:",
     "typescript": "catalog:",
@@ -64,8 +62,11 @@
   ],
   "types": "./dist/pack.d.mts",
   "exports": {
+    "./codec-ids": "./dist/codec-ids.mjs",
     "./codec-types": "./dist/codec-types.mjs",
+    "./codecs": "./dist/codecs.mjs",
     "./control": "./dist/control.mjs",
+    "./data-types": "./dist/data-types.mjs",
     "./migration": "./dist/migration.mjs",
     "./pack": "./dist/pack.mjs",
     "./runtime": "./dist/runtime.mjs",

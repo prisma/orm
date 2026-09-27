@@ -20,6 +20,10 @@ catalog:
   '@types/pg': 8.20.4
   ajv: ^8.20.0
   arktype: ^2.2.2
+  # bson and mongodb must share a major: the Mongo target builds the bson values the
+  # driver serialises, and the driver rejects values from another bson major.
+  # Use the bson range the mongodb release declares.
+  bson: ^7.2.0
   gray-matter: ^4.0.3
   mongodb: ^7.4.0
   mongodb-connection-string-url: ^7.0.1

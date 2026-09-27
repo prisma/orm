@@ -1,8 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { createMongoRunnerDeps, extractDb } from '@prisma/orm-mongo/adapter/control';
-import { MongoDriverImpl } from '@prisma/orm-mongo/driver';
+import { MongoControlAdapterImpl } from '@prisma/orm-mongo/adapter/control';
 import mongoControlDriver from '@prisma/orm-mongo/driver/control';
-import { createMongoFamilyInstance } from '@prisma/orm-mongo/family/control';
 import type { MongoContract } from '@prisma/orm-mongo/family-contract';
 import { deserializeMongoOps, MongoMigrationRunner } from '@prisma/orm-mongo/target/control';
 import { timeouts } from '@repo/test-utils';
@@ -15,13 +13,6 @@ import BackfillProductStatus from '../migrations/app/20260513T0508_backfill_prod
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] as const,
 };
-
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these examples.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 const migrationDir = resolve(
   import.meta.dirname,
@@ -123,11 +114,7 @@ describe('hand-authored migration (backfill-product-status)', {
     const controlDriver = await mongoControlDriver.create(replSet.getUri(dbName));
     try {
       const runner = new MongoMigrationRunner(
-        createMongoRunnerDeps(
-          controlDriver,
-          MongoDriverImpl.fromDb(extractDb(controlDriver)),
-          makeFamily(),
-        ),
+        new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
       );
       // Synthetic-contract opt-out (paired with `strictVerification: false`):
       // this test isolates migration 3's apply mechanics against a real

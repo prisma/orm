@@ -5,6 +5,7 @@ import { flag } from '@prisma/cli-engine';
 import { ok } from '@prisma/cli-engine/protocol';
 import { dirname, relative, resolve } from 'pathe';
 import { executeContractEmit as executeContractEmitOperation } from '../../control-api/operations/contract-emit';
+import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
 import { defineOrmCommand } from '../define-command';
 import { controlProgressReporter } from '../progress';
 
@@ -101,6 +102,13 @@ export function createContractEmitCommand({ executeContractEmit }: ContractEmitC
         ...ifDefined('outputPath', outputPath),
       });
 
+      for (const warning of result.sourceWarnings ?? []) {
+        ctx.report({
+          kind: 'message',
+          severity: 'warn',
+          text: `warning ${formatSourceDiagnostic(warning)}`,
+        });
+      }
       if (result.validationWarning !== undefined) {
         ctx.report({ kind: 'message', severity: 'warn', text: result.validationWarning });
       }

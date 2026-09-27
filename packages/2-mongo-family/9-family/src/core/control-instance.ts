@@ -26,7 +26,11 @@ import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
-import type { MongoControlAdapter, MongoControlAdapterDescriptor } from './control-adapter';
+import type {
+  MongoControlAdapter,
+  MongoControlAdapterDescriptor,
+  MongoRunnerDependencies,
+} from './control-adapter';
 import type { MongoControlExtensionDescriptor } from './control-types';
 import { MongoContractSerializer } from './ir/mongo-contract-serializer';
 import { mongoOperationsToPreview } from './operation-preview';
@@ -48,6 +52,13 @@ export interface MongoControlFamilyInstance
    * guarded by `pnpm lint:no-contract-cast`.
    */
   deserializeContract(contractJson: unknown): Contract;
+
+  /**
+   * Builds the migration runner's dependencies through the control adapter on the stack, so the target never names the adapter package (ADR 198).
+   */
+  createRunnerDependencies(options: {
+    readonly driver: ControlDriverInstance<'mongo', string>;
+  }): MongoRunnerDependencies;
 }
 
 function deserializeMongoContract(contractJson: unknown): MongoContract {
@@ -379,6 +390,10 @@ export function createMongoFamilyInstance(controlStack: ControlStack): MongoCont
 
     async introspect(options): Promise<MongoSchemaIR> {
       return getControlAdapter().introspectSchema(asMongoDriver(options.driver));
+    },
+
+    createRunnerDependencies(options): MongoRunnerDependencies {
+      return getControlAdapter().createRunnerDependencies(asMongoDriver(options.driver));
     },
 
     toSchemaView(schema: MongoSchemaIR): CoreSchemaView {

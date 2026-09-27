@@ -1288,11 +1288,13 @@ How it composes:
 - Long-lived hosts (Vite dev server, watch CLIs) must call `disposeEmitQueue`
   on shutdown to drop the per-output queue state, otherwise the module-global
   queue map leaks one entry per unique output path.
-- `loadContractSource(config, { signal })` runs only the resolve-source step: it builds the control stack, runs `contract.source.load`, and returns the contract or the source's `{ summary, diagnostics }` without writing anything. `prisma orm init` uses it to check a Prisma 7 schema before it changes the project. `executeContractEmit`, `contract print` and `ControlClient.emit` load the source through the same step, so each reports a bad source with the same error.
+- `loadContractSource(config, { signal, onWarning })` runs only the resolve-source step: it builds the control stack, runs `contract.source.load`, and returns the contract or the source's `{ summary, diagnostics }` without writing anything. `onWarning` receives each warning the source reports. `prisma orm init` uses it to check a Prisma 7 schema before it changes the project. `executeContractEmit`, `contract print` and `ControlClient.emit` load the source through the same step, so each reports a bad source with the same error.
 
 The `validateContractDeps` warning is returned in `ContractEmitResult.validationWarning`
 rather than written to stderr by the operation — callers (CLI, Vite plugin) decide
 how to render it (`ui.warn`, plugin logger, etc.).
+
+A contract source can report warnings while it still produces a contract, through the optional `reportWarning` on its `ContractSourceContext` (each a `ContractSourceDiagnostic` with `severity: 'warning'`). `executeContractEmit` collects them into `ContractEmitResult.sourceWarnings`, and `prisma contract emit` prints each as `warning <file>:<line>:<column> <code> <message>`; the language server shows them with warning severity.
 
 ## Config Validation and Normalization
 

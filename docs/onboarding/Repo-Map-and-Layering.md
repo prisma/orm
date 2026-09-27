@@ -11,7 +11,7 @@ Planes (`migration` / `runtime` / `shared`) cut across the directory hierarchy a
 Target packages (`@internal/target-*`) split their `src/core/` along this boundary:
 
 - `src/core/migrations/**` — migration plane. Planner, emitter, operation factories, resolver, TS rendering. Executed at `node migration.ts` time and at `migration plan` / `migrate`.
-- `src/core/**` (everything else) — shared plane. Files used from both migration and runtime entrypoints (`authoring.ts`, `descriptor-meta.ts`, `types.ts`, …).
+- `src/core/*.ts` (the files directly in `src/core/`) — shared plane. Files used from both migration and runtime entrypoints (`authoring.ts`, `descriptor-meta.ts`, `types.ts`, …).
 - `src/exports/control.ts` — migration-plane export.
 - `src/exports/runtime.ts` — runtime-plane export.
 - `src/exports/pack.ts` — shared-plane export.
@@ -20,11 +20,11 @@ The intent is that target migration code is **plainly control-plane** and should
 
 ### Glob resolution
 
-`dependency-cruiser.config.mjs` resolves overlapping globs by **most-specific wins**: each source file is placed in exactly the module group corresponding to its longest-matching glob. So a target whose `architecture.config.json` registers both `src/core/**` (shared) and `src/core/migrations/**` (migration) places files under `migrations/` in the migration group only — not in both. Author globs from broad-to-specific; the resolver picks the right one.
+`dependency-cruiser.config.mjs` does not resolve overlapping globs: a file that matches two globs belongs to both module groups, and every rule for either group applies to it. A target that registered both `src/core/**` (shared) and `src/core/migrations/**` (migration) would put its migration files in the shared group too, and each import between two migration files would then count as shared → migration and fail. Register globs that do not overlap: `src/core/*.ts` matches only the files directly in `src/core/`.
 
 ### When adding a new target package
 
 1. Register `src/exports/runtime.ts` as `plane: runtime`.
 2. Register `src/exports/control.ts` as `plane: migration` (and `pack.ts` as `plane: shared` if the target has one).
-3. Register `src/core/**` as `plane: shared`.
+3. Register `src/core/*.ts` as `plane: shared`.
 4. Register `src/core/migrations/**` as `plane: migration` *even if the directory does not exist yet* — keeps target registrations symmetric and prevents code added later from inheriting the shared registration by accident.

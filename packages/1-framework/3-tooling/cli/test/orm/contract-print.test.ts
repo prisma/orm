@@ -249,6 +249,34 @@ describe('contract print', () => {
     ]);
   });
 
+  it('reports each warning the contract source reports, with its location', async () => {
+    const dir = await projectDir();
+    mocks.load.mockImplementation(
+      async (context: { reportWarning?: (diagnostic: unknown) => void }) => {
+        context.reportWarning?.({
+          code: 'PSL_DEPRECATED_SCALAR_NAME',
+          message: 'Scalar type "Int" is deprecated; use "Int32".',
+          sourceId: 'prisma/schema.prisma',
+          span: {
+            start: { offset: 30, line: 3, column: 9 },
+            end: { offset: 33, line: 3, column: 12 },
+          },
+          severity: 'warning',
+        });
+        return ok({ roots: {}, domain: {} });
+      },
+    );
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.events).toContainEqual({
+      kind: 'message',
+      severity: 'warn',
+      text: 'warning prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME Scalar type "Int" is deprecated; use "Int32".',
+    });
+  });
+
   it('prints no warning when the contract has no default control policy', async () => {
     const dir = await projectDir();
 

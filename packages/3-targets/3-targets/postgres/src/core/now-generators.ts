@@ -1,4 +1,4 @@
-import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/family-sql/control';
+import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
 import {
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,

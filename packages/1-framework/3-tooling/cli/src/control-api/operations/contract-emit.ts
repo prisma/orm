@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises';
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { type ControlStack, createControlStack } from '@internal/framework-components/control';
@@ -101,11 +102,19 @@ export async function executeContractEmit(
 
   return queueEmitByOutput(outputJsonPath, async () => {
     startSpan(onProgress, 'resolveSource', 'Resolving contract source...');
+    const sourceWarnings: ContractSourceDiagnostic[] = [];
     let stack: ControlStack;
     let contract: Contract;
     try {
       stack = createControlStack(config);
-      const loaded = await resolveContractSource({ stack, source: contractConfig.source, signal });
+      const loaded = await resolveContractSource({
+        stack,
+        source: contractConfig.source,
+        signal,
+        reportWarning: (diagnostic) => {
+          sourceWarnings.push(diagnostic);
+        },
+      });
       if (!loaded.ok) throw loaded.failure.error;
       contract = loaded.value;
     } catch (error) {
@@ -177,6 +186,7 @@ export async function executeContractEmit(
         dts: outputDtsPath,
       },
       ...ifDefined('validationWarning', validationWarning),
+      ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
     };
   });
 }

@@ -20,7 +20,7 @@ function symbolTableInput(schema: string): {
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
+  ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
 ]);
 

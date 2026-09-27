@@ -1,4 +1,6 @@
 import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
+import type { ControlMutationDefaults } from '@internal/framework-components/control';
+import type { mongoAuthoringFieldPresets } from '../core/authoring';
 import { mongoTargetDescriptorMeta } from '../core/descriptor-meta';
 import type { CodecTypes } from './codec-types';
 
@@ -13,6 +15,8 @@ const mongoTargetPack: {
   readonly types: {
     readonly codecTypes: { readonly codecDescriptors: ReadonlyArray<AnyCodecDescriptor> };
   };
+  readonly authoring: { readonly field: typeof mongoAuthoringFieldPresets };
+  readonly controlMutationDefaults: ControlMutationDefaults;
   readonly __codecTypes?: CodecTypes;
 } = mongoTargetDescriptorMeta;
 

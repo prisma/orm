@@ -220,14 +220,54 @@ export type DefaultModelRow<
   ModelName extends string & keyof MongoModelsMap<TContract>,
 > = ResolvedOutputRow<TContract, ModelName>;
 
+type ModelCollectionName<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = MongoModelsMap<TContract>[ModelName] extends {
+  readonly storage: { readonly collection: infer Collection extends string };
+}
+  ? Collection
+  : ModelName;
+
+type ExecutionDefaultEntry<TContract extends MongoContract> =
+  NonNullable<TContract['execution']> extends {
+    readonly mutations: { readonly defaults: ReadonlyArray<infer Entry> };
+  }
+    ? Entry
+    : never;
+
+/**
+ * Fields of the model's collection that an execution default fills on create; the create input makes them optional, mirroring `IsOptionalCreateField` in the SQL ORM client.
+ */
+type GeneratedOnCreateFields<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> =
+  Extract<
+    ExecutionDefaultEntry<TContract>,
+    {
+      readonly ref: { readonly entry: ModelCollectionName<TContract, ModelName> };
+      readonly onCreate: unknown;
+    }
+  > extends infer Matched
+    ? Matched extends { readonly ref: { readonly field: infer Field extends string } }
+      ? Field
+      : never
+    : never;
+
+type OptionalOnCreate<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = '_id' | GeneratedOnCreateFields<TContract, ModelName>;
+
 export type CreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-> = Omit<ResolvedInputRow<TContract, ModelName>, '_id'> &
+> = Omit<ResolvedInputRow<TContract, ModelName>, OptionalOnCreate<TContract, ModelName>> &
   Partial<
     Pick<
       ResolvedInputRow<TContract, ModelName>,
-      '_id' & keyof ResolvedInputRow<TContract, ModelName>
+      OptionalOnCreate<TContract, ModelName> & keyof ResolvedInputRow<TContract, ModelName>
     >
   >;
 
@@ -250,12 +290,19 @@ export type VariantCreateInput<
   VariantName extends string,
 > = Omit<
   VariantModelRow<TContract, ModelName, VariantName>,
-  '_id' | DiscriminatorField<TContract, ModelName>
+  OptionalOnCreate<TContract, ModelName> | DiscriminatorField<TContract, ModelName>
 > &
   Partial<
     Pick<
       ResolvedInputRow<TContract, ModelName>,
       '_id' & keyof ResolvedInputRow<TContract, ModelName>
+    >
+  > &
+  Partial<
+    Pick<
+      VariantModelRow<TContract, ModelName, VariantName>,
+      GeneratedOnCreateFields<TContract, ModelName> &
+        keyof VariantModelRow<TContract, ModelName, VariantName>
     >
   >;
 

@@ -1,5 +1,6 @@
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
+import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { resolveValue } from '../src/resolve-value';
@@ -251,26 +252,24 @@ describe('resolveValue', () => {
       expect(err.details?.['label']).toBe('test/failing@1');
     });
 
-    it('preserves an existing RUNTIME.ENCODE_FAILED envelope without re-wrapping', async () => {
-      const innerCodec = mongoCodec({
-        typeId: 'test/already-wrapped@1',
-        decode: (w: string) => w,
-        encode: async (_v: string) => {
-          const err = new Error('original') as RuntimeErrorShape;
-          err.code = 'RUNTIME.ENCODE_FAILED';
-          throw err;
+    it('adds the parameter label to a structured RUNTIME.ENCODE_FAILED from a codec, keeping its details', async () => {
+      const ref = new MongoParamRef('12.5E', { codecId: 'mongo/decimal128@1', name: 'price' });
+      const rejection = await resolveValue(ref, buildStandardCodecRegistry(), noCtx).catch(
+        (e: unknown) => e,
+      );
+      const err = rejection as RuntimeErrorShape;
+      expect({ code: err.code, message: err.message, details: err.details }).toEqual({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message:
+          "Failed to encode parameter price with codec 'mongo/decimal128@1': mongo/decimal128@1 value must be decimal text without an exponent, or NaN, Infinity or -Infinity",
+        details: {
+          codecId: 'mongo/decimal128@1',
+          received: '12.5E',
+          label: 'price',
+          codec: 'mongo/decimal128@1',
         },
       });
-      const registry = newMongoCodecRegistry();
-      registry.register(innerCodec);
-
-      const ref = new MongoParamRef('x', { codecId: 'test/already-wrapped@1' });
-      const rejection = (await resolveValue(ref, registry, noCtx).catch(
-        (e: unknown) => e,
-      )) as Error;
-      const err = rejection as RuntimeErrorShape;
-      expect(err.code).toBe('RUNTIME.ENCODE_FAILED');
-      expect(err.message).toBe('original');
+      expect(err.cause).toEqual(expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' }));
     });
 
     it('passes any structured envelope through unchanged instead of re-wrapping', async () => {

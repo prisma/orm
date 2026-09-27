@@ -1,4 +1,4 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractSourceDiagnostic, PrismaNextConfig } from '@internal/config/config-types';
 import type { PslSourceSettings } from '@internal/framework-components/control';
 import { createControlStack, hasPslContractPrint } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
@@ -20,6 +20,7 @@ export interface ContractPrintOptions {
 export interface ContractPrintResult {
   readonly psl: string;
   readonly sourceSettings: PslSourceSettings;
+  readonly sourceWarnings: readonly ContractSourceDiagnostic[];
 }
 
 export interface ContractPrintDependencies {
@@ -45,10 +46,14 @@ export async function executeContractPrint(
 ): Promise<ContractPrintResult> {
   const { config, contractConfig, description, signal } = options;
   const stack = createControlStack(config);
+  const sourceWarnings: ContractSourceDiagnostic[] = [];
   const loaded = await resolveContractSource({
     stack,
     source: contractConfig.source,
     ...ifDefined('signal', signal),
+    reportWarning: (diagnostic) => {
+      sourceWarnings.push(diagnostic);
+    },
   });
   if (!loaded.ok) {
     throw loaded.failure.error;
@@ -75,5 +80,6 @@ export async function executeContractPrint(
       description,
     }),
     sourceSettings,
+    sourceWarnings,
   };
 }

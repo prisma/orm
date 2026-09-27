@@ -4,6 +4,7 @@ import type {
   AuthoringDataTypeEntry,
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
   assembleAuthoringContributions,
@@ -23,7 +24,12 @@ import {
 } from '@internal/psl-parser';
 import { parse, type SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type CompletionItem,
+  CompletionItemKind,
+  CompletionItemTag,
+  InsertTextFormat,
+} from 'vscode-languageserver';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 
@@ -224,6 +230,7 @@ function completeWithSource(input: {
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
   readonly clientSupportsSnippets?: boolean;
   readonly clientSupportsTriggerParameterHintsCommand?: boolean;
+  readonly scalarTypes?: readonly string[];
 }) {
   const cursorOffset = input.markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
@@ -246,7 +253,7 @@ function completeWithSource(input: {
       context,
       sourceFile,
       candidates: {
-        scalarTypes,
+        scalarTypes: input.scalarTypes ?? scalarTypes,
         pslBlockDescriptors: input.pslBlockDescriptors,
         symbolTable,
         ...(input.authoringContributions === undefined
@@ -1123,6 +1130,47 @@ describe('providePslCompletionItems', () => {
     });
     expect(completionItemByLabel(items, 'String').detail).toBe('Variable-length Unicode text.');
     expect(completionItemByLabel(items, 'Int').detail).toBe('Configured scalar type');
+  });
+
+  it('lists deprecated Mongo scalar names last, tagged deprecated, naming the replacement', async () => {
+    const { mongoScalarAuthoringTypes } = await importFromPackageRoot<{
+      readonly mongoScalarAuthoringTypes: AuthoringTypeNamespace;
+    }>('../../../3-mongo-target/2-mongo-adapter/src/exports/control.ts');
+    const { items } = completeWithSource({
+      markedSource: 'model Post { value | }',
+      pslBlockDescriptors: {},
+      scalarTypes: Object.keys(mongoScalarAuthoringTypes),
+      authoringContributions: assembleAuthoringContributions([
+        { id: 'mongo-scalars', authoring: { type: mongoScalarAuthoringTypes } },
+      ]),
+      controlMutationDefaults,
+    });
+    const scalars = [...items]
+      .filter((item) => item.kind === CompletionItemKind.Keyword)
+      .sort((a, b) => (a.sortText ?? '').localeCompare(b.sortText ?? ''));
+    const current = ['Int32', 'Double', 'Bool', 'Date'];
+    const deprecated = [
+      ['Int', 'Int32'],
+      ['Float', 'Double'],
+      ['Boolean', 'Bool'],
+      ['DateTime', 'Date'],
+    ] as const;
+
+    expect(
+      scalars
+        .slice(-4)
+        .map((item) => item.label)
+        .sort(),
+    ).toEqual(deprecated.map(([name]) => name).sort());
+    for (const name of current) {
+      expect(completionItemByLabel(items, name)).not.toHaveProperty('tags');
+    }
+    for (const [name, replacement] of deprecated) {
+      expect(completionItemByLabel(items, name)).toMatchObject({
+        tags: [CompletionItemTag.Deprecated],
+        detail: expect.stringContaining(`Deprecated: use ${replacement}`),
+      });
+    }
   });
 
   it('uses actual SQL enum metadata and rejects an empty enum without invented values', async () => {

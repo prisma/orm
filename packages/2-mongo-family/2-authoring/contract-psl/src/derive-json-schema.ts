@@ -9,11 +9,16 @@ import { MongoValidator } from '@internal/mongo-contract';
  */
 export type FieldValueSets = Record<string, { readonly values: readonly JsonValue[] }>;
 
+/**
+ * `undefined` for a codec the lookup does not know. `null` for one it knows that declares no BSON type (`mongo/json@1` holds any value), which the validator admits unconstrained rather than dropping: with `additionalProperties: false` a dropped field would reject every document that carries it.
+ */
 function resolveBsonType(
   codecId: string,
   codecLookup: CodecLookup | undefined,
-): string | undefined {
-  return codecLookup?.targetTypesFor(codecId)?.[0];
+): string | null | undefined {
+  const targetTypes = codecLookup?.targetTypesFor(codecId);
+  if (targetTypes === undefined) return undefined;
+  return targetTypes[0] ?? null;
 }
 
 function fieldToBsonSchema(
@@ -24,7 +29,10 @@ function fieldToBsonSchema(
 ): Record<string, unknown> | undefined {
   if (field.type.kind === 'scalar') {
     const bsonType = resolveBsonType(field.type.codecId, codecLookup);
-    if (!bsonType) return undefined;
+    if (bsonType === undefined) return undefined;
+    if (bsonType === null) {
+      return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
+    }
 
     const enumValues =
       field.valueSet !== undefined

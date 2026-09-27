@@ -8,7 +8,7 @@ import { mongoEmission } from '../src/index';
 
 const codecImports = [
   {
-    package: '@internal/adapter-mongo/codec-types',
+    package: '@internal/target-mongo/codec-types',
     named: 'CodecTypes',
     alias: 'MongoCodecTypes',
   },
@@ -49,6 +49,7 @@ const targets = [
     import.meta.dirname,
     '../../../1-foundation/mongo-contract/test/fixtures/orm-contract.d.ts',
   ),
+  resolve(import.meta.dirname, '../../../9-family/test/fixtures/orm-contract.d.ts'),
 ];
 
 for (const target of targets) {

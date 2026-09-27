@@ -53,15 +53,6 @@ export function getPositionalArgumentEntry(
   };
 }
 
-export function unquoteStringLiteral(value: string): string {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(['"])(.*)\1$/);
-  if (!match) {
-    return trimmed;
-  }
-  return match[2] ?? '';
-}
-
 export function mapFieldNamesToColumns(input: {
   readonly modelName: string;
   readonly fieldNames: readonly string[];

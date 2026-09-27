@@ -44,6 +44,9 @@ export function mapInterpreterDiagnostics(
         : sourceFile.pslSpanToRange(diagnostic.span),
     message: diagnostic.message,
     code: diagnostic.code,
-    severity: ParseDiagnosticSeverity.Error,
+    severity:
+      diagnostic.severity === 'warning'
+        ? ParseDiagnosticSeverity.Warning
+        : ParseDiagnosticSeverity.Error,
   }));
 }

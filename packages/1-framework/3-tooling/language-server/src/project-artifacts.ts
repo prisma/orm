@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import {
   buildSymbolTable,
   type PslDiagnostic,
@@ -86,19 +87,23 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     const interpretDiagnostics = (): readonly LspDiagnostic[] => {
       const currentSymbolTable = readSymbolTable();
       if (memo === undefined || memoSources !== sources) {
+        const warnings: ContractSourceDiagnostic[] = [];
         const result = interpretation.source.interpret(
           {
             documents: [document],
             sources,
             symbolTable: currentSymbolTable,
           },
-          interpretation.context,
+          {
+            ...interpretation.context,
+            reportWarning: (diagnostic) => {
+              warnings.push({ ...diagnostic, severity: 'warning' });
+            },
+          },
         );
-        const diagnostics = result.ok
-          ? []
-          : result.failure.diagnostics.filter(
-              (diagnostic) => diagnostic.sourceId === sourceFile.filename,
-            );
+        const diagnostics = [...warnings, ...(result.ok ? [] : result.failure.diagnostics)].filter(
+          (diagnostic) => diagnostic.sourceId === sourceFile.filename,
+        );
         memo = mapInterpreterDiagnostics(diagnostics, sourceFile);
         memoSources = sources;
       }

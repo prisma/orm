@@ -7,7 +7,7 @@ import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
+  ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
 ]);
 
@@ -150,7 +150,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       diagnosticsOf(`
         model Item {
           id        ObjectId @id @map("_id")
-          createdAt Int      @default(1)
+          createdAt Int32      @default(1)
         }
       `),
     ).toEqual([
@@ -178,19 +178,19 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
-  it('tells the user to delete @updatedAt because Mongo never lowers it', () => {
+  it('points @updatedAt at the temporal.updatedAt() preset', () => {
     expect(
       diagnosticsOf(`
         model Item {
           id        ObjectId @id @map("_id")
-          updatedAt Int      @updatedAt
+          updatedAt Int32      @updatedAt
         }
       `),
     ).toEqual([
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message:
-          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". Mongo lowers no automatic timestamp updates; delete the attribute and set the timestamp in application code.',
+          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". To fill the timestamp on create and update, use `temporal.updatedAt()` as the field type.',
       }),
     ]);
   });

@@ -1,8 +1,7 @@
-import { createMongoRunnerDeps, extractDb } from '@internal/adapter-mongo/control';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
-import { MongoDriverImpl } from '@internal/driver-mongo';
 import mongoControlDriver from '@internal/driver-mongo/control';
-import { contractToMongoSchemaIR, createMongoFamilyInstance } from '@internal/family-mongo/control';
+import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import {
   MongoCollection,
   type MongoCollectionInput,
@@ -23,13 +22,6 @@ import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these integration tests.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 function makeContract(
   collections: Record<string, MongoCollectionInput>,
@@ -104,11 +96,7 @@ async function planAndApply(
   const controlDriver = await mongoControlDriver.create(replSetUri);
   try {
     const runner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        controlDriver,
-        MongoDriverImpl.fromDb(extractDb(controlDriver)),
-        makeFamily(),
-      ),
+      new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
     );
     const plan = {
       targetId: 'mongo',

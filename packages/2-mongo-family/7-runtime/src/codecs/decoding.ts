@@ -1,6 +1,7 @@
 import type { CodecCallContext } from '@internal/framework-components/codec';
 import { runtimeError } from '@internal/framework-components/runtime';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
+import { blindCast } from '@internal/utils/casts';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { MongoCodecLookup } from '../mongo-execution-stack';
 
@@ -16,9 +17,7 @@ function previewWireValue(wireValue: unknown): string {
 }
 
 /**
- * Structured envelopes (any error with a dotted `code`, per `isStructuredError`)
- * thrown by a codec body pass through unchanged; everything else is wrapped in
- * a `RUNTIME.DECODE_FAILED` envelope with the original error on `cause`.
+ * Every decode failure names the collection and field. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) passes through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
  */
 function wrapDecodeFailure(
   error: unknown,
@@ -27,7 +26,8 @@ function wrapDecodeFailure(
   codecId: string,
   wireValue: unknown,
 ): never {
-  if (isStructuredError(error)) {
+  const codecDetails = isStructuredError(error) ? error.meta : undefined;
+  if (isStructuredError(error) && error.code !== 'RUNTIME.DECODE_FAILED') {
     throw error;
   }
   const message = error instanceof Error ? error.message : String(error);
@@ -35,6 +35,7 @@ function wrapDecodeFailure(
     'RUNTIME.DECODE_FAILED',
     `Failed to decode field ${path} in collection '${collection}' with codec '${codecId}': ${message}`,
     {
+      ...codecDetails,
       collection,
       path,
       codec: codecId,
@@ -58,7 +59,7 @@ export async function decodeMongoRow(
   if (typeof row !== 'object' || row === null) {
     return row;
   }
-  const rowObj = row as Record<string, unknown>;
+  const rowObj = blindCast<Record<string, unknown>, 'a non-null object row is a document'>(row);
   const out: Record<string, unknown> = {};
   const tasks: Array<Promise<void>> = [];
 
@@ -113,7 +114,10 @@ export async function decodeMongoRow(
           assign(value);
           return;
         }
-        const vObj = value as Record<string, unknown>;
+        const vObj = blindCast<
+          Record<string, unknown>,
+          'a non-null, non-array object value is a subdocument'
+        >(value);
         // Pre-seed with a shallow copy so unshaped subdocument keys
         // round-trip verbatim. Subsequent walkField assignments overwrite
         // shaped keys with their decoded values. Mirrors the top-level

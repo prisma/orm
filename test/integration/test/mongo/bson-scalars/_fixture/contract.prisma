@@ -1,0 +1,12 @@
+// use prisma-8
+
+model Post {
+  id        ObjectId   @id @map("_id")
+  views     Int64
+  price     Decimal128
+  thumbnail Binary
+  meta      Json
+  notes     Json?
+
+  @@map("posts")
+}

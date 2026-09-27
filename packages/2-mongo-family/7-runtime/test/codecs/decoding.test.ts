@@ -436,29 +436,47 @@ describe('decodeMongoRow', () => {
     }
   });
 
-  it('passes a structured RUNTIME.DECODE_FAILED envelope from a codec through unchanged', async () => {
-    const envelope = structuredError('RUNTIME.DECODE_FAILED', 'codec-owned decode envelope');
+  it('adds the collection and field to a structured RUNTIME.DECODE_FAILED from a codec, keeping its details', async () => {
     const registry = newMongoCodecRegistry();
     registry.register(
       mongoCodec({
-        typeId: 'structured@1',
+        typeId: 'mongo/decimal128@1',
         encode: (v: string) => v,
-        decode: () => {
-          throw envelope;
+        decode: (wire: unknown) => {
+          throw structuredError(
+            'RUNTIME.DECODE_FAILED',
+            'mongo/decimal128@1 wire value must be a Decimal128',
+            { meta: { codecId: 'mongo/decimal128@1', received: typeof wire } },
+          );
         },
       }),
     );
     const shape: MongoResultShape = {
       kind: 'document',
       fields: {
-        f: { kind: 'leaf', codecId: 'structured@1', nullable: false },
+        price: { kind: 'leaf', codecId: 'mongo/decimal128@1', nullable: false },
       },
     };
     try {
-      await decodeMongoRow({ f: 'wire' }, shape, registry, 'items');
+      await decodeMongoRow({ price: 19.99 }, shape, registry, 'posts');
       expect.fail('expected throw');
     } catch (e) {
-      expect(e).toBe(envelope);
+      expect(isRuntimeError(e)).toBe(true);
+      if (!isRuntimeError(e)) return;
+      expect({ code: e.code, message: e.message, details: e.details }).toEqual({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          "Failed to decode field price in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
+        details: {
+          codecId: 'mongo/decimal128@1',
+          received: 'number',
+          collection: 'posts',
+          path: 'price',
+          codec: 'mongo/decimal128@1',
+          wirePreview: '19.99',
+        },
+      });
+      expect(e.cause).toEqual(expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }));
     }
   });
 

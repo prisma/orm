@@ -154,8 +154,12 @@ function paramRefLabel(ref: MongoParamRef, codecId: string): string {
   return ref.name ?? codecId;
 }
 
+/**
+ * Every encode failure names the parameter. A codec's own `RUNTIME.ENCODE_FAILED` keeps its code and details, with the label added; any other structured envelope passes through unchanged; everything else is wrapped in a `RUNTIME.ENCODE_FAILED` envelope. The original error is the `cause`.
+ */
 function wrapEncodeFailure(error: unknown, ref: MongoParamRef, codecId: string): never {
-  if (isStructuredError(error)) {
+  const codecDetails = isStructuredError(error) ? error.meta : undefined;
+  if (isStructuredError(error) && error.code !== 'RUNTIME.ENCODE_FAILED') {
     throw error;
   }
   const label = paramRefLabel(ref, codecId);
@@ -163,7 +167,7 @@ function wrapEncodeFailure(error: unknown, ref: MongoParamRef, codecId: string):
   const wrapped = runtimeError(
     'RUNTIME.ENCODE_FAILED',
     `Failed to encode parameter ${label} with codec '${codecId}': ${message}`,
-    { label, codec: codecId },
+    { ...codecDetails, label, codec: codecId },
   );
   wrapped.cause = error;
   throw wrapped;

@@ -188,6 +188,7 @@ export default function mongo<
   const orm = mongoOrm<TContract>({
     contract,
     executor: { query: queryRows, execute: executeStats },
+    mutationDefaults: context,
   });
 
   return {

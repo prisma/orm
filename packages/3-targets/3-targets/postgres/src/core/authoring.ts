@@ -1,5 +1,4 @@
 import {
-  temporalAuthoringPresets,
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,
 } from '@internal/family-sql/control';
@@ -14,6 +13,7 @@ import type {
   AuthoringTypeNamespace,
   PslExtensionBlock,
 } from '@internal/framework-components/authoring';
+import { temporalAuthoringPresets } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type { ModelAttributeSpecFactory } from '@internal/psl-parser';

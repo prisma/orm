@@ -276,7 +276,7 @@ describe('mongo enum — end-to-end (replica set)', {
 describe('emit-then-consume: value-union narrowing through the emitted contract.d.ts', () => {
   const mongoCodecImports = [
     {
-      package: '@internal/adapter-mongo/codec-types',
+      package: '@internal/target-mongo/codec-types',
       named: 'CodecTypes' as const,
       alias: 'MongoCodecTypes' as const,
     },

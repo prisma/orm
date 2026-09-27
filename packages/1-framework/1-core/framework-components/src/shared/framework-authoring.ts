@@ -130,6 +130,8 @@ export interface AuthoringTypeConstructorDescriptor {
   readonly output: AuthoringStorageTypeTemplate;
   /** Present when one of this constructor's positional arguments names another document-local entity instead of carrying a literal value. Absent for ordinary literal-argument constructors. */
   readonly entityRefArg?: AuthoringTypeConstructorEntityRef;
+  /** Present when this name is kept only as an alias of `replacement` and will be removed; it resolves as before, and a source may warn. */
+  readonly deprecated?: { readonly replacement: string };
 }
 
 export interface AuthoringColumnDefaultTemplateLiteral {

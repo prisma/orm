@@ -1,4 +1,5 @@
 import type {
+  ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
   PrismaNextConfig,
@@ -226,12 +227,14 @@ export async function resolveContractSource(inputs: {
   readonly stack: ControlStack;
   readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
+  readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
 }): Promise<ContractSourceLoadResult> {
   const { stack, source } = inputs;
   const signal = inputs.signal ?? new AbortController().signal;
   const unlessAborted = abortable(signal);
 
   const sourceContext = {
+    ...ifDefined('reportWarning', inputs.reportWarning),
     composedExtensions: stack.extensions.map((p) => p.id),
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
@@ -300,7 +303,11 @@ export interface ContractSourceFailure {
  */
 export async function loadContractSource(
   config: PrismaNextConfig,
-  options: { readonly signal?: AbortSignal } = {},
+  options: {
+    readonly signal?: AbortSignal;
+    /** Receives each warning the source reports. */
+    readonly onWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  } = {},
 ): Promise<Result<Contract, ContractSourceFailure>> {
   const contractConfig = requireContractConfig(config);
   requireSourceProvider(contractConfig);
@@ -308,6 +315,7 @@ export async function loadContractSource(
     stack: createControlStack(config),
     source: contractConfig.source,
     ...ifDefined('signal', options.signal),
+    ...ifDefined('reportWarning', options.onWarning),
   });
   if (loaded.ok) return loaded;
   const { error, sourceDiagnostics } = loaded.failure;

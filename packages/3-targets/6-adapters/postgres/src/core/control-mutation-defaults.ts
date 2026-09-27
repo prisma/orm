@@ -1,5 +1,4 @@
 import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
-import { timestampNowControlDescriptor } from '@internal/family-sql/control';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
   ControlMutationDefaultEntry,
@@ -8,6 +7,7 @@ import type {
   MutationDefaultGeneratorDescriptor,
   TypedDefaultFunctionCall,
 } from '@internal/framework-components/control';
+import { timestampNowControlDescriptor } from '@internal/framework-components/control';
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional } from '@internal/psl-parser';

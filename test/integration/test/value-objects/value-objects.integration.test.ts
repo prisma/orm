@@ -70,11 +70,11 @@ const postgresScalarTypeDescriptors = new Map([
 function interpretMongoPsl(schema: string) {
   const mongoScalarTypeDescriptors = new Map([
     ['String', 'mongo/string@1'],
-    ['Int', 'mongo/int32@1'],
-    ['Boolean', 'mongo/bool@1'],
-    ['DateTime', 'mongo/date@1'],
+    ['Int32', 'mongo/int32@1'],
+    ['Bool', 'mongo/bool@1'],
+    ['Date', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
-    ['Float', 'mongo/double@1'],
+    ['Double', 'mongo/double@1'],
   ]);
   const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
   const { symbolTable } = buildSymbolTable({
@@ -280,7 +280,7 @@ model Item {
 
 type Metadata {
   label String
-  count Int
+  count Int32
 }
 `);
     const sqlResult = interpretSqlPsl(`

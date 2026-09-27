@@ -6,6 +6,7 @@ import {
   domainValueObjectsAtDefaultNamespace,
   type PlanMeta,
 } from '@internal/contract/types';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   AsyncIterableResult,
   type RuntimeStatementStats,
@@ -16,6 +17,8 @@ import type {
   MongoContractWithTypeMaps,
   MongoModelDefinition,
   MongoModelsMap,
+  MongoMutationDefaults,
+  MongoMutationDefaultsOp,
 } from '@internal/mongo-contract';
 import type {
   AnyMongoCommand,
@@ -170,6 +173,18 @@ function resolveCollectionName(model: MongoModelDefinition, modelName: string): 
   return model.storage.collection ?? modelName;
 }
 
+function topLevelUpdateFields(
+  updateDoc: Record<string, Record<string, MongoValue>>,
+): ReadonlySet<string> {
+  const fields = new Set<string>();
+  for (const operatorGroup of Object.values(updateDoc)) {
+    for (const fieldPath of Object.keys(operatorGroup)) {
+      fields.add(fieldPath.split('.')[0] ?? fieldPath);
+    }
+  }
+  return fields;
+}
+
 function isUnknownRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -184,14 +199,21 @@ class MongoCollectionImpl<
   readonly #contract: TContract;
   readonly #modelName: ModelName;
   readonly #executor: MongoQueryExecutor;
+  readonly #mutationDefaults: MongoMutationDefaults | undefined;
   #collectionName: string;
   #state: MongoCollectionState;
   #variantName: string | undefined;
 
-  constructor(contract: TContract, modelName: ModelName, executor: MongoQueryExecutor) {
+  constructor(
+    contract: TContract,
+    modelName: ModelName,
+    executor: MongoQueryExecutor,
+    mutationDefaults: MongoMutationDefaults | undefined,
+  ) {
     this.#contract = contract;
     this.#modelName = modelName;
     this.#executor = executor;
+    this.#mutationDefaults = mutationDefaults;
     const model = blindCast<
       MongoModelDefinition,
       'modelName is constrained to Mongo contract model keys but namespace lookup erases storage type'
@@ -353,13 +375,16 @@ class MongoCollectionImpl<
     data: ResolvedCreateInput<TContract, ModelName, TVariant>,
   ): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
     this.#rejectIncludes('create');
-    const normalized = this.#injectDiscriminator(
-      this.#stripUndefined(
-        blindCast<
-          Record<string, unknown>,
-          'resolved Mongo create input is a model-field value record'
-        >(data),
+    const normalized = this.#withCreateDefaults(
+      this.#injectDiscriminator(
+        this.#stripUndefined(
+          blindCast<
+            Record<string, unknown>,
+            'resolved Mongo create input is a model-field value record'
+          >(data),
+        ),
       ),
+      new Map(),
     );
     const document = this.#toDocument(normalized);
     const command = new InsertOneCommand(this.#collectionName, document);
@@ -380,14 +405,18 @@ class MongoCollectionImpl<
     this.#rejectIncludes('createAll');
     const self = this;
     async function* gen(): AsyncGenerator<IncludedRow<TContract, ModelName, TIncludes>> {
+      const defaultValueCache = new Map<string, unknown>();
       const normalizedRows = data.map((d) =>
-        self.#injectDiscriminator(
-          self.#stripUndefined(
-            blindCast<
-              Record<string, unknown>,
-              'resolved Mongo create-all input is a model-field value record'
-            >(d),
+        self.#withCreateDefaults(
+          self.#injectDiscriminator(
+            self.#stripUndefined(
+              blindCast<
+                Record<string, unknown>,
+                'resolved Mongo create-all input is a model-field value record'
+              >(d),
+            ),
           ),
+          defaultValueCache,
         ),
       );
       const documents = normalizedRows.map((d) => self.#toDocument(d));
@@ -411,13 +440,19 @@ class MongoCollectionImpl<
     data: ReadonlyArray<ResolvedCreateInput<TContract, ModelName, TVariant>>,
   ): Promise<number> {
     this.#rejectIncludes('createAndCount');
+    const defaultValueCache = new Map<string, unknown>();
     const documents = data.map((d) =>
       this.#toDocument(
-        this.#injectDiscriminator(
-          blindCast<
-            Record<string, unknown>,
-            'resolved Mongo create-and-count input is a model-field value record'
-          >(d),
+        this.#withCreateDefaults(
+          this.#injectDiscriminator(
+            this.#stripUndefined(
+              blindCast<
+                Record<string, unknown>,
+                'resolved Mongo create-and-count input is a model-field value record'
+              >(d),
+            ),
+          ),
+          defaultValueCache,
         ),
       ),
     );
@@ -438,7 +473,7 @@ class MongoCollectionImpl<
     this.#rejectWindowing('update');
     this.#rejectIncludes('update');
     const filter = this.#mergeFilters();
-    const updateDoc = this.#resolveUpdateDoc(dataOrCallback);
+    const updateDoc = this.#withUpdateDefaults(this.#resolveUpdateDoc(dataOrCallback), new Map());
     const command = new FindOneAndUpdateCommand(this.#collectionName, filter, updateDoc, false);
     const results = await this.#drainPlan(command, this.#modelResultShape());
     const result = results[0];
@@ -463,7 +498,7 @@ class MongoCollectionImpl<
       if (ids.length === 0) return;
 
       const filter = self.#mergeFilters();
-      const updateDoc = self.#resolveUpdateDoc(dataOrCallback);
+      const updateDoc = self.#withUpdateDefaults(self.#resolveUpdateDoc(dataOrCallback), new Map());
       const command = new UpdateManyCommand(self.#collectionName, filter, updateDoc);
       await self.#drainPlan(command);
 
@@ -485,7 +520,7 @@ class MongoCollectionImpl<
     this.#rejectWindowing('updateAndCount');
     this.#rejectIncludes('updateAndCount');
     const filter = this.#mergeFilters();
-    const updateDoc = this.#resolveUpdateDoc(dataOrCallback);
+    const updateDoc = this.#withUpdateDefaults(this.#resolveUpdateDoc(dataOrCallback), new Map());
     const command = new UpdateManyCommand(this.#collectionName, filter, updateDoc);
     const stats = await this.#executePlan(command);
     return stats.affectedRows;
@@ -544,13 +579,19 @@ class MongoCollectionImpl<
     this.#rejectWindowing('upsert');
     this.#rejectIncludes('upsert');
     const filter = this.#mergeFilters();
+    const defaultValueCache = new Map<string, unknown>();
 
     const allCreateFields = this.#toDocument(
-      this.#injectDiscriminator(
-        blindCast<
-          Record<string, unknown>,
-          'resolved Mongo upsert create input is a model-field value record'
-        >(input.create),
+      this.#withCreateDefaults(
+        this.#injectDiscriminator(
+          this.#stripUndefined(
+            blindCast<
+              Record<string, unknown>,
+              'resolved Mongo upsert create input is a model-field value record'
+            >(input.create),
+          ),
+        ),
+        defaultValueCache,
       ),
     );
 
@@ -590,12 +631,8 @@ class MongoCollectionImpl<
       }
     }
 
-    const updatedFields = new Set<string>();
-    for (const operatorGroup of Object.values(updateDoc)) {
-      for (const fieldPath of Object.keys(operatorGroup)) {
-        updatedFields.add(fieldPath.split('.')[0] ?? fieldPath);
-      }
-    }
+    updateDoc = this.#withUpdateDefaults(updateDoc, defaultValueCache);
+    const updatedFields = topLevelUpdateFields(updateDoc);
     const insertOnlyFields: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(allCreateFields)) {
       if (!updatedFields.has(key)) {
@@ -812,6 +849,43 @@ class MongoCollectionImpl<
     return result;
   }
 
+  #appliedDefaults(
+    op: MongoMutationDefaultsOp,
+    values: Readonly<Record<string, unknown>>,
+    defaultValueCache: Map<string, unknown>,
+  ): Record<string, unknown> {
+    const applied =
+      this.#mutationDefaults?.applyMutationDefaults({
+        op,
+        namespace: UNBOUND_NAMESPACE_ID,
+        entry: this.#collectionName,
+        values,
+        defaultValueCache,
+      }) ?? [];
+    return Object.fromEntries(applied.map(({ field, value }) => [field, value]));
+  }
+
+  #withCreateDefaults(
+    values: Record<string, unknown>,
+    defaultValueCache: Map<string, unknown>,
+  ): Record<string, unknown> {
+    return { ...values, ...this.#appliedDefaults('create', values, defaultValueCache) };
+  }
+
+  #withUpdateDefaults(
+    updateDoc: Record<string, Record<string, MongoValue>>,
+    defaultValueCache: Map<string, unknown>,
+  ): Record<string, Record<string, MongoValue>> {
+    const explicit = Object.fromEntries(
+      [...topLevelUpdateFields(updateDoc)].map((field) => [field, true]),
+    );
+    const generated = this.#appliedDefaults('update', explicit, defaultValueCache);
+    if (Object.keys(generated).length === 0) {
+      return updateDoc;
+    }
+    return { ...updateDoc, $set: { ...updateDoc['$set'], ...this.#toSetFields(generated) } };
+  }
+
   #stripUndefined(data: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data)) {
@@ -986,6 +1060,7 @@ class MongoCollectionImpl<
       this.#contract,
       this.#modelName,
       this.#executor,
+      this.#mutationDefaults,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1001,6 +1076,7 @@ class MongoCollectionImpl<
       this.#contract,
       this.#modelName,
       this.#executor,
+      this.#mutationDefaults,
     );
     instance.#state = { ...this.#state, ...overrides };
     instance.#collectionName = this.#collectionName;
@@ -1016,6 +1092,7 @@ export function createMongoCollection<
   contract: TContract,
   modelName: ModelName,
   executor: MongoQueryExecutor,
+  mutationDefaults?: MongoMutationDefaults,
 ): MongoCollection<TContract, ModelName> {
-  return new MongoCollectionImpl(contract, modelName, executor);
+  return new MongoCollectionImpl(contract, modelName, executor, mutationDefaults);
 }

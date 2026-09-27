@@ -25,7 +25,7 @@ import {
   deserializeDmlCommand,
   deserializeMongoQueryPlan,
   deserializePipelineStage,
-} from '../src/core/mongo-ops-serializer';
+} from '../src/core/migrations/mongo-ops-serializer';
 
 describe('deserializeDmlCommand', () => {
   describe('raw commands', () => {

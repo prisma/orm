@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -631,6 +632,7 @@ class ControlClientImpl implements ControlClient {
       throw new InternalError('Family instance was not initialized. This is a bug.');
     }
 
+    const sourceWarnings: ContractSourceDiagnostic[] = [];
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -641,6 +643,9 @@ class ControlClientImpl implements ControlClient {
     const loaded = await resolveContractSource({
       stack: this.stack!,
       source: contractConfig.source,
+      reportWarning: (diagnostic) => {
+        sourceWarnings.push(diagnostic);
+      },
     });
     onProgress?.({
       action: 'emit',
@@ -705,6 +710,7 @@ class ControlClientImpl implements ControlClient {
         profileHash: result.profileHash,
         contractJson: result.contractJson,
         contractDts: result.contractDts,
+        ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
       });
     } catch (error) {
       onProgress?.({

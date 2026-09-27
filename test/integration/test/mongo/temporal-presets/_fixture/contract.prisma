@@ -1,0 +1,32 @@
+// use prisma-8
+
+model Post {
+  id        ObjectId             @id @map("_id")
+  title     String
+  createdAt temporal.createdAt()
+  updatedAt temporal.updatedAt() @map("updated_at")
+  touchedAt temporal.timestamp(onUpdate: now)
+
+  @@map("posts")
+}
+
+model Event {
+  id        ObjectId             @id @map("_id")
+  kind      String
+  createdAt temporal.createdAt()
+
+  @@discriminator(kind)
+  @@map("events")
+}
+
+model Click {
+  url String
+
+  @@base(Event, "click")
+}
+
+model View {
+  path String
+
+  @@base(Event, "view")
+}
