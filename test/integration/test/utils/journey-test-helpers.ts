@@ -98,7 +98,7 @@ export function useDevDatabase(options?: {
 
   afterAll(async () => {
     await close();
-  });
+  }, timeouts.spinUpPpgDev);
 
   return {
     get connectionString() {
