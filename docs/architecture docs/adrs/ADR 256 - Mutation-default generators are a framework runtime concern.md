@@ -132,3 +132,9 @@ A default's `ref` is `{ namespace, entry, field }` ([ADR 158](ADR%20158%20-%20Ex
 **Treating `undefined` as absent inside the apply loop.** It saves callers a filter, but the loop cannot know what a caller's payload means. A SQL builder that sets a column to `undefined` and a Mongo update document that unsets a field are different writes, and only the caller can tell them apart.
 
 **Checking availability lazily, on the first write.** It lets a client over a contract with an unavailable generator start, and then fail on a write. Checking at context creation reports every missing id at once, before any data is touched.
+
+**A ref of `{ namespace, table, column }`, with document families writing model and field names into `table` and `column`.** It keeps the SQL spelling and needs no change to SQL authoring, but it puts SQL vocabulary into a framework type that every family reads, and a Mongo ref would say `table` for a collection and `column` for a document field. `entry` is the framework's own word for what a namespace holds, so `{ namespace, entry, field }` is correct for every family.
+
+**A document-family execution type, with an emitter hook to render it.** Mongo could carry its own execution section and ref shape, with the emitter asking each family how to render it. Every emitted `contract.d.ts` and every family control interface that extends a framework one would then have to handle two execution types, and the shared runtime could not match refs without knowing the family.
+
+**A type parameter on `Contract` for the ref shape.** Each family could choose its ref shape through a generic. Every use of `Contract` would carry the parameter, for a difference that is only in the names of three strings.
