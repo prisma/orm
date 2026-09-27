@@ -1,0 +1,25 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id      String  @id @default(auto()) @map("_id") @db.ObjectId
+  title   String
+  address Address
+
+  @@index([title, address.city(sort: Asc)])
+  @@unique([address.city(sort: Desc)])
+  @@fulltext([address.street(sort: Desc)])
+}
+
+type Address {
+  street String
+  city   String
+  geo    Geo
+}
+
+type Geo {
+  lat Float
+  lng Float
+}

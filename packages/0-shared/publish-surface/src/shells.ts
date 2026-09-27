@@ -480,6 +480,12 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: 'value',
         },
         {
+          dir: 'packages/2-mongo-family/2-authoring/contract-prisma6',
+          name: '@internal/mongo-contract-prisma6',
+          entry: 'contract-prisma6',
+          subpaths: ['provider'],
+        },
+        {
           dir: 'packages/2-mongo-family/2-authoring/contract-psl',
           name: '@internal/mongo-contract-psl',
           entry: 'contract-psl',
@@ -693,6 +699,19 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
         familyPack: '@internal/family-mongo',
         runtime: '@internal/mongo-runtime',
         target: '@internal/target-mongo',
+        // Every target subpath except `prisma6-binding`, which only the
+        // facade's `prisma6Schema` imports. A test fails when a target export
+        // is missing here.
+        targetSubpaths: [
+          'codec-ids',
+          'codec-types',
+          'codecs',
+          'control',
+          'data-types',
+          'migration',
+          'pack',
+          'runtime',
+        ],
         adapter: '@internal/adapter-mongo',
         driver: '@internal/driver-mongo',
         queryBuilders: MONGO_QUERY_REEXPORTS,

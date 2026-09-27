@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.count\": native type \"@db.Long\" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. Remove it: the stored BSON type then follows the field type."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Post.title\": native type \"@db.String\" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. Remove it: the stored BSON type then follows the field type."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"Post.number\": @db.ObjectId is only supported on a String field, and this field is \"Int\". Remove @db.ObjectId, or change the field type to String."
+  }
+]

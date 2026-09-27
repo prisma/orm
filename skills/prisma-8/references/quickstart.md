@@ -289,7 +289,7 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 
 ## What Prisma 8 doesn't do yet
 
-- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Prisma 6/7 / Sequelize / TypeORM / Kysely / Knex / a raw driver. Workaround: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
+- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Sequelize / TypeORM / Kysely / Knex / a raw driver. A Prisma 6 MongoDB schema and a Prisma 7 Postgres schema are the exception: they can be the contract source as they are (`prisma6Schema` / `prisma7Schema`, see `references/contract.md`). For the others: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
 - **`prisma db push`-style production sync.** `db update` is the quick development path; for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
 - **Studio / GUI database browser.** Use `prisma db schema` for a CLI tree-style summary of the live DB. If you need an interactive UI, file a feature request via the `references/feedback.md` skill.
 

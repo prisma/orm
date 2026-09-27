@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 16,
+    "message": "Relation field \"Post.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove \"onDelete\" and handle related documents in application code."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 22,
+    "message": "Relation field \"Comment.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove \"onUpdate\" and handle related documents in application code."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 28,
+    "message": "Relation field \"Like.user\": @relation argument \"map\" is not supported; it names a foreign key constraint, and MongoDB has none. Remove \"map\"."
+  }
+]

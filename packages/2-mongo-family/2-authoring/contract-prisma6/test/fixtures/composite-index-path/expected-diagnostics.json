@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Index path \"address.city\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Index path \"address.city\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Index path \"address.street\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+  }
+]

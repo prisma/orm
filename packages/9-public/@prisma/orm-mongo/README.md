@@ -23,7 +23,7 @@ The one package a MongoDB application installs. It wires the framework, the Mong
 | --- | --- |
 | `/runtime` | `mongo(url)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
-| `/config` | `defineConfig` for `prisma.config.ts` |
+| `/config` | `defineConfig` for `prisma.config.ts`, and `prisma6Schema` to read a Prisma 6 MongoDB schema as the contract source |
 | `/contract-builder` | `defineContract` and Mongo contract authoring |
 | `/bson` | BSON value helpers (`ObjectId`, `Decimal128`, …) |
 | `/target`, `/family` | the Mongo target pack and the Mongo family pack |

@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_PROVIDER_MISMATCH",
+    "file": "schema.prisma",
+    "line": 2,
+    "message": "The datasource provider is \"postgresql\"; this contract source reads Prisma 6 schemas for provider \"mongodb\"."
+  }
+]

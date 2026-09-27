@@ -111,6 +111,32 @@ describe('publicShells', () => {
       './target/prisma7-binding',
     ]);
     expect(published('packages/9-public/@prisma/orm-postgres', /prisma7/)).toEqual([]);
+    expect(published('packages/9-public/@prisma/orm-family-mongo', /contract-prisma6/)).toEqual([
+      './contract-prisma6/provider',
+    ]);
+    expect(published('packages/9-public/@prisma/orm-target-mongo', /prisma6/)).toEqual([
+      './target/prisma6-binding',
+    ]);
+    expect(published('packages/9-public/@prisma/orm-mongo', /prisma6/)).toEqual([]);
+  });
+
+  it('forwards every Mongo target export from the Mongo facade except the ones only the facade imports', () => {
+    const notForwardedByFacade = ['prisma6-binding'];
+    const manifest: unknown = JSON.parse(
+      readFileSync(join(repoRoot, 'packages/3-mongo-target/1-mongo-target/package.json'), 'utf8'),
+    );
+    const targetSubpaths = Object.keys(
+      (manifest as { exports?: Record<string, unknown> }).exports ?? {},
+    )
+      .filter((subpath) => subpath.startsWith('./') && subpath !== './package.json')
+      .map((subpath) => subpath.slice(2));
+    const forwarded = publicShells
+      .get('@prisma/orm-mongo')
+      ?.reexports?.find((reexport) => reexport.package === '@internal/target-mongo')?.subpaths;
+
+    expect([...(forwarded ?? [])].sort()).toEqual(
+      targetSubpaths.filter((subpath) => !notForwardedByFacade.includes(subpath)).sort(),
+    );
   });
 
   it('forwards every Postgres target export from the Postgres facade except the ones only the facade imports', () => {

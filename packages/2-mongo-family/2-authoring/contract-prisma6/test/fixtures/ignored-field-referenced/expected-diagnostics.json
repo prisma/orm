@@ -1,0 +1,32 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"User.legacyId\" is marked @ignore, but @unique on field \"User.legacyId\" uses it. Remove @ignore from \"User.legacyId\", or remove @unique on field \"User.legacyId\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 16,
+    "message": "Field \"Post.slug\" is marked @ignore, but @unique on field \"Post.slug\" uses it. Remove @ignore from \"Post.slug\", or remove @unique on field \"Post.slug\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 19,
+    "message": "Field \"Post.authorId\" is marked @ignore, but relation field \"Post.author\" uses it. Remove @ignore from \"Post.authorId\", or remove relation field \"Post.author\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 27,
+    "message": "Field \"User.legacyId\" is marked @ignore, but relation field \"Comment.author\" uses it. Remove @ignore from \"User.legacyId\", or remove relation field \"Comment.author\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 21,
+    "message": "Field \"Post.title\" is marked @ignore, but @@index on model \"Post\" uses it. Remove @ignore from \"Post.title\", or remove @@index on model \"Post\"."
+  }
+]

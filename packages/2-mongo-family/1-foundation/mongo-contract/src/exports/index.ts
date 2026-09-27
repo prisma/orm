@@ -6,6 +6,8 @@ export type {
 } from '@internal/framework-components/runtime';
 export { RelationKeys } from '@internal/framework-components/runtime';
 export { buildMongoExecutionSection } from '../build-execution-section';
+export type { MongoEnumValueSetSource } from '../build-mongo-storage';
+export { buildMongoStorage, encodeMongoValueSets } from '../build-mongo-storage';
 export {
   createMongoContractSchema,
   createMongoNamespaceEnvelopeSchema,
