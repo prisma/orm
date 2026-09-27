@@ -225,6 +225,23 @@ ID_LIKE="opensuse suse"
       },
     },
     {
+      name: 'nixos',
+      content: `
+NAME=NixOS
+VERSION="26.05 (Yarara)"
+ID=nixos
+ID_LIKE=""
+PRETTY_NAME="NixOS 26.05 (Yarara)"
+VERSION_ID="26.05"
+VERSION_CODENAME=yarara
+      `,
+      expect: {
+        targetDistro: 'debian',
+        familyDistro: 'nixos',
+        originalDistro: 'nixos',
+      },
+    },
+    {
       name: 'unknown',
       content: `
 ID="whoknows"

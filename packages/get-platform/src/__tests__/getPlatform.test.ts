@@ -155,6 +155,40 @@ describe('getBinaryTargetForCurrentPlatformInternal', () => {
       expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
     })
 
+    it('nixos (nixos), amd64 (x86_64), openssl-3.0.x', () => {
+      expect(
+        getBinaryTargetForCurrentPlatformInternal({
+          platform,
+          libssl: '3.0.x',
+          arch: 'x64',
+          archFromUname: 'x86_64',
+          familyDistro: 'nixos',
+          originalDistro: 'nixos',
+          targetDistro: 'debian',
+        }),
+      ).toBe('debian-openssl-3.0.x')
+      expect(ctx.mocked['console.log'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
+      expect(ctx.mocked['console.warn'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
+      expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
+    })
+
+    it('nixos (nixos), arm64 (aarch64), openssl-3.0.x', () => {
+      expect(
+        getBinaryTargetForCurrentPlatformInternal({
+          platform,
+          libssl: '3.0.x',
+          arch: 'arm64',
+          archFromUname: 'aarch64',
+          familyDistro: 'nixos',
+          originalDistro: 'nixos',
+          targetDistro: 'debian',
+        }),
+      ).toBe('linux-arm64-openssl-3.0.x')
+      expect(ctx.mocked['console.log'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
+      expect(ctx.mocked['console.warn'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
+      expect(ctx.mocked['console.error'].mock.calls.join('\n')).toMatchInlineSnapshot(`""`)
+    })
+
     it('unknown (unknown), amd64 (x86_64), openssl-3.0.x', () => {
       expect(
         getBinaryTargetForCurrentPlatformInternal({
