@@ -1,13 +1,13 @@
 import type { Contract, ContractField } from '@internal/contract/types';
 import { asNamespaceId } from '@internal/contract/types';
-import type { SqlPslPrintContext } from '@internal/family-sql/control';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { expect } from 'vitest';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
-import { testPrintContext } from './print-context';
+import { testBuildContext } from './build-context';
 
 export type Overrides = NonNullable<Parameters<typeof createSqlContract>[0]>;
 
@@ -102,21 +102,36 @@ export function deserialize(overrides: Overrides): Contract<SqlStorage> {
   );
 }
 
+/** The contract the Postgres serializer reads from `overrides` after `edit` changed its JSON. */
+export function deserializeEdited(
+  overrides: Overrides,
+  edit: (json: string) => string,
+): Contract<SqlStorage> {
+  return blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(
+    new PostgresContractSerializer().deserializeContract(
+      JSON.parse(edit(JSON.stringify(createSqlContract(overrides)))),
+    ),
+  );
+}
+
 export function printing(
   contract: Contract<SqlStorage>,
-  context: SqlPslPrintContext = testPrintContext(),
+  context: SqlPslBuildContext = testBuildContext(),
 ): () => unknown {
   return () => buildPostgresPslContract(contract, context);
 }
 
 export function printingWidget(
   parts: WidgetParts = {},
-  context: SqlPslPrintContext = testPrintContext(),
+  context: SqlPslBuildContext = testBuildContext(),
 ): () => unknown {
   return printing(deserialize(widgetContract(parts)), context);
 }
 
-/** The contract with one storage namespace's entries replaced verbatim, bypassing entity hydration. */
+/**
+ * The contract with entries added to one storage namespace as they are. It stands in for a contract
+ * with an entity kind a pack contributes, which the Postgres serializer reads only with that pack.
+ */
 export function withRawEntries(
   contract: Contract<SqlStorage>,
   namespaceId: string,

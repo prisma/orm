@@ -2,9 +2,9 @@ import type { ContractReferenceRelation, ContractRelation } from '@internal/cont
 import type { PslAttributeArgument, PslField } from '@internal/framework-components/psl-ast';
 import type { ForeignKey, ReferentialAction } from '@internal/sql-contract/types';
 import { escapePslString } from '@internal/sql-relational-core/ast';
+import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
-import { postgresError } from '../errors';
-import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import {
   crossReferenceCoordinate,
   type ModelWithTable,
@@ -13,8 +13,10 @@ import {
   type VariantInfo,
 } from './contract-model-index';
 import {
+  refuseBackRelationWithoutOwningRelation,
   refuseManyToManyWithoutJunctionRelation,
   refuseRelationToOtherContractSpace,
+  refuseRelationWithoutJoin,
   refuseToOneRelationWithoutForeignKey,
   refuseUnwritableName,
 } from './refusals';
@@ -36,14 +38,14 @@ export interface ModelRelation {
 }
 
 function isReferenceRelation(relation: ContractRelation): relation is ContractReferenceRelation {
-  return 'on' in relation;
+  return 'on' in relation && relation.on !== undefined;
 }
 
 export function collectRelations(models: readonly ModelWithTable[]): readonly ModelRelation[] {
   const entries: ModelRelation[] = [];
   for (const owner of models) {
     for (const [fieldName, relation] of Object.entries(owner.model.relations)) {
-      if (!isReferenceRelation(relation)) continue;
+      if (!isReferenceRelation(relation)) refuseRelationWithoutJoin(owner.name, fieldName);
       entries.push({
         owner,
         fieldName,
@@ -326,10 +328,14 @@ export function buildRelationFields(input: {
       : modelRelation.relation.cardinality === 'N:M'
         ? junctionRelation
         : owningPartner(modelRelation, input.relationsByModel);
-    const name =
-      owning !== undefined && input.pinned.has(relationKey(owning))
-        ? relationName(owning)
-        : undefined;
+    if (owning === undefined) {
+      refuseBackRelationWithoutOwningRelation({
+        modelName: modelRelation.owner.name,
+        fieldName: modelRelation.fieldName,
+        targetModel: target.name,
+      });
+    }
+    const name = input.pinned.has(relationKey(owning)) ? relationName(owning) : undefined;
     if (isOwningRelation(modelRelation)) {
       const foreignKey = foreignKeyFor(modelRelation, target);
       if (foreignKey !== undefined) input.travelledForeignKeys.add(foreignKey);
@@ -362,20 +368,9 @@ function relationTarget(
     space: to.space,
   });
   const target = modelsByCoordinate.get(entry.targetCoordinate);
-  if (target === undefined) {
-    throw postgresError(
-      'CONTRACT.MODEL_UNKNOWN',
-      `contract print: relation "${entry.owner.name}.${entry.fieldName}" targets model "${to.namespace}.${to.model}", which the contract does not declare.`,
-      {
-        why: 'A relation is written as a field typed by the model it targets.',
-        fix: 'The contract source produced a relation to a model it does not declare. Fix the relation if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-        meta: {
-          model: entry.owner.name,
-          field: entry.fieldName,
-          target: `${to.namespace}.${to.model}`,
-        },
-      },
-    );
-  }
+  assertDefined(
+    target,
+    `relation "${entry.owner.name}.${entry.fieldName}" targets model "${to.namespace}.${to.model}", which the contract does not declare`,
+  );
   return target;
 }

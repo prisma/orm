@@ -21,7 +21,7 @@ function configWithMalformedContract(output: string) {
     deserializeContract: vi.fn(() => {
       throw malformed;
     }),
-    printPslContract: vi.fn(),
+    buildPslContract: vi.fn(),
   };
   const config = {
     family: {
@@ -71,6 +71,6 @@ describe('executeContractPrint', () => {
     await expect(
       executeContractPrint({ config, contractConfig, description: 'printed' }),
     ).rejects.toBe(malformed);
-    expect(familyInstance.printPslContract).not.toHaveBeenCalled();
+    expect(familyInstance.buildPslContract).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import type { SqlPslPrintContext } from '@internal/family-sql/control';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import {
   type CodecDescriptorTemplate,
@@ -65,12 +65,12 @@ export const extensionCodec: AnyPostgresCodecDescriptor = postgresCodec(citextTe
  * A stand-in for the stack the SQL family hands the printer: the target's own type constructors,
  * codecs and data types, the adapter's type constructors these tests print, and what `extra` adds.
  */
-export function testPrintContext(
+export function testBuildContext(
   extra: {
     readonly types?: AuthoringTypeNamespace;
     readonly codecs?: readonly AnyPostgresCodecDescriptor[];
   } = {},
-): SqlPslPrintContext {
+): SqlPslBuildContext {
   const extraCodecs = new Map((extra.codecs ?? []).map((codec) => [codec.codecId, codec]));
   return {
     authoringContributions: {

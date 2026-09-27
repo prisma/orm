@@ -1,6 +1,6 @@
 import type { ContractEnum } from '@internal/contract/types';
-import type { SqlPslPrintContext } from '@internal/family-sql/control';
-import { mapDefault } from '@internal/family-sql/psl-ast';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import { mapDefault } from '@internal/family-sql/psl-build';
 import type { PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { PG_TEXT_CODEC_ID } from '../codec-ids';
@@ -8,7 +8,7 @@ import {
   buildAttribute,
   parseDefaultAttributeString,
   positionalArg,
-} from '../psl-ast/psl-literals';
+} from '../psl-build/psl-literals';
 import { refuseDefaultOutsideEnum, refuseUnwritableLiteralDefault } from './refusals';
 
 /**
@@ -33,7 +33,7 @@ export function buildColumnDefault(input: {
   readonly namespaceId: string;
   readonly tableName: string;
   readonly columnName: string;
-  readonly context: SqlPslPrintContext;
+  readonly context: SqlPslBuildContext;
 }): PslFieldAttribute | undefined {
   const columnDefault = input.column.default;
   if (columnDefault === undefined) {

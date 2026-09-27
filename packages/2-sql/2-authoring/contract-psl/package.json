@@ -62,6 +62,10 @@
       "types": "./dist/default-table-name.d.mts",
       "import": "./dist/default-table-name.mjs"
     },
+    "./map-names": {
+      "types": "./dist/map-names.d.mts",
+      "import": "./dist/map-names.mjs"
+    },
     "./provider": {
       "types": "./dist/provider.d.mts",
       "import": "./dist/provider.mjs"

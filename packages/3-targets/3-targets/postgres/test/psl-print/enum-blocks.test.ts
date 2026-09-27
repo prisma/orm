@@ -8,7 +8,7 @@ import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
-import { testPrintContext } from './print-context';
+import { testBuildContext } from './build-context';
 import { type ColumnShape, domainFieldOf, INT_COLUMN, table } from './print-support';
 
 describe('native enum blocks', () => {
@@ -75,7 +75,7 @@ describe('native enum blocks', () => {
     const contract = new PostgresContractSerializer().deserializeContract(json);
     const ast = buildPostgresPslContract(
       blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
-      testPrintContext(),
+      testBuildContext(),
     );
     return ast.namespaces
       .flatMap((namespace) => namespacePslExtensionBlocks(namespace))

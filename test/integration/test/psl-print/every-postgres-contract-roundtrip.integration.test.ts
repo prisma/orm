@@ -24,7 +24,7 @@ import {
   type PostgresStack,
   printContract,
   readPsl,
-} from '../../../../packages/3-targets/6-adapters/postgres/test/helpers/psl-print';
+} from './print-and-read-back';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 

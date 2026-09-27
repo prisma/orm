@@ -11,7 +11,7 @@ import {
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from '../codec-ids';
 import { postgresNowGeneratorIdFor } from '../now-generators';
-import { buildAttribute, namedArg, positionalArg } from '../psl-ast/psl-literals';
+import { buildAttribute, namedArg, positionalArg } from '../psl-build/psl-literals';
 import {
   refuseGeneratorOnUpdate,
   refuseGeneratorWithoutPslFunction,
@@ -20,7 +20,7 @@ import {
 
 /**
  * The `temporal.*` field preset each codec with a "now" generator is authored through. The target
- * contributes the presets; `adapter-postgres/test/psl-print-generated-values.test.ts` writes and
+ * contributes the presets; `test/integration/test/psl-print/generated-values-roundtrip.integration.test.ts` writes and
  * reads back every one the stack contributes, so this table cannot drift from them.
  */
 const TEMPORAL_PRESET_NAMES: ReadonlyMap<string, string> = new Map([
@@ -33,7 +33,7 @@ const TEMPORAL_PRESET_NAMES: ReadonlyMap<string, string> = new Map([
 
 /**
  * The `@default(<fn>(…))` call each id generator is authored through. The Postgres adapter registers
- * the functions; `adapter-postgres/test/psl-print-generated-values.test.ts` writes and reads back
+ * the functions; `test/integration/test/psl-print/generated-values-roundtrip.integration.test.ts` writes and reads back
  * every call the stack registers, so this table cannot drift from them.
  */
 type GeneratorCall = (params: Record<string, unknown> | undefined) => string;

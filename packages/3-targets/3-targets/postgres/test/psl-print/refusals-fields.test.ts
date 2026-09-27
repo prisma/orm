@@ -1,6 +1,6 @@
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import { testPrintContext } from './print-context';
+import { testBuildContext } from './build-context';
 import { INT_FIELD, printingWidget, refusal, TEXT_COLUMN, TEXT_FIELD } from './refusal-support';
 
 it('prints the widget the refusal tests start from', () => {
@@ -102,7 +102,7 @@ describe('columns and fields', () => {
   });
 
   describe('a column written through a type constructor the stack contributes', () => {
-    const context = testPrintContext({
+    const context = testBuildContext({
       types: {
         geo: {
           Shape: {

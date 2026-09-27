@@ -1,16 +1,16 @@
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import { formatWireName } from '@internal/sql-schema-ir/naming';
+import { invariant } from '@internal/utils/assertions';
 import { POLICY_BLOCK_KEYWORDS } from '../authoring';
 import { PostgresRlsEnablement } from '../postgres-rls-enablement';
 import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { PostgresRole } from '../postgres-role';
-import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { computeContentHash } from '../rls/canonicalize';
 import {
   refuseEntryFiledUnderAnotherName,
   refuseEntryInOtherNamespace,
-  refuseInvalidEntry,
   refusePolicyNameNotDerived,
   refusePolicyWithoutModel,
   refusePolicyWithoutRls,
@@ -29,7 +29,10 @@ export function rlsEnabledTables(
 ): ReadonlySet<string> {
   const tables = new Set<string>();
   for (const [name, entity] of Object.entries(entries ?? {})) {
-    if (!(entity instanceof PostgresRlsEnablement)) refuseInvalidEntry(namespaceId, 'rls', name);
+    invariant(
+      entity instanceof PostgresRlsEnablement,
+      `"rls" entry "${name}" in namespace "${namespaceId}" is not a row-level security setting`,
+    );
     refuseEntryInOtherNamespace({
       namespaceId,
       kind: 'rls',
@@ -56,7 +59,10 @@ export function buildRoleBlocks(
   entries: Readonly<Record<string, unknown>> | undefined,
 ): readonly PslExtensionBlock[] {
   return Object.entries(entries ?? {}).map(([name, entity]): PslExtensionBlock => {
-    if (!(entity instanceof PostgresRole)) refuseInvalidEntry(namespaceId, 'role', name);
+    invariant(
+      entity instanceof PostgresRole,
+      `"role" entry "${name}" in namespace "${namespaceId}" is not a role`,
+    );
     refuseRoleOutsideUnbound(namespaceId, name);
     refuseEntryInOtherNamespace({
       namespaceId,
@@ -107,8 +113,10 @@ export function buildPolicyBlocks(input: {
   readonly rlsTables: ReadonlySet<string>;
 }): readonly PslExtensionBlock[] {
   return Object.entries(input.entries ?? {}).map(([head, policy]): PslExtensionBlock => {
-    if (!(policy instanceof PostgresRlsPolicy))
-      refuseInvalidEntry(input.namespaceId, 'policy', head);
+    invariant(
+      policy instanceof PostgresRlsPolicy,
+      `"policy" entry "${head}" in namespace "${input.namespaceId}" is not a policy`,
+    );
     refuseUnwritableName('policy', head);
     refuseEntryInOtherNamespace({
       namespaceId: input.namespaceId,

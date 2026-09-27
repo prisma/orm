@@ -8,8 +8,8 @@ import type {
   SqlStorage,
   StorageTable,
 } from '@internal/sql-contract/types';
+import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
-import { postgresError } from '../errors';
 
 /** One domain model paired with the storage table it is bridged to. */
 export interface ModelWithTable {
@@ -43,8 +43,8 @@ export function modelCoordinate(namespaceId: string, modelName: string): string 
 }
 
 /**
- * Every domain model of the contract, in declaration order, with its storage table. A model whose
- * domain namespace is not the namespace of its table is refused before this runs.
+ * Every domain model of the contract, in declaration order, with its storage table. Contract
+ * validation has checked that each model's table exists, in the namespace of the model.
  */
 export function indexContractModels(contract: Contract<SqlStorage>): readonly ModelWithTable[] {
   const entries: ModelWithTable[] = [];
@@ -53,17 +53,10 @@ export function indexContractModels(contract: Contract<SqlStorage>): readonly Mo
       const storage = blindCast<SqlModelStorage, 'SQL contract model storage'>(model.storage);
       const table =
         contract.storage.namespaces[storage.namespaceId]?.entries.table?.[storage.table];
-      if (table === undefined) {
-        throw postgresError(
-          'CONTRACT.MODEL_UNKNOWN',
-          `contract print: model "${namespaceId}.${name}" is stored in table "${storage.namespaceId}"."${storage.table}", which the contract's storage does not declare.`,
-          {
-            why: "The printer reads each model's columns, keys and indexes off its storage table.",
-            fix: 'The contract source produced a model without its table. Fix the model if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-            meta: { namespaceId, modelName: name, table: storage.table },
-          },
-        );
-      }
+      assertDefined(
+        table,
+        `model "${namespaceId}.${name}" is stored in table "${storage.namespaceId}"."${storage.table}", which the storage does not declare`,
+      );
       const fields = Object.entries(storage.fields);
       entries.push({
         namespaceId: storage.namespaceId,
@@ -102,17 +95,14 @@ export function variantInfo(
   if (entry.model.base === undefined) return undefined;
   const base = byCoordinate.get(crossReferenceCoordinate(entry.model.base));
   const value = base?.model.variants?.[entry.name]?.value;
-  if (base === undefined || value === undefined) {
-    throw postgresError(
-      'CONTRACT.MODEL_UNKNOWN',
-      `contract print: model "${entry.namespaceId}.${entry.name}" extends base "${entry.model.base.namespace}.${entry.model.base.model}", which the contract does not declare, or which does not list it as a variant.`,
-      {
-        why: 'A variant is written as `@@base(Base, "value")`, and the value comes from the base model.',
-        fix: 'The contract source produced a variant its base does not list. Fix the variant or its base if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-        meta: { namespaceId: entry.namespaceId, modelName: entry.name },
-      },
-    );
-  }
+  assertDefined(
+    base,
+    `model "${entry.namespaceId}.${entry.name}" extends a base the contract does not declare`,
+  );
+  assertDefined(
+    value,
+    `model "${entry.namespaceId}.${entry.name}" extends base "${base.name}", which does not list it as a variant`,
+  );
   return {
     base,
     value,

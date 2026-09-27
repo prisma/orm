@@ -7,7 +7,7 @@ import {
   needsEscaping,
   snakeToCamelCase,
   snakeToPascalCase,
-} from '../psl-ast/psl-names';
+} from '../psl-build/psl-names';
 
 type NameResult = {
   readonly name: string;

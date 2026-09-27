@@ -11,9 +11,9 @@ import type {
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
-  PrintedPslContract,
+  PslContractBuildCapable,
+  PslContractDocument,
   PslContractInferCapable,
-  PslContractPrintCapable,
   SchemaDiffIssue,
   SchemaViewCapable,
   SignDatabaseResult,
@@ -209,7 +209,7 @@ export interface SqlControlFamilyInstance
   extends ControlFamilyInstance<'sql', SqlSchemaIRNode>,
     SchemaViewCapable<SqlSchemaIRNode>,
     PslContractInferCapable<SqlSchemaIRNode>,
-    PslContractPrintCapable<Contract<SqlStorage>>,
+    PslContractBuildCapable<Contract<SqlStorage>>,
     OperationPreviewCapable,
     SqlFamilyInstanceState {
   /**
@@ -587,12 +587,12 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     SqlControlTargetDescriptor<TTargetId, unknown>,
     'reading the optional target-descriptor inferPslContract hook'
   >(target).inferPslContract;
-  // Contract→PSL printing is read off the descriptor the same way. Absent for
-  // targets without `contract print`.
-  const targetPrintPslContract = blindCast<
+  // The hook that builds the PSL document of a contract is read off the descriptor the same way.
+  // Absent for targets without `contract print`.
+  const targetBuildPslContract = blindCast<
     SqlControlTargetDescriptor<TTargetId, unknown>,
-    'reading the optional target-descriptor printPslContract hook'
-  >(target).printPslContract;
+    'reading the optional target-descriptor buildPslContract hook'
+  >(target).buildPslContract;
   // The full-tree node diff the verify VERDICT derives from. Read lazily so
   // construction-only stub descriptors (schema-view tests) keep working; the
   // throw happens at verify time.
@@ -1024,20 +1024,20 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       return targetInferPslContract(schemaIR, describedContracts);
     },
 
-    printPslContract(contract: Contract<SqlStorage>): PrintedPslContract {
-      if (!targetPrintPslContract) {
+    buildPslContract(contract: Contract<SqlStorage>): PslContractDocument {
+      if (!targetBuildPslContract) {
         throw sqlFamilyError(
           'CONTRACT.PRINT_UNSUPPORTED',
-          `Target "${target.targetId}" does not support contract print (no printPslContract on its descriptor).`,
+          `Target "${target.targetId}" does not support contract print (no buildPslContract on its descriptor).`,
           {
-            why: 'The target descriptor does not provide the printPslContract hook, so the contract cannot be printed as a Prisma 8 PSL file.',
-            fix: 'Use a target whose descriptor provides printPslContract, or write the Prisma 8 PSL file by hand.',
+            why: 'The target descriptor does not provide the buildPslContract hook, so the contract cannot be printed as a Prisma 8 PSL file.',
+            fix: 'Use a target whose descriptor provides buildPslContract, or write the Prisma 8 PSL file by hand.',
             meta: { targetId: target.targetId },
           },
         );
       }
       return {
-        document: targetPrintPslContract(contract, {
+        document: targetBuildPslContract(contract, {
           authoringContributions: stack.authoringContributions,
           codecLookup: stack.codecLookup,
           dataTypeLookup: stack.dataTypeLookup,

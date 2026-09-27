@@ -11,9 +11,9 @@ import {
   printContract,
   readPsl,
   serializedWithoutCapabilities,
-} from './helpers/psl-print';
+} from './print-and-read-back';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 
 /**
  * Emitted contract fixtures, one per feature a Prisma 7 schema cannot carry.

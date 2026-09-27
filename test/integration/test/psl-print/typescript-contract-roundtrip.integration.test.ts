@@ -10,14 +10,15 @@ import {
 } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
-import {
-  printAndReadBack,
-  serializedWithoutCapabilities,
-} from '../../../../packages/3-targets/6-adapters/postgres/test/helpers/psl-print';
 import { contract as coreSurface } from '../authoring/parity/core-surface/contract';
 import { contract as mapAttributes } from '../authoring/parity/map-attributes/contract';
 import { contract as nativeEnum } from '../authoring/parity/native-enum/contract';
 import { contract as relationBackrelationList } from '../authoring/parity/relation-backrelation-list/contract';
+import {
+  printAndReadBack,
+  printContract,
+  serializedWithoutCapabilities,
+} from './print-and-read-back';
 
 const Account = model('Account', {
   fields: {
@@ -49,6 +50,20 @@ const Session = model('Session', {
 
 const checksAndRelations = defineContract({ models: { Account, Session } });
 
+const Author = model('Author', {
+  fields: { id: field.column(int4Column).default(autoincrement()).id() },
+  relations: { articles: rel.hasMany(() => Article, { by: 'authorId' }) },
+}).sql({ table: 'author' });
+
+const Article = model('Article', {
+  fields: {
+    id: field.column(int4Column).default(autoincrement()).id(),
+    authorId: field.column(int4Column),
+  },
+}).sql({ table: 'article' });
+
+const oneSidedRelation = defineContract({ models: { Author, Article } });
+
 const cases: ReadonlyArray<{ readonly name: string; readonly contract: Contract<SqlStorage> }> = [
   {
     name: 'checks named by prefix and by exact name, a relation and an index',
@@ -66,5 +81,14 @@ describe('a TypeScript-authored contract printed as PSL reads back as the same c
 
     expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(contract));
     expect(printed.storage.storageHash).toBe(contract.storage.storageHash);
+  });
+
+  it('refuses a hasMany relation when the other model declares no belongsTo', () => {
+    expect(() => printContract(oneSidedRelation)).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PRINT_UNSUPPORTED',
+        meta: { model: 'Author', field: 'articles' },
+      }),
+    );
   });
 });

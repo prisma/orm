@@ -58,6 +58,8 @@ export default defineConfig({
 
 `prisma6Schema` reads a Prisma 6 MongoDB `schema.prisma` as the contract source, so a project that still runs Prisma 6 can adopt Prisma 8 without a second schema file. It accepts one file or a directory of `.prisma` files (every file under it, nested directories included, as Prisma 6 reads a schema directory). `contract emit` writes `contract.json` and `contract.d.ts` into the directory that holds the schema file or the schema directory: `prisma6Schema('prisma/schema.prisma')` and `prisma6Schema('prisma/schema')` both write `prisma/contract.json` and `prisma/contract.d.ts`. The `output` directory on `defineConfig` overrides that, as for every other source.
 
+`prisma contract format` treats this source as PSL: when `prisma6Schema` names one file, the command rewrites that file in place with the Prisma 8 formatter. To keep Prisma 6's own formatting, do not run `prisma contract format`; format the schema with Prisma 6's `prisma format` instead.
+
 ```typescript
 // prisma.config.ts
 import { definePrismaConfig } from 'prisma/config';

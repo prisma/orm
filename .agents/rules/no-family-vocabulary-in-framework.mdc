@@ -18,7 +18,7 @@ The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabula
 
 **Comments and JSDoc are deliberately not counted.** Prose that documents family-blind code correctly ("family-parameterized (SQL, Mongo, …)") is good documentation, and the previous line-scanning checker taxed it — the majority of what it flagged was prose, not surface. A leak that matters is a real type, field, identifier, string, or import path, and the plugin only sees those.
 
-Test files and `test/` directories are not scanned. Outside them there are two exemptions, and no others: a framework-neutral compound listed in the plugin's `not` guards (`SymbolTable`, `MigrationLogTable`, the formatter's alignment columns), and a line suppression. The plugin has no path exemptions; do not add one.
+Test files and `test/` directories are not scanned. Outside them the plugin has one path exemption: the CLI (`packages/1-framework/3-tooling/cli`) may name a Prisma version before 8. That exemption covers version names only; family and target terms are flagged in the CLI as everywhere else. Do not add another path exemption. There are two other exemptions, and no others: a framework-neutral compound listed in the plugin's `not` guards (`SymbolTable`, `MigrationLogTable`, the formatter's alignment columns), and a line suppression.
 
 Suppress a genuinely family-blind site at the line, with a reason:
 

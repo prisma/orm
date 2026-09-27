@@ -1,10 +1,10 @@
-import { toEnumMemberName } from '@internal/family-sql/psl-ast';
+import { toEnumMemberName } from '@internal/family-sql/psl-build';
 import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
+import { NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
 import { escapePslString } from '@internal/sql-relational-core/ast';
-import { NAME_THE_PSL_SOURCE_LOSES } from './name-the-psl-source-loses';
 import { SYNTHETIC_SPAN } from './psl-literals';
 import { createUniqueFieldName } from './unique-name';
 

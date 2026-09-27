@@ -1,20 +1,20 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { expectTypeOf, test } from 'vitest';
 import type {
-  PrintedPslContract,
-  PslContractPrintCapable,
+  PslContractBuildCapable,
+  PslContractDocument,
   PslSourceSettings,
 } from '../src/control/control-capabilities';
 import type { PslDocumentAst } from '../src/control/psl-ast';
 
-test('printing a contract returns the PSL document and the settings its PSL source must carry', () => {
-  expectTypeOf<PslContractPrintCapable['printPslContract']>().parameters.toEqualTypeOf<
+test('building the PSL document of a contract returns the document and the settings its PSL source must carry', () => {
+  expectTypeOf<PslContractBuildCapable['buildPslContract']>().parameters.toEqualTypeOf<
     [Contract]
   >();
   expectTypeOf<
-    PslContractPrintCapable['printPslContract']
-  >().returns.toEqualTypeOf<PrintedPslContract>();
-  expectTypeOf<PrintedPslContract>().toEqualTypeOf<{
+    PslContractBuildCapable['buildPslContract']
+  >().returns.toEqualTypeOf<PslContractDocument>();
+  expectTypeOf<PslContractDocument>().toEqualTypeOf<{
     readonly document: PslDocumentAst;
     readonly sourceSettings: PslSourceSettings;
   }>();

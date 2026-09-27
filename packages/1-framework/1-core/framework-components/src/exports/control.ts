@@ -10,9 +10,9 @@ export type {
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
   OperationPreviewCapable,
-  PrintedPslContract,
+  PslContractBuildCapable,
+  PslContractDocument,
   PslContractInferCapable,
-  PslContractPrintCapable,
   PslSourceSettings,
   SchemaSubjectClassifierCapable,
   SchemaViewCapable,
@@ -20,8 +20,8 @@ export type {
 export {
   hasMigrations,
   hasOperationPreview,
+  hasPslContractBuild,
   hasPslContractInfer,
-  hasPslContractPrint,
   hasSchemaSubjectClassifier,
   hasSchemaView,
 } from '../control/control-capabilities';

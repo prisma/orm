@@ -63,7 +63,7 @@
     "./ir": "./dist/ir.mjs",
     "./migration": "./dist/migration.mjs",
     "./pack": "./dist/pack.mjs",
-    "./psl-ast": "./dist/psl-ast.mjs",
+    "./psl-build": "./dist/psl-build.mjs",
     "./psl-infer": "./dist/psl-infer.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./verify": "./dist/verify.mjs",

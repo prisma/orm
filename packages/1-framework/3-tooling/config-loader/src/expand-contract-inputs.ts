@@ -1,4 +1,4 @@
-import { resolve } from 'pathe';
+import { matchesGlob, resolve } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
 
 /**
@@ -33,4 +33,15 @@ export async function expandContractInputs(
       : await glob(globPatterns, { absolute: true, onlyFiles: true, expandDirectories: false });
   const canonical = new Set([...literals, ...globMatches].map((entry) => resolve(entry)));
   return Array.from(canonical).sort();
+}
+
+/**
+ * The first glob entry of `patterns` that `path` matches, whether or not a
+ * file exists at `path`. Both must be absolute.
+ */
+export function globContractInputMatching(
+  patterns: readonly string[],
+  path: string,
+): string | undefined {
+  return patterns.find((pattern) => isDynamicPattern(pattern) && matchesGlob(path, pattern));
 }

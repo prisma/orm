@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toEnumMemberName } from '../../src/core/psl-ast/psl-names';
+import { toEnumMemberName } from '../../src/core/psl-build/psl-names';
 
 describe('toEnumMemberName', () => {
   it('keeps a valid identifier value verbatim, preserving case', () => {

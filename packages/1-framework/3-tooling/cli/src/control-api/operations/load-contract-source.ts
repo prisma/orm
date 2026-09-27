@@ -223,7 +223,7 @@ function validateProviderResult(
  *
  * @throws {DOMException} `AbortError` if cancelled via `signal`
  */
-export async function resolveContractSource(inputs: {
+export async function loadContractSourceWithStack(inputs: {
   readonly stack: ControlStack;
   readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
@@ -311,7 +311,7 @@ export async function loadContractSource(
 ): Promise<Result<Contract, ContractSourceFailure>> {
   const contractConfig = requireContractConfig(config);
   requireSourceProvider(contractConfig);
-  const loaded = await resolveContractSource({
+  const loaded = await loadContractSourceWithStack({
     stack: createControlStack(config),
     source: contractConfig.source,
     ...ifDefined('signal', options.signal),

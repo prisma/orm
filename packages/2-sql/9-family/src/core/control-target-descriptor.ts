@@ -32,12 +32,9 @@ export interface SqlDescribedContractSpace {
 }
 
 /**
- * The parts of the composed stack a printer writes a PSL contract with. The PSL contract source
- * reads the printed file with the same parts, so the printer writes a column type as a type
- * constructor the stack contributes, and a literal default through the data type of the column's
- * codec, and both read back.
+ * The parts of the composed stack a target builds a PSL document with. The PSL contract source reads the document with the same parts, so the target writes a column type as a type constructor the stack contributes, and a literal default through the data type of the column's codec, and both read back.
  */
-export interface SqlPslPrintContext {
+export interface SqlPslBuildContext {
   readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type' | 'dataTypes'>;
   readonly codecLookup: CodecLookup;
   readonly dataTypeLookup: DataTypeLookup;
@@ -77,15 +74,9 @@ export interface SqlControlTargetDescriptor<
     describedContracts?: readonly SqlDescribedContractSpace[],
   ) => PslDocumentAst;
   /**
-   * Contract→PSL printing for `contract print`. Like {@link inferPslContract} it produces a PSL
-   * document, but from an assembled contract and the stack parts in `context`. The document reads
-   * back as the same contract; the hook throws `CONTRACT.PRINT_UNSUPPORTED` for a contract PSL
-   * cannot express. The printer sits in the target, though most of it inverts this family's PSL
-   * reader; only its column types, defaults, native enums, derived checks and row-level security
-   * are dialect logic. Optional: targets without `contract print` omit it, and the family instance
-   * throws when it is absent.
+   * Builds the PSL document of a contract, which `contract print` renders as text. `contract` must be one `contractSerializer.deserializeContract` accepted; the hook does not check its structure again. Like {@link inferPslContract} it produces a PSL document, but from an assembled contract and the stack parts in `context`. The document reads back as the same contract; the hook throws `CONTRACT.PRINT_UNSUPPORTED` for a contract PSL cannot express. The implementation sits in the target, though most of it inverts this family's PSL reader; only its column types, defaults, native enums, derived checks and row-level security are dialect logic. Optional: targets without `contract print` omit it, and the family instance throws when it is absent.
    */
-  readonly printPslContract?: (contract: TContract, context: SqlPslPrintContext) => PslDocumentAst;
+  readonly buildPslContract?: (contract: TContract, context: SqlPslBuildContext) => PslDocumentAst;
   /**
    * The full-tree node diff the family verify verdict derives from —
    * expected-tree derivation, pre-diff normalization, the generic differ,

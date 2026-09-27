@@ -1,6 +1,6 @@
 import type { PslModelAttribute } from '@internal/framework-components/psl-ast';
 import type { StorageTable } from '@internal/sql-contract/types';
-import { pslModelMapName } from '@internal/sql-contract-psl/resolution';
+import { pslModelMapName } from '@internal/sql-contract-psl/map-names';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   composeCheckWirePrefix,
@@ -15,8 +15,8 @@ import {
   buildCheckAttribute,
   buildIndexAttribute,
   buildModelConstraintAttribute,
-} from '../psl-ast/index-attributes';
-import { buildAttribute, buildMapAttribute, positionalArg } from '../psl-ast/psl-literals';
+} from '../psl-build/index-attributes';
+import { buildAttribute, buildMapAttribute, positionalArg } from '../psl-build/psl-literals';
 import type { ModelWithTable, VariantInfo } from './contract-model-index';
 import { refuseUnwritableIndexOptions, refuseUnwritableObjectName } from './refusals';
 

@@ -12,19 +12,19 @@ export const PSL = 'model User {\n  id Int @id\n}\n';
 
 /**
  * The command is mounted from the factory with a printer double injected, and
- * the config's family creates an instance whose `printPslContract` is a
+ * the config's family creates an instance whose `buildPslContract` is a
  * double, so no module mocking is involved and the doubles are scoped to the
  * test files that use them.
  */
 export const mocks: Readonly<
   Record<
-    'createFamilyInstance' | 'deserializeContract' | 'printPslContract' | 'printPsl' | 'load',
+    'createFamilyInstance' | 'deserializeContract' | 'buildPslContract' | 'printPsl' | 'load',
     Mock
   >
 > = {
   createFamilyInstance: vi.fn(),
   deserializeContract: vi.fn(),
-  printPslContract: vi.fn(),
+  buildPslContract: vi.fn(),
   printPsl: vi.fn(),
   load: vi.fn(),
 };
@@ -85,6 +85,18 @@ export function harness(config: Record<string, unknown>) {
   return createTestCli({ commands, groups, config: { orm: config } });
 }
 
+/** A CLI whose `prisma.config.ts` sits in `configDir`, whatever directory a run is invoked from. */
+export function harnessWithConfigIn(configDir: string, config: Record<string, unknown>) {
+  return createTestCli({
+    commands,
+    groups,
+    loadConfig: async () => ({
+      files: [{ path: join(configDir, 'prisma.config.ts'), sections: { orm: config } }],
+      diagnostics: [],
+    }),
+  });
+}
+
 export function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {
   const terminal = run.json.at(-1);
   if (terminal === undefined || terminal.kind !== 'result' || terminal.envelope.ok) {
@@ -102,13 +114,13 @@ export function useContractPrintDoubles(): void {
   });
 
   beforeEach(() => {
-    mocks.printPslContract
+    mocks.buildPslContract
       .mockReset()
       .mockReturnValue({ document: { kind: 'psl-document' }, sourceSettings: {} });
     mocks.deserializeContract.mockReset().mockReturnValue(VALIDATED_CONTRACT);
     mocks.createFamilyInstance.mockReset().mockReturnValue({
       deserializeContract: mocks.deserializeContract,
-      printPslContract: mocks.printPslContract,
+      buildPslContract: mocks.buildPslContract,
     });
     mocks.printPsl.mockReset().mockReturnValue(PSL);
     mocks.load.mockReset().mockResolvedValue(ok({ roots: {}, domain: {} }));

@@ -4,8 +4,8 @@ import {
   type ExecutionMutationDefault,
   effectiveControlPolicy,
 } from '@internal/contract/types';
-import type { SqlPslPrintContext } from '@internal/family-sql/control';
-import type { PslTypeMap } from '@internal/family-sql/psl-ast';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import type {
   PslDocumentAst,
   PslExtensionBlock,
@@ -17,12 +17,14 @@ import {
   makePslNamespaceEntries,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
-import type { ForeignKey, SqlStorage } from '@internal/sql-contract/types';
+import type { ForeignKey, SqlModelStorage, SqlStorage } from '@internal/sql-contract/types';
+import { invariant } from '@internal/utils/assertions';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import { PostgresNativeEnum } from '../postgres-native-enum';
-import { createPostgresTypeMap } from '../psl-ast/postgres-type-map';
-import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { createPostgresTypeMap } from '../psl-build/postgres-type-map';
+import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import {
   indexContractModels,
   type ModelWithTable,
@@ -44,9 +46,8 @@ import {
   refuseDuplicateModelNames,
   refuseEnumAndNativeEnumSharingName,
   refuseEnumsOutsideDefaultNamespace,
-  refuseInvalidEntry,
   refuseModelOwner,
-  refuseModelsOutsideTableNamespace,
+  refuseNamespaceNamedUnbound,
   refuseRlsWithoutModel,
   refuseUnderivedChecks,
   refuseUnderivedRoots,
@@ -55,6 +56,7 @@ import {
   refuseUnmodelledTablesAndColumns,
   refuseUnprintedEntryKinds,
   refuseUntravelledForeignKeys,
+  refuseUnwritableMappedName,
   refuseUnwritableName,
   refuseUnwrittenExecutionDefaults,
   refuseUnwrittenNamespaces,
@@ -73,7 +75,7 @@ import { buildScalarFields, executionDefaultsByColumn } from './scalar-fields';
 /** What building every model needs from the whole contract, computed once. */
 interface ContractModels {
   readonly contract: Contract<SqlStorage>;
-  readonly context: SqlPslPrintContext;
+  readonly context: SqlPslBuildContext;
   readonly typeMap: PslTypeMap;
   readonly models: readonly ModelWithTable[];
   readonly byCoordinate: ReadonlyMap<string, ModelWithTable>;
@@ -93,7 +95,10 @@ function nativeEnumsOf(
 ): ReadonlyMap<string, PostgresNativeEnum> {
   const nativeEnums = new Map<string, PostgresNativeEnum>();
   for (const [name, entity] of Object.entries(entries['native_enum'] ?? {})) {
-    if (!PostgresNativeEnum.is(entity)) refuseInvalidEntry(namespaceId, 'native_enum', name);
+    invariant(
+      PostgresNativeEnum.is(entity),
+      `"native_enum" entry "${name}" in namespace "${namespaceId}" is not a native enum`,
+    );
     nativeEnums.set(name, entity);
   }
   return nativeEnums;
@@ -147,6 +152,7 @@ function buildModel(
       executionDefaults: all.executionDefaults,
       writtenExecutionDefaults: all.writtenExecutionDefaults,
       defaultDomainEnumNames: new Set(Object.keys(all.defaultDomainEnums)),
+      namedTypes: all.contract.storage.types ?? {},
     }),
     ...buildRelationFields({
       entry,
@@ -257,12 +263,24 @@ function buildNamespace(
   if (namespaceModels.length === 0 && blocks.length === 0 && compositeTypes.length === 0) {
     return undefined;
   }
+  refuseNamespaceNamedUnbound(namespaceId);
+  const name = pslNamespaceName(namespaceId);
+  refuseUnwritableName('namespace', name);
   return makePslNamespace({
     kind: 'namespace',
-    name: pslNamespaceName(namespaceId),
+    name,
     entries: makePslNamespaceEntries(namespaceModels, compositeTypes, blocks),
     span: SYNTHETIC_SPAN,
   });
+}
+
+function refuseUnwritableTableNames(contract: Contract<SqlStorage>): void {
+  for (const domainNamespace of Object.values(contract.domain.namespaces)) {
+    for (const model of Object.values(domainNamespace.models)) {
+      const storage = blindCast<SqlModelStorage, 'SQL contract model storage'>(model.storage);
+      refuseUnwritableMappedName('table', storage.table);
+    }
+  }
 }
 
 /**
@@ -271,13 +289,14 @@ function buildNamespace(
  * every native enum, in the namespace block that carries it.
  *
  * Read back by the PSL contract source with the same stack, the document yields the contract it was
- * built from. Anything the language cannot carry is refused by name.
+ * built from. Anything the language cannot carry is refused by name. `contract` must be one the
+ * Postgres contract serializer accepted: its structure is asserted, not checked again.
  */
 export function buildPostgresPslContract(
   contract: Contract<SqlStorage>,
-  context: SqlPslPrintContext,
+  context: SqlPslBuildContext,
 ): PslDocumentAst {
-  refuseModelsOutsideTableNamespace(contract);
+  refuseUnwritableTableNames(contract);
   const models = indexContractModels(contract);
   refuseDuplicateModelNames(models);
   const byCoordinate = modelsByCoordinate(models);

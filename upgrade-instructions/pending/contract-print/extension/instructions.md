@@ -6,8 +6,8 @@ changes:
     summary: The prisma7Schema() contract source declares format 'psl' instead of 'prisma7'.
   - id: print-psl-description-option
     summary: printPsl() from @internal/psl-printer opens every file with only the // use prisma-8 marker unless the caller passes description.
-  - id: family-sql-psl-ast-export
-    summary: mapDefault, its option types, the PslTypeMap types and toEnumMemberName moved from @internal/family-sql/psl-infer to @internal/family-sql/psl-ast.
+  - id: family-sql-psl-build-export
+    summary: mapDefault, its option types, the PslTypeMap types and toEnumMemberName moved from @internal/family-sql/psl-infer to @internal/family-sql/psl-build.
 ---
 
 # Contract source formats are PSL and TypeScript
@@ -30,6 +30,6 @@ printPsl(ast, {
 });
 ```
 
-# PSL building blocks moved to `@internal/family-sql/psl-ast`
+# PSL building blocks moved to `@internal/family-sql/psl-build`
 
-`contract print` uses some of what `@internal/family-sql/psl-infer` exported, so those exports moved to the new subpath `@internal/family-sql/psl-ast`: `mapDefault`, `DefaultMappingOptions`, `DefaultMappingResult`, `PslTypeMap`, `PslTypeReference`, `PslTypeResolution` and `toEnumMemberName`. Import them from `@internal/family-sql/psl-ast`. Everything else stays in `@internal/family-sql/psl-infer`.
+`contract print` uses some of what `@internal/family-sql/psl-infer` exported, so those exports moved to the new subpath `@internal/family-sql/psl-build`: `mapDefault`, `DefaultMappingOptions`, `DefaultMappingResult`, `PslTypeMap`, `PslTypeReference`, `PslTypeResolution` and `toEnumMemberName`. Import them from `@internal/family-sql/psl-build`. Everything else stays in `@internal/family-sql/psl-infer`.

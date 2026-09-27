@@ -2,10 +2,10 @@ import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/type
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
-import { PRINTED_PSL_TYPE_NAMES } from '../../../src/core/psl-ast/postgres-type-map';
+import { INFERRED_PSL_TYPE_NAMES } from '../../../src/core/psl-build/postgres-type-map';
 import {
-  CODEC_ID_BY_PRINTED_TYPE,
-  dataTypeForPrintedType,
+  CODEC_ID_BY_INFERRED_TYPE,
+  dataTypeForInferredType,
 } from '../../../src/core/psl-infer/infer-default-codec';
 import { printPslFromFlat } from '../fixtures';
 
@@ -196,27 +196,27 @@ describe('printPsl writes each default as the literal the column data type takes
   });
 });
 
-describe('the codec bound to each printed type name', () => {
+describe('the codec bound to each inferred type name', () => {
   it('covers every PSL type name the type map prints', () => {
-    expect(PRINTED_PSL_TYPE_NAMES.size).toBeGreaterThan(0);
+    expect(INFERRED_PSL_TYPE_NAMES.size).toBeGreaterThan(0);
     expect(
-      [...PRINTED_PSL_TYPE_NAMES].filter((name) => !CODEC_ID_BY_PRINTED_TYPE.has(name)),
+      [...INFERRED_PSL_TYPE_NAMES].filter((name) => !CODEC_ID_BY_INFERRED_TYPE.has(name)),
     ).toEqual([]);
   });
 
-  it('names a registered codec that represents a data type for every printed type', () => {
+  it('names a registered codec that represents a data type for every inferred type', () => {
     expect(
-      [...CODEC_ID_BY_PRINTED_TYPE.keys()].filter(
-        (typeName) => dataTypeForPrintedType(typeName, false) === undefined,
+      [...CODEC_ID_BY_INFERRED_TYPE.keys()].filter(
+        (typeName) => dataTypeForInferredType(typeName, false) === undefined,
       ),
     ).toEqual([]);
   });
 
   it('reads an enum column through the text codec, whose members are text', () => {
-    expect(dataTypeForPrintedType('SomeEnum', true)).toBe('pg/text');
+    expect(dataTypeForInferredType('SomeEnum', true)).toBe('pg/text');
   });
 
   it('names nothing for a type no codec is bound to', () => {
-    expect(dataTypeForPrintedType('Unsupported', false)).toBeUndefined();
+    expect(dataTypeForInferredType('Unsupported', false)).toBeUndefined();
   });
 });

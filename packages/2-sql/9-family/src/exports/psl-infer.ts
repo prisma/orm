@@ -4,7 +4,7 @@
  * These leaf transforms (name normalization, relation inference, the printer-config types) carry no
  * dialect knowledge, so they live in the SQL family and are imported by the target that owns the
  * dialect maps and walks its own schema tree (Postgres). The parts `contract print` uses too are
- * under `@internal/family-sql/psl-ast`.
+ * under `@internal/family-sql/psl-build`.
  */
 
 export {

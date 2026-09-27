@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CODEC_ID_BY_PRINTED_TYPE } from '../../../3-targets/postgres/src/core/psl-infer/infer-default-codec';
+import { CODEC_ID_BY_INFERRED_TYPE } from '../../../3-targets/postgres/src/core/psl-infer/infer-default-codec';
 import {
   postgresNativeAuthoringTypes,
   postgresScalarAuthoringTypes,
@@ -17,17 +17,17 @@ const emitCodecIdByTypeName: ReadonlyMap<string, string> = new Map(
   ].map(([typeName, typeConstructor]) => [typeName, typeConstructor.output.codecId]),
 );
 
-describe('the codec bound to each printed PSL type name', () => {
+describe('the codec bound to each inferred PSL type name', () => {
   it('has a binding to compare against', () => {
     expect(emitCodecIdByTypeName.size).toBeGreaterThan(0);
-    expect(CODEC_ID_BY_PRINTED_TYPE.size).toBeGreaterThan(0);
+    expect(CODEC_ID_BY_INFERRED_TYPE.size).toBeGreaterThan(0);
   });
 
   it('agrees with the type constructor contract emit resolves', () => {
     expect(
-      [...CODEC_ID_BY_PRINTED_TYPE].map(([typeName, codecId]) => ({ typeName, codecId })),
+      [...CODEC_ID_BY_INFERRED_TYPE].map(([typeName, codecId]) => ({ typeName, codecId })),
     ).toEqual(
-      [...CODEC_ID_BY_PRINTED_TYPE.keys()].map((typeName) => ({
+      [...CODEC_ID_BY_INFERRED_TYPE.keys()].map((typeName) => ({
         typeName,
         codecId: emitCodecIdByTypeName.get(typeName),
       })),

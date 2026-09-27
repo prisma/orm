@@ -10,7 +10,7 @@ import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { createSqlContract, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { printContract, readPsl } from './helpers/psl-print';
+import { printContract, readPsl } from './print-and-read-back';
 
 const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
 const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;

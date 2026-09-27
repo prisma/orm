@@ -14,24 +14,22 @@ import type {
   ValueObjectFieldType,
 } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import { canonicalizeJson } from '@internal/framework-components/utils';
-import { isPslIdentifier } from '@internal/psl-parser';
+import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser';
 import {
   type ForeignKey,
   type Index,
-  type SqlModelStorage,
   type SqlStorage,
   StorageColumn,
 } from '@internal/sql-contract/types';
 import { escapePslString } from '@internal/sql-relational-core/ast';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
 import { postgresError } from '../errors';
 import { DEFAULT_NAMESPACE_ID } from '../namespace-ids';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import type { PostgresRlsPolicy } from '../postgres-rls-policy';
-import { NAME_THE_PSL_SOURCE_LOSES } from '../psl-ast/name-the-psl-source-loses';
 import {
   isVariantLinkForeignKey,
   type ModelWithTable,
@@ -340,17 +338,41 @@ export function refuseFieldsWithoutColumn(entry: ModelWithTable): void {
   }
 }
 
-export function refuseStorageWithoutFieldOrColumn(input: {
+/** Refuses a column a model stores under a field name the model does not declare. */
+export function refuseStorageOfUndeclaredField(input: {
   readonly entry: ModelWithTable;
   readonly fieldName: string;
   readonly coordinate: string;
 }): never {
   const { entry, fieldName } = input;
   throw unsupported(
-    `model "${entry.namespaceId}.${entry.name}" stores "${fieldName}" in column ${input.coordinate}, but the model has no such field or the table has no such column.`,
-    'PSL declares a field together with the column it is stored in, so both must exist.',
-    'The contract source produced storage for a field or column it does not declare. Fix it if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
+    `model "${entry.namespaceId}.${entry.name}" stores "${fieldName}" in column ${input.coordinate}, but the model has no field of that name, so it cannot be written in Prisma 8 PSL.`,
+    'PSL declares a field together with the column it is stored in.',
+    'Declare the field on the model, or keep authoring this contract in its current source.',
     { namespaceId: entry.namespaceId, modelName: entry.name, field: fieldName },
+  );
+}
+
+/**
+ * Refuses a column typed by a named type when the contract declares no such type, or when the
+ * column's native type or codec is not the named type's. PSL writes the column as the name of the
+ * type, and the PSL source copies both from the named type.
+ */
+export function refuseColumnDifferingFromNamedType(input: {
+  readonly column: StorageColumn;
+  readonly typeRef: string;
+  readonly namedType: { readonly nativeType: string; readonly codecId: string } | undefined;
+  readonly coordinate: string;
+}): void {
+  const { column, typeRef, namedType, coordinate } = input;
+  if (namedType?.nativeType === column.nativeType && namedType.codecId === column.codecId) return;
+  throw unsupported(
+    namedType === undefined
+      ? `column ${coordinate} is typed by the named type "${typeRef}", which the contract does not declare, so it cannot be written in Prisma 8 PSL.`
+      : `column ${coordinate} is typed by the named type "${typeRef}" but has a different native type or codec from it, which cannot be written in Prisma 8 PSL.`,
+    'PSL writes such a column as the name of its named type, and the PSL source gives the column the native type and codec of that named type.',
+    'Make the column and its named type agree, or keep authoring this contract in its current source.',
+    { coordinate, typeRef },
   );
 }
 
@@ -405,22 +427,6 @@ export function refuseUnmodelledTablesAndColumns(
 }
 
 // Models
-
-/** Refuses a model whose domain namespace is not the namespace of its table. */
-export function refuseModelsOutsideTableNamespace(contract: Contract<SqlStorage>): void {
-  for (const [namespaceId, domainNamespace] of Object.entries(contract.domain.namespaces)) {
-    for (const [name, model] of Object.entries(domainNamespace.models)) {
-      const storage = blindCast<SqlModelStorage, 'SQL contract model storage'>(model.storage);
-      if (storage.namespaceId === namespaceId) continue;
-      throw unsupported(
-        `model "${namespaceId}.${name}" is stored in namespace "${storage.namespaceId}", which cannot be written in Prisma 8 PSL.`,
-        'A model written in a namespace block belongs to that namespace in both the domain and the storage.',
-        'The contract source produced a model outside the namespace of its table. Fix the model if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-        { namespaceId, modelName: name, tableNamespaceId: storage.namespaceId },
-      );
-    }
-  }
-}
 
 export function refuseModelOwner(entry: ModelWithTable): void {
   if (entry.model.owner === undefined) return;
@@ -656,6 +662,28 @@ export function refuseManyToManyWithoutJunctionRelation(
   );
 }
 
+export function refuseBackRelationWithoutOwningRelation(input: {
+  readonly modelName: string;
+  readonly fieldName: string;
+  readonly targetModel: string;
+}): never {
+  throw unsupported(
+    `relation "${input.modelName}.${input.fieldName}" has no foreign key of its own, and model "${input.targetModel}" has no relation back to "${input.modelName}" over the same columns, so it cannot be written in Prisma 8 PSL.`,
+    'The PSL source reads a relation field without `fields:` and `references:` only as the other side of a relation field that has them.',
+    `Declare the relation on "${input.targetModel}" that holds the foreign key, or keep authoring this contract in its current source.`,
+    { model: input.modelName, field: input.fieldName },
+  );
+}
+
+export function refuseRelationWithoutJoin(modelName: string, fieldName: string): never {
+  throw unsupported(
+    `relation "${modelName}.${fieldName}" names no fields to join on, which cannot be written in Prisma 8 PSL.`,
+    'The PSL source reads every relation as a join between fields of the two models; a relation with no `on` part has no PSL form.',
+    KEEP_SOURCE,
+    { model: modelName, field: fieldName },
+  );
+}
+
 // Enums and value sets
 
 /**
@@ -776,6 +804,20 @@ export function refuseUnwrittenNamespaces(input: {
       );
     }
   }
+}
+
+/**
+ * Refuses a namespace named `unbound` that is not the late-binding namespace: PSL writes the
+ * late-binding namespace as `namespace unbound`, so a block of that name reads back as it.
+ */
+export function refuseNamespaceNamedUnbound(namespaceId: string): void {
+  if (namespaceId !== UNBOUND_PSL_NAMESPACE_NAME) return;
+  throw unsupported(
+    `namespace "${namespaceId}" cannot be written in Prisma 8 PSL, because \`namespace ${UNBOUND_PSL_NAMESPACE_NAME}\` is how PSL writes the late-binding namespace.`,
+    `The PSL source reads \`namespace ${UNBOUND_PSL_NAMESPACE_NAME}\` as the late-binding namespace "${UNBOUND_NAMESPACE_ID}", so everything in this namespace would move there.`,
+    'Rename the namespace, or keep authoring this contract in its current source.',
+    { namespaceId },
+  );
 }
 
 /** Refuses top-level `meta` entries: the PSL source reads back an empty `meta`. */
@@ -931,19 +973,30 @@ export function refuseEntryInOtherNamespace(input: {
 
 // Names and storage entries
 
+function refuseNameThePslSourceLoses(kind: string, name: string): void {
+  if (name !== NAME_THE_PSL_SOURCE_LOSES) return;
+  throw unsupported(
+    `${kind} "${name}" cannot be written in Prisma 8 PSL, because the PSL source loses this name when it reads it.`,
+    'The PSL source keeps names as keys of plain objects, where this name sets the prototype instead of adding a key.',
+    'Rename it, or keep authoring this contract in its current source.',
+    { kind, name },
+  );
+}
+
 /**
- * Refuses a name the printer writes where PSL reads an identifier: a model, field, value object,
- * enum, enum member, native enum, named type, policy, role or index option key.
+ * Refuses a table or column named `__proto__`, which the printer would write inside `@@map` or
+ * `@map` and the PSL source loses when it reads it.
+ */
+export function refuseUnwritableMappedName(kind: 'table' | 'column', name: string): void {
+  refuseNameThePslSourceLoses(kind, name);
+}
+
+/**
+ * Refuses a name the printer writes where PSL reads an identifier: a namespace, model, field, value
+ * object, enum, enum member, native enum, named type, policy, role or index option key.
  */
 export function refuseUnwritableName(kind: string, name: string): void {
-  if (name === NAME_THE_PSL_SOURCE_LOSES) {
-    throw unsupported(
-      `${kind} "${name}" cannot be written in Prisma 8 PSL, because the PSL source loses this name when it reads it.`,
-      'The PSL source keeps names as keys of plain objects, where this name sets the prototype instead of adding a key.',
-      'Rename it, or keep authoring this contract in its current source.',
-      { kind, name },
-    );
-  }
+  refuseNameThePslSourceLoses(kind, name);
   if (isPslIdentifier(name)) return;
   throw unsupported(
     `${kind} "${name}" is not a PSL identifier, so it cannot be written in Prisma 8 PSL.`,
@@ -978,14 +1031,4 @@ export function refuseUnprintedEntryKinds(
       { namespaceId, kind, names },
     );
   }
-}
-
-/** Refuses an entry filed under a kind whose entity class does not accept it. */
-export function refuseInvalidEntry(namespaceId: string, kind: string, name: string): never {
-  throw unsupported(
-    `namespace "${namespaceId}" has a "${kind}" entry "${name}" that is not a ${kind} entity.`,
-    'The printer reads each storage entry through the entity class of its kind, and this entry does not have that shape.',
-    'The contract source produced an entry the Postgres target does not accept. Fix the entry if the source is a TypeScript contract; otherwise report the bug to the source that produced it.',
-    { namespaceId, kind, name },
-  );
 }

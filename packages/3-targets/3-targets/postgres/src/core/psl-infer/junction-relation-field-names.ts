@@ -2,7 +2,7 @@ import { toModelName } from '@internal/family-sql/psl-infer';
 import { flatPslModels } from '@internal/framework-components/psl-ast';
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { parsePostgresDefault } from '../default-normalizer';
-import { createPostgresTypeMap } from '../psl-ast/postgres-type-map';
+import { createPostgresTypeMap } from '../psl-build/postgres-type-map';
 import { buildPslDocumentAst } from './infer-psl-contract';
 import { createPostgresDefaultMapping } from './postgres-default-mapping';
 

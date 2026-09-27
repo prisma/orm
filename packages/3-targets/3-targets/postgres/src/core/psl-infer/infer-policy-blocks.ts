@@ -4,7 +4,7 @@ import { escapePslString } from '@internal/sql-relational-core/ast';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import { POLICY_BLOCK_KEYWORDS } from '../authoring';
-import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
 
 /** Replaces invalid character runs with `_`; prepends `_` when the first character is invalid. */

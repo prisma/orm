@@ -7,7 +7,7 @@ import {
   type DefaultMappingOptions,
   mapDefault,
   type PslTypeMap,
-} from '@internal/family-sql/psl-ast';
+} from '@internal/family-sql/psl-build';
 import type { PslPrinterOptions, RelationField } from '@internal/family-sql/psl-infer';
 import { toFieldName, toModelName } from '@internal/family-sql/psl-infer';
 import type {
@@ -31,7 +31,7 @@ import {
   buildCheckAttribute,
   buildIndexAttribute,
   buildModelConstraintAttribute,
-} from '../psl-ast/index-attributes';
+} from '../psl-build/index-attributes';
 import {
   buildAttribute,
   buildMapAttribute,
@@ -40,9 +40,9 @@ import {
   parseDefaultAttributeString,
   positionalArg,
   SYNTHETIC_SPAN,
-} from '../psl-ast/psl-literals';
-import { createUniqueFieldName } from '../psl-ast/unique-name';
-import { dataTypeForPrintedType, printedDefaultReadsBack } from './infer-default-codec';
+} from '../psl-build/psl-literals';
+import { createUniqueFieldName } from '../psl-build/unique-name';
+import { dataTypeForInferredType, inferredDefaultReadsBack } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import { resolveColumnFieldName, type TableColumnFieldNameMap } from './infer-names';
 
@@ -284,11 +284,14 @@ function buildScalarField(
     rawDefaultParser,
     {
       ...defaultMapping,
-      ...ifDefined('columnDataType', dataTypeForPrintedType(resolution.pslType.name, isEnumColumn)),
+      ...ifDefined(
+        'columnDataType',
+        dataTypeForInferredType(resolution.pslType.name, isEnumColumn),
+      ),
       list: column.many === true,
     },
     (value) =>
-      printedDefaultReadsBack(value, resolution.pslType.name, isEnumColumn, column.many === true),
+      inferredDefaultReadsBack(value, resolution.pslType.name, isEnumColumn, column.many === true),
   );
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));

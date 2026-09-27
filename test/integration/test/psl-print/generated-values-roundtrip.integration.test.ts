@@ -9,7 +9,7 @@ import {
   printAndReadBack,
   readPsl,
   serializedWithoutCapabilities,
-} from './helpers/psl-print';
+} from './print-and-read-back';
 
 const stack = composePostgresStack();
 

@@ -3,7 +3,7 @@ import type { PslModel } from '@internal/framework-components/psl-ast';
 import type { SqlTableIR } from '@internal/sql-schema-ir/types';
 import { assertDefined } from '@internal/utils/assertions';
 import { postgresError } from '../errors';
-import { createUniqueFieldName } from '../psl-ast/unique-name';
+import { createUniqueFieldName } from '../psl-build/unique-name';
 
 export type ResolvedColumnFieldName = {
   readonly fieldName: string;

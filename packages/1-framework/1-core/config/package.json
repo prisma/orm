@@ -20,7 +20,8 @@
     "@internal/framework-components": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
     "arktype": "^2.2.2",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
     "@repo/tsconfig": "workspace:8.0.0-rc.12",

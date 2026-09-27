@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   erroredEnvelope,
   harness,
+  harnessWithConfigIn,
   mocks,
   ormConfig,
   PSL,
@@ -68,6 +69,7 @@ describe('contract print', () => {
       target: { familyId: 'sql', id: 'postgres' },
       psl: { text: PSL },
       source: ['prisma/schema.prisma'],
+      sourceSettings: {},
       timings: { total: expect.any(Number) },
     });
     expect(await readdir(dir)).toEqual([]);
@@ -88,6 +90,7 @@ describe('contract print', () => {
       target: { familyId: 'sql', id: 'postgres' },
       psl: { path: 'generated/contract.prisma' },
       source: ['prisma/schema.prisma'],
+      sourceSettings: {},
       timings: { total: expect.any(Number) },
     });
   });
@@ -121,7 +124,7 @@ describe('contract print', () => {
     expect(sourceContext.authoringContributions).toBe(stack.authoringContributions);
     expect(printOptions.codecLookup).toBe(stack.codecLookup);
     expect(printOptions.pslBlockDescriptors).toBe(stack.authoringContributions.pslBlockDescriptors);
-    expect(mocks.printPslContract).toHaveBeenCalledWith(VALIDATED_CONTRACT);
+    expect(mocks.buildPslContract).toHaveBeenCalledWith(VALIDATED_CONTRACT);
   });
 
   it('publishes through a staged rename, leaving no temporary file behind', async () => {
@@ -222,7 +225,7 @@ describe('contract print', () => {
 
   it('warns that the config must set the default control policy, because a PSL file cannot carry it', async () => {
     const dir = await projectDir();
-    mocks.printPslContract.mockReturnValue({
+    mocks.buildPslContract.mockReturnValue({
       document: { kind: 'psl-document' },
       sourceSettings: { defaultControlPolicy: 'external' },
     });
@@ -238,7 +241,10 @@ describe('contract print', () => {
       severity: 'warn',
       text: "The contract's default control policy is 'external', and a PSL file cannot carry it. Set defaultControlPolicy: 'external' on the PSL source in prisma.config.ts. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed.",
     });
-    expect(run.presented?.data).toMatchObject({ defaultControlPolicy: 'external' });
+    expect(run.presented?.data).toMatchObject({
+      sourceSettings: { defaultControlPolicy: 'external' },
+    });
+    expect(run.presented?.data).not.toHaveProperty('defaultControlPolicy');
     expect(run.presented?.presentation.next).toEqual([
       {
         kind: 'user-choice',
@@ -314,6 +320,38 @@ describe('contract print', () => {
     ]);
   });
 
+  it('names the next-step paths relative to the directory of the config, not the invocation directory', async () => {
+    const dir = await projectDir();
+    await mkdir(join(dir, 'src'), { recursive: true });
+    const config = ormConfig(dir, {
+      contract: {
+        source: { format: 'psl', inputs: ['./prisma/schema.prisma'], load: mocks.load },
+        output: join(dir, 'prisma', 'schema.json'),
+      },
+    });
+
+    const run = await harnessWithConfigIn(dir, config).run(
+      ['contract', 'print', '--output', 'prisma/contract.prisma', '--json'],
+      { cwd: join(dir, 'src') },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(await readFile(join(dir, 'src', 'prisma', 'contract.prisma'), 'utf-8')).toBe(PSL);
+    expect(run.presented?.data).toMatchObject({ psl: { path: 'prisma/contract.prisma' } });
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'user-choice',
+        label: 'Point contract in prisma.config.ts at src/prisma/contract.prisma',
+      },
+      {
+        kind: 'user-choice',
+        label:
+          "With contract: './src/prisma/contract.prisma' and no output in prisma.config.ts, contract emit writes src/prisma/contract.json and src/prisma/contract.d.ts, not prisma/schema.json and prisma/schema.d.ts",
+      },
+      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+    ]);
+  });
+
   it('prints a PSL source the same way as any other source', async () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
@@ -369,7 +407,7 @@ describe('contract print', () => {
 
   it('writes no file at the output path when the target refuses part of the contract', async () => {
     const dir = await projectDir();
-    mocks.printPslContract.mockImplementation(() => {
+    mocks.buildPslContract.mockImplementation(() => {
       throw structuredError(
         'CONTRACT.PRINT_UNSUPPORTED',
         'contract print: field "public".Shop.location has a union type, which cannot be written in Prisma 8 PSL.',
@@ -396,7 +434,7 @@ describe('contract print', () => {
 
   it('reports the code, summary and next actions of a refusal the target raised', async () => {
     const dir = await projectDir();
-    mocks.printPslContract.mockImplementation(() => {
+    mocks.buildPslContract.mockImplementation(() => {
       throw structuredError(
         'CONTRACT.PRINT_UNSUPPORTED',
         'contract print: field "public".Shop.location has a union type, which cannot be written in Prisma 8 PSL.',

@@ -16,8 +16,8 @@ import {
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { parsePostgresDefault } from '../default-normalizer';
 import { postgresError } from '../errors';
-import { createPostgresTypeMap } from '../psl-ast/postgres-type-map';
-import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { createPostgresTypeMap } from '../psl-build/postgres-type-map';
+import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
 import { buildNativeEnumBlocks, PSL_SCALAR_TYPE_NAMES } from './infer-enum-blocks';

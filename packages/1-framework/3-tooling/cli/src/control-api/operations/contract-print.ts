@@ -1,10 +1,10 @@
 import type { ContractSourceDiagnostic, PrismaNextConfig } from '@internal/config/config-types';
 import type { PslSourceSettings } from '@internal/framework-components/control';
-import { createControlStack, hasPslContractPrint } from '@internal/framework-components/control';
+import { createControlStack, hasPslContractBuild } from '@internal/framework-components/control';
 import { printPsl } from '@internal/psl-printer';
 import { ifDefined } from '@internal/utils/defined';
 import { errorRuntime } from '../../utils/cli-errors';
-import { resolveContractSource } from './load-contract-source';
+import { loadContractSourceWithStack } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
 type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
@@ -47,7 +47,7 @@ export async function executeContractPrint(
   const { config, contractConfig, description, signal } = options;
   const stack = createControlStack(config);
   const sourceWarnings: ContractSourceDiagnostic[] = [];
-  const loaded = await resolveContractSource({
+  const loaded = await loadContractSourceWithStack({
     stack,
     source: contractConfig.source,
     ...ifDefined('signal', signal),
@@ -61,7 +61,7 @@ export async function executeContractPrint(
 
   const familyInstance = config.family.create(stack);
   const contract = validateLoadedContract({ config, familyInstance, contract: loaded.value });
-  if (!hasPslContractPrint(familyInstance)) {
+  if (!hasPslContractBuild(familyInstance)) {
     throw errorRuntime(
       'CONTRACT.PRINT_UNSUPPORTED',
       'contract print is not supported for this family',
@@ -71,7 +71,7 @@ export async function executeContractPrint(
       },
     );
   }
-  const { document, sourceSettings } = familyInstance.printPslContract(contract);
+  const { document, sourceSettings } = familyInstance.buildPslContract(contract);
 
   return {
     psl: dependencies.printPsl(document, {

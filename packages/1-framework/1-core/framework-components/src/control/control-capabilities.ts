@@ -56,33 +56,32 @@ export function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(
 
 /**
  * Settings a PSL contract source takes from the config, because a PSL file
- * cannot carry them. Emitting the printed file produces the same contract only
+ * cannot carry them. Emitting the PSL file produces the same contract only
  * when the config sets each of them on the new source.
  */
 export interface PslSourceSettings {
   readonly defaultControlPolicy?: ControlPolicy;
 }
 
-/** A contract printed as a PSL document, and the settings its PSL source must carry. */
-export interface PrintedPslContract {
+/** The PSL document built from a contract, and the settings its PSL source must carry. */
+export interface PslContractDocument {
   readonly document: PslDocumentAst;
   readonly sourceSettings: PslSourceSettings;
 }
 
 /**
- * Capability declaring that a family can print a contract as a PSL document
- * AST. Consumed by `prisma contract print`.
+ * Capability declaring that a family can build the PSL document AST of a contract. `contract` must be one the family's contract serializer accepted. `prisma contract print` renders the document as text.
  */
-export interface PslContractPrintCapable<TContract = Contract> {
-  printPslContract(contract: TContract): PrintedPslContract;
+export interface PslContractBuildCapable<TContract = Contract> {
+  buildPslContract(contract: TContract): PslContractDocument;
 }
 
-export function hasPslContractPrint<TFamilyId extends string, TSchemaIR>(
+export function hasPslContractBuild<TFamilyId extends string, TSchemaIR>(
   instance: ControlFamilyInstance<TFamilyId, TSchemaIR>,
-): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractPrintCapable {
+): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractBuildCapable {
   return (
-    'printPslContract' in instance &&
-    typeof Reflect.get(instance, 'printPslContract') === 'function'
+    'buildPslContract' in instance &&
+    typeof Reflect.get(instance, 'buildPslContract') === 'function'
   );
 }
 

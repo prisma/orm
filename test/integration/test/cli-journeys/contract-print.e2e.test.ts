@@ -119,7 +119,7 @@ function setupPrisma7Project(
 function onPrintedContract(ctx: JourneyContext, connectionString: string): JourneyContext {
   return {
     ...ctx,
-    configPath: writeConfig(ctx.testDir, 'prisma.config.prisma7-printed.ts', connectionString),
+    configPath: writeConfig(ctx.testDir, 'prisma.config.printed-contract.ts', connectionString),
   };
 }
 
@@ -249,7 +249,7 @@ withTempDir(({ createTempDir }) => {
       expect(print.exitCode, output(print)).toBe(0);
       expect(print.presented?.data).toMatchObject({
         psl: { path: 'prisma/contract.prisma' },
-        defaultControlPolicy: 'external',
+        sourceSettings: { defaultControlPolicy: 'external' },
       });
       expect(print.events).toContainEqual(
         expect.objectContaining({

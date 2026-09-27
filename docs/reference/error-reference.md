@@ -283,15 +283,15 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE
 
-`prisma contract print --output` was asked to write over a file the project needs: `prisma.config.ts` in the invocation directory, or one of the files `contract emit` writes (the JSON `contract.output` names, and the `.d.ts` beside it). Writing there would put PSL where the CLI reads its config when `--config` names no other file, or the next `contract emit` would write over the printed PSL. The check compares the files the paths name: a path through a symbolic link, or one that differs only in case on a volume that ignores case, counts as the same file. Raised before the source is read, so nothing is written. Pick another `--output` path. Payload: `output` and `file`, both relative to the invocation directory.
+`prisma contract print --output` was asked to write over a file the project needs: the `prisma.config.ts` in the directory of the config that defines the `orm` section, or one of the files `contract emit` writes (the JSON `contract.output` names, and the `.d.ts` beside it). Writing there would put PSL where the CLI reads its config when `--config` names no other file, or the next `contract emit` would write over the printed PSL. The check compares the files the paths name: a path through a symbolic link, or one that differs only in case on a volume that ignores case, counts as the same file. Raised before the source is read, so nothing is written. Pick another `--output` path. Payload: `output` and `file`, both relative to the invocation directory.
 
 ### CONTRACT.PRINT_OUTPUT_IS_SOURCE
 
-`prisma contract print --output` was asked to write over a file it reads: the resolved `--output` path is one of the contract source's inputs, or sits inside a directory of source files. Writing there would destroy the source the printed contract is made from. Pick another `--output` path, outside the files the config names. Raised before the source is read, so nothing is written and the source file is untouched. Payload: `output` and `source`, both relative to the invocation directory.
+`prisma contract print --output` was asked to write over a file it reads: the resolved `--output` path is one of the contract source's inputs, or sits inside a directory of source files. Writing there would destroy the source the printed contract is made from. The same code is raised when the path names a new file that a glob input of the source would match once written, because the next `contract emit` would read the printed file together with the source files; `source` is then the glob. Pick another `--output` path, outside the files the config names. Raised before the source is read, so nothing is written and the source file is untouched. Payload: `output` and `source`, both relative to the invocation directory.
 
 ### CONTRACT.PRINT_UNSUPPORTED
 
-`contract print` cannot write the loaded contract as Prisma 8 PSL that reads back as the same contract, so it writes nothing. The message names what it stopped on. Raised when the configured family cannot print a contract (no meta), or when the target's descriptor has no `printPslContract` hook (meta: `targetId`). The Postgres printer raises it in each case below; each case is one function in its `psl-print/refusals.ts`, in this order.
+`contract print` cannot write the loaded contract as Prisma 8 PSL that reads back as the same contract, so it writes nothing. The message names what it stopped on. Raised when the configured family cannot print a contract (no meta), or when the target's descriptor has no `buildPslContract` hook (meta: `targetId`). The Postgres printer raises it in each case below; each case is one function in its `psl-print/refusals.ts`, in this order. Every case is a contract that passes validation. The printer takes a validated contract and does not check its structure again.
 
 - Column types and defaults:
   - no PSL type in the configured stack produces a column's codec, native type and type parameters, including a column that has no value for an argument its type constructor requires. Add the extension that contributes the type to the config (meta: `coordinate`, `nativeType`, `codecId`);
@@ -311,11 +311,11 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a value-object field uses a codec that no Postgres codec in the configured stack names a native type for (meta: `coordinate`, `codecId`);
   - a value-object field uses a codec that names a native type only from type parameters (meta: `coordinate`, `codecId`);
   - a field is stored in no column (meta: `namespaceId`, `modelName`, `field`);
-  - a model's storage names a field or column that does not exist (meta: `namespaceId`, `modelName`, `field`);
+  - a model stores a column under a field name the model does not declare (meta: `namespaceId`, `modelName`, `field`);
+  - a column is typed by a named type the contract does not declare, or its native type or codec is not the named type's (meta: `coordinate`, `typeRef`);
   - a column has its own control policy (meta: `coordinate`, `control`);
   - a table has no model stored in it (meta: `namespaceId`, `table`), or a column is stored by no field, other than the primary key columns that link a multi-table variant to its base (meta: `namespaceId`, `table`, `column`).
 - Models:
-  - a model's domain namespace is not the namespace of its table (meta: `namespaceId`, `modelName`, `tableNamespaceId`);
   - a model has an owner (meta: `namespaceId`, `modelName`, `owner`);
   - a multi-table variant is linked to its base other than through the base's primary key columns as its unnamed primary key and an unnamed foreign key that cascades on delete (meta: `namespaceId`, `modelName`);
   - one model name is declared in more than one namespace (meta: `modelName`, `namespaces`);
@@ -329,7 +329,9 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a to-one relation has no foreign key behind it (meta: `model`, `field`);
   - a foreign key has no relation that travels it (meta: `namespaceId`, `table`, `columns`);
   - a relation targets a model in another contract space, which the printer does not write yet (meta: `model`, `field`, `space`);
-  - a many-to-many relation goes through a table whose model has no relation back to the relation's model (meta: `model`, `field`).
+  - a many-to-many relation goes through a table whose model has no relation back to the relation's model (meta: `model`, `field`);
+  - a one-to-many or one-to-one relation has no foreign key of its own, and the model it targets has no relation back that holds the foreign key (meta: `model`, `field`);
+  - a relation names no fields to join on (meta: `model`, `field`).
 - Enums and value sets:
   - a value set is not the value set of an enum or native enum of that name holding exactly its values, or an enum has no value set holding its members (meta: `namespaceId`, `name`);
   - an enum and a native enum would derive the same value set (meta: `namespaceId`, `name`);
@@ -337,6 +339,7 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a native enum has its own control policy (meta: `namespaceId`, `typeName`, `control`).
 - Namespaces, meta and roots:
   - a storage or domain namespace holds nothing PSL writes, or the contract lacks a namespace the PSL source would create, such as the default namespace (meta: `plane`, `namespaceId`);
+  - a namespace is named `unbound` and is not the late-binding namespace, which PSL writes as `namespace unbound` (meta: `namespaceId`);
   - the contract has top-level `meta` entries (meta: `keys`);
   - the contract has roots other than one per model that is not a variant, keyed by its table name (meta: `root`).
 - Row-level security:
@@ -348,9 +351,9 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a row-level security setting or role is filed under a key the PSL source would not file it under (meta: `namespaceId`, `kind`, `name`);
   - a row-level security setting, role or policy records a namespace other than the one it is stored in (meta: `namespaceId`, `kind`, `name`).
 - Names and storage entries:
-  - a name PSL writes as an identifier is not one, or is `__proto__`, which the PSL source loses when it reads it: a model, field, value object, enum, enum member, native enum, named type, policy, role or index option key. `NaN` and `Infinity` are number words, not identifiers (meta: `kind`, `name`);
-  - a namespace holds a storage entity kind other than tables, value sets, native enums, row-level security settings, policies and roles (meta: `namespaceId`, `kind`, `names`);
-  - a storage entry is not an entity of its kind (meta: `namespaceId`, `kind`, `name`).
+  - a table or column is named `__proto__`, which the PSL source loses when it reads the name from `@@map` or `@map` (meta: `kind`, `name`);
+  - a name PSL writes as an identifier is not one, or is `__proto__`: a namespace, model, field, value object, enum, enum member, native enum, named type, policy, role or index option key. `NaN` and `Infinity` are number words, not identifiers (meta: `kind`, `name`);
+  - a namespace holds a storage entity kind other than tables, value sets, native enums, row-level security settings, policies and roles (meta: `namespaceId`, `kind`, `names`).
 
 ### CONTRACT.DATA_TYPE_DUPLICATE
 
@@ -483,8 +486,6 @@ An emitted model type name, formed as `<namespace>_<Model>`, is not a TypeScript
 ### CONTRACT.MODEL_UNKNOWN
 
 A relation, foreign key, junction (`through`) reference, or context declaration names a model that is not declared in the contract. Raised while lowering/building a SQL contract. Payload: `sourceModel`, `relationName`, `targetModel`.
-
-Also raised by `contract print` when the loaded contract names a model or table it does not declare: a model is stored in a table the storage does not declare (payload: `namespaceId`, `modelName`, `table`), a variant's base is not declared or does not list it as a variant (payload: `namespaceId`, `modelName`), or a relation targets a model the contract does not declare (payload: `model`, `field`, `target`). `contract print` loads the contract from its source on every run, so the source produced the broken contract: fix the model if the source is a TypeScript contract, and otherwise report the bug to the source that produced it.
 
 ### CONTRACT.MODEL_VARIANT_MISSING
 

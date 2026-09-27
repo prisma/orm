@@ -1,10 +1,11 @@
 import type { Contract, ContractEnum, ExecutionMutationDefault } from '@internal/contract/types';
-import type { SqlPslPrintContext } from '@internal/family-sql/control';
-import type { PslTypeMap } from '@internal/family-sql/psl-ast';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import type { PslField, PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import type { SqlStorage, StorageColumn } from '@internal/sql-contract/types';
-import { pslFieldMapName } from '@internal/sql-contract-psl/resolution';
+import { pslFieldMapName } from '@internal/sql-contract-psl/map-names';
 import { escapePslString } from '@internal/sql-relational-core/ast';
+import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
 import {
@@ -13,7 +14,7 @@ import {
   namedArg,
   positionalArg,
   SYNTHETIC_SPAN,
-} from '../psl-ast/psl-literals';
+} from '../psl-build/psl-literals';
 import { buildColumnDefault } from './column-defaults';
 import { buildColumnType } from './column-types';
 import type { ModelWithTable, VariantInfo } from './contract-model-index';
@@ -22,11 +23,13 @@ import type { NativeEnumEmission } from './enum-blocks';
 import { buildExecutionDefault, temporalPresetArguments } from './generated-values';
 import {
   refuseColumnControl,
+  refuseColumnDifferingFromNamedType,
   refuseFieldColumnMismatch,
   refuseFieldsWithoutColumn,
   refuseGeneratorWithDatabaseDefault,
-  refuseStorageWithoutFieldOrColumn,
+  refuseStorageOfUndeclaredField,
   refuseUnwritableFieldShape,
+  refuseUnwritableMappedName,
   refuseUnwritableName,
 } from './refusals';
 
@@ -53,7 +56,7 @@ function scalarFieldAttributes(input: {
   readonly isEnum: boolean;
   readonly domainEnum: ContractEnum | undefined;
   readonly generatedDefault: PslFieldAttribute | undefined;
-  readonly context: SqlPslPrintContext;
+  readonly context: SqlPslBuildContext;
 }): readonly PslFieldAttribute[] {
   const attributes: PslFieldAttribute[] = [];
   if (input.isSingleColumnId) {
@@ -102,10 +105,11 @@ export function buildScalarFields(input: {
   readonly enums: NativeEnumEmission;
   readonly domainEnums: Readonly<Record<string, ContractEnum>>;
   readonly typeMap: PslTypeMap;
-  readonly context: SqlPslPrintContext;
+  readonly context: SqlPslBuildContext;
   readonly executionDefaults: ReadonlyMap<string, ExecutionMutationDefault>;
   readonly writtenExecutionDefaults: Set<ExecutionMutationDefault>;
   readonly defaultDomainEnumNames: ReadonlySet<string>;
+  readonly namedTypes: NonNullable<SqlStorage['types']>;
 }): readonly PslField[] {
   const { entry, variant, enums, domainEnums, typeMap, context, executionDefaults } = input;
   const primaryKeyColumns = variant === undefined ? (entry.table.primaryKey?.columns ?? []) : [];
@@ -118,10 +122,10 @@ export function buildScalarFields(input: {
     const coordinate = `"${entry.namespaceId}"."${entry.tableName}"."${columnName}"`;
     const column = entry.table.columns[columnName];
     const field = entry.model.fields[fieldName];
-    if (column === undefined || field === undefined) {
-      refuseStorageWithoutFieldOrColumn({ entry, fieldName, coordinate });
-    }
+    assertDefined(column, `column ${coordinate} is not declared by its table`);
+    if (field === undefined) refuseStorageOfUndeclaredField({ entry, fieldName, coordinate });
     refuseUnwritableName('field', fieldName);
+    refuseUnwritableMappedName('column', columnName);
     refuseUnwritableFieldShape(field, coordinate);
     refuseColumnControl(column, coordinate);
     refuseFieldColumnMismatch({
@@ -132,6 +136,14 @@ export function buildScalarFields(input: {
       singleTableVariant: variant?.singleTable === true,
       domainEnumNames: input.defaultDomainEnumNames,
     });
+    if (column.typeRef !== undefined) {
+      refuseColumnDifferingFromNamedType({
+        column,
+        typeRef: column.typeRef,
+        namedType: input.namedTypes[column.typeRef],
+        coordinate,
+      });
+    }
     const columnType =
       column.typeRef !== undefined
         ? { typeName: column.typeRef }

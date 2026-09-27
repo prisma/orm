@@ -4,7 +4,7 @@ import type {
   ControlStack,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
-import { createControlStack, hasPslContractPrint } from '@internal/framework-components/control';
+import { createControlStack, hasPslContractBuild } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it, vi } from 'vitest';
@@ -12,7 +12,7 @@ import { createSqlFamilyInstance } from '../src/core/control-instance';
 
 const DOCUMENT: PslDocumentAst = {
   kind: 'document',
-  sourceId: 'printed',
+  sourceId: 'built',
   namespaces: [],
   span: {
     start: { offset: 0, line: 1, column: 1 },
@@ -20,8 +20,8 @@ const DOCUMENT: PslDocumentAst = {
   },
 };
 
-function stackWithPrinter(
-  printPslContract: ((contract: Contract<SqlStorage>) => PslDocumentAst) | undefined,
+function stackWithBuilder(
+  buildPslContract: ((contract: Contract<SqlStorage>) => PslDocumentAst) | undefined,
 ): ControlStack<'sql', 'postgres'> {
   return createControlStack({
     family: {
@@ -38,7 +38,7 @@ function stackWithPrinter(
       familyId: 'sql',
       targetId: 'postgres',
       create: () => ({ familyId: 'sql', targetId: 'postgres' }),
-      ...(printPslContract === undefined ? {} : { printPslContract }),
+      ...(buildPslContract === undefined ? {} : { buildPslContract }),
     } as ControlTargetDescriptor<'sql', 'postgres'>,
     adapter: {
       kind: 'adapter',
@@ -61,24 +61,24 @@ function contractWith(defaultControlPolicy?: ControlPolicy): Contract<SqlStorage
   } as unknown as Contract<SqlStorage>;
 }
 
-describe('sql family printPslContract', () => {
+describe('sql family buildPslContract', () => {
   it("returns the target's document and no source settings for a contract without a default control policy", () => {
-    const printer = vi.fn(() => DOCUMENT);
-    const instance = createSqlFamilyInstance(stackWithPrinter(printer));
+    const builder = vi.fn(() => DOCUMENT);
+    const instance = createSqlFamilyInstance(stackWithBuilder(builder));
     const contract = contractWith();
 
-    expect(instance.printPslContract(contract)).toEqual({ document: DOCUMENT, sourceSettings: {} });
-    expect(printer).toHaveBeenCalledWith(contract, expect.anything());
+    expect(instance.buildPslContract(contract)).toEqual({ document: DOCUMENT, sourceSettings: {} });
+    expect(builder).toHaveBeenCalledWith(contract, expect.anything());
   });
 
   it('passes the target hook the stack parts the PSL source reads with', () => {
-    const printer = vi.fn(() => DOCUMENT);
-    const stack = stackWithPrinter(printer);
+    const builder = vi.fn(() => DOCUMENT);
+    const stack = stackWithBuilder(builder);
     const contract = contractWith();
 
-    createSqlFamilyInstance(stack).printPslContract(contract);
+    createSqlFamilyInstance(stack).buildPslContract(contract);
 
-    expect(printer).toHaveBeenCalledWith(contract, {
+    expect(builder).toHaveBeenCalledWith(contract, {
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
       dataTypeLookup: stack.dataTypeLookup,
@@ -86,22 +86,22 @@ describe('sql family printPslContract', () => {
   });
 
   it('returns the default control policy as a setting the PSL source must carry', () => {
-    const instance = createSqlFamilyInstance(stackWithPrinter(() => DOCUMENT));
+    const instance = createSqlFamilyInstance(stackWithBuilder(() => DOCUMENT));
 
-    expect(instance.printPslContract(contractWith('external'))).toEqual({
+    expect(instance.buildPslContract(contractWith('external'))).toEqual({
       document: DOCUMENT,
       sourceSettings: { defaultControlPolicy: 'external' },
     });
   });
 
-  it('passes the capability check contract print makes, even when the target cannot print', () => {
-    expect(hasPslContractPrint(createSqlFamilyInstance(stackWithPrinter(undefined)))).toBe(true);
+  it('passes the capability check contract print makes, even when the target has no hook', () => {
+    expect(hasPslContractBuild(createSqlFamilyInstance(stackWithBuilder(undefined)))).toBe(true);
   });
 
-  it('raises CONTRACT.PRINT_UNSUPPORTED when the target descriptor has no printPslContract', () => {
-    const instance = createSqlFamilyInstance(stackWithPrinter(undefined));
+  it('raises CONTRACT.PRINT_UNSUPPORTED when the target descriptor has no buildPslContract', () => {
+    const instance = createSqlFamilyInstance(stackWithBuilder(undefined));
 
-    expect(() => instance.printPslContract(contractWith())).toThrow(
+    expect(() => instance.buildPslContract(contractWith())).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.PRINT_UNSUPPORTED',
         meta: { targetId: 'postgres' },

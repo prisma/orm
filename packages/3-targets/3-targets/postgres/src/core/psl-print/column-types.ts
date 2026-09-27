@@ -1,4 +1,4 @@
-import type { PslTypeMap } from '@internal/family-sql/psl-ast';
+import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import {
   type AuthoringTypeConstructorCall,
   type AuthoringTypeNamespace,
@@ -7,7 +7,7 @@ import {
 import type { PslTypeConstructorCall } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { PG_ENUM_CODEC_ID } from '../codec-ids';
-import { positionalArg, SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { positionalArg, SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { refuseColumnWithoutPslType, refuseUnwritableTypeArgument } from './refusals';
 
 /** The PSL type position of one column: a bare name, or a type-constructor call. */

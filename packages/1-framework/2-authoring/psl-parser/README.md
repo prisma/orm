@@ -51,6 +51,7 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
   over it, building the ref-resolution context from the symbol table.
 - `parseQuotedStringLiteral` / `getPositionalArgument` in `src/attribute-helpers.ts`.
 - `isPslIdentifier(text)` in `src/tokenizer.ts`: whether the tokenizer reads the text as one identifier. Code that writes PSL checks a name with it before writing the name where PSL reads an identifier.
+- `NAME_THE_PSL_SOURCE_LOSES` in `src/name-the-psl-source-loses.ts`: the name `__proto__`, which is lost when a PSL file is read: the parser keeps block members, and the PSL contract sources keep other names, as keys of plain objects. Code that writes PSL refuses this name wherever a PSL source reads a name, `@map` and `@@map` included.
 - Rules both PSL readers apply, at `@internal/psl-parser/interpret`: `claimedBlockKeywords` and `unsupportedBlockDiagnostic` (`src/unclaimed-blocks.ts`) report a generic block whose keyword no composed descriptor claims; `enumMemberAttributeDiagnostics` (`src/enum-member-attributes.ts`) reports an attribute on an enum member; `src/relation-backrelations.ts` holds the back-relation pairing rules.
 - Legacy AST/span types live in `@internal/framework-components/psl-ast` and are re-exported from this package's root entry. The attribute kit's `PslDiagnostic` lives in `src/diagnostic.ts`; framework contribution diagnostics retain their separate external contract.
 - Subpath exports:

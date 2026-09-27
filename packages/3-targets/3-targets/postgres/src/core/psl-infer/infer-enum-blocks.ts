@@ -1,7 +1,7 @@
 import { toEnumName } from '@internal/family-sql/psl-infer';
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
-import { buildNativeEnumBlock } from '../psl-ast/native-enum-block';
-import { createUniqueFieldName } from '../psl-ast/unique-name';
+import { buildNativeEnumBlock } from '../psl-build/native-enum-block';
+import { createUniqueFieldName } from '../psl-build/unique-name';
 import { buildTopLevelNameMap, type TopLevelNameResult } from './infer-names';
 
 export const PSL_SCALAR_TYPE_NAMES = new Set([

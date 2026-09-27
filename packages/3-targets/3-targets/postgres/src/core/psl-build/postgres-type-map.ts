@@ -1,4 +1,4 @@
-import type { PslTypeMap, PslTypeResolution } from '@internal/family-sql/psl-ast';
+import type { PslTypeMap, PslTypeResolution } from '@internal/family-sql/psl-build';
 
 const POSTGRES_TO_PSL: Record<string, string> = {
   text: 'String',
@@ -53,11 +53,11 @@ const PARAMETERIZED_NATIVE_TYPES: Record<string, string> = {
 };
 
 /**
- * Every PSL type name this map prints for a column whose native type it recognises. A column's
+ * Every PSL type name this map writes for a column whose native type it recognises. A column's
  * literal default has to be written in the form the codec bound to its type name reads back, so
  * `infer-default-codec.ts` names a codec for each of these.
  */
-export const PRINTED_PSL_TYPE_NAMES: ReadonlySet<string> = new Set([
+export const INFERRED_PSL_TYPE_NAMES: ReadonlySet<string> = new Set([
   ...Object.values(POSTGRES_TO_PSL),
   ...Object.values(PRESERVED_NATIVE_TYPES),
   ...Object.values(PARAMETERIZED_NATIVE_TYPES),

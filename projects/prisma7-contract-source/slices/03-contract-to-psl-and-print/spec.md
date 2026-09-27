@@ -28,9 +28,10 @@ Output begins:
 | No `--output` | Print the PSL; write no file. |
 | `--output` file exists | Warn and overwrite, as `contract infer` does. |
 | `--output` path is a source file the config reads | Exit 2 with `CONTRACT.PRINT_OUTPUT_IS_SOURCE`; nothing is written. |
+| `--output` path names a new file that a glob input of the source would match | Exit 2 with `CONTRACT.PRINT_OUTPUT_IS_SOURCE`; nothing is written. |
 | `--output` path is the config file or an emitted contract file | Exit 2 with `CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE`; nothing is written. |
 | Part of the contract PSL cannot carry | Exit 2 with `CONTRACT.PRINT_UNSUPPORTED` naming it; nothing is written. Two Prisma 7 fixtures meet this: one model name in two namespaces. |
-| The contract has a default control policy | The PSL file cannot carry it; the result names it so the config sets it on the PSL source. |
+| The contract has a default control policy | The PSL file cannot carry it; the result names it, in `sourceSettings` in the JSON result, so the config sets it on the PSL source. |
 
 ## Slice Definition of Done
 

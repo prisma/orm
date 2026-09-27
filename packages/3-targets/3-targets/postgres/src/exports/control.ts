@@ -44,7 +44,7 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
       PostgresDatabaseSchemaNode.assert(schema);
       return inferPostgresPslContract(schema, describedContracts);
     },
-    printPslContract(contract, context) {
+    buildPslContract(contract, context) {
       return buildPostgresPslContract(contract, context);
     },
     diffSchema(input) {

@@ -1,9 +1,14 @@
 import { existsSync } from 'node:fs';
-import { expandContractInputs, ormConfigSection } from '@internal/config-loader';
+import { defaultContractOutputPath } from '@internal/config/config-types';
+import {
+  expandContractInputs,
+  globContractInputMatching,
+  ormConfigSection,
+} from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import type { CliStructuredError } from '@internal/errors/control';
+import type { PslSourceSettings } from '@internal/framework-components/control';
 import { printPsl as printPslFromAst } from '@internal/psl-printer';
-import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
@@ -20,7 +25,7 @@ import { publishTextArtifact } from '../../utils/publish-text-artifact';
 import { defineOrmCommand } from '../define-command';
 import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
-import { emittedJsonPathFor, filePathKey } from './paths';
+import { filePathKey } from './paths';
 
 interface PrintDocument {
   readonly ok: true;
@@ -30,11 +35,21 @@ interface PrintDocument {
   readonly psl: { readonly path: string } | { readonly text: string };
   readonly source: readonly string[];
   /**
-   * The contract's default control policy. A PSL file cannot carry it; the
-   * config sets it on the PSL source, or the emitted contract loses it.
+   * What a PSL file cannot carry. The config sets each on the PSL source, or
+   * the emitted contract loses it.
    */
-  readonly defaultControlPolicy?: string;
+  readonly sourceSettings: PslSourceSettings;
   readonly timings: { readonly total: number };
+}
+
+/**
+ * What the next step tells the user to put in the config. Every path is
+ * relative to the directory of the config, which is what the config resolves
+ * its own paths against.
+ */
+interface ConfigSwitch {
+  readonly contractPath: string;
+  readonly emittedFilesMove: EmittedFilesMove | undefined;
 }
 
 /** The emitted files `contract emit` writes now, and after the config switches to the printed file. */
@@ -51,11 +66,11 @@ function sourceSettingsClause(policy: string | undefined): string {
 
 function switchToPrintedActions(
   document: PrintDocument,
-  emittedFilesMove: EmittedFilesMove | undefined,
+  configSwitch: ConfigSwitch | undefined,
 ): readonly NextAction[] {
-  const policyClause = sourceSettingsClause(document.defaultControlPolicy);
+  const policyClause = sourceSettingsClause(document.sourceSettings.defaultControlPolicy);
   const emit = runCommandAction('Emit the printed contract', '{bin} contract emit');
-  if (!('path' in document.psl)) {
+  if (configSwitch === undefined) {
     return [
       chooseAction(
         `Write the PSL to a file with --output <path>, then point contract in prisma.config.ts at that file${policyClause}`,
@@ -63,7 +78,7 @@ function switchToPrintedActions(
       emit,
     ];
   }
-  const path = document.psl.path;
+  const { contractPath: path, emittedFilesMove } = configSwitch;
   return [
     chooseAction(`Point contract in prisma.config.ts at ${path}${policyClause}`),
     ...(emittedFilesMove === undefined
@@ -88,11 +103,11 @@ function linesOf(text: string): readonly string[] {
 
 function printPresentations(
   document: PrintDocument,
-  emittedFilesMove: EmittedFilesMove | undefined,
+  configSwitch: ConfigSwitch | undefined,
 ): Presentations {
   return {
     stdout: () => ('text' in document.psl ? linesOf(document.psl.text) : []),
-    next: () => switchToPrintedActions(document, emittedFilesMove),
+    next: () => switchToPrintedActions(document, configSwitch),
     human: (): readonly Block[] =>
       'path' in document.psl
         ? [
@@ -163,6 +178,22 @@ async function outputPathRefusal(inputs: {
     }
   }
 
+  const matchingGlob =
+    globContractInputMatching(inputs.sourceInputs, inputs.outputPath) ??
+    globContractInputMatching(inputs.sourceInputs, outputKey);
+  if (matchingGlob !== undefined) {
+    const source = relative(cwd, matchingGlob);
+    return errorRuntime(
+      'CONTRACT.PRINT_OUTPUT_IS_SOURCE',
+      'contract print would write a file its own contract source reads',
+      {
+        why: `The contract source reads every file that matches ${source}. Once written, ${output} would match, so contract emit would read the printed file together with the source files.`,
+        fix: 'Pick another --output path, one the source inputs in the config do not match.',
+        meta: { output, source },
+      },
+    );
+  }
+
   const { configPath } = inputs;
   if (await isSameFile(outputKey, configPath)) {
     const file = relative(cwd, configPath);
@@ -199,7 +230,7 @@ async function outputPathRefusal(inputs: {
 }
 
 function emittedFilesMoveFor(inputs: {
-  readonly cwd: string;
+  readonly configDir: string;
   readonly outputPath: string;
   readonly emittedJsonPath: string | undefined;
 }): EmittedFilesMove | undefined {
@@ -207,16 +238,19 @@ function emittedFilesMoveFor(inputs: {
     return undefined;
   }
   const before = getEmittedArtifactPaths(inputs.emittedJsonPath);
-  const after = getEmittedArtifactPaths(emittedJsonPathFor(inputs.outputPath));
+  const after = getEmittedArtifactPaths(defaultContractOutputPath(inputs.outputPath));
   if (after.jsonPath === before.jsonPath) {
     return undefined;
   }
   return {
     before: {
-      json: relative(inputs.cwd, before.jsonPath),
-      dts: relative(inputs.cwd, before.dtsPath),
+      json: relative(inputs.configDir, before.jsonPath),
+      dts: relative(inputs.configDir, before.dtsPath),
     },
-    after: { json: relative(inputs.cwd, after.jsonPath), dts: relative(inputs.cwd, after.dtsPath) },
+    after: {
+      json: relative(inputs.configDir, after.jsonPath),
+      dts: relative(inputs.configDir, after.dtsPath),
+    },
   };
 }
 
@@ -236,7 +270,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
         'with a warning.',
       examples: [
         'contract print',
-        'contract print --format human > ./src/prisma/contract.prisma',
+        'contract print --format human > printed.prisma',
         'contract print --output ./src/prisma/contract.prisma',
         'contract print --json',
       ],
@@ -267,6 +301,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
       const emittedJsonPath =
         contractConfig.output === undefined ? undefined : resolve(ctx.cwd, contractConfig.output);
 
+      const configDir = baseDirFor(ctx.config);
       const outputPath =
         args.flags.output === undefined ? undefined : resolve(ctx.cwd, args.flags.output);
       if (outputPath !== undefined) {
@@ -274,7 +309,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
           cwd: ctx.cwd,
           outputPath,
           sourceInputs,
-          configPath: resolve(baseDirFor(ctx.config), 'prisma.config.ts'),
+          configPath: resolve(configDir, 'prisma.config.ts'),
           emittedJsonPath,
         });
         if (refusal !== undefined) {
@@ -338,7 +373,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
             ? { text: printed.psl }
             : { path: relative(ctx.cwd, outputPath) },
         source: sourcePaths,
-        ...ifDefined('defaultControlPolicy', defaultControlPolicy),
+        sourceSettings: printed.sourceSettings,
         timings: { total: Date.now() - startedAt },
       };
 
@@ -349,7 +384,10 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
             document,
             outputPath === undefined
               ? undefined
-              : emittedFilesMoveFor({ cwd: ctx.cwd, outputPath, emittedJsonPath }),
+              : {
+                  contractPath: relative(configDir, outputPath),
+                  emittedFilesMove: emittedFilesMoveFor({ configDir, outputPath, emittedJsonPath }),
+                },
           ),
         ),
       );

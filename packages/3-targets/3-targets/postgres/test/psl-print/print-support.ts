@@ -12,7 +12,7 @@ import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
-import { testPrintContext } from './print-context';
+import { testBuildContext } from './build-context';
 
 export const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
 export const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
@@ -122,7 +122,7 @@ export function buildModels(input: {
   const contract = new PostgresContractSerializer().deserializeContract(json);
   const ast = buildPostgresPslContract(
     blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
-    testPrintContext(),
+    testBuildContext(),
   );
   return ast.namespaces.flatMap((namespace) => namespace.models);
 }

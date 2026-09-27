@@ -1,10 +1,10 @@
 import type { ContractField } from '@internal/contract/types';
-import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
-import { extensionCodec, testPrintContext } from './print-context';
+import { extensionCodec, testBuildContext } from './build-context';
 import {
   deserialize,
+  deserializeEdited,
   INT_COLUMN,
   PUBLIC,
   printing,
@@ -118,15 +118,14 @@ describe('parts of the contract no model carries', () => {
   });
 
   it('refuses a contract without the default namespace the PSL source always creates', () => {
-    const contract = deserialize(widgetContract());
-    const { public: _, ...others } = contract.storage.namespaces;
-    const withoutPublic = blindCast<typeof contract, 'a contract missing its default namespace'>({
-      ...contract,
-      domain: { namespaces: {} },
-      roots: {},
-      storage: { ...contract.storage, namespaces: others },
+    const empty = deserializeEdited(widgetContract(), (json) => {
+      const contract = JSON.parse(json);
+      contract.roots = {};
+      contract.domain.namespaces = {};
+      contract.storage.namespaces = {};
+      return JSON.stringify(contract);
     });
-    expect(printing(withoutPublic)).toThrow(refusal({ plane: 'storage', namespaceId: 'public' }));
+    expect(printing(empty)).toThrow(refusal({ plane: 'storage', namespaceId: 'public' }));
   });
 
   it('refuses top-level meta entries', () => {
@@ -155,17 +154,6 @@ describe('parts of the contract no model carries', () => {
       ),
     ).toThrow(refusal({ namespaceId: 'public', kind: 'sequence', names: ['counter'] }));
   });
-
-  it.each(['rls', 'policy', 'role', 'native_enum'])(
-    'refuses a %s entry that is not an entity of its kind',
-    (kind) => {
-      expect(
-        printing(
-          withRawEntries(deserialize(widgetContract()), 'public', { [kind]: { odd: { kind } } }),
-        ),
-      ).toThrow(refusal({ namespaceId: 'public', kind, name: 'odd' }));
-    },
-  );
 });
 
 describe('row-level security', () => {
@@ -327,7 +315,7 @@ describe('value objects', () => {
   });
 
   it('writes a value-object field typed by a codec only the stack knows, as the type constructor that produces it', () => {
-    const context = testPrintContext({
+    const context = testBuildContext({
       codecs: [extensionCodec],
       types: {
         ext: {

@@ -19,9 +19,9 @@ import type {
   OnControlProgress,
 } from '../types';
 import {
+  loadContractSourceWithStack,
   requireContractConfig,
   requireSourceProvider,
-  resolveContractSource,
 } from './load-contract-source';
 import { validateLoadedContract } from './validate-loaded-contract';
 
@@ -107,7 +107,7 @@ export async function executeContractEmit(
     let contract: Contract;
     try {
       stack = createControlStack(config);
-      const loaded = await resolveContractSource({
+      const loaded = await loadContractSourceWithStack({
         stack,
         source: contractConfig.source,
         signal,

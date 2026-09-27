@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
-import { expandContractInputs } from '../src/expand-contract-inputs';
+import { expandContractInputs, globContractInputMatching } from '../src/expand-contract-inputs';
 
 describe('expandContractInputs', () => {
   const tempDirs: string[] = [];
@@ -102,5 +102,31 @@ describe('expandContractInputs', () => {
     const result = await expandContractInputs([join(dir, 'a/*.prisma'), join(dir, 'b/*.prisma')]);
 
     expect(result).toEqual([first, second]);
+  });
+});
+
+describe('globContractInputMatching', () => {
+  it('returns the glob input a path that does not exist yet would match', () => {
+    expect(
+      globContractInputMatching(
+        ['/app/prisma/schema.prisma', '/app/prisma/**/*.prisma'],
+        '/app/prisma/contract.prisma',
+      ),
+    ).toBe('/app/prisma/**/*.prisma');
+  });
+
+  it('returns nothing for a path no glob input matches', () => {
+    expect(
+      globContractInputMatching(['/app/prisma/**/*.prisma'], '/app/printed/contract.prisma'),
+    ).toBeUndefined();
+    expect(
+      globContractInputMatching(['/app/prisma/**/*.prisma'], '/app/prisma/contract.json'),
+    ).toBeUndefined();
+  });
+
+  it('does not treat an input with no wildcard as a glob', () => {
+    expect(
+      globContractInputMatching(['/app/prisma/contract.prisma'], '/app/prisma/contract.prisma'),
+    ).toBeUndefined();
   });
 });

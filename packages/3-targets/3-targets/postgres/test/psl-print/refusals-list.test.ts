@@ -21,7 +21,7 @@ function documentedCases(): readonly string[] {
 }
 
 describe('the refusals of contract print', () => {
-  it('has one function for each case the error reference lists', () => {
+  it('has as many refusal functions as the error reference lists cases', () => {
     const functions = Object.entries(refusals).filter(
       ([name, value]) => name.startsWith('refuse') && typeof value === 'function',
     );

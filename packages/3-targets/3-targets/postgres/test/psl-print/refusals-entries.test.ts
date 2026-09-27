@@ -1,20 +1,5 @@
-import type { Contract } from '@internal/contract/types';
-import { asNamespaceId } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
-import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import {
-  deserialize,
-  INT_FIELD,
-  PUBLIC,
-  printing,
-  printingWidget,
-  refusal,
-  TEXT_COLUMN,
-  TEXT_FIELD,
-  widgetContract,
-  withRawEntries,
-} from './refusal-support';
+import { INT_FIELD, printingWidget, refusal, TEXT_COLUMN, TEXT_FIELD } from './refusal-support';
 
 describe('names PSL writes as identifiers', () => {
   it('refuses a value object name that is not an identifier', () => {
@@ -199,98 +184,19 @@ describe('row-level security entries the PSL source would file differently', () 
   });
 });
 
-describe('storage a model names but the contract does not declare', () => {
-  function withWidget(patch: (widget: Record<string, unknown>) => Record<string, unknown>) {
-    const contract = deserialize(
-      widgetContract({ columns: { name: TEXT_COLUMN }, fields: { name: TEXT_FIELD } }),
-    );
-    const publicDomain = contract.domain.namespaces['public'];
-    const widget = blindCast<Record<string, unknown>, 'the test widget model'>(
-      publicDomain?.models['Widget'],
-    );
-    return blindCast<Contract<SqlStorage>, 'a contract the validator would reject'>({
-      ...contract,
-      domain: {
-        namespaces: {
-          ...contract.domain.namespaces,
-          public: { ...publicDomain, models: { Widget: patch(widget) } },
-        },
-      },
-    });
-  }
-
+describe('fields and the columns they are stored in', () => {
   it('refuses a field stored in no column', () => {
     expect(
-      printing(
-        withWidget((widget) => ({
-          ...widget,
-          fields: { ...blindCast<object, 'fields'>(widget['fields']), extra: INT_FIELD },
-        })),
-      ),
+      printingWidget({ fields: { extra: INT_FIELD }, storageFields: { id: { column: 'id' } } }),
     ).toThrow(refusal({ namespaceId: 'public', modelName: 'Widget', field: 'extra' }));
   });
 
-  it('refuses a field stored in a column the table does not declare', () => {
+  it('refuses a column stored under a field name the model does not declare', () => {
     expect(
-      printing(
-        withWidget((widget) => ({
-          ...widget,
-          storage: {
-            table: 'Widget',
-            namespaceId: 'public',
-            fields: { id: { column: 'id' }, name: { column: 'missing' } },
-          },
-        })),
-      ),
+      printingWidget({
+        columns: { name: TEXT_COLUMN },
+        storageFields: { id: { column: 'id' }, name: { column: 'name' } },
+      }),
     ).toThrow(refusal({ namespaceId: 'public', modelName: 'Widget', field: 'name' }));
-  });
-
-  it('reports a relation to a model the contract does not declare', () => {
-    expect(
-      printing(
-        withWidget((widget) => ({
-          ...widget,
-          relations: {
-            owner: {
-              to: { namespace: PUBLIC, model: 'Ghost' },
-              cardinality: '1:N',
-              on: { localFields: ['id'], targetFields: ['widgetId'] },
-            },
-          },
-        })),
-      ),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.MODEL_UNKNOWN',
-        meta: { model: 'Widget', field: 'owner', target: 'public.Ghost' },
-      }),
-    );
-  });
-
-  it('reports a variant whose base does not list it', () => {
-    expect(
-      printing(
-        withWidget((widget) => ({
-          ...widget,
-          base: { namespace: asNamespaceId('public'), model: 'Ghost' },
-        })),
-      ),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.MODEL_UNKNOWN',
-        meta: { namespaceId: 'public', modelName: 'Widget' },
-      }),
-    );
-  });
-
-  it('reports a model stored in a table the storage does not declare', () => {
-    expect(
-      printing(withRawEntries(deserialize(widgetContract()), 'public', { table: {} })),
-    ).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.MODEL_UNKNOWN',
-        meta: { namespaceId: 'public', modelName: 'Widget', table: 'Widget' },
-      }),
-    );
   });
 });

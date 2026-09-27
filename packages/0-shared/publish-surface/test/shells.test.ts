@@ -104,6 +104,7 @@ describe('publicShells', () => {
         './contract-psl',
         './contract-psl/attribute-specs',
         './contract-psl/default-table-name',
+        './contract-psl/map-names',
         './contract-psl/provider',
       ],
     );

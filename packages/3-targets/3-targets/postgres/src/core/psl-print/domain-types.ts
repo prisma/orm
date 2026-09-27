@@ -1,6 +1,6 @@
 import type { Contract, ContractField, ScalarFieldType } from '@internal/contract/types';
-import type { SqlPslPrintContext } from '@internal/family-sql/control';
-import type { PslTypeMap } from '@internal/family-sql/psl-ast';
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import type {
   PslCompositeType,
   PslField,
@@ -11,7 +11,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import { StorageColumn } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { isPostgresCodecDescriptor } from '../codec-descriptor';
-import { SYNTHETIC_SPAN } from '../psl-ast/psl-literals';
+import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { buildColumnType, type PslColumnType } from './column-types';
 import {
   refuseUnwritableFieldShape,
@@ -29,7 +29,7 @@ import {
 function nativeTypeOfValueObjectField(
   field: ContractField & { readonly type: ScalarFieldType },
   coordinate: string,
-  context: SqlPslPrintContext,
+  context: SqlPslBuildContext,
 ): string {
   const { codecId } = field.type;
   const descriptor = context.codecLookup.descriptorFor?.(codecId);
@@ -48,7 +48,7 @@ export function buildDomainFieldType(input: {
   readonly field: ContractField;
   readonly coordinate: string;
   readonly typeMap: PslTypeMap;
-  readonly context: SqlPslPrintContext;
+  readonly context: SqlPslBuildContext;
   readonly enumBlockNames: ReadonlyMap<string, string>;
 }): PslColumnType {
   const { field, coordinate } = input;
@@ -77,7 +77,7 @@ export function buildCompositeTypes(input: {
   readonly contract: Contract<SqlStorage>;
   readonly namespaceId: string;
   readonly typeMap: PslTypeMap;
-  readonly context: SqlPslPrintContext;
+  readonly context: SqlPslBuildContext;
   readonly enumBlockNames: ReadonlyMap<string, string>;
 }): readonly PslCompositeType[] {
   refuseValueObjectsOutsideDefaultNamespace(input.contract, input.namespaceId);
@@ -117,7 +117,7 @@ export function buildCompositeTypes(input: {
 export function buildTypesBlock(
   contract: Contract<SqlStorage>,
   typeMap: PslTypeMap,
-  context: SqlPslPrintContext,
+  context: SqlPslBuildContext,
 ): PslTypesBlock | undefined {
   const declarations: PslNamedTypeDeclaration[] = [];
   for (const [name, instance] of Object.entries(contract.storage.types ?? {})) {

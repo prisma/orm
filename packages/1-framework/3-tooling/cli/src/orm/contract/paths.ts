@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
-import { basename, dirname, extname, join, normalize, resolve } from 'pathe';
+import { basename, dirname, join, normalize, resolve } from 'pathe';
 
 /** The file `contract infer` writes when nothing names another. */
 const INFERRED_CONTRACT_FILENAME = 'contract.prisma';
@@ -23,15 +23,6 @@ export function inferredContractPathFor(inputs: {
     return join(dirname(resolve(inputs.cwd, contractOutput)), INFERRED_CONTRACT_FILENAME);
   }
   return join(inputs.cwd, INFERRED_CONTRACT_FILENAME);
-}
-
-/**
- * Where a config that names `contractPath` and sets no `output` has
- * `contract emit` write its JSON: beside the contract file, named after it.
- */
-export function emittedJsonPathFor(contractPath: string): string {
-  const extension = extname(contractPath);
-  return `${extension.length === 0 ? contractPath : contractPath.slice(0, -extension.length)}.json`;
 }
 
 /**

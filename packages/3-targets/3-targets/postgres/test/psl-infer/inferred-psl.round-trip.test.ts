@@ -27,7 +27,7 @@ import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { postgresDataTypes } from '../../src/core/data-types';
 import { parsePostgresDefault } from '../../src/core/default-normalizer';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
-import { CODEC_ID_BY_PRINTED_TYPE } from '../../src/core/psl-infer/infer-default-codec';
+import { CODEC_ID_BY_INFERRED_TYPE } from '../../src/core/psl-infer/infer-default-codec';
 import { postgresCodecRegistry } from '../../src/core/registry';
 import { printPslFromFlat } from './fixtures';
 
@@ -204,9 +204,9 @@ two lines é'::text`,
     });
   });
 
-  it('prints a type constructor for every printed type name the round trip covers', () => {
+  it('prints a type constructor for every inferred type name the round trip covers', () => {
     expect(
-      Object.keys(authoringTypes).filter((name) => !CODEC_ID_BY_PRINTED_TYPE.has(name)),
+      Object.keys(authoringTypes).filter((name) => !CODEC_ID_BY_INFERRED_TYPE.has(name)),
     ).toEqual([]);
   });
 });

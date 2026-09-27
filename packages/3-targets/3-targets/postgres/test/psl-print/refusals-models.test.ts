@@ -1,5 +1,4 @@
 import { asNamespaceId } from '@internal/contract/types';
-import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
   deserialize,
@@ -38,18 +37,6 @@ describe('models and relations', () => {
         contract: { roots: { Other: { namespace: PUBLIC, model: 'Other' } } },
       }),
     ).toThrow(refusal({ namespaceId: 'public', modelName: 'Widget', owner: 'Other' }));
-  });
-
-  it('refuses a model whose domain namespace is not the namespace of its table', () => {
-    const contract = deserialize(widgetContract());
-    const { public: publicNamespace, ...others } = contract.domain.namespaces;
-    const moved = {
-      ...contract,
-      domain: { namespaces: { ...others, app: publicNamespace } },
-    };
-    expect(
-      printing(blindCast<typeof contract, 'a contract the validator would reject'>(moved)),
-    ).toThrow(refusal({ namespaceId: 'app', modelName: 'Widget', tableNamespaceId: 'public' }));
   });
 
   it('refuses a model name that is not a PSL identifier', () => {

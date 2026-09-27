@@ -2,19 +2,23 @@ import { existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { blindCast } from '@internal/utils/casts';
 import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import {
+  composePostgresStack,
   printAndReadBack,
   printContract,
   serializedWithoutCapabilities,
-} from '../../../../3-targets/6-adapters/postgres/test/helpers/psl-print';
-import { prisma7Contract } from '../src/provider';
-import { postgresSourceContext } from './support';
+  sourceContext,
+} from './print-and-read-back';
 
-const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
+const fixturesDir = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../packages/2-sql/2-authoring/contract-prisma7/test/fixtures',
+);
 
 const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())
@@ -39,7 +43,7 @@ async function loadPrisma7Fixture(
 ): Promise<Contract<SqlStorage>> {
   const result = await prisma7Contract(schemaPath, {
     binding: prisma7PostgresBinding,
-  }).source.load(postgresSourceContext([schemaPath]));
+  }).source.load(sourceContext(composePostgresStack(), [schemaPath]));
   if (!result.ok) {
     throw new Error(
       `Prisma 7 fixture "${caseName}" did not load: ${JSON.stringify(result.failure.diagnostics)}`,

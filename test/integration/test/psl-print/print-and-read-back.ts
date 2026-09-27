@@ -1,5 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import postgresAdapter from '@internal/adapter-postgres/control';
+import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
@@ -21,7 +23,6 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { join } from 'pathe';
-import postgresAdapter from '../../src/exports/control';
 
 export type PostgresStack = ControlStack<'sql', 'postgres'>;
 
@@ -52,13 +53,30 @@ export function printContract(
   contract: Contract<SqlStorage>,
   stack: PostgresStack = composePostgresStack(),
 ): PrintedContract {
-  const { document, sourceSettings } = sql.create(stack).printPslContract(contract);
+  const { document, sourceSettings } = sql.create(stack).buildPslContract(contract);
   return {
     text: printPsl(document, {
       pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
       codecLookup: stack.codecLookup,
     }),
     sourceSettings,
+  };
+}
+
+/** The context `contract emit` gives a contract source for this stack and these input files. */
+export function sourceContext(
+  stack: PostgresStack,
+  resolvedInputs: readonly string[],
+): ContractSourceContext {
+  return {
+    composedExtensions: stack.extensions.map((extension) => extension.id),
+    composedExtensionContracts: stack.extensionContracts,
+    authoringContributions: stack.authoringContributions,
+    codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
+    controlMutationDefaults: stack.controlMutationDefaults,
+    resolvedInputs,
+    capabilities: stack.capabilities,
   };
 }
 
@@ -88,16 +106,7 @@ export async function readPsl(
       enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
       ...ifDefined('composedExtensionPackRefs', options.packRefs),
       ...ifDefined('defaultControlPolicy', options.sourceSettings?.defaultControlPolicy),
-    }).source.load({
-      composedExtensions: stack.extensions.map((extension) => extension.id),
-      composedExtensionContracts: stack.extensionContracts,
-      authoringContributions: stack.authoringContributions,
-      codecLookup: stack.codecLookup,
-      dataTypeLookup: stack.dataTypeLookup,
-      controlMutationDefaults: stack.controlMutationDefaults,
-      resolvedInputs: [path],
-      capabilities: stack.capabilities,
-    });
+    }).source.load(sourceContext(stack, [path]));
     if (!result.ok) {
       throw new Error(
         `the PSL did not load: ${JSON.stringify(result.failure.diagnostics)}\n${text}`,

@@ -5,7 +5,7 @@ import {
   printContract,
   readPsl,
   serializedWithoutCapabilities,
-} from '../../../../packages/3-targets/6-adapters/postgres/test/helpers/psl-print';
+} from './print-and-read-back';
 
 const stack = composePostgresStack([pgvector]);
 
