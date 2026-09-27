@@ -32,7 +32,7 @@ Source: `postgresScalarAuthoringTypes` and `postgresNativeAuthoringTypes` in `pa
 | `char` | `sql/char@1` | `Char(n?)` | `Char(n?)` | Unchanged. |
 | all others | | `Uuid`, `Inet`, `Date`, `DateString`, `Timestamp(p?)`, `Time(p?)`, `Timetz(p?)`, `TimestampString(p?)`, `TimestamptzJsDate(p?)`, `TimestamptzString(p?)`, `TimeString(p?)`, `BigIntNumber`, `UnboundedInt`, `pg.enum(...)`, `sql.String(n)` | unchanged | Already token-named (`BigIntNumber` and `UnboundedInt` are codec tokens `int8number` and `unboundedint`; they stay as they are). |
 
-Renamed names (`String`, `Boolean`, `Int`, `BigInt`, `SmallInt`, `Float`, `Real`, `Decimal`, `DateTime`, `Bytes`, `VarChar`) stay for one release line as deprecated aliases of the new names, as ADR 257 specifies and as the MongoDB renames shipped: the scalar map entry carries `deprecated: { replacement }`, resolves to the same codec, and the interpreter reports `PSL_DEPRECATED_SCALAR_NAME` as a warning through the contract source's warning channel. The shaping text this spec was built from specified a hard rename error instead; ADR 257 supersedes it, so confirm the choice when this project starts.
+Renamed names (`String`, `Boolean`, `Int`, `BigInt`, `SmallInt`, `Float`, `Real`, `Decimal`, `DateTime`, `Bytes`, `VarChar`) stay for one release line as deprecated aliases of the new names, not a hard error. This is the decided behaviour, matching ADR 257 and the MongoDB renames: the scalar map entry carries `deprecated: { replacement }` and resolves to the same codec, and the interpreter reports `PSL_DEPRECATED_SCALAR_NAME` as a warning through the contract source's warning channel.
 
 ### Postgres TypeScript presets
 
