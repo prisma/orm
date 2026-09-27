@@ -1,4 +1,4 @@
-# ADR 255 — Mutation-default generators are a framework runtime concern
+# ADR 256 — Mutation-default generators are a framework runtime concern
 
 Status: **Accepted**
 

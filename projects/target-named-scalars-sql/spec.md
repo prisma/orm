@@ -2,11 +2,11 @@
 
 ## Summary
 
-PostgreSQL and SQLite PSL scalar names and PostgreSQL TypeScript presets are renamed after each target's own storage types, following [ADR 256](../../docs/architecture%20docs/adrs/ADR%20256%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md): one token per type, taken from the unchanged codec id, on the PSL name, the TypeScript helper and the codec id. MongoDB already follows the rule. This project runs before general availability.
+PostgreSQL and SQLite PSL scalar names and PostgreSQL TypeScript presets are renamed after each target's own storage types, following [ADR 257](../../docs/architecture%20docs/adrs/ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md): one token per type, taken from the unchanged codec id, on the PSL name, the TypeScript helper and the codec id. MongoDB already follows the rule. This project runs before general availability.
 
 ## Principle
 
-See ADR 256 for the decision, its reasons, the `Json` exception, the deprecation path for renamed names, and the reserved mechanism for a codec id that must change. No codec id changes in this project.
+See ADR 257 for the decision, its reasons, the `Json` exception, the deprecation path for renamed names, and the reserved mechanism for a codec id that must change. No codec id changes in this project.
 
 ## Postgres and SQLite names
 
@@ -32,7 +32,7 @@ Source: `postgresScalarAuthoringTypes` and `postgresNativeAuthoringTypes` in `pa
 | `char` | `sql/char@1` | `Char(n?)` | `Char(n?)` | Unchanged. |
 | all others | | `Uuid`, `Inet`, `Date`, `DateString`, `Timestamp(p?)`, `Time(p?)`, `Timetz(p?)`, `TimestampString(p?)`, `TimestamptzJsDate(p?)`, `TimestamptzString(p?)`, `TimeString(p?)`, `BigIntNumber`, `UnboundedInt`, `pg.enum(...)`, `sql.String(n)` | unchanged | Already token-named (`BigIntNumber` and `UnboundedInt` are codec tokens `int8number` and `unboundedint`; they stay as they are). |
 
-Renamed names (`String`, `Boolean`, `Int`, `BigInt`, `SmallInt`, `Float`, `Real`, `Decimal`, `DateTime`, `Bytes`, `VarChar`) stay for one release line as deprecated aliases of the new names, as ADR 256 specifies and as the MongoDB renames shipped: the scalar map entry carries `deprecated: { replacement }`, resolves to the same codec, and the interpreter reports `PSL_DEPRECATED_SCALAR_NAME` as a warning through the contract source's warning channel. The shaping text this spec was built from specified a hard rename error instead; ADR 256 supersedes it, so confirm the choice when this project starts.
+Renamed names (`String`, `Boolean`, `Int`, `BigInt`, `SmallInt`, `Float`, `Real`, `Decimal`, `DateTime`, `Bytes`, `VarChar`) stay for one release line as deprecated aliases of the new names, as ADR 257 specifies and as the MongoDB renames shipped: the scalar map entry carries `deprecated: { replacement }`, resolves to the same codec, and the interpreter reports `PSL_DEPRECATED_SCALAR_NAME` as a warning through the contract source's warning channel. The shaping text this spec was built from specified a hard rename error instead; ADR 257 supersedes it, so confirm the choice when this project starts.
 
 ### Postgres TypeScript presets
 

@@ -1,4 +1,4 @@
-# ADR 256 — Scalar types are named after the target on every surface
+# ADR 257 — Scalar types are named after the target on every surface
 
 Status: **Accepted**
 
