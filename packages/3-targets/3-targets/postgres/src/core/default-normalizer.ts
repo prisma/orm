@@ -223,7 +223,7 @@ function unquotedElementValue(token: string, elementType: string): JsonValue | u
   if (isJsonElementType(elementType)) {
     if (token === 'true') return true;
     if (token === 'false') return false;
-    return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
+    return NUMERIC_PATTERN.test(token) ? textElementValue(token, elementType) : undefined;
   }
   return token;
 }
