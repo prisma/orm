@@ -116,6 +116,7 @@ async function harness(watched = true) {
   });
   return {
     registrations,
+    register: vi.mocked(connection.client.register),
     coverage,
     read: (uri: string) =>
       client.sendRequest(DocumentDiagnosticRequest.type, { textDocument: { uri } }),
@@ -147,6 +148,24 @@ afterEach(async () => {
 });
 
 describe('schema watcher disk caching', { timeout: timeouts.databaseOperation }, () => {
+  it('registers POSIX escapes unchanged without granting watcher cache trust', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux');
+    const file = await fixture();
+    const pattern = `${file.dir}/\\[draft\\].prisma`;
+    inputOverrides.set(file.config, [file.path, pattern]);
+    const h = await harness();
+    await h.read(file.uri);
+    expect(h.register).toHaveBeenCalledWith(DidChangeWatchedFilesNotification.type, {
+      watchers: [{ globPattern: file.path }, { globPattern: pattern }],
+    });
+    h.registrations[0]?.resolve({ dispose: vi.fn() });
+    await h.read(file.uri);
+    vi.mocked(statSync).mockClear();
+    await h.read(file.uri);
+    expect(fileStats(file.path).length).toBeGreaterThan(0);
+    expect(h.coverage.mock.calls.flatMap(([, uris]) => Array.from(uris))).toEqual([]);
+  });
+
   it('trusts only registered projects and invalidates watched disk edits', async () => {
     const one = await fixture();
     const two = await fixture();

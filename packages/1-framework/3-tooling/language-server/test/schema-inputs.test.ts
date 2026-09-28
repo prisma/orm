@@ -8,6 +8,7 @@ import {
   isWatcherCacheEligible,
   resolveSchemaInputs,
   type SchemaInputConfig,
+  toWatcherGlobPattern,
 } from '../src/schema-inputs';
 
 afterEach(() => vi.restoreAllMocks());
@@ -32,6 +33,21 @@ function configWith(
 
 const directive = '// use prisma-8\n';
 const alwaysMember = (): string => directive;
+
+describe('watcher glob patterns', () => {
+  it.each([
+    ['win32', 'C:\\project\\*.prisma', 'C:/project/*.prisma'],
+    ['win32', '\\\\server\\share\\*.prisma', '//server/share/*.prisma'],
+    ['win32', 'C:/project/*.prisma', 'C:/project/*.prisma'],
+    ['linux', '/project/\\[draft\\].prisma', '/project/\\[draft\\].prisma'],
+    ['linux', '/project/\\\\name.prisma', '/project/\\\\name.prisma'],
+    ['linux', '/project/*.prisma', '/project/*.prisma'],
+    ['darwin', '/project/\\[draft\\].prisma', '/project/\\[draft\\].prisma'],
+  ] as const)('normalizes %s pattern %s', (platform, pattern, expected) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform);
+    expect(toWatcherGlobPattern(pattern)).toBe(expected);
+  });
+});
 
 describe('watcher cache eligibility', () => {
   it.each([

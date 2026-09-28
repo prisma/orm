@@ -67,7 +67,7 @@ export function isWatcherCacheEligible(config: SchemaInputConfig): boolean {
 }
 
 export function toWatcherGlobPattern(pattern: string): string {
-  return pattern.replaceAll('\\', '/');
+  return isWindowsPlatform() ? pattern.replaceAll('\\', '/') : pattern;
 }
 
 function isFileUri(input: string): boolean {
