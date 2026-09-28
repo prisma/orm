@@ -8,14 +8,20 @@ import type {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { canonicalFileIdentity } from './schema-inputs';
 
+export interface DocumentSnapshot {
+  readonly uri: string;
+  readonly text: string;
+}
+
 interface OverlayEntry {
   readonly origin: 'overlay';
   readonly document: TextDocument;
+  readonly snapshot: DocumentSnapshot;
 }
 
 interface DiskEntry {
   readonly origin: 'disk';
-  readonly text: string;
+  readonly snapshot: DocumentSnapshot;
   readonly mtime: number;
   readonly size: number;
 }
@@ -31,12 +37,17 @@ function statSafe(path: string): { readonly mtime: number; readonly size: number
   }
 }
 
-function readDiskEntry(path: string): DiskEntry | undefined {
+function readDiskEntry(path: string, uri: string): DiskEntry | undefined {
   const stats = statSafe(path);
   if (stats === undefined) return undefined;
   try {
     const text = readFileSync(path, 'utf8');
-    return { origin: 'disk', text, mtime: stats.mtime, size: stats.size };
+    return {
+      origin: 'disk',
+      snapshot: Object.freeze({ uri, text }),
+      mtime: stats.mtime,
+      size: stats.size,
+    };
   } catch {
     return undefined;
   }
@@ -67,12 +78,12 @@ export class DocumentStore {
     this.watchedIdentities = next;
   }
 
-  readonly getDocument = (uri: string): TextDocument | undefined => {
+  readonly getOpenDocument = (uri: string): TextDocument | undefined => {
     const entry = this.entries.get(canonicalFileIdentity(uri));
     return entry?.origin === 'overlay' ? entry.document : undefined;
   };
 
-  all(): readonly TextDocument[] {
+  openDocuments(): readonly TextDocument[] {
     const documents: TextDocument[] = [];
     for (const entry of this.entries.values()) {
       if (entry.origin === 'overlay') documents.push(entry.document);
@@ -81,26 +92,30 @@ export class DocumentStore {
   }
 
   text(uri: string): string | undefined {
+    return this.readSnapshot(uri)?.text;
+  }
+
+  readonly readSnapshot = (uri: string): DocumentSnapshot | undefined => {
     const identity = canonicalFileIdentity(uri);
     const entry = this.entries.get(identity);
     if (entry?.origin === 'overlay') {
-      return entry.document.getText();
+      return entry.snapshot;
     }
     if (entry?.origin === 'disk') {
-      if (this.watchedIdentities.has(identity)) return entry.text;
+      if (this.watchedIdentities.has(identity)) return entry.snapshot;
       const stats = statSafe(identity);
       if (stats !== undefined && stats.mtime === entry.mtime && stats.size === entry.size) {
-        return entry.text;
+        return entry.snapshot;
       }
     }
-    const fresh = readDiskEntry(identity);
+    const fresh = readDiskEntry(identity, uri);
     if (fresh === undefined) {
       this.entries.delete(identity);
       return undefined;
     }
     this.entries.set(identity, fresh);
-    return fresh.text;
-  }
+    return fresh.snapshot;
+  };
 
   invalidate(uri: string): void {
     const identity = canonicalFileIdentity(uri);
@@ -111,7 +126,11 @@ export class DocumentStore {
 
   open(item: TextDocumentItem): TextDocument {
     const document = TextDocument.create(item.uri, item.languageId, item.version, item.text);
-    this.entries.set(canonicalFileIdentity(item.uri), { origin: 'overlay', document });
+    this.entries.set(canonicalFileIdentity(item.uri), {
+      origin: 'overlay',
+      document,
+      snapshot: Object.freeze({ uri: item.uri, text: item.text }),
+    });
     return document;
   }
 
@@ -126,15 +145,19 @@ export class DocumentStore {
         `Received document change event for ${uri} without valid version identifier`,
       );
     }
-    const document = this.getDocument(uri);
+    const document = this.getOpenDocument(uri);
     if (document === undefined) return undefined;
     const updated = TextDocument.update(document, changes, version);
-    this.entries.set(canonicalFileIdentity(uri), { origin: 'overlay', document: updated });
+    this.entries.set(canonicalFileIdentity(uri), {
+      origin: 'overlay',
+      document: updated,
+      snapshot: Object.freeze({ uri: updated.uri, text: updated.getText() }),
+    });
     return updated;
   }
 
   close(uri: string): TextDocument | undefined {
-    const document = this.getDocument(uri);
+    const document = this.getOpenDocument(uri);
     this.entries.delete(canonicalFileIdentity(uri));
     return document;
   }

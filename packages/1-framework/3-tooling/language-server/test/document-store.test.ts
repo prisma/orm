@@ -19,29 +19,56 @@ function open(store: DocumentStore, openedUri = alias, text = 'first') {
 }
 
 describe('document store', () => {
+  it('retains immutable snapshots across mutable updates, aliases, and reset versions', () => {
+    const store = new DocumentStore();
+    const document = open(store);
+    const first = store.readSnapshot(uri)!;
+    expect(store.readSnapshot(alias)).toBe(first);
+    expect(first).toEqual({ uri: alias, text: 'first' });
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(store.change({ uri, version: 2 }, [])).toBeUndefined();
+    expect(store.readSnapshot(uri)).toBe(first);
+    expect(
+      store.change({ uri, version: 2 }, [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
+          text: 'second',
+        },
+      ]),
+    ).toBe(document);
+    const second = store.readSnapshot(uri)!;
+    expect(second).not.toBe(first);
+    expect(first.text).toBe('first');
+    expect(second.text).toBe('second');
+    store.close(alias);
+    open(store, uri, 'first');
+    const reopened = store.readSnapshot(alias)!;
+    expect(reopened).not.toBe(first);
+    expect(reopened).toEqual({ uri, text: 'first' });
+  });
   it('keeps document lookup bound when passed as a callback', () => {
     const store = new DocumentStore();
-    const { getDocument } = store;
-    expect(getDocument(uri)).toBeUndefined();
+    const { getOpenDocument } = store;
+    expect(getOpenDocument(uri)).toBeUndefined();
     const document = open(store);
-    expect([uri, alias].map(getDocument)).toEqual([document, document]);
+    expect([uri, alias].map(getOpenDocument)).toEqual([document, document]);
     store.close(alias);
-    expect(getDocument(uri)).toBeUndefined();
+    expect(getOpenDocument(uri)).toBeUndefined();
   });
 
   it('owns one document per identity, preserving the latest opened URI', () => {
     const store = new DocumentStore();
     const first = open(store);
-    expect(store.getDocument(uri)).toBe(first);
-    expect(store.getDocument(alias)).toBe(first);
+    expect(store.getOpenDocument(uri)).toBe(first);
+    expect(store.getOpenDocument(alias)).toBe(first);
     expect(first.uri).toBe(alias);
     const replacement = open(store, uri, 'replacement');
-    expect(store.getDocument(alias)).toBe(replacement);
-    expect([...store.all()]).toEqual([replacement]);
+    expect(store.getOpenDocument(alias)).toBe(replacement);
+    expect(store.openDocuments()).toEqual([replacement]);
     expect(replacement.uri).toBe(uri);
     expect(store.close(alias)).toBe(replacement);
-    expect(store.getDocument(uri)).toBeUndefined();
-    expect([...store.all()]).toEqual([]);
+    expect(store.getOpenDocument(uri)).toBeUndefined();
+    expect(store.openDocuments()).toEqual([]);
     expect(store.close(uri)).toBeUndefined();
     expect(open(store, uri).uri).toBe(uri);
   });
@@ -101,11 +128,55 @@ describe('document store', () => {
       return { path, uri: pathToFileURL(path).toString() };
     }
 
+    it('enumerates and looks up only open documents in a mixed store', async () => {
+      const disk = await fixtureFile('disk');
+      const overlay = await fixtureFile('saved');
+      const store = new DocumentStore();
+      expect(store.text(disk.uri)).toBe('disk');
+      expect(store.getOpenDocument(disk.uri)).toBeUndefined();
+      const aliasUri = overlay.uri.replace('member.prisma', '%6dember.prisma');
+      const opened = open(store, aliasUri, 'unsaved');
+      expect(store.getOpenDocument(overlay.uri)).toBe(opened);
+      expect(store.openDocuments()).toEqual([opened]);
+      expect(store.text(overlay.uri)).toBe('unsaved');
+      store.close(overlay.uri);
+      expect(store.text(overlay.uri)).toBe('saved');
+      expect(store.openDocuments()).toEqual([]);
+    });
+
+    it.each([false, true])(
+      'reuses disk snapshots until refresh with watcher coverage %s',
+      async (watched) => {
+        const file = await fixtureFile('first');
+        const store = new DocumentStore();
+        if (watched) store.setWatchCoverage('project', [file.uri]);
+        const first = store.readSnapshot(file.uri)!;
+        expect(store.readSnapshot(file.uri)).toBe(first);
+        await writeFile(file.path, 'changed content');
+        if (watched) {
+          expect(store.readSnapshot(file.uri)).toBe(first);
+          store.invalidate(file.uri);
+        }
+        const second = store.readSnapshot(file.uri)!;
+        expect(second).not.toBe(first);
+        expect(second.text).toBe('changed content');
+        expect(first.text).toBe('first');
+        expect(store.readSnapshot(file.uri)).toBe(second);
+        open(store, file.uri, 'overlay');
+        const overlay = store.readSnapshot(file.uri);
+        store.setWatchCoverage('project', []);
+        store.invalidate(file.uri);
+        expect(store.readSnapshot(file.uri)).toBe(overlay);
+        store.close(file.uri);
+        expect(store.readSnapshot(file.uri)).not.toBe(second);
+      },
+    );
+
     it('reads a never-opened member from disk and caches it as a disk entry', async () => {
       const { uri: fileUri } = await fixtureFile('model Disk {}');
       const store = new DocumentStore();
       expect(store.text(fileUri)).toBe('model Disk {}');
-      expect(store.getDocument(fileUri)).toBeUndefined();
+      expect(store.getOpenDocument(fileUri)).toBeUndefined();
     });
 
     it('skips stat for covered identities and reloads after invalidation', async () => {
@@ -197,7 +268,7 @@ describe('document store', () => {
       store.invalidate(file.uri);
       store.setWatchCoverage('project', []);
       expect(store.text(file.uri)).toBe('overlay');
-      expect(store.getDocument(file.uri)).toBe(overlay);
+      expect(store.getOpenDocument(file.uri)).toBe(overlay);
       store.setWatchCoverage('project', [file.uri]);
       store.close(file.uri);
       expect(store.text(file.uri)).toBe('disk');
@@ -221,7 +292,7 @@ describe('document store', () => {
         text: 'model Overlay {}',
       });
       expect(store.text(fileUri)).toBe('model Overlay {}');
-      expect(store.getDocument(fileUri)).toBe(overlay);
+      expect(store.getOpenDocument(fileUri)).toBe(overlay);
     });
 
     it('refreshes from disk after close, discarding the overlay text', async () => {
@@ -229,7 +300,7 @@ describe('document store', () => {
       const store = new DocumentStore();
       store.open({ uri: fileUri, languageId: 'prisma', version: 1, text: 'model Edited {}' });
       expect(store.close(fileUri)?.getText()).toBe('model Edited {}');
-      expect(store.getDocument(fileUri)).toBeUndefined();
+      expect(store.getOpenDocument(fileUri)).toBeUndefined();
       expect(store.text(fileUri)).toBe('model DiskOriginal {}');
     });
 
@@ -253,7 +324,7 @@ describe('document store', () => {
         text: 'model Overlay {}',
       });
       store.invalidate(fileUri);
-      expect(store.getDocument(fileUri)).toBe(overlay);
+      expect(store.getOpenDocument(fileUri)).toBe(overlay);
       expect(store.text(fileUri)).toBe('model Overlay {}');
     });
 

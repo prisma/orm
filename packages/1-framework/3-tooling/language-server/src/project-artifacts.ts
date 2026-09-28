@@ -7,14 +7,14 @@ import {
 } from '@internal/psl-parser';
 import { type DocumentAst, PslSources, type SourceFile } from '@internal/psl-parser/syntax';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
-import type { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from './config-resolution';
 import {
   type LspDiagnostic,
-  mapInterpreterDiagnostics,
+  mapInterpreterDiagnostic,
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
 import { computeDocumentDiagnostics } from './document-diagnostics';
+import type { DocumentSnapshot } from './document-store';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
@@ -34,8 +34,7 @@ export interface DocumentArtifacts {
 
 export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
-  readonly getDocument: (uri: string) => TextDocument | undefined;
-  readonly readText: (uri: string) => string | undefined;
+  readonly readSnapshot: (uri: string) => DocumentSnapshot | undefined;
   readonly interpretation?: ProjectInterpretation;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
@@ -51,12 +50,12 @@ export interface ProjectArtifacts {
 }
 
 interface CachedDocument {
-  readonly text: string;
+  readonly snapshot: DocumentSnapshot;
   readonly artifacts: DocumentArtifacts;
 }
 
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const {, getDocument, readText, interpretation } = options;
+  const { readSnapshot, interpretation } = options;
   let inputs = options.inputs;
   const documents = new Map<string, CachedDocument>();
   let symbolTableResult: SymbolTableResult | undefined;
@@ -104,24 +103,24 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         },
       },
     );
+    const diagnostics = [...warnings, ...(result.ok ? [] : result.failure.diagnostics)];
+    if (diagnostics.length === 0) {
+      return new Map();
+    }
     const sourceFileByFilename = new Map<string, SourceFile>();
     for (const { artifacts } of documents.values()) {
       sourceFileByFilename.set(artifacts.sourceFile.filename, artifacts.sourceFile);
     }
-    const grouped = new Map<string, ContractSourceDiagnostic[]>();
-    for (const diagnostic of [...warnings, ...(result.ok ? [] : result.failure.diagnostics)]) {
-      const group = grouped.get(diagnostic.sourceId);
+    const bySourceId = new Map<string, LspDiagnostic[]>();
+    for (const diagnostic of diagnostics) {
+      const sourceFile = sourceFileByFilename.get(diagnostic.sourceId);
+      if (sourceFile === undefined) continue;
+      const mapped = mapInterpreterDiagnostic(diagnostic, sourceFile);
+      const group = bySourceId.get(diagnostic.sourceId);
       if (group === undefined) {
-        grouped.set(diagnostic.sourceId, [diagnostic]);
+        bySourceId.set(diagnostic.sourceId, [mapped]);
       } else {
-        group.push(diagnostic);
-      }
-    }
-    const bySourceId = new Map<string, readonly LspDiagnostic[]>();
-    for (const [sourceId, diagnostics] of grouped) {
-      const sourceFile = sourceFileByFilename.get(sourceId);
-      if (sourceFile !== undefined) {
-        bySourceId.set(sourceId, mapInterpreterDiagnostics(diagnostics, sourceFile));
+        group.push(mapped);
       }
     }
     return bySourceId;
@@ -183,19 +182,19 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
 
   function readDocument(uri: string): DocumentArtifacts | undefined {
     const identity = canonicalFileIdentity(uri);
-    const text = readText(uri);
-    if (text === undefined) {
+    const snapshot = readSnapshot(uri);
+    if (snapshot === undefined) {
       if (documents.delete(identity)) {
         refreshSources();
       }
       return undefined;
     }
     const existing = documents.get(identity);
-    if (existing !== undefined && existing.text === text) {
+    if (existing !== undefined && existing.snapshot === snapshot) {
       return existing.artifacts;
     }
-    const resolvedUri = getDocument(uri)?.uri ?? uri;
-    const computed = computeDocumentDiagnostics(resolvedUri, text, inputs);
+    const resolvedUri = snapshot.uri;
+    const computed = computeDocumentDiagnostics(resolvedUri, snapshot.text, inputs);
     if (computed === null) {
       if (documents.delete(identity)) {
         refreshSources();
@@ -208,7 +207,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       diagnostics: computed.parseDiagnostics,
       interpretDiagnostics: createInterpretSlot(resolvedUri, computed.sourceFile),
     };
-    documents.set(identity, { text, artifacts });
+    documents.set(identity, { snapshot, artifacts });
     refreshSources();
     return artifacts;
   }

@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -9,6 +12,7 @@ import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
+import { type DocumentSnapshot, DocumentStore } from '../src/document-store';
 import { createProjectArtifacts, type ProjectArtifacts } from '../src/project-artifacts';
 import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
 
@@ -39,6 +43,32 @@ const cleanSource = `${directive}model User {\n  id Int @id\n}\n`;
 const twoModelSource = `${directive}model User {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n`;
 const unmarkedSource = 'model Stray {\n  id Int @id\n}\n';
 
+class TextMirror extends Map<string, string> {
+  private readonly snapshots = new Map<string, DocumentSnapshot>();
+
+  constructor(entries: readonly (readonly [string, string])[] = []) {
+    super();
+    for (const [uri, text] of entries) this.set(uri, text);
+  }
+
+  override set(uri: string, text: string): this {
+    this.snapshots.set(uri, Object.freeze({ uri, text }));
+    return super.set(uri, text);
+  }
+
+  override delete(uri: string): boolean {
+    this.snapshots.delete(uri);
+    return super.delete(uri);
+  }
+
+  readonly readSnapshot = (uri: string): DocumentSnapshot | undefined => {
+    for (const [sourceUri, snapshot] of this.snapshots) {
+      if (canonicalFileIdentity(sourceUri) === canonicalFileIdentity(uri)) return snapshot;
+    }
+    return undefined;
+  };
+}
+
 function mirroredDocument(
   texts: ReadonlyMap<string, string>,
   uri: string,
@@ -66,14 +96,10 @@ function projectWithMirror(interpretation?: ProjectInterpretation): {
   readonly onInterpretationError: ReturnType<typeof vi.fn>;
 } {
   const onInterpretationError = vi.fn();
-  const texts = new Map<string, string>();
-  const store = createProjectArtifacts({
-    inputs,
-    onInterpretationError,
-    getDocument: (uri) => mirroredDocument(texts, uri),
-    readText: (uri) => mirroredDocument(texts, uri)?.getText(),
-    ...(interpretation === undefined ? {} : { interpretation }),
-  });
+  const texts = new TextMirror();
+  const store = createProjectArtifacts({ inputs, onInterpretationError,
+  readSnapshot: texts.readSnapshot,
+  ...(interpretation === undefined ? {} : { interpretation }), });
   return { texts, store, onInterpretationError };
 }
 
@@ -93,25 +119,88 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
 }
 
 describe('createProjectArtifacts', () => {
+  it.each([false, true])('refreshes disk artifacts with watcher coverage %s', async (watched) => {
+    const dir = await mkdtemp(join(tmpdir(), 'project-artifacts-'));
+    try {
+      const path = join(dir, 'schema.psl');
+      const uri = pathToFileURL(path).href;
+      await writeFile(path, cleanSource);
+      const documents = new DocumentStore();
+      if (watched) documents.setWatchCoverage('project', [uri]);
+      const project = createProjectArtifacts({ inputs: await resolveSchemaInputs(
+        { contract: { source: { format: 'psl', inputs: [path] } } },
+        (uri) => documents.text(uri),
+      ), readSnapshot: documents.readSnapshot,
+      onInterpretationError: vi.fn(), });
+      const first = project.document(uri);
+      expect(first).toBeDefined();
+      expect(project.document(uri)).toBe(first);
+      expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+      await writeFile(path, twoModelSource);
+      if (watched) {
+        expect(project.document(uri)).toBe(first);
+        documents.invalidate(uri);
+      }
+      const second = project.document(uri);
+      expect(second).not.toBe(first);
+      expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
+      expect(project.document(uri)).toBe(second);
+      expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(2);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('parses once per store snapshot despite mutable updates and reset editor versions', () => {
+    const documents = new DocumentStore();
+    const liveUri = 'file:///abs/%73chema.psl';
+    const opened = documents.open({
+      uri: liveUri,
+      languageId: 'prisma',
+      version: 1,
+      text: cleanSource,
+    });
+    const project = createProjectArtifacts({ inputs, readSnapshot: documents.readSnapshot,
+    onInterpretationError: vi.fn(), });
+    const first = project.document(schemaUri)!;
+    project.symbolTable();
+    expect(project.document(liveUri)).toBe(first);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(
+      documents.change({ uri: schemaUri, version: 2 }, [
+        {
+          range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+          text: 'Post',
+        },
+      ]),
+    ).toBe(opened);
+    const second = project.document(schemaUri)!;
+    expect(second).not.toBe(first);
+    expect(project.document(liveUri)).toBe(second);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(2);
+    documents.close(liveUri);
+    documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: cleanSource });
+    const third = project.document(liveUri)!;
+    expect(third).not.toBe(first);
+    expect(third.sourceFile.filename).toBe(schemaUri);
+    expect(project.document(schemaUri)).toBe(third);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(3);
+  });
   it('owns symbol diagnostics at project level in configured order with source filenames', async () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
-    const texts = new Map([
+    const texts = new TextMirror([
       [schemaUri, cleanSource],
       [siblingUri, twoModelSource],
     ]);
     const { interpretation, spy } = interpretationDouble(() => ok({} as never));
-    const store = createProjectArtifacts({
-      inputs: await resolveSchemaInputs(
-        {
-          contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
-        },
-        alwaysMember,
-      ),
-      getDocument: (uri) => mirroredDocument(texts, uri),
-      readText: (uri) => mirroredDocument(texts, uri)?.getText(),
-      onInterpretationError: vi.fn(),
-      interpretation,
-    });
+    const store = createProjectArtifacts({ inputs: await resolveSchemaInputs(
+      {
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      },
+      alwaysMember,
+    ), readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(),
+    interpretation, });
     const sibling = store.document(siblingUri)!;
     expect(sibling.diagnostics).toEqual([]);
     expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
@@ -151,7 +240,7 @@ describe('createProjectArtifacts', () => {
     expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
   });
   it('shows a warning the interpreter reports at its span, with warning severity', () => {
-    const texts = new Map([[schemaUri, cleanSource]]);
+    const texts = new TextMirror([[schemaUri, cleanSource]]);
     const { interpretation } = interpretationDouble((_input, context) => {
       context.reportWarning?.({
         code: 'PSL_DEPRECATED_SCALAR_NAME',
@@ -166,13 +255,9 @@ describe('createProjectArtifacts', () => {
       });
       return ok({} as never);
     });
-    const artifacts = createProjectArtifacts({
-      inputs,
-      getDocument: (uri) => mirroredDocument(texts, uri),
-      readText: (uri) => mirroredDocument(texts, uri)?.getText(),
-      onInterpretationError: vi.fn(),
-      interpretation,
-    });
+    const artifacts = createProjectArtifacts({ inputs, readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(),
+    interpretation, });
 
     expect(artifacts.document(schemaUri)?.interpretDiagnostics()).toEqual([
       {
@@ -289,7 +374,7 @@ describe('createProjectArtifacts', () => {
 
   it('excludes an unmarked sibling input from the symbol table', async () => {
     const schema2Uri = pathToFileURL('/abs/schema2.psl').toString();
-    const texts = new Map<string, string>();
+    const texts = new TextMirror();
     const readText = (uri: string): string | undefined => mirroredDocument(texts, uri)?.getText();
     const twoInputs = await resolveSchemaInputs(
       {
@@ -299,12 +384,8 @@ describe('createProjectArtifacts', () => {
       },
       readText,
     );
-    const store = createProjectArtifacts({
-      inputs: twoInputs,
-      getDocument: (uri) => mirroredDocument(texts, uri),
-      readText,
-      onInterpretationError: vi.fn(),
-    });
+    const store = createProjectArtifacts({ inputs: twoInputs, readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(), });
     texts.set(schemaUri, unmarkedSource);
     texts.set(schema2Uri, cleanSource);
 
@@ -316,13 +397,15 @@ describe('createProjectArtifacts', () => {
 
   it('reads an unopened member from disk and resolves a cross-file reference against it', async () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
-    const overlayTexts = new Map([
+    const overlayTexts = new TextMirror([
       [
         schemaUri,
         `${directive}model Order {\n  id Int @id\n  customer Customer @relation(fields: [customerId])\n  customerId Int\n}\n`,
       ],
     ]);
-    const diskTexts = new Map([[siblingUri, `${directive}model Customer {\n  id Int @id\n}\n`]]);
+    const diskTexts = new TextMirror([
+      [siblingUri, `${directive}model Customer {\n  id Int @id\n}\n`],
+    ]);
     const readText = (uri: string): string | undefined =>
       mirroredDocument(overlayTexts, uri)?.getText() ?? mirroredText(diskTexts, uri);
     const inputsWithDiskSibling = await resolveSchemaInputs(
@@ -331,12 +414,8 @@ describe('createProjectArtifacts', () => {
       },
       readText,
     );
-    const store = createProjectArtifacts({
-      inputs: inputsWithDiskSibling,
-      getDocument: (uri) => mirroredDocument(overlayTexts, uri),
-      readText,
-      onInterpretationError: vi.fn(),
-    });
+    const store = createProjectArtifacts({ inputs: inputsWithDiskSibling, readSnapshot: (uri) => overlayTexts.readSnapshot(uri) ?? diskTexts.readSnapshot(uri),
+    onInterpretationError: vi.fn(), });
 
     const artifacts = store.document(schemaUri);
     expect(artifacts?.diagnostics).toEqual([]);
@@ -364,7 +443,7 @@ describe('createProjectArtifacts', () => {
 
   it('rebuilds the symbol table from a sibling input after the contributing document closes', async () => {
     const schema2Uri = pathToFileURL('/abs/schema2.psl').toString();
-    const texts = new Map<string, string>();
+    const texts = new TextMirror();
     const readText = (uri: string): string | undefined => mirroredDocument(texts, uri)?.getText();
     const twoInputs = await resolveSchemaInputs(
       {
@@ -374,12 +453,8 @@ describe('createProjectArtifacts', () => {
       },
       readText,
     );
-    const store = createProjectArtifacts({
-      inputs: twoInputs,
-      getDocument: (uri) => mirroredDocument(texts, uri),
-      readText,
-      onInterpretationError: vi.fn(),
-    });
+    const store = createProjectArtifacts({ inputs: twoInputs, readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(), });
     texts.set(schemaUri, cleanSource);
     texts.set(schema2Uri, twoModelSource);
     store.document(schemaUri);
@@ -393,22 +468,18 @@ describe('createProjectArtifacts', () => {
 
   it('owns immutable registry snapshots matching cached roots through edits and closes', async () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
-    const texts = new Map([
+    const texts = new TextMirror([
       [schemaUri, cleanSource],
       [siblingUri, twoModelSource],
     ]);
     const readText = (uri: string): string | undefined => mirroredDocument(texts, uri)?.getText();
-    const store = createProjectArtifacts({
-      inputs: await resolveSchemaInputs(
-        {
-          contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
-        },
-        readText,
-      ),
-      getDocument: (uri) => mirroredDocument(texts, uri),
+    const store = createProjectArtifacts({ inputs: await resolveSchemaInputs(
+      {
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      },
       readText,
-      onInterpretationError: vi.fn(),
-    });
+    ), readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(), });
     const first = store.document(schemaUri)!;
     const sibling = store.document(siblingUri)!;
     const snapshot = store.sources;
@@ -629,21 +700,17 @@ describe('interpret slot', () => {
 
   it('invalidates retained semantic memos and shared symbols when registry membership changes', async () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
-    const texts = new Map([[schemaUri, cleanSource]]);
+    const texts = new TextMirror([[schemaUri, cleanSource]]);
     const readText = (uri: string): string | undefined => mirroredDocument(texts, uri)?.getText();
     const { interpretation, spy } = interpretationDouble(() => ok({} as never));
-    const store = createProjectArtifacts({
-      inputs: await resolveSchemaInputs(
-        {
-          contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
-        },
-        readText,
-      ),
-      getDocument: (uri) => mirroredDocument(texts, uri),
+    const store = createProjectArtifacts({ inputs: await resolveSchemaInputs(
+      {
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      },
       readText,
-      onInterpretationError: vi.fn(),
-      interpretation,
-    });
+    ), readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(),
+    interpretation, });
     const first = store.document(schemaUri)!;
     first.interpretDiagnostics();
     const initialSymbols = store.symbolTable();
@@ -707,23 +774,19 @@ describe('interpret slot', () => {
         ],
       }),
     );
-    const texts = new Map([
+    const texts = new TextMirror([
       [schemaUri, cleanSource],
       [siblingUri, twoModelSource],
     ]);
     const readText = (uri: string): string | undefined => mirroredDocument(texts, uri)?.getText();
-    const store = createProjectArtifacts({
-      inputs: await resolveSchemaInputs(
-        {
-          contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
-        },
-        readText,
-      ),
-      getDocument: (uri) => mirroredDocument(texts, uri),
+    const store = createProjectArtifacts({ inputs: await resolveSchemaInputs(
+      {
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      },
       readText,
-      onInterpretationError: vi.fn(),
-      interpretation,
-    });
+    ), readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(),
+    interpretation, });
     store.symbolDiagnostics();
     expect(
       store
@@ -739,6 +802,55 @@ describe('interpret slot', () => {
     ).toEqual(['SIBLING_ERROR']);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0]?.[0].documents).toHaveLength(2);
+  });
+
+  it('maps warnings before failures per source and ignores unknown sources', async () => {
+    const siblingUri = 'file:///abs/sibling.psl';
+    const texts = new TextMirror([
+      [schemaUri, cleanSource],
+      [siblingUri, twoModelSource],
+    ]);
+    const { interpretation, spy } = interpretationDouble((_input, context) => {
+      context.reportWarning?.({ code: 'W1', message: 'first', sourceId: schemaUri });
+      context.reportWarning?.({ ...spanned, code: 'W2', sourceId: siblingUri });
+      return notOk({
+        summary: 'errors',
+        diagnostics: [
+          { ...spanned, code: 'E1' },
+          { code: 'E2', message: 'second', sourceId: siblingUri },
+          { code: 'E3', message: 'third', sourceId: schemaUri },
+          {
+            code: 'UNKNOWN',
+            sourceId: 'file:///abs/missing.psl',
+            get message(): string {
+              throw new Error('must not map');
+            },
+          },
+        ],
+      });
+    });
+    const store = createProjectArtifacts({ inputs: await resolveSchemaInputs(
+      {
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      },
+      alwaysMember,
+    ), readSnapshot: texts.readSnapshot,
+    interpretation,
+    onInterpretationError: vi.fn(), });
+    store.symbolTable();
+    const start = { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } };
+    const span = { start: { line: 2, character: 2 }, end: { line: 2, character: 8 } };
+    expect(store.document(schemaUri)?.interpretDiagnostics()).toEqual([
+      { code: 'W1', message: 'first', severity: 2, range: start },
+      { code: 'E1', message: spanned.message, severity: 1, range: span },
+      { code: 'E3', message: 'third', severity: 1, range: start },
+    ]);
+    expect(store.document(siblingUri)?.interpretDiagnostics()).toEqual([
+      { code: 'W2', message: spanned.message, severity: 2, range: span },
+      { code: 'E2', message: 'second', severity: 1, range: start },
+    ]);
+    store.document(schemaUri)?.interpretDiagnostics();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('returns no diagnostics for a successful interpretation', () => {

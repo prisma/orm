@@ -203,8 +203,7 @@ model Widget {
         const project = createProjectArtifacts({
           ...resolution,
           onInterpretationError,
-          getDocument: documents.getDocument,
-          readText,
+          readSnapshot: documents.readSnapshot,
         });
         const document = project.document(uri);
         expect(document).toBeDefined();
@@ -283,8 +282,7 @@ namespace billing {
       const project = createProjectArtifacts({
         ...resolution,
         onInterpretationError,
-        getDocument: documents.getDocument,
-        readText,
+        readSnapshot: documents.readSnapshot,
       });
       return { project, onInterpretationError };
     }
