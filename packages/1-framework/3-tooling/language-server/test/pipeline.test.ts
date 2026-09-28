@@ -12,9 +12,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import { runPipeline } from '../src/pipeline';
 
-const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
-void scalarTypes;
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
