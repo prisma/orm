@@ -336,11 +336,11 @@ function bindExpression(
 function allowsUnresolvedName(type: unknown, visited = new Set<object>()): boolean {
   if (typeof type !== 'object' || type === null || visited.has(type)) return false;
   visited.add(type);
+  if ('kind' in type && type.kind === 'identifier') {
+    return 'allowsUnresolvedName' in type && type.allowsUnresolvedName === true;
+  }
   if ('alternatives' in type && Array.isArray(type.alternatives)) {
-    return type.alternatives.some(
-      (alternative) =>
-        referenceKind(alternative) === undefined || allowsUnresolvedName(alternative, visited),
-    );
+    return type.alternatives.some((alternative) => allowsUnresolvedName(alternative, visited));
   }
   if ('of' in type) return allowsUnresolvedName(type.of, visited);
   return false;

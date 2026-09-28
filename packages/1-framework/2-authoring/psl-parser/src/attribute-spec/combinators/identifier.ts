@@ -9,18 +9,24 @@ import type {
 } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-export function identifier(): UnrestrictedIdentifierArgType<AttributeCtx>;
+export function identifier(options?: {
+  readonly allowsUnresolvedName?: boolean;
+}): UnrestrictedIdentifierArgType<AttributeCtx>;
 export function identifier<const N extends string>(
   name: N,
-  options: { readonly documentation: string },
+  options: { readonly documentation: string; readonly allowsUnresolvedName?: boolean },
 ): FixedIdentifierArgType<N, AttributeCtx>;
 export function identifier(
-  name?: string,
-  options?: { readonly documentation: string },
+  nameOrOptions?: string | { readonly allowsUnresolvedName?: boolean },
+  options?: { readonly documentation: string; readonly allowsUnresolvedName?: boolean },
 ): IdentifierArgType<string, AttributeCtx> {
+  const name = typeof nameOrOptions === 'string' ? nameOrOptions : undefined;
+  const allowsUnresolvedName =
+    (typeof nameOrOptions === 'string' ? options : nameOrOptions)?.allowsUnresolvedName ?? true;
   const label = name ?? 'identifier';
   return {
     kind: 'identifier',
+    allowsUnresolvedName,
     label,
     name,
     documentation: options?.documentation ?? '',

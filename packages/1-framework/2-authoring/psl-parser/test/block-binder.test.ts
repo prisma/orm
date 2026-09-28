@@ -1,11 +1,15 @@
 import { expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
+import { bool } from '../src/attribute-spec/combinators/bool';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { identifier } from '../src/attribute-spec/combinators/identifier';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { list } from '../src/attribute-spec/combinators/list';
+import { num } from '../src/attribute-spec/combinators/num';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
+import { str } from '../src/attribute-spec/combinators/str';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
+import { optional } from '../src/attribute-spec/optional';
 import type { ArgType, AttributeCtx } from '../src/attribute-spec/types';
 import { createBinder } from '../src/binder';
 import { mapBlock } from '../src/block-spec/constructors';
@@ -150,6 +154,76 @@ it('reports strict references once per entry or argument even through a recursiv
     kind: 'model',
     symbol: symbolTable.topLevel.models['Later'],
   });
+});
+
+it.each([
+  reference,
+  oneOf(reference, bool()),
+  oneOf(reference, num()),
+  oneOf(reference, str()),
+  oneOf(reference, identifier({ allowsUnresolvedName: false })),
+  oneOf(
+    reference,
+    identifier('Missing', { documentation: 'missing', allowsUnresolvedName: false }),
+  ),
+])('reports unresolved names for $label without an accepting identifier policy', (rule) => {
+  const { diagnostics } = bind(
+    'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
+    rule,
+  );
+  expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual(
+    Array.from({ length: 5 }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+    })),
+  );
+});
+
+it.each([
+  identifier(),
+  identifier({ allowsUnresolvedName: true }),
+  identifier('Missing', { documentation: 'missing' }),
+  identifier('Missing', { documentation: 'missing', allowsUnresolvedName: true }),
+])('allows unresolved $label identifiers alongside entity references', (alternative) => {
+  expect(
+    bind(
+      'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
+      oneOf(reference, alternative),
+    ).diagnostics,
+  ).toEqual([]);
+});
+
+it.each([
+  { rule: optional(list(oneOf(reference, identifier()))), count: 0 },
+  { rule: optional(list(oneOf(reference, bool()))), count: 3 },
+  { rule: optional(list(oneOf(reference, identifier({ allowsUnresolvedName: false })))), count: 3 },
+])(
+  'preserves unresolved-name policy through optional lists ($count diagnostics)',
+  ({ rule, count }) => {
+    const { diagnostics } = bind(
+      'policy P {\n target = [Missing]\n @@refs([Missing])\n}\nmodel M {\n @@refs([Missing])\n}',
+      rule,
+    );
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual(
+      Array.from({ length: count }, () => ({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find entity "Missing"',
+      })),
+    );
+  },
+);
+
+it('does not infer identifier policy from JSON null alongside entity references', () => {
+  const { diagnostics } = bind(
+    'policy P {\n target = null\n @@refs(null, targets: [null])\n}\nmodel M {\n @@refs(null, targets: [null])\n}',
+    oneOf(reference, jsonValue()),
+  );
+  expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual(
+    Array.from({ length: 5 }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "null"',
+    })),
+  );
 });
 
 it('does not treat recursive JSON metadata as references', () => {
