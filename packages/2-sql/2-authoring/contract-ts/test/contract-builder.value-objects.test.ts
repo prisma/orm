@@ -73,6 +73,7 @@ describe('value objects in contract definition builder', () => {
                 fieldName: 'total',
                 columnName: 'total',
                 valueObjectName: 'Money',
+                descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
                 nullable: false,
                 default: {
                   kind: 'literal',
@@ -198,6 +199,7 @@ describe('value objects in contract definition builder', () => {
               fieldName: 'homeAddress',
               columnName: 'home_address',
               valueObjectName: 'Address',
+              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
               nullable: true,
             },
           ],
@@ -236,55 +238,6 @@ describe('value objects in contract definition builder', () => {
     });
   });
 
-  it('maps value object fields to JSONB storage columns', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-            {
-              fieldName: 'homeAddress',
-              columnName: 'home_address',
-              valueObjectName: 'Address',
-              nullable: true,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'Address',
-          fields: [
-            {
-              fieldName: 'street',
-              columnName: 'street',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-          ],
-        },
-      ],
-    });
-
-    const tables = unboundTables(contract.storage);
-    expect(tables['user']?.columns['home_address']).toMatchObject({
-      nativeType: 'jsonb',
-      codecId: 'pg/jsonb@1',
-      nullable: true,
-    });
-  });
-
   it('emits many: true for value object list fields', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
@@ -305,6 +258,7 @@ describe('value objects in contract definition builder', () => {
               fieldName: 'addresses',
               columnName: 'addresses',
               valueObjectName: 'Address',
+              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
               nullable: false,
               many: true,
             },
@@ -359,6 +313,7 @@ describe('value objects in contract definition builder', () => {
               fieldName: 'address',
               columnName: 'address',
               valueObjectName: 'CompanyAddress',
+              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
               nullable: false,
             },
           ],
@@ -394,7 +349,6 @@ describe('value objects in contract definition builder', () => {
             },
             {
               fieldName: 'location',
-              columnName: 'location',
               valueObjectName: 'GeoLocation',
               nullable: true,
             },
@@ -466,6 +420,7 @@ describe('value objects in contract definition builder', () => {
               fieldName: 'homeAddress',
               columnName: 'home_address',
               valueObjectName: 'Address',
+              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
               nullable: true,
             },
           ],

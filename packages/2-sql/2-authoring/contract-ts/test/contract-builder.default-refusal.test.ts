@@ -181,6 +181,7 @@ describe('a literal default the codec refuses', () => {
                   fieldName: 'total',
                   columnName: 'total',
                   valueObjectName: 'Money',
+                  descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
                   nullable: false,
                   default: { kind: 'literal', value: 'twelve' },
                 },

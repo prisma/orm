@@ -88,6 +88,7 @@ import type {
   ModelNode,
   RelationNode,
   ValueObjectFieldNode,
+  ValueObjectRefNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
@@ -379,9 +380,7 @@ function assertTargetTableMatches(
   }
 }
 
-function isValueObjectField(
-  field: FieldNode | ValueObjectFieldNode,
-): field is ValueObjectFieldNode {
+function isValueObjectField(field: FieldNode | ValueObjectRefNode): field is ValueObjectRefNode {
   return 'valueObjectName' in field;
 }
 
@@ -726,9 +725,6 @@ function mergeColumnAndAttachedEntities(
   return result;
 }
 
-const JSONB_CODEC_ID = 'pg/jsonb@1';
-const JSONB_NATIVE_TYPE = 'jsonb';
-
 function resolveModelNamespaceId(
   model: ModelNode,
   modelNameToNamespaceId: ReadonlyMap<string, string>,
@@ -834,34 +830,18 @@ function buildStorageColumn(
   storageTypes: Record<string, StorageTypeInstance>,
   codecLookup?: CodecLookup,
 ): StorageColumn {
-  if (isValueObjectField(field)) {
-    const encodedDefault =
-      field.default !== undefined
-        ? encodeColumnDefault(field.default, codecLookup, (lookup) => lookup.get(JSONB_CODEC_ID), {
-            modelName,
-            fieldName: field.fieldName,
-            codecId: JSONB_CODEC_ID,
-          })
-        : undefined;
-
-    return {
-      nativeType: JSONB_NATIVE_TYPE,
-      codecId: JSONB_CODEC_ID,
-      nullable: field.nullable,
-      ...ifDefined('default', encodedDefault),
-    };
-  }
-
-  const codecId = field.descriptor.codecId;
+  const { descriptor } = field;
+  const codecId = descriptor.codecId;
+  const storedAsList = !isValueObjectField(field) && field.many === true;
+  const noCheck = isValueObjectField(field) ? undefined : field.noCheck;
   const encodedDefault =
     field.default !== undefined
       ? encodeColumnDefault(
           field.default,
           codecLookup,
-          (lookup) =>
-            columnCodec(codecId, columnTypeParams(field.descriptor, storageTypes), lookup),
+          (lookup) => columnCodec(codecId, columnTypeParams(descriptor, storageTypes), lookup),
           { modelName, fieldName: field.fieldName, codecId },
-          field.many === true,
+          storedAsList,
         )
       : undefined;
 
@@ -870,25 +850,38 @@ function buildStorageColumn(
   // is the fallback: set by an entity-ref type constructor (e.g. `pg.enum(Ref)`)
   // that resolved the field's type against a value-set-deriving entity with no
   // domain enum involved. A field carries at most one of the two in practice.
-  const valueSet = storageValueSetRef ?? field.descriptor.valueSet;
+  const valueSet = storageValueSetRef ?? descriptor.valueSet;
 
   return {
-    nativeType: field.descriptor.nativeType,
+    nativeType: descriptor.nativeType,
     codecId,
     nullable: field.nullable,
-    ...(field.many ? { many: true as const } : {}),
-    ...(field.noCheck !== undefined ? { noCheck: [...field.noCheck].sort() } : {}),
-    ...ifDefined('typeParams', field.descriptor.typeParams),
+    ...(storedAsList ? { many: true as const } : {}),
+    ...(noCheck !== undefined ? { noCheck: [...noCheck].sort() } : {}),
+    ...ifDefined('typeParams', descriptor.typeParams),
     ...ifDefined('default', encodedDefault),
-    ...ifDefined('typeRef', field.descriptor.typeRef),
+    ...ifDefined('typeRef', descriptor.typeRef),
     ...ifDefined('valueSet', valueSet),
   };
 }
 
+function domainEnumRef(
+  enumHandle: EnumTypeHandle | undefined,
+  defaultNamespaceId: string,
+): ValueSetRef | undefined {
+  return enumHandle === undefined
+    ? undefined
+    : {
+        plane: 'domain',
+        entityKind: 'enum',
+        namespaceId: defaultNamespaceId,
+        entityName: enumHandle.enumName,
+      };
+}
+
 function buildDomainField(
-  field: FieldNode | ValueObjectFieldNode,
-  column: StorageColumn,
-  domainValueSetRef: ValueSetRef | undefined,
+  field: FieldNode | ValueObjectRefNode,
+  defaultNamespaceId: string,
 ): ContractField {
   if (isValueObjectField(field)) {
     return {
@@ -901,12 +894,12 @@ function buildDomainField(
   return {
     type: {
       kind: 'scalar',
-      codecId: column.codecId,
-      ...ifDefined('typeParams', column.typeParams),
+      codecId: field.descriptor.codecId,
+      ...ifDefined('typeParams', field.descriptor.typeParams),
     },
-    nullable: column.nullable,
+    nullable: field.nullable,
     ...(field.many ? { many: true } : {}),
-    ...ifDefined('valueSet', domainValueSetRef),
+    ...ifDefined('valueSet', domainEnumRef(field.enumTypeHandle, defaultNamespaceId)),
   };
 }
 
@@ -1197,15 +1190,6 @@ export function buildSqlContractFromDefinition(
               entityName: enumHandle.enumName,
             }
           : undefined;
-      const domainValueSetRef: ValueSetRef | undefined =
-        enumHandle !== undefined
-          ? {
-              plane: 'domain',
-              entityKind: 'enum',
-              namespaceId: defaultNamespaceId,
-              entityName: enumHandle.enumName,
-            }
-          : undefined;
 
       // A field authored through a deferred entity-ref column helper (e.g.
       // `pg.enum(handle)`) carries `descriptor.entityRef`: the referenced
@@ -1222,7 +1206,7 @@ export function buildSqlContractFromDefinition(
       // storage column is built from this qualified descriptor and the domain
       // field derives its `type.typeParams` from that column, both come out
       // qualified in this single pass.
-      let resolvedField: FieldNode | ValueObjectFieldNode = field;
+      let resolvedField = field;
       if (!isValueObjectField(field)) {
         let descriptor = field.descriptor;
         const entityRef = descriptor.entityRef;
@@ -1289,7 +1273,7 @@ export function buildSqlContractFromDefinition(
         );
       }
 
-      domainFields[field.fieldName] = buildDomainField(field, column, domainValueSetRef);
+      domainFields[field.fieldName] = buildDomainField(resolvedField, defaultNamespaceId);
 
       if (isValueObjectField(field)) {
         domainFieldRefs[field.fieldName] = {
@@ -1777,23 +1761,7 @@ export function buildSqlContractFromDefinition(
             vo.name,
             {
               fields: Object.fromEntries(
-                vo.fields.map((f) => [
-                  f.fieldName,
-                  isValueObjectField(f)
-                    ? {
-                        type: { kind: 'valueObject' as const, name: f.valueObjectName },
-                        nullable: f.nullable,
-                        ...(f.many ? { many: true } : {}),
-                      }
-                    : {
-                        type: {
-                          kind: 'scalar' as const,
-                          codecId: f.descriptor.codecId,
-                          ...ifDefined('typeParams', f.descriptor.typeParams),
-                        },
-                        nullable: f.nullable,
-                      },
-                ]),
+                vo.fields.map((f) => [f.fieldName, buildDomainField(f, defaultNamespaceId)]),
               ),
             },
           ]),

@@ -377,7 +377,44 @@ describe('value objects', () => {
     ).toEqual(['amount Numeric(65, 30)', 'history Numeric(65, 30)[]']);
   });
 
-  it('refuses a value-object field that names a value set, which the PSL source drops', () => {
+  const countryEnumParts = {
+    enum: { Country: { codecId: 'pg/text@1', members: [{ name: 'DE', value: 'DE' }] } },
+  } as const;
+  const countryValueSet = {
+    plane: 'domain',
+    entityKind: 'enum',
+    namespaceId: 'public',
+    entityName: 'Country',
+  } as const;
+
+  function withCountryMembers(fields: Record<string, ContractField>) {
+    return deserialize(
+      widgetContract({
+        columns: { address: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        fields: { address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } } },
+        domain: { ...countryEnumParts, valueObjects: { Address: { fields } } },
+        entries: { valueSet: { Country: { kind: 'valueSet', values: ['DE'] } } },
+      }),
+    );
+  }
+
+  it('writes a value-object field typed by a domain enum as the enum name, single and list', () => {
+    const document = buildPostgresPslContract(
+      withCountryMembers({
+        country: { ...TEXT_FIELD, valueSet: countryValueSet },
+        countries: { ...TEXT_FIELD, many: true, valueSet: countryValueSet },
+      }),
+      testBuildContext(),
+    );
+
+    expect(
+      document.namespaces.flatMap((namespace) =>
+        namespace.compositeTypes.flatMap((compositeType) => compositeType.fields.map(fieldText)),
+      ),
+    ).toEqual(['country Country', 'countries Country[]']);
+  });
+
+  it('refuses a value-object field whose value set is not a domain enum of the default namespace', () => {
     expect(
       withAddress({
         ...TEXT_FIELD,
@@ -389,5 +426,19 @@ describe('value objects', () => {
         },
       }),
     ).toThrow(refusal({ coordinate: '"public".Address.street' }));
+  });
+
+  it('refuses a value-object field that names a domain enum with a codec other than the enum codec', () => {
+    expect(
+      printing(
+        withCountryMembers({
+          country: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'pg/int4@1' },
+            valueSet: countryValueSet,
+          },
+        }),
+      ),
+    ).toThrow(refusal({ coordinate: '"public".Address.country' }));
   });
 });

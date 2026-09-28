@@ -3,13 +3,7 @@ import type {
   ContractSourceDiagnosticSpan,
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
-import type {
-  Contract,
-  ContractField,
-  ContractModel,
-  ContractValueObject,
-  ControlPolicy,
-} from '@internal/contract/types';
+import type { Contract, ContractModel, ControlPolicy } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
 import { resolveToOneRelationNullable } from '@internal/contract-authoring';
 import type {
@@ -99,6 +93,9 @@ import {
   type PrimaryKeyNode,
   type RelationNode,
   type UniqueConstraintNode,
+  type ValueObjectFieldNode,
+  type ValueObjectNode,
+  type ValueObjectRefNode,
 } from '@internal/sql-contract-ts/contract-builder';
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -617,7 +614,6 @@ interface BuildModelNodeResult {
   readonly fkRelationMetadata: FkRelationMetadata[];
   readonly invalidFkPairings: InvalidFkPairing[];
   readonly backrelationCandidates: ModelBackrelationCandidate[];
-  readonly resolvedFields: readonly ResolvedField[];
   /** Cross-contract-space relation nodes that bypass the local back-relation matching. */
   readonly crossSpaceRelations: RelationNode[];
   /** Entities lowered by contributed model attributes, keyed by attribute name then entity key (`entries[attribute][key]`). */
@@ -1472,20 +1468,23 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     modelNode: {
       modelName: model.name,
       tableName,
-      fields: resolvedFields.map((resolvedField) => {
-        const enumHandle = input.enumHandles?.get(resolvedField.field.typeName);
-        return {
+      fields: resolvedFields.map((resolvedField): FieldNode | ValueObjectFieldNode => {
+        const common = {
           fieldName: resolvedField.field.name,
           columnName: resolvedField.columnName,
           descriptor: resolvedField.descriptor,
           nullable: resolvedField.nullable,
-          ...(resolvedField.many && resolvedField.valueObjectTypeName === undefined
-            ? { many: true as const }
-            : {}),
+          ...ifDefined('many', resolvedField.many),
           ...ifDefined('default', resolvedField.defaultValue),
           ...ifDefined('executionDefaults', resolvedField.executionDefaults),
+        };
+        if (resolvedField.valueObjectTypeName !== undefined) {
+          return { ...common, valueObjectName: resolvedField.valueObjectTypeName };
+        }
+        return {
+          ...common,
           ...ifDefined('noCheck', resolvedField.noCheck),
-          ...ifDefined('enumTypeHandle', enumHandle),
+          ...ifDefined('enumTypeHandle', input.enumHandles?.get(resolvedField.field.typeName)),
         };
       }),
       ...ifDefined('id', primaryKey),
@@ -1499,7 +1498,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     invalidFkPairings: resultInvalidFkPairings,
     crossSpaceRelations: resultCrossSpaceRelations,
     backrelationCandidates: resultBackrelationCandidates,
-    resolvedFields,
     modelAttributeEntities,
   };
 }
@@ -1507,6 +1505,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
 interface BuildValueObjectsInput {
   readonly compositeTypes: readonly CompositeTypeSymbol[];
   readonly enumTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
+  readonly enumHandles: ReadonlyMap<string, EnumTypeHandle>;
   readonly namedTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions: ReadonlySet<string>;
@@ -1515,45 +1514,33 @@ interface BuildValueObjectsInput {
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
-  readonly binder: Binder;
 }
 
-function buildValueObjects(input: BuildValueObjectsInput): Record<string, ContractValueObject> {
-  const {
-    compositeTypes,
-    enumTypeDescriptors,
-    namedTypeDescriptors,
-    scalarColumnDescriptors,
-    composedExtensions,
-    familyId,
-    targetId,
-    authoringContributions,
-    diagnostics,
-    sources,
-  } = input;
-  const valueObjects: Record<string, ContractValueObject> = {};
+function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[] {
+  const { compositeTypes, enumHandles, diagnostics, sources } = input;
   const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
 
-  for (const compositeType of compositeTypes) {
-    const fields: Record<string, ContractField> = {};
+  return compositeTypes.map((compositeType) => {
+    const fields: (FieldNode | ValueObjectRefNode)[] = [];
     for (const field of Object.values(compositeType.fields)) {
+      const common = {
+        fieldName: field.name,
+        nullable: field.optional,
+        ...(field.list ? { many: true } : {}),
+      };
       if (compositeTypeNames.has(field.typeName)) {
-        const result: ContractField = {
-          type: { kind: 'valueObject', name: field.typeName },
-          nullable: field.optional,
-        };
-        fields[field.name] = field.list ? { ...result, many: true } : result;
+        fields.push({ ...common, valueObjectName: field.typeName });
         continue;
       }
       const resolved = resolveFieldTypeDescriptor({
         field,
-        enumTypeDescriptors,
-        namedTypeDescriptors,
-        scalarColumnDescriptors,
-        authoringContributions,
-        composedExtensions,
-        familyId,
-        targetId,
+        enumTypeDescriptors: input.enumTypeDescriptors,
+        namedTypeDescriptors: input.namedTypeDescriptors,
+        scalarColumnDescriptors: input.scalarColumnDescriptors,
+        authoringContributions: input.authoringContributions,
+        composedExtensions: input.composedExtensions,
+        familyId: input.familyId,
+        targetId: input.targetId,
         diagnostics,
         sources,
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
@@ -1568,52 +1555,15 @@ function buildValueObjects(input: BuildValueObjectsInput): Record<string, Contra
         }
         continue;
       }
-      const scalarField: ContractField = {
-        nullable: field.optional,
-        type: {
-          kind: 'scalar',
-          codecId: resolved.descriptor.codecId,
-          ...ifDefined('typeParams', resolved.descriptor.typeParams),
-        },
-      };
-      fields[field.name] = field.list ? { ...scalarField, many: true } : scalarField;
+      fields.push({
+        ...common,
+        columnName: field.name,
+        descriptor: resolved.descriptor,
+        ...ifDefined('enumTypeHandle', enumHandles.get(field.typeName)),
+      });
     }
-    valueObjects[compositeType.name] = { fields };
-  }
-
-  return valueObjects;
-}
-
-function patchModelDomainFields(
-  models: Record<string, ContractModel>,
-  modelResolvedFields: ReadonlyMap<string, readonly ResolvedField[]>,
-): Record<string, ContractModel> {
-  let patched = models;
-
-  for (const [modelName, resolvedFields] of modelResolvedFields) {
-    const model = patched[modelName];
-    if (!model) continue;
-
-    let needsPatch = false;
-    const patchedFields: Record<string, ContractField> = { ...model.fields };
-
-    for (const rf of resolvedFields) {
-      if (rf.valueObjectTypeName) {
-        needsPatch = true;
-        patchedFields[rf.field.name] = {
-          nullable: rf.field.optional,
-          type: { kind: 'valueObject', name: rf.valueObjectTypeName },
-          ...(rf.many ? { many: true as const } : {}),
-        };
-      }
-    }
-
-    if (needsPatch) {
-      patched = { ...patched, [modelName]: { ...model, fields: patchedFields } };
-    }
-  }
-
-  return patched;
+    return { name: compositeType.name, fields };
+  });
 }
 
 type DiscriminatorDeclaration = {
@@ -1869,7 +1819,8 @@ function materializeMtiVariantStorageLinks(
     for (const pkColumn of basePrimaryKey.columns) {
       if (existingColumns.has(pkColumn)) continue;
       const baseField = baseNode.fields.find(
-        (field): field is FieldNode => 'descriptor' in field && field.columnName === pkColumn,
+        (field): field is FieldNode =>
+          !('valueObjectName' in field) && field.columnName === pkColumn,
       );
       if (!baseField) continue;
       linkFields.push({
@@ -2429,7 +2380,6 @@ export function interpretPslDocumentToSqlContract(
   const fkRelationMetadata: FkRelationMetadata[] = [];
   const invalidFkPairings: InvalidFkPairing[] = [];
   const backrelationCandidates: ModelBackrelationCandidate[] = [];
-  const modelResolvedFields = new Map<string, readonly ResolvedField[]>();
   // Cross-space relation nodes keyed by declaring model name — merged into
   // modelRelations after local back-relation matching so they bypass that step.
   const crossSpaceRelationsByModel = new Map<string, RelationNode[]>();
@@ -2485,7 +2435,6 @@ export function interpretPslDocumentToSqlContract(
     fkRelationMetadata.push(...result.fkRelationMetadata);
     invalidFkPairings.push(...result.invalidFkPairings);
     backrelationCandidates.push(...result.backrelationCandidates);
-    modelResolvedFields.set(coordinate, result.resolvedFields);
     if (result.crossSpaceRelations.length > 0) {
       const existing = crossSpaceRelationsByModel.get(model.name) ?? [];
       crossSpaceRelationsByModel.set(model.name, [...existing, ...result.crossSpaceRelations]);
@@ -2627,9 +2576,10 @@ export function interpretPslDocumentToSqlContract(
       defaultNamespaceId,
     );
 
-  const valueObjects = buildValueObjects({
+  const valueObjects = buildValueObjectNodes({
     compositeTypes,
     enumTypeDescriptors: allEnumTypeDescriptors,
+    enumHandles: enumHandlesByName,
     namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     composedExtensions,
@@ -2638,7 +2588,6 @@ export function interpretPslDocumentToSqlContract(
     authoringContributions: input.authoringContributions,
     diagnostics,
     sources: input.sources,
-    binder,
   });
 
   if (diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {
@@ -2711,6 +2660,7 @@ export function interpretPslDocumentToSqlContract(
         ? { namespaces: [...namespaceExtensionEntities.keys()] }
         : {}),
       createNamespace: createNamespaceWithExtensions,
+      ...(valueObjects.length > 0 ? { valueObjects } : {}),
       models: stiColumnModelNodes.map((model) => ({
         ...model,
         ...(modelRelations.has(model.modelName)
@@ -2725,24 +2675,23 @@ export function interpretPslDocumentToSqlContract(
     input.codecLookup,
   );
 
-  // Include namespace in patch keys so same bare model names across namespaces
-  // stay distinct; same-coordinate duplicates were already collapsed first-wins.
-  const modelsForPatch: Record<string, ContractModel> = {};
+  // Key by namespace so same bare model names across namespaces stay distinct;
+  // same-coordinate duplicates were already collapsed first-wins.
+  const modelsByCoordinate: Record<string, ContractModel> = {};
   for (const [namespaceId, namespaceSlice] of Object.entries(contract.domain.namespaces)) {
     for (const [modelName, model] of Object.entries(namespaceSlice.models)) {
       const coordinate = modelCoordinateKey(namespaceId, modelName);
       invariant(
-        !Object.hasOwn(modelsForPatch, coordinate),
+        !Object.hasOwn(modelsByCoordinate, coordinate),
         `symbol table guarantees coordinate uniqueness; duplicate model "${namespaceId}.${modelName}" reached interpretation`,
       );
-      modelsForPatch[coordinate] = model;
+      modelsByCoordinate[coordinate] = model;
     }
   }
-  let patchedModels = patchModelDomainFields(modelsForPatch, modelResolvedFields);
 
   const polyDiagnostics = createPslDiagnosticCollector(input.sources);
-  patchedModels = resolvePolymorphism(
-    patchedModels,
+  const patchedModels = resolvePolymorphism(
+    modelsByCoordinate,
     discriminatorDeclarations,
     baseDeclarations,
     modelMappingsByCoordinate,
@@ -2781,10 +2730,6 @@ export function interpretPslDocumentToSqlContract(
             ),
             ...ifDefined('enum', namespaceSlice.enum),
             ...ifDefined('valueObjects', namespaceSlice.valueObjects),
-            ...(namespaceId === input.target.defaultNamespaceId &&
-            Object.keys(valueObjects).length > 0
-              ? { valueObjects }
-              : {}),
           },
         ]),
       ),

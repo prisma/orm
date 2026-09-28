@@ -8,6 +8,7 @@
 
 import type {
   Contract,
+  ContractEnum,
   ContractField,
   ExecutionMutationDefault,
   ScalarFieldType,
@@ -283,12 +284,29 @@ export function refuseUnwritableFieldShape(
   );
 }
 
-/** Refuses a value-object field with a value set, since the PSL source never gives one. */
-export function refuseValueObjectFieldValueSet(field: ContractField, coordinate: string): void {
-  if (field.valueSet === undefined) return;
+/**
+ * Refuses a value-object field with a value set other than the one the PSL source derives for a field typed by an enum: the enum of the default namespace, with the enum's codec and no type parameters.
+ */
+export function refuseUnderivedValueObjectFieldValueSet(input: {
+  readonly field: ContractField;
+  readonly type: ScalarFieldType;
+  readonly coordinate: string;
+  readonly domainEnums: Readonly<Record<string, ContractEnum>>;
+}): void {
+  const { field, type, coordinate } = input;
+  const { valueSet } = field;
+  if (valueSet === undefined) return;
+  const domainEnum = input.domainEnums[valueSet.entityName];
+  if (
+    sameJson(valueSet, derivedValueSetRefs(valueSet.entityName).field) &&
+    domainEnum?.codecId === type.codecId &&
+    type.typeParams === undefined
+  ) {
+    return;
+  }
   throw unsupported(
-    `value-object field ${coordinate} carries a value set, which cannot be written in Prisma 8 PSL.`,
-    "The PSL source keeps a value-object field's codec and type parameters, but no value set, so the value set would be lost.",
+    `value-object field ${coordinate} carries a value set other than an enum of the default namespace with that enum's codec, which cannot be written in Prisma 8 PSL.`,
+    "PSL types the field by the enum name, and the PSL source then points the field at that enum in the default namespace and gives it the enum's codec.",
     KEEP_SOURCE,
     { coordinate },
   );

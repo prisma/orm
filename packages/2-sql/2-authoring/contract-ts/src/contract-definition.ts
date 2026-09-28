@@ -200,19 +200,27 @@ export interface RelationNode {
   };
 }
 
-export interface ValueObjectFieldNode {
+/** A field typed by a value object: a model field when it carries a column, or a value-object member. */
+export interface ValueObjectRefNode {
   readonly fieldName: string;
-  readonly columnName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
+  readonly many?: boolean;
+}
+
+/**
+ * A model field typed by a value object. It is stored in one column of the storage type the target declares for value objects, carried in `descriptor`; a list of value objects is stored in that one column too.
+ */
+export interface ValueObjectFieldNode extends ValueObjectRefNode {
+  readonly columnName: string;
+  readonly descriptor: ColumnTypeDescriptor;
   readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  readonly many?: boolean;
 }
 
 export interface ValueObjectNode {
   readonly name: string;
-  readonly fields: readonly (FieldNode | ValueObjectFieldNode)[];
+  readonly fields: readonly (FieldNode | ValueObjectRefNode)[];
 }
 
 export interface ModelNode {

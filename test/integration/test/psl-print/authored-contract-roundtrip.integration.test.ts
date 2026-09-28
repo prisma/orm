@@ -203,6 +203,25 @@ model Product {
 `,
   },
   {
+    name: 'value-object members typed by a domain enum, single and list',
+    schema: `enum Country {
+  @@type("pg/text@1")
+  DE = "DE"
+  FR = "FR"
+}
+
+type Address {
+  country   Country
+  countries Country[]
+}
+
+model Person {
+  id   Int     @id
+  home Address
+}
+`,
+  },
+  {
     name: 'a policy expression holding a quote, a backslash and a line break',
     schema: `namespace unbound {
   role app_user {

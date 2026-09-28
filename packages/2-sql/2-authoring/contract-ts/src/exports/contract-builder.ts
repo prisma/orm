@@ -29,6 +29,9 @@ export type {
   PrimaryKeyNode,
   RelationNode,
   UniqueConstraintNode,
+  ValueObjectFieldNode,
+  ValueObjectNode,
+  ValueObjectRefNode,
 } from '../contract-definition';
 export type {
   CheckKind,

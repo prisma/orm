@@ -1,4 +1,10 @@
-import type { Contract, ContractField, JsonValue, ScalarFieldType } from '@internal/contract/types';
+import type {
+  Contract,
+  ContractEnum,
+  ContractField,
+  JsonValue,
+  ScalarFieldType,
+} from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import type {
@@ -15,11 +21,11 @@ import { isPostgresCodecDescriptor } from '../codec-descriptor';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { buildColumnType, type PslColumnType } from './column-types';
 import {
+  refuseUnderivedValueObjectFieldValueSet,
   refuseUnwritableFieldShape,
   refuseUnwritableName,
   refuseValueObjectFieldCodecNeedingTypeParameters,
   refuseValueObjectFieldCodecWithoutNativeType,
-  refuseValueObjectFieldValueSet,
   refuseValueObjectsOutsideDefaultNamespace,
 } from './refusals';
 
@@ -47,13 +53,14 @@ function nativeTypeOfValueObjectField(
   }
 }
 
-/** The PSL type position of a domain field: a value object by name, or a scalar as a column would print. */
-export function buildDomainFieldType(input: {
+/** The PSL type position of a value-object member: a value object or an enum by name, or a scalar as a column would print. */
+function buildMemberType(input: {
   readonly field: ContractField;
   readonly coordinate: string;
   readonly typeMap: PslTypeMap;
   readonly context: SqlPslBuildContext;
   readonly enumBlockNames: ReadonlyMap<string, string>;
+  readonly domainEnums: Readonly<Record<string, ContractEnum>>;
 }): PslColumnType {
   const { field, coordinate } = input;
   refuseUnwritableFieldShape(field, coordinate);
@@ -61,7 +68,15 @@ export function buildDomainFieldType(input: {
   if (type.kind === 'valueObject') {
     return { typeName: type.name };
   }
-  refuseValueObjectFieldValueSet(field, coordinate);
+  refuseUnderivedValueObjectFieldValueSet({
+    field,
+    type,
+    coordinate,
+    domainEnums: input.domainEnums,
+  });
+  if (field.valueSet !== undefined) {
+    return { typeName: field.valueSet.entityName };
+  }
   return buildColumnType({
     column: new StorageColumn({
       nativeType: nativeTypeOfValueObjectField(type, coordinate, input.context),
@@ -84,6 +99,7 @@ export function buildCompositeTypes(input: {
   readonly typeMap: PslTypeMap;
   readonly context: SqlPslBuildContext;
   readonly enumBlockNames: ReadonlyMap<string, string>;
+  readonly domainEnums: Readonly<Record<string, ContractEnum>>;
 }): readonly PslCompositeType[] {
   refuseValueObjectsOutsideDefaultNamespace(input.contract, input.namespaceId);
   const valueObjects = input.contract.domain.namespaces[input.namespaceId]?.valueObjects ?? {};
@@ -94,12 +110,13 @@ export function buildCompositeTypes(input: {
       name,
       fields: Object.entries(valueObject.fields).map(([fieldName, field]): PslField => {
         refuseUnwritableName('field', fieldName);
-        const { typeName, typeConstructor } = buildDomainFieldType({
+        const { typeName, typeConstructor } = buildMemberType({
           field,
           coordinate: `"${input.namespaceId}".${name}.${fieldName}`,
           typeMap: input.typeMap,
           context: input.context,
           enumBlockNames: input.enumBlockNames,
+          domainEnums: input.domainEnums,
         });
         return {
           kind: 'field',
