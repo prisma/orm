@@ -34,54 +34,23 @@ export interface DocumentArtifacts {
 
 export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
-  /**
-   * The open overlay, if any — consulted only for its own URI spelling
-   * (a client's live document URI can differ in encoding/casing from the
-   * configured input string that names the same file).
-   */
   readonly getDocument: (uri: string) => TextDocument | undefined;
-  /** Overlay text if the member is open, disk text otherwise; `undefined` on a miss. */
   readonly readText: (uri: string) => string | undefined;
   readonly interpretation?: ProjectInterpretation;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
 
-/**
- * An overlay's edits are never observed stale: the vscode-languageserver
- * runtime dispatches messages in order and the server raises
- * `documentChanged` / `documentClosed` synchronously against the
- * already-updated text mirror, so every overlay mutation lands before the
- * read that could see it. A disk-origin member has no such event to ride —
- * `readText` is re-consulted on every read instead (design decision 4's
- * stat-mtime+size fallback lives one layer down, inside the store), so an
- * external edit to a closed member surfaces on the next read even without
- * an intervening `documentChanged`. A config reload replaces the store
- * wholesale.
- */
 export interface ProjectArtifacts {
   readonly sources: PslSources;
-  /**
-   * `undefined` when the member has no readable text (open or on disk) or is
-   * not one of the project's configured inputs.
-   */
   document(uri: string): DocumentArtifacts | undefined;
   symbolTable(): SymbolTable;
   symbolDiagnostics(): readonly PslDiagnostic[];
   documentChanged(uri: string): void;
   documentClosed(uri: string): void;
-  /**
-   * Swaps in a freshly re-expanded membership set (a schema-glob watch
-   * event) without discarding this project's caches — a control-stack
-   * rebuild (a full config reload) is not needed just to notice a member
-   * file was created or deleted. Members no longer covered by `next` are
-   * dropped from the cache immediately, so a deleted member's stale
-   * artifacts cannot outlive its membership.
-   */
   updateInputs(next: SchemaInputSet): void;
 }
 
 interface CachedDocument {
-  /** The text `artifacts` was computed from — the freshness check for the next read. */
   readonly text: string;
   readonly artifacts: DocumentArtifacts;
 }
@@ -110,13 +79,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     interpretMemo = undefined;
   }
 
-  /**
-   * One interpret call over every member currently read into this project,
-   * distributed by `sourceId` — replacing a once-per-open-document loop that
-   * called `interpret` once per file with a `documents` array of just that
-   * file. Memoized on `sources` identity, the same invalidation signal the
-   * symbol table uses.
-   */
   function projectInterpretDiagnostics(): ReadonlyMap<string, readonly LspDiagnostic[]> {
     if (interpretation === undefined) {
       return new Map();
@@ -219,14 +181,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     }
   }
 
-  /**
-   * `readText` is consulted on every call, cache hit or not: for an open
-   * overlay this is a cheap in-memory read, but for a disk-origin member it
-   * is the store's stat-mtime+size revalidation — the freshness path for
-   * clients that cannot register a file watcher (design decision 4). A
-   * cache hit whose text has not changed skips reparsing; a change (or a
-   * first read) recomputes.
-   */
   function readDocument(uri: string): DocumentArtifacts | undefined {
     const identity = canonicalFileIdentity(uri);
     const text = readText(uri);
@@ -240,10 +194,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (existing !== undefined && existing.text === text) {
       return existing.artifacts;
     }
-    // An open overlay keeps its own URI spelling (a client's live document
-    // URI can differ in encoding/casing from the configured input string);
-    // a disk-only member has no such live spelling, so it uses `uri` as
-    // given by the membership set.
     const resolvedUri = getDocument(uri)?.uri ?? uri;
     const computed = computeDocumentDiagnostics(resolvedUri, text, inputs);
     if (computed === null) {

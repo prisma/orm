@@ -4,7 +4,11 @@ import { pathToFileURL } from 'node:url';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
+import {
+  isWatcherCacheEligible,
+  resolveSchemaInputs,
+  type SchemaInputConfig,
+} from '../src/schema-inputs';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -28,6 +32,38 @@ function configWith(
 
 const directive = '// use prisma-8\n';
 const alwaysMember = (): string => directive;
+
+describe('watcher cache eligibility', () => {
+  it.each([
+    '/project/schema.prisma',
+    '/project/*.prisma',
+    '/project/**/*.prisma',
+    '/project/model?.prisma',
+  ])('accepts interoperable pattern %s', (pattern) =>
+    expect(isWatcherCacheEligible(configWith([pattern]))).toBe(true),
+  );
+
+  it.each([
+    '/project/@(user|post).prisma',
+    '/project/!(user).prisma',
+    '!/project/user.prisma',
+    '/project/{user,post}.prisma',
+    '/project/model{1..3}.prisma',
+    '/project/[up]*.prisma',
+    '/project/\\*.prisma',
+    'file:///project/schema.prisma',
+    '/project/**model.prisma',
+    '/project/***/schema.prisma',
+  ])('rejects uncertain pattern %s even alongside a literal input', (pattern) => {
+    expect(isWatcherCacheEligible(configWith(['/project/schema.prisma', pattern]))).toBe(false);
+  });
+
+  it('requires nonempty PSL inputs', () => {
+    expect(isWatcherCacheEligible(configWith([]))).toBe(false);
+    expect(isWatcherCacheEligible(configWith(undefined))).toBe(false);
+    expect(isWatcherCacheEligible(configWith(['/project/schema.prisma'], 'ts'))).toBe(false);
+  });
+});
 
 describe('resolveSchemaInputs', () => {
   it('includes only the listed inputs by their file URI', async () => {
@@ -211,14 +247,10 @@ describe('resolveSchemaInputs', () => {
       const secondPath = join(dir, 'second.prisma');
       await writeFile(secondPath, directive, 'utf8');
 
-      // A fresh resolveSchemaInputs call is a new resolution pass — no
-      // config change involved, just re-running the same glob.
       const after = await resolveSchemaInputs(configWith([pattern]), alwaysMember);
       expect([...after.uris()].sort()).toEqual(
         [pathToFileURL(firstPath).toString(), pathToFileURL(secondPath).toString()].sort(),
       );
-      // The earlier SchemaInputSet is untouched — expansion is a snapshot
-      // per resolution pass, not a live filesystem view.
       expect([...before.uris()]).toEqual([pathToFileURL(firstPath).toString()]);
     });
   });

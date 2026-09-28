@@ -143,10 +143,6 @@ describe('globContractInputMatching', () => {
   });
 
   it('reaches resolvedInputs intact through the same assembly every emit consumer uses', async () => {
-    // Mirrors `resolvedInputs: await expandContractInputs(source.inputs)` in
-    // contract-emit.ts, client.ts, and format.ts — every consumer beyond the
-    // LSP builds `resolvedInputs` from this exact call, with no further
-    // transformation, so this pins the UNC authority survives that path too.
     const dir = await createFixtureDir();
     const ordinary = join(dir, 'schema.prisma');
     await writeFile(ordinary, 'model User {}\n', 'utf-8');

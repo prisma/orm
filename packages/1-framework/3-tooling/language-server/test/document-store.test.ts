@@ -1,9 +1,15 @@
+import { statSync } from 'node:fs';
 import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentStore } from '../src/document-store';
+
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return { ...actual, statSync: vi.fn(actual.statSync) };
+});
 
 const uri = 'file:///abs/schema.psl';
 const alias = 'file:///abs/%73chema.psl';
@@ -102,6 +108,101 @@ describe('document store', () => {
       expect(store.getDocument(fileUri)).toBeUndefined();
     });
 
+    it('skips stat for covered identities and reloads after invalidation', async () => {
+      const file = await fixtureFile('first');
+      const store = new DocumentStore();
+      store.setWatchCoverage('project', [file.uri]);
+      expect(store.text(file.uri)).toBe('first');
+      vi.mocked(statSync).mockClear();
+      await writeFile(file.path, 'second');
+      expect(store.text(file.uri)).toBe('first');
+      expect(store.text(file.uri)).toBe('first');
+      expect(statSync).not.toHaveBeenCalled();
+      store.invalidate(file.uri);
+      expect(store.text(file.uri)).toBe('second');
+      expect(statSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('revalidates uncovered files independently of other project coverage', async () => {
+      const watched = await fixtureFile('watched');
+      const unwatched = await fixtureFile('before');
+      const store = new DocumentStore();
+      store.setWatchCoverage('watched-project', [watched.uri]);
+      expect(store.text(unwatched.uri)).toBe('before');
+      vi.mocked(statSync).mockClear();
+      expect(store.text(unwatched.uri)).toBe('before');
+      expect(statSync).toHaveBeenCalledTimes(1);
+      await writeFile(unwatched.path, 'changed externally');
+      expect(store.text(unwatched.uri)).toBe('changed externally');
+    });
+
+    it('discards disk text cached before gaining coverage even when metadata is unchanged', async () => {
+      const file = await fixtureFile('first');
+      const pinned = new Date('2020-01-01T00:00:00Z');
+      await utimes(file.path, pinned, pinned);
+      const store = new DocumentStore();
+      expect(store.text(file.uri)).toBe('first');
+      await writeFile(file.path, 'other');
+      await utimes(file.path, pinned, pinned);
+      store.setWatchCoverage('project', [file.uri]);
+      expect(store.text(file.uri)).toBe('other');
+      store.setWatchCoverage('project', []);
+      expect(store.text(file.uri)).toBe('other');
+      await writeFile(file.path, 'third');
+      await utimes(file.path, pinned, pinned);
+      store.setWatchCoverage('project', [file.uri]);
+      expect(store.text(file.uri)).toBe('third');
+    });
+
+    it('retains shared coverage until the last owner removes it', async () => {
+      const file = await fixtureFile('first');
+      const store = new DocumentStore();
+      store.setWatchCoverage('one', [file.uri]);
+      store.setWatchCoverage('two', [file.uri]);
+      expect(store.text(file.uri)).toBe('first');
+      store.setWatchCoverage('one', []);
+      vi.mocked(statSync).mockClear();
+      expect(store.text(file.uri)).toBe('first');
+      expect(statSync).not.toHaveBeenCalled();
+      store.setWatchCoverage('two', []);
+      expect(store.text(file.uri)).toBe('first');
+      vi.mocked(statSync).mockClear();
+      expect(store.text(file.uri)).toBe('first');
+      expect(statSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('canonicalizes coverage and stops trusting files removed from an owner', async () => {
+      const previous = await fixtureFile('previous');
+      const next = await fixtureFile('next');
+      const store = new DocumentStore();
+      store.setWatchCoverage('project', [previous.uri.replace('member.prisma', '%6dember.prisma')]);
+      expect(store.text(previous.uri)).toBe('previous');
+      vi.mocked(statSync).mockClear();
+      expect(store.text(previous.uri)).toBe('previous');
+      expect(statSync).not.toHaveBeenCalled();
+      store.setWatchCoverage('project', [next.uri]);
+      expect(store.text(previous.uri)).toBe('previous');
+      vi.mocked(statSync).mockClear();
+      expect(store.text(previous.uri)).toBe('previous');
+      expect(statSync).toHaveBeenCalledTimes(1);
+      await writeFile(previous.path, 'external change');
+      expect(store.text(previous.uri)).toBe('external change');
+    });
+
+    it('preserves overlays across coverage changes and watcher invalidation', async () => {
+      const file = await fixtureFile('disk');
+      const store = new DocumentStore();
+      const overlay = open(store, file.uri, 'overlay');
+      store.setWatchCoverage('project', [file.uri]);
+      store.invalidate(file.uri);
+      store.setWatchCoverage('project', []);
+      expect(store.text(file.uri)).toBe('overlay');
+      expect(store.getDocument(file.uri)).toBe(overlay);
+      store.setWatchCoverage('project', [file.uri]);
+      store.close(file.uri);
+      expect(store.text(file.uri)).toBe('disk');
+    });
+
     it('returns a defined miss (never throws) for a nonexistent member', () => {
       const store = new DocumentStore();
       const missingUri = pathToFileURL(join(tmpdir(), 'document-store-missing.prisma')).toString();
@@ -163,8 +264,6 @@ describe('document store', () => {
       await utimes(path, cachedMtime, cachedMtime);
       expect(store.text(fileUri)).toBe('model Alpha {}');
 
-      // Same size and mtime as the cached entry: stat revalidation alone
-      // would not detect this change, isolating eviction as the mechanism.
       await writeFile(path, 'model Bravo {}', 'utf8');
       await utimes(path, cachedMtime, cachedMtime);
       expect(store.text(fileUri)).toBe('model Alpha {}');
@@ -205,8 +304,6 @@ describe('document store', () => {
       await utimes(path, pinned, pinned);
       expect(store.text(fileUri)).toBe('cached');
 
-      // Same size and mtime as the cached entry: a correctly-implemented
-      // cache must not observe this write.
       await writeFile(path, 'MUTATE', 'utf8');
       await utimes(path, pinned, pinned);
 

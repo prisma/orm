@@ -44,6 +44,28 @@ function readDiskEntry(path: string): DiskEntry | undefined {
 
 export class DocumentStore {
   private readonly entries = new Map<string, StoreEntry>();
+  private readonly watchCoverage = new Map<string, ReadonlySet<string>>();
+  private watchedIdentities = new Set<string>();
+
+  setWatchCoverage(owner: string, uris: Iterable<string>): void {
+    const identities = new Set(Array.from(uris, canonicalFileIdentity));
+    if (identities.size === 0) {
+      this.watchCoverage.delete(owner);
+    } else {
+      this.watchCoverage.set(owner, identities);
+    }
+    const next = new Set<string>();
+    for (const coverage of this.watchCoverage.values()) {
+      for (const identity of coverage) next.add(identity);
+    }
+    for (const identity of this.watchedIdentities) {
+      if (!next.has(identity)) this.invalidate(identity);
+    }
+    for (const identity of next) {
+      if (!this.watchedIdentities.has(identity)) this.invalidate(identity);
+    }
+    this.watchedIdentities = next;
+  }
 
   readonly getDocument = (uri: string): TextDocument | undefined => {
     const entry = this.entries.get(canonicalFileIdentity(uri));
@@ -65,6 +87,7 @@ export class DocumentStore {
       return entry.document.getText();
     }
     if (entry?.origin === 'disk') {
+      if (this.watchedIdentities.has(identity)) return entry.text;
       const stats = statSafe(identity);
       if (stats !== undefined && stats.mtime === entry.mtime && stats.size === entry.size) {
         return entry.text;

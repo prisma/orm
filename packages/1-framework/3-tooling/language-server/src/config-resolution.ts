@@ -21,11 +21,6 @@ export interface ProjectInterpretation {
 
 export interface ConfigResolution {
   readonly inputs: SchemaInputSet;
-  /**
-   * The raw section `inputs` was resolved from — kept so membership can be
-   * re-expanded later (a schema-glob watch event) without paying for a full
-   * config reload (`loadConfig` plus control-stack rebuild).
-   */
   readonly schemaInputConfig: SchemaInputConfig;
   readonly formatter?: FormatOptions;
   readonly controlStack: PipelineInputs;

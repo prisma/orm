@@ -251,7 +251,6 @@ namespace billing {
   }
 }
 `;
-    // No directive: matches the glob but must be quietly excluded on both surfaces.
     const draftSchema = 'model Draft {\n  id Int @id\n}\n';
 
     function multiFileProject(
@@ -361,10 +360,6 @@ namespace billing {
         const models = Object.keys(project.symbolTable().topLevel.models);
         expect(models.sort()).toEqual(['Post', 'User']);
 
-        // Directive-less: excluded from the emitted contract (no Draft model
-        // in any namespace) and unreadable through the LSP project (no
-        // document, so nothing to publish diagnostics for and nothing in
-        // the symbol table).
         const namespaceModels = Object.values(contract.domain.namespaces).flatMap((namespace) =>
           Object.keys(namespace.models ?? {}),
         );

@@ -424,13 +424,6 @@ interface Harness {
   readonly notifyConfigChanged: (uri?: string) => void;
   readonly getDocumentAst: (uri: string) => DocumentArtifacts | undefined;
   readonly getProjectSymbolTable: (uri: string) => SymbolTable | undefined;
-  /**
-   * Holds the response to the next schema-watcher (non-config)
-   * `client/registerCapability` request instead of answering it — lets a
-   * test force a registration's own request/response race deliberately.
-   * Returns the registration's id once the request has arrived; the
-   * response is released by calling the returned function.
-   */
   readonly delayNextSchemaWatcherRegistration: () => Promise<{
     readonly id: string;
     readonly release: () => void;
@@ -537,9 +530,6 @@ function startHarness(
     params.registrations.some(
       (registration) => registration.method === 'workspace/didChangeWatchedFiles',
     );
-  // The config watcher registers a `prisma.config.ts` pattern; the
-  // schema-glob watcher never does, so this distinguishes the two without
-  // needing the harness to know the server's registration ids.
   const isSchemaWatcherRegistration = (params: RegistrationParams) =>
     isWatchedFilesRegistration(params) &&
     !JSON.stringify(params.registrations).includes('prisma.config.ts');
@@ -948,8 +938,6 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     await harness.waitForDiagnostics(schemaUri);
     expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
     expect(Object.keys(harness.getProjectSymbolTable(alias)!.topLevel.models)).toEqual(['User']);
-    // The project survives the close (design decision 8), so reopening the
-    // same input reuses it rather than triggering a second config load.
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
@@ -3010,7 +2998,6 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     );
     openDocument(harness, schemaUri, duplicateModelSource, 2);
     await rediagnosed;
-    // The project survived the close, so reopening reuses it — no second load.
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
@@ -3051,8 +3038,6 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     );
     openDocument(harness, schemaUri, duplicateModelSource);
     await diagnosed;
-    // The project the stray document's own resolution created survives
-    // (design decision 8), so the real input's open reuses it.
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
@@ -3085,8 +3070,6 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
 
     harness.notifyConfigChanged();
     await settle();
-    // The project survived the close (design decision 8) and keeps reacting
-    // to config changes, so this is a real second load.
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
   });
 });
@@ -3678,11 +3661,6 @@ describe('language server config failure surfacing', {
     expect(fullReportItems(after).map((d) => d.code)).toContain('PSL_INTERPRETER_FINDING');
   });
 
-  /**
-   * One interpret call now carries every member currently read into the
-   * project (not just one document per call), so a specific document's
-   * position in `input.documents` is no longer stable — look it up by URI.
-   */
   function documentFor(input: PslInterpretInput, uri: string) {
     return input.documents.find((doc) => input.sources.sourceFileFor(doc.syntax).filename === uri);
   }
@@ -3764,8 +3742,6 @@ describe('language server config failure surfacing', {
     });
     await settle();
 
-    // The project survives the close (design decision 8): nothing clears its
-    // failed marker, so the config diagnostic stays published.
     expect(harness.latestDiagnostics(configUri)?.length).toBeGreaterThan(0);
   });
 
@@ -3789,8 +3765,6 @@ describe('language server config failure surfacing', {
     gate.reject(new Error('config exploded'));
     await settle();
 
-    // The project survives the close (design decision 8) and keeps
-    // publishing for it even though nothing is open to see it.
     expect(harness.nonEmptyPublishCount(configUri)).toBe(1);
     expect(harness.latestDiagnostics(configUri)?.length).toBeGreaterThan(0);
   });
@@ -4045,8 +4019,6 @@ describe('language server whole-project push and freshness', {
 
     openDocument(harness, memberAUri, userSchema);
     await harness.waitForDiagnostics(memberAUri);
-    // b is closed but readable from disk, so the sweep from opening a already
-    // pushed an (empty) diagnostic set to it.
     expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
 
     const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
@@ -4088,16 +4060,12 @@ describe('language server whole-project push and freshness', {
     openDocument(harness, memberAUri, userSchema);
     await harness.waitForDiagnostics(memberAUri);
     expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
-    // The schema-glob watcher registers once the project the open member
-    // belongs to has loaded.
     await waitUntil(() =>
       watchedFilesRegistrations(activeHarness).some((registration) =>
         JSON.stringify(registration.registerOptions).includes('a.prisma'),
       ),
     );
 
-    // A byte-length change alongside the content change, so the assertion
-    // does not depend on filesystem mtime granularity.
     await writeFile(memberBPath, conflictingSchema, 'utf8');
     const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
     harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
@@ -4120,9 +4088,6 @@ describe('language server whole-project push and freshness', {
     await harness.initialize();
     await harness.waitForWatchedFilesRegistration(timeouts.default);
 
-    // Holds the first load's schema-watcher registration response so its
-    // resolution can be forced to land after a second, racing reload's own
-    // registration has already completed and been stored.
     const held = harness.delayNextSchemaWatcherRegistration();
     openDocument(harness, memberAUri, userSchema);
     await harness.waitForDiagnostics(memberAUri);
@@ -4138,9 +4103,6 @@ describe('language server whole-project push and freshness', {
     releaseFirstResponse();
     await waitUntil(() => activeHarness.unregisteredIds().includes(firstRegistrationId));
 
-    // Exactly one live registration survives the race: the first (now
-    // superseded) call disposed the registration it belatedly received
-    // instead of overwriting the second call's already-stored one.
     expect(activeHarness.unregisteredIds()).not.toContain(secondRegistrationId);
   });
 
@@ -4164,10 +4126,6 @@ describe('language server whole-project push and freshness', {
     await writeFile(memberBPath, conflictingSchema, 'utf8');
     expect(watchedFilesRegistrations(harness).length).toBe(0);
 
-    // No watcher exists to notify the server of b's change; an unrelated
-    // edit to the open sibling is the next validation pass, and b's
-    // diagnostics must still pick up the on-disk change through the
-    // store's stat-mtime+size revalidation alone.
     const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: memberAUri, version: 2 },
@@ -4182,9 +4140,6 @@ describe('language server whole-project push and freshness', {
     const memberBPath = join(dir, 'b.prisma');
     const memberAUri = pathToFileURL(memberAPath).toString();
     const memberBUri = pathToFileURL(memberBPath).toString();
-    // b's own two `Post` declarations conflict with each other, independent
-    // of a's content, so a's own model set is the control for the
-    // "dropped from the symbol table" assertion below.
     await writeFile(memberAPath, userSchema, 'utf8');
     await writeFile(memberBPath, selfDuplicatePostSchema, 'utf8');
 

@@ -51,7 +51,6 @@ function mirroredDocument(
   return undefined;
 }
 
-/** Like `mirroredDocument`, but for a disk-backed map with no open document. */
 function mirroredText(texts: ReadonlyMap<string, string>, uri: string): string | undefined {
   for (const [diskUri, text] of texts) {
     if (canonicalFileIdentity(diskUri) === canonicalFileIdentity(uri)) {
@@ -341,8 +340,6 @@ describe('createProjectArtifacts', () => {
 
     const artifacts = store.document(schemaUri);
     expect(artifacts?.diagnostics).toEqual([]);
-    // The sibling has no open document — only readText (the disk fallback)
-    // makes it readable — yet it still enters the merged symbol table.
     expect(store.document(siblingUri)?.document).toBeDefined();
     const models = Object.keys(store.symbolTable().topLevel.models);
     expect(models).toEqual(expect.arrayContaining(['Order', 'Customer']));
@@ -727,9 +724,6 @@ describe('interpret slot', () => {
       onInterpretationError: vi.fn(),
       interpretation,
     });
-    // Matches how server.ts's combinedDiagnostics actually calls this:
-    // symbolDiagnostics() (reading every member into the registry) runs
-    // before any file's interpretDiagnostics() is pulled.
     store.symbolDiagnostics();
     expect(
       store
@@ -743,8 +737,6 @@ describe('interpret slot', () => {
         ?.interpretDiagnostics()
         .map(({ code }) => code),
     ).toEqual(['SIBLING_ERROR']);
-    // One project-wide interpret call serves both files' distributed
-    // diagnostics — not one call per open document.
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0]?.[0].documents).toHaveLength(2);
   });

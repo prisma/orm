@@ -23,12 +23,6 @@ import { providePslSignatureHelp } from '../src/signature-help';
 
 vi.mock('@internal/config-loader', { spy: true });
 
-/**
- * `runPipeline` is parse-only (the symbol table is a project-wide concern
- * built once over every member); these attribute-spec-consumption tests
- * still want a symbol table for a single document, so they build one
- * directly, the way `ProjectArtifacts` builds its project-wide one.
- */
 function pipelineWithSymbolTable(
   filename: string,
   text: string,
