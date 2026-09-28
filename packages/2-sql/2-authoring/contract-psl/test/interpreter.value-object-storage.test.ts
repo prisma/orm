@@ -1,13 +1,12 @@
+import type { Contract } from '@internal/contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
-import {
-  type InterpretPslDocumentToSqlContractInput,
-  interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
-} from '../src/interpreter';
+import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
-  modelsOf,
+  postgresCodecLookup,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -15,477 +14,144 @@ import {
   sqliteScalarColumnDescriptors,
   sqliteTarget,
   symbolTableInputFromParseArgs,
-  valueObjectsOf,
 } from './fixtures';
 
-describe('interpretPslDocumentToSqlContract value objects and list fields', () => {
-  const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
-  const interpretPslDocumentToSqlContract = (
-    input: Omit<
-      InterpretPslDocumentToSqlContractInput,
-      | 'target'
-      | 'scalarColumnDescriptors'
-      | 'composedExtensionContracts'
-      | 'createNamespace'
-      | 'capabilities'
-      | 'dataTypeLookup'
-    > &
-      Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
-  ) =>
-    interpretPslDocumentToSqlContractInternal({
-      target: postgresTarget,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-      authoringContributions: {
-        type: postgresScalarAuthoringTypes,
-        valueObjectStorageType: 'Jsonb',
-      },
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: { scalarList: true } },
-      ...input,
-    });
+function userFieldsAndColumns(contract: Contract) {
+  const [namespaceId = ''] = Object.keys(contract.storage.namespaces);
+  return {
+    fields: contract.domain.namespaces[namespaceId]?.models['User']?.fields,
+    columns: (contract.storage as SqlStorage).namespaces[namespaceId]?.entries.table?.['User']
+      ?.columns,
+  };
+}
 
-  it('emits composite types as valueObjects', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
+const jsonbStorage = { valueObjectStorageType: 'Jsonb' } as const;
+
+function interpretPostgres(
+  schema: string,
+  valueObjectStorage: { readonly valueObjectStorageType?: string } = jsonbStorage,
+) {
+  return interpretPslDocumentToSqlContract({
+    target: postgresTarget,
+    scalarColumnDescriptors: postgresScalarTypeDescriptors,
+    authoringContributions: {
+      type: postgresScalarAuthoringTypes,
+      dataTypes: fixtureDataTypeSupport.entries,
+      ...valueObjectStorage,
+    },
+    codecLookup: postgresCodecLookup,
+    composedExtensionContracts: new Map(),
+    createNamespace: createTestSqlNamespace,
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    capabilities: { sql: { scalarList: true } },
+    ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+    controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+  });
+}
+
+const userWithAddresses = `type Address {
   street String
-  city String
-  zip String?
 }
 
 model User {
-  id Int @id
-  name String
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(valueObjectsOf(result.value)).toEqual({
-      Address: {
-        fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          zip: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        },
-      },
-    });
-  });
-
-  it('preserves the many marker for scalar list fields inside composite types', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
-  street String
-  tags   String[]
-}
-
-model User {
-  id Int @id
-  home Address?
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(valueObjectsOf(result.value)).toEqual({
-      Address: {
-        fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          tags: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: true },
-        },
-      },
-    });
-  });
-
-  it('emits value object field references with valueObject domain type and JSONB storage', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
-  street String
-  city String
-}
-
-model User {
-  id Int @id
-  homeAddress Address?
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(modelsOf(result.value)).toMatchObject({
-      User: {
-        fields: {
-          homeAddress: {
-            nullable: true,
-            type: { kind: 'valueObject', name: 'Address' },
-          },
-        },
-      },
-    });
-
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              User: {
-                columns: {
-                  homeAddress: {
-                    nativeType: 'jsonb',
-                    codecId: 'pg/jsonb@1',
-                    nullable: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('lowers scalar list fields to native array storage columns', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
-  id Int @id
-  tags String[]
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(modelsOf(result.value)).toMatchObject({
-      User: {
-        fields: {
-          tags: {
-            nullable: false,
-            type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
-          },
-        },
-      },
-    });
-
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              User: {
-                columns: {
-                  tags: {
-                    nativeType: 'text',
-                    codecId: 'pg/text@1',
-                    many: true,
-                    nullable: false,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('lowers nullable scalar list fields to native array storage columns', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
-  id Int @id
-  tags String[]?
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(modelsOf(result.value)).toMatchObject({
-      User: {
-        fields: {
-          tags: {
-            nullable: true,
-            type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
-          },
-        },
-      },
-    });
-
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              User: {
-                columns: {
-                  tags: {
-                    nativeType: 'text',
-                    codecId: 'pg/text@1',
-                    many: true,
-                    nullable: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('emits value object list fields with many: true and valueObject domain type', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
-  street String
-  city String
-}
-
-model User {
-  id Int @id
+  id        Int       @id
+  home      Address?
   addresses Address[]
-}`,
-      sourceId: 'schema.prisma',
+}`;
+
+const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
+const idColumn = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const addressFields = {
+  home: { nullable: true, type: { kind: 'valueObject', name: 'Address' } },
+  addresses: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: true },
+};
+
+describe('interpretPslDocumentToSqlContract value-object storage', () => {
+  describe('guards: passed before value-object fields were built by the contract builder', () => {
+    it('stores a value-object field, optional or list, in one column of the storage type the stack declares', () => {
+      const result = interpretPostgres(userWithAddresses);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(userFieldsAndColumns(result.value)).toEqual({
+        fields: { id: idField, ...addressFields },
+        columns: {
+          id: idColumn,
+          home: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: true },
+          addresses: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
+      });
     });
 
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
+    it('stores value-object fields in the storage type the sqlite target declares', () => {
+      const result = interpretPslDocumentToSqlContract({
+        target: sqliteTarget,
+        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+        authoringContributions: {
+          type: sqliteScalarAuthoringTypes,
+          valueObjectStorageType: 'Json',
+        },
+        composedExtensionContracts: new Map(),
+        createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        capabilities: { sql: {} },
+        ...symbolTableInputFromParseArgs({ schema: userWithAddresses, sourceId: 'schema.prisma' }),
+        controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const { fields, columns } = userFieldsAndColumns(result.value);
+      expect({ fields, columns }).toEqual({
+        fields: { id: fields?.['id'], ...addressFields },
+        columns: {
+          id: columns?.['id'],
+          home: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
+          addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+        },
+      });
     });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
+    it('keeps a database default on a value-object field', () => {
+      const result = interpretPostgres(`type Address {
+  street String
+}
 
-    expect(modelsOf(result.value)).toMatchObject({
-      User: {
+model User {
+  id   Int     @id
+  home Address @default(sql\`'{}'::jsonb\`)
+}`);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(userFieldsAndColumns(result.value)).toEqual({
         fields: {
-          addresses: {
+          id: idField,
+          home: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+        },
+        columns: {
+          id: idColumn,
+          home: {
+            nativeType: 'jsonb',
+            codecId: 'pg/jsonb@1',
             nullable: false,
-            type: { kind: 'valueObject', name: 'Address' },
-            many: true,
+            default: { kind: 'function', expression: "'{}'::jsonb" },
           },
         },
-      },
-    });
-
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              User: {
-                columns: {
-                  addresses: {
-                    nativeType: 'jsonb',
-                    codecId: 'pg/jsonb@1',
-                    nullable: false,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      });
     });
   });
 
-  it('emits nested value object references within composite types', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
-  street String
-  city String
-}
-
-type ShippingInfo {
-  address Address
-  notes String
-}
-
-model Order {
-  id Int @id
-  ship ShippingInfo
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(valueObjectsOf(result.value)).toEqual({
-      Address: {
-        fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        },
-      },
-      ShippingInfo: {
-        fields: {
-          address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
-          notes: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        },
-      },
-    });
-  });
-
-  it('omits valueObjects from contract when no composite types exist', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `model User {
-  id Int @id
-  name String
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(valueObjectsOf(result.value)).toBeUndefined();
-  });
-
-  it('stores value object fields in the storage type the sqlite target declares', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
-  street String
-  city String
-}
-
-model User {
-  id Int @id
-  homeAddress Address?
-}`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContractInternal({
-      target: sqliteTarget,
-      scalarColumnDescriptors: sqliteScalarColumnDescriptors,
-      authoringContributions: {
-        type: sqliteScalarAuthoringTypes,
-        valueObjectStorageType: 'Json',
-      },
-      composedExtensionContracts: new Map(),
-      createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
-      capabilities: { sql: {} },
-      ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    expect(modelsOf(result.value)).toMatchObject({
-      User: {
-        fields: {
-          homeAddress: {
-            nullable: true,
-            type: { kind: 'valueObject', name: 'Address' },
-          },
-        },
-      },
-    });
-
-    const namespaces = result.value.storage.namespaces;
-    const [namespace] = Object.values(namespaces);
-    expect(namespace).toMatchObject({
-      entries: {
-        table: {
-          User: {
-            columns: {
-              homeAddress: {
-                codecId: 'sqlite/json@1',
-                nativeType: 'text',
-                nullable: true,
-              },
-            },
-          },
-        },
-      },
-    });
-  });
-
-  it('skips value object fields when the target declares no value-object storage type', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `type Address {
-  street String
-  city String
-}
-
-model User {
-  id Int @id
-  homeAddress Address?
-}`,
-      sourceId: 'schema.prisma',
-    });
-
+  it('skips value-object fields when the stack declares no value-object storage type', () => {
     // The scalar map still contains Jsonb/Json entries; the family layer
     // must not fall back to hardcoded type names.
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      authoringContributions: { type: postgresScalarAuthoringTypes },
-      controlMutationDefaults: builtinControlMutationDefaults,
-    });
+    const result = interpretPostgres(userWithAddresses, {});
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-
-    expect(modelsOf(result.value)['User']?.fields).not.toHaveProperty('homeAddress');
-    expect(result.value.storage).toMatchObject({
-      namespaces: {
-        public: {
-          entries: {
-            table: {
-              User: {
-                columns: expect.not.objectContaining({ homeAddress: expect.anything() }),
-              },
-            },
-          },
-        },
-      },
+    expect(userFieldsAndColumns(result.value)).toEqual({
+      fields: { id: idField },
+      columns: { id: idColumn },
     });
   });
 });

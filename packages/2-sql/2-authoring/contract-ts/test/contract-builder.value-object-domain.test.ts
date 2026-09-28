@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { enumType, member } from '../src/enum-type';
-import { unboundTables } from './unbound-tables';
+import { valueObjectsOf } from './contract-test-helpers';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -23,8 +23,9 @@ const numeric = {
 } as const;
 const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable: false } as const;
 
-describe('value-object fields in contract definition builder', () => {
-  it('stores a value-object field of a model in a column of the descriptor it carries', () => {
+describe('value-object members and value-object fields in the domain', () => {
+  it('types a model field by its value object, optional and list', () => {
+    const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
       target: postgresTargetPack,
@@ -39,14 +40,14 @@ describe('value-object fields in contract definition builder', () => {
               fieldName: 'home',
               columnName: 'home',
               valueObjectName: 'Address',
-              descriptor: { codecId: 'sqlite/json@1', nativeType: 'text' },
+              descriptor: jsonb,
               nullable: true,
             },
             {
               fieldName: 'addresses',
               columnName: 'addresses',
               valueObjectName: 'Address',
-              descriptor: { codecId: 'sqlite/json@1', nativeType: 'text' },
+              descriptor: jsonb,
               nullable: false,
               many: true,
             },
@@ -55,17 +56,15 @@ describe('value-object fields in contract definition builder', () => {
         },
       ],
       valueObjects: [
-        {
-          name: 'Address',
-          fields: [{ fieldName: 'street', descriptor: text, nullable: false }],
-        },
+        { name: 'Address', fields: [{ fieldName: 'street', descriptor: text, nullable: false }] },
       ],
     });
 
-    expect(unboundTables(contract.storage)['user']?.columns).toEqual({
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      home: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-      addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+    const { id: _id, ...fields } =
+      contract.domain.namespaces['public']?.models['User']?.fields ?? {};
+    expect(fields).toEqual({
+      home: { type: { kind: 'valueObject', name: 'Address' }, nullable: true },
+      addresses: { type: { kind: 'valueObject', name: 'Address' }, nullable: false, many: true },
     });
   });
 
@@ -174,5 +173,54 @@ describe('value-object fields in contract definition builder', () => {
         },
       },
     });
+  });
+
+  it('types a member by a nested value object, and keeps the members of the nested value object', () => {
+    const contract = buildSqlContractFromDefinition({
+      warnings: undefined,
+      target: postgresTargetPack,
+      createNamespace: createTestSqlNamespace,
+      models: [
+        { modelName: 'Company', tableName: 'company', fields: [idField], id: { columns: ['id'] } },
+      ],
+      valueObjects: [
+        {
+          name: 'GeoLocation',
+          fields: [{ fieldName: 'lat', descriptor: { codecId: 'pg/float8@1' }, nullable: false }],
+        },
+        {
+          name: 'CompanyAddress',
+          fields: [
+            { fieldName: 'street', descriptor: text, nullable: false },
+            { fieldName: 'location', valueObjectName: 'GeoLocation', nullable: true },
+          ],
+        },
+      ],
+    });
+
+    expect(valueObjectsOf(contract)).toEqual({
+      GeoLocation: {
+        fields: { lat: { type: { kind: 'scalar', codecId: 'pg/float8@1' }, nullable: false } },
+      },
+      CompanyAddress: {
+        fields: {
+          street: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+          location: { type: { kind: 'valueObject', name: 'GeoLocation' }, nullable: true },
+        },
+      },
+    });
+  });
+
+  it('omits valueObjects from the contract when none are defined', () => {
+    const contract = buildSqlContractFromDefinition({
+      warnings: undefined,
+      target: postgresTargetPack,
+      createNamespace: createTestSqlNamespace,
+      models: [
+        { modelName: 'User', tableName: 'user', fields: [idField], id: { columns: ['id'] } },
+      ],
+    });
+
+    expect(valueObjectsOf(contract)).toBeUndefined();
   });
 });

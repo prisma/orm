@@ -25,15 +25,17 @@ export type {
   FieldNode,
   ForeignKeyNode,
   IndexNode,
+  MemberTypeDescriptor,
   ModelNode,
   PrimaryKeyNode,
   RelationNode,
   ScalarMemberNode,
   UniqueConstraintNode,
   ValueObjectFieldNode,
+  ValueObjectMemberNode,
   ValueObjectNode,
-  ValueObjectRefNode,
 } from '../contract-definition';
+export { isValueObjectNode } from '../contract-definition';
 export type {
   CheckKind,
   ColumnRef,

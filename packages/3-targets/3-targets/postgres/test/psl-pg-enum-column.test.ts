@@ -426,6 +426,34 @@ namespace auth {
     );
   });
 
+  it('refuses pg.enum(E) on a composite type member, which has no column to store the enum in', () => {
+    const source = `
+native_enum Level {
+  low = "low"
+  @@map("level")
+}
+
+type Session {
+  level pg.enum(Level)
+}
+
+model User {
+  id Int @id
+}
+`;
+    const result = interpret(source);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "Session.level" is typed by the storage enum "Level", which a composite type member cannot use: a member has no column to store it in. Use a PSL enum instead.',
+      },
+    ]);
+  });
+
   it('a pg.enum() call with no arguments is a diagnostic', () => {
     const source = `
 namespace auth {

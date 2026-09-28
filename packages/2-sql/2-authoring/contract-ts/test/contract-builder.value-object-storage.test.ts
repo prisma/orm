@@ -1,10 +1,10 @@
-import type { ContractField, ContractValueObject } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
-import { modelsOf, valueObjectsOf } from './contract-test-helpers';
+import type { ContractDefinition } from '../src/contract-definition';
+import { modelsOf } from './contract-test-helpers';
 import { unboundTables } from './unbound-tables';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
@@ -16,8 +16,77 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-describe('value objects in contract definition builder', () => {
-  it('encodes value-object literal defaults through codecLookup during storage lowering', () => {
+const int4 = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
+const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
+const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable: false } as const;
+
+function userWithAddresses(descriptor: ColumnTypeDescriptor): ContractDefinition {
+  return {
+    warnings: undefined,
+    target: postgresTargetPack,
+    createNamespace: createTestSqlNamespace,
+    models: [
+      {
+        modelName: 'User',
+        tableName: 'user',
+        fields: [
+          idField,
+          {
+            fieldName: 'home',
+            columnName: 'home_address',
+            valueObjectName: 'Address',
+            descriptor,
+            nullable: true,
+          },
+          {
+            fieldName: 'addresses',
+            columnName: 'addresses',
+            valueObjectName: 'Address',
+            descriptor,
+            nullable: false,
+            many: true,
+          },
+        ],
+        id: { columns: ['id'] },
+      },
+    ],
+    valueObjects: [
+      {
+        name: 'Address',
+        fields: [{ fieldName: 'street', descriptor: { codecId: 'pg/text@1' }, nullable: false }],
+      },
+    ],
+  };
+}
+
+describe('value-object fields are stored in one column of the descriptor they carry', () => {
+  it('stores a single and a list value-object field in a column of that descriptor', () => {
+    const contract = buildSqlContractFromDefinition(
+      userWithAddresses({ codecId: 'sqlite/json@1', nativeType: 'text' }),
+    );
+
+    expect(unboundTables(contract.storage)['user']?.columns).toEqual({
+      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+      home_address: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
+      addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+    });
+  });
+
+  it('maps a value-object field to its column in the storage bridge', () => {
+    const contract = buildSqlContractFromDefinition(userWithAddresses(jsonb));
+
+    const models = modelsOf(contract) as unknown as Record<
+      string,
+      { readonly storage: { readonly fields: Record<string, unknown> } } | undefined
+    >;
+    expect(models['User']?.storage.fields).toEqual({
+      id: { column: 'id' },
+      home: { column: 'home_address' },
+      addresses: { column: 'addresses' },
+    });
+  });
+
+  it('encodes a literal default on a value-object field through the codec of its column', () => {
     const isMoneyValue = (value: unknown): value is { amount: number; currency: string } =>
       typeof value === 'object' &&
       value !== null &&
@@ -63,25 +132,14 @@ describe('value objects in contract definition builder', () => {
             modelName: 'Invoice',
             tableName: 'invoice',
             fields: [
-              {
-                fieldName: 'id',
-                columnName: 'id',
-                descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-                nullable: false,
-              },
+              idField,
               {
                 fieldName: 'total',
                 columnName: 'total',
                 valueObjectName: 'Money',
-                descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
+                descriptor: jsonb,
                 nullable: false,
-                default: {
-                  kind: 'literal',
-                  value: {
-                    amount: 12,
-                    currency: 'EUR',
-                  },
-                },
+                default: { kind: 'literal', value: { amount: 12, currency: 'EUR' } },
               },
             ],
             id: { columns: ['id'] },
@@ -91,16 +149,8 @@ describe('value objects in contract definition builder', () => {
           {
             name: 'Money',
             fields: [
-              {
-                fieldName: 'amount',
-                descriptor: { codecId: 'pg/int8@1', nativeType: 'int8' },
-                nullable: false,
-              },
-              {
-                fieldName: 'currency',
-                descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-                nullable: false,
-              },
+              { fieldName: 'amount', descriptor: { codecId: 'pg/int8@1' }, nullable: false },
+              { fieldName: 'currency', descriptor: { codecId: 'pg/text@1' }, nullable: false },
             ],
           },
         ],
@@ -110,337 +160,7 @@ describe('value objects in contract definition builder', () => {
 
     expect(unboundTables(contract.storage)['invoice']?.columns['total']?.default).toEqual({
       kind: 'literal',
-      value: {
-        amount: '12',
-        currency: 'EUR',
-      },
-    });
-  });
-
-  it('emits valueObjects section with scalar fields', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'Address',
-          fields: [
-            {
-              fieldName: 'street',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-            {
-              fieldName: 'city',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-          ],
-        },
-      ],
-    });
-
-    const valueObjects = valueObjectsOf(contract) as
-      | Record<string, ContractValueObject>
-      | undefined;
-
-    expect(valueObjects).toBeDefined();
-    expect(valueObjects?.['Address']).toEqual({
-      fields: {
-        street: {
-          type: { kind: 'scalar', codecId: 'pg/text@1' },
-          nullable: false,
-        },
-        city: {
-          type: { kind: 'scalar', codecId: 'pg/text@1' },
-          nullable: false,
-        },
-      },
-    });
-  });
-
-  it('emits valueObject domain type for model fields referencing a value object', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-            {
-              fieldName: 'homeAddress',
-              columnName: 'home_address',
-              valueObjectName: 'Address',
-              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
-              nullable: true,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'Address',
-          fields: [
-            {
-              fieldName: 'street',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-            {
-              fieldName: 'city',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-          ],
-        },
-      ],
-    });
-
-    const userModel = modelsOf(contract) as Record<
-      string,
-      { readonly fields: Record<string, ContractField> } | undefined
-    >;
-
-    expect(userModel['User']?.fields['homeAddress']).toEqual({
-      type: { kind: 'valueObject', name: 'Address' },
-      nullable: true,
-    });
-  });
-
-  it('emits many: true for value object list fields', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-            {
-              fieldName: 'addresses',
-              columnName: 'addresses',
-              valueObjectName: 'Address',
-              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
-              nullable: false,
-              many: true,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'Address',
-          fields: [
-            {
-              fieldName: 'street',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-          ],
-        },
-      ],
-    });
-
-    const userModel = modelsOf(contract) as Record<
-      string,
-      { readonly fields: Record<string, ContractField> } | undefined
-    >;
-
-    expect(userModel['User']?.fields['addresses']).toEqual({
-      type: { kind: 'valueObject', name: 'Address' },
-      nullable: false,
-      many: true,
-    });
-  });
-
-  it('emits nested value-object references inside a parent value object', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'Company',
-          tableName: 'company',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-            {
-              fieldName: 'address',
-              columnName: 'address',
-              valueObjectName: 'CompanyAddress',
-              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
-              nullable: false,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'GeoLocation',
-          fields: [
-            {
-              fieldName: 'lat',
-              descriptor: { codecId: 'pg/float8@1', nativeType: 'float8' },
-              nullable: false,
-            },
-            {
-              fieldName: 'lng',
-              descriptor: { codecId: 'pg/float8@1', nativeType: 'float8' },
-              nullable: false,
-            },
-          ],
-        },
-        {
-          name: 'CompanyAddress',
-          fields: [
-            {
-              fieldName: 'street',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-            {
-              fieldName: 'location',
-              valueObjectName: 'GeoLocation',
-              nullable: true,
-            },
-          ],
-        },
-      ],
-    });
-
-    const valueObjects = valueObjectsOf(contract) as
-      | Record<string, ContractValueObject>
-      | undefined;
-
-    expect(valueObjects?.['CompanyAddress']?.fields['location']).toEqual({
-      type: { kind: 'valueObject', name: 'GeoLocation' },
-      nullable: true,
-    });
-    expect(valueObjects?.['CompanyAddress']?.fields['street']).toEqual({
-      type: { kind: 'scalar', codecId: 'pg/text@1' },
-      nullable: false,
-    });
-    expect(valueObjects?.['GeoLocation']?.fields['lat']).toEqual({
-      type: { kind: 'scalar', codecId: 'pg/float8@1' },
-      nullable: false,
-    });
-  });
-
-  it('omits valueObjects from contract when none are defined', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-    });
-
-    expect(valueObjectsOf(contract)).toBeUndefined();
-  });
-
-  it('maps value object field to correct storage bridge entry', () => {
-    const contract = buildSqlContractFromDefinition({
-      warnings: undefined,
-      target: postgresTargetPack,
-      createNamespace: createTestSqlNamespace,
-      models: [
-        {
-          modelName: 'User',
-          tableName: 'user',
-          fields: [
-            {
-              fieldName: 'id',
-              columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
-              nullable: false,
-            },
-            {
-              fieldName: 'homeAddress',
-              columnName: 'home_address',
-              valueObjectName: 'Address',
-              descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
-              nullable: true,
-            },
-          ],
-          id: { columns: ['id'] },
-        },
-      ],
-      valueObjects: [
-        {
-          name: 'Address',
-          fields: [
-            {
-              fieldName: 'street',
-              descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-              nullable: false,
-            },
-          ],
-        },
-      ],
-    });
-
-    const userModel = modelsOf(contract) as unknown as Record<
-      string,
-      | {
-          readonly storage: { readonly fields: Record<string, { readonly column: string }> };
-        }
-      | undefined
-    >;
-
-    expect(userModel['User']?.storage.fields['homeAddress']).toEqual({
-      column: 'home_address',
+      value: { amount: '12', currency: 'EUR' },
     });
   });
 });

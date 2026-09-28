@@ -55,10 +55,15 @@ export type AuthoredColumnDefault =
       readonly canonical?: boolean;
     };
 
-/** A scalar field of a value object, which has no column of its own. */
+/** The type of a scalar that has no column: a codec and its type parameters. */
+export type MemberTypeDescriptor = Pick<ColumnTypeDescriptor, 'codecId' | 'typeParams'>;
+
+/**
+ * The column-free part of a scalar field. A value-object member is exactly this; a model field ({@link FieldNode}) adds its column.
+ */
 export interface ScalarMemberNode {
   readonly fieldName: string;
-  readonly descriptor: ColumnTypeDescriptor;
+  readonly descriptor: MemberTypeDescriptor;
   readonly nullable: boolean;
   readonly many?: boolean;
   /** Present when the field is typed by an enum. */
@@ -66,6 +71,7 @@ export interface ScalarMemberNode {
 }
 
 export interface FieldNode extends ScalarMemberNode {
+  readonly descriptor: ColumnTypeDescriptor;
   readonly columnName: string;
   readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
@@ -204,8 +210,10 @@ export interface RelationNode {
   };
 }
 
-/** A field typed by a value object: a model field when it carries a column, or a value-object member. */
-export interface ValueObjectRefNode {
+/**
+ * The column-free part of a field typed by a value object. A value-object member is exactly this; a model field ({@link ValueObjectFieldNode}) adds its column.
+ */
+export interface ValueObjectMemberNode {
   readonly fieldName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
@@ -215,7 +223,7 @@ export interface ValueObjectRefNode {
 /**
  * A model field typed by a value object. It is stored in one column of the storage type the target declares for value objects, carried in `descriptor`; a list of value objects is stored in that one column too.
  */
-export interface ValueObjectFieldNode extends ValueObjectRefNode {
+export interface ValueObjectFieldNode extends ValueObjectMemberNode {
   readonly columnName: string;
   readonly descriptor: ColumnTypeDescriptor;
   readonly default?: AuthoredColumnDefault;
@@ -224,7 +232,14 @@ export interface ValueObjectFieldNode extends ValueObjectRefNode {
 
 export interface ValueObjectNode {
   readonly name: string;
-  readonly fields: readonly (ScalarMemberNode | ValueObjectRefNode)[];
+  readonly fields: readonly (ScalarMemberNode | ValueObjectMemberNode)[];
+}
+
+/** Whether a field or member is typed by a value object. */
+export function isValueObjectNode(
+  field: ScalarMemberNode | ValueObjectMemberNode,
+): field is ValueObjectMemberNode {
+  return 'valueObjectName' in field;
 }
 
 export interface ModelNode {

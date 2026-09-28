@@ -89,14 +89,15 @@ import {
   type FieldNode,
   type ForeignKeyNode,
   type IndexNode,
+  isValueObjectNode,
   type ModelNode,
   type PrimaryKeyNode,
   type RelationNode,
   type ScalarMemberNode,
   type UniqueConstraintNode,
   type ValueObjectFieldNode,
+  type ValueObjectMemberNode,
   type ValueObjectNode,
-  type ValueObjectRefNode,
 } from '@internal/sql-contract-ts/contract-builder';
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -1515,6 +1516,12 @@ interface BuildValueObjectsInput {
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
+  /** Composite types are placed in the default namespace, so their members resolve against it. */
+  readonly defaultNamespaceId: string;
+  readonly defaultNamespaceExtensionEntities:
+    | Readonly<Record<string, Readonly<Record<string, unknown>>>>
+    | undefined;
+  readonly codecLookup: CodecLookup | undefined;
 }
 
 function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[] {
@@ -1522,12 +1529,12 @@ function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[]
   const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
 
   return compositeTypes.map((compositeType) => {
-    const fields: (ScalarMemberNode | ValueObjectRefNode)[] = [];
+    const fields: (ScalarMemberNode | ValueObjectMemberNode)[] = [];
     for (const field of Object.values(compositeType.fields)) {
       const common = {
         fieldName: field.name,
         nullable: field.optional,
-        ...(field.list ? { many: true } : {}),
+        ...ifDefined('many', field.list ? (true as const) : undefined),
       };
       if (compositeTypeNames.has(field.typeName)) {
         fields.push({ ...common, valueObjectName: field.typeName });
@@ -1545,6 +1552,9 @@ function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[]
         diagnostics,
         sources,
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
+        namespaceId: input.defaultNamespaceId,
+        ...ifDefined('namespaceExtensionEntities', input.defaultNamespaceExtensionEntities),
+        ...ifDefined('codecLookup', input.codecLookup),
       });
       if (!resolved.ok) {
         if (!resolved.alreadyReported) {
@@ -1556,9 +1566,21 @@ function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[]
         }
         continue;
       }
+      const { descriptor } = resolved;
+      if (descriptor.valueSet !== undefined) {
+        diagnostics.push({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: `Field "${compositeType.name}.${field.name}" is typed by the storage enum "${descriptor.valueSet.entityName}", which a composite type member cannot use: a member has no column to store it in. Use a PSL enum instead.`,
+          ...diagnosticSource(sources, field.node.syntax).at(field.span),
+        });
+        continue;
+      }
       fields.push({
         ...common,
-        descriptor: resolved.descriptor,
+        descriptor: {
+          codecId: descriptor.codecId,
+          ...ifDefined('typeParams', descriptor.typeParams),
+        },
         ...ifDefined('enumTypeHandle', enumHandles.get(field.typeName)),
       });
     }
@@ -1819,8 +1841,7 @@ function materializeMtiVariantStorageLinks(
     for (const pkColumn of basePrimaryKey.columns) {
       if (existingColumns.has(pkColumn)) continue;
       const baseField = baseNode.fields.find(
-        (field): field is FieldNode =>
-          !('valueObjectName' in field) && field.columnName === pkColumn,
+        (field): field is FieldNode => !isValueObjectNode(field) && field.columnName === pkColumn,
       );
       if (!baseField) continue;
       linkFields.push({
@@ -2588,6 +2609,9 @@ export function interpretPslDocumentToSqlContract(
     authoringContributions: input.authoringContributions,
     diagnostics,
     sources: input.sources,
+    defaultNamespaceId,
+    defaultNamespaceExtensionEntities: namespaceExtensionEntities.get(defaultNamespaceId),
+    codecLookup: input.codecLookup,
   });
 
   if (diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {
@@ -2660,7 +2684,7 @@ export function interpretPslDocumentToSqlContract(
         ? { namespaces: [...namespaceExtensionEntities.keys()] }
         : {}),
       createNamespace: createNamespaceWithExtensions,
-      ...(valueObjects.length > 0 ? { valueObjects } : {}),
+      ...ifDefined('valueObjects', valueObjects.length > 0 ? valueObjects : undefined),
       models: stiColumnModelNodes.map((model) => ({
         ...model,
         ...(modelRelations.has(model.modelName)

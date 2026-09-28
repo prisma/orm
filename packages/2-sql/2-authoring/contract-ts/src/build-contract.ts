@@ -81,22 +81,19 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
-import type {
-  AuthoredColumnDefault,
-  ContractDefinition,
-  FieldNode,
-  ModelNode,
-  RelationNode,
-  ScalarMemberNode,
-  ValueObjectFieldNode,
-  ValueObjectRefNode,
+import {
+  type AuthoredColumnDefault,
+  type ContractDefinition,
+  type FieldNode,
+  isValueObjectNode,
+  type ModelNode,
+  type RelationNode,
+  type ScalarMemberNode,
+  type ValueObjectFieldNode,
+  type ValueObjectMemberNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
-
-type DomainFieldRef =
-  | { readonly kind: 'scalar'; readonly many?: boolean }
-  | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
 
 /**
  * The codec that encodes one column's default. Built with the column's own `typeParams`, because a
@@ -381,12 +378,6 @@ function assertTargetTableMatches(
   }
 }
 
-function isValueObjectField(
-  field: ScalarMemberNode | ValueObjectRefNode,
-): field is ValueObjectRefNode {
-  return 'valueObjectName' in field;
-}
-
 /**
  * Resolves a deferred entity-ref column descriptor (e.g. a `pg.enum(handle)`
  * column) against the field's now-known owning namespace: attaches the
@@ -622,11 +613,8 @@ function resolveColumnTypeQualifier(
 }
 
 /**
- * Applies the target's `qualifyColumnType` hook to a scalar column descriptor
- * at construction, so the storage column and the domain field (which derives
- * its `type.typeParams` from the storage column) are both built already
- * qualified in a single pass. A descriptor whose codec the target leaves
- * unchanged passes through untouched.
+ * Applies the target's `qualifyColumnType` hook to a scalar column descriptor.
+ * A descriptor whose codec the target leaves unchanged passes through untouched.
  */
 function qualifyColumnDescriptor(
   descriptor: ColumnTypeDescriptor,
@@ -828,15 +816,15 @@ function targetColumnsForJunction(targetModel: ModelNode, fieldName: string): re
 
 function buildStorageColumn(
   field: FieldNode | ValueObjectFieldNode,
-  storageValueSetRef: ValueSetRef | undefined,
+  enumRefs: EnumValueSetRefs | undefined,
   modelName: string,
   storageTypes: Record<string, StorageTypeInstance>,
   codecLookup?: CodecLookup,
 ): StorageColumn {
   const { descriptor } = field;
   const codecId = descriptor.codecId;
-  const storedAsList = !isValueObjectField(field) && field.many === true;
-  const noCheck = isValueObjectField(field) ? undefined : field.noCheck;
+  const storedAsList = !isValueObjectNode(field) && field.many === true;
+  const noCheck = isValueObjectNode(field) ? undefined : field.noCheck;
   const encodedDefault =
     field.default !== undefined
       ? encodeColumnDefault(
@@ -848,19 +836,18 @@ function buildStorageColumn(
         )
       : undefined;
 
-  // `storageValueSetRef` (derived from an `enumTypeHandle`) takes precedence
-  // when present — the established domain-enum path. `field.descriptor.valueSet`
-  // is the fallback: set by an entity-ref type constructor (e.g. `pg.enum(Ref)`)
-  // that resolved the field's type against a value-set-deriving entity with no
-  // domain enum involved. A field carries at most one of the two in practice.
-  const valueSet = storageValueSetRef ?? descriptor.valueSet;
+  invariant(
+    enumRefs === undefined || descriptor.valueSet === undefined,
+    `Field "${modelName}.${field.fieldName}" is typed by a domain enum and also carries a storage value set from its type constructor.`,
+  );
+  const valueSet = enumRefs?.storage ?? descriptor.valueSet;
 
   return {
     nativeType: descriptor.nativeType,
     codecId,
     nullable: field.nullable,
-    ...(storedAsList ? { many: true as const } : {}),
-    ...(noCheck !== undefined ? { noCheck: [...noCheck].sort() } : {}),
+    ...ifDefined('many', storedAsList ? (true as const) : undefined),
+    ...ifDefined('noCheck', noCheck && [...noCheck].sort()),
     ...ifDefined('typeParams', descriptor.typeParams),
     ...ifDefined('default', encodedDefault),
     ...ifDefined('typeRef', descriptor.typeRef),
@@ -868,29 +855,35 @@ function buildStorageColumn(
   };
 }
 
-function domainEnumRef(
+interface EnumValueSetRefs {
+  readonly domain: ValueSetRef;
+  readonly storage: ValueSetRef;
+}
+
+/**
+ * The refs of a field typed by an authored enum: the domain enum and its storage value set. Authored enums are registered in the default namespace, whatever namespace the field's model is in.
+ */
+function enumValueSetRefs(
   enumHandle: EnumTypeHandle | undefined,
   defaultNamespaceId: string,
-): ValueSetRef | undefined {
-  return enumHandle === undefined
-    ? undefined
-    : {
-        plane: 'domain',
-        entityKind: 'enum',
-        namespaceId: defaultNamespaceId,
-        entityName: enumHandle.enumName,
-      };
+): EnumValueSetRefs | undefined {
+  if (enumHandle === undefined) return undefined;
+  const common = { namespaceId: defaultNamespaceId, entityName: enumHandle.enumName };
+  return {
+    domain: { plane: 'domain', entityKind: 'enum', ...common },
+    storage: { plane: 'storage', entityKind: 'valueSet', ...common },
+  };
 }
 
 function buildDomainField(
-  field: ScalarMemberNode | ValueObjectRefNode,
+  field: ScalarMemberNode | ValueObjectMemberNode,
   defaultNamespaceId: string,
 ): ContractField {
-  if (isValueObjectField(field)) {
+  if (isValueObjectNode(field)) {
     return {
       type: { kind: 'valueObject', name: field.valueObjectName },
       nullable: field.nullable,
-      ...(field.many ? { many: true } : {}),
+      ...ifDefined('many', field.many ? (true as const) : undefined),
     };
   }
 
@@ -901,8 +894,8 @@ function buildDomainField(
       ...ifDefined('typeParams', field.descriptor.typeParams),
     },
     nullable: field.nullable,
-    ...(field.many ? { many: true } : {}),
-    ...ifDefined('valueSet', domainEnumRef(field.enumTypeHandle, defaultNamespaceId)),
+    ...ifDefined('many', field.many ? (true as const) : undefined),
+    ...ifDefined('valueSet', enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId)?.domain),
   };
 }
 
@@ -1136,7 +1129,6 @@ export function buildSqlContractFromDefinition(
     const columns: Record<string, StorageColumn> = {};
     const fieldToColumn: Record<string, string> = {};
     const domainFields: Record<string, ContractField> = {};
-    const domainFieldRefs: Record<string, DomainFieldRef> = {};
     const checksForTable: CheckConstraint[] = [];
     // Enforcement is derived only for tables Prisma 8 owns: the contract
     // describes an external schema, it does not prescribe enforcement for it.
@@ -1180,19 +1172,7 @@ export function buildSqlContractFromDefinition(
         }
       }
 
-      const enumHandle = !isValueObjectField(field) ? field.enumTypeHandle : undefined;
-      // Authored enums are always registered under the contract's defaultNamespaceId
-      // (see the enum registration loop below), so refs must point there regardless
-      // of which namespace the consuming model lives in.
-      const storageValueSetRef: ValueSetRef | undefined =
-        enumHandle !== undefined
-          ? {
-              plane: 'storage',
-              entityKind: 'valueSet',
-              namespaceId: defaultNamespaceId,
-              entityName: enumHandle.enumName,
-            }
-          : undefined;
+      const enumHandle = !isValueObjectNode(field) ? field.enumTypeHandle : undefined;
 
       // A field authored through a deferred entity-ref column helper (e.g.
       // `pg.enum(handle)`) carries `descriptor.entityRef`: the referenced
@@ -1205,12 +1185,9 @@ export function buildSqlContractFromDefinition(
       // which schema-qualifies a native-enum column's type name for its
       // namespace. Keying off the codec id (inside the hook) catches both the
       // TS `pg.enum(handle)` path (via `entityRef`) and the PSL `pg.enum(Ref)`
-      // path (resolved inline in the interpreter, no `entityRef`). Because the
-      // storage column is built from this qualified descriptor and the domain
-      // field derives its `type.typeParams` from that column, both come out
-      // qualified in this single pass.
+      // path (resolved inline in the interpreter, no `entityRef`).
       let resolvedField = field;
-      if (!isValueObjectField(field)) {
+      if (!isValueObjectNode(field)) {
         let descriptor = field.descriptor;
         const entityRef = descriptor.entityRef;
         if (entityRef !== undefined) {
@@ -1223,7 +1200,7 @@ export function buildSqlContractFromDefinition(
         }
       }
 
-      if (!isValueObjectField(resolvedField) && resolvedField.noCheck !== undefined) {
+      if (!isValueObjectNode(resolvedField) && resolvedField.noCheck !== undefined) {
         const { noCheck: authoredNoCheck, ...withoutNoCheck } = resolvedField;
         // A non-`managed` table derives no checks, so an opt-out there is a
         // tolerated no-op (never persisted): policy may also be stamped
@@ -1245,7 +1222,7 @@ export function buildSqlContractFromDefinition(
 
       const column = buildStorageColumn(
         resolvedField,
-        storageValueSetRef,
+        enumValueSetRefs(enumHandle, defaultNamespaceId),
         semanticModel.modelName,
         definition.storageTypes ?? {},
         codecLookup,
@@ -1261,7 +1238,7 @@ export function buildSqlContractFromDefinition(
       // IS the storage-level enforcement — including array columns, since the
       // target enforces membership on every element of a native-typed array.
       if (renderCheckExpressions !== undefined && derivesChecks) {
-        const waivedKinds = !isValueObjectField(resolvedField) ? resolvedField.noCheck : undefined;
+        const waivedKinds = !isValueObjectNode(resolvedField) ? resolvedField.noCheck : undefined;
         checksForTable.push(
           ...lowerRenderedChecks(
             tableName,
@@ -1277,16 +1254,6 @@ export function buildSqlContractFromDefinition(
       }
 
       domainFields[field.fieldName] = buildDomainField(resolvedField, defaultNamespaceId);
-
-      if (isValueObjectField(field)) {
-        domainFieldRefs[field.fieldName] = {
-          kind: 'valueObject',
-          name: field.valueObjectName,
-          ...(field.many ? { many: true } : {}),
-        };
-      } else if (field.many) {
-        domainFieldRefs[field.fieldName] = { kind: 'scalar', many: true };
-      }
 
       if (executionDefaultPhases) {
         executionDefaults.push({
