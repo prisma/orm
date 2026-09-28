@@ -202,6 +202,19 @@ describe('mongoBsonCodec decode', () => {
     expect(decoded['link']).not.toBeInstanceOf(DBRef);
     expect((decoded['link'] as { $id: unknown }).$id).toBeInstanceOf(ObjectId);
   });
+
+  it('rebuilds a DBRef inside a Code scope', async () => {
+    const stored = BSON.deserialize(
+      BSON.serialize({ code: new Code('x', { link: { $ref: 'posts', $id: 1 } }) }),
+    );
+    expect(stored['code'].scope.link).toBeInstanceOf(DBRef);
+
+    const decoded = (await mongoBsonCodec.decode(notBson(stored), {})) as { code: Code };
+    expect(decoded.code).toBeInstanceOf(Code);
+    expect(decoded.code.code).toBe('x');
+    expect(decoded.code.scope).toEqual({ link: { $ref: 'posts', $id: 1 } });
+    expect(decoded.code.scope?.['link']).not.toBeInstanceOf(DBRef);
+  });
 });
 
 describe('mongoBsonCodec JSON form', () => {

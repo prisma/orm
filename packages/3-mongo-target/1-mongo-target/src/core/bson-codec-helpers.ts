@@ -90,6 +90,10 @@ export function encodeBsonValue(value: BsonInputValue): BsonInputValue {
   return value;
 }
 
+function isScope(scope: Document | null | undefined): scope is Document {
+  return scope !== null && scope !== undefined;
+}
+
 function decodeEntries(entries: readonly [string, unknown][]): Record<string, unknown> {
   return Object.fromEntries(entries.map(([key, entry]) => [key, decodeValue(entry)]));
 }
@@ -101,6 +105,12 @@ function decodeValue(value: unknown): unknown {
     const decoded = value.map(decodeValue);
     return decoded.some((entry, index) => entry !== value[index]) ? decoded : value;
   }
+  if (value instanceof Code && isScope(value.scope)) {
+    const scope = decodeValue(value.scope);
+    return scope === value.scope
+      ? value
+      : new Code(value.code, blindCast<Document, 'a decoded document is a document'>(scope));
+  }
   if (!isPlainObject(value)) return value;
   const entries = Object.entries(value);
   const decoded = decodeEntries(entries);
@@ -108,7 +118,7 @@ function decodeValue(value: unknown): unknown {
 }
 
 /**
- * Returns the wire value as the driver produced it, except that a `DBRef` the `bson` library read from a `{ $ref, $id }` subdocument becomes that document again, `{ $ref, $id[, $db], ...fields }`, with its members' BSON types kept. A value holding no `DBRef` is returned as the same object.
+ * Returns the wire value as the driver produced it, except that a `DBRef` the `bson` library read from a `{ $ref, $id }` subdocument becomes that document again, `{ $ref, $id[, $db], ...fields }`, with its members' BSON types kept, at any depth and inside a `Code` scope. A value holding no `DBRef` is returned as the same object.
  */
 export function decodeBsonValue(wire: unknown): BsonValue {
   return blindCast<
@@ -134,7 +144,7 @@ function asDriverWrites(value: unknown): unknown {
       Object.entries(value).map(([key, entry]) => [key, asDriverWrites(entry)]),
     );
   }
-  if (value instanceof Code && value.scope !== null && value.scope !== undefined) {
+  if (value instanceof Code && isScope(value.scope)) {
     return new Code(
       value.code,
       blindCast<Document, 'a Code scope is a document'>(asDriverWrites(value.scope)),
