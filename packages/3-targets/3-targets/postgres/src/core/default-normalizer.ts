@@ -151,7 +151,8 @@ type ArrayElementToken = { readonly value: string; readonly quoted: boolean };
  * outside double quotes; inside a quoted element a doubled quote (`""`) or a
  * backslash-escaped quote (`\"`) is a literal quote, and a backslash escapes the
  * next character. Returns undefined if the body is malformed (e.g. an unbalanced
- * quote) or nests an array, which puts a brace outside quotes.
+ * quote), nests an array, which puts a brace outside quotes, or escapes a character outside
+ * quotes with a backslash, which Postgres never prints.
  */
 function splitArrayElements(inner: string): readonly ArrayElementToken[] | undefined {
   const tokens: ArrayElementToken[] = [];
@@ -186,7 +187,7 @@ function splitArrayElements(inner: string): readonly ArrayElementToken[] | undef
       quoted = true;
       continue;
     }
-    if (char === '{' || char === '}') return undefined;
+    if (char === '{' || char === '}' || char === '\\') return undefined;
     if (char === ',') {
       tokens.push({ value: current, quoted });
       current = '';

@@ -156,6 +156,13 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
+  it('keeps a default raw when a backslash sits outside quotes', () => {
+    expect(parsePostgresDefault("'{a\\,b}'::text[]", 'text[]')).toEqual({
+      kind: 'function',
+      expression: "'{a\\,b}'::text[]",
+    });
+  });
+
   it('keeps a quoted element that looks like NULL as the literal string', () => {
     expect(parsePostgresDefault('\'{"NULL"}\'::text[]', 'text[]')).toEqual({
       kind: 'literal',
