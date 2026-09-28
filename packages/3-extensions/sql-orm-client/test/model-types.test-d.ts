@@ -250,6 +250,17 @@ test('a refined required to-one include that only orders keeps the row non-null'
   >();
 });
 
+declare const narrowToOne: boolean;
+
+test('a conditionally filtered to-one refinement is nullable even when the relation is not', () => {
+  const refined = db.Article.include('reviewer', (reviewer) =>
+    narrowToOne ? reviewer.where({ id: 1 }) : reviewer,
+  );
+  expectTypeOf<
+    ResultType<typeof refined>['reviewer']
+  >().toEqualTypeOf<Scalars<Models.public_User> | null>();
+});
+
 test('a refined to-one include with paging is nullable even when the relation is not', () => {
   const offset = db.Article.include('reviewer', (reviewer) => reviewer.offset(1));
   expectTypeOf<

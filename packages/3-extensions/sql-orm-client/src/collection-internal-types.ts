@@ -121,36 +121,34 @@ export interface RowSelection<T> {
 
 export type StripRowType<T> = Omit<T, typeof RowType>;
 
-export declare const KeepsRow: unique symbol;
+export declare const DropsRow: unique symbol;
 
 /**
- * `true` when a refinement returns the related row whenever the parent has
- * one, `never` when a filter or paging can drop it, `boolean` when the state
+ * `never` when a refinement returns the related row whenever the parent has
+ * one, `true` when a filter or paging can drop it, `boolean` when the state
  * is not known. A witness rather than the state itself: `never` is assignable
- * to `true`, so a filtered collection stays assignable to an unfiltered one.
+ * to `true`, so `cond ? c.where(...) : c` collapses to the filtered type.
  */
-export type RefinementKeepsRow<State extends CollectionTypeState> = true extends
+export type RefinementDropsRow<State extends CollectionTypeState> = true extends
   | State['hasWhere']
   | State['hasPaging']
   ? State['hasWhere'] extends true
-    ? never
+    ? true
     : State['hasPaging'] extends true
-      ? never
+      ? true
       : boolean
-  : true;
+  : never;
 
 export interface RowWitness<State extends CollectionTypeState> {
-  readonly [KeepsRow]?: RefinementKeepsRow<State> | undefined;
+  readonly [DropsRow]?: RefinementDropsRow<State> | undefined;
 }
 
 type RefinementKept<RefinedResult> = RefinedResult extends {
-  readonly [KeepsRow]?: unknown;
+  readonly [DropsRow]?: unknown;
 }
-  ? [NonNullable<RefinedResult[typeof KeepsRow]>] extends [never]
-    ? false
-    : [NonNullable<RefinedResult[typeof KeepsRow]>] extends [true]
-      ? true
-      : false
+  ? [NonNullable<RefinedResult[typeof DropsRow]>] extends [never]
+    ? true
+    : false
   : false;
 
 export type IncludeRefinementValue<

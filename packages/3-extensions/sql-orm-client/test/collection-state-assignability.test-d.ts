@@ -8,19 +8,9 @@ const context = {} as ExecutionContext<TestContract>;
 const users = new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 declare const narrowToOne: boolean;
 
-test('a filtered collection is assignable to an unfiltered one', () => {
-  const filtered: typeof users = users.where({ id: 1 });
-  expectTypeOf(filtered).not.toBeAny();
-});
-
-test('a paged collection is assignable to an unpaged one', () => {
-  const paged: typeof users = users.limit(1);
-  expectTypeOf(paged).not.toBeAny();
-});
-
-test('a conditionally filtered collection still exposes include', () => {
+test('a conditionally filtered collection collapses to the filtered type and exposes include', () => {
   const maybeFiltered = narrowToOne ? users.where({ id: 1 }) : users;
+  expectTypeOf(maybeFiltered).toEqualTypeOf(users.where({ id: 1 }));
   const withPosts = maybeFiltered.include('posts', (posts) => posts.select('title'));
   expectTypeOf(withPosts).not.toBeAny();
-  expectTypeOf(maybeFiltered).toEqualTypeOf(users);
 });

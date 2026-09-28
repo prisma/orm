@@ -56,14 +56,14 @@ import {
 import type {
   CollectionConstructor,
   CollectionInit,
+  // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
+  DropsRow,
   IncludedRelationsForRow,
   IncludeRefinementCollection,
   IncludeRefinementResult,
   IncludeRefinementValue,
   IsToManyRelation,
-  // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
-  KeepsRow,
-  RefinementKeepsRow,
+  RefinementDropsRow,
   RowSelection,
   RowType,
   RowWitness,
@@ -264,7 +264,7 @@ class CollectionImpl<
 > implements RowSelection<Row>, RowWitness<State>
 {
   declare readonly [RowType]: Row;
-  declare readonly [KeepsRow]?: RefinementKeepsRow<State> | undefined;
+  declare readonly [DropsRow]?: RefinementDropsRow<State> | undefined;
   declare readonly _row?: Row;
   /** @internal */
   readonly ctx: CollectionContext<TContract>;
