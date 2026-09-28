@@ -118,7 +118,7 @@ describe('mongoJsonCodec encode', () => {
 describe('mongoJsonCodec decode', () => {
   it('returns a JSON wire value as the same JSON value', async () => {
     const document = { a: [1, 'two', null, true, { c: 1.5 }], $d: { 'e.f': [] } };
-    expect(await mongoJsonCodec.decode(wire(document), {})).toEqual(document);
+    expect(await mongoJsonCodec.decode(wire(document), {})).toBe(document);
   });
 
   it.each([
@@ -215,6 +215,14 @@ describe('mongoJsonCodec decode', () => {
     expect(
       await mongoJsonCodec.decode(wire({ i: new Int32(7), d: [new Double(1.5)] }), {}),
     ).toEqual({ i: 7, d: [1.5] });
+  });
+
+  it('copies only the objects and arrays around a value it converts', async () => {
+    const untouched = { b: [1] };
+    const document = { untouched, changed: { n: new Int32(7) } };
+    const decoded = (await mongoJsonCodec.decode(wire(document), {})) as Record<string, unknown>;
+    expect(decoded).toEqual({ untouched: { b: [1] }, changed: { n: 7 } });
+    expect(decoded['untouched']).toBe(untouched);
   });
 
   it('keeps a "__proto__" key as an own property', async () => {

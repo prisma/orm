@@ -90,7 +90,10 @@ function finiteDouble(value: number, path: string): number {
   return Number.isFinite(value) ? value : decodeRefused('double', path);
 }
 
-function decodeEntries(entries: readonly [string, unknown][], path: string): JsonValue {
+function decodeEntries(
+  entries: readonly [string, unknown][],
+  path: string,
+): Record<string, JsonValue> {
   return Object.fromEntries(
     entries.map(([key, entry]) => [key, decodeValue(entry, child(path, key))]),
   );
@@ -125,14 +128,19 @@ function decodeValue(value: unknown, path: string): JsonValue {
   if (value instanceof RegExp) return decodeRefused('regex', path);
   if (value instanceof Uint8Array) return decodeRefused('binData', path);
   if (Array.isArray(value)) {
-    return value.map((entry, index) => decodeValue(entry, child(path, index)));
+    const decoded = value.map((entry, index) => decodeValue(entry, child(path, index)));
+    return decoded.some((entry, index) => entry !== value[index]) ? decoded : value;
   }
   if (!isPlainObject(value)) return decodeRefused(constructorName(value), path);
-  return decodeEntries(Object.entries(value), path);
+  const entries = Object.entries(value);
+  const decoded = decodeEntries(entries, path);
+  return entries.some(([key, entry]) => decoded[key] !== entry)
+    ? decoded
+    : blindCast<JsonValue, 'every member decoded to itself, so the document is JSON'>(value);
 }
 
 /**
- * Decodes a wire value to the JSON value it holds: a `long` in the safe-integer range and the driver's `Int32` and `Double` wrappers become numbers. Throws `RUNTIME.DECODE_FAILED` naming the BSON type and path of the first value that is not JSON.
+ * Decodes a wire value to the JSON value it holds: a `long` in the safe-integer range and the driver's `Int32` and `Double` wrappers become numbers. Only the objects and arrays around a converted value are copied; a wire value that is already JSON is returned as the same object. Throws `RUNTIME.DECODE_FAILED` naming the BSON type and path of the first value that is not JSON.
  */
 export function decodeJsonValue(wire: unknown): JsonValue {
   return decodeValue(wire, '');
