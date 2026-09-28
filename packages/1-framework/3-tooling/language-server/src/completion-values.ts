@@ -153,6 +153,8 @@ function valueItems(
       return scalarItems(input, type.value === undefined ? [] : [String(type.value)]);
     case 'bool':
       return scalarItems(input, ['true', 'false']);
+    case 'null':
+      return scalarItems(input, ['null']);
     case 'fieldRef':
     case 'referencedFieldRef':
       return scalarItems(input, input.fieldNames(type.kind));
@@ -161,7 +163,6 @@ function valueItems(
     case 'entityRef':
     case 'int':
     case 'json':
-    case 'jsonValue':
     case 'rejecting':
       return [];
   }

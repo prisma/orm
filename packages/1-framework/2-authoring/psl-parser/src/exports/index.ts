@@ -82,6 +82,7 @@ export type {
   JsonValueArgType,
   ModelAttributeCtx,
   NamedOut,
+  NullArgType,
   NumLiteral,
   OptionalArgType,
   OutOf,

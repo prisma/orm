@@ -1182,6 +1182,35 @@ describe('providePslCompletionItems', () => {
     }
   });
 
+  it.each(['|', '[|]', '{ nested: | }', '[{ nested: [|] }]'])(
+    'completes recursive JSON values at %s',
+    (value) => {
+      const { items } = completeWithSource({
+        markedSource: `model Post { value String @jsonFixture(${value}) }`,
+        pslBlockDescriptors: {},
+        authoringContributions: assembleAuthoringContributions([
+          {
+            id: 'json-fixture',
+            authoring: {
+              attributeSpecs: {
+                field: {
+                  jsonFixture: () =>
+                    fieldAttribute('jsonFixture', {
+                      documentation: '',
+                      positional: [{ key: 'value', type: jsonValue(), documentation: '' }],
+                    }),
+                },
+                model: {},
+              },
+            },
+          },
+        ]),
+        controlMutationDefaults,
+      });
+      expect(items.map((item) => item.label)).toEqual(['true', 'false', 'null']);
+    },
+  );
+
   it('returns an empty list for unsupported classifier contexts', () => {
     const { items } = complete(['model Post {', '  // @|', '}'].join('\n'));
 

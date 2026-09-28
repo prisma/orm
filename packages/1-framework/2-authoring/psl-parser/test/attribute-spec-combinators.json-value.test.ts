@@ -39,6 +39,30 @@ function expectValue(exprSource: string, value: unknown): void {
 }
 
 describe('jsonValue', () => {
+  it('exposes finite scalar and recursive container metadata', () => {
+    const spec = jsonValue();
+    expect(spec.kind).toBe('oneOf');
+    expect(spec.alternatives.map((alternative) => alternative.kind)).toEqual([
+      'str',
+      'num',
+      'bool',
+      'null',
+      'list',
+      'record',
+    ]);
+    expect(spec.alternatives[1].value).toBeUndefined();
+    expect(spec.alternatives[4].of).toBe(spec);
+    expect(spec.alternatives[5].of).toBe(spec);
+    const { expr, ctx } = argOf('null');
+    const result = spec.alternatives[3].parse(expr, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBeNull();
+  });
+
+  it('rejects an infinite number', () => {
+    expect(parseJsonValue('9'.repeat(400)).ok).toBe(false);
+  });
+
   it('reads scalar literals natively', () => {
     expectValue('"hello"', 'hello');
     expectValue('42', 42);

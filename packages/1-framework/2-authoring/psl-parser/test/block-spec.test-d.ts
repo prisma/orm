@@ -10,6 +10,7 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { record } from '../src/attribute-spec/combinators/record';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
+import type { OutOf } from '../src/attribute-spec/types';
 import { mapBlock, structBlock } from '../src/block-spec/binders';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import type { interpretExtensionBlock } from '../src/block-spec/interpret';
@@ -78,6 +79,13 @@ describe('InferBlock', () => {
     expectTypeOf<InferBlock<typeof withBare>>().toEqualTypeOf<
       Record<string, JsonValue | undefined>
     >();
+  });
+
+  it('preserves JSON and scalar leaf output types in recursive metadata', () => {
+    const spec = jsonValue();
+    expectTypeOf<OutOf<typeof spec>>().toEqualTypeOf<JsonValue>();
+    expectTypeOf<OutOf<(typeof spec.alternatives)[1]>>().toEqualTypeOf<number>();
+    expectTypeOf<OutOf<(typeof spec.alternatives)[3]>>().toEqualTypeOf<null>();
   });
 
   it('pins fixed string literals as literal output types', () => {

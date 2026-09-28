@@ -39,7 +39,7 @@ export type ArgTypeKind =
   | 'identifier'
   | 'int'
   | 'json'
-  | 'jsonValue'
+  | 'null'
   | 'list'
   | 'num'
   | 'oneOf'
@@ -136,7 +136,20 @@ export interface JsonArgType<Ctx extends AttributeCtx = AttributeCtx>
 
 export interface JsonValueArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<JsonValue, Ctx> {
-  readonly kind: 'jsonValue';
+  readonly kind: 'oneOf';
+  readonly alternatives: readonly [
+    UnrestrictedStrArgType<Ctx>,
+    UnrestrictedNumArgType<Ctx>,
+    BoolArgType<Ctx>,
+    NullArgType<Ctx>,
+    ListArgType<JsonValue, Ctx>,
+    RecordArgType<JsonValue, Ctx>,
+  ];
+}
+
+export interface NullArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<null, Ctx> {
+  readonly kind: 'null';
 }
 
 export interface ListArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
@@ -261,7 +274,7 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | IdentifierArgType<string, Ctx>
   | IntArgType<Ctx>
   | JsonArgType<Ctx>
-  | JsonValueArgType<Ctx>
+  | NullArgType<Ctx>
   | ListArgType<unknown, Ctx>
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
