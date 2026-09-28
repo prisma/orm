@@ -15,7 +15,7 @@ import type { AttributeCtx } from '../attribute-spec/types';
 import type { Binder } from '../binder';
 import { diagnosticSource, type PslDiagnostic } from '../diagnostic';
 import { findBlockDescriptor } from '../extension-block';
-import { nodePslSpan } from '../resolve';
+import { nodePslSpan, readResolvedAttribute } from '../resolve';
 import type { PslSources } from '../source-file';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 import type { AstNode } from '../syntax/ast-helpers';
@@ -262,13 +262,20 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
       BlockAttributeSpecFactory,
       'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; this is the single point that restores the factory type the descriptor surface documents'
     >(declared[name]);
-    const result = interpretAttribute(attribute, factory({ symbols, block }), {
+    const spec = factory({ symbols, block });
+    const result = interpretAttribute(attribute, spec, {
       sources,
       symbols,
       binder,
     });
     if (result.ok) {
-      attributes[name] = { args: result.value, span };
+      const argSpans: Record<string, PslSpan> = Object.create(null);
+      let positionalSlot = 0;
+      for (const arg of readResolvedAttribute(attribute, sources).args) {
+        const key = arg.name ?? spec.positional[positionalSlot++]?.key;
+        if (key !== undefined) argSpans[key] = arg.span;
+      }
+      attributes[name] = { args: result.value, argSpans, span };
     } else {
       diagnostics.push(...result.failure);
     }

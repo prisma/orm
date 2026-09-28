@@ -139,6 +139,7 @@ export interface PslExtensionBlockAttribute {
 
 export interface PslExtensionBlockParsedAttribute {
   readonly args: Readonly<Record<string, unknown>>;
+  readonly argSpans?: Readonly<Record<string, PslSpan>>;
   readonly span: PslSpan;
 }
 

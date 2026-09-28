@@ -654,6 +654,47 @@ describe('interpretExtensionBlock — block attributes', () => {
     expect(seenContexts.at(-1)?.symbols).toBe(result.symbolTable);
   });
 
+  it.each([
+    '@@map("levels", label: "display")',
+    '@@map(label: "display", "levels")',
+    '@@map(name: "levels", label: "display")',
+  ])('preserves argument spans by spec parameter name for %s', (attribute) => {
+    const descriptor = {
+      ...NATIVE_ENUM_DESCRIPTOR,
+      attributes: {
+        map: () =>
+          blockAttribute('map', {
+            documentation: 'Maps a block.',
+            positional: [{ key: 'name', type: str(), documentation: 'Storage name.' }],
+            named: {
+              name: { type: str(), documentation: 'Storage name.' },
+              label: { type: str(), documentation: 'Display label.' },
+              suffix: { type: optional(str(), 'default'), documentation: 'Optional suffix.' },
+            },
+          }),
+      },
+    } satisfies PslBlockSpecDescriptor;
+    const source = `native_enum Level {\n  Low = "low"\n  ${attribute}\n}`;
+    const result = setup(source);
+    const parsed = interpret(result, blockNamed(result, 'Level'), descriptor, descriptor.spec());
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const nameArgument = attribute.includes('name:') ? 'name: "levels"' : '"levels"';
+    const expectedSpan = (argument: string) => ({
+      start: expect.objectContaining({ offset: source.indexOf(argument) }),
+      end: expect.objectContaining({ offset: source.indexOf(argument) + argument.length }),
+    });
+    expect(parsed.value.attributes['map']).toEqual({
+      args: { name: 'levels', label: 'display', suffix: 'default' },
+      span: expectedSpan(attribute),
+      argSpans: {
+        name: expectedSpan(nameArgument),
+        label: expectedSpan('label: "display"'),
+      },
+    });
+  });
+
   it('fails the block for an attribute the descriptor does not declare', () => {
     const result = setup(
       ['native_enum Level {', '  Low = "low"', '  @@schema("x")', '}'].join('\n'),

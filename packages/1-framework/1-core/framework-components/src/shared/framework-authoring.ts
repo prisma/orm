@@ -339,7 +339,7 @@ export function resolveEnumCodecId(
 
   const codecId = typeAttr.args['codecId'];
   invariant(typeof codecId === 'string', '@@type on an enum block parses one string argument');
-  return { codecId, codecSpan: typeAttr.span };
+  return { codecId, codecSpan: typeAttr.argSpans?.['codecId'] ?? typeAttr.span };
 }
 
 export interface AuthoringEntityTypeTemplateOutput {
