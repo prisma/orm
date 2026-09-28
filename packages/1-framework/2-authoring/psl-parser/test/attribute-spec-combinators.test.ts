@@ -599,11 +599,13 @@ describe('oneOf', () => {
     const { expr, ctx } = argOf('Cascade');
     const first: ArgType<'first', AttributeCtx> = {
       kind: 'str',
+      value: undefined,
       label: 'first',
       parse: () => ok('first'),
     };
     const second: ArgType<'second', AttributeCtx> = {
       kind: 'str',
+      value: undefined,
       label: 'second',
       parse: () => ok('second'),
     };

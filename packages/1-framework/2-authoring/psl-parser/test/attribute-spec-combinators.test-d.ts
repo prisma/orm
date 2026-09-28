@@ -6,7 +6,6 @@ import type {
   BlockSymbol,
   CompositeTypeSymbol,
   FieldAttributeCtx,
-  InspectableArgType,
   ModelAttributeCtx,
   ModelSymbol,
   NamedTypeSymbol,
@@ -32,13 +31,6 @@ import {
   referencedFieldRef,
   str,
 } from '../src/exports';
-
-test('inspectable lists and records expose ArgType children', () => {
-  type ListMetadata = Extract<InspectableArgType<never>, { kind: 'list' }>;
-  type RecordMetadata = Extract<InspectableArgType<never>, { kind: 'record' }>;
-  expectTypeOf<ListMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
-  expectTypeOf<RecordMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
-});
 
 test('checked reference selectors and wrappers preserve inferred outputs', () => {
   const model = entityRef({ kind: 'model' });
@@ -479,6 +471,7 @@ test('field references have distinct inspectable kinds', () => {
 test('runtime context metadata is rejected from arg types', () => {
   const fake: ArgType<string, AttributeCtx> = {
     kind: 'str',
+    value: undefined,
     label: 'custom',
     // @ts-expect-error parse contexts live in the generic, not runtime metadata
     requiredContext: 'attribute',

@@ -145,6 +145,7 @@ describe('oneOf and a silently failing alternative', () => {
 
   const loudAlt: ArgType<string, ModelAttributeCtx> = {
     kind: 'identifier',
+    name: undefined,
     label: 'a four-character name',
     parse: (arg): Result<string, readonly PslDiagnostic[]> =>
       arg.syntax.green.textLength === 4

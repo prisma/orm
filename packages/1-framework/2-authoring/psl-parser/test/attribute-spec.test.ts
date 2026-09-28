@@ -52,6 +52,7 @@ function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttribu
 function str(): ArgType<string, AttributeCtx> {
   return {
     kind: 'str',
+    value: undefined,
     label: 'string',
     parse: (arg, ctx): Result<string, readonly PslDiagnostic[]> => {
       if (arg instanceof StringLiteralExprAst) {
@@ -79,6 +80,7 @@ const FAILING_DIAGNOSTIC: PslDiagnostic = {
 function failing(): ArgType<never, AttributeCtx> {
   return {
     kind: 'rejecting',
+    message: FAILING_DIAGNOSTIC.message,
     label: 'failing',
     parse: (): Result<never, readonly PslDiagnostic[]> => notOk([FAILING_DIAGNOSTIC]),
   };

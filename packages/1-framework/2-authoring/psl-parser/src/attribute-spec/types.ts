@@ -190,9 +190,14 @@ export type NumArgType<
 export interface OneOfArgType<
   Alts extends readonly [AnyArgType, ...AnyArgType[]],
   Ctx extends AttributeCtx = ContextForRequirement<RequiredContextFor<CtxOf<Alts[number]>>>,
-> extends ArgTypeOutput<OutOf<Alts[number]>, Ctx> {
-  readonly kind: 'oneOf';
+> extends ArgTypeOutput<OutOf<Alts[number]>, Ctx>,
+    OneOfMetadata {
   readonly alternatives: Alts;
+}
+
+interface OneOfMetadata {
+  readonly kind: 'oneOf';
+  readonly alternatives: readonly [AnyArgType, ...AnyArgType[]];
 }
 
 export interface RecordArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
@@ -241,9 +246,12 @@ export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly documentation: string;
 }
 
-export interface ArgType<T, Ctx extends AttributeCtx> extends ArgTypeOutput<T, Ctx> {
-  readonly kind: ArgTypeKind;
-}
+type ArgTypeMetadata<Type> = Type extends object
+  ? Omit<Type, keyof ArgTypeOutput<unknown, never>>
+  : never;
+
+export type ArgType<T, Ctx extends AttributeCtx> = ArgTypeOutput<T, Ctx> &
+  ArgTypeMetadata<ArgTypeVariant<Ctx>>;
 
 export type AnyArgType =
   | ArgType<unknown, AttributeCtx>
@@ -266,7 +274,9 @@ export type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'fie
     ? ModelAttributeCtx
     : AttributeCtx;
 
-export type InspectableArgType<Ctx extends AttributeCtx> =
+export type InspectableArgType<Ctx extends AttributeCtx> = ArgType<unknown, Ctx>;
+
+type ArgTypeVariant<Ctx extends AttributeCtx> =
   | BoolArgType<Ctx>
   | EntityRefArgType<EntityDeclaration, Ctx>
   | FieldRefArgType<ModelAttributeCtx & Ctx>
@@ -279,7 +289,7 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
   | NumLiteralArgType<Ctx>
-  | OneOfArgType<readonly [AnyArgType, ...AnyArgType[]], Ctx>
+  | OneOfMetadata
   | RecordArgType<unknown, Ctx>
   | ReferencedFieldRefArgType<FieldAttributeCtx & Ctx>
   | RejectingArgType<never, Ctx>

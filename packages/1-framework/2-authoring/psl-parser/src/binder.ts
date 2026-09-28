@@ -9,7 +9,14 @@ import type {
   AttributeSpecNamespace,
   BlockAttributeSpecFactory,
 } from './attribute-spec/spec-context';
-import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
+import type {
+  AttributeSpec,
+  FieldAttributeCtx,
+  InspectableArgType,
+  ModelAttributeCtx,
+  Param,
+  PositionalParam,
+} from './attribute-spec/types';
 import { blockSpecFactoryOf } from './block-spec/descriptor';
 import { contributedTypeScope } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
@@ -322,7 +329,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
 }
 
 function bindExpression(
-  rule: unknown,
+  rule: InspectableArgType<never>,
   expression: ExpressionAst,
   ctx: ReferenceContext,
   modelContext?: BindContext,
@@ -339,98 +346,99 @@ interface BindingTrial {
 }
 
 function tryBindExpression(
-  rule: unknown,
+  rule: InspectableArgType<never>,
   expression: ExpressionAst,
   ctx: ReferenceContext,
   modelContext?: BindContext,
 ): BindingTrial {
   const references = new Map<SyntaxNode, Resolution>();
   const diagnostics = new Map<SyntaxNode, ParseDiagnostic>();
-  if (typeof rule !== 'object' || rule === null || !('kind' in rule)) {
-    return { matched: false, references, diagnostics };
-  }
-  if (rule.kind === 'oneOf' && 'alternatives' in rule && Array.isArray(rule.alternatives)) {
-    const alternatives: readonly unknown[] = rule.alternatives;
-    for (const alternative of alternatives) {
-      const trial = tryBindExpression(alternative, expression, ctx, modelContext);
-      if (trial.matched) return trial;
-      for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
-      for (const [node, resolution] of trial.references) {
-        if (resolution.kind === 'unresolved') references.set(node, resolution);
+  switch (rule.kind) {
+    case 'oneOf': {
+      for (const alternative of rule.alternatives) {
+        const trial = tryBindExpression(alternative, expression, ctx, modelContext);
+        if (trial.matched) return trial;
+        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+        for (const [node, resolution] of trial.references) {
+          if (resolution.kind === 'unresolved') references.set(node, resolution);
+        }
       }
-    }
-    return { matched: false, references, diagnostics };
-  }
-  if ((rule.kind === 'list' || rule.kind === 'record') && 'of' in rule) {
-    const children =
-      rule.kind === 'list'
-        ? ArrayLiteralAst.cast(expression.syntax)?.elements()
-        : recordValues(expression);
-    if (children === undefined) return { matched: false, references, diagnostics };
-    let matched = true;
-    for (const child of children) {
-      const trial = tryBindExpression(rule.of, child, ctx, modelContext);
-      matched = trial.matched && matched;
-      for (const [node, resolution] of trial.references) references.set(node, resolution);
-      for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
-    }
-    return { matched, references, diagnostics };
-  }
-  if (rule.kind === 'funcCall' && 'signature' in rule && 'name' in rule) {
-    const call = FunctionCallAst.cast(expression.syntax);
-    const name = call?.name();
-    if (
-      call === undefined ||
-      name === undefined ||
-      name.dot() !== undefined ||
-      name.colon() !== undefined ||
-      name.identifier()?.name() !== rule.name
-    )
       return { matched: false, references, diagnostics };
-    let matched = true;
-    let positional = 0;
-    for (const arg of call.args()) {
-      const key = arg.name()?.name();
-      const parameter = argumentParameter(
-        rule.signature,
-        key,
-        key === undefined ? positional++ : positional,
-      );
-      const value = arg.value();
-      if (parameter === undefined || value === undefined) {
-        matched = false;
-        continue;
-      }
-      const trial = tryBindExpression(parameter.type, value, ctx, modelContext);
-      matched = trial.matched && matched;
-      for (const [node, resolution] of trial.references) references.set(node, resolution);
-      for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
     }
-    return { matched, references, diagnostics };
+    case 'list':
+    case 'record': {
+      const children =
+        rule.kind === 'list'
+          ? ArrayLiteralAst.cast(expression.syntax)?.elements()
+          : recordValues(expression);
+      if (children === undefined) return { matched: false, references, diagnostics };
+      let matched = true;
+      for (const child of children) {
+        const trial = tryBindExpression(rule.of, child, ctx, modelContext);
+        matched = trial.matched && matched;
+        for (const [node, resolution] of trial.references) references.set(node, resolution);
+        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+      }
+      return { matched, references, diagnostics };
+    }
+    case 'funcCall': {
+      const call = FunctionCallAst.cast(expression.syntax);
+      const name = call?.name();
+      if (
+        call === undefined ||
+        name === undefined ||
+        name.dot() !== undefined ||
+        name.colon() !== undefined ||
+        name.identifier()?.name() !== rule.name
+      )
+        return { matched: false, references, diagnostics };
+      let matched = true;
+      let positional = 0;
+      for (const arg of call.args()) {
+        const key = arg.name()?.name();
+        const parameter = argumentParameter(
+          rule.signature,
+          key,
+          key === undefined ? positional++ : positional,
+        );
+        const value = arg.value();
+        if (parameter === undefined || value === undefined) {
+          matched = false;
+          continue;
+        }
+        const trial = tryBindExpression(parameter.type, value, ctx, modelContext);
+        matched = trial.matched && matched;
+        for (const [node, resolution] of trial.references) references.set(node, resolution);
+        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+      }
+      return { matched, references, diagnostics };
+    }
+    case 'entityRef':
+    case 'fieldRef':
+    case 'referencedFieldRef': {
+      const node = expression.syntax;
+      const name = IdentifierAst.cast(node)?.name();
+      if (name === undefined) return { matched: false, references, diagnostics };
+      const failures: ParseDiagnostic[] = [];
+      const resolution =
+        rule.kind === 'entityRef'
+          ? resolveEntity(name, node, { ...ctx, diagnostics: failures })
+          : modelContext === undefined
+            ? undefined
+            : rule.kind === 'fieldRef'
+              ? resolveOwnerField(name, node, { ...modelContext, diagnostics: failures })
+              : resolveReferencedField(name, node, { ...modelContext, diagnostics: failures });
+      if (resolution !== undefined) references.set(node, resolution);
+      for (const diagnostic of failures) diagnostics.set(node, diagnostic);
+      return {
+        matched: resolution !== undefined && resolution.kind !== 'unresolved',
+        references,
+        diagnostics,
+      };
+    }
+    default:
+      return { matched: true, references, diagnostics };
   }
-  const kind = rule.kind;
-  if (kind === 'entityRef' || kind === 'fieldRef' || kind === 'referencedFieldRef') {
-    const node = expression.syntax;
-    const name = IdentifierAst.cast(node)?.name();
-    if (name === undefined) return { matched: false, references, diagnostics };
-    const failures: ParseDiagnostic[] = [];
-    const resolution =
-      kind === 'entityRef'
-        ? resolveEntity(name, node, { ...ctx, diagnostics: failures })
-        : modelContext === undefined
-          ? undefined
-          : kind === 'fieldRef'
-            ? resolveOwnerField(name, node, { ...modelContext, diagnostics: failures })
-            : resolveReferencedField(name, node, { ...modelContext, diagnostics: failures });
-    if (resolution !== undefined) references.set(node, resolution);
-    for (const diagnostic of failures) diagnostics.set(node, diagnostic);
-    return {
-      matched: resolution !== undefined && resolution.kind !== 'unresolved',
-      references,
-      diagnostics,
-    };
-  }
-  return { matched: true, references, diagnostics };
 }
 
 function recordValues(expression: ExpressionAst): Iterable<ExpressionAst> | undefined {
@@ -492,10 +500,7 @@ function bindAttributes<Factory>(
 
 function bindArguments(
   attribute: ResolvedAttribute,
-  spec: {
-    readonly positional: readonly { readonly type: unknown }[];
-    readonly named: Readonly<Record<string, { readonly type: unknown }>>;
-  },
+  spec: BindingArguments,
   ctx: ReferenceContext,
   modelContext?: BindContext,
 ): void {
@@ -511,27 +516,18 @@ function bindArguments(
   }
 }
 
-interface BindingParameter {
-  readonly type: unknown;
+interface BindingArguments {
+  readonly positional?: readonly PositionalParam<unknown, never>[];
+  readonly named?: Readonly<Record<string, Param<unknown, never>>>;
 }
 
 function argumentParameter(
-  spec: unknown,
+  spec: BindingArguments,
   name: string | undefined,
   position: number,
-): BindingParameter | undefined {
-  let parameter: unknown;
-  if (name === undefined && hasMember(spec, 'positional') && Array.isArray(spec.positional)) {
-    const parameters: readonly unknown[] = spec.positional;
-    parameter = parameters[position];
-  } else if (name !== undefined && hasMember(spec, 'named') && hasMember(spec.named, name)) {
-    parameter = spec.named[name];
-  }
-  return hasMember(parameter, 'type') ? parameter : undefined;
-}
-
-function hasMember<Key extends string>(value: unknown, key: Key): value is Record<Key, unknown> {
-  return typeof value === 'object' && value !== null && Object.hasOwn(value, key);
+): Param<unknown, never> | undefined {
+  if (name === undefined) return spec.positional?.[position];
+  return spec.named === undefined ? undefined : own(spec.named, name);
 }
 
 function resolveOwnerField(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
