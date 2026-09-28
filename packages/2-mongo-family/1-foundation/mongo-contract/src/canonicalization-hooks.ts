@@ -9,7 +9,7 @@ const preserveEmptyPatterns = [
 const matchesPreserveEmptyPattern = createPreserveEmptyPredicate(preserveEmptyPatterns);
 
 // An empty schema under `properties` (or as an array's `items`) admits any
-// value: a field whose codec declares no BSON type, such as `mongo/json@1`.
+// value: a field whose codec declares no BSON type, such as `mongo/bson@1`.
 // Dropping it would leave the field out of `properties`, and the closed
 // schema would then reject every document that carries it.
 const isUnconstrainedFieldSchema = (path: readonly string[]): boolean =>

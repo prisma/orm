@@ -82,6 +82,10 @@ const testCodecLookup: CodecLookup = {
   targetTypesFor(id: string): readonly string[] | undefined {
     if (id === MONGO_STRING_CODEC_ID) return ['string'];
     if (id === MONGO_INT_CODEC_ID) return ['int'];
+    if (id === 'mongo/json@1') {
+      return ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'];
+    }
+    if (id === 'mongo/bson@1') return [];
     return undefined;
   },
   renderOutputTypeFor: () => undefined,
@@ -177,5 +181,26 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type is unchanged', () => 
 
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({ codecId: MONGO_STRING_CODEC_ID, nativeType: 'string' });
+  });
+});
+
+describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage type', () => {
+  it.each([
+    ['mongo/json@1', 8],
+    ['mongo/bson@1', 0],
+  ])('refuses @@type("%s"), which declares %i BSON types', (codecId, count) => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Shape', parameters: { a: bareMember() }, typeCodecId: codecId }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one`,
+        span: SPAN,
+      }),
+    ]);
   });
 });

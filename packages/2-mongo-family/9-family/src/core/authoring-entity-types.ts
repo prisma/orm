@@ -11,6 +11,10 @@ import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contr
 import { blockAttribute, str } from '@internal/psl-parser';
 import { blindCast } from '@internal/utils/casts';
 
+function typeArgumentSpan(block: PslExtensionBlock): PslExtensionBlock['span'] | undefined {
+  return block.blockAttributes.find((attribute) => attribute.name === 'type')?.args[0]?.span;
+}
+
 export const mongoFamilyEnumEntityDescriptor = {
   kind: 'entity' as const,
   discriminator: 'enum',
@@ -28,13 +32,23 @@ export const mongoFamilyEnumEntityDescriptor = {
       }
       const { codecId, codecSpan } = resolved;
 
-      const nativeType = ctx.codecLookup?.targetTypesFor(codecId)?.[0];
-      if (nativeType === undefined) {
+      const bsonTypes = ctx.codecLookup?.targetTypesFor(codecId);
+      if (bsonTypes === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
           sourceId,
-          span: codecSpan,
+          span: typeArgumentSpan(block) ?? codecSpan,
+        });
+        return undefined;
+      }
+      const [bsonType, ...otherBsonTypes] = bsonTypes;
+      if (bsonType === undefined || otherBsonTypes.length > 0) {
+        diagnostics?.push({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "${block.name}" @@type codec "${codecId}" declares ${bsonTypes.length} BSON types; an enum needs exactly one`,
+          sourceId,
+          span: typeArgumentSpan(block) ?? codecSpan,
         });
         return undefined;
       }
@@ -131,7 +145,7 @@ export const mongoFamilyEnumEntityDescriptor = {
 
       return enumType(
         block.name,
-        { codecId, nativeType },
+        { codecId, nativeType: bsonType },
         ...members.map((m) => ({ name: m.name, value: m.value })),
       );
     },

@@ -353,7 +353,7 @@ describe('mongo contract builder', () => {
     });
   });
 
-  it('supports the int64, decimal128, binary and json scalar helpers', () => {
+  it('supports the int64, decimal128, binary, json and bson scalar helpers', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
@@ -362,6 +362,7 @@ describe('mongo contract builder', () => {
         price: field.decimal128(),
         thumbnail: field.binary(),
         meta: field.json(),
+        raw: field.bson(),
       },
     });
 
@@ -377,11 +378,13 @@ describe('mongo contract builder', () => {
       price: fields?.['price'],
       thumbnail: fields?.['thumbnail'],
       meta: fields?.['meta'],
+      raw: fields?.['raw'],
     }).toEqual({
       views: { type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
       price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' }, nullable: false },
       thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' }, nullable: false },
       meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
+      raw: { type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
     });
   });
 

@@ -44,6 +44,7 @@ const BSON_SCALARS_SCHEMA = `model post {
   price     Decimal128
   thumbnail Binary
   meta      Json
+  raw       Bson
 }
 `;
 
@@ -89,6 +90,7 @@ describe('mongo scalar types derived from the unified namespace', () => {
       Decimal128: { codecId: 'mongo/decimal128@1', nativeType: 'decimal' },
       Binary: { codecId: 'mongo/binary@1', nativeType: 'binData' },
       Json: { codecId: 'mongo/json@1', nativeType: 'json' },
+      Bson: { codecId: 'mongo/bson@1', nativeType: 'bson' },
       Int: { codecId: 'mongo/int32@1', nativeType: 'int' },
       Float: { codecId: 'mongo/double@1', nativeType: 'double' },
       Boolean: { codecId: 'mongo/bool@1', nativeType: 'bool' },
@@ -101,6 +103,7 @@ describe('mongo scalar types derived from the unified namespace', () => {
       'Binary',
       'Bool',
       'Boolean',
+      'Bson',
       'Date',
       'DateTime',
       'Decimal128',
@@ -138,7 +141,7 @@ describe('mongo scalar types derived from the unified namespace', () => {
     });
   });
 
-  it('resolves Int64, Decimal128, Binary and Json to their codecs and BSON validator types', () => {
+  it('resolves Int64, Decimal128, Binary, Json and Bson to their codecs and BSON validator types', () => {
     const result = emit(namespaceScalarTypeCodecIds(), BSON_SCALARS_SCHEMA);
 
     expect(result.ok).toBe(true);
@@ -154,6 +157,7 @@ describe('mongo scalar types derived from the unified namespace', () => {
                   price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' } },
                   thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' } },
                   meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+                  raw: { type: { kind: 'scalar', codecId: 'mongo/bson@1' } },
                 },
               },
             },
@@ -172,7 +176,18 @@ describe('mongo scalar types derived from the unified namespace', () => {
                         views: { bsonType: 'long' },
                         price: { bsonType: 'decimal' },
                         thumbnail: { bsonType: 'binData' },
-                        meta: {},
+                        meta: {
+                          bsonType: [
+                            'object',
+                            'array',
+                            'string',
+                            'double',
+                            'int',
+                            'long',
+                            'bool',
+                            'null',
+                          ],
+                        },
                       },
                     },
                   },
@@ -183,6 +198,20 @@ describe('mongo scalar types derived from the unified namespace', () => {
         },
       },
     });
+    expect(result.value.storage).toHaveProperty(
+      [
+        'namespaces',
+        '__unbound__',
+        'entries',
+        'collection',
+        'post',
+        'validator',
+        'jsonSchema',
+        'properties',
+        'raw',
+      ],
+      {},
+    );
   });
 });
 

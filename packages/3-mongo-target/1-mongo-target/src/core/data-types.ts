@@ -17,6 +17,7 @@ export const mongoInt64: DataType = dataType('mongo/int64', {});
 export const mongoDecimal128: DataType = dataType('mongo/decimal128', {});
 export const mongoBinary: DataType = dataType('mongo/binary', {});
 export const mongoJson: DataType = dataType('mongo/json', {});
+export const mongoBson: DataType = dataType('mongo/bson', {});
 
 export const mongoDataTypes: readonly DataType[] = [
   mongoObjectId,
@@ -30,4 +31,5 @@ export const mongoDataTypes: readonly DataType[] = [
   mongoDecimal128,
   mongoBinary,
   mongoJson,
+  mongoBson,
 ];

@@ -22,6 +22,7 @@ const STANDARD_CODEC_IDS = [
   'mongo/decimal128@1',
   'mongo/binary@1',
   'mongo/json@1',
+  'mongo/bson@1',
 ];
 
 describe('createMongoExecutionStack', () => {

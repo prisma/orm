@@ -4,6 +4,10 @@
   "target": "mongo",
   "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
   "roots": {
+    "assets": {
+      "model": "Asset",
+      "namespace": "__unbound__"
+    },
     "posts": {
       "model": "Post",
       "namespace": "__unbound__"
@@ -13,6 +17,70 @@
     "namespaces": {
       "__unbound__": {
         "models": {
+          "Asset": {
+            "discriminator": {
+              "field": "kind"
+            },
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "assets"
+            },
+            "variants": {
+              "Photo": {
+                "value": "photo"
+              }
+            }
+          },
+          "Photo": {
+            "base": {
+              "model": "Asset",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "exif": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "ownerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "stamps": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Stamp"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "assets"
+            }
+          },
           "Post": {
             "fields": {
               "_id": {
@@ -43,6 +111,13 @@
                   "kind": "scalar"
                 }
               },
+              "raw": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/bson@1",
+                  "kind": "scalar"
+                }
+              },
               "thumbnail": {
                 "nullable": false,
                 "type": {
@@ -63,6 +138,19 @@
               "collection": "posts"
             }
           }
+        },
+        "valueObjects": {
+          "Stamp": {
+            "fields": {
+              "note": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
         }
       }
     }
@@ -72,6 +160,89 @@
       "__unbound__": {
         "entries": {
           "collection": {
+            "assets": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "exif": {
+                          "bsonType": [
+                            "object",
+                            "array",
+                            "string",
+                            "double",
+                            "int",
+                            "long",
+                            "bool",
+                            "null"
+                          ]
+                        },
+                        "kind": {
+                          "enum": [
+                            "photo"
+                          ]
+                        },
+                        "ownerId": {
+                          "bsonType": "objectId"
+                        },
+                        "stamps": {
+                          "bsonType": "array",
+                          "items": {
+                            "additionalProperties": false,
+                            "bsonType": "object",
+                            "properties": {
+                              "note": {
+                                "bsonType": [
+                                  "object",
+                                  "array",
+                                  "string",
+                                  "double",
+                                  "int",
+                                  "long",
+                                  "bool",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "note"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "exif",
+                        "kind",
+                        "ownerId",
+                        "stamps"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "kind": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "kind"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
             "posts": {
               "kind": "mongo-collection",
               "validator": {
@@ -82,11 +253,34 @@
                     "_id": {
                       "bsonType": "objectId"
                     },
-                    "meta": {},
-                    "notes": {},
+                    "meta": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
+                    "notes": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
                     "price": {
                       "bsonType": "decimal"
                     },
+                    "raw": {},
                     "thumbnail": {
                       "bsonType": "binData"
                     },
@@ -113,7 +307,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "aca56cf39644e33c19f84c870164ce9cb4e2df6a14b913395b76588482786e01"
+    "storageHash": "8fa3c276a2a132a34acdae3e4d3eb83f932907d74dffc722050e8023ab1e0db4"
   },
   "capabilities": {},
   "extensions": {},
