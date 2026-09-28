@@ -96,12 +96,13 @@ If `contract:` ends in `.prisma`, the source is PSL; if it ends in `.ts`, the so
 
 ## Workflow — Edit a model / field / relation (PSL)
 
-The concept: PSL models lower to tables (or collections, on Mongo); fields lower to columns; `@relation(...)` declares the FK side. Add the relation only on the owning side — the framework derives the back-reference automatically.
+The concept: PSL models lower to tables (or collections, on Mongo); fields lower to columns; `@relation(...)` declares the FK side. The other model gets a relation only when it declares the back-reference itself, as a list field (`posts Post[]`) or an optional singular field for a one-to-one (`profile Profile?`), with no `fields`/`references`. A relation declared only on the FK side leaves the other model with no relation to `include` from.
 
 ```prisma
 model User {
   id    Int    @id @default(autoincrement())
   email String @unique
+  posts Post[]
 }
 
 model Post {
