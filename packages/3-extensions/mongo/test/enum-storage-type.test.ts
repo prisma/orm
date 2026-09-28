@@ -41,7 +41,7 @@ function interpret(schema: string) {
   });
 }
 
-describe('a Mongo enum over a codec without exactly one storage type', () => {
+describe('a Mongo enum over a codec without exactly one BSON type', () => {
   it.each([
     ['mongo/json@1', 8],
     ['mongo/bson@1', 0],
