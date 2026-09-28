@@ -24,7 +24,7 @@ export const mongoScalarAuthoringTypes = {
   Json: {
     kind: 'typeConstructor',
     documentation:
-      'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types.',
+      'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
     output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
   },
   Bson: {
@@ -78,7 +78,7 @@ mongo/json@1 wire value contains a non-JSON BSON date at events.0.at
 
 `Bson` (`mongo/bson@1`) is any BSON value, the only MongoDB type whose validator does not constrain the field. Its application type `BsonValue` is structural (a `_bsontype` tag plus methods), because values come from the driver's own copy of the `bson` library. Its JSON form is canonical Extended JSON v2. The split is the same decision seen from both sides: a field typed `Json` holds what JSON can represent and is validated as such, and a field that must hold dates, identifiers or 64-bit integers inside it is typed `Bson`.
 
-On PostgreSQL and SQLite, `Json` already holds JSON only; no `Bson` counterpart exists.
+On PostgreSQL and SQLite, `Json` columns store JSON text, so what is stored is always JSON, but their codecs do not yet refuse a non-JSON value on write: they pass it to `JSON.stringify`, which stores a `Date` as text, drops `undefined` members and stores `null` for `NaN`. Moving MongoDB's plain-JSON check into the framework so that those codecs refuse such values too is planned and has not shipped; until it does, the rule that `Json` holds a JSON value is enforced on write on MongoDB only. No `Bson` counterpart exists on either target.
 
 ## Renaming a surface name
 
