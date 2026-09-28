@@ -55,6 +55,7 @@ A brief may add gates specific to the work:
 - [ ] No new TODOs left behind by this dispatch.
 - [ ] Per-commit messages reference the source spike artifact / slice spec where appropriate.
 - [ ] If the dispatch touched test fixtures: `fixtures:check` passes; drift in unrelated fixture files is investigated, not committed.
+- [ ] If the dispatch renders SQL, lowers an AST, or validates user input, the reviewer brief grants an execution budget and names the three probes from [`failure-modes.md § F34`](./failure-modes.md#f34-the-in-loop-reviewer-passes-sql-lowering-by-reading-it-a-review-that-runs-the-code-finds-injection-and-invalid-sql): a hostile value through every public entry point, the new construct compiled through every wrapper on its path and run on a database, and each cited database rule quoted and tested on both sides. "Trust the implementer's gates" never means "read only".
 
 ## Slice-DoD overlay
 
