@@ -87,6 +87,7 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
   - A Mongo enum over a codec with several BSON types, or none, is refused at the `@@type` argument. A SQL enum over such a codec would silently store its members as the codec's first type. No SQL codec declares several types today; add the same refusal to the SQL enum path, or move it into the framework enum path both families use, in `target-named-scalars-sql`.
   - The Mongo planner classifies any change to an existing property schema as destructive, including a `Json`-to-`Bson` switch (a list to `{}`), which only widens the validator. Teach `isWideningSchemaChange` that `{}` admits everything.
   - `schema-to-view.ts` prints a `bsonType` list with `String(...)`, so `db schema` shows `meta: object,array,string,double,int,long,bool,null`.
+  - A read through a polymorphic model's base collection (no `.variant(...)`) returns fields declared only on a variant as the driver read them: an `ObjectId` comes back as an `ObjectId`, not a hex string, and a `Json` field is not checked. Reads and writes through `.variant(...)` use the variant's codecs. Decoding each row by its discriminator would close this.
 
 ## Follow-on projects specified in `design/`
 

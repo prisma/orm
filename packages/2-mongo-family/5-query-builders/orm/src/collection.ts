@@ -683,10 +683,7 @@ class MongoCollectionImpl<
   }
 
   #compile(): MongoQueryPlan<IncludedRow<TContract, ModelName, TIncludes>> {
-    const model = blindCast<
-      MongoModelDefinition | undefined,
-      'Mongo contract model lookup preserves target storage metadata erased by the namespace helper'
-    >(domainModelsAtDefaultNamespace(this.#contract.domain)[this.#modelName]);
+    const model = this.#modelWithVariantFields();
     if (!model) {
       throw ormError('ORM.MODEL_UNKNOWN', `Unknown model: "${this.#modelName}".`, {
         meta: { model: this.#modelName },
@@ -724,11 +721,23 @@ class MongoCollectionImpl<
   }
 
   #modelFields(): Record<string, ContractField> {
+    return this.#modelWithVariantFields()?.fields ?? {};
+  }
+
+  #modelWithVariantFields(): MongoModelDefinition | undefined {
+    const models = domainModelsAtDefaultNamespace(this.#contract.domain);
     const model = blindCast<
       MongoModelDefinition | undefined,
       'Mongo contract model lookup preserves target storage metadata erased by the namespace helper'
-    >(domainModelsAtDefaultNamespace(this.#contract.domain)[this.#modelName]);
-    return model?.fields ?? {};
+    >(models[this.#modelName]);
+    if (model === undefined || this.#variantName === undefined) return model;
+    const variant = blindCast<
+      MongoModelDefinition | undefined,
+      'a variant name is the name of the variant model in the same namespace'
+    >(models[this.#variantName]);
+    return variant === undefined
+      ? model
+      : { ...model, fields: { ...model.fields, ...variant.fields } };
   }
 
   #idFieldShape(): MongoFieldShape {
@@ -753,10 +762,7 @@ class MongoCollectionImpl<
   }
 
   #modelResultShape(): MongoResultShape {
-    const model = blindCast<
-      MongoModelDefinition | undefined,
-      'Mongo contract model lookup preserves target storage metadata erased by the namespace helper'
-    >(domainModelsAtDefaultNamespace(this.#contract.domain)[this.#modelName]);
+    const model = this.#modelWithVariantFields();
     if (!model) {
       return Object.freeze({ kind: 'unknown' as const });
     }
