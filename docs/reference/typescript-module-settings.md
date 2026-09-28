@@ -8,7 +8,7 @@ Which `tsconfig.json` settings a Prisma 8 project needs, which ones work for whi
 - **`resolveJsonModule: true`.** The scaffolded `db.ts` imports the emitted `contract.json`.
 - **The import attribute, where the file is an ES module.** `db.ts` imports the contract with `with { type: 'json' }`. TypeScript accepts that attribute only when `module` is `esnext`, `node18`, `node20`, `nodenext`, or `preserve`, and only from TypeScript 5.3.
 - **The emitted declarations in `include`,** so `contract.d.ts` is part of the program.
-- **A type import path that resolves under every `module` setting.** `db.ts` imports the `Contract` type from `./contract.js`, which TypeScript maps to `contract.d.ts`. The extensionless form `./contract.d` fails with TS2307 under `nodenext`, `node18`, and `node20` whenever the file is an ES module, and `./contract.d.ts` needs `allowImportingTsExtensions`.
+- **A type import path that resolves under every `module` setting.** `db.ts` imports the `Contract` type from `./contract.d.js`, which TypeScript maps to `contract.d.ts`. The extensionless `./contract.d` fails with TS2307 under `nodenext`, `node18`, and `node20` whenever the file is an ES module. `./contract.js` resolves under every setting when the contract is PSL, but with TypeScript authoring a `contract.ts` sits beside `contract.d.ts` and `./contract.js` resolves to the source file, whose export is `contract`, so it fails with TS2724. `./contract.d.ts` needs `allowImportingTsExtensions`.
 
 Prisma 8 does not require `NodeNext`. Under `"module": "NodeNext"` with `"type": "module"` in `package.json`, TypeScript requires a `.js` extension on every relative import, because Node's ESM loader requires one at runtime. That is Node's rule, and it only matters to projects that compile with `tsc` and run the output with plain `node`.
 
@@ -25,7 +25,7 @@ Prisma 8 does not require `NodeNext`. Under `"module": "NodeNext"` with `"type":
 ## What `prisma orm init` writes
 
 - It merges `module: 'preserve'`, `moduleResolution: 'bundler'`, and `resolveJsonModule: true` into an existing `tsconfig.json`, and adds `node` to `compilerOptions.types` while keeping the entries already there, so `process.env` typechecks in a project with an explicit `types` list (`packages/1-framework/3-tooling/cli/src/commands/init/templates/tsconfig.ts`). It does this whatever the project's current `module` setting is, and reports only that it updated the file.
-- It scaffolds `db.ts` with the `with { type: 'json' }` import and the `./contract.js` type import (`templates/code-templates.ts`). Releases up to 8.0.0-rc.17 wrote `./contract.d`, which fails under `nodenext`, `node18`, and `node20` as ES modules.
+- It scaffolds `db.ts` with the `with { type: 'json' }` import and the `./contract.d.js` type import (`templates/code-templates.ts`). Releases up to 8.0.0-rc.17 wrote `./contract.d`, which fails under `nodenext`, `node18`, and `node20` as ES modules.
 - When `package.json` declares a `"type"` other than `"module"`, it keeps the user's value and warns that `db.ts` will not load under it (`commands/init/hygiene-package-scripts.ts`). For a CommonJS project, the attribute-free import from the table above would load, because the file runs as CommonJS; Node requires the attribute when the file runs as an ES module.
 
 ## How the CommonJS option was verified
@@ -44,20 +44,22 @@ Tested on Node 26.8 with TypeScript 5.9.3 and 7.0.2 (both agree on every row) ag
 | --- | --- | --- | --- | --- | --- |
 | `esnext` | `bundler` | `module` | yes | `./contract.d` or `./contract.js` | pass |
 | `preserve` | `bundler` | `module` or none | yes | `./contract.d` or `./contract.js` | pass |
-| `nodenext` | `nodenext` or unset | `module` | yes | `./contract.js` | pass |
+| `nodenext` | `nodenext` or unset | `module` | yes | `./contract.d.js` (or `./contract.js` without a `contract.ts` sibling) | pass |
 | `nodenext` | `nodenext` | `module` | yes | `./contract.d` | TS2307 |
 | `nodenext` | `nodenext` | none or `commonjs` | no | `./contract.d` or `./contract.js` | pass |
 | `nodenext` | `nodenext` | none | yes | any | TS2856 |
 | `node18` | unset | none | no | any | TS1479 |
 | `node20` | unset | none | no | `./contract.d` or `./contract.js` | pass |
-| `node18`, `node20` | unset (or `nodenext` for `node18`) | `module` | yes | `./contract.js` | pass |
+| `node18`, `node20` | unset (or `nodenext` for `node18`) | `module` | yes | `./contract.d.js` | pass |
 | `node18`, `node20` | unset | `module` | yes | `./contract.d` | TS2307 |
 | `node16` | unset | `module` | yes | any | TS2823 |
 | `es2022` | `bundler` | `module` | yes | any | TS2823 |
 | `commonjs` | `node` | none | either | any | TS2307 on the package |
 | unset | unset | `module` | yes | any | TS5070 (`resolveJsonModule` needs a non-classic resolution) |
 | `esnext` | `node` or `node10` | `module` | yes | any | TS2307 on the package |
-| `nodenext` or `preserve` | matching | `module` | yes | `./contract.js`, with `allowImportingTsExtensions` | pass (type stripping) |
+| `nodenext` or `preserve` | matching | `module` | yes | `./contract.d.js`, with `allowImportingTsExtensions` | pass (type stripping) |
+
+The `Contract` type import, checked in every setting above both with and without a `contract.ts` beside `contract.d.ts` (TypeScript authoring): `./contract.d.js` passes every cell. `./contract.js` passes every cell without the sibling and fails every cell with it (TS2724, it resolves to `contract.ts`). `./contract.d` fails under `nodenext`, `node18`, and `node20` as ES modules regardless of the sibling.
 
 Runtime, each constructing the client without a database connection:
 
