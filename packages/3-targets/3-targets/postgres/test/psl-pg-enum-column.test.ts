@@ -221,6 +221,42 @@ namespace auth {
     expect(aalsColumn?.many).toBe(true);
   });
 
+  it('keeps typeParams.typeName on a pg.enum(E)[] domain field, like the single field', () => {
+    const source = `
+namespace auth {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+    @@map("aal_level")
+  }
+
+  model AuthSession {
+    id   Int                 @id
+    aal  pg.enum(AalLevel)
+    aals pg.enum(AalLevel)[]
+  }
+}
+`;
+    const result = interpret(source, { sql: { scalarList: true } });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const fields = result.value.domain.namespaces['auth']?.models['AuthSession']?.fields;
+    const aal = {
+      nullable: false,
+      type: {
+        kind: 'scalar',
+        codecId: 'pg/enum@1',
+        typeParams: { typeName: 'auth.aal_level' },
+      },
+    };
+    expect({ aal: fields?.['aal'], aals: fields?.['aals'] }).toEqual({
+      aal,
+      aals: { ...aal, many: true },
+    });
+  });
+
   it('stores a list of member names written as a default on a pg.enum(E)[] field', () => {
     const source = `
 namespace auth {

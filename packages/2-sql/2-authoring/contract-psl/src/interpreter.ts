@@ -1570,7 +1570,11 @@ function buildValueObjects(input: BuildValueObjectsInput): Record<string, Contra
       }
       const scalarField: ContractField = {
         nullable: field.optional,
-        type: { kind: 'scalar', codecId: resolved.descriptor.codecId },
+        type: {
+          kind: 'scalar',
+          codecId: resolved.descriptor.codecId,
+          ...ifDefined('typeParams', resolved.descriptor.typeParams),
+        },
       };
       fields[field.name] = field.list ? { ...scalarField, many: true } : scalarField;
     }
@@ -1600,19 +1604,6 @@ function patchModelDomainFields(
           nullable: rf.field.optional,
           type: { kind: 'valueObject', name: rf.valueObjectTypeName },
           ...(rf.many ? { many: true as const } : {}),
-        };
-      } else if (rf.many && rf.scalarCodecId) {
-        needsPatch = true;
-        const builtType = model.fields[rf.field.name]?.type;
-        const typeParams = builtType?.kind === 'scalar' ? builtType.typeParams : undefined;
-        patchedFields[rf.field.name] = {
-          nullable: rf.field.optional,
-          type: {
-            kind: 'scalar',
-            codecId: rf.scalarCodecId,
-            ...ifDefined('typeParams', typeParams),
-          },
-          many: true as const,
         };
       }
     }

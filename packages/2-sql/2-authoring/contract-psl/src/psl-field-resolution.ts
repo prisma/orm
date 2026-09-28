@@ -123,7 +123,6 @@ export type ResolvedField = {
   // @internal/sql-schema-ir; the canonical alias is `CheckKind` there.
   readonly noCheck?: readonly ('membership' | 'elementNotNull')[];
   readonly valueObjectTypeName?: string;
-  readonly scalarCodecId?: string;
 };
 
 export type ModelNameMapping = {
@@ -485,7 +484,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     const isListField = field.list;
 
     let descriptor: ColumnDescriptor | undefined;
-    let scalarCodecId: string | undefined;
     let presetContributions: FieldPresetContributions | undefined;
     const resolveInput = {
       field,
@@ -542,7 +540,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
         });
         continue;
       }
-      scalarCodecId = resolved.descriptor.codecId;
       descriptor = resolved.descriptor;
     } else {
       const resolved = resolveFieldTypeDescriptor(resolveInput);
@@ -729,7 +726,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       ...ifDefined('many', isListField ? (true as const) : undefined),
       ...ifDefined('noCheck', noCheckKinds),
       ...ifDefined('valueObjectTypeName', isValueObjectField ? field.typeName : undefined),
-      ...ifDefined('scalarCodecId', scalarCodecId),
     });
   }
 
