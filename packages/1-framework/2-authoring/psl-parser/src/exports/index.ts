@@ -110,7 +110,7 @@ export {
   createBinder,
   PSL_UNRESOLVED_REFERENCE,
 } from '../binder';
-export { mapBlock, structBlock } from '../block-spec/binders';
+export { mapBlock, structBlock } from '../block-spec/constructors';
 export type { PslBlockSpecDescriptor } from '../block-spec/descriptor';
 export { blockSpecFactoryOf } from '../block-spec/descriptor';
 export type {

@@ -8,7 +8,7 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
 import type { ArgType, AttributeCtx } from '../src/attribute-spec/types';
 import { createBinder } from '../src/binder';
-import { mapBlock } from '../src/block-spec/binders';
+import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ArrayLiteralAst } from '../src/syntax/ast/expressions';

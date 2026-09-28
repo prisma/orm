@@ -1,7 +1,7 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
-import { mapBlock, structBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import { enumMemberAttributeDiagnostics } from '../src/enum-member-attributes';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';

@@ -11,7 +11,7 @@ import { record } from '../src/attribute-spec/combinators/record';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
 import type { OutOf } from '../src/attribute-spec/types';
-import { mapBlock, structBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import type { interpretExtensionBlock } from '../src/block-spec/interpret';
 import type { BlockSpecContext, BlockSpecFactory, InferBlock } from '../src/block-spec/types';

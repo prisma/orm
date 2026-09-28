@@ -9,7 +9,7 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
 import { createBinder } from '../src/binder';
-import { mapBlock, structBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/constructors';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
