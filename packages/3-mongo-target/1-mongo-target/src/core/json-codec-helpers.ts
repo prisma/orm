@@ -1,6 +1,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
 import {
+  bsonClassTag,
   bsonTypeTag,
   child,
   constructorName,
@@ -114,7 +115,7 @@ function decodeValue(value: unknown, path: string): JsonValue {
   if (typeof value === 'undefined') return decodeRefused('undefined', path);
   if (typeof value === 'symbol') return decodeRefused('symbol', path);
   if (typeof value === 'function') return decodeRefused('javascript', path);
-  const tag = bsonTypeTag(value);
+  const tag = bsonClassTag(value);
   if (tag !== undefined) return decodeTagged(value, tag, path);
   if (value instanceof Date) return decodeRefused('date', path);
   if (value instanceof RegExp) return decodeRefused('regex', path);

@@ -1,6 +1,7 @@
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import {
+  bsonClassTag,
   bsonTypeTag,
   child,
   constructorName,
@@ -82,7 +83,7 @@ function decodeEntries(entries: readonly [string, unknown][]): Record<string, un
 
 function decodeValue(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) return value;
-  if (bsonTypeTag(value) === 'DBRef') return decodeEntries(dbRefEntries(value));
+  if (bsonClassTag(value) === 'DBRef') return decodeEntries(dbRefEntries(value));
   if (Array.isArray(value)) {
     const decoded = value.map(decodeValue);
     return decoded.some((entry, index) => entry !== value[index]) ? decoded : value;

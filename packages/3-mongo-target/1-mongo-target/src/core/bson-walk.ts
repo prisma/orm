@@ -22,6 +22,13 @@ export function bsonTypeTag(value: object): string | undefined {
   return typeof tag === 'string' ? tag : undefined;
 }
 
+/**
+ * The `_bsontype` tag of a `bson` class instance. A stored subdocument is read as a plain object even when it has a `_bsontype` key, so a plain object has no tag.
+ */
+export function bsonClassTag(value: object): string | undefined {
+  return isPlainObject(value) ? undefined : bsonTypeTag(value);
+}
+
 export function constructorName(value: object): string {
   const name = Reflect.get(value, 'constructor')?.name;
   return typeof name === 'string' && name !== '' ? name : 'object';

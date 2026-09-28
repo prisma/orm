@@ -126,6 +126,17 @@ describe('mongoBsonCodec decode', () => {
     expect(await mongoBsonCodec.decode(wire, {})).toBe(wire);
   });
 
+  it.each([
+    ['DBRef', { _bsontype: 'DBRef' }],
+    ['Long', { _bsontype: 'Long' }],
+  ])(
+    'returns a stored subdocument whose _bsontype key says %s unchanged',
+    async (_, subdocument) => {
+      const wire = JSON.parse(JSON.stringify({ a: subdocument }));
+      expect(await mongoBsonCodec.decode(wire, {})).toBe(wire);
+    },
+  );
+
   it('rebuilds a DBRef that bson read from a $ref/$id subdocument, keeping member BSON types', async () => {
     const id = new ObjectId('64b7f0c2a1b2c3d4e5f60718');
     const stored = BSON.deserialize(

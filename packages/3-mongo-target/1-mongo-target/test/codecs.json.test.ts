@@ -165,6 +165,19 @@ describe('mongoJsonCodec decode', () => {
     });
   });
 
+  it.each([
+    ['Long', { _bsontype: 'Long' }],
+    ['DBRef', { _bsontype: 'DBRef' }],
+    ['ObjectId', { _bsontype: 'ObjectId', x: 1 }],
+    ['Int32', { _bsontype: 'Int32' }],
+  ])(
+    'reads a stored subdocument whose _bsontype key says %s as that document',
+    async (_, subdocument) => {
+      const document = JSON.parse(JSON.stringify({ a: subdocument }));
+      expect(await mongoJsonCodec.decode(wire(document), {})).toEqual({ a: subdocument });
+    },
+  );
+
   it('says "the root" when the wire value itself is not JSON', async () => {
     await expect(mongoJsonCodec.decode(wire(new Date(0)), {})).rejects.toThrow(
       decodeRefusal('date', 'the root'),
