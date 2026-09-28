@@ -49,7 +49,35 @@ export function mongoCodec<
   const TTraits extends readonly MongoCodecTrait[] = readonly [],
   TWire = unknown,
   TInput = unknown,
-  TOutput = TInput,
+>(
+  config: {
+    typeId: Id;
+    encode: (value: TInput, ctx: CodecCallContext) => TWire | Promise<TWire>;
+    decode: (wire: TWire, ctx: CodecCallContext) => TInput | Promise<TInput>;
+  } & JsonRoundTripConfig<TInput>,
+): MongoCodec<Id, TTraits, TWire, TInput>;
+/**
+ * Construct a Mongo codec whose `decode` returns `TOutput`, a type narrower than the `TInput` its `encode` takes. Pass all five type arguments.
+ */
+export function mongoCodec<
+  Id extends string,
+  const TTraits extends readonly MongoCodecTrait[],
+  TWire,
+  TInput,
+  TOutput extends TInput,
+>(
+  config: {
+    typeId: Id;
+    encode: (value: TInput, ctx: CodecCallContext) => TWire | Promise<TWire>;
+    decode: (wire: TWire, ctx: CodecCallContext) => TOutput | Promise<TOutput>;
+  } & JsonRoundTripConfig<TInput>,
+): MongoCodec<Id, TTraits, TWire, TInput, TOutput>;
+export function mongoCodec<
+  Id extends string,
+  const TTraits extends readonly MongoCodecTrait[],
+  TWire,
+  TInput,
+  TOutput extends TInput,
 >(
   config: {
     typeId: Id;
