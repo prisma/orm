@@ -1,3 +1,4 @@
+import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { MONGO_BSON_CODEC_ID } from './codec-ids';
 import { mongoTargetError } from './mongo-target-errors';
@@ -79,7 +80,7 @@ function assertBsonValue(value: unknown, path: string): void {
 /**
  * Returns `value` unchanged when it is a BSON value at every depth, and throws `RUNTIME.ENCODE_FAILED` naming the first value that is not, with its path.
  */
-export function encodeBsonValue(value: unknown): unknown {
+export function encodeBsonValue(value: BsonInputValue): BsonInputValue {
   assertBsonValue(value, '');
   return value;
 }
@@ -124,6 +125,9 @@ function decodeValue(value: unknown): unknown {
 /**
  * Returns the wire value as the driver produced it, except that a `DBRef` the `bson` library read from a `{ $ref, $id }` subdocument becomes that document again, `{ $ref, $id[, $db], ...fields }`, with its members' BSON types kept. A value holding no `DBRef` is returned as the same object.
  */
-export function decodeBsonValue(wire: unknown): unknown {
-  return decodeValue(wire);
+export function decodeBsonValue(wire: unknown): BsonValue {
+  return blindCast<
+    BsonValue,
+    'the driver reads only BSON values, and a rebuilt DBRef is a document of them'
+  >(decodeValue(wire));
 }

@@ -1987,6 +1987,9 @@ importers:
       '@internal/mongo-contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-foundation/mongo-contract
+      '@internal/mongo-value':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../1-foundation/mongo-value
       '@internal/utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/0-foundation/utils

@@ -1,6 +1,6 @@
 import type { InferModelRow } from '@internal/mongo-contract';
 import type { CreateInput } from '@internal/mongo-orm';
-import type { BsonValue } from '@internal/target-mongo/codec-types';
+import type { BsonInputValue, BsonValue } from '@internal/target-mongo/codec-types';
 import type { BSONSymbol, Code, MaxKey, MinKey } from 'mongodb';
 import { expectTypeOf, test } from 'vitest';
 import { defineContract } from '../src/exports/contract-builder';
@@ -21,6 +21,10 @@ type RawInput = CreateInput<typeof contract, 'Event'>['raw'];
 
 test('a bson field reads as BsonValue on the no-emit path', () => {
   expectTypeOf<InferModelRow<typeof contract, 'Event'>['raw']>().toEqualTypeOf<BsonValue>();
+});
+
+test('a bson field writes as BsonInputValue on the no-emit path', () => {
+  expectTypeOf<RawInput>().toEqualTypeOf<BsonInputValue>();
 });
 
 test('a bson field also accepts a native RegExp and a Uint8Array on write, at any depth', () => {

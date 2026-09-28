@@ -159,7 +159,7 @@ A new scalar for "any BSON value", the only Mongo type whose validator does not 
 
 - **Token** `bson`; codec id `mongo/bson@1`; data type `mongo/bson`; PSL `Bson`; TS `field.bson()`; `CodecTypes['mongo/bson@1']` input `BsonInputValue`, output `BsonValue`.
 - **`targetTypes`:** `[]`; the validator derivation gives `{}` (or `{ bsonType: 'array', items: {} }` for a list), exactly the mechanism slice 1 built for a known codec with no BSON type. The canonicalisation rule that keeps empty objects under `properties` and `items` stays.
-- **Application type `BsonValue`**, declared in `packages/3-mongo-target/1-mongo-target/src/exports/codec-types.ts` and duplicated in the Mongo TS builder's local map as the other types are, structural because values come from the driver's own copy of `bson`:
+- **Application type `BsonValue`**, declared once with `BsonScalar` and `BsonInputValue` in the Mongo family's value vocabulary, `packages/2-mongo-family/1-foundation/mongo-value/src/bson-value.ts` (exported from `@internal/mongo-value`). The target's `exports/codec-types.ts` re-exports the three types for users and uses them in `CodecTypes`; the Mongo TS builder's local codec map imports them from `@internal/mongo-value`, so authoring gets the same types without depending on the target. The types are structural because values come from the driver's own copy of `bson`:
 
 ```ts
 export type BsonScalar =
@@ -177,10 +177,10 @@ export type BsonScalar =
   | { readonly _bsontype: 'MaxKey' }
   | { readonly _bsontype: 'BSONSymbol'; valueOf(): string };
 export type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue };
-export type BsonInputValue = BsonValue | Uint8Array | ReadonlyArray<BsonInputValue> | { readonly [key: string]: BsonInputValue };
+export type BsonInputValue = BsonScalar | Uint8Array | ReadonlyArray<BsonInputValue> | { readonly [key: string]: BsonInputValue };
 ```
 
-  `undefined`, `bigint`, `symbol`, functions, and `DBRef` instances are not part of `BsonValue`. A stored regex reads back as a native `RegExp` (the driver deserialises with `bsonRegExp: false`), so `RegExp` is on the read side; `BSONRegExp` appears only when a driver is configured otherwise. `Uint8Array` is write-only (`Binary` is what reads back). `CodecTypes['mongo/bson@1']` is `{ input: BsonInputValue; output: BsonValue }`.
+  `undefined`, `bigint`, `symbol`, functions, and `DBRef` instances are not part of `BsonValue`. A stored regex reads back as a native `RegExp` (the driver deserialises with `bsonRegExp: false`), so `RegExp` is on the read side; `BSONRegExp` appears only when a driver is configured otherwise. `Uint8Array` is write-only (`Binary` is what reads back). `CodecTypes['mongo/bson@1']` is `{ input: BsonInputValue; output: BsonValue }`. `BsonInputValue` is written from `BsonScalar` rather than `BsonValue`; its own array and document members already admit every `BsonValue`, so both spellings admit the same values. `mongoBsonCodec` is typed the same way: `encode` takes a `BsonInputValue` and `decode` returns a `BsonValue`.
 - **Encode:** accepts any `BsonInputValue` and returns it unchanged; refuses with `RUNTIME.ENCODE_FAILED` (message `mongo/bson@1 value must be a BSON value; received <describe> at <path>`) `undefined`, `bigint`, `symbol`, function, non-finite number, `DBRef` instances, any object with a `_bsontype` not in the list above, and any other non-plain object (`Map`, `Set`, class instances, typed arrays other than `Uint8Array`, sparse holes), at any depth (§ 5.1 points 12 and 13).
 - **Decode:** returns the wire value unchanged except that a `DBRef` at any depth is rebuilt into `{ $ref, $id[, $db], ...fields }` with member types kept (§ 5.1 point 13); refuses nothing. A `long` promoted to `number` by the driver is returned as that `number`.
 - **JSON form:** MongoDB Extended JSON v2, canonical mode: `encodeJson` is `EJSON.serialize(value, { relaxed: false })` and `decodeJson` is `EJSON.deserialize(json, { relaxed: false })`, both from the `bson` package the target already depends on. This is deterministic and round-trips every `BsonValue`.

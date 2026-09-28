@@ -7,6 +7,7 @@ import {
   mongoCodec,
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
+import type { BsonInputValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type Binary, type Decimal128, type Document, EJSON, type Long, ObjectId } from 'bson';
@@ -151,13 +152,13 @@ export const mongoJsonCodec = mongoCodec({
 });
 
 /**
- * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. The application type is `BsonValue` in `CodecTypes`; the codec is typed `unknown` so this module's declarations do not pull `codec-types` into a shared chunk. Its JSON form is canonical MongoDB Extended JSON v2, which round-trips every BSON type.
+ * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. Its JSON form is canonical MongoDB Extended JSON v2, which round-trips every BSON type.
  */
 export const mongoBsonCodec = mongoCodec({
   typeId: MONGO_BSON_CODEC_ID,
-  decode: (wire: unknown) => decodeBsonValue(wire),
-  encode: (value: unknown) => encodeBsonValue(value),
-  encodeJson: (value: unknown) =>
+  decode: (wire: BsonInputValue) => decodeBsonValue(wire),
+  encode: (value: BsonInputValue) => encodeBsonValue(value),
+  encodeJson: (value: BsonInputValue) =>
     blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(
       EJSON.serialize(value, { relaxed: false }),
     ),
