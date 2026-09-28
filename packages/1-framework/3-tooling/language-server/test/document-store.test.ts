@@ -24,7 +24,7 @@ describe('document store', () => {
     const document = open(store);
     const first = store.readSnapshot(uri)!;
     expect(store.readSnapshot(alias)).toBe(first);
-    expect(first).toEqual({ uri: alias, text: 'first' });
+    expect(first).toEqual({ uri, text: 'first' });
     expect(Object.isFrozen(first)).toBe(true);
     expect(store.change({ uri, version: 2 }, [])).toBeUndefined();
     expect(store.readSnapshot(uri)).toBe(first);
@@ -46,6 +46,15 @@ describe('document store', () => {
     expect(reopened).not.toBe(first);
     expect(reopened).toEqual({ uri, text: 'first' });
   });
+  it('preserves non-file document URIs', () => {
+    const store = new DocumentStore();
+    const uri = 'untitled:Schema.psl';
+    expect(open(store, uri).uri).toBe(uri);
+    expect(store.readSnapshot(uri)).toEqual({ uri, text: 'first' });
+    expect(store.change({ uri, version: 2 }, [{ text: 'updated' }])?.uri).toBe(uri);
+    expect(store.close(uri)?.uri).toBe(uri);
+  });
+
   it('keeps document lookup bound when passed as a callback', () => {
     const store = new DocumentStore();
     const { getOpenDocument } = store;
@@ -56,12 +65,12 @@ describe('document store', () => {
     expect(getOpenDocument(uri)).toBeUndefined();
   });
 
-  it('owns one document per identity, preserving the latest opened URI', () => {
+  it('owns one document per identity with a normalized URI', () => {
     const store = new DocumentStore();
     const first = open(store);
     expect(store.getOpenDocument(uri)).toBe(first);
     expect(store.getOpenDocument(alias)).toBe(first);
-    expect(first.uri).toBe(alias);
+    expect(first.uri).toBe(uri);
     const replacement = open(store, uri, 'replacement');
     expect(store.getOpenDocument(alias)).toBe(replacement);
     expect(store.openDocuments()).toEqual([replacement]);
@@ -85,7 +94,7 @@ describe('document store', () => {
       },
     ]);
     expect(changed).toBe(document);
-    expect(changed?.uri).toBe(alias);
+    expect(changed?.uri).toBe(uri);
     expect(changed?.version).toBe(2);
     expect(changed?.getText()).toBe('// ok\r\nmodel Post {}\r\n');
     expect(changed?.offsetAt({ line: 1, character: 6 })).toBe(13);
@@ -171,6 +180,19 @@ describe('document store', () => {
         expect(store.readSnapshot(file.uri)).not.toBe(second);
       },
     );
+
+    it('normalizes disk snapshots independently of the first URI read', async () => {
+      const file = await fixtureFile('disk');
+      const alias = file.uri.replace('member.prisma', '%6dember.prisma');
+      const store = new DocumentStore();
+      const first = store.readSnapshot(alias);
+      expect(first).toEqual({ uri: file.uri, text: 'disk' });
+      expect(store.readSnapshot(file.uri)).toBe(first);
+      open(store, alias, 'overlay');
+      expect(store.readSnapshot(file.uri)).toEqual({ uri: file.uri, text: 'overlay' });
+      store.close(alias);
+      expect(store.readSnapshot(alias)).toEqual(first);
+    });
 
     it('reads a never-opened member from disk and caches it as a disk entry', async () => {
       const { uri: fileUri } = await fixtureFile('model Disk {}');

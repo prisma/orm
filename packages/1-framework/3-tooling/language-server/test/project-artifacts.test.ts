@@ -165,6 +165,7 @@ describe('createProjectArtifacts', () => {
     const first = project.document(schemaUri)!;
     project.symbolTable();
     expect(project.document(liveUri)).toBe(first);
+    expect(first.sourceFile.filename).toBe(schemaUri);
     expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
     expect(
       documents.change({ uri: schemaUri, version: 2 }, [
@@ -286,7 +287,7 @@ describe('createProjectArtifacts', () => {
     const { texts, store } = projectWithMirror();
     texts.set(liveUri, cleanSource);
     const first = store.document(schemaUri)!;
-    expect(first.sourceFile.filename).toBe(liveUri);
+    expect(first.sourceFile.filename).toBe(schemaUri);
     expect(store.symbolTable().topLevel.models['User']?.node.syntax.root()).toBe(
       first.document.syntax,
     );

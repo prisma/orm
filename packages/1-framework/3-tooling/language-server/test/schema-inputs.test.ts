@@ -5,7 +5,9 @@ import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  canonicalFileIdentity,
   isWatcherCacheEligible,
+  normalizeFileUri,
   resolveSchemaInputs,
   type SchemaInputConfig,
   toWatcherGlobPattern,
@@ -33,6 +35,24 @@ function configWith(
 
 const directive = '// use prisma-8\n';
 const alwaysMember = (): string => directive;
+
+describe('normalized file URIs', () => {
+  it.each([
+    ['linux', 'file:///abs/%73chema.psl', 'file:///abs/schema.psl'],
+    ['linux', 'file:///abs/Schema.psl', 'file:///abs/Schema.psl'],
+    ['win32', 'file:///D%3A/Project/%73chema.psl', 'file:///d:/project/schema.psl'],
+    ['win32', 'file://SERVER/Share/%73chema.psl', 'file://server/share/schema.psl'],
+    ['linux', 'untitled:Schema.psl', 'untitled:Schema.psl'],
+    ['linux', 'not a URI', 'not a URI'],
+    ['linux', 'file:///abs/%2Fschema.psl', 'file:///abs/%2Fschema.psl'],
+    ['linux', 'file://server/share/schema.psl', 'file://server/share/schema.psl'],
+  ] as const)('normalizes %s URI %s', (platform, uri, expected) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform);
+    expect(normalizeFileUri(uri)).toBe(expected);
+    expect(normalizeFileUri(expected)).toBe(expected);
+    expect(canonicalFileIdentity(expected)).toBe(canonicalFileIdentity(uri));
+  });
+});
 
 describe('watcher glob patterns', () => {
   it.each([
@@ -127,6 +147,7 @@ describe('resolveSchemaInputs', () => {
       alwaysMember,
     );
     expect(set.includes('file:///d%3A/project%20files/schema%20%231.PRISMA')).toBe(true);
+    expect([...set.uris()]).toEqual(['file:///d:/project%20files/schema%20%231.prisma']);
   });
 
   it('matches Windows UNC inputs', async () => {

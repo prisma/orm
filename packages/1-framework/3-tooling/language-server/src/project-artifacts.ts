@@ -15,7 +15,7 @@ import {
 } from './diagnostic-mapping';
 import { computeDocumentDiagnostics } from './document-diagnostics';
 import type { DocumentSnapshot } from './document-store';
-import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
+import { canonicalFileIdentity, normalizeFileUri, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
   return new Set(Array.from(inputs.uris(), canonicalFileIdentity));
@@ -193,7 +193,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (existing !== undefined && existing.snapshot === snapshot) {
       return existing.artifacts;
     }
-    const resolvedUri = snapshot.uri;
+    const resolvedUri = normalizeFileUri(snapshot.uri);
     const computed = computeDocumentDiagnostics(resolvedUri, snapshot.text, inputs);
     if (computed === null) {
       if (documents.delete(identity)) {

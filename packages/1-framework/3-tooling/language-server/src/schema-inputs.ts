@@ -30,7 +30,9 @@ export async function resolveSchemaInputs(
   const patterns = rawInputs?.map(toExpandablePath);
   const expanded = await expandContractInputs(patterns);
   const windows = isWindowsPlatform();
-  const candidates = expanded.map((path) => pathToFileURL(path, { windows }).toString());
+  const candidates = expanded.map((path) =>
+    normalizeFileUri(pathToFileURL(path, { windows }).toString()),
+  );
   const identities = new Set(candidates.map(canonicalFileIdentity));
 
   function isMember(uri: string): boolean {
@@ -96,6 +98,13 @@ export function canonicalFileIdentity(uri: string): string {
   } catch {
     return uri;
   }
+}
+
+export function normalizeFileUri(uri: string): string {
+  const identity = canonicalFileIdentity(uri);
+  return identity === uri
+    ? uri
+    : pathToFileURL(identity, { windows: isWindowsPlatform() }).toString();
 }
 
 function isWindowsPlatform(): boolean {

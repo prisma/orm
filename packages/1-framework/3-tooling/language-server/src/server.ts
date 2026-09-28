@@ -50,6 +50,7 @@ import {
 import {
   canonicalFileIdentity,
   isWatcherCacheEligible,
+  normalizeFileUri,
   resolveSchemaInputs,
   type SchemaInputConfig,
   type SchemaInputSet,
@@ -107,11 +108,6 @@ function lastGoodProject(entry: ManagedProject | undefined): ProjectState | unde
   return entry.status === 'loaded' ? entry.project : entry.lastGood;
 }
 
-interface ClosedOverride {
-  readonly identity: string;
-  readonly uri: string;
-}
-
 export const CONFIG_LOAD_FAILED_CODE = 'PRISMA_CONFIG_LOAD_FAILED';
 
 const semanticTokenSourceLimit = 100_000;
@@ -128,7 +124,7 @@ function createServerOn(connection: Connection): LanguageServer {
   const { getOpenDocument } = documents;
   const managedProjects = new Map<string, ManagedProject>();
   const documentConfigPaths = new Map<string, string>();
-  const publishedMembers = new Map<string, ReadonlyMap<string, string>>();
+  const publishedMembers = new Map<string, ReadonlySet<string>>();
   const schemaWatchRegistrations = new Map<
     string,
     { readonly disposable: Disposable; readonly schemaInputConfig: SchemaInputConfig }
@@ -139,7 +135,7 @@ function createServerOn(connection: Connection): LanguageServer {
   let clientCapabilities = noClientCapabilities;
 
   function sendDiagnostics(params: PublishDiagnosticsParams): void {
-    void connection.sendDiagnostics(params);
+    void connection.sendDiagnostics({ ...params, uri: normalizeFileUri(params.uri) });
   }
 
   function logWarn(message: string): void {
@@ -153,23 +149,15 @@ function createServerOn(connection: Connection): LanguageServer {
       : members;
   }
 
-  function pushTargetUri(candidateUri: string, closedOverride?: ClosedOverride): string {
-    const identity = canonicalFileIdentity(candidateUri);
-    if (closedOverride !== undefined && closedOverride.identity === identity) {
-      return closedOverride.uri;
-    }
-    return getOpenDocument(candidateUri)?.uri ?? candidateUri;
-  }
-
-  function publishProjectMembers(project: ProjectState, closedOverride?: ClosedOverride): void {
-    const nextLedger = new Map<string, string>();
+  function publishProjectMembers(project: ProjectState): void {
+    const nextLedger = new Set<string>();
     const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
     for (const candidateUri of membersToPush(project)) {
       const artifacts = project.artifacts.document(candidateUri);
       if (artifacts === undefined && getOpenDocument(candidateUri) === undefined) {
         continue;
       }
-      const uri = pushTargetUri(candidateUri, closedOverride);
+      const uri = normalizeFileUri(candidateUri);
       sendDiagnostics({
         uri,
         diagnostics:
@@ -177,12 +165,12 @@ function createServerOn(connection: Connection): LanguageServer {
             ? []
             : combinedDiagnostics(project.artifacts, artifacts, projectSymbolDiagnostics),
       });
-      nextLedger.set(canonicalFileIdentity(candidateUri), uri);
+      nextLedger.add(uri);
     }
     const previousLedger = publishedMembers.get(project.configPath);
     if (previousLedger !== undefined) {
-      for (const [identity, uri] of previousLedger) {
-        if (!nextLedger.has(identity)) {
+      for (const uri of previousLedger) {
+        if (!nextLedger.has(uri)) {
           sendDiagnostics({ uri, diagnostics: [] });
         }
       }
@@ -195,7 +183,7 @@ function createServerOn(connection: Connection): LanguageServer {
     if (ledger === undefined) {
       return;
     }
-    for (const uri of ledger.values()) {
+    for (const uri of ledger) {
       sendDiagnostics({ uri, diagnostics: [] });
     }
     publishedMembers.delete(configPath);
@@ -780,15 +768,7 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   connection.onDidOpenTextDocument((event) => {
-    const previous = getOpenDocument(event.textDocument.uri);
     const document = documents.open(event.textDocument);
-    if (
-      previous !== undefined &&
-      previous.uri !== document.uri &&
-      !clientCapabilities.pullDiagnostics
-    ) {
-      sendDiagnostics({ uri: previous.uri, diagnostics: [] });
-    }
     documentChanged(document.uri);
   });
   connection.onDidChangeTextDocument((event) => {
@@ -807,7 +787,7 @@ function createServerOn(connection: Connection): LanguageServer {
       sendDiagnostics({ uri, diagnostics: [] });
       return;
     }
-    publishProjectMembers(project, { identity: canonicalFileIdentity(uri), uri });
+    publishProjectMembers(project);
   });
 
   function currentProjectState(configPath: string | undefined): ProjectState | undefined {

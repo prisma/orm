@@ -10,6 +10,8 @@ Unopened members are read from disk and interpreted alongside open ones — the 
 
 Diagnostics are pushed (`textDocument/publishDiagnostics`) to every current member, closed files included — a client that pulls diagnostics still receives push for its closed members, since pull only ever serves open documents. `interFileDependencies: true` reflects this honestly: an edit in one file can change diagnostics anywhere else in the project. A member that leaves the schema (directive removed, file deleted, glob no longer matches) is cleared with an empty diagnostics publish.
 
+Equivalent file URIs share one document and one normalized URI for source filenames and diagnostic publications, including clears. Normalization follows file-path identity: percent encoding is standardized, Windows paths are case-folded, and UNC authorities are preserved. The server does not resolve symlinks or preserve the editor's original URI spelling.
+
 ## Completion
 
 Attribute, argument, function, identifier-value, registered scalar, generic block, and block parameter completions use contribution documentation as their detail when available. Scalar constructors, generic block descriptors, and block parameter descriptors can supply this text through their optional `documentation` property. Undocumented descriptors retain their generic completion details.

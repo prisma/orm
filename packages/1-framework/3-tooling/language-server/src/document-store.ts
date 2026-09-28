@@ -6,7 +6,7 @@ import type {
   TextDocumentItem,
 } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { canonicalFileIdentity } from './schema-inputs';
+import { canonicalFileIdentity, normalizeFileUri } from './schema-inputs';
 
 export interface DocumentSnapshot {
   readonly uri: string;
@@ -108,7 +108,7 @@ export class DocumentStore {
         return entry.snapshot;
       }
     }
-    const fresh = readDiskEntry(identity, uri);
+    const fresh = readDiskEntry(identity, normalizeFileUri(uri));
     if (fresh === undefined) {
       this.entries.delete(identity);
       return undefined;
@@ -125,11 +125,12 @@ export class DocumentStore {
   }
 
   open(item: TextDocumentItem): TextDocument {
-    const document = TextDocument.create(item.uri, item.languageId, item.version, item.text);
+    const uri = normalizeFileUri(item.uri);
+    const document = TextDocument.create(uri, item.languageId, item.version, item.text);
     this.entries.set(canonicalFileIdentity(item.uri), {
       origin: 'overlay',
       document,
-      snapshot: Object.freeze({ uri: item.uri, text: item.text }),
+      snapshot: Object.freeze({ uri, text: item.text }),
     });
     return document;
   }

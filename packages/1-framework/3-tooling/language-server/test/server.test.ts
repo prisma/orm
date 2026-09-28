@@ -887,18 +887,18 @@ afterEach(async () => {
 });
 
 describe('language server', { timeout: timeouts.databaseOperation }, () => {
-  it('publishes once per open and edit, using the opened URI across equivalent lifecycle notifications', async () => {
+  it('publishes once per open and edit, using a normalized URI across equivalent lifecycle notifications', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
     const alias = schemaUri.replace('schema.psl', '%73chema.psl');
     openDocument(harness, alias, unformattedPsl);
-    await harness.waitForDiagnostics(alias);
+    await harness.waitForDiagnostics(schemaUri);
     await settle();
-    expect(harness.publishCount(alias)).toBe(1);
-    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(harness.publishCount(schemaUri)).toBe(1);
+    expect(harness.publishCount(alias)).toBe(0);
     const first = harness.getDocumentAst(schemaUri)!;
     expect(first).toBe(harness.getDocumentAst(alias));
-    expect(first.sourceFile.filename).toBe(alias);
+    expect(first.sourceFile.filename).toBe(schemaUri);
     expect(await requestFormatting(harness, schemaUri)).toEqual([
       {
         range: { start: { line: 0, character: 0 }, end: { line: 3, character: 1 } },
@@ -914,10 +914,10 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         },
       ],
     });
-    await harness.waitForDiagnosticsCount(alias, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 2);
     await settle();
-    expect(harness.publishCount(alias)).toBe(2);
-    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(harness.publishCount(schemaUri)).toBe(2);
+    expect(harness.publishCount(alias)).toBe(0);
     expect(harness.getDocumentAst(schemaUri)).not.toBe(first);
     expect(Object.keys(harness.getProjectSymbolTable(schemaUri)!.topLevel.models)).toEqual([
       'Post',
@@ -929,31 +929,34 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     });
     await requestFormatting(harness, alias);
     await settle();
-    expect(harness.publishCount(alias)).toBe(2);
+    expect(harness.publishCount(schemaUri)).toBe(2);
     closeDocument(harness, schemaUri);
-    await harness.waitForDiagnosticsCount(alias, 3);
+    await harness.waitForDiagnosticsCount(schemaUri, 3);
     expect(harness.getDocumentAst(alias)).toBeUndefined();
     expect(harness.getProjectSymbolTable(schemaUri)).toBeUndefined();
     openDocument(harness, schemaUri, unformattedPsl);
-    await harness.waitForDiagnostics(schemaUri);
+    await harness.waitForDiagnosticsCount(schemaUri, 4);
+    expect(harness.publishCount(alias)).toBe(0);
     expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
     expect(Object.keys(harness.getProjectSymbolTable(alias)!.topLevel.models)).toEqual(['User']);
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
-  it('replaces simultaneous alias opens and clears the superseded URI', async () => {
+  it('replaces simultaneous alias opens without a spelling-only clear', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
     const alias = schemaUri.replace('schema.psl', '%73chema.psl');
     openDocument(harness, alias, duplicateModelSource);
-    expect((await harness.waitForDiagnostics(alias)).length).toBeGreaterThan(0);
+    expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
     openDocument(harness, schemaUri, unformattedPsl);
-    await harness.waitForDiagnostics(schemaUri);
-    expect(harness.latestDiagnostics(alias)).toEqual([]);
+    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(2);
+    expect(harness.publishCount(alias)).toBe(0);
     expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
     expect(harness.getDocumentAst(alias)).toBe(harness.getDocumentAst(schemaUri));
     closeDocument(harness, alias);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 3);
     expect(harness.getDocumentAst(schemaUri)).toBeUndefined();
     expect(await requestFormatting(harness, schemaUri)).toEqual([]);
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
@@ -965,7 +968,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const alias = schemaUri.replace('schema.psl', '%73chema.psl');
     openDocument(harness, alias, unformattedPsl);
     expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([]);
-    expect(harness.getDocumentAst(schemaUri)?.sourceFile.filename).toBe(alias);
+    expect(harness.getDocumentAst(schemaUri)?.sourceFile.filename).toBe(schemaUri);
     const updated = '// use prisma-8\r\nmodel Post {\r\n  id Int\r\n}\r\nmodel Post {}';
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
@@ -984,7 +987,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const completions = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(completions.map(({ label }) => label)).toContain('Post');
     expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
-    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(alias, updated);
+    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(schemaUri, updated);
     expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
     expect(harness.publishCount(schemaUri)).toBe(0);
     expect(harness.publishCount(alias)).toBe(0);
@@ -1747,7 +1750,11 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       harness = startHarness(async () => resolutionForInputs(['D:\\project\\next.prisma']));
       await harness.initialize();
       openDocument(harness, windowsDocumentUri, '// use prisma-8\n');
-      await harness.waitForDiagnostics(windowsDocumentUri);
+      await harness.waitForDiagnostics('file:///d:/project/next.prisma');
+      expect(harness.publishCount(windowsDocumentUri)).toBe(0);
+      expect(harness.getDocumentAst(windowsDocumentUri)?.sourceFile.filename).toBe(
+        'file:///d:/project/next.prisma',
+      );
 
       const items = completionItems(
         await requestCompletion(harness, windowsDocumentUri, { line: 1, character: 0 }),
@@ -3842,7 +3849,9 @@ describe('project symbol diagnostics assembly', () => {
         },
       ];
       if (mode === 'push') {
-        expect(await harness.waitForDiagnostics(siblingUri)).toEqual(expected);
+        expect(await harness.waitForDiagnostics(pathToFileURL(siblingPath).toString())).toEqual(
+          expected,
+        );
         expect(harness.latestDiagnostics(schemaUri)).toEqual([]);
       } else {
         expect(await requestPullDiagnostics(harness, siblingUri)).toEqual({
@@ -4133,6 +4142,43 @@ describe('language server whole-project push and freshness', {
     });
     expect(isDuplicateDeclaration(await conflicted)).toBe(true);
   });
+
+  it.each(['push', 'pull'] as const)(
+    'publishes and clears a closed aliased member at its normalized URI over %s',
+    async (mode) => {
+      const dir = await fixtureDir();
+      const memberPath = join(dir, 'member.prisma');
+      const memberUri = pathToFileURL(memberPath).toString();
+      const alias = memberUri.replace('member.prisma', '%6dember.prisma');
+      await writeFile(memberPath, selfDuplicatePostSchema, 'utf8');
+      harness = startHarness(
+        async () => resolutionForInputs([memberPath]),
+        mode === 'pull' ? pullDiagnosticsCapabilities : undefined,
+      );
+      await harness.initialize();
+      openDocument(harness, alias, postSchema);
+      if (mode === 'pull') {
+        expect(fullReportItems(await requestPullDiagnostics(harness, alias))).toEqual([]);
+      } else {
+        expect(await harness.waitForDiagnostics(memberUri)).toEqual([]);
+      }
+      const closed = harness.waitForDiagnosticsMatching(memberUri, isDuplicateDeclaration);
+      closeDocument(harness, memberUri);
+      expect(isDuplicateDeclaration(await closed)).toBe(true);
+      expect(harness.publishCount(alias)).toBe(0);
+      await rm(memberPath);
+      const cleared = harness.waitForDiagnosticsMatching(
+        memberUri,
+        (diagnostics) => diagnostics.length === 0,
+      );
+      harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+        changes: [{ uri: alias, type: FileChangeType.Deleted }],
+      });
+      expect(await cleared).toEqual([]);
+      expect(harness.publishCount(memberUri)).toBe(mode === 'pull' ? 2 : 3);
+      expect(harness.publishCount(alias)).toBe(0);
+    },
+  );
 
   it("clears a closed member's diagnostics and drops it from the symbol table once it is deleted", async () => {
     const dir = await fixtureDir();
