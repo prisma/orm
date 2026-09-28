@@ -4,7 +4,7 @@ Status: **Accepted**
 
 ## Decision
 
-A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one lowercase token, and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token in PascalCase, and the TypeScript builder helper is `field.<token>()`. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.
+A scalar type's name says what the database stores, in the database's own vocabulary. Each type has one token, written exactly as its codec id writes it (`objectId` keeps its inner capital), and the three surfaces a user writes derive from it: the codec id is `<target>/<token>@<version>`, the PSL name is the token with its first letter uppercased, and the TypeScript builder helper is `field.<token>()`. Where a codec id already carries a name, the codec id is the source of the token, and no codec id is renamed to fit a surface name.
 
 Two types are named after an encoding rather than a single stored type: `Json`, the JSON-representable subset of the target's values, and, on MongoDB, `Bson`, any BSON value.
 

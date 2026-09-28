@@ -30,7 +30,7 @@ The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of
 Two limitations to know about:
 
 - `Binary` reads every binData subtype back as its bytes and writes subtype 0, so a UUID stored as subtype 4 round-trips as subtype 0. Use `Bson` to keep the subtype.
-- `field.temporal.timestamp(undefined, 'now')` keeps the field required on the create input type, although the runtime fills it on create. `field.temporal.timestamp()` and `field.temporal.timestamp('now', 'now')` are typed exactly.
+- `field.temporal.timestamp(undefined, 'now')` sets an update default only, and TypeScript infers both phases as optional, so its update default is typed as possibly absent. `field.temporal.timestamp()` and `field.temporal.timestamp('now', 'now')` are typed exactly.
 
 ## PostgreSQL
 
