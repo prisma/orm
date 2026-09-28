@@ -37,7 +37,7 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   const { block, descriptor, spec, symbols, sources, binder } = input;
   const ctx: AttributeCtx = { sources, symbols, binder };
   const entries =
-    spec.mode === 'fixed'
+    spec.mode === 'struct'
       ? interpretStructBlock(block, spec, ctx)
       : interpretMapBlock(block, spec, ctx);
 

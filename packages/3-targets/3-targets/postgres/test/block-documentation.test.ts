@@ -20,7 +20,7 @@ describe('PostgreSQL block documentation', () => {
     it(`documents ${descriptor.keyword} and its keys`, () => {
       expect(descriptor.documentation).toEqual(expect.stringMatching(/\S/));
       const spec = blockSpecFactoryOf(descriptor)(ctx);
-      if (spec.mode === 'fixed') {
+      if (spec.mode === 'struct') {
         for (const parameter of Object.values(spec.parameters)) {
           expect(parameter.documentation).toEqual(expect.stringMatching(/\S/));
         }

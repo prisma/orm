@@ -451,7 +451,7 @@ function provideGenericBlockKeyCompletionItems(
     return [];
   }
   const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
-  if (spec.mode !== 'fixed') {
+  if (spec.mode !== 'struct') {
     return [];
   }
 

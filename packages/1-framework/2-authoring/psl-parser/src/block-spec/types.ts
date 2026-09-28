@@ -12,13 +12,13 @@ export interface BlockEntryValueSpec {
 }
 
 export interface StructBlockSpec<Out = unknown> {
-  readonly mode: 'fixed';
+  readonly mode: 'struct';
   readonly parameters: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
   readonly _out?: Out;
 }
 
 export interface MapBlockSpec<Out = unknown> {
-  readonly mode: 'entries';
+  readonly mode: 'map';
   readonly value: BlockEntryValueSpec;
   readonly allowBare: boolean;
   readonly _out?: Out;

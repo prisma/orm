@@ -286,7 +286,7 @@ function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
     const key = entry.key()?.name();
     if (key === undefined) continue;
     const rule =
-      spec.mode === 'fixed'
+      spec.mode === 'struct'
         ? Object.hasOwn(spec.parameters, key)
           ? spec.parameters[key]?.type
           : undefined
