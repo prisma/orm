@@ -93,13 +93,11 @@ describe('value objects in contract definition builder', () => {
             fields: [
               {
                 fieldName: 'amount',
-                columnName: 'amount',
                 descriptor: { codecId: 'pg/int8@1', nativeType: 'int8' },
                 nullable: false,
               },
               {
                 fieldName: 'currency',
-                columnName: 'currency',
                 descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
                 nullable: false,
               },
@@ -145,13 +143,11 @@ describe('value objects in contract definition builder', () => {
           fields: [
             {
               fieldName: 'street',
-              columnName: 'street',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },
             {
               fieldName: 'city',
-              columnName: 'city',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },
@@ -212,13 +208,11 @@ describe('value objects in contract definition builder', () => {
           fields: [
             {
               fieldName: 'street',
-              columnName: 'street',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },
             {
               fieldName: 'city',
-              columnName: 'city',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },
@@ -272,7 +266,6 @@ describe('value objects in contract definition builder', () => {
           fields: [
             {
               fieldName: 'street',
-              columnName: 'street',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },
@@ -326,13 +319,11 @@ describe('value objects in contract definition builder', () => {
           fields: [
             {
               fieldName: 'lat',
-              columnName: 'lat',
               descriptor: { codecId: 'pg/float8@1', nativeType: 'float8' },
               nullable: false,
             },
             {
               fieldName: 'lng',
-              columnName: 'lng',
               descriptor: { codecId: 'pg/float8@1', nativeType: 'float8' },
               nullable: false,
             },
@@ -343,7 +334,6 @@ describe('value objects in contract definition builder', () => {
           fields: [
             {
               fieldName: 'street',
-              columnName: 'street',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },
@@ -433,7 +423,6 @@ describe('value objects in contract definition builder', () => {
           fields: [
             {
               fieldName: 'street',
-              columnName: 'street',
               descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
               nullable: false,
             },

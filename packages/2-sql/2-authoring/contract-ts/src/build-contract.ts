@@ -87,6 +87,7 @@ import type {
   FieldNode,
   ModelNode,
   RelationNode,
+  ScalarMemberNode,
   ValueObjectFieldNode,
   ValueObjectRefNode,
 } from './contract-definition';
@@ -380,7 +381,9 @@ function assertTargetTableMatches(
   }
 }
 
-function isValueObjectField(field: FieldNode | ValueObjectRefNode): field is ValueObjectRefNode {
+function isValueObjectField(
+  field: ScalarMemberNode | ValueObjectRefNode,
+): field is ValueObjectRefNode {
   return 'valueObjectName' in field;
 }
 
@@ -880,7 +883,7 @@ function domainEnumRef(
 }
 
 function buildDomainField(
-  field: FieldNode | ValueObjectRefNode,
+  field: ScalarMemberNode | ValueObjectRefNode,
   defaultNamespaceId: string,
 ): ContractField {
   if (isValueObjectField(field)) {

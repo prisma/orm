@@ -28,6 +28,7 @@ export type {
   ModelNode,
   PrimaryKeyNode,
   RelationNode,
+  ScalarMemberNode,
   UniqueConstraintNode,
   ValueObjectFieldNode,
   ValueObjectNode,

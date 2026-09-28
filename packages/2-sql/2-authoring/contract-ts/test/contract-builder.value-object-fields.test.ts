@@ -57,9 +57,7 @@ describe('value-object fields in contract definition builder', () => {
       valueObjects: [
         {
           name: 'Address',
-          fields: [
-            { fieldName: 'street', columnName: 'street', descriptor: text, nullable: false },
-          ],
+          fields: [{ fieldName: 'street', descriptor: text, nullable: false }],
         },
       ],
     });
@@ -74,24 +72,21 @@ describe('value-object fields in contract definition builder', () => {
   it('builds value-object members like model fields, keeping many, type parameters and the domain valueSet of an enum', () => {
     const Country = enumType('Country', text, member('DE', 'DE'), member('FR', 'FR'));
     const scalarFields = [
-      { fieldName: 'amount', columnName: 'amount', descriptor: numeric, nullable: false },
+      { fieldName: 'amount', descriptor: numeric, nullable: false },
       {
         fieldName: 'history',
-        columnName: 'history',
         descriptor: numeric,
         nullable: false,
         many: true,
       },
       {
         fieldName: 'country',
-        columnName: 'country',
         descriptor: text,
         nullable: false,
         enumTypeHandle: Country,
       },
       {
         fieldName: 'countries',
-        columnName: 'countries',
         descriptor: text,
         nullable: true,
         many: true,
@@ -109,7 +104,7 @@ describe('value-object fields in contract definition builder', () => {
           tableName: 'order',
           fields: [
             idField,
-            ...scalarFields,
+            ...scalarFields.map((member) => ({ ...member, columnName: member.fieldName })),
             {
               fieldName: 'shipping',
               columnName: 'shipping',
@@ -131,7 +126,7 @@ describe('value-object fields in contract definition builder', () => {
         },
         {
           name: 'Stop',
-          fields: [{ fieldName: 'city', columnName: 'city', descriptor: text, nullable: false }],
+          fields: [{ fieldName: 'city', descriptor: text, nullable: false }],
         },
       ],
     });

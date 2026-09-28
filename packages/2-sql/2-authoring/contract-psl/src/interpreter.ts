@@ -92,6 +92,7 @@ import {
   type ModelNode,
   type PrimaryKeyNode,
   type RelationNode,
+  type ScalarMemberNode,
   type UniqueConstraintNode,
   type ValueObjectFieldNode,
   type ValueObjectNode,
@@ -1521,7 +1522,7 @@ function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[]
   const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
 
   return compositeTypes.map((compositeType) => {
-    const fields: (FieldNode | ValueObjectRefNode)[] = [];
+    const fields: (ScalarMemberNode | ValueObjectRefNode)[] = [];
     for (const field of Object.values(compositeType.fields)) {
       const common = {
         fieldName: field.name,
@@ -1557,7 +1558,6 @@ function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[]
       }
       fields.push({
         ...common,
-        columnName: field.name,
         descriptor: resolved.descriptor,
         ...ifDefined('enumTypeHandle', enumHandles.get(field.typeName)),
       });

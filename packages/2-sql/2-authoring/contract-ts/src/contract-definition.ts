@@ -55,14 +55,20 @@ export type AuthoredColumnDefault =
       readonly canonical?: boolean;
     };
 
-export interface FieldNode {
+/** A scalar field of a value object, which has no column of its own. */
+export interface ScalarMemberNode {
   readonly fieldName: string;
-  readonly columnName: string;
   readonly descriptor: ColumnTypeDescriptor;
   readonly nullable: boolean;
+  readonly many?: boolean;
+  /** Present when the field is typed by an enum. */
+  readonly enumTypeHandle?: EnumTypeHandle;
+}
+
+export interface FieldNode extends ScalarMemberNode {
+  readonly columnName: string;
   readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  readonly many?: boolean;
   /**
    * Generated-check kinds the author declined for this column. The PSL
    * interpreter always writes concrete kinds; the TS builder's bare
@@ -70,8 +76,6 @@ export interface FieldNode {
    * derivable kinds at contract build time.
    */
   readonly noCheck?: readonly CheckKind[];
-  /** Present when the field was authored with `field.namedType(enumHandle)`. */
-  readonly enumTypeHandle?: EnumTypeHandle;
 }
 
 export interface PrimaryKeyNode {
@@ -220,7 +224,7 @@ export interface ValueObjectFieldNode extends ValueObjectRefNode {
 
 export interface ValueObjectNode {
   readonly name: string;
-  readonly fields: readonly (FieldNode | ValueObjectRefNode)[];
+  readonly fields: readonly (ScalarMemberNode | ValueObjectRefNode)[];
 }
 
 export interface ModelNode {

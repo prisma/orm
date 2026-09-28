@@ -195,7 +195,6 @@ describe('a literal default the codec refuses', () => {
               fields: [
                 {
                   fieldName: 'amount',
-                  columnName: 'amount',
                   descriptor: { codecId: 'pg/int8@1', nativeType: 'int8' },
                   nullable: false,
                 },
