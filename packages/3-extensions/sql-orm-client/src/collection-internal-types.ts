@@ -38,6 +38,10 @@ export type WithOrderByState<State extends CollectionTypeState> = Omit<State, 'h
   readonly hasOrderBy: true;
 };
 
+export type WithPagingState<State extends CollectionTypeState> = Omit<State, 'hasPaging'> & {
+  readonly hasPaging: true;
+};
+
 export type WithVariantState<State extends CollectionTypeState, V extends string> = Omit<
   State,
   'variantName'
@@ -117,6 +121,38 @@ export interface RowSelection<T> {
 
 export type StripRowType<T> = Omit<T, typeof RowType>;
 
+export declare const KeepsRow: unique symbol;
+
+/**
+ * `true` when a refinement returns the related row whenever the parent has
+ * one, `never` when a filter or paging can drop it, `boolean` when the state
+ * is not known. A witness rather than the state itself: `never` is assignable
+ * to `true`, so a filtered collection stays assignable to an unfiltered one.
+ */
+export type RefinementKeepsRow<State extends CollectionTypeState> = true extends
+  | State['hasWhere']
+  | State['hasPaging']
+  ? State['hasWhere'] extends true
+    ? never
+    : State['hasPaging'] extends true
+      ? never
+      : boolean
+  : true;
+
+export interface RowWitness<State extends CollectionTypeState> {
+  readonly [KeepsRow]?: RefinementKeepsRow<State> | undefined;
+}
+
+type RefinementKept<RefinedResult> = RefinedResult extends {
+  readonly [KeepsRow]?: unknown;
+}
+  ? [NonNullable<RefinedResult[typeof KeepsRow]>] extends [never]
+    ? false
+    : [NonNullable<RefinedResult[typeof KeepsRow]>] extends [true]
+      ? true
+      : false
+  : false;
+
 export type IncludeRefinementValue<
   TContract extends Contract<SqlStorage>,
   ParentModelName extends string,
@@ -130,21 +166,31 @@ export type IncludeRefinementValue<
       // cardinality-wrapped; Collection carries a raw row that still needs it.
       RefinedResult extends { readonly kind: 'includeScalar' | 'includeCombine' }
       ? V
-      : RefinedIncludeRelationValue<TContract, ParentModelName, RelName, V, NsId>
+      : RefinedIncludeRelationValue<
+          TContract,
+          ParentModelName,
+          RelName,
+          V,
+          RefinementKept<RefinedResult>,
+          NsId
+        >
     : IncludeRelationValue<TContract, ParentModelName, RelName, DefaultIncludedRow, NsId>;
 
 /**
  * A refined to-one include is nullable whatever the relation's `nullable` flag
- * says: the refinement's filter can exclude the related row.
+ * says when the refinement's filter or paging can exclude the related row;
+ * otherwise it follows the flag like a plain include.
  */
 type RefinedIncludeRelationValue<
   TContract extends Contract<SqlStorage>,
   ParentModelName extends string,
   RelName extends string,
   IncludedRow,
+  Kept extends boolean,
   NsId extends string = never,
-> =
-  RelationCardinality<TContract, ParentModelName, RelName, NsId> extends '1:1' | 'N:1'
+> = Kept extends true
+  ? IncludeRelationValue<TContract, ParentModelName, RelName, IncludedRow, NsId>
+  : RelationCardinality<TContract, ParentModelName, RelName, NsId> extends '1:1' | 'N:1'
     ? IncludedRow | null
     : IncludedRow[];
 

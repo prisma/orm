@@ -144,6 +144,7 @@ export function emptyGroupPagingState(): GroupPagingState {
 export interface CollectionTypeState {
   readonly hasOrderBy: boolean;
   readonly hasWhere: boolean;
+  readonly hasPaging: boolean;
   readonly hasUniqueFilter: boolean;
   readonly variantName: string | undefined;
   /**
@@ -162,6 +163,7 @@ export type RelationCardinalityTag = '1:1' | 'N:1' | '1:N' | 'N:M';
 export type DefaultCollectionTypeState = {
   readonly hasOrderBy: false;
   readonly hasWhere: false;
+  readonly hasPaging: false;
   readonly hasUniqueFilter: false;
   readonly variantName: undefined;
   readonly nsId: never;
