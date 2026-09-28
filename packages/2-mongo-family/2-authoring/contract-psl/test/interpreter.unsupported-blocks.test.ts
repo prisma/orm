@@ -1,8 +1,8 @@
-import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { mongoCodecLookup } from './derive-json-schema-helpers';
 
 function interpret(schema: string) {
   const { document, sources } = parse(schema, 'schema.prisma');
@@ -20,7 +20,7 @@ function interpret(schema: string) {
       ['ObjectId', 'mongo/objectId@1'],
     ]),
     controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
-    codecLookup: emptyCodecLookup,
+    codecLookup: mongoCodecLookup,
   });
 }
 

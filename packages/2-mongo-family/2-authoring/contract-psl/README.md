@@ -8,7 +8,7 @@ PSL-to-Mongo contract interpreter for Prisma 8. Transforms Prisma Schema Languag
 - **Attribute registry**: `mongoAttributeSpecs` registers every Mongo built-in (`@@map`, `@@discriminator`, `@@base`, `@@index`, `@@unique`, `@@textIndex`, `@id`, `@unique`, `@map`, `@relation`) as spec factories over the uniform `AttributeSpecContext`; the family descriptor contributes it under `authoring.attributeSpecs`, and the interpreter sources every spec from it
 - **Scalar type mapping**: `createMongoScalarTypeDescriptors()` provides the default PSL-type → Mongo codec ID mapping (e.g. `String` → `mongo/string@1`, `ObjectId` → `mongo/objectId@1`)
 - **Contract provider**: `mongoContract()` (exported from `./provider`) integrates with the CLI's `prisma contract emit` command, reading a `.prisma` schema file and producing a `ContractConfig`
-- **Diagnostics**: Emits structured diagnostics for unsupported field types (`PSL_UNSUPPORTED_FIELD_TYPE`), missing `@id` fields (`PSL_MISSING_ID_FIELD`), orphaned backrelations (`PSL_ORPHANED_BACKRELATION`), ambiguous backrelations (`PSL_AMBIGUOUS_BACKRELATION`), and attribute names outside the registered namespace (`PSL_UNSUPPORTED_MODEL_ATTRIBUTE`, `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`)
+- **Diagnostics**: Emits structured diagnostics for unsupported field types (`PSL_UNSUPPORTED_FIELD_TYPE`), field types whose codec is not registered (`PSL_UNKNOWN_FIELD_CODEC`), missing `@id` fields (`PSL_MISSING_ID_FIELD`), orphaned backrelations (`PSL_ORPHANED_BACKRELATION`), ambiguous backrelations (`PSL_AMBIGUOUS_BACKRELATION`), and attribute names outside the registered namespace (`PSL_UNSUPPORTED_MODEL_ATTRIBUTE`, `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`)
 
 ## Known limitations
 

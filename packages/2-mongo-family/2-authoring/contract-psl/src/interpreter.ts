@@ -1018,6 +1018,24 @@ function resolvePresetExecutionDefaults(input: {
   return resolved;
 }
 
+function isKnownFieldCodec(
+  field: FieldSymbol,
+  ownerName: string,
+  codecId: string,
+  codecLookup: CodecLookup | undefined,
+  { sources, diagnostics }: FieldPresetContext,
+): boolean {
+  if (codecLookup === undefined || codecLookup.targetTypesFor(codecId) !== undefined) {
+    return true;
+  }
+  diagnostics.push({
+    code: 'PSL_UNKNOWN_FIELD_CODEC',
+    message: `Field "${ownerName}.${field.name}" type "${field.typeName}" uses codec "${codecId}", which is not registered by any composed component`,
+    ...diagnosticSource(sources, field.node.syntax).at(field.span),
+  });
+  return false;
+}
+
 interface ResolvedNonRelationField {
   readonly field: ContractField;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
@@ -1029,6 +1047,7 @@ function resolveNonRelationField(
   compositeTypeNames: ReadonlySet<string>,
   scalarTypeCodecIds: ReadonlyMap<string, string>,
   codecIdByEnumName: ReadonlyMap<string, string>,
+  codecLookup: CodecLookup | undefined,
   presetContext: FieldPresetContext,
   warnDeprecatedScalar: (field: FieldSymbol) => void,
 ): ResolvedNonRelationField | undefined {
@@ -1075,6 +1094,12 @@ function resolveNonRelationField(
     return undefined;
   }
   if (preset.kind === 'preset') {
+    if (
+      preset.field.type.kind === 'scalar' &&
+      !isKnownFieldCodec(field, ownerName, preset.field.type.codecId, codecLookup, presetContext)
+    ) {
+      return undefined;
+    }
     return {
       field: preset.field,
       ...ifDefined('executionDefaults', preset.executionDefaults),
@@ -1088,6 +1113,10 @@ function resolveNonRelationField(
       message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
       ...diagnosticSource(sources, field.node.syntax).at(field.span),
     });
+    return undefined;
+  }
+
+  if (!isKnownFieldCodec(field, ownerName, codecId, codecLookup, presetContext)) {
     return undefined;
   }
 
@@ -1355,6 +1384,7 @@ export function interpretPslDocumentToMongoContract(
         compositeTypeNames,
         scalarTypeCodecIds,
         codecIdByEnumName,
+        codecLookup,
         presetContext,
         warnDeprecatedScalar,
       );
@@ -1454,6 +1484,7 @@ export function interpretPslDocumentToMongoContract(
         compositeTypeNames,
         scalarTypeCodecIds,
         codecIdByEnumName,
+        codecLookup,
         presetContext,
         warnDeprecatedScalar,
       );

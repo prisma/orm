@@ -833,6 +833,10 @@ A Mongo field preset that sets execution defaults, such as `temporal.createdAt()
 
 Two Mongo models stored in the same collection declare field presets with different execution defaults for the same stored field, for example `temporal.createdAt()` on one and `temporal.updatedAt()` on the other. Execution defaults are keyed by collection and field, so the collection can have only one. Identical presets are merged. Use the same preset on both models. Reported at the second preset.
 
+### PSL_UNKNOWN_FIELD_CODEC
+
+A Mongo model or composite type field, or a field preset, has a type whose codec no composed component registers, for example a type contributed by a pack that does not also register its codec: `Field "<Model>.<field>" type "<Type>" uses codec "<codecId>", which is not registered by any composed component`. The collection's `$jsonSchema` validator is closed, so a field it cannot describe would make MongoDB reject every document that carries it. Register the codec in a component the stack composes, or add to `extensions` a pack that registers it. Reported at the field.
+
 ## ORM
 
 ### ORM.AGGREGATE_OPERATION_RESERVED

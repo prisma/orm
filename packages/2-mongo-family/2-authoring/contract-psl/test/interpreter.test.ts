@@ -245,6 +245,10 @@ describe('interpretPslDocumentToMongoContract', () => {
     });
 
     it('uses custom scalar type descriptors when provided', () => {
+      const customTargetTypes: Record<string, readonly string[]> = {
+        'custom/oid@2': ['objectId'],
+        'custom/text@2': ['string'],
+      };
       const ir = interpretOk(
         `
         model Item {
@@ -257,6 +261,10 @@ describe('interpretPslDocumentToMongoContract', () => {
             ['ObjectId', 'custom/oid@2'],
             ['String', 'custom/text@2'],
           ]),
+          codecLookup: {
+            ...mongoCodecLookup,
+            targetTypesFor: (id: string) => customTargetTypes[id],
+          },
         },
       );
 

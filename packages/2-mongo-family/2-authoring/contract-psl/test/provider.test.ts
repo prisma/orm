@@ -4,14 +4,11 @@ import type { ContractSourceContext } from '@internal/config/config-types';
 import type { JsonValue } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
 import type { PslExtensionBlock } from '@internal/framework-components/authoring';
-import {
-  type Codec,
-  createDataTypeLookup,
-  emptyCodecLookup,
-} from '@internal/framework-components/codec';
+import { type Codec, createDataTypeLookup } from '@internal/framework-components/codec';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
+import { mongoCodecLookup } from './derive-json-schema-helpers';
 
 const originalCwd = process.cwd();
 const tempDirs: string[] = [];
@@ -68,7 +65,7 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       modelAttributes: {},
       attributeSpecs: { model: {}, field: {} },
     },
-    codecLookup: emptyCodecLookup,
+    codecLookup: mongoCodecLookup,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
@@ -207,7 +204,7 @@ model User {
       createMongoTestContext({
         resolvedInputs: [schemaPath],
         codecLookup: {
-          ...emptyCodecLookup,
+          ...mongoCodecLookup,
           get: (id) => (id === stringCodec.id ? stringCodec : undefined),
         },
         authoringContributions: {
