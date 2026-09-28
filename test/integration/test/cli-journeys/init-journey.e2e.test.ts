@@ -164,7 +164,7 @@ describe.each(ALL_CELLS.map((cell) => ({ cell, label: cellLabel(cell) })))(
           [
             "import { createPostgresControlClient } from '@prisma/orm-postgres/control';",
             "import postgres from '@prisma/orm-postgres/runtime';",
-            "import type { Contract } from './src/prisma/contract.d';",
+            "import type { Contract } from './src/prisma/contract.js';",
             "import contractJson from './src/prisma/contract.json' with { type: 'json' };",
             '',
             'const url = process.env.DATABASE_URL;',
