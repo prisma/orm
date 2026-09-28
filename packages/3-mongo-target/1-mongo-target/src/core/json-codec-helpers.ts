@@ -32,26 +32,30 @@ function describeNonJson(value: unknown): string | undefined {
   return isPlainObject(value) ? undefined : constructorName(value);
 }
 
-function assertJsonValue(value: unknown, path: string): void {
+function assertJsonValue(value: unknown, path: string, ancestors: Set<object>): void {
   const received = describeNonJson(value);
   if (received !== undefined) encodeRefused(received, path);
+  if (typeof value !== 'object' || value === null) return;
+  if (ancestors.has(value)) encodeRefused('circular reference', path);
+  ancestors.add(value);
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index++) {
       if (!(index in value)) encodeRefused('sparse array hole', child(path, index));
-      assertJsonValue(value[index], child(path, index));
+      assertJsonValue(value[index], child(path, index), ancestors);
     }
-  } else if (typeof value === 'object' && value !== null) {
+  } else {
     for (const [key, entry] of Object.entries(value)) {
-      assertJsonValue(entry, child(path, key));
+      assertJsonValue(entry, child(path, key), ancestors);
     }
   }
+  ancestors.delete(value);
 }
 
 /**
  * Returns `value` unchanged when it is a plain JSON value at every depth, and throws `RUNTIME.ENCODE_FAILED` naming the first value that is not, with its path.
  */
 export function encodeJsonValue(value: JsonValue): JsonValue {
-  assertJsonValue(value, '');
+  assertJsonValue(value, '', new Set());
   return value;
 }
 

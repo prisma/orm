@@ -86,6 +86,20 @@ describe('mongoJsonCodec encode', () => {
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
   });
 
+  it('refuses a circular reference, naming the path where it repeats', async () => {
+    const outer: { inner: { list: unknown[] } } = { inner: { list: [] } };
+    outer.inner.list.push(outer);
+    await expect(mongoJsonCodec.encode(notJson(outer), {})).rejects.toThrow(
+      encodeRefusal('circular reference', 'inner.list.0'),
+    );
+  });
+
+  it('accepts the same object at two places', async () => {
+    const shared = { a: 1 };
+    const value = notJson({ left: shared, right: [shared] });
+    expect(await mongoJsonCodec.encode(value, {})).toBe(value);
+  });
+
   it('refuses a hole in a sparse array', async () => {
     const sparse: unknown[] = [1];
     sparse[2] = 3;

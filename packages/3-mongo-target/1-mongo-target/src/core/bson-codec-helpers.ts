@@ -40,7 +40,7 @@ function encodeRefused(received: string, path: string): never {
   );
 }
 
-function assertBsonValue(value: unknown, path: string): void {
+function assertBsonValue(value: unknown, path: string, ancestors: Set<object>): void {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) encodeRefused(String(value), path);
@@ -59,28 +59,30 @@ function assertBsonValue(value: unknown, path: string): void {
     return;
   }
   if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return;
-  if (isPlainArray(value)) {
-    for (let index = 0; index < value.length; index++) {
-      const at = child(path, index);
-      if (!(index in value)) encodeRefused('sparse array hole', at);
-      assertBsonValue(value[index], at);
-    }
-    return;
-  }
-  if (!isPlainObject(value)) {
+  if (!isPlainArray(value) && !isPlainObject(value)) {
     encodeRefused(constructorName(value), path);
     return;
   }
-  for (const [key, entry] of Object.entries(value)) {
-    assertBsonValue(entry, child(path, key));
+  if (ancestors.has(value)) encodeRefused('circular reference', path);
+  ancestors.add(value);
+  if (Array.isArray(value)) {
+    for (let index = 0; index < value.length; index++) {
+      if (!(index in value)) encodeRefused('sparse array hole', child(path, index));
+      assertBsonValue(value[index], child(path, index), ancestors);
+    }
+  } else {
+    for (const [key, entry] of Object.entries(value)) {
+      assertBsonValue(entry, child(path, key), ancestors);
+    }
   }
+  ancestors.delete(value);
 }
 
 /**
  * Returns `value` unchanged when it is a BSON value at every depth, and throws `RUNTIME.ENCODE_FAILED` naming the first value that is not, with its path.
  */
 export function encodeBsonValue(value: BsonInputValue): BsonInputValue {
-  assertBsonValue(value, '');
+  assertBsonValue(value, '', new Set());
   return value;
 }
 
