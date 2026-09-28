@@ -33,7 +33,7 @@ model Document {
     expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });
 
-  it('writes an extension type with type parameters on a value-object field and reads back as the same contract', async () => {
+  it('writes an extension type with type parameters on a value-object member and reads back as the same contract', async () => {
     const authored = await readPsl(
       `// use prisma-8
 type Point {

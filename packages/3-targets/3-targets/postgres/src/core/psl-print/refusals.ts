@@ -261,7 +261,7 @@ export function refuseFieldColumnMismatch(input: {
 
 /**
  * Refuses a field PSL has no form for: one whose type is a union of types, or one that is a
- * dictionary. Runs for model fields and value-object fields alike.
+ * dictionary. Runs for model fields and value-object members alike.
  */
 export function refuseUnwritableFieldShape(
   field: ContractField,
@@ -285,9 +285,9 @@ export function refuseUnwritableFieldShape(
 }
 
 /**
- * Refuses a value-object field with a value set other than the one the PSL source derives for a field typed by an enum: the enum of the default namespace, with the enum's codec and no type parameters.
+ * Refuses a value-object member with a value set other than the one the PSL source derives for a member typed by an enum: the enum of the default namespace, with the enum's codec and no type parameters.
  */
-export function refuseUnderivedValueObjectFieldValueSet(input: {
+export function refuseUnderivedMemberValueSet(input: {
   readonly field: ContractField;
   readonly type: ScalarFieldType;
   readonly coordinate: string;
@@ -305,32 +305,26 @@ export function refuseUnderivedValueObjectFieldValueSet(input: {
     return;
   }
   throw unsupported(
-    `value-object field ${coordinate} carries a value set other than an enum of the default namespace with that enum's codec, which cannot be written in Prisma 8 PSL.`,
-    "PSL types the field by the enum name, and the PSL source then points the field at that enum in the default namespace and gives it the enum's codec.",
+    `value-object member ${coordinate} carries a value set other than an enum of the default namespace with that enum's codec and no type parameters, which cannot be written in Prisma 8 PSL.`,
+    "PSL types the member by the enum name, and the PSL source then points the member at that enum in the default namespace and gives it the enum's codec.",
     KEEP_SOURCE,
     { coordinate },
   );
 }
 
-export function refuseValueObjectFieldCodecWithoutNativeType(
-  codecId: string,
-  coordinate: string,
-): never {
+export function refuseMemberCodecWithoutNativeType(codecId: string, coordinate: string): never {
   throw unsupported(
-    `field ${coordinate} uses codec "${codecId}", which no Postgres codec in the configured stack names a native type for.`,
-    'A value-object field has no storage column, so its PSL type is derived from the native type its codec names.',
+    `value-object member ${coordinate} uses codec "${codecId}", which no Postgres codec in the configured stack names a native type for.`,
+    'A value-object member has no storage column, so its PSL type is derived from the native type its codec names.',
     KEEP_SOURCE,
     { coordinate, codecId },
   );
 }
 
-export function refuseValueObjectFieldCodecNeedingTypeParameters(
-  codecId: string,
-  coordinate: string,
-): never {
+export function refuseMemberCodecNeedingTypeParameters(codecId: string, coordinate: string): never {
   throw unsupported(
-    `field ${coordinate} uses codec "${codecId}", which names a native type only from type parameters the field does not carry.`,
-    'A value-object field has no storage column, so its PSL type is derived from the native type its codec names for its type parameters.',
+    `value-object member ${coordinate} uses codec "${codecId}", which names a native type only from type parameters the member does not carry.`,
+    'A value-object member has no storage column, so its PSL type is derived from the native type its codec names for its type parameters.',
     KEEP_SOURCE,
     { coordinate, codecId },
   );

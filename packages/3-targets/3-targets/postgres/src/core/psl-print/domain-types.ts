@@ -21,16 +21,16 @@ import { isPostgresCodecDescriptor } from '../codec-descriptor';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import { buildColumnType, type PslColumnType } from './column-types';
 import {
-  refuseUnderivedValueObjectFieldValueSet,
+  refuseMemberCodecNeedingTypeParameters,
+  refuseMemberCodecWithoutNativeType,
+  refuseUnderivedMemberValueSet,
   refuseUnwritableFieldShape,
   refuseUnwritableName,
-  refuseValueObjectFieldCodecNeedingTypeParameters,
-  refuseValueObjectFieldCodecWithoutNativeType,
   refuseValueObjectsOutsideDefaultNamespace,
 } from './refusals';
 
-/** The native type the stack's codec names for a value-object field, which has no column of its own. */
-function nativeTypeOfValueObjectField(
+/** The native type the stack's codec names for a value-object member, which has no column of its own. */
+function nativeTypeOfMember(
   type: ScalarFieldType,
   coordinate: string,
   context: SqlPslBuildContext,
@@ -38,7 +38,7 @@ function nativeTypeOfValueObjectField(
   const { codecId } = type;
   const descriptor = context.codecLookup.descriptorFor?.(codecId);
   if (!isPostgresCodecDescriptor(descriptor)) {
-    refuseValueObjectFieldCodecWithoutNativeType(codecId, coordinate);
+    refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }
   try {
     return descriptor.nativeTypeFor({
@@ -49,7 +49,7 @@ function nativeTypeOfValueObjectField(
       ),
     });
   } catch {
-    refuseValueObjectFieldCodecNeedingTypeParameters(codecId, coordinate);
+    refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
   }
 }
 
@@ -68,7 +68,7 @@ function buildMemberType(input: {
   if (type.kind === 'valueObject') {
     return { typeName: type.name };
   }
-  refuseUnderivedValueObjectFieldValueSet({
+  refuseUnderivedMemberValueSet({
     field,
     type,
     coordinate,
@@ -79,7 +79,7 @@ function buildMemberType(input: {
   }
   return buildColumnType({
     column: new StorageColumn({
-      nativeType: nativeTypeOfValueObjectField(type, coordinate, input.context),
+      nativeType: nativeTypeOfMember(type, coordinate, input.context),
       codecId: type.codecId,
       nullable: field.nullable,
       ...ifDefined('many', field.many),
