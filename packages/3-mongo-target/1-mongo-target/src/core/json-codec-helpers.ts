@@ -17,7 +17,7 @@ function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
     `${MONGO_JSON_CODEC_ID} value must be a JSON value; received ${received} at ${where(path)}`,
-    { meta: { codecId: MONGO_JSON_CODEC_ID, received, path } },
+    { meta: { codecId: MONGO_JSON_CODEC_ID, received, valuePath: path } },
   );
 }
 
@@ -75,7 +75,7 @@ function decodeRefused(bsonType: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.DECODE_FAILED',
     `${MONGO_JSON_CODEC_ID} wire value contains a non-JSON BSON ${bsonType} at ${where(path)}`,
-    { meta: { codecId: MONGO_JSON_CODEC_ID, received: bsonType, path } },
+    { meta: { codecId: MONGO_JSON_CODEC_ID, received: bsonType, valuePath: path } },
   );
 }
 

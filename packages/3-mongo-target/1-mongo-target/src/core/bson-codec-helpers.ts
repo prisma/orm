@@ -36,7 +36,7 @@ function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
     `${MONGO_BSON_CODEC_ID} value must be a BSON value; received ${received} at ${where(path)}`,
-    { meta: { codecId: MONGO_BSON_CODEC_ID, received, path } },
+    { meta: { codecId: MONGO_BSON_CODEC_ID, received, valuePath: path } },
   );
 }
 

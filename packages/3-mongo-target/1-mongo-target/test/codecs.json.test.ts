@@ -224,3 +224,14 @@ describe('mongoJsonCodec decode', () => {
     expect(Object.hasOwn(decoded as object, '__proto__')).toBe(true);
   });
 });
+
+describe('mongoJsonCodec refusal details', () => {
+  it('name the codec, the refused kind and the path inside the value', async () => {
+    await expect(mongoJsonCodec.encode(notJson({ a: [undefined] }), {})).rejects.toMatchObject({
+      meta: { codecId: 'mongo/json@1', received: 'undefined', valuePath: 'a.0' },
+    });
+    await expect(mongoJsonCodec.decode(wire({ a: [new Date(0)] }), {})).rejects.toMatchObject({
+      meta: { codecId: 'mongo/json@1', received: 'date', valuePath: 'a.0' },
+    });
+  });
+});

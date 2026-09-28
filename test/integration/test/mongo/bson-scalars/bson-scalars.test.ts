@@ -178,9 +178,19 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
           notes: null,
         });
 
-        await expect(db.posts.all()).rejects.toThrow(
-          'mongo/json@1 wire value contains a non-JSON BSON date at events.0.at',
-        );
+        await expect(db.posts.all()).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          message: expect.stringContaining(
+            'mongo/json@1 wire value contains a non-JSON BSON date at events.0.at',
+          ),
+          details: {
+            codecId: 'mongo/json@1',
+            received: 'date',
+            valuePath: 'events.0.at',
+            collection: 'posts',
+            path: 'meta',
+          },
+        });
       }),
     timeouts.spinUpMongoMemoryServer,
   );

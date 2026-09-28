@@ -153,6 +153,14 @@ describe('mongoBsonCodec encode', () => {
   });
 });
 
+describe('mongoBsonCodec refusal details', () => {
+  it('name the codec, the refused kind and the path inside the value', async () => {
+    await expect(mongoBsonCodec.encode(notBson({ a: [undefined] }), {})).rejects.toMatchObject({
+      meta: { codecId: 'mongo/bson@1', received: 'undefined', valuePath: 'a.0' },
+    });
+  });
+});
+
 describe('mongoBsonCodec decode', () => {
   it('returns the wire value unchanged, whatever it holds', async () => {
     const wire = notBson({
