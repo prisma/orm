@@ -22,10 +22,6 @@ export function mongoFamilyEnumSpec() {
 
 type EnumBlockValues = InferBlock<ReturnType<typeof mongoFamilyEnumSpec>>;
 
-function typeArgumentSpan(block: PslExtensionBlock): PslExtensionBlock['span'] | undefined {
-  return block.blockAttributes.find((attribute) => attribute.name === 'type')?.args[0]?.span;
-}
-
 export const mongoFamilyEnumEntityDescriptor = {
   kind: 'entity' as const,
   discriminator: 'enum',
@@ -49,7 +45,7 @@ export const mongoFamilyEnumEntityDescriptor = {
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
           sourceId,
-          span: typeArgumentSpan(block) ?? codecSpan,
+          span: codecSpan,
         });
         return undefined;
       }
@@ -59,7 +55,7 @@ export const mongoFamilyEnumEntityDescriptor = {
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type codec "${codecId}" declares ${bsonTypes.length} BSON types; an enum needs exactly one`,
           sourceId,
-          span: typeArgumentSpan(block) ?? codecSpan,
+          span: codecSpan,
         });
         return undefined;
       }
