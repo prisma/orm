@@ -9,7 +9,7 @@ import {
   createDataTypeLookup,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
-import { entriesBlock, jsonValue } from '@internal/psl-parser';
+import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
@@ -52,7 +52,7 @@ const enumBlockDescriptor = {
   discriminator: 'enum',
   name: { required: true },
   spec: () =>
-    entriesBlock({
+    mapBlock({
       value: { type: jsonValue(), documentation: 'The member value.' },
       allowBare: true,
     }),

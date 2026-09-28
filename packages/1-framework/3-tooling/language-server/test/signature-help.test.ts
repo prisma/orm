@@ -8,7 +8,6 @@ import {
   bool,
   buildSymbolTable,
   fieldAttribute,
-  fixedBlock,
   funcCall,
   list,
   modelAttribute,
@@ -16,6 +15,7 @@ import {
   optional,
   record,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
@@ -114,7 +114,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'signature-policy',
     name: { required: true },
-    spec: () => fixedBlock({ parameters: {} }),
+    spec: () => structBlock({ parameters: {} }),
     attributes: { probe: () => blockSpec },
   },
 };

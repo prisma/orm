@@ -6,7 +6,7 @@ import type {
 } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable, entriesBlock, jsonValue } from '@internal/psl-parser';
+import { buildSymbolTable, jsonValue, mapBlock } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
@@ -355,7 +355,7 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
           discriminator: 'enum',
           name: { required: true },
           spec: () =>
-            entriesBlock({
+            mapBlock({
               value: { type: jsonValue(), documentation: 'The member value.' },
               allowBare: true,
             }),

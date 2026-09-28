@@ -1,7 +1,7 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
-import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/binders';
 import { enumMemberAttributeDiagnostics } from '../src/enum-member-attributes';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -14,7 +14,7 @@ const descriptors: AuthoringPslBlockDescriptorNamespace = {
     discriminator: 'enum',
     name: { required: true },
     spec: () =>
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),
@@ -25,7 +25,7 @@ const descriptors: AuthoringPslBlockDescriptorNamespace = {
       keyword: 'policy',
       discriminator: 'policy',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
     },
   },
 };

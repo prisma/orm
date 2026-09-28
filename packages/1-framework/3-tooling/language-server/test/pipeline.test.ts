@@ -3,9 +3,9 @@ import {
   buildSymbolTable,
   createBinder,
   entityRef,
-  fixedBlock,
   interpretExtensionBlocks,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -133,7 +133,7 @@ describe('runPipeline — block resolution stays out of the parse-plus-symbol pi
       discriminator: 'fixture-guard',
       name: { required: true as const },
       spec: () =>
-        fixedBlock({
+        structBlock({
           parameters: {
             target: { type: entityRef({ kind: 'model' }), documentation: 'The guarded model.' },
             using: { type: str(), documentation: 'The predicate.' },

@@ -16,17 +16,17 @@ import {
   blockAttribute,
   buildSymbolTable,
   entityRef,
-  entriesBlock,
   type FieldAttributeSpecContext,
   fieldAttribute,
-  fixedBlock,
   identifier,
   int,
   jsonValue,
+  mapBlock,
   modelAttribute,
   oneOf,
   optional,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse, type SourceFile } from '@internal/psl-parser/syntax';
 import { timeouts } from '@repo/test-utils';
@@ -117,7 +117,7 @@ const attributeContributions = assembleAuthoringContributions([
 ]);
 const controlMutationDefaults = assembleControlMutationDefaults([]);
 const policySpec = () =>
-  fixedBlock({
+  structBlock({
     parameters: {
       on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
       where: { type: optional(str()), documentation: 'The policy predicate.' },
@@ -151,7 +151,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     discriminator: 'fixture-inventory',
     name: { required: true },
     spec: () =>
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The entry value.' },
         allowBare: true,
       }),
@@ -163,7 +163,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
       discriminator: 'fixture-audit',
       name: { required: true },
       spec: () =>
-        fixedBlock({
+        structBlock({
           parameters: {
             on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
           },
@@ -1163,7 +1163,7 @@ describe('providePslCompletionItems', () => {
           name: { required: true },
           spec: (ctx: unknown) => {
             factoryContexts.push(ctx);
-            return fixedBlock({
+            return structBlock({
               parameters: {
                 shield: { type: throwingRule, documentation: 'The shield key.' },
               },

@@ -1,4 +1,4 @@
-import { fixedBlock } from '@internal/psl-parser';
+import { structBlock } from '@internal/psl-parser';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -545,7 +545,7 @@ model Doc {
         keyword: 'test_block',
         discriminator: 'test-custom-block',
         name: { required: true },
-        spec: () => fixedBlock({ parameters: {} }),
+        spec: () => structBlock({ parameters: {} }),
       },
     };
     const authoringContributions = {
@@ -612,7 +612,7 @@ namespace public {
         keyword: 'top_thing',
         discriminator: 'top-thing',
         name: { required: true },
-        spec: () => fixedBlock({ parameters: {} }),
+        spec: () => structBlock({ parameters: {} }),
       },
     };
     const topThingAuthoringContributions = {
@@ -774,7 +774,7 @@ namespace auth {
         keyword: 'thing',
         discriminator: 'thing',
         name: { required: true },
-        spec: () => fixedBlock({ parameters: {} }),
+        spec: () => structBlock({ parameters: {} }),
       },
     };
     const thingAuthoringContributions = {

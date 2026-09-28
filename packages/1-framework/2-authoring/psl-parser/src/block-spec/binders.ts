@@ -1,18 +1,18 @@
 import type { ArgType, AttributeCtx, NamedOut, OutOf, Param } from '../attribute-spec/types';
-import type { EntriesBlockSpec, FixedBlockSpec } from './types';
+import type { MapBlockSpec, StructBlockSpec } from './types';
 
-export function fixedBlock<const P extends Record<string, Param<unknown, AttributeCtx>>>(config: {
+export function structBlock<const P extends Record<string, Param<unknown, AttributeCtx>>>(config: {
   readonly parameters: P;
-}): FixedBlockSpec<NamedOut<P>> {
+}): StructBlockSpec<NamedOut<P>> {
   return { mode: 'fixed', parameters: config.parameters };
 }
 
-export function entriesBlock<
+export function mapBlock<
   R extends ArgType<unknown, AttributeCtx>,
   Bare extends boolean = false,
 >(config: {
   readonly value: { readonly type: R; readonly documentation: string };
   readonly allowBare?: Bare;
-}): EntriesBlockSpec<Record<string, Bare extends true ? OutOf<R> | undefined : OutOf<R>>> {
+}): MapBlockSpec<Record<string, Bare extends true ? OutOf<R> | undefined : OutOf<R>>> {
   return { mode: 'entries', value: config.value, allowBare: config.allowBare ?? false };
 }

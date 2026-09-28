@@ -8,10 +8,10 @@ import {
 } from '@internal/framework-components/authoring';
 import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contract-builder';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
-import { blockAttribute, entriesBlock, jsonValue, str } from '@internal/psl-parser';
+import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
 
 export function mongoFamilyEnumSpec() {
-  return entriesBlock({
+  return mapBlock({
     value: {
       type: jsonValue(),
       documentation: 'The stored member value; a bare member stores its own name.',

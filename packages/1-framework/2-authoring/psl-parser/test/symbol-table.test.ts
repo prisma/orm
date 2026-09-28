@@ -4,7 +4,7 @@ import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { str } from '../src/attribute-spec/combinators/str';
-import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/binders';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -629,7 +629,7 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
       discriminator: 'enum',
       name: { required: true },
       spec: () =>
-        entriesBlock({
+        mapBlock({
           value: { type: jsonValue(), documentation: 'The explicit member value.' },
           allowBare: true,
         }),
@@ -643,7 +643,7 @@ describe('buildSymbolTable() — collected blocks and their envelopes', () => {
       discriminator: 'fixture-policy-select',
       name: { required: true },
       spec: () =>
-        fixedBlock({
+        structBlock({
           parameters: {
             using: { type: str(), documentation: 'The row predicate.' },
           },
@@ -769,14 +769,14 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
       keyword: 'shape_circle',
       discriminator: 'shape',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
     },
     shape_square: {
       kind: 'pslBlock',
       keyword: 'shape_square',
       discriminator: 'shape',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
     },
   };
 
@@ -815,7 +815,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       discriminator: 'widget',
       name: { required: true },
       spec: () =>
-        entriesBlock({
+        mapBlock({
           value: { type: jsonValue(), documentation: 'A widget property.' },
           allowBare: true,
         }),
@@ -828,7 +828,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
     },
   };
 

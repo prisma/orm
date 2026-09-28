@@ -5,12 +5,12 @@ import {
   blockAttribute,
   createBinder,
   entityRef,
-  fixedBlock,
   identifier,
   interpretExtensionBlockAttributes,
   list,
   modelAttribute,
   oneOf,
+  structBlock,
 } from '../src/exports';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -102,7 +102,7 @@ describe('syntax-scoped entity resolution', () => {
       kind: 'pslBlock',
       keyword: 'permission',
       discriminator: 'permission',
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
       attributes: { target: () => target },
     } satisfies PslBlockSpecDescriptor;
     const result = buildSymbolTable({

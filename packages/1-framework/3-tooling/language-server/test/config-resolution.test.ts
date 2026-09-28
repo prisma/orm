@@ -11,7 +11,7 @@ import {
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type { ControlStack } from '@internal/framework-components/control';
 import * as control from '@internal/framework-components/control';
-import { entriesBlock, jsonValue } from '@internal/psl-parser';
+import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { notOk, ok } from '@internal/utils/result';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -233,7 +233,7 @@ describe('control-stack input derivation', () => {
         discriminator: 'enum',
         name: { required: true },
         spec: () =>
-          entriesBlock({
+          mapBlock({
             value: { type: jsonValue(), documentation: 'The member value.' },
             allowBare: true,
           }),

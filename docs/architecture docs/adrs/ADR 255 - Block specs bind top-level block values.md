@@ -8,13 +8,13 @@
 
 ## At a glance
 
-A contributed top-level PSL block declares its member-value grammar with the same argument combinators attributes use (ADR 231), through one of two binders. A closed key set is a `fixedBlock`; the Postgres `policy_select` keyword declares exactly the keys a SELECT policy takes:
+A contributed top-level PSL block declares its member-value grammar with the same argument combinators attributes use (ADR 231), through one of two binders. A closed key set is a `structBlock`; the Postgres `policy_select` keyword declares exactly the keys a SELECT policy takes:
 
 ```ts
-import { entityRef, fixedBlock, identifier, list, oneOf, optional, str, bool } from '@internal/psl-parser';
+import { entityRef, structBlock, identifier, list, oneOf, optional, str, bool } from '@internal/psl-parser';
 
 export function policyUsingOnlySpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: {
         type: entityRef({ kind: 'model' }),
@@ -38,13 +38,13 @@ export function policyUsingOnlySpec() {
 }
 ```
 
-An arbitrary key set is an `entriesBlock`, one reusable rule applied to every member; the SQL family enum accepts native JSON-compatible literals and bare members:
+An arbitrary key set is a `mapBlock`, one reusable rule applied to every member; the SQL family enum accepts native JSON-compatible literals and bare members:
 
 ```ts
-import { entriesBlock, jsonValue } from '@internal/psl-parser';
+import { mapBlock, jsonValue } from '@internal/psl-parser';
 
 export function sqlFamilyEnumSpec() {
-  return entriesBlock({
+  return mapBlock({
     value: {
       type: jsonValue(),
       documentation: 'The stored member value; a bare member stores its own name.',
@@ -86,8 +86,8 @@ Top-level extension blocks have one value grammar: a **block spec** built from t
 
 Two binders cover the block shapes PSL has:
 
-- `fixedBlock({ parameters })` — a closed set of declared keys. Unknown keys are rejected; a key is required unless its rule is `optional(...)`. Required/optional property inference reuses the named-argument machinery (`NamedOut`), so a fixed spec's output type carries exactly the declared keys.
-- `entriesBlock({ value, allowBare? })` — arbitrary keys, each bound through one shared value rule. With `allowBare: true`, a member may stand alone on its line; the output record then carries the key with an `undefined` value — the bare sentinel, distinct from an explicit JSON `null`.
+- `structBlock({ parameters })` — a closed set of declared keys. Unknown keys are rejected; a key is required unless its rule is `optional(...)`. Required/optional property inference reuses the named-argument machinery (`NamedOut`), so a fixed spec's output type carries exactly the declared keys.
+- `mapBlock({ value, allowBare? })` — arbitrary keys, each bound through one shared value rule. With `allowBare: true`, a member may stand alone on its line; the output record then carries the key with an `undefined` value — the bare sentinel, distinct from an explicit JSON `null`.
 
 `InferBlock<S>` extracts a spec's output type, and `jsonValue()` is the shared rule for native JSON-compatible literals (strings, numbers, booleans, `null`, arrays, object literals, recursively). It recognizes the expression AST directly; `json()`, which decodes a quoted JSON object string, remains the deliberate text exception (ADR 231).
 
@@ -178,7 +178,7 @@ The hook picks only the destination namespace — entity kind and key stay fixed
 
 **Validate blocks from flattened source text.** Keeping raw expression strings on the parsed block and reparsing them in each consumer. Rejected: it duplicates the expression grammar in every consumer, loses spans, and makes diagnostics inconsistent. Parsed AST is never stringified at all; only producers without an AST write print text.
 
-**A variadic flag on fixed parameter tables.** Marking a descriptor as accepting arbitrary extra keys next to declared ones. Rejected: arbitrary-key blocks and closed-key blocks are different shapes with different output types; `entriesBlock` gives the former its own binder and inferred `Record` output instead of weakening unknown-key rejection for the latter.
+**A variadic flag on fixed parameter tables.** Marking a descriptor as accepting arbitrary extra keys next to declared ones. Rejected: arbitrary-key blocks and closed-key blocks are different shapes with different output types; `mapBlock` gives the former its own binder and inferred `Record` output instead of weakening unknown-key rejection for the latter.
 
 **Injected reference resolvers in the spec context.** Passing a resolver object to spec factories. Rejected: the snapshot's binder already owns every resolution, so an injected resolver adds a second owner without adding a capability.
 

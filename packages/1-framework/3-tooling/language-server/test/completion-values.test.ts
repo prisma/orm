@@ -10,7 +10,6 @@ import {
   buildSymbolTable,
   entityRef,
   fieldAttribute,
-  fixedBlock,
   funcCall,
   identifier,
   int,
@@ -23,6 +22,7 @@ import {
   type RejectingArgType,
   record,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
@@ -196,7 +196,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'completion-policy',
     name: { required: true },
-    spec: () => fixedBlock({ parameters: {} }),
+    spec: () => structBlock({ parameters: {} }),
     attributes: { probe: () => blockSpec },
   },
 };

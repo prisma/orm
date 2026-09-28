@@ -8,7 +8,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
-import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/binders';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlock } from '../src/block-spec/interpret';
 import type { BlockSpec, BlockSpecContext } from '../src/block-spec/types';
@@ -18,7 +18,7 @@ import { buildSymbolTable } from '../src/symbol-table';
 import { ownEntry, supportBinder } from './support';
 
 function policySpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: { type: entityRef({ kind: 'model' }), documentation: 'The protected model.' },
       using: { type: str(), documentation: 'The row predicate.' },
@@ -48,7 +48,7 @@ const NATIVE_ENUM_DESCRIPTOR = {
   keyword: 'native_enum',
   discriminator: 'fixture-native-enum',
   name: { required: true },
-  spec: () => entriesBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
+  spec: () => mapBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
 } satisfies PslBlockSpecDescriptor;
 
 const FAMILY_ENUM_DESCRIPTOR = {
@@ -57,7 +57,7 @@ const FAMILY_ENUM_DESCRIPTOR = {
   discriminator: 'fixture-enum',
   name: { required: true },
   spec: () =>
-    entriesBlock({
+    mapBlock({
       value: { type: jsonValue(), documentation: 'The explicit member value.' },
       allowBare: true,
     }),
@@ -444,7 +444,7 @@ describe('interpretExtensionBlock — arbitrary-key entries blocks', () => {
       result,
       block,
       NATIVE_ENUM_DESCRIPTOR,
-      entriesBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
+      mapBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
     );
 
     expect(parsed.ok).toBe(true);
@@ -460,7 +460,7 @@ describe('interpretExtensionBlock — arbitrary-key entries blocks', () => {
       result,
       blockNamed(result, 'Level'),
       NATIVE_ENUM_DESCRIPTOR,
-      entriesBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
+      mapBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
     );
 
     expect(parsed.ok).toBe(false);
@@ -481,7 +481,7 @@ describe('interpretExtensionBlock — arbitrary-key entries blocks', () => {
       result,
       blockNamed(result, 'Mood'),
       FAMILY_ENUM_DESCRIPTOR,
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),
@@ -502,7 +502,7 @@ describe('interpretExtensionBlock — arbitrary-key entries blocks', () => {
       result,
       blockNamed(result, 'Mood'),
       FAMILY_ENUM_DESCRIPTOR,
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),
@@ -526,7 +526,7 @@ describe('interpretExtensionBlock — prototype-named keys stay own entries', ()
   } satisfies PslBlockSpecDescriptor;
 
   function protoFixedSpec() {
-    return fixedBlock({
+    return structBlock({
       parameters: {
         ['__proto__']: { type: str(), documentation: 'A hostile key name.' },
         constructor: { type: str(), documentation: 'Another hostile key name.' },
@@ -579,7 +579,7 @@ describe('interpretExtensionBlock — prototype-named keys stay own entries', ()
       result,
       blockNamed(result, 'Mood'),
       FAMILY_ENUM_DESCRIPTOR,
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),
@@ -604,7 +604,7 @@ describe('interpretExtensionBlock — prototype-named keys stay own entries', ()
       result,
       blockNamed(result, 'Mood'),
       FAMILY_ENUM_DESCRIPTOR,
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),
@@ -644,7 +644,7 @@ describe('interpretExtensionBlock — block attributes', () => {
       result,
       block,
       descriptor,
-      entriesBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
+      mapBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
     );
 
     expect(parsed.ok).toBe(true);
@@ -663,7 +663,7 @@ describe('interpretExtensionBlock — block attributes', () => {
       result,
       blockNamed(result, 'Level'),
       NATIVE_ENUM_DESCRIPTOR,
-      entriesBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
+      mapBlock({ value: { type: str(), documentation: 'The explicit member value.' } }),
     );
 
     expect(parsed.ok).toBe(false);

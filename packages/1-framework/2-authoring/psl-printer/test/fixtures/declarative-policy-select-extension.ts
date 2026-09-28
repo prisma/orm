@@ -7,19 +7,19 @@ import { freezeNode, IRNodeBase } from '@internal/framework-components/ir';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
 import {
   entityRef,
-  fixedBlock,
   identifier,
   list,
   oneOf,
   optional,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 
 export const POLICY_SELECT_KEYWORD = 'policy_select';
 export const POLICY_SELECT_DISCRIMINATOR = 'fixture-policy-select';
 
 export function policySelectSpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: {
         type: entityRef({ kind: 'model' }),

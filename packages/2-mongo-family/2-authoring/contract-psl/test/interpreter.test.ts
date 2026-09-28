@@ -14,7 +14,7 @@ import {
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
-import { buildSymbolTable, entriesBlock, jsonValue, type SymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, jsonValue, mapBlock, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { JsonObject } from '@internal/utils/json';
@@ -176,7 +176,7 @@ describe('interpretPslDocumentToMongoContract', () => {
             discriminator: 'enum',
             name: { required: true },
             spec: () =>
-              entriesBlock({
+              mapBlock({
                 value: { type: jsonValue(), documentation: 'The member value.' },
                 allowBare: true,
               }),

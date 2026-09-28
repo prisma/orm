@@ -7,11 +7,11 @@ import {
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
-import { blockAttribute, entriesBlock, jsonValue, str } from '@internal/psl-parser';
+import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 
 export function sqlFamilyEnumSpec() {
-  return entriesBlock({
+  return mapBlock({
     value: {
       type: jsonValue(),
       documentation: 'The stored member value; a bare member stores its own name.',

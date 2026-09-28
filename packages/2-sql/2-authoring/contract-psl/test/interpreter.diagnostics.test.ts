@@ -1,4 +1,4 @@
-import { fixedBlock } from '@internal/psl-parser';
+import { structBlock } from '@internal/psl-parser';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -1294,7 +1294,7 @@ namespace auth {
           keyword: 'role',
           discriminator: 'role-like',
           name: { required: true },
-          spec: () => fixedBlock({ parameters: {} }),
+          spec: () => structBlock({ parameters: {} }),
         },
       };
       const roleAuthoringContributions = {

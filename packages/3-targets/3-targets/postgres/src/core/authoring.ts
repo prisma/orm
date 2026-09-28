@@ -25,16 +25,16 @@ import {
   blockAttribute,
   bool,
   entityRef,
-  entriesBlock,
   fieldRef,
-  fixedBlock,
   identifier,
   leafDiagnostic,
   list,
+  mapBlock,
   modelAttribute,
   oneOf,
   optional,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import type {
   EntityHandleLoweringInput,
@@ -161,7 +161,7 @@ const policyPermissiveParam = {
 };
 
 export function policyUsingOnlySpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
@@ -172,7 +172,7 @@ export function policyUsingOnlySpec() {
 }
 
 export function policyWithCheckOnlySpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
@@ -183,7 +183,7 @@ export function policyWithCheckOnlySpec() {
 }
 
 export function policyBothPredicatesSpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: policyTargetParam,
       roles: policyRolesParam,
@@ -202,11 +202,11 @@ export interface RlsPolicyExtensionBlock extends ParsedPslExtensionBlock<PolicyB
 }
 
 export function roleSpec() {
-  return fixedBlock({ parameters: {} });
+  return structBlock({ parameters: {} });
 }
 
 export function nativeEnumSpec() {
-  return entriesBlock({
+  return mapBlock({
     value: { type: str(), documentation: 'The member value stored in the database enum type.' },
   });
 }

@@ -30,8 +30,8 @@ import { dataTypeId } from '@internal/framework-components/codec';
 import {
   buildSymbolTable,
   createPslDiagnosticCollector,
-  entriesBlock,
   jsonValue,
+  mapBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
@@ -56,7 +56,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     discriminator: NATIVE_ENUM_DISCRIMINATOR,
     name: { required: true },
     spec: () =>
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),
@@ -67,7 +67,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     discriminator: PLAIN_REF_DISCRIMINATOR,
     name: { required: true },
     spec: () =>
-      entriesBlock({
+      mapBlock({
         value: { type: jsonValue(), documentation: 'The explicit member value.' },
         allowBare: true,
       }),

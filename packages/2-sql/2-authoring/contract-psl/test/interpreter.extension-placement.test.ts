@@ -3,7 +3,7 @@ import type {
   AuthoringEntityTypeFactoryOutput,
 } from '@internal/framework-components/authoring';
 import type { PslBlockSpecDescriptor } from '@internal/psl-parser';
-import { entityRef, fixedBlock, optional, str } from '@internal/psl-parser';
+import { entityRef, optional, str, structBlock } from '@internal/psl-parser';
 import type {
   ResolvedPslModelRefs,
   SqlPslEntityPlacementOutput,
@@ -47,7 +47,7 @@ function guardFactory(block: AnnotatedGuardBlock): GuardEntity | undefined {
 }
 
 const guardSpec = () =>
-  fixedBlock({
+  structBlock({
     parameters: {
       target: { type: entityRef({ kind: 'model' }), documentation: 'The guarded model.' },
       disabled: { type: optional(str()), documentation: 'Set to "yes" to skip lowering.' },

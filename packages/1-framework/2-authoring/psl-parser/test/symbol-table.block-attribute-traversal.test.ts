@@ -1,6 +1,6 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it, vi } from 'vitest';
-import { blockAttribute, fixedBlock, interpretExtensionBlocks, str } from '../src/exports';
+import { blockAttribute, interpretExtensionBlocks, str, structBlock } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
 import { supportBinder } from './support';
@@ -37,7 +37,7 @@ function fixture(
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
       attributes: { map: factory },
     },
   };

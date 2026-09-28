@@ -20,7 +20,7 @@ import type { PslSources } from '../source-file';
 import type { BlockSymbol, SymbolTable } from '../symbol-table';
 import type { AstNode } from '../syntax/ast-helpers';
 import { blockSpecFactoryOf } from './descriptor';
-import type { BlockSpec, EntriesBlockSpec, FixedBlockSpec, InferBlock } from './types';
+import type { BlockSpec, InferBlock, MapBlockSpec, StructBlockSpec } from './types';
 
 export interface InterpretExtensionBlockInput<S> {
   readonly block: BlockSymbol;
@@ -38,8 +38,8 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   const ctx: AttributeCtx = { sources, symbols, binder };
   const entries =
     spec.mode === 'fixed'
-      ? interpretFixedBlock(block, spec, ctx)
-      : interpretEntriesBlock(block, spec, ctx);
+      ? interpretStructBlock(block, spec, ctx)
+      : interpretMapBlock(block, spec, ctx);
 
   const diagnostics = [...entries.diagnostics];
   const interpretedAttributes = interpretExtensionBlockAttributes({
@@ -75,9 +75,9 @@ interface InterpretedBlockEntries {
   readonly failed: boolean;
 }
 
-function interpretFixedBlock(
+function interpretStructBlock(
   block: BlockSymbol,
-  spec: FixedBlockSpec,
+  spec: StructBlockSpec,
   ctx: AttributeCtx,
 ): InterpretedBlockEntries {
   const diagnostics: PslDiagnostic[] = [];
@@ -145,9 +145,9 @@ function interpretFixedBlock(
   return { values, parameterSpans, diagnostics, failed };
 }
 
-function interpretEntriesBlock(
+function interpretMapBlock(
   block: BlockSymbol,
-  spec: EntriesBlockSpec,
+  spec: MapBlockSpec,
   ctx: AttributeCtx,
 ): InterpretedBlockEntries {
   const diagnostics: PslDiagnostic[] = [];

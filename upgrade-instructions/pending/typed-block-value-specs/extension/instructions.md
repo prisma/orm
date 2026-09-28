@@ -4,7 +4,7 @@ changes:
     summary: |
       `AuthoringPslBlockDescriptor.parameters` and `variadicParameters` are removed.
       A block descriptor declares its member-value grammar as a `spec` factory built
-      with `fixedBlock` / `entriesBlock` from `@internal/psl-parser`.
+      with `structBlock` / `mapBlock` from `@internal/psl-parser`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -27,8 +27,8 @@ changes:
 Rewrite each `kind: 'pslBlock'` descriptor:
 
 1. Delete the `parameters` map and the `variadicParameters` flag.
-2. Add a `spec` factory. A closed key set becomes `fixedBlock`; each old parameter entry becomes a key whose rule is an argument combinator (`str()`, `bool()`, `entityRef({ kind: 'model' })`, `list(...)`, `oneOf(...)`), wrapped in `optional(...)` when the old entry had `required: false`. Every key carries `documentation`.
-3. A descriptor that accepted arbitrary member names (the old `variadicParameters: true`) becomes `entriesBlock({ value })` with one shared rule for every key; add `allowBare: true` if members may stand alone without `= value` (a bare member surfaces as `undefined` in the output record, distinct from JSON `null`).
+2. Add a `spec` factory. A closed key set becomes `structBlock`; each old parameter entry becomes a key whose rule is an argument combinator (`str()`, `bool()`, `entityRef({ kind: 'model' })`, `list(...)`, `oneOf(...)`), wrapped in `optional(...)` when the old entry had `required: false`. Every key carries `documentation`.
+3. A descriptor that accepted arbitrary member names (the old `variadicParameters: true`) becomes `mapBlock({ value })` with one shared rule for every key; add `allowBare: true` if members may stand alone without `= value` (a bare member surfaces as `undefined` in the output record, distinct from JSON `null`).
 4. Declare the descriptor with `satisfies PslBlockSpecDescriptor` (from `@internal/psl-parser`) so the `spec` and `attributes` fields stay typed at the source; the core registration type keeps them erased.
 
 Old parameter kinds translate as:

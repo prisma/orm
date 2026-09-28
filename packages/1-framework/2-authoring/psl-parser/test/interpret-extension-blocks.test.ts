@@ -9,7 +9,7 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
 import { createBinder } from '../src/binder';
-import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/binders';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { interpretExtensionBlocks } from '../src/block-spec/interpret';
 import { parse } from '../src/parse';
@@ -23,7 +23,7 @@ const POLICY_DESCRIPTOR = {
   discriminator: 'fixture-policy',
   name: { required: true },
   spec: () =>
-    fixedBlock({
+    structBlock({
       parameters: {
         target: { type: entityRef({ kind: 'model' }), documentation: 'The protected model.' },
         using: { type: str(), documentation: 'The row predicate.' },
@@ -40,7 +40,7 @@ const ROLE_DESCRIPTOR = {
   keyword: 'role',
   discriminator: 'fixture-role',
   name: { required: true },
-  spec: () => fixedBlock({ parameters: {} }),
+  spec: () => structBlock({ parameters: {} }),
 } satisfies PslBlockSpecDescriptor;
 
 const ENUM_DESCRIPTOR = {
@@ -49,7 +49,7 @@ const ENUM_DESCRIPTOR = {
   discriminator: 'fixture-enum',
   name: { required: true },
   spec: () =>
-    entriesBlock({
+    mapBlock({
       value: { type: jsonValue(), documentation: 'The explicit member value.' },
       allowBare: true,
     }),

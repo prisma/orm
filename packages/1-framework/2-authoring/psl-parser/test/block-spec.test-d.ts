@@ -10,7 +10,7 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { record } from '../src/attribute-spec/combinators/record';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
-import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { mapBlock, structBlock } from '../src/block-spec/binders';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import type { interpretExtensionBlock } from '../src/block-spec/interpret';
 import type { BlockSpecContext, BlockSpecFactory, InferBlock } from '../src/block-spec/types';
@@ -18,7 +18,7 @@ import type { ResolvedEntityReference } from '../src/entity-reference';
 import type { BlockSymbol, ModelSymbol } from '../src/symbol-table';
 
 function policySpec() {
-  return fixedBlock({
+  return structBlock({
     parameters: {
       target: { type: entityRef({ kind: 'model' }), documentation: 'The protected model.' },
       using: { type: str(), documentation: 'The row predicate.' },
@@ -66,12 +66,12 @@ describe('InferBlock', () => {
   });
 
   it('infers a record of the entry rule output for arbitrary-key blocks', () => {
-    const explicitOnly = entriesBlock({
+    const explicitOnly = mapBlock({
       value: { type: str(), documentation: 'The explicit member value.' },
     });
     expectTypeOf<InferBlock<typeof explicitOnly>>().toEqualTypeOf<Record<string, string>>();
 
-    const withBare = entriesBlock({
+    const withBare = mapBlock({
       value: { type: jsonValue(), documentation: 'The explicit member value.' },
       allowBare: true,
     });
@@ -81,7 +81,7 @@ describe('InferBlock', () => {
   });
 
   it('pins fixed string literals as literal output types', () => {
-    const spec = fixedBlock({
+    const spec = structBlock({
       parameters: {
         mode: { type: str('checked'), documentation: 'The only accepted mode.' },
       },
@@ -90,7 +90,7 @@ describe('InferBlock', () => {
   });
 
   it('supports nested shared rules', () => {
-    const spec = fixedBlock({
+    const spec = structBlock({
       parameters: {
         weights: {
           type: optional(record(list(str()))),
@@ -106,19 +106,19 @@ describe('InferBlock', () => {
 
 describe('block spec context requirements', () => {
   it('rejects model- and field-context rules inside block specs', () => {
-    fixedBlock({
+    structBlock({
       parameters: {
         // @ts-expect-error model-only rules cannot enter block specs
         broken: { type: fieldRef(), documentation: 'Needs a model context.' },
       },
     });
-    fixedBlock({
+    structBlock({
       parameters: {
         // @ts-expect-error field-only rules cannot enter block specs
         broken: { type: referencedFieldRef(), documentation: 'Needs a field context.' },
       },
     });
-    entriesBlock({
+    mapBlock({
       // @ts-expect-error model-only rules cannot enter block specs
       value: { type: fieldRef(), documentation: 'Needs a model context.' },
     });

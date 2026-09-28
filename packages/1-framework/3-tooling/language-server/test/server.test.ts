@@ -15,7 +15,6 @@ import {
   buildSymbolTable,
   entityRef,
   fieldAttribute,
-  fixedBlock,
   funcCall,
   identifier,
   int,
@@ -25,6 +24,7 @@ import {
   optional,
   type SymbolTable,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import type { PslInterpretCapable, PslInterpretInput } from '@internal/psl-parser/interpret';
@@ -142,7 +142,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     discriminator: 'fixture-policy',
     name: { required: true },
     spec: () =>
-      fixedBlock({
+      structBlock({
         parameters: {
           on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
           where: { type: optional(str()), documentation: '' },
@@ -295,7 +295,7 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
       keyword: 'policy',
       discriminator: 'completion-policy',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () => structBlock({ parameters: {} }),
       attributes: { probe: () => probeBlock },
     },
   };

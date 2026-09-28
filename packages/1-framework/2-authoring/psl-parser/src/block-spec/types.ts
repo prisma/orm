@@ -11,20 +11,20 @@ export interface BlockEntryValueSpec {
   readonly documentation: string;
 }
 
-export interface FixedBlockSpec<Out = unknown> {
+export interface StructBlockSpec<Out = unknown> {
   readonly mode: 'fixed';
   readonly parameters: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
   readonly _out?: Out;
 }
 
-export interface EntriesBlockSpec<Out = unknown> {
+export interface MapBlockSpec<Out = unknown> {
   readonly mode: 'entries';
   readonly value: BlockEntryValueSpec;
   readonly allowBare: boolean;
   readonly _out?: Out;
 }
 
-export type BlockSpec<Out = unknown> = FixedBlockSpec<Out> | EntriesBlockSpec<Out>;
+export type BlockSpec<Out = unknown> = StructBlockSpec<Out> | MapBlockSpec<Out>;
 
 export type InferBlock<S> = S extends BlockSpec<infer Out> ? Out : never;
 

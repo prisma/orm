@@ -1,6 +1,6 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import type { PslBlockSpecDescriptor } from '@internal/psl-parser';
-import { entityRef, fixedBlock, modelAttribute, optional } from '@internal/psl-parser';
+import { entityRef, modelAttribute, optional, structBlock } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
@@ -18,7 +18,7 @@ const pslBlockDescriptors = {
     discriminator: 'audit_rule',
     name: { required: true },
     spec: () =>
-      fixedBlock({
+      structBlock({
         parameters: {
           target: {
             type: optional(entityRef({ kind: 'model' })),

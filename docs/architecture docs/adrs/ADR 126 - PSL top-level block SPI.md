@@ -49,7 +49,7 @@ The constraint this addresses: PSL's keyword set was closed, so an extension tha
 
 ## Parameter value-kinds
 
-> **Superseded by [ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md).** Descriptors carry a `spec` factory (`fixedBlock` / `entriesBlock` over the shared argument combinators) instead of a parameter-kind table; block values do not travel the codec JSON medium. This section is historical.
+> **Superseded by [ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md).** Descriptors carry a `spec` factory (`structBlock` / `mapBlock` over the shared argument combinators) instead of a parameter-kind table; block values do not travel the codec JSON medium. This section is historical.
 
 A parameter is one of four kinds. The split is principled, not incidental:
 
