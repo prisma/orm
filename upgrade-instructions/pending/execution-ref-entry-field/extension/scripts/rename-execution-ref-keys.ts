@@ -1,9 +1,8 @@
-// Renames `table`/`column` to `entry`/`field` in execution default refs of migration contract snapshots.
+// Renames `table`/`column` to `entry`/`field` in execution default refs of contracts under `migrations/`.
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, dirname, join, relative, sep } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
-const SNAPSHOT_FILES = new Set(['contract.json', 'contract.d.ts']);
 const RENAMES = new Map([
   ['table', 'entry'],
   ['column', 'field'],
@@ -12,20 +11,20 @@ const RENAMES = new Map([
 const check = process.argv.includes('--check');
 const projectRoot = process.cwd();
 
-function isSnapshotDir(dir: string): boolean {
-  return (
-    /^[0-9a-f]+$/.test(basename(dir)) &&
-    basename(dirname(dir)) === 'snapshots' &&
-    dirname(dirname(dir)).split(sep).includes('migrations')
-  );
+function isContractFile(name: string): boolean {
+  return name.endsWith('.json') || name.endsWith('.d.ts');
 }
 
-async function findSnapshotFiles(dir: string, found: string[] = []): Promise<string[]> {
+async function findMigrationFiles(dir: string, found: string[] = []): Promise<string[]> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory() && !SKIP_DIRS.has(entry.name)) {
-      await findSnapshotFiles(path, found);
-    } else if (entry.isFile() && SNAPSHOT_FILES.has(entry.name) && isSnapshotDir(dir)) {
+      await findMigrationFiles(path, found);
+    } else if (
+      entry.isFile() &&
+      isContractFile(entry.name) &&
+      relative(projectRoot, dir).split(sep).includes('migrations')
+    ) {
       found.push(path);
     }
   }
@@ -44,8 +43,24 @@ function sortKeys(value: unknown): unknown {
   return sorted;
 }
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+function serializeLike(original: string, value: unknown): string {
+  if (original === `${JSON.stringify(sortKeys(parseJson(original)))}\n`) {
+    return `${JSON.stringify(sortKeys(value))}\n`;
+  }
+  const indent = /\n([ \t]+)/.exec(original)?.[1] ?? 2;
+  return `${JSON.stringify(value, null, indent)}${original.endsWith('\n') ? '\n' : ''}`;
+}
+
 function renameInJson(text: string): string {
-  const contract: unknown = JSON.parse(text);
+  const contract = parseJson(text);
   if (!isObject(contract) || !isObject(contract['execution'])) return text;
   const mutations = contract['execution']['mutations'];
   const defaults = isObject(mutations) ? mutations['defaults'] : undefined;
@@ -53,16 +68,16 @@ function renameInJson(text: string): string {
   let changed = false;
   for (const entry of defaults) {
     if (!isObject(entry) || !isObject(entry['ref'])) continue;
-    const ref = entry['ref'];
-    for (const [from, to] of RENAMES) {
-      if (from in ref && !(to in ref)) {
-        ref[to] = ref[from];
-        delete ref[from];
-        changed = true;
-      }
-    }
+    const keys = Object.keys(entry['ref']);
+    if (!keys.some((key) => RENAMES.has(key))) continue;
+    entry['ref'] = sortKeys(
+      Object.fromEntries(
+        Object.entries(entry['ref']).map(([key, value]) => [RENAMES.get(key) ?? key, value]),
+      ),
+    );
+    changed = true;
   }
-  return changed ? `${JSON.stringify(sortKeys(contract))}\n` : text;
+  return changed ? serializeLike(text, contract) : text;
 }
 
 const REF_BLOCK = /readonly ref: \{([^{}]*)\}/g;
@@ -81,7 +96,7 @@ function renameInDts(text: string): string {
 }
 
 async function main(): Promise<void> {
-  const files = await findSnapshotFiles(projectRoot);
+  const files = await findMigrationFiles(projectRoot);
   let changed = 0;
   for (const path of files.sort()) {
     const before = await readFile(path, 'utf-8');
@@ -92,7 +107,7 @@ async function main(): Promise<void> {
     if (!check) await writeFile(path, after, 'utf-8');
   }
   console.log(
-    `${files.length} snapshot file(s) scanned, ${changed} ${check ? 'need' : 'got'} the rename.`,
+    `${files.length} file(s) under migrations/ scanned, ${changed} ${check ? 'need' : 'got'} the rename.`,
   );
   if (check && changed > 0) process.exit(1);
 }
