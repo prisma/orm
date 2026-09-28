@@ -10,8 +10,13 @@ import {
 import type { BsonInputValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { type Binary, type Decimal128, type Document, EJSON, type Long, ObjectId } from 'bson';
-import { decodeBsonValue, encodeBsonValue } from './bson-codec-helpers';
+import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
+import {
+  decodeBsonJson,
+  decodeBsonValue,
+  encodeBsonJson,
+  encodeBsonValue,
+} from './bson-codec-helpers';
 import {
   binaryDecode,
   binaryDecodeJson,
@@ -158,14 +163,8 @@ export const mongoBsonCodec = mongoCodec({
   typeId: MONGO_BSON_CODEC_ID,
   decode: (wire: BsonInputValue) => decodeBsonValue(wire),
   encode: (value: BsonInputValue) => encodeBsonValue(value),
-  encodeJson: (value: BsonInputValue) =>
-    blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(
-      EJSON.serialize(value, { relaxed: false }),
-    ),
-  decodeJson: (json) =>
-    EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
-      relaxed: false,
-    }),
+  encodeJson: encodeBsonJson,
+  decodeJson: decodeBsonJson,
 });
 
 /**

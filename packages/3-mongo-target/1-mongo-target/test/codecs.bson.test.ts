@@ -212,9 +212,36 @@ describe('mongoBsonCodec JSON form', () => {
       const json = mongoBsonCodec.encodeJson(notBson(document));
       expect(JSON.parse(JSON.stringify(json))).toEqual(json);
       const decoded = mongoBsonCodec.decodeJson(json);
-      expect(BSON.serialize(decoded as BSON.Document)).toEqual(BSON.serialize(document));
+      expect(BSON.serialize(decoded as BSON.Document)).toEqual(
+        BSON.serialize(document as BSON.Document),
+      );
     },
   );
+
+  it.each([
+    ['an integer above the int32 range', 2 ** 40, new Double(2 ** 40)],
+    ['an integer below the int32 range', -(2 ** 31) - 1, new Double(-(2 ** 31) - 1)],
+    ['a Uint8Array', new Uint8Array([1, 2]), new Binary(new Uint8Array([1, 2]))],
+    ['a Buffer', Buffer.from([1, 2]), new Binary(new Uint8Array([1, 2]))],
+    ['a native RegExp', /^a/i, new BSONRegExp('^a', 'i')],
+    [
+      'a Code scope holding an integer above the int32 range',
+      new Code('x', { n: 2 ** 40 }),
+      new Code('x', { n: new Double(2 ** 40) }),
+    ],
+  ])('records %s as the BSON type the driver writes', (_, value, readBack) => {
+    const document = notBson({ value, list: [value] });
+    const decoded = mongoBsonCodec.decodeJson(mongoBsonCodec.encodeJson(document));
+    expect(decoded).toEqual({ value: readBack, list: [readBack] });
+    expect(BSON.serialize(decoded as BSON.Document)).toEqual(
+      BSON.serialize(document as BSON.Document),
+    );
+  });
+
+  it('writes a top-level scalar as its canonical Extended JSON', () => {
+    expect(mongoBsonCodec.encodeJson(2 ** 40)).toEqual({ $numberDouble: '1099511627776.0' });
+    expect(mongoBsonCodec.encodeJson(5)).toEqual({ $numberInt: '5' });
+  });
 
   it('writes canonical, not relaxed, Extended JSON', () => {
     expect(mongoBsonCodec.encodeJson(notBson({ n: new Int32(1), d: new Date(0) }))).toEqual({

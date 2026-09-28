@@ -1,6 +1,7 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
-import { MinKey } from 'bson';
+import { Binary, Code, type Document, Double, EJSON, MinKey } from 'bson';
 import {
   bsonClassTag,
   bsonTypeTag,
@@ -114,4 +115,45 @@ export function decodeBsonValue(wire: unknown): BsonValue {
     BsonValue,
     'the driver reads only BSON values, and a rebuilt DBRef is a document of them'
   >(decodeValue(wire));
+}
+
+const INT32_MIN = -(2 ** 31);
+const INT32_MAX = 2 ** 31 - 1;
+
+function asDriverWrites(value: unknown): unknown {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && (value < INT32_MIN || value > INT32_MAX)
+      ? new Double(value)
+      : value;
+  }
+  if (typeof value !== 'object' || value === null) return value;
+  if (value instanceof Uint8Array) return new Binary(value);
+  if (Array.isArray(value)) return value.map(asDriverWrites);
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, asDriverWrites(entry)]),
+    );
+  }
+  if (value instanceof Code && value.scope !== null && value.scope !== undefined) {
+    return new Code(
+      value.code,
+      blindCast<Document, 'a Code scope is a document'>(asDriverWrites(value.scope)),
+    );
+  }
+  return value;
+}
+
+/**
+ * Canonical Extended JSON for a BSON value, recording each JavaScript number and `Uint8Array` as the BSON type the driver writes for it: an integer outside the int32 range as a `double`, and bytes as `binData`.
+ */
+export function encodeBsonJson(value: BsonInputValue): JsonValue {
+  return blindCast<JsonValue, 'canonical Extended JSON is plain JSON'>(
+    EJSON.serialize(asDriverWrites(value), { relaxed: false }),
+  );
+}
+
+export function decodeBsonJson(json: JsonValue): BsonInputValue {
+  return EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
+    relaxed: false,
+  });
 }
