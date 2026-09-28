@@ -250,40 +250,34 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   });
 
-  const blockScopes: readonly {
-    readonly blocks: Readonly<Record<string, BlockSymbol>>;
-    readonly scope: Scope;
-  }[] = [
-    { blocks: symbolTable.topLevel.blocks, scope: stack.current() },
-    ...Object.values(symbolTable.topLevel.namespaces).map((namespace) => ({
-      blocks: namespace.blocks,
-      scope: namespaceScope(namespace, stack.current()),
-    })),
-  ];
-  for (const { blocks, scope } of blockScopes) {
-    for (const block of Object.values(blocks)) {
-      bindBlock(block, scope, {
-        pslBlockDescriptors,
-        symbolTable,
-        sources,
-        references,
-        diagnostics,
-      });
-    }
+  const blockContext = { pslBlockDescriptors, symbolTable, sources, references, diagnostics };
+  const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>) => {
+    const context = { ...blockContext, scope: stack.current() };
+    for (const block of Object.values(blocks)) bindBlock(block, context);
+  };
+  bindBlocks(symbolTable.topLevel.blocks);
+  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    stack.push(namespaceScope(namespace, stack.current()));
+    bindBlocks(namespace.blocks);
+    stack.pop();
   }
 
   return { binder: new PslBinder(declarations, references), diagnostics };
 }
 
-interface BlockBindContext {
-  readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
-  readonly symbolTable: SymbolTable;
+interface ReferenceContext {
+  readonly scope: Scope;
   readonly sources: PslSources;
   readonly references: WeakMap<SyntaxNode, Resolution>;
   readonly diagnostics: ParseDiagnostic[];
 }
 
-function bindBlock(block: BlockSymbol, scope: Scope, ctx: BlockBindContext): void {
+interface BlockBindContext extends ReferenceContext {
+  readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
+  readonly symbolTable: SymbolTable;
+}
+
+function bindBlock(block: BlockSymbol, ctx: BlockBindContext): void {
   const descriptor = findBlockDescriptor(ctx.pslBlockDescriptors, block.keyword);
   if (descriptor === undefined) return;
   const spec = blockSpecFactoryOf(descriptor)({ symbols: ctx.symbolTable, block });
@@ -299,7 +293,7 @@ function bindBlock(block: BlockSymbol, scope: Scope, ctx: BlockBindContext): voi
         : spec.value.type;
     const value = entry.value();
     if (rule === undefined || value === undefined) continue;
-    bindBlockExpression(rule, value, scope, ctx);
+    bindExpression(rule, value, ctx);
   }
 
   const attributeSpecs = descriptor.attributes ?? {};
@@ -311,65 +305,50 @@ function bindBlock(block: BlockSymbol, scope: Scope, ctx: BlockBindContext): voi
       BlockAttributeSpecFactory,
       'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; the binder restores the factory type the descriptor surface documents'
     >(factory)({ symbols: ctx.symbolTable, block });
-    let positional = 0;
-    for (const arg of attribute.args) {
-      const param =
-        arg.name === undefined
-          ? attributeSpec.positional[positional++]
-          : attributeSpec.named[arg.name];
-      if (param === undefined || arg.expression === undefined) continue;
-      bindBlockExpression(param.type, arg.expression, scope, ctx);
-    }
+    bindArguments(attribute, attributeSpec, ctx);
   }
 }
 
-function bindBlockExpression(
+function bindExpression(
   rule: unknown,
   expression: ExpressionAst,
-  scope: Scope,
-  ctx: BlockBindContext,
+  ctx: ReferenceContext,
+  modelContext?: BindContext,
 ): void {
-  if (referenceKind(rule) !== 'entityRef') return;
+  const kind = referenceKind(rule);
+  if (kind === undefined) return;
   const silent = allowsUnresolvedName(rule);
   for (const node of referenceNodes(expression)) {
     const name = IdentifierAst.cast(node)?.name();
     if (name === undefined) continue;
-    const found = scope.lookup(name);
-    if (found !== undefined) {
-      ctx.references.set(node, found);
-      continue;
+    if (kind === 'entityRef') {
+      ctx.references.set(node, resolveEntity(name, node, ctx, silent));
+    } else if (modelContext !== undefined) {
+      const resolution =
+        kind === 'fieldRef'
+          ? resolveOwnerField(name, node, modelContext)
+          : resolveReferencedField(name, node, modelContext);
+      ctx.references.set(node, resolution);
     }
-    ctx.references.set(node, { kind: 'unresolved', name });
-    if (silent) continue;
-    ctx.diagnostics.push({
-      code: PSL_UNRESOLVED_REFERENCE,
-      message: `Cannot find entity "${name}"`,
-      data: { reference: 'entity' },
-      ...diagnosticSource(ctx.sources, node).at(),
-    });
   }
 }
 
-function allowsUnresolvedName(type: unknown): boolean {
-  if (typeof type !== 'object' || type === null) return false;
+function allowsUnresolvedName(type: unknown, visited = new Set<object>()): boolean {
+  if (typeof type !== 'object' || type === null || visited.has(type)) return false;
+  visited.add(type);
   if ('alternatives' in type && Array.isArray(type.alternatives)) {
     return type.alternatives.some(
       (alternative) =>
-        referenceKind(alternative) === undefined || allowsUnresolvedName(alternative),
+        referenceKind(alternative) === undefined || allowsUnresolvedName(alternative, visited),
     );
   }
-  if ('of' in type) return allowsUnresolvedName(type.of);
+  if ('of' in type) return allowsUnresolvedName(type.of, visited);
   return false;
 }
 
-interface BindContext {
+interface BindContext extends ReferenceContext {
   readonly owner: ModelSymbol | CompositeTypeSymbol;
-  readonly scope: Scope;
   readonly field: FieldSymbol | undefined;
-  readonly references: WeakMap<SyntaxNode, Resolution>;
-  readonly diagnostics: ParseDiagnostic[];
-  readonly symbolTable: SymbolTable;
-  readonly sources: PslSources;
   readonly describeUnsupportedAttribute: DescribeUnsupportedAttribute | undefined;
 }
 
@@ -409,38 +388,24 @@ function bindAttributes<Factory>(
         },
       });
     }
-    bindArguments(attribute, spec, ctx);
+    bindArguments(attribute, spec, ctx, ctx);
   });
 }
 
-function bindArguments(attribute: ResolvedAttribute, spec: BoundSpec, ctx: BindContext) {
+function bindArguments(
+  attribute: ResolvedAttribute,
+  spec: {
+    readonly positional: readonly { readonly type: unknown }[];
+    readonly named: Readonly<Record<string, { readonly type: unknown }>>;
+  },
+  ctx: ReferenceContext,
+  modelContext?: BindContext,
+): void {
   let positional = 0;
   for (const arg of attribute.args) {
     const param = arg.name === undefined ? spec.positional[positional++] : spec.named[arg.name];
     if (param === undefined || arg.expression === undefined) continue;
-    const kind = referenceKind(param.type);
-    if (kind === undefined) continue;
-    for (const node of referenceNodes(arg.expression)) {
-      const resolution = resolveArgument(kind, node, ctx);
-      if (resolution !== undefined) ctx.references.set(node, resolution);
-    }
-  }
-}
-
-function resolveArgument(
-  kind: ReferenceKind,
-  node: SyntaxNode,
-  ctx: BindContext,
-): Resolution | undefined {
-  const name = IdentifierAst.cast(node)?.name();
-  if (name === undefined) return undefined;
-  switch (kind) {
-    case 'fieldRef':
-      return resolveOwnerField(name, node, ctx);
-    case 'referencedFieldRef':
-      return resolveReferencedField(name, node, ctx);
-    case 'entityRef':
-      return resolveEntity(name, node, ctx);
+    bindExpression(param.type, arg.expression, ctx, modelContext);
   }
 }
 
@@ -477,10 +442,15 @@ function targetFields(
   return undefined;
 }
 
-function resolveEntity(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
+function resolveEntity(
+  name: string,
+  node: SyntaxNode,
+  ctx: ReferenceContext,
+  silent: boolean,
+): Resolution {
   const found = ctx.scope.lookup(name);
   if (found === undefined) {
-    report(`Cannot find entity "${name}"`, node, ctx, 'entity');
+    if (!silent) report(`Cannot find entity "${name}"`, node, ctx, 'entity');
     return { kind: 'unresolved', name };
   }
   return found;
@@ -489,7 +459,7 @@ function resolveEntity(name: string, node: SyntaxNode, ctx: BindContext): Resolu
 function report(
   message: string,
   node: SyntaxNode,
-  ctx: BindContext,
+  ctx: ReferenceContext,
   reference: 'field' | 'entity',
 ): void {
   ctx.diagnostics.push({
@@ -502,16 +472,17 @@ function report(
 
 type ReferenceKind = 'fieldRef' | 'referencedFieldRef' | 'entityRef';
 
-function referenceKind(type: unknown): ReferenceKind | undefined {
-  if (typeof type !== 'object' || type === null) return undefined;
+function referenceKind(type: unknown, visited = new Set<object>()): ReferenceKind | undefined {
+  if (typeof type !== 'object' || type === null || visited.has(type)) return undefined;
+  visited.add(type);
   if ('kind' in type) {
     const kind = type.kind;
     if (kind === 'fieldRef' || kind === 'referencedFieldRef' || kind === 'entityRef') return kind;
   }
-  if ('of' in type) return referenceKind(type.of);
+  if ('of' in type) return referenceKind(type.of, visited);
   if ('alternatives' in type && Array.isArray(type.alternatives)) {
     for (const alternative of type.alternatives) {
-      const kind = referenceKind(alternative);
+      const kind = referenceKind(alternative, visited);
       if (kind !== undefined) return kind;
     }
   }
