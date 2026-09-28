@@ -41,9 +41,12 @@ function encodeRefused(received: string, path: string): never {
 }
 
 function assertBsonValue(value: unknown, path: string, ancestors: Set<object>): void {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value)) encodeRefused(String(value), path);
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    typeof value === 'number'
+  ) {
     return;
   }
   if (typeof value !== 'object') {

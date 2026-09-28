@@ -65,9 +65,6 @@ describe('mongoBsonCodec encode', () => {
     ['bigint', 1n],
     ['symbol', Symbol('s')],
     ['function', () => 1],
-    ['NaN', Number.NaN],
-    ['Infinity', Number.POSITIVE_INFINITY],
-    ['-Infinity', Number.NEGATIVE_INFINITY],
     ['DBRef', new DBRef('c', new ObjectId())],
   ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
     await expect(
@@ -76,6 +73,9 @@ describe('mongoBsonCodec encode', () => {
   });
 
   it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
     ['a native RegExp', /^a/i],
     ['a Uint8Array', new Uint8Array([1, 2])],
     ['a Buffer', Buffer.from([1, 2])],
