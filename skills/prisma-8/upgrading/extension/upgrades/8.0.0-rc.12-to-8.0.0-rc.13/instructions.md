@@ -194,7 +194,7 @@ A contract with generated defaults (`temporal.createdAt()`, `temporal.updatedAt(
 
 - The framework type `ExecutionMutationDefault['ref']` from `@internal/contract/types` is `{ namespace: string; entry: string; field: string }`. A type that matches refs by shape (for example a create-input type that checks whether a column has a generated default) matches `entry` and `field`.
 - A pack that ships a contract with generated defaults re-emits it with `prisma contract emit`, and updates its pinned contract-space snapshots as in step 2.
-- `MutationDefaultsOptions` passed to `applyMutationDefaults` still names the table as `table`; only the contract ref changes.
+- The options passed to `applyMutationDefaults` change separately: see `mutation-defaults-options-entry-field` below for the rename of `table` to `entry`.
 
 ## `mutation-default-generator-types-move-to-framework`
 

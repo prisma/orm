@@ -314,12 +314,13 @@ This change has no detection pattern: which `Json` fields hold non-JSON values d
 
 A Mongo `Json` field (`field.json()` in TypeScript) means a JSON value, no more. Its validator admits BSON `object`, `array`, `string`, `double`, `int`, `long`, `bool` and `null`. Reading a document fails with `RUNTIME.DECODE_FAILED` when the field holds a `Date`, `ObjectId`, `Decimal128`, `Binary`, regular expression, timestamp, or a 64-bit integer outside the safe-integer range, at any depth; the message names the path inside the field. Writing such a value fails with `RUNTIME.ENCODE_FAILED`.
 
-To find the affected fields, query each collection with a `Json` field for documents whose field holds a non-JSON value at its top level: a BSON type outside the JSON types, a `long` outside the safe-integer range, or a `NaN` or infinite `double`:
+To find the affected fields, query each collection with a `Json` field for documents whose field holds a non-JSON value at its top level or as a direct element of an array: a BSON type outside the JSON types, a `long` outside the safe-integer range, or a `NaN` or infinite `double`:
 
 ```js
 db.<collection>.find({
   $or: [
     { <field>: { $exists: true, $not: { $type: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'] } } },
+    { <field>: { $elemMatch: { $not: { $type: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'] } } } },
     { <field>: { $type: 'long', $gt: 9007199254740991 } },
     { <field>: { $type: 'long', $lt: -9007199254740991 } },
     { <field>: { $in: [NaN, Infinity, -Infinity] } },
@@ -327,7 +328,7 @@ db.<collection>.find({
 })
 ```
 
-The last three clauses also match such a value when it is a direct element of an array field. A non-JSON value nested deeper, inside an object or an array of objects, is not visible to this query; reading every document through the ORM finds it, because the read fails with the path of the first such value.
+The first clause checks the field's own value, and the second checks each direct element when the value is an array. The last three clauses match at both levels. A non-JSON value nested deeper, inside an object or an array of objects, is not visible to this query; reading every document through the ORM finds it, because the read fails with the path of the first such value.
 
 1. For each Mongo `Json` field whose documents hold such values, change its type to `Bson` in PSL (`field.bson()` in TypeScript), which admits any BSON value. A project whose contract source is a Prisma 6 schema (`prisma6Schema`) cannot declare `Bson`: keep its `Json` fields JSON-only, or move the contract source to a Prisma 8 schema and change the type there.
 2. Run `prisma contract emit`. Every Mongo contract written in Prisma 8 PSL with a `Json` field changes: its validator lists the JSON types and its `storageHash` moves, whether or not step 1 changed anything. A contract built with the TypeScript builder or read from a Prisma 6 schema has no validator, so it does not change; the codec's checks on read and write still apply to it.
