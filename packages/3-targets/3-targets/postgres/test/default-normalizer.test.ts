@@ -66,7 +66,7 @@ describe('parsePostgresDefault array literals', () => {
   });
 
   it('reads an unquoted enum member as a string', () => {
-    expect(parsePostgresDefault('\'{USER}\'::"Role"[]', '"Role"[]')).toEqual({
+    expect(parsePostgresDefault('\'{USER}\'::"Role"[]', 'Role[]')).toEqual({
       kind: 'literal',
       value: ['USER'],
     });
@@ -160,6 +160,13 @@ describe('parsePostgresDefault array literals', () => {
     expect(parsePostgresDefault("'{a\\,b}'::text[]", 'text[]')).toEqual({
       kind: 'function',
       expression: "'{a\\,b}'::text[]",
+    });
+  });
+
+  it('keeps quoted elements that look like a boolean or a number as literal text', () => {
+    expect(parsePostgresDefault('\'{"true","1"}\'::text[]', 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['true', '1'],
     });
   });
 
