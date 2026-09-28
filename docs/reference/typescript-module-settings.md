@@ -16,7 +16,7 @@ Prisma 8 does not require `NodeNext`. Under `"module": "NodeNext"` with `"type":
 
 | Project | Settings | Notes |
 | --- | --- | --- |
-| Already on an ESM-capable `module` | Keep it; add `resolveJsonModule` and the `include` entry. `moduleResolution` must be `bundler` (with `esnext` or `preserve`) or the matching `node*` value; `node` and `node10` cannot resolve the packages (TS2307) | Nothing else changes. A project on `nodenext`, `node18`, or `node20` without `"type": "module"` is CommonJS and follows the next row. |
+| Already on an ESM-capable `module` | Keep it; add `resolveJsonModule` and the `include` entry. `moduleResolution` must be `bundler` (with `esnext` or `preserve`) or the matching `node*` value; `node` and `node10` cannot resolve the packages under TypeScript 5.9 (TS2307), and TypeScript 7.0 rejects the option itself (TS5108) | Nothing else changes. A project on `nodenext`, `node18`, or `node20` without `"type": "module"` is CommonJS and follows the next row. |
 | CommonJS, staying CommonJS | `"module": "nodenext"` and `resolveJsonModule`; `db.ts` imports the JSON without the `with { type: "json" }` attribute | No `"type": "module"`, no `.js` extensions, no import attribute. The attribute-free import works only because `nodenext` emits `db.ts` as CommonJS here; keeping the attribute fails with TS2856. `node20` behaves the same; `node18` rejects the ESM-only package from CommonJS with TS1479. |
 | Running through `tsx`, `vite`, `next`, `esbuild`, or another bundler | `"module": "preserve"`, `"moduleResolution": "bundler"`, `resolveJsonModule` | Accepts extensionless imports and the import attribute. Needs TypeScript 5.4 or later, the release that added `preserve`. This is what `prisma orm init` writes. |
 | Running the `.ts` files directly with `node` (type stripping) | Either of the two pairs above plus `"allowImportingTsExtensions": true` | Node needs the `.ts` extension on every relative import and keeps the `with { type: "json" }` attribute. `nodenext` with `rewriteRelativeImportExtensions` also typechecks. |
@@ -38,7 +38,7 @@ Tested on Node 24.13 with TypeScript 5.9.3 against the workspace build:
 
 ## How the full matrix was verified
 
-Tested on Node 26.8 with TypeScript 5.9.3 and 7.0.2 (both agree on every row) against `@prisma/orm-postgres@8.0.0-rc.12`, using the `db.ts`, `contract.json`, and `contract.d.ts` that `prisma orm init` writes. `tsc --noEmit` results:
+Tested on Node 26.8 with TypeScript 5.9.3 and 7.0.2 against `@prisma/orm-postgres@8.0.0-rc.12`, using the `db.ts`, `contract.json`, and `contract.d.ts` that `prisma orm init` writes. `tsc --noEmit` results; where the two compilers differ, the row says so, otherwise they agree:
 
 | `module` | `moduleResolution` | `package.json` `type` | `with` attribute | `Contract` import | Result |
 | --- | --- | --- | --- | --- | --- |
@@ -54,9 +54,9 @@ Tested on Node 26.8 with TypeScript 5.9.3 and 7.0.2 (both agree on every row) ag
 | `node18`, `node20` | unset | `module` | yes | `./contract.d` | TS2307 |
 | `node16` | unset | `module` | yes | any | TS2823 |
 | `es2022` | `bundler` | `module` | yes | any | TS2823 |
-| `commonjs` | `node` | none | either | any | TS2307 on the package |
-| unset | unset | `module` | yes | any | TS5070 (`resolveJsonModule` needs a non-classic resolution) |
-| `esnext` | `node` or `node10` | `module` | yes | any | TS2307 on the package |
+| `commonjs` | `node` | none | either | any | 5.9: TS2307 on the package (plus TS2823 with the attribute); 7.0: TS5108, `node10` resolution was removed |
+| unset | unset | `module` | yes | any | 5.9: TS5070 (`resolveJsonModule` needs a non-classic resolution); 7.0: TS2823 |
+| `esnext` | `node` or `node10` | `module` | yes | any | 5.9: TS2307 on the package; 7.0: TS5108, the option was removed |
 | `nodenext` or `preserve` | matching | `module` | yes | `./contract.d.js`, with `allowImportingTsExtensions` | pass (type stripping) |
 
 The `Contract` type import, checked in every setting above both with and without a `contract.ts` beside `contract.d.ts` (TypeScript authoring): `./contract.d.js` passes every cell. `./contract.js` passes every cell without the sibling and fails every cell with it (TS2724, it resolves to `contract.ts`). `./contract.d` fails under `nodenext`, `node18`, and `node20` as ES modules regardless of the sibling.
