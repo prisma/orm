@@ -22,7 +22,7 @@ The Mongo validator derivation reads every entry of a codec descriptor's `target
 
 For each Mongo codec descriptor in the extension whose `targetTypes` has more than one entry, check that every entry is a BSON type the codec's `encode` can produce, because each one is now admitted by the validator. Remove any entry the codec does not write. Then re-emit the extension's contracts and any test fixtures; their validators list every entry.
 
-An enum's `@@type` codec must declare exactly one entry: the Mongo enum factory reports `Enum "<name>": codec "<id>" declares <n> storage types; an enum needs exactly one.` otherwise.
+An enum's `@@type` codec must declare exactly one entry: the Mongo enum factory reports `enum "<name>" @@type codec "<id>" declares <n> BSON types; an enum needs exactly one` otherwise.
 
 ## `mongo-bson-codec-added`
 

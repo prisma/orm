@@ -46,7 +46,7 @@ describe('a Mongo enum over a codec without exactly one storage type', () => {
     ['mongo/json@1', 8],
     ['mongo/bson@1', 0],
   ])(
-    'refuses @@type("%s"), which declares %i storage types, at the @@type argument',
+    'refuses @@type("%s"), which declares %i BSON types, at the @@type argument',
     (codecId, count) => {
       const typeAttribute = `@@type("${codecId}")`;
       const schema = `enum Shape {\n  ${typeAttribute}\n  a\n}\n`;
@@ -58,7 +58,7 @@ describe('a Mongo enum over a codec without exactly one storage type', () => {
       expect(result.failure.diagnostics).toEqual([
         expect.objectContaining({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `Enum "Shape": codec "${codecId}" declares ${count} storage types; an enum needs exactly one.`,
+          message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one`,
           span: expect.objectContaining({
             start: expect.objectContaining({ offset: start }),
             end: expect.objectContaining({ offset: start + codecId.length + 2 }),

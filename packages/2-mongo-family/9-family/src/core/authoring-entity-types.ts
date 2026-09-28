@@ -32,8 +32,8 @@ export const mongoFamilyEnumEntityDescriptor = {
       }
       const { codecId, codecSpan } = resolved;
 
-      const storageTypes = ctx.codecLookup?.targetTypesFor(codecId);
-      if (storageTypes === undefined) {
+      const bsonTypes = ctx.codecLookup?.targetTypesFor(codecId);
+      if (bsonTypes === undefined) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
           message: `enum "${block.name}" @@type references unknown codec "${codecId}"`,
@@ -42,11 +42,11 @@ export const mongoFamilyEnumEntityDescriptor = {
         });
         return undefined;
       }
-      const [nativeType, ...otherStorageTypes] = storageTypes;
-      if (nativeType === undefined || otherStorageTypes.length > 0) {
+      const [bsonType, ...otherBsonTypes] = bsonTypes;
+      if (bsonType === undefined || otherBsonTypes.length > 0) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `Enum "${block.name}": codec "${codecId}" declares ${storageTypes.length} storage types; an enum needs exactly one.`,
+          message: `enum "${block.name}" @@type codec "${codecId}" declares ${bsonTypes.length} BSON types; an enum needs exactly one`,
           sourceId,
           span: typeArgumentSpan(block) ?? codecSpan,
         });
@@ -145,7 +145,7 @@ export const mongoFamilyEnumEntityDescriptor = {
 
       return enumType(
         block.name,
-        { codecId, nativeType },
+        { codecId, nativeType: bsonType },
         ...members.map((m) => ({ name: m.name, value: m.value })),
       );
     },

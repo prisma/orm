@@ -188,7 +188,7 @@ describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage t
   it.each([
     ['mongo/json@1', 8],
     ['mongo/bson@1', 0],
-  ])('refuses @@type("%s"), which declares %i storage types', (codecId, count) => {
+  ])('refuses @@type("%s"), which declares %i BSON types', (codecId, count) => {
     const diagnostics: unknown[] = [];
     const handle = factory(
       enumBlock({ name: 'Shape', parameters: { a: bareMember() }, typeCodecId: codecId }),
@@ -198,7 +198,7 @@ describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage t
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        message: `Enum "Shape": codec "${codecId}" declares ${count} storage types; an enum needs exactly one.`,
+        message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one`,
         span: SPAN,
       }),
     ]);
