@@ -135,6 +135,20 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
+  it('undoes the SQL quote escape in an unquoted element', () => {
+    expect(parsePostgresDefault("'{a''b}'::text[]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ["a'b"],
+    });
+  });
+
+  it('undoes the SQL quote escape in a quoted element', () => {
+    expect(parsePostgresDefault("'{\"a''b c\"}'::text[]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ["a'b c"],
+    });
+  });
+
   it('keeps a quoted element that looks like NULL as the literal string', () => {
     expect(parsePostgresDefault('\'{"NULL"}\'::text[]', 'text[]')).toEqual({
       kind: 'literal',

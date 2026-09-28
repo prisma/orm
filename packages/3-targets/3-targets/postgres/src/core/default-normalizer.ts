@@ -373,7 +373,7 @@ export function parsePostgresDefault(
     const elementType = normalizedType.slice(0, -2);
     const arrayMatch = trimmed.match(ARRAY_LITERAL_PATTERN);
     if (arrayMatch?.[1] !== undefined) {
-      const parsed = parseArrayLiteralBody(arrayMatch[1], elementType);
+      const parsed = parseArrayLiteralBody(arrayMatch[1].replace(/''/g, "'"), elementType);
       if (parsed !== undefined) {
         return { kind: 'literal', value: parsed };
       }
