@@ -51,4 +51,23 @@ The `PslExtensionBlockParam*` value union is removed. A factory registered under
 3. Anchor diagnostics with `block.parameterSpans['<key>']` and read interpreted `@@` attributes from `block.attributes['<name>'].args`.
 4. `PslExtensionBlock` (with `PslExtensionBlockPrintEntry` entries) remains only as the producer-only print shape; construct it only in a generator whose text is born from its own values (inference output, script-synthesized documents), never from parsed source and never to validate or lower values. The type no longer carries an interpreted `attributes` record — delete that property from every manufactured `PslExtensionBlock` literal (interpreted attributes exist only on envelopes); printable `@@` lines stay in `blockAttributes`.
 5. `BlockSymbol.block` is removed: read a collected block's identity from `symbol.name` / `symbol.keyword` / `symbol.span`, its decoded values from the envelope, and its syntax from `symbol.node` — the parser renders no source text from the AST.
-6. The standalone validator entry points (`validateExtensionBlock`, `ExtensionBlockRefResolutionContext`) are removed without replacement: `buildSymbolTable({ documents, sources })` collects declarations only; resolve registered blocks afterwards with `interpretExtensionBlocks(symbolTable, sources, pslBlockDescriptors)`, which returns `{ parsedBlocks, diagnostics }` — the typed envelope of every valid block plus the value/attribute failures, which the resolving consumer owns and reports. Family interpreters resolve internally; nothing is threaded through interpreter inputs.
+6. The standalone validator entry points (`validateExtensionBlock`, `ExtensionBlockRefResolutionContext`) are removed without replacement: `buildSymbolTable({ documents, sources })` collects declarations only. Direct callers construct a binder from the same snapshot and registries, including block descriptors, then interpret registered blocks:
+
+   ```ts
+   const { binder, diagnostics: binderDiagnostics } = createBinder({
+     sources,
+     symbolTable,
+     typeConstructors,
+     attributeSpecs,
+     controlMutationDefaults,
+     pslBlockDescriptors,
+   });
+   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+     symbolTable,
+     sources,
+     pslBlockDescriptors,
+     binder,
+   });
+   ```
+
+   `parsedBlocks` contains typed envelopes for successfully interpreted blocks. The direct caller owns reporting `binderDiagnostics` once alongside `blockDiagnostics`: unresolved-reference failures belong to the binder, while block interpretation reports value/attribute shape and selector failures. `controlMutationDefaults` is the required `ControlDefaultRegistries` value, not only its default-function registry. Family interpreters already construct the binder, interpret blocks, and report both diagnostic sets internally; nothing is threaded through interpreter inputs.
