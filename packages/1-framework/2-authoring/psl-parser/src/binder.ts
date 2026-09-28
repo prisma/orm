@@ -9,13 +9,7 @@ import type {
   AttributeSpecNamespace,
   BlockAttributeSpecFactory,
 } from './attribute-spec/spec-context';
-import type {
-  ArgTypeOutput,
-  AttributeCtx,
-  AttributeSpec,
-  FieldAttributeCtx,
-  ModelAttributeCtx,
-} from './attribute-spec/types';
+import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
 import { blockSpecFactoryOf } from './block-spec/descriptor';
 import { contributedTypeScope } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
@@ -82,7 +76,7 @@ export type Resolution =
 
 export interface Binder {
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined;
-  symbolForNode(node: SyntaxNode, referenceKind?: ReferenceKind): Resolution | undefined;
+  symbolForNode(node: SyntaxNode): Resolution | undefined;
 }
 
 export interface UnsupportedAttribute {
@@ -118,26 +112,21 @@ export function typeReferenceNode(field: FieldSymbol): SyntaxNode | undefined {
 class PslBinder implements Binder {
   readonly #declarations: WeakMap<SyntaxNode, PslSymbol>;
   readonly #references: WeakMap<SyntaxNode, Resolution>;
-  readonly #examined: ExaminedReferences;
 
   constructor(
     declarations: WeakMap<SyntaxNode, PslSymbol>,
     references: WeakMap<SyntaxNode, Resolution>,
-    examined: ExaminedReferences,
   ) {
     this.#declarations = declarations;
     this.#references = references;
-    this.#examined = examined;
   }
 
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined {
     return this.#declarations.get(node);
   }
 
-  symbolForNode(node: SyntaxNode, referenceKind?: ReferenceKind): Resolution | undefined {
-    return referenceKind === undefined
-      ? this.#references.get(node)
-      : this.#examined.get(node)?.[referenceKind];
+  symbolForNode(node: SyntaxNode): Resolution | undefined {
+    return this.#references.get(node);
   }
 }
 
@@ -195,9 +184,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
   const diagnostics: ParseDiagnostic[] = [];
-  const examined: ExaminedReferences = new WeakMap();
-  const binder = new PslBinder(declarations, references, examined);
-  const interpretation: AttributeCtx = { sources, symbols: symbolTable, binder };
+  const binder = new PslBinder(declarations, references);
 
   for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -246,9 +233,6 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       symbolTable,
       sources,
       describeUnsupportedAttribute,
-      examined,
-      interpretation:
-        entity.kind === 'model' ? { ...interpretation, selfModel: entity } : interpretation,
     };
     const specContext =
       entity.kind === 'model'
@@ -267,14 +251,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         field.attributes,
         attributeSpecs.field,
         (factory) => (specContext === undefined ? undefined : factory({ ...specContext, field })),
-        {
-          ...context,
-          field,
-          interpretation:
-            entity.kind === 'model'
-              ? { ...interpretation, selfModel: entity, field }
-              : interpretation,
-        },
+        { ...context, field },
       );
     }
   });
@@ -285,8 +262,6 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     sources,
     references,
     diagnostics,
-    examined,
-    interpretation,
   };
   const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>) => {
     const context = { ...blockContext, scope: stack.current() };
@@ -302,12 +277,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   return { binder, diagnostics };
 }
 
-type ReferenceKind = 'fieldRef' | 'referencedFieldRef' | 'entityRef';
-type ExaminedReferences = WeakMap<SyntaxNode, Partial<Record<ReferenceKind, Resolution>>>;
-
 interface ReferenceContext {
-  readonly examined: ExaminedReferences;
-  readonly interpretation: AttributeCtx | ModelAttributeCtx | FieldAttributeCtx;
   readonly scope: Scope;
   readonly sources: PslSources;
   readonly references: WeakMap<SyntaxNode, Resolution>;
@@ -396,69 +366,71 @@ function tryBindExpression(
       rule.kind === 'list'
         ? ArrayLiteralAst.cast(expression.syntax)?.elements()
         : recordValues(expression);
-    if (children !== undefined) {
-      for (const child of children) {
-        const trial = tryBindExpression(rule.of, child, ctx, modelContext);
-        for (const [node, resolution] of trial.references) references.set(node, resolution);
-        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
-      }
+    if (children === undefined) return { matched: false, references, diagnostics };
+    let matched = true;
+    for (const child of children) {
+      const trial = tryBindExpression(rule.of, child, ctx, modelContext);
+      matched = trial.matched && matched;
+      for (const [node, resolution] of trial.references) references.set(node, resolution);
+      for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
     }
+    return { matched, references, diagnostics };
   }
   if (rule.kind === 'funcCall' && 'signature' in rule && 'name' in rule) {
     const call = FunctionCallAst.cast(expression.syntax);
     const name = call?.name();
     if (
-      call !== undefined &&
-      name !== undefined &&
-      name.dot() === undefined &&
-      name.colon() === undefined &&
-      name.identifier()?.name() === rule.name
-    ) {
-      let positional = 0;
-      for (const arg of call.args()) {
-        const key = arg.name()?.name();
-        const parameter = argumentParameter(
-          rule.signature,
-          key,
-          key === undefined ? positional++ : positional,
-        );
-        const value = arg.value();
-        if (parameter === undefined || value === undefined) continue;
-        const trial = tryBindExpression(parameter.type, value, ctx, modelContext);
-        for (const [node, resolution] of trial.references) references.set(node, resolution);
-        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+      call === undefined ||
+      name === undefined ||
+      name.dot() !== undefined ||
+      name.colon() !== undefined ||
+      name.identifier()?.name() !== rule.name
+    )
+      return { matched: false, references, diagnostics };
+    let matched = true;
+    let positional = 0;
+    for (const arg of call.args()) {
+      const key = arg.name()?.name();
+      const parameter = argumentParameter(
+        rule.signature,
+        key,
+        key === undefined ? positional++ : positional,
+      );
+      const value = arg.value();
+      if (parameter === undefined || value === undefined) {
+        matched = false;
+        continue;
       }
+      const trial = tryBindExpression(parameter.type, value, ctx, modelContext);
+      matched = trial.matched && matched;
+      for (const [node, resolution] of trial.references) references.set(node, resolution);
+      for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
     }
+    return { matched, references, diagnostics };
   }
   const kind = rule.kind;
   if (kind === 'entityRef' || kind === 'fieldRef' || kind === 'referencedFieldRef') {
     const node = expression.syntax;
     const name = IdentifierAst.cast(node)?.name();
-    if (name !== undefined) {
-      const failures: ParseDiagnostic[] = [];
-      const resolution =
-        kind === 'entityRef'
-          ? resolveEntity(name, node, { ...ctx, diagnostics: failures })
-          : modelContext === undefined
-            ? undefined
-            : kind === 'fieldRef'
-              ? resolveOwnerField(name, node, { ...modelContext, diagnostics: failures })
-              : resolveReferencedField(name, node, { ...modelContext, diagnostics: failures });
-      if (resolution !== undefined) {
-        references.set(node, resolution);
-        ctx.examined.set(node, { ...ctx.examined.get(node), [kind]: resolution });
-      }
-      for (const diagnostic of failures) diagnostics.set(node, diagnostic);
-    }
+    if (name === undefined) return { matched: false, references, diagnostics };
+    const failures: ParseDiagnostic[] = [];
+    const resolution =
+      kind === 'entityRef'
+        ? resolveEntity(name, node, { ...ctx, diagnostics: failures })
+        : modelContext === undefined
+          ? undefined
+          : kind === 'fieldRef'
+            ? resolveOwnerField(name, node, { ...modelContext, diagnostics: failures })
+            : resolveReferencedField(name, node, { ...modelContext, diagnostics: failures });
+    if (resolution !== undefined) references.set(node, resolution);
+    for (const diagnostic of failures) diagnostics.set(node, diagnostic);
+    return {
+      matched: resolution !== undefined && resolution.kind !== 'unresolved',
+      references,
+      diagnostics,
+    };
   }
-  const matched =
-    'parse' in rule &&
-    typeof rule.parse === 'function' &&
-    blindCast<
-      ArgTypeOutput<unknown, AttributeCtx>['parse'],
-      'The rule and interpretation context come from the same block, model, or field spec factory; the erased parameter type loses that context relationship'
-    >(rule.parse)(expression, ctx.interpretation).ok;
-  return { matched, references, diagnostics };
+  return { matched: true, references, diagnostics };
 }
 
 function recordValues(expression: ExpressionAst): Iterable<ExpressionAst> | undefined {

@@ -105,19 +105,21 @@ A field whose type is malformed (`malformedType`) is skipped entirely: no resolu
 
 The binder owns resolution failures and nothing else. Failures come back under `PSL_UNRESOLVED_REFERENCE` (an unknown type, field, or entity name) and `PSL_UNRESOLVED_ATTRIBUTE` (an unknown attribute name), located by filename and range through `PslSources`. Converted consumers adopt these codes and **never re-emit their own** — the same rule the symbol table set for `PSL_DUPLICATE_DECLARATION`. Shape failures (arity, argument type, malformed literals) remain the spec combinators' voice; they are not resolution. References bind to first-wins symbols, and the binder never restates a duplicate-declaration diagnostic the symbol table already made.
 
-For `oneOf`, binding tries alternatives in order and publishes only the first matching alternative's references and diagnostics. Failed alternatives do not produce diagnostics when another alternative succeeds. Lists and records bind their child expressions recursively; the spec parsers determine whether each alternative accepts the value. For example, `oneOf(entityRef(...), identifier())` accepts an undeclared name through `identifier()` without an unresolved-reference diagnostic.
+For `oneOf`, binding tries alternatives in order and publishes only the first successful binding attempt's references and diagnostics. Earlier attempts are discarded when another succeeds; unresolved-reference diagnostics are reported only when every attempt fails. Binding never calls a spec's `parse` function. Every non-reference leaf, including fixed identifiers, literals, and rejecting specs, succeeds as a binding no-op regardless of the expression's value. For example, `oneOf(entityRef(...), identifier())` leaves an undeclared name unbound without an unresolved-reference diagnostic. Interpretation independently decides whether an alternative accepts the value.
+
+Lists and records require a traversable array or object expression and recursively bind its actual children. Function calls require a matching unqualified callee to select their signature; positional and named arguments use the same parameter matching as attributes. An argument without a matching parameter or expression fails the call's binding attempt. A container succeeds only when all child binding attempts succeed. A non-container expression fails a container attempt without a diagnostic, allowing a later reference alternative to resolve it. The binder does not check scalar constraints, list uniqueness, entity selectors, or required argument counts; those remain interpretation's responsibility.
 
 ### Attribute contexts and the single voice
 
 `modelAttributeContext` / `fieldAttributeContext` put the whole `Binder` on the parse-time context. `ModelAttributeCtx` **requires** it, so every context that can reach a reference combinator carries one by construction — there is no binder-less path to fall back to and no dual behavior to reason about.
 
-`fieldRef` and `referencedFieldRef` resolve solely through it: they read the argument's resolution out of the binder (`symbolForNode(argumentNode, referenceKind)` — a map read of results already computed at creation, never a second resolution) and
+`fieldRef` and `referencedFieldRef` resolve solely through it: they read the argument's resolution out of the binder (`symbolForNode(argumentNode)` — a map read of results already computed at creation, never a second resolution) and
 
 - return the bound field's name when the binder resolved a field;
 - return the written name for a `crossSpace` reference, which is deferred by design;
-- **fail the argument, carrying no diagnostics of their own**, when the binder bound nothing or bound something that is not a field. The binder has already reported that name as `PSL_UNRESOLVED_REFERENCE`, so a second complaint would be a duplicate. A failed argument fails its attribute rather than quietly yielding a short list or a missing key.
+- **fail the argument, carrying no diagnostics of their own**, when the binder bound nothing or bound something that is not a field. An unresolved reference has already been reported by the binder; an absent binding can instead mean a non-reference alternative succeeded. A failed argument fails its attribute rather than quietly yielding a short list or a missing key.
 
-`entityRef` reads the examined entity resolution, rejects unresolved names, checks the declaration against its selector, and returns the matching declaration and namespace.
+`entityRef` reads the committed resolution, fails without diagnostics for absent or unresolved bindings, checks the declaration against its selector, and returns the matching declaration and namespace. Selector checks happen only during interpretation, not binding.
 
 Shape and arity stay the combinator's voice — "Expected a field name", "Expected a list of field name", wrong argument counts. Only *existence* belongs to the binder. The split is the point: resolution is the binder's, shape is the spec's, and no schema error is ever reported twice.
 
@@ -125,11 +127,9 @@ Shape and arity stay the combinator's voice — "Expected a field name", "Expect
 
 This lookup rests on red-node identity (below): the combinator receives the very `SyntaxNode` the binder keyed its result under.
 
-**Precondition, enforced.** The binder on the context must be built over the *same snapshot* — the same symbol table and `PslSources` — and the same `typeConstructors` / `attributeSpecs` registries as the interpretation consuming it.
+The binder on the context must be built over the same snapshot — the same symbol table and `PslSources` — and registries as interpretation. This requirement is not enforced by reference parsers.
 
-The binder records examined resolutions separately from the references committed after alternative selection. `symbolForNode(node)` exposes committed references; `symbolForNode(node, referenceKind)` lets reference parsers revisit failed alternatives without losing their resolution results. An unsuccessful lookup has an explicit `unresolved` result. A missing examined result violates the same-snapshot precondition, so reference combinators **throw an `InternalError`** rather than silently skipping validation.
-
-Fields whose type is malformed are the one deliberate absence: the binder does not examine them, and no combinator reads a type node.
+The binder stores one final resolution per syntax node. `symbolForNode(node)` exposes only committed references, not per-kind results from rejected trials. An unsuccessful committed lookup has an explicit `unresolved` result. Raw identifier fallbacks and malformed field types have no binding. Reference parsers treat absent bindings as normal failures (`notOk([])`), allowing interpreter alternatives to proceed; there is no missing-binder invariant exception.
 
 ### Snapshot lifetime
 

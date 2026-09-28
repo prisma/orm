@@ -250,7 +250,7 @@ describe('the binder is the only resolution path', () => {
 });
 
 describe('a binder built over another snapshot', () => {
-  it('fails loudly instead of silently forgoing the check', () => {
+  it('fails without diagnostics when no binding is available', () => {
     const first = bind(RELATION_SCHEMA);
     const second = bind(RELATION_SCHEMA);
     const post = second.symbolTable.topLevel.models['Post']!;
@@ -263,9 +263,9 @@ describe('a binder built over another snapshot', () => {
       field,
     };
 
-    expect(() =>
-      interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx),
-    ).toThrow(/same snapshot/i);
+    const result = interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
   it('resolves normally when the binder and the context share a snapshot', () => {
