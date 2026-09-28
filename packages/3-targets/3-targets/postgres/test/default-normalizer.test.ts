@@ -149,6 +149,13 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
+  it('keeps a box array default raw, since box elements are delimited by semicolons', () => {
+    expect(parsePostgresDefault("'{(3,4),(1,2)}'::box[]", 'box[]')).toEqual({
+      kind: 'function',
+      expression: "'{(3,4),(1,2)}'::box[]",
+    });
+  });
+
   it('keeps a quoted element that looks like NULL as the literal string', () => {
     expect(parsePostgresDefault('\'{"NULL"}\'::text[]', 'text[]')).toEqual({
       kind: 'literal',

@@ -46,6 +46,9 @@ const DECIMAL_TEXT_TYPE_PATTERN = /^(?:bigint|int8|numeric|decimal)(?:\(\d+(?:,\
  */
 const ARRAY_LITERAL_PATTERN = /^'(\{.*\})'(?:::.+\[\])?$/;
 
+/** `box` is the one core type whose array elements are delimited by `;`, not `,`. */
+const SEMICOLON_DELIMITED_ELEMENT_TYPE_PATTERN = /^box$/i;
+
 /**
  * Matches the constructor spelling Postgres reports for a default written as
  * `ARRAY[...]`: `ARRAY['a'::text, 'b'::text]`, `ARRAY[1, 2]`, `ARRAY[]::text[]`.
@@ -372,7 +375,10 @@ export function parsePostgresDefault(
   if (normalizedType?.endsWith('[]')) {
     const elementType = normalizedType.slice(0, -2);
     const arrayMatch = trimmed.match(ARRAY_LITERAL_PATTERN);
-    if (arrayMatch?.[1] !== undefined) {
+    if (
+      arrayMatch?.[1] !== undefined &&
+      !SEMICOLON_DELIMITED_ELEMENT_TYPE_PATTERN.test(elementType)
+    ) {
       const parsed = parseArrayLiteralBody(arrayMatch[1].replace(/''/g, "'"), elementType);
       if (parsed !== undefined) {
         return { kind: 'literal', value: parsed };
