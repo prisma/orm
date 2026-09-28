@@ -99,6 +99,31 @@ describe('mongoBsonCodec encode', () => {
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
   });
 
+  class OtherBsonObjectId {
+    readonly _bsontype = 'ObjectId';
+    constructor() {
+      Reflect.set(this, Symbol.for('@@mdb.bson.version'), 6);
+    }
+    toHexString(): string {
+      return '64b7f0c2a1b2c3d4e5f60718';
+    }
+  }
+
+  class Tagged {
+    readonly _bsontype = 'Foo';
+  }
+
+  it.each([
+    ['MinKey not created by bson 7', { _bsontype: 'MinKey' }],
+    ['Decimal128 not created by bson 7', { _bsontype: 'Decimal128', toString: () => '1' }],
+    ['ObjectId not created by bson 7', new OtherBsonObjectId()],
+    ['Foo', new Tagged()],
+  ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
+    await expect(
+      mongoBsonCodec.encode(notBson({ outer: { items: [0, { value }] } }), {}),
+    ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
+  });
+
   it('refuses a hole in a sparse array', async () => {
     const sparse: unknown[] = [1];
     sparse[2] = 3;

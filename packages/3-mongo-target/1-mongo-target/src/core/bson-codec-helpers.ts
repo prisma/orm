@@ -1,5 +1,6 @@
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
+import { MinKey } from 'bson';
 import {
   bsonClassTag,
   bsonTypeTag,
@@ -28,6 +29,9 @@ const BSON_VALUE_TAGS: ReadonlySet<string> = new Set([
   'BSONSymbol',
 ]);
 
+const BSON_VERSION = Symbol.for('@@mdb.bson.version');
+const BSON_MAJOR: unknown = Reflect.get(new MinKey(), BSON_VERSION);
+
 function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
@@ -49,6 +53,9 @@ function assertBsonValue(value: unknown, path: string): void {
   const tag = bsonTypeTag(value);
   if (tag !== undefined) {
     if (!BSON_VALUE_TAGS.has(tag)) encodeRefused(tag, path);
+    if (Reflect.get(value, BSON_VERSION) !== BSON_MAJOR) {
+      encodeRefused(`${tag} not created by bson ${String(BSON_MAJOR)}`, path);
+    }
     return;
   }
   if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return;
