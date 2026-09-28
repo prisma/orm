@@ -12,6 +12,7 @@ changes:
         - '"ref"\s*:\s*\{(?![^{}]*"kind")[^{}]*"(?:table|column)"\s*:'
         - '\.ref\??\.(?:table|column)\b'
         - '\bref\s*:\s*\{(?![^{}]*\bkind\b)[^{}]*\b(?:table|column)\s*:[^{}]*\b(?:table|column)\s*:'
+    script: ./scripts/rename-execution-ref-keys.ts
 ---
 
 ## `execution-ref-entry-field`
@@ -27,7 +28,13 @@ A contract with generated defaults (`temporal.createdAt()`, `temporal.updatedAt(
 ```
 
 1. Run `prisma contract emit` so `contract.json` and `contract.d.ts` use the new keys. The runtime rejects a contract whose refs still say `table` and `column` with `Contract structural validation failed: execution.mutations.defaults[0].ref.entry must be a string`.
-2. Contract snapshots under `migrations/snapshots/<hash>/` that carry an `execution` section have the old keys too. In each `execution.mutations.defaults[].ref`, in both `contract.json` and `contract.d.ts`, rename `table` to `entry` and `column` to `field`, and write the keys in the order `entry`, `field`, `namespace`, which is the order `prisma contract emit` writes. Leave the snapshot's existing `executionHash` as it is. It no longer matches the renamed content, but the snapshot loader re-hashes only the storage section, so nothing checks it. `storageHash` and `profileHash` do not move, so snapshot directory names stay the same.
+2. Contract snapshots under `migrations/snapshots/<hash>/` that carry an `execution` section have the old keys too. Run the script that ships beside this guide, from the project root. The path below is relative to this file:
+
+   ```bash
+   pnpm exec tsx ./scripts/rename-execution-ref-keys.ts
+   ```
+
+   In each `execution.mutations.defaults[].ref`, in both `contract.json` and `contract.d.ts`, it renames `table` to `entry` and `column` to `field`, and writes the keys in the order `entry`, `field`, `namespace`, which is the order `prisma contract emit` writes. It rewrites `contract.json` the way the snapshot writer does, so the file matches a fresh emit apart from `executionHash`. It leaves the snapshot's existing `executionHash` as it is. That hash no longer matches the renamed content, but the snapshot loader re-hashes only the storage section, so nothing checks it. `storageHash` and `profileHash` do not move, so snapshot directory names stay the same. The script touches only files under `migrations/snapshots/<hash>/`, skips `node_modules`, `.git` and `dist`, and changes nothing on a second run. Pass `--check` to list the files it would change without writing them; it exits 1 if any would change.
 3. Code that reads the section directly changes `.ref.table` to `.ref.entry` and `.ref.column` to `.ref.field`.
 
 `executionHash` changes for every contract with generated defaults, because the canonical JSON changes. Nothing compares it against the database, so no migration or re-sign is needed.
