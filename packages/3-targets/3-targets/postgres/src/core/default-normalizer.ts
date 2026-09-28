@@ -202,18 +202,17 @@ function splitArrayElements(inner: string): readonly ArrayElementToken[] | undef
   return tokens;
 }
 
-const BOOLEAN_ELEMENT_TYPE_PATTERN = /^(?:bool|boolean)$/;
+const BOOLEAN_TYPE_PATTERN = /^(?:bool|boolean)$/i;
 const BOOLEAN_TRUE_TOKEN_PATTERN = /^(?:t|true)$/i;
 const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
 
 /**
- * Reads an unquoted, non-NULL array element by the column's element type. Postgres quotes any
- * element containing whitespace, a comma, a brace, a quote or a backslash, so an unquoted token is
- * the element's text as is.
+ * Reads an unquoted, non-NULL array element by the column's element type. Only text Postgres itself
+ * would print is read; anything else keeps the raw expression.
  */
 function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
   if (token === '') return undefined;
-  if (BOOLEAN_ELEMENT_TYPE_PATTERN.test(elementType)) {
+  if (BOOLEAN_TYPE_PATTERN.test(elementType)) {
     if (BOOLEAN_TRUE_TOKEN_PATTERN.test(token)) return true;
     if (BOOLEAN_FALSE_TOKEN_PATTERN.test(token)) return false;
     return undefined;
