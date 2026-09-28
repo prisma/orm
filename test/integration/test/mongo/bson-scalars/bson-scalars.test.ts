@@ -196,6 +196,47 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
   );
 
   it(
+    'installs a validator that refuses a Json field holding a non-JSON value at its top level',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ mongoDb }) => {
+        const document = {
+          views: Long.fromNumber(1),
+          price: Decimal128.fromString('1'),
+          thumbnail: new Binary(new Uint8Array([1])),
+          notes: null,
+        };
+        await mongoDb.collection('posts').insertOne({ ...document, meta: { at: 1 } });
+        await expect(
+          mongoDb.collection('posts').insertOne({ ...document, meta: new Date(0) }),
+        ).rejects.toMatchObject({ code: 121 });
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'refuses to write a BSON look-alike into a Bson field, naming its path inside the field',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db }) => {
+        await expect(
+          db.posts.create({
+            views: 1n,
+            price: '1',
+            thumbnail: new Uint8Array([1]),
+            meta: {},
+            notes: null,
+            raw: { nested: [{ _bsontype: 'MinKey' }] },
+          }),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message: expect.stringContaining(
+            'mongo/bson@1 value must be a BSON value; received MinKey not created by bson 7 at nested.0',
+          ),
+        });
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'reads a Decimal128 stored in exponent form as plain decimal text',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
