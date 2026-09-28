@@ -190,6 +190,19 @@ model Person {
 `,
   },
   {
+    name: 'value-object members with type parameters, single and list',
+    schema: `type Price {
+  amount  Numeric(65, 30)
+  history Numeric(65, 30)[]
+}
+
+model Product {
+  id    Int   @id
+  price Price
+}
+`,
+  },
+  {
     name: 'a policy expression holding a quote, a backslash and a line break',
     schema: `namespace unbound {
   role app_user {

@@ -177,14 +177,14 @@ export function refuseUnwrittenExecutionDefaults(
 
 /**
  * The value-set references the PSL source gives a field typed by a domain enum and its column: the
- * column names the enum's value set, and a field that is not a list names the enum, both in the
- * default namespace. A field with no domain enum has neither.
+ * column names the enum's value set and the field names the enum, both in the default namespace. A
+ * field with no domain enum has neither.
  */
-function derivedValueSetRefs(enumName: string | undefined, list: boolean) {
+function derivedValueSetRefs(enumName: string | undefined) {
   if (enumName === undefined) return { field: undefined, column: undefined };
   const common = { namespaceId: DEFAULT_NAMESPACE_ID, entityName: enumName };
   return {
-    field: list ? undefined : { plane: 'domain', entityKind: 'enum', ...common },
+    field: { plane: 'domain', entityKind: 'enum', ...common },
     column: { plane: 'storage', entityKind: 'valueSet', ...common },
   };
 }
@@ -243,7 +243,7 @@ export function refuseFieldColumnMismatch(input: {
   }
   if (field.type.kind !== 'scalar' || column.codecId === PG_ENUM_CODEC_ID) return;
   const enumName = column.valueSet?.entityName;
-  const derived = derivedValueSetRefs(enumName, field.many === true);
+  const derived = derivedValueSetRefs(enumName);
   if (
     !sameJson(field.valueSet, derived.field) ||
     !sameJson(column.valueSet, derived.column) ||
@@ -251,7 +251,7 @@ export function refuseFieldColumnMismatch(input: {
   ) {
     throw unsupported(
       `field ${coordinate} and its column do not name the enum of the default namespace and its value set that the PSL source derives for a field typed by an enum, which cannot be written in Prisma 8 PSL.`,
-      'PSL types the field by the enum name, and the PSL source then points the column at the value set of that enum in the default namespace, and a field that is not a list at the enum.',
+      'PSL types the field by the enum name, and the PSL source then points the column at the value set of that enum in the default namespace, and the field at the enum.',
       fix,
       { coordinate },
     );
@@ -283,18 +283,12 @@ export function refuseUnwritableFieldShape(
   );
 }
 
-/**
- * Refuses a value-object field with type parameters or a value set: the PSL source keeps only the
- * codec of a value-object field's type, so either would be lost.
- */
-export function refuseValueObjectFieldPartsTheSourceDrops(
-  field: ContractField & { readonly type: ScalarFieldType },
-  coordinate: string,
-): void {
-  if (Object.keys(field.type.typeParams ?? {}).length === 0 && field.valueSet === undefined) return;
+/** Refuses a value-object field with a value set, since the PSL source never gives one. */
+export function refuseValueObjectFieldValueSet(field: ContractField, coordinate: string): void {
+  if (field.valueSet === undefined) return;
   throw unsupported(
-    `value-object field ${coordinate} carries type parameters or a value set, which cannot be written in Prisma 8 PSL.`,
-    "The PSL source keeps only the codec of a value-object field's type, so its type parameters and value set would be lost.",
+    `value-object field ${coordinate} carries a value set, which cannot be written in Prisma 8 PSL.`,
+    "The PSL source keeps a value-object field's codec and type parameters, but no value set, so the value set would be lost.",
     KEEP_SOURCE,
     { coordinate },
   );
@@ -317,8 +311,8 @@ export function refuseValueObjectFieldCodecNeedingTypeParameters(
   coordinate: string,
 ): never {
   throw unsupported(
-    `field ${coordinate} uses codec "${codecId}", which names a native type only from type parameters, and the PSL source keeps none on a value-object field.`,
-    "The PSL source keeps only the codec of a value-object field's type, so a codec that needs type parameters cannot be written there.",
+    `field ${coordinate} uses codec "${codecId}", which names a native type only from type parameters the field does not carry.`,
+    'A value-object field has no storage column, so its PSL type is derived from the native type its codec names for its type parameters.',
     KEEP_SOURCE,
     { coordinate, codecId },
   );

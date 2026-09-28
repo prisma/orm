@@ -307,9 +307,9 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 - Fields and columns:
   - a field and its column disagree where PSL writes them once: the field is optional and the column is not nullable or the reverse, a column of a single-table variant is not nullable, one of them is a list and the other is not, a scalar field's codec or type parameters differ from its column's, or they do not name the enum and value set the PSL source derives for a field typed by an enum (meta: `coordinate`);
   - a model or value-object field's type is a union of types (meta: `coordinate`, `kind`), or a field is a dictionary (meta: `coordinate`);
-  - a value-object field carries type parameters or a value set, which the PSL source does not keep on a value-object field (meta: `coordinate`);
+  - a value-object field carries a value set, which the PSL source does not keep on a value-object field (meta: `coordinate`);
   - a value-object field uses a codec that no Postgres codec in the configured stack names a native type for (meta: `coordinate`, `codecId`);
-  - a value-object field uses a codec that names a native type only from type parameters (meta: `coordinate`, `codecId`);
+  - a value-object field uses a codec that names a native type only from type parameters the field does not carry (meta: `coordinate`, `codecId`);
   - a field is stored in no column (meta: `namespaceId`, `modelName`, `field`);
   - a model stores a column under a field name the model does not declare (meta: `namespaceId`, `modelName`, `field`);
   - a column is typed by a named type the contract does not declare, or its native type or codec is not the named type's (meta: `coordinate`, `typeRef`);

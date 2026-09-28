@@ -1,9 +1,11 @@
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  modelsOf,
   postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
@@ -20,7 +22,53 @@ const numeric = {
   typeParams: { precision: 65, scale: 30 },
 } as const;
 
-describe('interpretPslDocumentToSqlContract type parameters on domain fields', () => {
+const varCharishTypes = {
+  ...postgresScalarAuthoringTypes,
+  VarCharish: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'length', integer: true, minimum: 1 }],
+    output: {
+      codecId: 'sql/varchar@1',
+      nativeType: 'character varying',
+      typeParams: { length: { kind: 'arg', index: 0 } },
+    },
+  },
+} satisfies AuthoringTypeNamespace;
+
+describe('interpretPslDocumentToSqlContract a list field equals the single field of its type, plus many', () => {
+  it('gives a list field the type parameters of the single field, from a type constructor the stack adds', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: 'model Doc {\n  id Int @id\n  one VarCharish(12)\n  many VarCharish(12)[]\n}\n',
+      sourceId: 'schema.prisma',
+    });
+    const result = interpretPslDocumentToSqlContract({
+      ...document,
+      target: postgresTarget,
+      scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
+      authoringContributions: {
+        type: varCharishTypes,
+        dataTypes: fixtureDataTypeSupport.entries,
+      },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      composedExtensionContracts: new Map(),
+      createNamespace: createTestSqlNamespace,
+      capabilities: { sql: { scalarList: true } },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const fields = modelsOf(result.value)['Doc']?.fields;
+    const varchar = {
+      kind: 'scalar',
+      codecId: 'sql/varchar@1',
+      typeParams: { length: 12 },
+    } as const;
+    expect({ one: fields?.['one'], many: fields?.['many'] }).toEqual({
+      one: { nullable: false, type: varchar },
+      many: { nullable: false, type: varchar, many: true },
+    });
+  });
+
   it('keeps type parameters on scalar list fields of a model', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `// use prisma-8

@@ -1,4 +1,4 @@
-import type { Contract, ContractField, ScalarFieldType } from '@internal/contract/types';
+import type { Contract, ContractField, JsonValue, ScalarFieldType } from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import type { PslTypeMap } from '@internal/family-sql/psl-build';
 import type {
@@ -9,6 +9,7 @@ import type {
 } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { StorageColumn } from '@internal/sql-contract/types';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isPostgresCodecDescriptor } from '../codec-descriptor';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
@@ -18,26 +19,29 @@ import {
   refuseUnwritableName,
   refuseValueObjectFieldCodecNeedingTypeParameters,
   refuseValueObjectFieldCodecWithoutNativeType,
-  refuseValueObjectFieldPartsTheSourceDrops,
+  refuseValueObjectFieldValueSet,
   refuseValueObjectsOutsideDefaultNamespace,
 } from './refusals';
 
-/**
- * The native type the stack's codec names for a value-object field. The field has no column of its
- * own, and no type parameters, which the PSL source would not keep.
- */
+/** The native type the stack's codec names for a value-object field, which has no column of its own. */
 function nativeTypeOfValueObjectField(
-  field: ContractField & { readonly type: ScalarFieldType },
+  type: ScalarFieldType,
   coordinate: string,
   context: SqlPslBuildContext,
 ): string {
-  const { codecId } = field.type;
+  const { codecId } = type;
   const descriptor = context.codecLookup.descriptorFor?.(codecId);
   if (!isPostgresCodecDescriptor(descriptor)) {
     refuseValueObjectFieldCodecWithoutNativeType(codecId, coordinate);
   }
   try {
-    return descriptor.nativeTypeFor({ codecId });
+    return descriptor.nativeTypeFor({
+      codecId,
+      ...ifDefined(
+        'typeParams',
+        blindCast<JsonValue | undefined, 'contract type parameters are JSON'>(type.typeParams),
+      ),
+    });
   } catch {
     refuseValueObjectFieldCodecNeedingTypeParameters(codecId, coordinate);
   }
@@ -57,13 +61,14 @@ export function buildDomainFieldType(input: {
   if (type.kind === 'valueObject') {
     return { typeName: type.name };
   }
-  refuseValueObjectFieldPartsTheSourceDrops({ ...field, type }, coordinate);
+  refuseValueObjectFieldValueSet(field, coordinate);
   return buildColumnType({
     column: new StorageColumn({
-      nativeType: nativeTypeOfValueObjectField({ ...field, type }, coordinate, input.context),
+      nativeType: nativeTypeOfValueObjectField(type, coordinate, input.context),
       codecId: type.codecId,
       nullable: field.nullable,
       ...ifDefined('many', field.many),
+      ...ifDefined('typeParams', type.typeParams),
     }),
     typeMap: input.typeMap,
     authoringTypes: input.context.authoringContributions.type,

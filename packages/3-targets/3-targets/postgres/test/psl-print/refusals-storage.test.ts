@@ -2,6 +2,7 @@ import type { ContractField } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { extensionCodec, testBuildContext } from './build-context';
+import { fieldText } from './print-support';
 import {
   deserialize,
   deserializeEdited,
@@ -343,13 +344,37 @@ describe('value objects', () => {
     ).toEqual(['ext.Citext']);
   });
 
-  it('refuses a value-object field whose type carries type parameters, which the PSL source drops', () => {
+  it('writes a value-object field whose type carries type parameters, as the type constructor called with them', () => {
+    const numeric = {
+      kind: 'scalar',
+      codecId: 'pg/numeric@1',
+      typeParams: { precision: 65, scale: 30 },
+    } as const;
+    const document = buildPostgresPslContract(
+      deserialize(
+        widgetContract({
+          columns: { price: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+          fields: { price: { nullable: false, type: { kind: 'valueObject', name: 'Price' } } },
+          domain: {
+            valueObjects: {
+              Price: {
+                fields: {
+                  amount: { nullable: false, type: numeric },
+                  history: { nullable: false, many: true, type: numeric },
+                },
+              },
+            },
+          },
+        }),
+      ),
+      testBuildContext(),
+    );
+
     expect(
-      withAddress({
-        nullable: false,
-        type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 20 } },
-      }),
-    ).toThrow(refusal({ coordinate: '"public".Address.street' }));
+      document.namespaces.flatMap((namespace) =>
+        namespace.compositeTypes.flatMap((compositeType) => compositeType.fields.map(fieldText)),
+      ),
+    ).toEqual(['amount Numeric(65, 30)', 'history Numeric(65, 30)[]']);
   });
 
   it('refuses a value-object field that names a value set, which the PSL source drops', () => {
