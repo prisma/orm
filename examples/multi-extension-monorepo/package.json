@@ -1,6 +1,6 @@
 {
   "name": "multi-extension-monorepo",
-  "version": "8.0.0-rc.12",
+  "version": "8.0.0-rc.13",
   "private": true,
   "type": "module",
   "engines": {
@@ -15,12 +15,12 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.12"
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.13"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.6.1",
-    "@repo/test-utils": "workspace:8.0.0-rc.12",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/test-utils": "workspace:8.0.0-rc.13",
+    "@repo/tsconfig": "workspace:8.0.0-rc.13",
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
