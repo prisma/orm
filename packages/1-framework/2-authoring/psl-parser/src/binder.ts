@@ -413,25 +413,49 @@ function tryBindExpression(
       }
       return { matched, references, diagnostics };
     }
-    case 'entityRef':
-    case 'fieldRef':
-    case 'referencedFieldRef': {
+    case 'entityRef': {
       const node = expression.syntax;
       const name = IdentifierAst.cast(node)?.name();
       if (name === undefined) return { matched: false, references, diagnostics };
       const failures: ParseDiagnostic[] = [];
-      const resolution =
-        rule.kind === 'entityRef'
-          ? resolveEntity(name, node, { ...ctx, diagnostics: failures })
-          : modelContext === undefined
-            ? undefined
-            : rule.kind === 'fieldRef'
-              ? resolveOwnerField(name, node, { ...modelContext, diagnostics: failures })
-              : resolveReferencedField(name, node, { ...modelContext, diagnostics: failures });
-      if (resolution !== undefined) references.set(node, resolution);
+      const resolution = resolveEntity(name, node, { ...ctx, diagnostics: failures });
+      references.set(node, resolution);
       for (const diagnostic of failures) diagnostics.set(node, diagnostic);
       return {
-        matched: resolution !== undefined && resolution.kind !== 'unresolved',
+        matched: resolution.kind !== 'unresolved',
+        references,
+        diagnostics,
+      };
+    }
+    case 'fieldRef': {
+      const node = expression.syntax;
+      const name = IdentifierAst.cast(node)?.name();
+      if (name === undefined || modelContext === undefined)
+        return { matched: false, references, diagnostics };
+      const failures: ParseDiagnostic[] = [];
+      const resolution = resolveOwnerField(name, node, { ...modelContext, diagnostics: failures });
+      references.set(node, resolution);
+      for (const diagnostic of failures) diagnostics.set(node, diagnostic);
+      return {
+        matched: resolution.kind !== 'unresolved',
+        references,
+        diagnostics,
+      };
+    }
+    case 'referencedFieldRef': {
+      const node = expression.syntax;
+      const name = IdentifierAst.cast(node)?.name();
+      if (name === undefined || modelContext === undefined)
+        return { matched: false, references, diagnostics };
+      const failures: ParseDiagnostic[] = [];
+      const resolution = resolveReferencedField(name, node, {
+        ...modelContext,
+        diagnostics: failures,
+      });
+      references.set(node, resolution);
+      for (const diagnostic of failures) diagnostics.set(node, diagnostic);
+      return {
+        matched: resolution.kind !== 'unresolved',
         references,
         diagnostics,
       };
