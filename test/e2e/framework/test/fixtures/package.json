@@ -5,7 +5,7 @@
   "version": "8.0.0-rc.12",
   "description": "The Postgres fixture of the e2e suite. Its own manifest because emission reads the nearest one to decide which package names generated files import, and this suite exercises two databases whose halves must not name each other's facade.",
   "dependencies": {
-    "@prisma/cli-engine": "0.6.1",
+    "@prisma/cli-engine": "0.6.2",
     "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.12",
     "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.12",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.12",

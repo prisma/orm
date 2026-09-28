@@ -29,7 +29,7 @@
     "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.1",
+    "@prisma/cli-engine": "0.6.2",
     "@prisma/dev": "catalog:",
     "@prisma/prisma7": "7.10.0",
     "@repo/test-utils": "workspace:8.0.0-rc.12",

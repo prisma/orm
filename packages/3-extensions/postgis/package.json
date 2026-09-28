@@ -37,7 +37,7 @@
     "@internal/operations": "workspace:8.0.0-rc.12",
     "@internal/postgres": "workspace:8.0.0-rc.12",
     "@internal/sql-contract-ts": "workspace:8.0.0-rc.12",
-    "@prisma/cli-engine": "0.6.1",
+    "@prisma/cli-engine": "0.6.2",
     "@repo/test-utils": "workspace:8.0.0-rc.12",
     "@repo/tsconfig": "workspace:8.0.0-rc.12",
     "@repo/tsdown": "workspace:8.0.0-rc.12",
