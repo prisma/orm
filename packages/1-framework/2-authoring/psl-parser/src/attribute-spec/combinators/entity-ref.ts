@@ -33,7 +33,7 @@ export function entityRef<const S extends EntitySelector>(
       if (name === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Expected ${label}`)]);
       }
-      const resolution = ctx.binder.symbolForNode(arg.syntax) ?? unbound(name);
+      const resolution = ctx.binder.symbolForNode(arg.syntax, 'entityRef') ?? unbound(name);
       if (resolution.kind === 'unresolved') return notOk([]);
       const reference = entityReference(resolution);
       if (reference === undefined || !matchesSelector(reference, expected)) {

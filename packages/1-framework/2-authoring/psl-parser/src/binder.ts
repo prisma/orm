@@ -9,7 +9,13 @@ import type {
   AttributeSpecNamespace,
   BlockAttributeSpecFactory,
 } from './attribute-spec/spec-context';
-import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
+import type {
+  ArgTypeOutput,
+  AttributeCtx,
+  AttributeSpec,
+  FieldAttributeCtx,
+  ModelAttributeCtx,
+} from './attribute-spec/types';
 import { blockSpecFactoryOf } from './block-spec/descriptor';
 import { contributedTypeScope } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
@@ -36,7 +42,12 @@ import type {
   SymbolTable,
 } from './symbol-table';
 import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attributes';
-import { ArrayLiteralAst, type ExpressionAst } from './syntax/ast/expressions';
+import {
+  ArrayLiteralAst,
+  type ExpressionAst,
+  FunctionCallAst,
+  ObjectLiteralExprAst,
+} from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { SyntaxNode } from './syntax/red';
 
@@ -71,7 +82,7 @@ export type Resolution =
 
 export interface Binder {
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined;
-  symbolForNode(node: SyntaxNode): Resolution | undefined;
+  symbolForNode(node: SyntaxNode, referenceKind?: ReferenceKind): Resolution | undefined;
 }
 
 export interface UnsupportedAttribute {
@@ -107,21 +118,26 @@ export function typeReferenceNode(field: FieldSymbol): SyntaxNode | undefined {
 class PslBinder implements Binder {
   readonly #declarations: WeakMap<SyntaxNode, PslSymbol>;
   readonly #references: WeakMap<SyntaxNode, Resolution>;
+  readonly #examined: ExaminedReferences;
 
   constructor(
     declarations: WeakMap<SyntaxNode, PslSymbol>,
     references: WeakMap<SyntaxNode, Resolution>,
+    examined: ExaminedReferences,
   ) {
     this.#declarations = declarations;
     this.#references = references;
+    this.#examined = examined;
   }
 
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined {
     return this.#declarations.get(node);
   }
 
-  symbolForNode(node: SyntaxNode): Resolution | undefined {
-    return this.#references.get(node);
+  symbolForNode(node: SyntaxNode, referenceKind?: ReferenceKind): Resolution | undefined {
+    return referenceKind === undefined
+      ? this.#references.get(node)
+      : this.#examined.get(node)?.[referenceKind];
   }
 }
 
@@ -179,6 +195,9 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
   const diagnostics: ParseDiagnostic[] = [];
+  const examined: ExaminedReferences = new WeakMap();
+  const binder = new PslBinder(declarations, references, examined);
+  const interpretation: AttributeCtx = { sources, symbols: symbolTable, binder };
 
   for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -227,6 +246,9 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       symbolTable,
       sources,
       describeUnsupportedAttribute,
+      examined,
+      interpretation:
+        entity.kind === 'model' ? { ...interpretation, selfModel: entity } : interpretation,
     };
     const specContext =
       entity.kind === 'model'
@@ -245,12 +267,27 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         field.attributes,
         attributeSpecs.field,
         (factory) => (specContext === undefined ? undefined : factory({ ...specContext, field })),
-        { ...context, field },
+        {
+          ...context,
+          field,
+          interpretation:
+            entity.kind === 'model'
+              ? { ...interpretation, selfModel: entity, field }
+              : interpretation,
+        },
       );
     }
   });
 
-  const blockContext = { pslBlockDescriptors, symbolTable, sources, references, diagnostics };
+  const blockContext = {
+    pslBlockDescriptors,
+    symbolTable,
+    sources,
+    references,
+    diagnostics,
+    examined,
+    interpretation,
+  };
   const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>) => {
     const context = { ...blockContext, scope: stack.current() };
     for (const block of Object.values(blocks)) bindBlock(block, context);
@@ -262,10 +299,15 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     stack.pop();
   }
 
-  return { binder: new PslBinder(declarations, references), diagnostics };
+  return { binder, diagnostics };
 }
 
+type ReferenceKind = 'fieldRef' | 'referencedFieldRef' | 'entityRef';
+type ExaminedReferences = WeakMap<SyntaxNode, Partial<Record<ReferenceKind, Resolution>>>;
+
 interface ReferenceContext {
+  readonly examined: ExaminedReferences;
+  readonly interpretation: AttributeCtx | ModelAttributeCtx | FieldAttributeCtx;
   readonly scope: Scope;
   readonly sources: PslSources;
   readonly references: WeakMap<SyntaxNode, Resolution>;
@@ -315,35 +357,119 @@ function bindExpression(
   ctx: ReferenceContext,
   modelContext?: BindContext,
 ): void {
-  const kind = referenceKind(rule);
-  if (kind === undefined) return;
-  const silent = allowsUnresolvedName(rule);
-  for (const node of referenceNodes(expression)) {
-    const name = IdentifierAst.cast(node)?.name();
-    if (name === undefined) continue;
-    if (kind === 'entityRef') {
-      ctx.references.set(node, resolveEntity(name, node, ctx, silent));
-    } else if (modelContext !== undefined) {
-      const resolution =
-        kind === 'fieldRef'
-          ? resolveOwnerField(name, node, modelContext)
-          : resolveReferencedField(name, node, modelContext);
-      ctx.references.set(node, resolution);
-    }
-  }
+  const trial = tryBindExpression(rule, expression, ctx, modelContext);
+  for (const [node, resolution] of trial.references) ctx.references.set(node, resolution);
+  ctx.diagnostics.push(...trial.diagnostics.values());
 }
 
-function allowsUnresolvedName(type: unknown, visited = new Set<object>()): boolean {
-  if (typeof type !== 'object' || type === null || visited.has(type)) return false;
-  visited.add(type);
-  if ('kind' in type && type.kind === 'identifier') {
-    return 'allowsUnresolvedName' in type && type.allowsUnresolvedName === true;
+interface BindingTrial {
+  readonly matched: boolean;
+  readonly references: Map<SyntaxNode, Resolution>;
+  readonly diagnostics: Map<SyntaxNode, ParseDiagnostic>;
+}
+
+function tryBindExpression(
+  rule: unknown,
+  expression: ExpressionAst,
+  ctx: ReferenceContext,
+  modelContext?: BindContext,
+): BindingTrial {
+  const references = new Map<SyntaxNode, Resolution>();
+  const diagnostics = new Map<SyntaxNode, ParseDiagnostic>();
+  if (typeof rule !== 'object' || rule === null || !('kind' in rule)) {
+    return { matched: false, references, diagnostics };
   }
-  if ('alternatives' in type && Array.isArray(type.alternatives)) {
-    return type.alternatives.some((alternative) => allowsUnresolvedName(alternative, visited));
+  if (rule.kind === 'oneOf' && 'alternatives' in rule && Array.isArray(rule.alternatives)) {
+    const alternatives: readonly unknown[] = rule.alternatives;
+    for (const alternative of alternatives) {
+      const trial = tryBindExpression(alternative, expression, ctx, modelContext);
+      if (trial.matched) return trial;
+      for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+      for (const [node, resolution] of trial.references) {
+        if (resolution.kind === 'unresolved') references.set(node, resolution);
+      }
+    }
+    return { matched: false, references, diagnostics };
   }
-  if ('of' in type) return allowsUnresolvedName(type.of, visited);
-  return false;
+  if ((rule.kind === 'list' || rule.kind === 'record') && 'of' in rule) {
+    const children =
+      rule.kind === 'list'
+        ? ArrayLiteralAst.cast(expression.syntax)?.elements()
+        : recordValues(expression);
+    if (children !== undefined) {
+      for (const child of children) {
+        const trial = tryBindExpression(rule.of, child, ctx, modelContext);
+        for (const [node, resolution] of trial.references) references.set(node, resolution);
+        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+      }
+    }
+  }
+  if (rule.kind === 'funcCall' && 'signature' in rule && 'name' in rule) {
+    const call = FunctionCallAst.cast(expression.syntax);
+    const name = call?.name();
+    if (
+      call !== undefined &&
+      name !== undefined &&
+      name.dot() === undefined &&
+      name.colon() === undefined &&
+      name.identifier()?.name() === rule.name
+    ) {
+      let positional = 0;
+      for (const arg of call.args()) {
+        const key = arg.name()?.name();
+        const parameter = argumentParameter(
+          rule.signature,
+          key,
+          key === undefined ? positional++ : positional,
+        );
+        const value = arg.value();
+        if (parameter === undefined || value === undefined) continue;
+        const trial = tryBindExpression(parameter.type, value, ctx, modelContext);
+        for (const [node, resolution] of trial.references) references.set(node, resolution);
+        for (const [node, diagnostic] of trial.diagnostics) diagnostics.set(node, diagnostic);
+      }
+    }
+  }
+  const kind = rule.kind;
+  if (kind === 'entityRef' || kind === 'fieldRef' || kind === 'referencedFieldRef') {
+    const node = expression.syntax;
+    const name = IdentifierAst.cast(node)?.name();
+    if (name !== undefined) {
+      const failures: ParseDiagnostic[] = [];
+      const resolution =
+        kind === 'entityRef'
+          ? resolveEntity(name, node, { ...ctx, diagnostics: failures })
+          : modelContext === undefined
+            ? undefined
+            : kind === 'fieldRef'
+              ? resolveOwnerField(name, node, { ...modelContext, diagnostics: failures })
+              : resolveReferencedField(name, node, { ...modelContext, diagnostics: failures });
+      if (resolution !== undefined) {
+        references.set(node, resolution);
+        ctx.examined.set(node, { ...ctx.examined.get(node), [kind]: resolution });
+      }
+      for (const diagnostic of failures) diagnostics.set(node, diagnostic);
+    }
+  }
+  const matched =
+    'parse' in rule &&
+    typeof rule.parse === 'function' &&
+    blindCast<
+      ArgTypeOutput<unknown, AttributeCtx>['parse'],
+      'The rule and interpretation context come from the same block, model, or field spec factory; the erased parameter type loses that context relationship'
+    >(rule.parse)(expression, ctx.interpretation).ok;
+  return { matched, references, diagnostics };
+}
+
+function recordValues(expression: ExpressionAst): Iterable<ExpressionAst> | undefined {
+  const record = ObjectLiteralExprAst.cast(expression.syntax);
+  if (record === undefined) return undefined;
+  return (function* () {
+    for (const field of record.fields()) {
+      const value = field.value();
+      if (value !== undefined) yield value;
+    }
+  })();
 }
 
 interface BindContext extends ReferenceContext {
@@ -403,10 +529,37 @@ function bindArguments(
 ): void {
   let positional = 0;
   for (const arg of attribute.args) {
-    const param = arg.name === undefined ? spec.positional[positional++] : spec.named[arg.name];
-    if (param === undefined || arg.expression === undefined) continue;
-    bindExpression(param.type, arg.expression, ctx, modelContext);
+    const parameter = argumentParameter(
+      spec,
+      arg.name,
+      arg.name === undefined ? positional++ : positional,
+    );
+    if (parameter === undefined || arg.expression === undefined) continue;
+    bindExpression(parameter.type, arg.expression, ctx, modelContext);
   }
+}
+
+interface BindingParameter {
+  readonly type: unknown;
+}
+
+function argumentParameter(
+  spec: unknown,
+  name: string | undefined,
+  position: number,
+): BindingParameter | undefined {
+  let parameter: unknown;
+  if (name === undefined && hasMember(spec, 'positional') && Array.isArray(spec.positional)) {
+    const parameters: readonly unknown[] = spec.positional;
+    parameter = parameters[position];
+  } else if (name !== undefined && hasMember(spec, 'named') && hasMember(spec.named, name)) {
+    parameter = spec.named[name];
+  }
+  return hasMember(parameter, 'type') ? parameter : undefined;
+}
+
+function hasMember<Key extends string>(value: unknown, key: Key): value is Record<Key, unknown> {
+  return typeof value === 'object' && value !== null && Object.hasOwn(value, key);
 }
 
 function resolveOwnerField(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
@@ -442,15 +595,10 @@ function targetFields(
   return undefined;
 }
 
-function resolveEntity(
-  name: string,
-  node: SyntaxNode,
-  ctx: ReferenceContext,
-  silent: boolean,
-): Resolution {
+function resolveEntity(name: string, node: SyntaxNode, ctx: ReferenceContext): Resolution {
   const found = ctx.scope.lookup(name);
   if (found === undefined) {
-    if (!silent) report(`Cannot find entity "${name}"`, node, ctx, 'entity');
+    report(`Cannot find entity "${name}"`, node, ctx, 'entity');
     return { kind: 'unresolved', name };
   }
   return found;
@@ -468,31 +616,6 @@ function report(
     data: { reference },
     ...diagnosticSource(ctx.sources, node).at(),
   });
-}
-
-type ReferenceKind = 'fieldRef' | 'referencedFieldRef' | 'entityRef';
-
-function referenceKind(type: unknown, visited = new Set<object>()): ReferenceKind | undefined {
-  if (typeof type !== 'object' || type === null || visited.has(type)) return undefined;
-  visited.add(type);
-  if ('kind' in type) {
-    const kind = type.kind;
-    if (kind === 'fieldRef' || kind === 'referencedFieldRef' || kind === 'entityRef') return kind;
-  }
-  if ('of' in type) return referenceKind(type.of, visited);
-  if ('alternatives' in type && Array.isArray(type.alternatives)) {
-    for (const alternative of type.alternatives) {
-      const kind = referenceKind(alternative, visited);
-      if (kind !== undefined) return kind;
-    }
-  }
-  return undefined;
-}
-
-function referenceNodes(expression: ExpressionAst): readonly SyntaxNode[] {
-  const array = ArrayLiteralAst.cast(expression.syntax);
-  if (array === undefined) return [expression.syntax];
-  return Array.from(array.elements(), (element) => element.syntax);
 }
 
 interface TypeReferenceOutcome {

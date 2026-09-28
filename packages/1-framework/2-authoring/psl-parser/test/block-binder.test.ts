@@ -2,12 +2,17 @@ import { expect, it } from 'vitest';
 import { blockAttribute } from '../src/attribute-spec/block-attribute';
 import { bool } from '../src/attribute-spec/combinators/bool';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
+import { fieldRef } from '../src/attribute-spec/combinators/field-ref';
+import { funcCall } from '../src/attribute-spec/combinators/func-call';
 import { identifier } from '../src/attribute-spec/combinators/identifier';
+import { int } from '../src/attribute-spec/combinators/int';
 import { jsonValue } from '../src/attribute-spec/combinators/json-value';
 import { list } from '../src/attribute-spec/combinators/list';
 import { num } from '../src/attribute-spec/combinators/num';
 import { oneOf } from '../src/attribute-spec/combinators/one-of';
+import { record } from '../src/attribute-spec/combinators/record';
 import { str } from '../src/attribute-spec/combinators/str';
+import { fieldAttribute } from '../src/attribute-spec/field-attribute';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
 import { optional } from '../src/attribute-spec/optional';
 import type { ArgType, AttributeCtx } from '../src/attribute-spec/types';
@@ -15,7 +20,7 @@ import { createBinder } from '../src/binder';
 import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
-import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
+import { ArrayLiteralAst, FunctionCallAst } from '../src/syntax/ast/expressions';
 
 const reference = entityRef({ kind: 'model' });
 
@@ -32,6 +37,7 @@ function bind(
   };
   return {
     symbolTable,
+    sources,
     ...createBinder({
       sources,
       symbolTable,
@@ -99,7 +105,7 @@ it('shares forward entity binding and silent identifier fallback across entries 
       ...[...targets.elements()].map((target) => binder.symbolForNode(target.syntax)),
     ];
   });
-  const external = { kind: 'unresolved', name: 'External' };
+  const external = undefined;
   const later = { kind: 'model', symbol: symbolTable.topLevel.models['Later'] };
   expect(attributeResolutions).toEqual([
     [later, external],
@@ -112,19 +118,17 @@ it('shares forward entity binding and silent identifier fallback across entries 
   ]);
 });
 
-it('terminates recursive inspectable graphs and still finds references after cycles', () => {
-  const recursive = { ...oneOf(reference, identifier()), alternatives: [] as unknown[] };
-  recursive.alternatives.push({ of: recursive }, reference, identifier());
+it('matches recursive JSON through actual child expressions', () => {
+  const recursive = oneOf(reference, jsonValue());
   const { diagnostics } = bind(
-    'policy P {\n target = Missing\n @@refs(Missing)\n}\nmodel M {\n @@refs(Missing)\n}',
+    'policy P {\n target = [null, { nested: [true, 12] }]\n @@refs(null)\n}\nmodel M {\n @@refs(null)\n}',
     recursive,
   );
   expect(diagnostics).toEqual([]);
 });
 
-it('reports strict references once per entry or argument even through a recursive graph', () => {
-  const recursive = { ...oneOf(reference, identifier()), alternatives: [] as unknown[] };
-  recursive.alternatives.push({ of: recursive }, reference);
+it('reports strict references once per entry or argument after all alternatives fail', () => {
+  const recursive = oneOf(reference, entityRef({ kind: 'block', keyword: 'role' }));
   const { diagnostics, binder, symbolTable } = bind(
     [
       'policy P {',
@@ -161,12 +165,8 @@ it.each([
   oneOf(reference, bool()),
   oneOf(reference, num()),
   oneOf(reference, str()),
-  oneOf(reference, identifier({ allowsUnresolvedName: false })),
-  oneOf(
-    reference,
-    identifier('Missing', { documentation: 'missing', allowsUnresolvedName: false }),
-  ),
-])('reports unresolved names for $label without an accepting identifier policy', (rule) => {
+  oneOf(reference, identifier('Other', { documentation: 'other' })),
+])('reports unresolved names for $label when all alternatives reject', (rule) => {
   const { diagnostics } = bind(
     'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
     rule,
@@ -179,52 +179,313 @@ it.each([
   );
 });
 
-it.each([
-  identifier(),
-  identifier({ allowsUnresolvedName: true }),
-  identifier('Missing', { documentation: 'missing' }),
-  identifier('Missing', { documentation: 'missing', allowsUnresolvedName: true }),
-])('allows unresolved $label identifiers alongside entity references', (alternative) => {
-  expect(
-    bind(
-      'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
-      oneOf(reference, alternative),
-    ).diagnostics,
-  ).toEqual([]);
-});
+it.each([identifier(), identifier('Missing', { documentation: 'missing' })])(
+  'allows unresolved $label identifiers alongside entity references',
+  (alternative) => {
+    expect(
+      bind(
+        'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
+        oneOf(reference, alternative),
+      ).diagnostics,
+    ).toEqual([]);
+  },
+);
 
 it.each([
   { rule: optional(list(oneOf(reference, identifier()))), count: 0 },
   { rule: optional(list(oneOf(reference, bool()))), count: 3 },
-  { rule: optional(list(oneOf(reference, identifier({ allowsUnresolvedName: false })))), count: 3 },
-])(
-  'preserves unresolved-name policy through optional lists ($count diagnostics)',
-  ({ rule, count }) => {
-    const { diagnostics } = bind(
-      'policy P {\n target = [Missing]\n @@refs([Missing])\n}\nmodel M {\n @@refs([Missing])\n}',
-      rule,
-    );
-    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual(
-      Array.from({ length: count }, () => ({
-        code: 'PSL_UNRESOLVED_REFERENCE',
-        message: 'Cannot find entity "Missing"',
-      })),
-    );
-  },
-);
+])('matches alternatives through optional lists ($count diagnostics)', ({ rule, count }) => {
+  const { diagnostics } = bind(
+    'policy P {\n target = [Missing]\n @@refs([Missing])\n}\nmodel M {\n @@refs([Missing])\n}',
+    rule,
+  );
+  expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual(
+    Array.from({ length: count }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+    })),
+  );
+});
 
-it('does not infer identifier policy from JSON null alongside entity references', () => {
+it('accepts JSON null after a failed reference alternative', () => {
   const { diagnostics } = bind(
     'policy P {\n target = null\n @@refs(null, targets: [null])\n}\nmodel M {\n @@refs(null, targets: [null])\n}',
     oneOf(reference, jsonValue()),
   );
-  expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual(
-    Array.from({ length: 5 }, () => ({
-      code: 'PSL_UNRESOLVED_REFERENCE',
-      message: 'Cannot find entity "null"',
-    })),
+  expect(diagnostics).toEqual([]);
+});
+
+it('interprets raw-name fallback after examining a failed entity reference', () => {
+  const rule = oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier());
+  const result = bind('policy P {\n target = External\n}', rule);
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  expect(result.binder.symbolForNode(expression.syntax)).toBeUndefined();
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value).toEqual('External');
+});
+
+it('discards failed container bindings before selecting a raw-name list', () => {
+  const rule = oneOf(list(reference), list(identifier()));
+  const result = bind('policy P {\n target = [Known, Missing]\n}\nmodel Known {}', rule);
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  expect(
+    [...ArrayLiteralAst.cast(expression.syntax)!.elements()].map((element) =>
+      result.binder.symbolForNode(element.syntax),
+    ),
+  ).toEqual([undefined, undefined]);
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value).toEqual(['Known', 'Missing']);
+});
+
+it('binds nested records and lists independently for each element', () => {
+  const rule = record(list(oneOf(reference, identifier())));
+  const result = bind(
+    'policy P {\n target = { values: [Known, External] }\n}\nmodel Known {}',
+    rule,
+  );
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok)
+    expect(parsed.value).toEqual({
+      values: [
+        { declaration: result.symbolTable.topLevel.models['Known'], namespace: undefined },
+        'External',
+      ],
+    });
+});
+
+it('selects a matching block keyword after a mismatched entity selector', () => {
+  const rule = oneOf(reference, entityRef({ kind: 'block', keyword: 'policy' }));
+  const result = bind('policy P {\n target = P\n}', rule);
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.binder.symbolForNode(expression.syntax)).toEqual({
+    kind: 'block',
+    symbol: result.symbolTable.topLevel.blocks['P'],
+  });
+  expect(
+    rule.parse(expression, {
+      sources: result.sources,
+      symbols: result.symbolTable,
+      binder: result.binder,
+    }).ok,
+  ).toBe(true);
+});
+
+it.each([
+  { rule: oneOf(list(reference), list(num(2))), value: '[Missing]' },
+  { rule: oneOf(list(reference), list(int({ min: 1 }))), value: '[Missing]' },
+  {
+    rule: oneOf(record(reference), record(identifier('Other', { documentation: 'other' }))),
+    value: '{ nested: Missing }',
+  },
+])('retains reference errors when container alternatives reject $value', ({ rule, value }) => {
+  const result = bind(
+    `policy P {\n target = ${value}\n @@refs(${value})\n}\nmodel M {\n @@refs(${value})\n}`,
+    rule,
+  );
+  expect(result.diagnostics.map(({ message }) => message)).toEqual(
+    Array.from({ length: 3 }, () => 'Cannot find entity "Missing"'),
   );
 });
+
+it('retains selector diagnostics without publishing failed alternative resolutions', () => {
+  const rule = oneOf(reference, entityRef({ kind: 'block', keyword: 'role' }));
+  const result = bind('policy P {\n target = P\n}', rule);
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  expect(result.binder.symbolForNode(expression.syntax)).toBeUndefined();
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(false);
+  if (!parsed.ok)
+    expect(parsed.failure.map(({ message }) => message)).toEqual([
+      'Expected one of: model reference | role reference',
+    ]);
+});
+
+it('checks list constraints before committing reference bindings', () => {
+  const rule = oneOf(list(reference, { unique: true }), list(identifier()));
+  const result = bind('policy P {\n target = [Known, Known]\n}\nmodel Known {}', rule);
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  expect(
+    [...ArrayLiteralAst.cast(expression.syntax)!.elements()].map((element) =>
+      result.binder.symbolForNode(element.syntax),
+    ),
+  ).toEqual([undefined, undefined]);
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value).toEqual(['Known', 'Known']);
+});
+
+it('keeps field and entity trials separate in the real field context', () => {
+  const { document, sources } = parse('model M {\n M M @pick(M)\n}', 'binder.psl');
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const rule = oneOf(entityRef({ kind: 'block', keyword: 'role' }), fieldRef());
+  const result = createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    attributeSpecs: {
+      model: {},
+      field: {
+        pick: () =>
+          fieldAttribute('pick', {
+            documentation: 'pick',
+            positional: [{ key: 'value', type: rule, documentation: 'value' }],
+          }),
+      },
+    },
+  });
+  const selfModel = symbolTable.topLevel.models['M']!;
+  const field = selfModel.fields['M']!;
+  const expression = [...[...field.node.attributes()][0]!.argList()!.args()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  expect(result.binder.symbolForNode(expression.syntax)).toEqual({ kind: 'field', symbol: field });
+  const parsed = rule.parse(expression, {
+    sources,
+    symbols: symbolTable,
+    binder: result.binder,
+    selfModel,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value).toEqual('M');
+});
+
+it.each(['Known', 'External'])('binds positional and named function arguments for %s', (name) => {
+  const target = oneOf(reference, identifier());
+  const rule = funcCall('choose', {
+    documentation: '',
+    positional: [{ key: 'target', type: target, documentation: '' }],
+    named: { other: { type: target, documentation: '' } },
+  });
+  const result = bind(
+    `policy P {\n target = choose(${name}, other: ${name})\n @@refs(choose(${name}, other: ${name}))\n}\nmodel Known {\n @@refs(choose(${name}, other: ${name}))\n}`,
+    rule,
+  );
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  const value =
+    name === 'Known'
+      ? { declaration: result.symbolTable.topLevel.models['Known'], namespace: undefined }
+      : name;
+  expect(result.diagnostics).toEqual([]);
+  expect(
+    [...FunctionCallAst.cast(expression.syntax)!.args()].map((arg) =>
+      result.binder.symbolForNode(arg.value()!.syntax),
+    ),
+  ).toEqual(
+    name === 'Known'
+      ? Array.from({ length: 2 }, () => ({
+          kind: 'model',
+          symbol: result.symbolTable.topLevel.models['Known'],
+        }))
+      : [undefined, undefined],
+  );
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value.args).toEqual({ target: value, other: value });
+});
+
+it('reports strict unresolved positional and named function arguments', () => {
+  const rule = funcCall('choose', {
+    documentation: '',
+    positional: [{ key: 'target', type: reference, documentation: '' }],
+    named: { other: { type: reference, documentation: '' } },
+  });
+  const result = bind('policy P {\n target = choose(Missing, other: Missing)\n}', rule);
+  expect(result.diagnostics.map(({ message }) => message)).toEqual([
+    'Cannot find entity "Missing"',
+    'Cannot find entity "Missing"',
+  ]);
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(false);
+});
+
+it('discards diagnostics and references from a failed function alternative', () => {
+  const rule = oneOf(
+    funcCall('choose', {
+      documentation: '',
+      positional: [{ key: 'target', type: reference, documentation: '' }],
+      named: { other: { type: reference, documentation: '' } },
+    }),
+    funcCall('choose', {
+      documentation: '',
+      positional: [{ key: 'target', type: identifier(), documentation: '' }],
+      named: { other: { type: identifier(), documentation: '' } },
+    }),
+  );
+  const result = bind(
+    'policy P {\n target = choose(Known, other: Missing)\n}\nmodel Known {}',
+    rule,
+  );
+  const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+  expect(result.diagnostics).toEqual([]);
+  expect(
+    [...FunctionCallAst.cast(expression.syntax)!.args()].map((arg) =>
+      result.binder.symbolForNode(arg.value()!.syntax),
+    ),
+  ).toEqual([undefined, undefined]);
+  const parsed = rule.parse(expression, {
+    sources: result.sources,
+    symbols: result.symbolTable,
+    binder: result.binder,
+  });
+  expect(parsed.ok).toBe(true);
+  if (parsed.ok) expect(parsed.value.args).toEqual({ target: 'Known', other: 'Missing' });
+});
+
+it.each(['other', 'ns.choose'])(
+  'does not bind arguments for a mismatched function name %s',
+  (name) => {
+    const rule = funcCall('choose', {
+      documentation: '',
+      positional: [{ key: 'target', type: reference, documentation: '' }],
+    });
+    const result = bind(`policy P {\n target = ${name}(Missing)\n}`, rule);
+    const expression = [...result.symbolTable.topLevel.blocks['P']!.node.entries()][0]!.value()!;
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      [...FunctionCallAst.cast(expression.syntax)!.args()].map((arg) =>
+        result.binder.symbolForNode(arg.value()!.syntax, 'entityRef'),
+      ),
+    ).toEqual([undefined]);
+  },
+);
 
 it('does not treat recursive JSON metadata as references', () => {
   expect(

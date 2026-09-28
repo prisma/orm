@@ -107,7 +107,6 @@ export interface FixedIdentifierArgType<
   Ctx extends AttributeCtx = AttributeCtx,
 > extends ArgTypeOutput<Name, Ctx> {
   readonly kind: 'identifier';
-  readonly allowsUnresolvedName: boolean;
   readonly name: Name;
   readonly documentation: string;
 }
@@ -115,7 +114,6 @@ export interface FixedIdentifierArgType<
 export interface UnrestrictedIdentifierArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<string, Ctx> {
   readonly kind: 'identifier';
-  readonly allowsUnresolvedName: boolean;
   readonly name: undefined;
 }
 
