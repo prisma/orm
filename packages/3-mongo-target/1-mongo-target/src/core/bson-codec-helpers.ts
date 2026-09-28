@@ -1,5 +1,14 @@
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
+import {
+  bsonTypeTag,
+  child,
+  constructorName,
+  dbRefEntries,
+  isPlainArray,
+  isPlainObject,
+  where,
+} from './bson-walk';
 import { MONGO_BSON_CODEC_ID } from './codec-ids';
 import { mongoTargetError } from './mongo-target-errors';
 
@@ -18,30 +27,12 @@ const BSON_VALUE_TAGS: ReadonlySet<string> = new Set([
   'BSONSymbol',
 ]);
 
-function where(path: string): string {
-  return path === '' ? 'the root' : path;
-}
-
-function child(path: string, key: string): string {
-  return path === '' ? key : `${path}.${key}`;
-}
-
 function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
     `${MONGO_BSON_CODEC_ID} value must be a BSON value; received ${received} at ${where(path)}`,
     { meta: { codecId: MONGO_BSON_CODEC_ID, received, path } },
   );
-}
-
-function isPlainObject(value: object): boolean {
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function constructorName(value: object): string {
-  const name = Reflect.get(value, 'constructor')?.name;
-  return typeof name === 'string' && name !== '' ? name : 'object';
 }
 
 function assertBsonValue(value: unknown, path: string): void {
@@ -54,15 +45,15 @@ function assertBsonValue(value: unknown, path: string): void {
     encodeRefused(typeof value, path);
     return;
   }
-  const tag = Reflect.get(value, '_bsontype');
-  if (typeof tag === 'string') {
+  const tag = bsonTypeTag(value);
+  if (tag !== undefined) {
     if (!BSON_VALUE_TAGS.has(tag)) encodeRefused(tag, path);
     return;
   }
   if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return;
-  if (Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype) {
+  if (isPlainArray(value)) {
     for (let index = 0; index < value.length; index++) {
-      const at = child(path, String(index));
+      const at = child(path, index);
       if (!(index in value)) encodeRefused('sparse array hole', at);
       assertBsonValue(value[index], at);
     }
@@ -85,33 +76,13 @@ export function encodeBsonValue(value: BsonInputValue): BsonInputValue {
   return value;
 }
 
-interface DbRefShape {
-  readonly collection: unknown;
-  readonly oid: unknown;
-  readonly db?: unknown;
-  readonly fields: Record<string, unknown>;
-}
-
-function isDbRef(value: object): boolean {
-  return Reflect.get(value, '_bsontype') === 'DBRef';
-}
-
 function decodeEntries(entries: readonly [string, unknown][]): Record<string, unknown> {
   return Object.fromEntries(entries.map(([key, entry]) => [key, decodeValue(entry)]));
 }
 
 function decodeValue(value: unknown): unknown {
   if (typeof value !== 'object' || value === null) return value;
-  if (isDbRef(value)) {
-    const ref = blindCast<DbRefShape, 'a bson DBRef carries collection, oid, db and fields'>(value);
-    const entries: [string, unknown][] = [
-      ['$ref', ref.collection],
-      ['$id', ref.oid],
-    ];
-    if (ref.db !== undefined) entries.push(['$db', ref.db]);
-    entries.push(...Object.entries(ref.fields));
-    return decodeEntries(entries);
-  }
+  if (bsonTypeTag(value) === 'DBRef') return decodeEntries(dbRefEntries(value));
   if (Array.isArray(value)) {
     const decoded = value.map(decodeValue);
     return decoded.some((entry, index) => entry !== value[index]) ? decoded : value;

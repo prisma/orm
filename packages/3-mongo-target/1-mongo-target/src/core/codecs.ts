@@ -11,6 +11,7 @@ import type { BsonInputValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type Binary, type Decimal128, type Document, EJSON, type Long, ObjectId } from 'bson';
+import { decodeBsonValue, encodeBsonValue } from './bson-codec-helpers';
 import {
   binaryDecode,
   binaryDecodeJson,
@@ -26,7 +27,6 @@ import {
   int64Encode,
   int64EncodeJson,
 } from './bson-scalar-helpers';
-import { decodeBsonValue, encodeBsonValue } from './bson-value';
 import {
   MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
@@ -55,7 +55,7 @@ import {
   mongoString,
   mongoVector,
 } from './data-types';
-import { decodeJsonValue, encodeJsonValue } from './json-value';
+import { decodeJsonValue, encodeJsonValue } from './json-codec-helpers';
 import { mongoTargetError } from './mongo-target-errors';
 
 export const mongoObjectIdCodec = mongoCodec({

@@ -1,30 +1,16 @@
 import type { JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
+import {
+  bsonTypeTag,
+  child,
+  constructorName,
+  dbRefEntries,
+  isPlainArray,
+  isPlainObject,
+  where,
+} from './bson-walk';
 import { MONGO_JSON_CODEC_ID } from './codec-ids';
 import { mongoTargetError } from './mongo-target-errors';
-
-function where(path: string): string {
-  return path === '' ? 'the root' : path;
-}
-
-function child(path: string, key: string | number): string {
-  return path === '' ? String(key) : `${path}.${key}`;
-}
-
-function isPlainObject(value: object): boolean {
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function bsonTypeTag(value: object): string | undefined {
-  const tag = Reflect.get(value, '_bsontype');
-  return typeof tag === 'string' ? tag : undefined;
-}
-
-function constructorName(value: object): string {
-  const name = Reflect.get(value, 'constructor')?.name;
-  return typeof name === 'string' && name !== '' ? name : 'object';
-}
 
 function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
@@ -41,7 +27,7 @@ function describeNonJson(value: unknown): string | undefined {
   const tag = bsonTypeTag(value);
   if (tag !== undefined) return tag;
   if (value instanceof Date) return 'Date';
-  if (Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype) return undefined;
+  if (isPlainArray(value)) return undefined;
   return isPlainObject(value) ? undefined : constructorName(value);
 }
 
@@ -99,23 +85,7 @@ function finiteDouble(value: number, path: string): number {
   return Number.isFinite(value) ? value : decodeRefused('double', path);
 }
 
-interface DbRefShape {
-  readonly collection: unknown;
-  readonly oid: unknown;
-  readonly db?: unknown;
-  readonly fields: Record<string, unknown>;
-}
-
-/**
- * The `bson` library reads any subdocument with a string `$ref` and an `$id` as a `DBRef`. It was stored as a plain object, so it decodes back to `{ $ref, $id[, $db], ...fields }`, each member with its own path.
- */
-function decodeDbRef(value: DbRefShape, path: string): JsonValue {
-  const entries: [string, unknown][] = [
-    ['$ref', value.collection],
-    ['$id', value.oid],
-  ];
-  if (value.db !== undefined) entries.push(['$db', value.db]);
-  entries.push(...Object.entries(value.fields));
+function decodeEntries(entries: readonly [string, unknown][], path: string): JsonValue {
   return Object.fromEntries(
     entries.map(([key, entry]) => [key, decodeValue(entry, child(path, key))]),
   );
@@ -124,10 +94,7 @@ function decodeDbRef(value: DbRefShape, path: string): JsonValue {
 function decodeTagged(value: object, tag: string, path: string): JsonValue {
   switch (tag) {
     case 'DBRef':
-      return decodeDbRef(
-        blindCast<DbRefShape, 'a bson DBRef carries collection, oid, db and fields'>(value),
-        path,
-      );
+      return decodeEntries(dbRefEntries(value), path);
     case 'Long':
       return safeLong(
         blindCast<{ toBigInt(): bigint }, 'a BSON Long carries toBigInt'>(value).toBigInt(),
@@ -156,9 +123,7 @@ function decodeValue(value: unknown, path: string): JsonValue {
     return value.map((entry, index) => decodeValue(entry, child(path, index)));
   }
   if (!isPlainObject(value)) return decodeRefused(constructorName(value), path);
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [key, decodeValue(entry, child(path, key))]),
-  );
+  return decodeEntries(Object.entries(value), path);
 }
 
 /**
