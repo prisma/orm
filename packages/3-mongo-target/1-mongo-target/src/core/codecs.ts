@@ -7,7 +7,7 @@ import {
   mongoCodec,
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
-import type { BsonInputValue } from '@internal/mongo-value';
+import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
@@ -157,9 +157,15 @@ export const mongoJsonCodec = mongoCodec({
 });
 
 /**
- * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. Its JSON form is canonical MongoDB Extended JSON v2, which round-trips every BSON type.
+ * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. Encode takes a `BsonInputValue` and decode returns a `BsonValue`. Its JSON form is canonical MongoDB Extended JSON v2, written with each number and `Uint8Array` as the BSON type the driver stores, so a round trip keeps the BSON bytes but may return wrapper classes such as `Int32` and `Double`.
  */
-export const mongoBsonCodec = mongoCodec({
+export const mongoBsonCodec = mongoCodec<
+  typeof MONGO_BSON_CODEC_ID,
+  readonly [],
+  BsonInputValue,
+  BsonInputValue,
+  BsonValue
+>({
   typeId: MONGO_BSON_CODEC_ID,
   decode: (wire: BsonInputValue) => decodeBsonValue(wire),
   encode: (value: BsonInputValue) => encodeBsonValue(value),
