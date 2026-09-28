@@ -184,6 +184,46 @@ describe('generic extension-block printer', () => {
     });
   });
 
+  describe('namespace rendering', () => {
+    it('retains an extension-only namespace while omitting an empty namespace', () => {
+      const block: PslExtensionBlock = {
+        kind: 'print-enum',
+        keyword: 'print_enum',
+        name: 'Priority',
+        parameters: { Low: bareEntry(), High: entry('"high"') },
+        blockAttributes: [],
+        span: STUB_SPAN,
+      };
+      const output = printPslFromAst(
+        {
+          kind: 'document',
+          sourceId: 'test',
+          namespaces: [
+            makePslNamespace({
+              kind: 'namespace',
+              name: 'app',
+              entries: makePslNamespaceEntries([], [], [block]),
+              span: STUB_SPAN,
+            }),
+            makeNs([], []),
+          ],
+          span: STUB_SPAN,
+        },
+        { pslBlockDescriptors: { print_enum: printOnlyDescriptor('print_enum', 'print-enum') } },
+      );
+
+      expect(output).toBe(
+        '// use prisma-8\n\n' +
+          'namespace app {\n' +
+          '  print_enum Priority {\n' +
+          '    Low\n' +
+          '    High = "high"\n' +
+          '  }\n' +
+          '}\n',
+      );
+    });
+  });
+
   describe('block attribute rendering', () => {
     it('renders block attributes with and without args after the entries', () => {
       const block: PslExtensionBlock = {
