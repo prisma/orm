@@ -67,7 +67,7 @@ const addressFields = {
 };
 
 describe('interpretPslDocumentToSqlContract value-object storage', () => {
-  describe('guards: passed before value-object fields were built by the contract builder', () => {
+  describe('value-object fields keep the target-declared storage column', () => {
     it('stores a value-object field, optional or list, in one column of the storage type the stack declares', () => {
       const result = interpretPostgres(userWithAddresses);
 

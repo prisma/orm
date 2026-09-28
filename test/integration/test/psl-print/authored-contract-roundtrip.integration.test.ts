@@ -203,7 +203,7 @@ model Product {
 `,
   },
   {
-    name: 'guard: value-object members typed by a domain enum, single and list, which the printer must write back by enum name',
+    name: 'value-object members typed by a domain enum, single and list, written back by enum name',
     schema: `enum Country {
   @@type("pg/text@1")
   DE = "DE"
