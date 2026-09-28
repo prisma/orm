@@ -22,6 +22,7 @@ import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { col } from '@internal/sql-relational-core/contract-free';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
   AddColumnCall,
   AddForeignKeyCall,
@@ -49,7 +50,6 @@ import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres
 import { renderOps } from '@internal/target-postgres/render-ops';
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';

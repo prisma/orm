@@ -31,6 +31,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
@@ -38,7 +39,6 @@ import {
 } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { postgresScalarAuthoringTypes } from '../../src/core/control-mutation-defaults';
 import {
   controlAdapter,

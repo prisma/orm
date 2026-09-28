@@ -6,6 +6,7 @@ import {
   SqlIndexIR,
   SqlUniqueIR,
 } from '@internal/sql-schema-ir/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 import type {
   PostgresDatabaseSchemaNode,
@@ -13,7 +14,6 @@ import type {
 } from '@internal/target-postgres/types';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   PostgresControlAdapter,
   parsePgNameArray,

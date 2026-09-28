@@ -17,6 +17,7 @@ import {
 } from '@internal/migration-tools/aggregate';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlExecuteRequest } from '@internal/sql-relational-core/ast';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { buildControlTableBootstrapQueries } from '@internal/target-postgres/contract-free';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
@@ -26,7 +27,6 @@ import {
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { applicationDomainOf, createDevDatabase, timeouts } from '@repo/test-utils';
-import { createPostgresBuiltinCodecLookup } from '../../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../../src/core/control-adapter';
 import type { PostgresContract } from '../../../src/core/types';
 import postgresAdapterDescriptor from '../../../src/exports/control';

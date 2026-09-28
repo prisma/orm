@@ -44,6 +44,7 @@ import type {
   SqlUniqueIRInput,
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind } from '@internal/sql-schema-ir/types';
+import type { PostgresCodecRegistry } from '@internal/target-postgres/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
@@ -98,7 +99,7 @@ import {
   NOW,
 } from './marker-ledger';
 import { renderLoweredSql } from './sql-renderer';
-import type { PostgresCodecRegistry, PostgresContract } from './types';
+import type { PostgresContract } from './types';
 
 const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
 const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';

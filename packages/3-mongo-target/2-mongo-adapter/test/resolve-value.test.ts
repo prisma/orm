@@ -272,6 +272,30 @@ describe('resolveValue', () => {
       expect(err.cause).toEqual(expect.objectContaining({ code: 'RUNTIME.ENCODE_FAILED' }));
     });
 
+    it('names the field and collection when the parameter carries them', async () => {
+      const ref = new MongoParamRef('12.5E', {
+        codecId: 'mongo/decimal128@1',
+        name: 'price',
+        collection: 'products',
+      });
+      const rejection = await resolveValue(ref, buildStandardCodecRegistry(), noCtx).catch(
+        (e: unknown) => e,
+      );
+      const err = rejection as RuntimeErrorShape;
+      expect({ code: err.code, message: err.message, details: err.details }).toEqual({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message:
+          "Failed to encode field price in collection 'products' with codec 'mongo/decimal128@1': mongo/decimal128@1 value must be decimal text without an exponent, or NaN, Infinity or -Infinity",
+        details: {
+          codecId: 'mongo/decimal128@1',
+          received: '12.5E',
+          label: 'price',
+          collection: 'products',
+          codec: 'mongo/decimal128@1',
+        },
+      });
+    });
+
     it('passes any structured envelope through unchanged instead of re-wrapping', async () => {
       const envelope = structuredError('EXT.CODEC_BROKEN', 'codec-owned envelope');
       const innerCodec = mongoCodec({

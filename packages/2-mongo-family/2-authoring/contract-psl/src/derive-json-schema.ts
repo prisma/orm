@@ -21,6 +21,10 @@ function withNull(bsonTypes: readonly string[]): readonly string[] {
   return bsonTypes.includes('null') ? bsonTypes : ['null', ...bsonTypes];
 }
 
+function anyValueSchema(field: ContractField): Record<string, unknown> {
+  return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
+}
+
 function fieldToBsonSchema(
   field: ContractField,
   valueObjects: Record<string, ContractValueObject> | undefined,
@@ -30,10 +34,7 @@ function fieldToBsonSchema(
   if (field.type.kind === 'scalar') {
     const bsonTypes = codecLookup?.targetTypesFor(field.type.codecId);
     if (bsonTypes === undefined) return undefined;
-    if (bsonTypes.length === 0) {
-      // Admitted unconstrained rather than dropped: with `additionalProperties: false` a dropped field would reject every document that carries it.
-      return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
-    }
+    if (bsonTypes.length === 0) return anyValueSchema(field);
     const bsonType = bsonTypeKeyword(bsonTypes);
 
     const enumValues =

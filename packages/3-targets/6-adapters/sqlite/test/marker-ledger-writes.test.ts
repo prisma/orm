@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
 
 interface CapturedCall {

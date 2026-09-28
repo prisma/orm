@@ -39,7 +39,7 @@ export const textColumn = {
   nativeType: 'text',
 } as const satisfies ColumnTypeDescriptor;
 
-export function charColumn(length: number): ColumnTypeDescriptor & {
+export function charColumn(length: number): ColumnTypeDescriptor<typeof SQL_CHAR_CODEC_ID> & {
   readonly typeParams: { readonly length: number };
 } {
   return {
@@ -49,7 +49,7 @@ export function charColumn(length: number): ColumnTypeDescriptor & {
   } as const;
 }
 
-export function varcharColumn(length: number): ColumnTypeDescriptor & {
+export function varcharColumn(length: number): ColumnTypeDescriptor<typeof SQL_VARCHAR_CODEC_ID> & {
   readonly typeParams: { readonly length: number };
 } {
   return {
@@ -87,7 +87,7 @@ export const float8Column = {
 export function numericColumn(
   precision: number,
   scale?: number,
-): ColumnTypeDescriptor & {
+): ColumnTypeDescriptor<typeof PG_NUMERIC_CODEC_ID> & {
   readonly typeParams: { readonly precision: number; readonly scale?: number };
 } {
   return {
@@ -136,7 +136,9 @@ export const timestamptzStringColumn = {
   nativeType: 'timestamptz',
 } as const satisfies ColumnTypeDescriptor;
 
-export function timeTemporalColumn(precision?: number): ColumnTypeDescriptor & {
+export function timeTemporalColumn(precision?: number): ColumnTypeDescriptor<
+  typeof PG_TIME_TEMPORAL_CODEC_ID
+> & {
   readonly typeParams?: { readonly precision: number };
 } {
   return {
@@ -146,7 +148,9 @@ export function timeTemporalColumn(precision?: number): ColumnTypeDescriptor & {
   } as const;
 }
 
-export function timeStringColumn(precision?: number): ColumnTypeDescriptor & {
+export function timeStringColumn(precision?: number): ColumnTypeDescriptor<
+  typeof PG_TIME_STRING_CODEC_ID
+> & {
   readonly typeParams?: { readonly precision: number };
 } {
   return {
@@ -156,7 +160,9 @@ export function timeStringColumn(precision?: number): ColumnTypeDescriptor & {
   } as const;
 }
 
-export function timetzColumn(precision?: number): ColumnTypeDescriptor & {
+export function timetzColumn(precision?: number): ColumnTypeDescriptor<
+  typeof PG_TIMETZ_CODEC_ID
+> & {
   readonly typeParams?: { readonly precision: number };
 } {
   return {
@@ -171,7 +177,7 @@ export const boolColumn = {
   nativeType: 'bool',
 } as const satisfies ColumnTypeDescriptor;
 
-export function bitColumn(length: number): ColumnTypeDescriptor & {
+export function bitColumn(length: number): ColumnTypeDescriptor<typeof PG_BIT_CODEC_ID> & {
   readonly typeParams: { readonly length: number };
 } {
   return {
@@ -181,7 +187,7 @@ export function bitColumn(length: number): ColumnTypeDescriptor & {
   } as const;
 }
 
-export function varbitColumn(length: number): ColumnTypeDescriptor & {
+export function varbitColumn(length: number): ColumnTypeDescriptor<typeof PG_VARBIT_CODEC_ID> & {
   readonly typeParams: { readonly length: number };
 } {
   return {
@@ -201,7 +207,9 @@ export const byteaColumn = {
   nativeType: 'bytea',
 } as const satisfies ColumnTypeDescriptor;
 
-export function intervalColumn(precision?: number): ColumnTypeDescriptor & {
+export function intervalColumn(precision?: number): ColumnTypeDescriptor<
+  typeof PG_INTERVAL_CODEC_ID
+> & {
   readonly typeParams?: { readonly precision: number };
 } {
   return {

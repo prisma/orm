@@ -1,36 +1,23 @@
 import type { JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
+import {
+  bsonClassTag,
+  bsonTypeTag,
+  child,
+  constructorName,
+  dbRefEntries,
+  isPlainArray,
+  isPlainObject,
+  where,
+} from './bson-walk';
 import { MONGO_JSON_CODEC_ID } from './codec-ids';
 import { mongoTargetError } from './mongo-target-errors';
-
-function where(path: string): string {
-  return path === '' ? 'the root' : path;
-}
-
-function child(path: string, key: string | number): string {
-  return path === '' ? String(key) : `${path}.${key}`;
-}
-
-function isPlainObject(value: object): boolean {
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function bsonTypeTag(value: object): string | undefined {
-  const tag = Reflect.get(value, '_bsontype');
-  return typeof tag === 'string' ? tag : undefined;
-}
-
-function constructorName(value: object): string {
-  const name = Reflect.get(value, 'constructor')?.name;
-  return typeof name === 'string' && name !== '' ? name : 'object';
-}
 
 function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
     `${MONGO_JSON_CODEC_ID} value must be a JSON value; received ${received} at ${where(path)}`,
-    { meta: { codecId: MONGO_JSON_CODEC_ID, received, path } },
+    { meta: { codecId: MONGO_JSON_CODEC_ID, received, valuePath: path } },
   );
 }
 
@@ -41,30 +28,34 @@ function describeNonJson(value: unknown): string | undefined {
   const tag = bsonTypeTag(value);
   if (tag !== undefined) return tag;
   if (value instanceof Date) return 'Date';
-  if (Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype) return undefined;
+  if (isPlainArray(value)) return undefined;
   return isPlainObject(value) ? undefined : constructorName(value);
 }
 
-function assertJsonValue(value: unknown, path: string): void {
+function assertJsonValue(value: unknown, path: string, ancestors: Set<object>): void {
   const received = describeNonJson(value);
   if (received !== undefined) encodeRefused(received, path);
+  if (typeof value !== 'object' || value === null) return;
+  if (ancestors.has(value)) encodeRefused('circular reference', path);
+  ancestors.add(value);
   if (Array.isArray(value)) {
     for (let index = 0; index < value.length; index++) {
       if (!(index in value)) encodeRefused('sparse array hole', child(path, index));
-      assertJsonValue(value[index], child(path, index));
+      assertJsonValue(value[index], child(path, index), ancestors);
     }
-  } else if (typeof value === 'object' && value !== null) {
+  } else {
     for (const [key, entry] of Object.entries(value)) {
-      assertJsonValue(entry, child(path, key));
+      assertJsonValue(entry, child(path, key), ancestors);
     }
   }
+  ancestors.delete(value);
 }
 
 /**
  * Returns `value` unchanged when it is a plain JSON value at every depth, and throws `RUNTIME.ENCODE_FAILED` naming the first value that is not, with its path.
  */
 export function encodeJsonValue(value: JsonValue): JsonValue {
-  assertJsonValue(value, '');
+  assertJsonValue(value, '', new Set());
   return value;
 }
 
@@ -84,7 +75,7 @@ function decodeRefused(bsonType: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.DECODE_FAILED',
     `${MONGO_JSON_CODEC_ID} wire value contains a non-JSON BSON ${bsonType} at ${where(path)}`,
-    { meta: { codecId: MONGO_JSON_CODEC_ID, received: bsonType, path } },
+    { meta: { codecId: MONGO_JSON_CODEC_ID, received: bsonType, valuePath: path } },
   );
 }
 
@@ -99,23 +90,10 @@ function finiteDouble(value: number, path: string): number {
   return Number.isFinite(value) ? value : decodeRefused('double', path);
 }
 
-interface DbRefShape {
-  readonly collection: unknown;
-  readonly oid: unknown;
-  readonly db?: unknown;
-  readonly fields: Record<string, unknown>;
-}
-
-/**
- * The `bson` library reads any subdocument with a string `$ref` and an `$id` as a `DBRef`. It was stored as a plain object, so it decodes back to `{ $ref, $id[, $db], ...fields }`, each member with its own path.
- */
-function decodeDbRef(value: DbRefShape, path: string): JsonValue {
-  const entries: [string, unknown][] = [
-    ['$ref', value.collection],
-    ['$id', value.oid],
-  ];
-  if (value.db !== undefined) entries.push(['$db', value.db]);
-  entries.push(...Object.entries(value.fields));
+function decodeEntries(
+  entries: readonly [string, unknown][],
+  path: string,
+): Record<string, JsonValue> {
   return Object.fromEntries(
     entries.map(([key, entry]) => [key, decodeValue(entry, child(path, key))]),
   );
@@ -124,10 +102,7 @@ function decodeDbRef(value: DbRefShape, path: string): JsonValue {
 function decodeTagged(value: object, tag: string, path: string): JsonValue {
   switch (tag) {
     case 'DBRef':
-      return decodeDbRef(
-        blindCast<DbRefShape, 'a bson DBRef carries collection, oid, db and fields'>(value),
-        path,
-      );
+      return decodeEntries(dbRefEntries(value), path);
     case 'Long':
       return safeLong(
         blindCast<{ toBigInt(): bigint }, 'a BSON Long carries toBigInt'>(value).toBigInt(),
@@ -147,22 +122,25 @@ function decodeValue(value: unknown, path: string): JsonValue {
   if (typeof value === 'undefined') return decodeRefused('undefined', path);
   if (typeof value === 'symbol') return decodeRefused('symbol', path);
   if (typeof value === 'function') return decodeRefused('javascript', path);
-  const tag = bsonTypeTag(value);
+  const tag = bsonClassTag(value);
   if (tag !== undefined) return decodeTagged(value, tag, path);
   if (value instanceof Date) return decodeRefused('date', path);
   if (value instanceof RegExp) return decodeRefused('regex', path);
   if (value instanceof Uint8Array) return decodeRefused('binData', path);
   if (Array.isArray(value)) {
-    return value.map((entry, index) => decodeValue(entry, child(path, index)));
+    const decoded = value.map((entry, index) => decodeValue(entry, child(path, index)));
+    return decoded.some((entry, index) => entry !== value[index]) ? decoded : value;
   }
   if (!isPlainObject(value)) return decodeRefused(constructorName(value), path);
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [key, decodeValue(entry, child(path, key))]),
-  );
+  const entries = Object.entries(value);
+  const decoded = decodeEntries(entries, path);
+  return entries.some(([key, entry]) => decoded[key] !== entry)
+    ? decoded
+    : blindCast<JsonValue, 'every member decoded to itself, so the document is JSON'>(value);
 }
 
 /**
- * Decodes a wire value to the JSON value it holds: a `long` in the safe-integer range and the driver's `Int32` and `Double` wrappers become numbers. Throws `RUNTIME.DECODE_FAILED` naming the BSON type and path of the first value that is not JSON.
+ * Decodes a wire value to the JSON value it holds: a `long` in the safe-integer range and the driver's `Int32` and `Double` wrappers become numbers. Only the objects and arrays around a converted value are copied; a wire value that is already JSON is returned as the same object. Throws `RUNTIME.DECODE_FAILED` naming the BSON type and path of the first value that is not JSON.
  */
 export function decodeJsonValue(wire: unknown): JsonValue {
   return decodeValue(wire, '');

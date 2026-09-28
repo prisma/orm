@@ -5,9 +5,11 @@ import type { RuntimeMutationDefaultGenerator } from '@internal/framework-compon
 import { builtinGeneratorIds } from '@internal/ids';
 import { generateId } from '@internal/ids/runtime';
 import type { SqlRuntimeAdapterDescriptor } from '@internal/sql-runtime';
-import { sqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codecs';
+import {
+  assembleSqliteCodecRegistry,
+  sqliteCodecDescriptorRegistry,
+} from '@internal/target-sqlite/codecs';
 import { createSqliteAdapterWithCodecRegistry, sqliteRawCodecInferer } from './adapter';
-import { assembleSqliteCodecRegistry } from './codec-lookup';
 import { sqliteAdapterDescriptorMeta } from './descriptor-meta';
 
 export type SqliteRuntimeAdapterInstance = RuntimeAdapterInstance<'sql', 'sqlite'> &

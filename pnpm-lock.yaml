@@ -1987,6 +1987,9 @@ importers:
       '@internal/mongo-contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../1-foundation/mongo-contract
+      '@internal/mongo-value':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../1-foundation/mongo-value
       '@internal/utils':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../1-framework/0-foundation/utils
@@ -3524,6 +3527,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.12
         version: link:../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)

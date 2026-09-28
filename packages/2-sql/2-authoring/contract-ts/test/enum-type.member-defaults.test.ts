@@ -1,4 +1,4 @@
-import { describe, expect, expectTypeOf, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { field } from '../src/contract-dsl';
 import { enumType, member } from '../src/enum-type';
 
@@ -17,9 +17,14 @@ const IntPriority = enumType('IntPriority', pgInt, member('Low', 1), member('Hig
 
 describe('enum builder .default() accepts member values only', () => {
   it('compiles with a valid member value (string codec)', () => {
-    expectTypeOf(field.namedType(Priority).default)
-      .parameter(0)
-      .toEqualTypeOf<'low' | 'high' | 'urgent'>();
+    expect(field.namedType(Priority).default('low').build().default).toEqual({
+      kind: 'literal',
+      value: 'low',
+    });
+    expect(field.namedType(Priority).default(Priority.members.Urgent).build().default).toEqual({
+      kind: 'literal',
+      value: 'urgent',
+    });
   });
 
   it('rejects a non-member string at compile time', () => {
@@ -37,7 +42,14 @@ describe('enum builder .default() accepts member values only', () => {
   });
 
   it('compiles with a valid int member value (int codec)', () => {
-    expectTypeOf(field.namedType(IntPriority).default).parameter(0).toEqualTypeOf<1 | 10>();
+    expect(field.namedType(IntPriority).default(1).build().default).toEqual({
+      kind: 'literal',
+      value: 1,
+    });
+    expect(field.namedType(IntPriority).default(IntPriority.members.High).build().default).toEqual({
+      kind: 'literal',
+      value: 10,
+    });
   });
 
   it('rejects a non-member int value at compile time', () => {

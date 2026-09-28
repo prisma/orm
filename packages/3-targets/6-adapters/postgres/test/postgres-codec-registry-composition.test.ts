@@ -22,14 +22,16 @@ import {
   type AnyPostgresCodecDescriptor,
   postgresCodec,
 } from '@internal/target-postgres/codec-descriptor';
-import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import {
+  assemblePostgresCodecRegistry,
+  postgresCodecDescriptorRegistry,
+} from '@internal/target-postgres/codecs';
 import postgresTargetControlDescriptor from '@internal/target-postgres/control';
 import postgresRuntimeTargetDescriptor from '@internal/target-postgres/runtime';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { createPostgresAdapter } from '../src/core/adapter';
-import { assemblePostgresCodecRegistry } from '../src/core/codec-lookup';
 import type { PostgresContract } from '../src/core/types';
 import postgresAdapterControlDescriptor, {
   createPostgresCodecRegistryWithBuiltins,

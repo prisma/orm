@@ -94,6 +94,8 @@ If migration N fails, migrations 1..N-1 are already committed. Re-running `migra
 
 ### 6. "From" contract resolution
 
+Since 8.0.0-rc.12 the default origin is the `db` ref: with no migrations and no `db` ref the origin is the empty database, with migrations but no `db` ref the command is refused with `MIGRATION.PLAN_ORIGIN_UNKNOWN`, and otherwise the origin is the hash the `db` ref points at. The rest of this section describes the earlier behaviour.
+
 `migration plan` determines the "from" contract by resolving the latest migration target:
 - **No migrations**: Assume `empty` (new project). The converted schema IR is empty.
 - **Linear history**: The target is unambiguous — the one reachable node with no outgoing edges.

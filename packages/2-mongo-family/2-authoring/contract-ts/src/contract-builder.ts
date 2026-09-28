@@ -74,6 +74,7 @@ import {
   type MongoValueSetInput,
 } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -149,38 +150,6 @@ export type ExtractCodecTypesFromPack<P> = P extends { __codecTypes?: infer Code
     ? CodecTypes
     : Record<string, never>
   : Record<string, never>;
-
-type BsonScalar =
-  | string
-  | number
-  | boolean
-  | null
-  | Date
-  | RegExp
-  | { readonly _bsontype: 'ObjectId'; toHexString(): string }
-  | { readonly _bsontype: 'Long'; toBigInt(): bigint }
-  | { readonly _bsontype: 'Decimal128'; toString(): string }
-  | { readonly _bsontype: 'Binary'; value(): Uint8Array; readonly sub_type: number }
-  | { readonly _bsontype: 'BSONRegExp'; readonly pattern: string; readonly options: string }
-  | { readonly _bsontype: 'Timestamp'; toBigInt(): bigint }
-  | { readonly _bsontype: 'Int32'; valueOf(): number }
-  | { readonly _bsontype: 'Double'; valueOf(): number }
-  | {
-      readonly _bsontype: 'Code';
-      readonly code: string;
-      readonly scope?: { readonly [key: string]: BsonValue } | null;
-    }
-  | { readonly _bsontype: 'MinKey' }
-  | { readonly _bsontype: 'MaxKey' }
-  | { readonly _bsontype: 'BSONSymbol'; valueOf(): string };
-
-type BsonValue = BsonScalar | ReadonlyArray<BsonValue> | { readonly [key: string]: BsonValue };
-
-type BsonInputValue =
-  | BsonScalar
-  | Uint8Array
-  | ReadonlyArray<BsonInputValue>
-  | { readonly [key: string]: BsonInputValue };
 
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.

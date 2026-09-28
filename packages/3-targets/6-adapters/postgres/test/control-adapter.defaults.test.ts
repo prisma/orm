@@ -1,8 +1,8 @@
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 
 const createMockDriver = (

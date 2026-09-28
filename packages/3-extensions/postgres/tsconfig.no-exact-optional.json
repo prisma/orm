@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "exactOptionalPropertyTypes": false
+  },
+  "include": ["test/no-exact-optional/**/*.ts", "test/temporal-global.d.ts"]
+}

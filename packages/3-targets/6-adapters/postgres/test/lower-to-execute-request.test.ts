@@ -5,15 +5,15 @@ import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types
 import type { ContractCodecRegistry, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import { postgresCodec } from '@internal/target-postgres/codec-descriptor';
+import {
+  createPostgresBuiltinCodecLookup,
+  createPostgresCodecRegistryWithBuiltins,
+} from '@internal/target-postgres/codecs';
 import { jsonb, pgTable, text } from '@internal/target-postgres/contract-free';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { createContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import {
-  createPostgresBuiltinCodecLookup,
-  createPostgresCodecRegistryWithBuiltins,
-} from '../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import { encodeControlQueryParams } from '../src/core/control-codecs';
 import type { PostgresContract } from '../src/core/types';

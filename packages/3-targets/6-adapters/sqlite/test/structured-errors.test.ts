@@ -11,15 +11,16 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
+import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { createTable } from '@internal/target-sqlite/contract-free';
 import { SqliteCreateTable } from '@internal/target-sqlite/ddl';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { createSqliteAdapter, sqliteRawCodecInferer } from '../src/core/adapter';
-import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
 import { decodeSqliteMarkerRow } from '../src/core/marker-ledger';
-import type { SqliteCodecRegistry, SqliteContract } from '../src/core/types';
+import type { SqliteContract } from '../src/core/types';
 
 const contract = {} as SqliteContract;
 const runtimeAdapter = createSqliteAdapter();

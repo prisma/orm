@@ -15,11 +15,11 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { index } from '@internal/sql-contract/factories';
 import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
 import { PrimaryKey } from '@internal/sql-schema-ir/types';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { createSqliteMigrationPlanner } from '@internal/target-sqlite/planner';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
 
 function createMemoryDriver() {

@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module';
 import {
   Binary,
   BSON,
@@ -18,6 +19,8 @@ import { describe, expect, it } from 'vitest';
 import { MONGO_BSON_CODEC_ID } from '../src/core/codec-ids';
 import { mongoBsonCodec, mongoDescriptorById, mongoStandardCodecs } from '../src/core/codecs';
 import type { BsonValue } from '../src/exports/codec-types';
+
+const driverBson: typeof import('bson') = createRequire(import.meta.url)('bson');
 
 function notBson(value: unknown): BsonValue {
   return value as BsonValue;
@@ -65,9 +68,6 @@ describe('mongoBsonCodec encode', () => {
     ['bigint', 1n],
     ['symbol', Symbol('s')],
     ['function', () => 1],
-    ['NaN', Number.NaN],
-    ['Infinity', Number.POSITIVE_INFINITY],
-    ['-Infinity', Number.NEGATIVE_INFINITY],
     ['DBRef', new DBRef('c', new ObjectId())],
   ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
     await expect(
@@ -76,6 +76,9 @@ describe('mongoBsonCodec encode', () => {
   });
 
   it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY],
     ['a native RegExp', /^a/i],
     ['a Uint8Array', new Uint8Array([1, 2])],
     ['a Buffer', Buffer.from([1, 2])],
@@ -99,6 +102,40 @@ describe('mongoBsonCodec encode', () => {
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
   });
 
+  class OtherBsonObjectId {
+    readonly _bsontype = 'ObjectId';
+    constructor() {
+      Reflect.set(this, Symbol.for('@@mdb.bson.version'), 6);
+    }
+    toHexString(): string {
+      return '64b7f0c2a1b2c3d4e5f60718';
+    }
+  }
+
+  it.each([
+    ['MinKey not created by bson 7', { _bsontype: 'MinKey' }],
+    ['Decimal128 not created by bson 7', { _bsontype: 'Decimal128', toString: () => '1' }],
+    ['ObjectId not created by bson 7', new OtherBsonObjectId()],
+  ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
+    await expect(
+      mongoBsonCodec.encode(notBson({ outer: { items: [0, { value }] } }), {}),
+    ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
+  });
+
+  it('refuses a circular reference, naming the path where it repeats', async () => {
+    const outer: { inner: { list: unknown[] } } = { inner: { list: [] } };
+    outer.inner.list.push(outer);
+    await expect(mongoBsonCodec.encode(notBson(outer), {})).rejects.toThrow(
+      encodeRefusal('circular reference', 'inner.list.0'),
+    );
+  });
+
+  it('accepts the same object at two places', async () => {
+    const shared = { a: 1 };
+    const value = notBson({ left: shared, right: [shared] });
+    expect(await mongoBsonCodec.encode(value, {})).toBe(value);
+  });
+
   it('refuses a hole in a sparse array', async () => {
     const sparse: unknown[] = [1];
     sparse[2] = 3;
@@ -114,7 +151,19 @@ describe('mongoBsonCodec encode', () => {
   });
 });
 
+describe('mongoBsonCodec refusal details', () => {
+  it('name the codec, the refused kind and the path inside the value', async () => {
+    await expect(mongoBsonCodec.encode(notBson({ a: [undefined] }), {})).rejects.toMatchObject({
+      meta: { codecId: 'mongo/bson@1', received: 'undefined', valuePath: 'a.0' },
+    });
+  });
+});
+
 describe('mongoBsonCodec decode', () => {
+  it('is tested against a separate load of bson, as the driver has', () => {
+    expect(driverBson.Code).not.toBe(Code);
+  });
+
   it('returns the wire value unchanged, whatever it holds', async () => {
     const wire = notBson({
       id: new ObjectId(),
@@ -125,6 +174,14 @@ describe('mongoBsonCodec decode', () => {
     });
     expect(await mongoBsonCodec.decode(wire, {})).toBe(wire);
   });
+
+  it.each([['DBRef', { _bsontype: 'DBRef' }]])(
+    'returns a stored subdocument whose _bsontype key says %s unchanged',
+    async (_, subdocument) => {
+      const wire = JSON.parse(JSON.stringify({ a: subdocument }));
+      expect(await mongoBsonCodec.decode(wire, {})).toBe(wire);
+    },
+  );
 
   it('rebuilds a DBRef that bson read from a $ref/$id subdocument, keeping member BSON types', async () => {
     const id = new ObjectId('64b7f0c2a1b2c3d4e5f60718');
@@ -144,6 +201,22 @@ describe('mongoBsonCodec decode', () => {
     expect(decoded['link']).not.toBeInstanceOf(DBRef);
     expect((decoded['link'] as { $id: unknown }).$id).toBeInstanceOf(ObjectId);
   });
+
+  it('rebuilds a DBRef inside a Code scope that the driver read', async () => {
+    const stored = driverBson.BSON.deserialize(
+      driverBson.BSON.serialize({
+        code: new driverBson.Code('x', { link: { $ref: 'posts', $id: 1 } }),
+      }),
+    );
+    expect(stored['code'].scope.link).toBeInstanceOf(driverBson.DBRef);
+
+    const decoded = (await mongoBsonCodec.decode(notBson(stored), {})) as {
+      code: { _bsontype: string; code: string; scope: Record<string, unknown> };
+    };
+    expect(decoded.code).toMatchObject({ _bsontype: 'Code', code: 'x' });
+    expect(decoded.code.scope).toEqual({ link: { $ref: 'posts', $id: 1 } });
+    expect(decoded.code.scope['link']).not.toBeInstanceOf(driverBson.DBRef);
+  });
 });
 
 describe('mongoBsonCodec JSON form', () => {
@@ -154,9 +227,39 @@ describe('mongoBsonCodec JSON form', () => {
       const json = mongoBsonCodec.encodeJson(notBson(document));
       expect(JSON.parse(JSON.stringify(json))).toEqual(json);
       const decoded = mongoBsonCodec.decodeJson(json);
-      expect(BSON.serialize(decoded as BSON.Document)).toEqual(BSON.serialize(document));
+      expect(BSON.serialize(decoded as BSON.Document)).toEqual(
+        BSON.serialize(document as BSON.Document),
+      );
     },
   );
+
+  it.each([
+    ['an integer above the int32 range', 2 ** 40, new Double(2 ** 40)],
+    ['an integer below the int32 range', -(2 ** 31) - 1, new Double(-(2 ** 31) - 1)],
+    ['a Uint8Array', new Uint8Array([1, 2]), new Binary(new Uint8Array([1, 2]))],
+    ['a Buffer', Buffer.from([1, 2]), new Binary(new Uint8Array([1, 2]))],
+  ])('records %s as the BSON type the driver writes', (_, value, readBack) => {
+    const document = notBson({ value, list: [value] });
+    const decoded = mongoBsonCodec.decodeJson(mongoBsonCodec.encodeJson(document));
+    expect(decoded).toEqual({ value: readBack, list: [readBack] });
+    expect(BSON.serialize(decoded as BSON.Document)).toEqual(
+      BSON.serialize(document as BSON.Document),
+    );
+  });
+
+  it('records an integer above the int32 range inside a driver-loaded Code scope as a double', () => {
+    const json = mongoBsonCodec.encodeJson(
+      notBson({ c: new driverBson.Code('x', { n: 2 ** 40 }) }),
+    );
+    expect(json).toEqual({
+      c: { $code: 'x', $scope: { n: { $numberDouble: '1099511627776.0' } } },
+    });
+  });
+
+  it('writes a top-level scalar as its canonical Extended JSON', () => {
+    expect(mongoBsonCodec.encodeJson(2 ** 40)).toEqual({ $numberDouble: '1099511627776.0' });
+    expect(mongoBsonCodec.encodeJson(5)).toEqual({ $numberInt: '5' });
+  });
 
   it('writes canonical, not relaxed, Extended JSON', () => {
     expect(mongoBsonCodec.encodeJson(notBson({ n: new Int32(1), d: new Date(0) }))).toEqual({

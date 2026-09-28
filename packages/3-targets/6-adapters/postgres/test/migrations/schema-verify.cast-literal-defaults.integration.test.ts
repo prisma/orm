@@ -6,10 +6,10 @@ import {
 } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import {
   createDriver,
   createTestDatabase,

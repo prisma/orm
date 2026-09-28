@@ -397,32 +397,27 @@ The Mongo target package owns every built-in Mongo codec, as the Postgres target
 | `@internal/target-mongo/data-types` | the data type each codec represents |
 | `@internal/target-mongo/codec-types` | the `CodecTypes` map emitted `contract.d.ts` files import |
 
-The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The adapter's runtime descriptor registers `buildStandardCodecRegistry()`, and its control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step.
+The source lives in `packages/3-mongo-target/1-mongo-target/src/core/{codec-ids,codecs,bson-scalar-helpers,data-types}.ts` and `src/exports/codec-types.ts`. The adapter's runtime descriptor registers `buildStandardCodecRegistry()`, and its control descriptor names each PSL scalar (`mongoScalarAuthoringTypes` in `packages/3-mongo-target/2-mongo-adapter/src/exports/control.ts`). The TypeScript builder in `@internal/mongo-contract-ts` keeps its own copy of the `CodecTypes` map; keep the two in step. `BsonScalar`, `BsonValue` and `BsonInputValue` are declared once in `@internal/mongo-value`, which both maps import, and `@internal/target-mongo/codec-types` re-exports them.
 
-The PSL name, TS helper and application type of every Mongo scalar are listed in [Scalar types](scalar-types.md#mongodb). The table below adds what a codec author needs: each codec's JSON form and the BSON types its validator admits.
+The PSL name, TS helper, BSON storage types and application type of every Mongo codec are listed in [Scalar types](scalar-types.md#mongodb). What that page does not list is each codec's JSON form, the value `encodeJson` writes into `contract.json`:
 
-| Codec id | Application value | JSON form | BSON types (`targetTypes`) |
-| --- | --- | --- | --- |
-| `mongo/objectId@1` | `string` (hex) | the same string | `objectId` |
-| `mongo/string@1` | `string` | the same string | `string` |
-| `mongo/int32@1` | `number` | the same number | `int` |
-| `mongo/double@1` | `number` | the same number | `double` |
-| `mongo/bool@1` | `boolean` | the same boolean | `bool` |
-| `mongo/date@1` | `Date` | ISO-8601 text | `date` |
-| `mongo/vector@1` | `readonly number[]` | the same array | `vector` |
-| `mongo/int64@1` | `bigint` | decimal text; a safe-integer `number` is accepted on the way in | `long` |
-| `mongo/decimal128@1` | decimal text without an exponent; a value with an extreme exponent such as `1E-6176` decodes to a plain digit string of about 6,100 characters | the same text | `decimal` |
-| `mongo/binary@1` | `Uint8Array` | unwrapped base64 | `binData` |
-| `mongo/json@1` | `JsonValue` | the same value | `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null` |
-| `mongo/bson@1` | `BsonValue`, including `Code`, `MinKey`, `MaxKey`, `BSONSymbol` and a native `RegExp` (what a stored regex reads back as; `BSONRegExp` only with a driver configured for it); a write also accepts a `Uint8Array`; a `DBRef` reads back as its `{ $ref, $id }` document | canonical Extended JSON v2 (`EJSON.serialize(value, { relaxed: false })`) | none; the validator does not constrain it |
+| Codec id | JSON form |
+| --- | --- |
+| `mongo/objectId@1`, `mongo/string@1`, `mongo/int32@1`, `mongo/double@1`, `mongo/bool@1`, `mongo/vector@1`, `mongo/decimal128@1`, `mongo/json@1` | the application value itself |
+| `mongo/date@1` | ISO-8601 text |
+| `mongo/int64@1` | decimal text; a safe-integer `number` is accepted on the way in |
+| `mongo/binary@1` | unwrapped base64 |
+| `mongo/bson@1` | canonical Extended JSON v2 (`EJSON.serialize(value, { relaxed: false })`), after writing each JavaScript number and `Uint8Array` as the BSON type the driver would store: an integer outside the int32 range as `double`, bytes as `binData` |
 
 `Json` (`mongo/json@1`) means a JSON value, no more. Encode accepts exactly a plain JSON value (plain objects, arrays without holes, strings, finite numbers, booleans, `null`) and refuses anything else at any depth with `RUNTIME.ENCODE_FAILED`, naming its path. Decode accepts a stored value whose every part is a BSON `object`, `array`, `string`, `double`, `int`, `bool`, `null`, or a `long` in the safe-integer range (returned as a `number`), and refuses anything else (a `Date`, `ObjectId`, `Decimal128`, `Binary`, regex, timestamp, a larger `long`, a non-finite double) with `RUNTIME.DECODE_FAILED`, naming its BSON type and path. The validator admits the same BSON types at the field's top level.
+
+`Bson` (`mongo/bson@1`) passes values through, so the driver's number handling shows: a stored `long` in the safe-integer range and an integral `double` read back as a JavaScript `number` (the driver's default `promoteLongs` and `promoteValues`), and a `number` that fits in 32 bits is written back as `int`. Wrap a value in `Long` or `Double` to keep its BSON type across a read and a write.
 
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`: they resolve to the same codecs, report `PSL_DEPRECATED_SCALAR_NAME` as a warning, and will be removed.
 
 The JSON forms of `int64`, `decimal128` and `binary` match the Postgres `int8`, `numeric` and `bytea` codecs. `Decimal128.toString()` prints some values with an exponent (`1E+3`); the codec rewrites them without one (`1000`), keeping trailing zeros, so the text is stable across a round trip. The driver hands a stored `long` that fits in 53 bits back as a `number`, so the `int64` codec accepts `Long`, `number` and `bigint` on decode. Decoding a wire value of the wrong BSON type throws `RUNTIME.DECODE_FAILED`.
 
-`$jsonSchema` validators take each field's `bsonType` from the whole `targetTypes` list: one entry gives `bsonType: '<entry>'`, several give `bsonType: [...entries]` (`mongo/json@1` lists `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null`). A list field applies the same to `items`, and a nullable field prepends `'null'` unless the list already has it. A codec that declares no BSON type gets an empty schema (`{}`), which admits any value; the field stays listed under `properties` because the validator is closed with `additionalProperties: false`.
+`$jsonSchema` validators take each field's `bsonType` from the whole `targetTypes` list: one entry gives `bsonType: '<entry>'`, several give `bsonType: [...entries]` (`mongo/json@1` lists `object`, `array`, `string`, `double`, `int`, `long`, `bool`, `null`). A list field applies the same to `items`, and a nullable field prepends `'null'` unless the list already has it. A codec that declares no BSON type gets an empty schema (`{}`), which admits any value, or `{ bsonType: 'array', items: {} }` for a list field, which admits an array of any values; the field stays listed under `properties` because the validator is closed with `additionalProperties: false`.
 
 ## The data type a codec represents
 

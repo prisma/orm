@@ -6,8 +6,8 @@ import {
   loweringEntryKey,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createPostgresDefaultFunctionRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,

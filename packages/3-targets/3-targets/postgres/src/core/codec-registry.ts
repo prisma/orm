@@ -1,11 +1,14 @@
+import type { CodecRegistry } from '@internal/framework-components/codec';
 import type { ComponentMetadata } from '@internal/framework-components/components';
 import { extractCodecLookup } from '@internal/framework-components/control';
 import {
   type AnyPostgresCodecDescriptor,
   buildPostgresCodecDescriptorRegistry,
-} from '@internal/target-postgres/codec-descriptor';
-import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
-import type { PostgresCodecRegistry } from './types';
+  type PostgresCodecDescriptorRegistry,
+} from './codec-descriptor';
+import { postgresCodecDescriptorRegistry } from './registry';
+
+export type PostgresCodecRegistry = CodecRegistry & PostgresCodecDescriptorRegistry;
 
 function buildPostgresCodecRegistry(descriptors: ReadonlyArray<unknown>): PostgresCodecRegistry {
   const descriptorRegistry = buildPostgresCodecDescriptorRegistry(descriptors);
@@ -31,6 +34,15 @@ export function assemblePostgresCodecRegistry(
     (component) => component.types?.codecTypes?.codecDescriptors ?? [],
   );
   return buildPostgresCodecRegistry(descriptors);
+}
+
+export function assemblePostgresCodecRegistryWithBuiltins(
+  extensions: ReadonlyArray<Pick<ComponentMetadata, 'types'>>,
+): PostgresCodecRegistry {
+  return buildPostgresCodecRegistry([
+    ...postgresCodecDescriptorRegistry.values(),
+    ...extensions.flatMap((extension) => extension.types?.codecTypes?.codecDescriptors ?? []),
+  ]);
 }
 
 export function createPostgresCodecRegistryWithBuiltins(

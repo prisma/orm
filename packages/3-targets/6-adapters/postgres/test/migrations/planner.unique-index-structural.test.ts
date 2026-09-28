@@ -21,6 +21,7 @@ import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import {
   PostgresDatabaseSchemaNode,
@@ -30,7 +31,6 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 describe('PostgresMigrationPlanner - unique constraints vs indexes (structural nodes)', () => {

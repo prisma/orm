@@ -1,11 +1,12 @@
+import type { CodecRegistry } from '@internal/framework-components/codec';
 import type { ComponentMetadata } from '@internal/framework-components/components';
 import { extractCodecLookup } from '@internal/framework-components/control';
 import {
   type AnySqliteCodecDescriptor,
   buildSqliteCodecDescriptorRegistry,
-} from '@internal/target-sqlite/codec-descriptor';
-import { sqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codecs';
-import type { SqliteCodecRegistry } from './types';
+  type SqliteCodecDescriptorRegistry,
+} from './codec-descriptor';
+import { sqliteCodecDescriptorRegistry } from './registry';
 
 type CodecContributor = Pick<ComponentMetadata, 'types'>;
 
@@ -14,6 +15,8 @@ function descriptorsFrom(contributors: ReadonlyArray<CodecContributor>): readonl
     (contributor) => contributor.types?.codecTypes?.codecDescriptors ?? [],
   );
 }
+
+export type SqliteCodecRegistry = CodecRegistry & SqliteCodecDescriptorRegistry;
 
 function buildSqliteCodecRegistry(descriptors: ReadonlyArray<unknown>): SqliteCodecRegistry {
   const descriptorRegistry = buildSqliteCodecDescriptorRegistry(descriptors);

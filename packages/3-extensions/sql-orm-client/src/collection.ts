@@ -1646,7 +1646,11 @@ class CollectionImpl<
       );
     }
 
-    this.#assertNotMtiVariant(method);
+    if (method === 'createAll()') {
+      this.#assertConflictSkipNotOnMtiVariant(method);
+    } else {
+      this.#assertNotMtiVariant(method);
+    }
 
     const conflictOn = options.conflictOn ?? [];
     assertInsertConflictSkipCapability(this.contract, method, conflictOn.length > 0);
@@ -1663,21 +1667,29 @@ class CollectionImpl<
   }
 
   #assertNotMtiVariant(method: string): void {
-    const mtiCtx = this.#resolveMtiCreateContext();
-    if (mtiCtx) {
-      throw ormError(
-        'ORM.OPERATION_UNSUPPORTED',
-        `${method} is not supported for MTI variant "${this.state.variantName}" on model "${this.modelName}". Use createAll() instead.`,
-        {
-          meta: {
-            method,
-            model: this.modelName,
-            variant: this.state.variantName,
-            reason: 'mti-variant',
-          },
-        },
-      );
-    }
+    this.#refuseOnMtiVariant(
+      method,
+      `${method} is not supported for MTI variant "${this.state.variantName}" on model "${this.modelName}". Use createAll() instead.`,
+    );
+  }
+
+  #assertConflictSkipNotOnMtiVariant(method: string): void {
+    this.#refuseOnMtiVariant(
+      method,
+      `The onConflict option is not supported on variant "${this.state.variantName}" of model "${this.modelName}" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.`,
+    );
+  }
+
+  #refuseOnMtiVariant(method: string, message: string): void {
+    if (!this.#resolveMtiCreateContext()) return;
+    throw ormError('ORM.OPERATION_UNSUPPORTED', message, {
+      meta: {
+        method,
+        model: this.modelName,
+        variant: this.state.variantName,
+        reason: 'mti-variant',
+      },
+    });
   }
 
   #resolveMtiCreateContext(): MtiCreateContext | null {

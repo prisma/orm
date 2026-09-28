@@ -35,18 +35,18 @@ import {
   SQLITE_BLOB_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
 } from '@internal/target-sqlite/codec-ids';
-import { sqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codecs';
+import {
+  assembleSqliteCodecRegistry,
+  createSqliteBuiltinCodecLookup,
+  createSqliteCodecRegistryWithBuiltins,
+  sqliteCodecDescriptorRegistry,
+} from '@internal/target-sqlite/codecs';
 import sqliteTargetControlDescriptor from '@internal/target-sqlite/control';
 import sqliteRuntimeTargetDescriptor from '@internal/target-sqlite/runtime';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { createSqliteAdapter } from '../src/core/adapter';
-import {
-  assembleSqliteCodecRegistry,
-  createSqliteBuiltinCodecLookup,
-  createSqliteCodecRegistryWithBuiltins,
-} from '../src/core/codec-lookup';
 import { sqliteAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import type { SqliteContract } from '../src/core/types';
 import sqliteAdapterControlDescriptor from '../src/exports/control';

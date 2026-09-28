@@ -1,5 +1,5 @@
 import sqlFamilyPack from '@internal/family-sql/pack';
-import type { ExtensionPackRef } from '@internal/framework-components/components';
+import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   SqlNamespaceBase,
   SqlNamespaceInput,
@@ -11,6 +11,7 @@ import type {
   ModelLike,
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
+import { assembleSqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import sqlitePack from '@internal/target-sqlite/pack';
 
@@ -57,6 +58,8 @@ type SqliteScaffold<
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
 > = SqliteBaseScaffold<Extensions>;
 
+const target: TargetPackRef<'sql', 'sqlite'> = sqlitePack;
+
 export function defineContract<
   const Types extends TypesConstraint = Record<never, never>,
   const Models extends ModelsConstraint = Record<never, never>,
@@ -84,7 +87,13 @@ export function defineContract(
     readonly models?: ModelsConstraint;
   },
 ): SqliteResult<TypesConstraint, ModelsConstraint, undefined> {
-  const bound = { ...definition, createNamespace: sqliteCreateNamespace };
+  const bound = {
+    ...definition,
+    createNamespace: sqliteCreateNamespace,
+    codecLookup:
+      definition.codecLookup ??
+      assembleSqliteCodecRegistry(target, Object.values(definition.extensions ?? {})),
+  };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, sqlitePack, bound, factory);
   }

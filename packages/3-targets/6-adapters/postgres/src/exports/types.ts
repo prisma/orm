@@ -1,3 +1,4 @@
+export type { PostgresCodecRegistry } from '@internal/target-postgres/codecs';
 export type {
   BinaryExpr,
   ColumnRef,
@@ -6,7 +7,6 @@ export type {
   OrderClause,
   ParamRef,
   PostgresAdapterOptions,
-  PostgresCodecRegistry,
   PostgresContract,
   PostgresLoweredStatement,
   SelectAst,

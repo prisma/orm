@@ -46,6 +46,9 @@ const DECIMAL_TEXT_TYPE_PATTERN = /^(?:bigint|int8|numeric|decimal)(?:\(\d+(?:,\
  */
 const ARRAY_LITERAL_PATTERN = /^'(\{.*\})'(?:::.+\[\])?$/;
 
+/** `box` is the one core type whose array elements are delimited by `;`, not `,`. */
+const SEMICOLON_DELIMITED_ELEMENT_TYPE_PATTERN = /^box$/i;
+
 /**
  * Matches the constructor spelling Postgres reports for a default written as
  * `ARRAY[...]`: `ARRAY['a'::text, 'b'::text]`, `ARRAY[1, 2]`, `ARRAY[]::text[]`.
@@ -148,7 +151,8 @@ type ArrayElementToken = { readonly value: string; readonly quoted: boolean };
  * outside double quotes; inside a quoted element a doubled quote (`""`) or a
  * backslash-escaped quote (`\"`) is a literal quote, and a backslash escapes the
  * next character. Returns undefined if the body is malformed (e.g. an unbalanced
- * quote).
+ * quote), nests an array, which puts a brace outside quotes, or escapes a character outside
+ * quotes with a backslash, which Postgres never prints.
  */
 function splitArrayElements(inner: string): readonly ArrayElementToken[] | undefined {
   const tokens: ArrayElementToken[] = [];
@@ -183,6 +187,7 @@ function splitArrayElements(inner: string): readonly ArrayElementToken[] | undef
       quoted = true;
       continue;
     }
+    if (char === '{' || char === '}' || char === '\\') return undefined;
     if (char === ',') {
       tokens.push({ value: current, quoted });
       current = '';
@@ -197,13 +202,39 @@ function splitArrayElements(inner: string): readonly ArrayElementToken[] | undef
   return tokens;
 }
 
+const BOOLEAN_TYPE_PATTERN = /^(?:bool|boolean)$/i;
+const BOOLEAN_TRUE_TOKEN_PATTERN = /^(?:t|true)$/i;
+const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
+
+/**
+ * Reads an unquoted, non-NULL array element by the column's element type. Only text Postgres itself
+ * would print is read; anything else keeps the raw expression.
+ */
+function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
+  if (token === '') return undefined;
+  if (BOOLEAN_TYPE_PATTERN.test(elementType)) {
+    if (BOOLEAN_TRUE_TOKEN_PATTERN.test(token)) return true;
+    if (BOOLEAN_FALSE_TOKEN_PATTERN.test(token)) return false;
+    return undefined;
+  }
+  if (NUMBER_TYPE_PATTERN.test(elementType)) {
+    return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
+  }
+  if (isJsonElementType(elementType)) {
+    if (token === 'true') return true;
+    if (token === 'false') return false;
+    return NUMERIC_PATTERN.test(token) ? textElementValue(token, elementType) : undefined;
+  }
+  return token;
+}
+
 /**
  * Parses a Postgres array literal body (`{...}`) into a JS array of primitives.
  * Returns undefined if the body cannot be reliably parsed.
  *
  * Handles:
  * - `{}` → `[]`
- * - `{elem1,elem2,...}` → `[elem1, elem2, ...]` with numeric and string element coercion
+ * - `{elem1,elem2,...}` → `[elem1, elem2, ...]`, each unquoted element read by the element type
  * - quoted elements that contain commas, doubled/escaped quotes, and the literal
  *   strings `NULL`/`true`/`false` (a quoted token is always a string)
  */
@@ -232,21 +263,9 @@ function parseArrayLiteralBody(
       result.push(null);
       continue;
     }
-    if (el === 'true') {
-      result.push(true);
-      continue;
-    }
-    if (el === 'false') {
-      result.push(false);
-      continue;
-    }
-    if (NUMERIC_PATTERN.test(el)) {
-      const value = numberValue(el, elementType);
-      if (value === undefined) return undefined;
-      result.push(value);
-      continue;
-    }
-    return undefined;
+    const value = unquotedElementValue(el, elementType);
+    if (value === undefined) return undefined;
+    result.push(value);
   }
   return result;
 }
@@ -356,8 +375,11 @@ export function parsePostgresDefault(
   if (normalizedType?.endsWith('[]')) {
     const elementType = normalizedType.slice(0, -2);
     const arrayMatch = trimmed.match(ARRAY_LITERAL_PATTERN);
-    if (arrayMatch?.[1] !== undefined) {
-      const parsed = parseArrayLiteralBody(arrayMatch[1], elementType);
+    if (
+      arrayMatch?.[1] !== undefined &&
+      !SEMICOLON_DELIMITED_ELEMENT_TYPE_PATTERN.test(elementType)
+    ) {
+      const parsed = parseArrayLiteralBody(arrayMatch[1].replace(/''/g, "'"), elementType);
       if (parsed !== undefined) {
         return { kind: 'literal', value: parsed };
       }

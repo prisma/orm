@@ -6,7 +6,10 @@ import { builtinGeneratorIds } from '@internal/ids';
 import { generateId } from '@internal/ids/runtime';
 import type { Adapter, AnyQueryAst } from '@internal/sql-relational-core/ast';
 import type { SqlRuntimeAdapterDescriptor } from '@internal/sql-runtime';
-import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
+import {
+  assemblePostgresCodecRegistry,
+  postgresCodecRegistry,
+} from '@internal/target-postgres/codecs';
 import {
   INSTANT_NOW_GENERATOR_ID,
   instantNow,
@@ -14,7 +17,6 @@ import {
   plainDateTimeNow,
 } from '@internal/target-postgres/runtime';
 import { createPostgresAdapterWithCodecRegistry, postgresRawCodecInferer } from '../core/adapter';
-import { assemblePostgresCodecRegistry } from '../core/codec-lookup';
 import { postgresAdapterDescriptorMeta } from '../core/descriptor-meta';
 import type { PostgresContract, PostgresLoweredStatement } from '../core/types';
 

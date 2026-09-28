@@ -86,6 +86,20 @@ describe('mongoJsonCodec encode', () => {
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
   });
 
+  it('refuses a circular reference, naming the path where it repeats', async () => {
+    const outer: { inner: { list: unknown[] } } = { inner: { list: [] } };
+    outer.inner.list.push(outer);
+    await expect(mongoJsonCodec.encode(notJson(outer), {})).rejects.toThrow(
+      encodeRefusal('circular reference', 'inner.list.0'),
+    );
+  });
+
+  it('accepts the same object at two places', async () => {
+    const shared = { a: 1 };
+    const value = notJson({ left: shared, right: [shared] });
+    expect(await mongoJsonCodec.encode(value, {})).toBe(value);
+  });
+
   it('refuses a hole in a sparse array', async () => {
     const sparse: unknown[] = [1];
     sparse[2] = 3;
@@ -104,7 +118,7 @@ describe('mongoJsonCodec encode', () => {
 describe('mongoJsonCodec decode', () => {
   it('returns a JSON wire value as the same JSON value', async () => {
     const document = { a: [1, 'two', null, true, { c: 1.5 }], $d: { 'e.f': [] } };
-    expect(await mongoJsonCodec.decode(wire(document), {})).toEqual(document);
+    expect(await mongoJsonCodec.decode(wire(document), {})).toBe(document);
   });
 
   it.each([
@@ -165,6 +179,19 @@ describe('mongoJsonCodec decode', () => {
     });
   });
 
+  it.each([
+    ['Long', { _bsontype: 'Long' }],
+    ['DBRef', { _bsontype: 'DBRef' }],
+    ['ObjectId', { _bsontype: 'ObjectId', x: 1 }],
+    ['Int32', { _bsontype: 'Int32' }],
+  ])(
+    'reads a stored subdocument whose _bsontype key says %s as that document',
+    async (_, subdocument) => {
+      const document = JSON.parse(JSON.stringify({ a: subdocument }));
+      expect(await mongoJsonCodec.decode(wire(document), {})).toEqual({ a: subdocument });
+    },
+  );
+
   it('says "the root" when the wire value itself is not JSON', async () => {
     await expect(mongoJsonCodec.decode(wire(new Date(0)), {})).rejects.toThrow(
       decodeRefusal('date', 'the root'),
@@ -190,10 +217,29 @@ describe('mongoJsonCodec decode', () => {
     ).toEqual({ i: 7, d: [1.5] });
   });
 
+  it('copies only the objects and arrays around a value it converts', async () => {
+    const untouched = { b: [1] };
+    const document = { untouched, changed: { n: new Int32(7) } };
+    const decoded = (await mongoJsonCodec.decode(wire(document), {})) as Record<string, unknown>;
+    expect(decoded).toEqual({ untouched: { b: [1] }, changed: { n: 7 } });
+    expect(decoded['untouched']).toBe(untouched);
+  });
+
   it('keeps a "__proto__" key as an own property', async () => {
     const document = JSON.parse('{"__proto__": {"polluted": true}}');
     const decoded = await mongoJsonCodec.decode(wire(document), {});
     expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype);
     expect(Object.hasOwn(decoded as object, '__proto__')).toBe(true);
+  });
+});
+
+describe('mongoJsonCodec refusal details', () => {
+  it('name the codec, the refused kind and the path inside the value', async () => {
+    await expect(mongoJsonCodec.encode(notJson({ a: [undefined] }), {})).rejects.toMatchObject({
+      meta: { codecId: 'mongo/json@1', received: 'undefined', valuePath: 'a.0' },
+    });
+    await expect(mongoJsonCodec.decode(wire({ a: [new Date(0)] }), {})).rejects.toMatchObject({
+      meta: { codecId: 'mongo/json@1', received: 'date', valuePath: 'a.0' },
+    });
   });
 });
