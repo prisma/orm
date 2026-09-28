@@ -9,7 +9,6 @@ function interpret(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
     documents: [document],

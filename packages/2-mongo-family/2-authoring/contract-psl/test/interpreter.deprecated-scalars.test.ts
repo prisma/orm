@@ -43,7 +43,6 @@ function interpret(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const warnings: ContractSourceDiagnostic[] = [];
   const result = interpretPslDocumentToMongoContract({
@@ -99,7 +98,6 @@ describe('deprecated Mongo PSL scalar names', () => {
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     const result = interpretPslDocumentToMongoContract({
       documents: [document],

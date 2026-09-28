@@ -57,7 +57,6 @@ import {
   type FieldSymbol,
   findBlockDescriptor,
   interpretExtensionBlocks,
-  deriveParsedBlocks,
   type ModelAttributeSpecFactory,
   type ModelSymbol,
   type NamedTypeSymbol,

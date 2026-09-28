@@ -152,7 +152,6 @@ describe('createProjectArtifacts', () => {
     });
     const artifacts = createProjectArtifacts({
       inputs,
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
