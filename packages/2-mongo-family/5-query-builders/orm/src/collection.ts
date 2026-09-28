@@ -768,17 +768,17 @@ class MongoCollectionImpl<
     const filters: MongoFilterExpr[] = [];
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
-      const wrapped = this.#wrapFieldValue(value, fields[key]);
+      const wrapped = this.#wrapFieldValue(value, fields[key], key);
       filters.push(MongoFieldFilter.eq(key, wrapped));
     }
     return filters;
   }
 
-  #wrapFieldValue(value: unknown, field: ContractField | undefined): MongoValue {
+  #wrapFieldValue(value: unknown, field: ContractField | undefined, path: string): MongoValue {
     if (field === undefined) return new MongoParamRef(value);
 
     if (field.type.kind === 'scalar') {
-      return new MongoParamRef(value, { codecId: field.type.codecId });
+      return this.#fieldParam(value, field.type.codecId, path);
     }
 
     if (field.type.kind === 'valueObject') {
@@ -787,13 +787,14 @@ class MongoCollectionImpl<
       if (!voDef || value === null) return new MongoParamRef(value);
 
       if (field.many && Array.isArray(value)) {
-        return value.map((item) =>
+        return value.map((item, index) =>
           this.#wrapValueObject(
             blindCast<
               Record<string, unknown>,
               'contract-typed value-object array elements are field-value records'
             >(item),
             voDef,
+            `${path}.${index}`,
           ),
         );
       }
@@ -803,21 +804,27 @@ class MongoCollectionImpl<
           'contract-typed value-object input is a field-value record'
         >(value),
         voDef,
+        path,
       );
     }
 
     return new MongoParamRef(value);
   }
 
+  #fieldParam(value: unknown, codecId: string, path: string): MongoParamRef {
+    return new MongoParamRef(value, { codecId, name: path, collection: this.#collectionName });
+  }
+
   #wrapValueObject(
     data: Record<string, unknown>,
     voDef: ContractValueObject,
+    path: string,
   ): Record<string, MongoValue> {
     const doc: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
       const fieldDef = voDef.fields[key];
-      doc[key] = this.#wrapFieldValue(value, fieldDef);
+      doc[key] = this.#wrapFieldValue(value, fieldDef, `${path}.${key}`);
     }
     return doc;
   }
@@ -827,7 +834,7 @@ class MongoCollectionImpl<
     const doc: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value !== undefined) {
-        doc[key] = this.#wrapFieldValue(value, fields[key]);
+        doc[key] = this.#wrapFieldValue(value, fields[key], key);
       }
     }
     return doc;
@@ -843,7 +850,7 @@ class MongoCollectionImpl<
         });
       }
       if (value !== undefined) {
-        result[key] = this.#wrapFieldValue(value, fields[key]);
+        result[key] = this.#wrapFieldValue(value, fields[key], key);
       }
     }
     return result;
@@ -942,7 +949,7 @@ class MongoCollectionImpl<
     }
 
     if (value instanceof MongoParamRef && contractField.type.kind === 'scalar') {
-      return new MongoParamRef(value.value, { codecId: contractField.type.codecId });
+      return this.#fieldParam(value.value, contractField.type.codecId, field);
     }
 
     if (contractField.type.kind === 'valueObject' && value instanceof MongoParamRef) {
@@ -951,7 +958,7 @@ class MongoCollectionImpl<
         const voName = contractField.type.name;
         const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[voName];
         if (voDef) {
-          return this.#wrapValueObject(raw, voDef);
+          return this.#wrapValueObject(raw, voDef, field);
         }
       }
     }
@@ -974,7 +981,7 @@ class MongoCollectionImpl<
     }
 
     if (currentField?.type.kind === 'scalar' && value instanceof MongoParamRef) {
-      return new MongoParamRef(value.value, { codecId: currentField.type.codecId });
+      return this.#fieldParam(value.value, currentField.type.codecId, dotPath);
     }
 
     if (currentField?.type.kind === 'valueObject' && value instanceof MongoParamRef) {
@@ -983,7 +990,7 @@ class MongoCollectionImpl<
         const voName = currentField.type.name;
         const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[voName];
         if (voDef) {
-          return this.#wrapValueObject(raw, voDef);
+          return this.#wrapValueObject(raw, voDef, dotPath);
         }
       }
     }

@@ -228,9 +228,13 @@ describe('Mongo Int64, Decimal128, Binary and Json fields', () => {
           }),
         ).rejects.toMatchObject({
           code: 'RUNTIME.ENCODE_FAILED',
-          message: expect.stringContaining(
-            'mongo/bson@1 value must be a BSON value; received MinKey not created by bson 7 at nested.0',
-          ),
+          message:
+            "Failed to encode field raw in collection 'posts' with codec 'mongo/bson@1': mongo/bson@1 value must be a BSON value; received MinKey not created by bson 7 at nested.0",
+          details: {
+            label: 'raw',
+            collection: 'posts',
+            valuePath: 'nested.0',
+          },
         });
       }),
     timeouts.spinUpMongoMemoryServer,

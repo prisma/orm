@@ -87,7 +87,6 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
   - The Mongo enum factory refuses a codec that does not declare exactly one BSON type; the SQL enum factory still takes `targetTypesFor(codecId)[0]` without the check. Move the check into the framework enum path both families use, or add it to the SQL factory in `target-named-scalars-sql`.
   - The Mongo planner classifies any change to an existing property schema as destructive, including a `Json`-to-`Bson` switch (a list to `{}`), which only widens the validator. Teach `isWideningSchemaChange` that `{}` admits everything.
   - `schema-to-view.ts` prints a `bsonType` list with `String(...)`, so `db schema` shows `meta: object,array,string,double,int,long,bool,null`.
-  - Mongo encode errors raised through the ORM name the codec as the parameter label, not the collection and field, because the ORM builds its `MongoParamRef`s without a name; decode errors name both. Naming the field on writes touches every Mongo codec's encode path.
 
 ## Follow-on projects specified in `design/`
 
