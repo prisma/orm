@@ -77,7 +77,7 @@ export const mongoScalarAuthoringTypes = {
   Json: {
     kind: 'typeConstructor',
     documentation:
-      'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types.',
+      'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
     output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
   },
   Bson: {

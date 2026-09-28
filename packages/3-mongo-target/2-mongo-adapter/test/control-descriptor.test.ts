@@ -66,7 +66,8 @@ describe('mongoScalarAuthoringTypes', () => {
     ]);
     expect(mongoScalarAuthoringTypes.Json).toEqual({
       kind: 'typeConstructor',
-      documentation: expect.stringContaining('the collection validator admits only those types'),
+      documentation:
+        'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
       output: { codecId: 'mongo/json@1', nativeType: 'json' },
     });
   });
