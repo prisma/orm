@@ -1,5 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
+import { BSON_MAJOR, createdByBsonMajor } from './bson-walk';
 import { mongoTargetError } from './mongo-target-errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -60,12 +61,13 @@ function describeReceived(value: unknown): string {
   return typeof value;
 }
 
-function refuseType(codecId: string, expected: string, value: unknown): never {
-  return encodeFailed(
-    codecId,
-    `value must be ${expected}; received ${describeReceived(value)}`,
-    value,
-  );
+function refuseType(
+  codecId: string,
+  expected: string,
+  value: unknown,
+  received = describeReceived(value),
+): never {
+  return encodeFailed(codecId, `value must be ${expected}; received ${received}`, value);
 }
 
 export function stringEncode(codecId: string, value: string): string {
@@ -94,9 +96,18 @@ const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
  * `new ObjectId(...)` makes a fresh id from `null` or `undefined` and reads a number as a timestamp, so only a 24-digit hex string or an `ObjectId` is accepted.
  */
 export function objectIdEncode(codecId: string, value: string): ObjectId {
+  const expected = 'a 24-digit hex string or an ObjectId';
   if (typeof value === 'string' && OBJECT_ID_HEX.test(value)) return new ObjectId(value);
-  if (isObjectId(value)) return new ObjectId(value.toHexString());
-  return refuseType(codecId, 'a 24-digit hex string or an ObjectId', value);
+  if (!isObjectId(value)) return refuseType(codecId, expected, value);
+  if (!createdByBsonMajor(value)) {
+    return refuseType(
+      codecId,
+      expected,
+      value,
+      `ObjectId not created by bson ${String(BSON_MAJOR)}`,
+    );
+  }
+  return new ObjectId(value.toHexString());
 }
 
 export function vectorEncode(codecId: string, value: readonly number[]): readonly number[] {

@@ -1,12 +1,14 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
-import { Binary, Code, type Document, Double, EJSON, MinKey } from 'bson';
+import { Binary, Code, type Document, Double, EJSON } from 'bson';
 import {
+  BSON_MAJOR,
   bsonClassTag,
   bsonTypeTag,
   child,
   constructorName,
+  createdByBsonMajor,
   dbRefEntries,
   isPlainArray,
   isPlainObject,
@@ -29,9 +31,6 @@ const BSON_VALUE_TAGS: ReadonlySet<string> = new Set([
   'MaxKey',
   'BSONSymbol',
 ]);
-
-const BSON_VERSION = Symbol.for('@@mdb.bson.version');
-const BSON_MAJOR: unknown = Reflect.get(new MinKey(), BSON_VERSION);
 
 const ENCODE_FIX_BY_RECEIVED: Readonly<Record<string, string>> = {
   DBRef: 'Write it as a { $ref, $id } document instead.',
@@ -62,7 +61,7 @@ function assertBsonValue(value: unknown, path: string, ancestors: Set<object>): 
   const tag = bsonTypeTag(value);
   if (tag !== undefined) {
     if (!BSON_VALUE_TAGS.has(tag)) encodeRefused(tag, path);
-    if (Reflect.get(value, BSON_VERSION) !== BSON_MAJOR) {
+    if (!createdByBsonMajor(value)) {
       encodeRefused(`${tag} not created by bson ${String(BSON_MAJOR)}`, path);
     }
     return;

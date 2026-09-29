@@ -140,6 +140,11 @@ describe('codecs that check the type of the value they write', () => {
       'abcdefabcdef',
     ],
     [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received ObjectId not created by bson 7',
+      mongoObjectIdCodec,
+      { _bsontype: 'ObjectId' },
+    ],
+    [
       'mongo/vector@1 value must be an array of numbers; received an array',
       mongoVectorCodec,
       [1, '2'],
