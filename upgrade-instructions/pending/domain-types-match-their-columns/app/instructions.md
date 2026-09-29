@@ -16,6 +16,13 @@ changes:
       glob: "**/*.prisma"
       matches:
         - '^\s*type\s+\w+\s*\{'
+  - id: codecs-check-stored-json
+    summary: |
+      The built-in SQL, PostgreSQL and SQLite codecs now refuse a JSON value that is not the stored form of their type, where they used to pass it through: a literal column default of the wrong JSON kind now fails when a migration is planned. Correct the default.
+    detection:
+      glob: "**/contract.json"
+      matches:
+        - '"kind"\s*:\s*"literal"'
   - id: composite-type-attributes-refused
     summary: |
       An attribute on a composite type or on one of its members is now refused, where it used to be ignored. Remove it.
@@ -50,11 +57,17 @@ A literal default on a field typed by a composite type used to be stored whateve
 
 - A single value object takes a JSON object, and a list of them a JSON array: `` homes Address[] @default(json`{"street": "x"}`) `` is refused; write `@default([])` or `` @default(json`[{"street": "x"}]`) ``. JSON `null` is taken when the field is optional. `PSL_DEFAULT_TYPE_INCOMPATIBLE`.
 - A key that is not a member is refused, and so is a missing member that is not optional, and `null` for a member that is not optional. `PSL_DEFAULT_TYPE_INCOMPATIBLE`.
-- The default holds each member in the form its codec stores, so the member's codec must read the value. A `Decimal`, `Numeric(p, s)` or `BigInt` member takes a decimal string, `"1.5"`, and a number is refused; a `DateTime` member takes a date and time string; a `Json` member takes any JSON value. `PSL_INVALID_DEFAULT_LITERAL`, with the codec's message.
-- A member typed by an enum takes only the enum's values: `PSL_INVALID_ATTRIBUTE_SYNTAX`, `Expected one of:` the values.
+- The default holds each member in the form its codec stores, so the member's codec must read the value. A `Decimal`, `Numeric(p, s)` or `BigInt` member takes a decimal string, `"1.5"`, and a number is refused; a `String` member takes a JSON string, so `"street": 1` is refused; a `DateTime` member takes a date and time string; a `Json` member takes any JSON value. `PSL_INVALID_DEFAULT_LITERAL`, with the codec's message.
+- A member typed by an enum takes only the enum's values: `PSL_INVALID_DEFAULT_LITERAL`, `Expected one of:` the values.
 - Nested value objects are checked the same way.
 
 Correct the value the diagnostic names.
+
+## `codecs-check-stored-json`
+
+A codec's `decodeJson` reads a value in the stored JSON form of its type: a column's literal default in `contract.json`, a member of a value-object default, and a value inside the JSON the database returns for an included relation. The text codecs (`pg/text@1`, `sql/text@1`, `sql/char@1`, `sql/varchar@1`, `sqlite/text@1`, `pg/enum@1`, `pg/uuid@1`, `pg/inet@1`, `pg/bit@1`, `pg/varbit@1`, `pg/tsquery@1`, `pg/timetz@1`, `pg/text-array@1` and the date and time codecs), the integer codecs `pg/int4@1`, `pg/int2@1` and `sql/int@1`, and `pg/bool@1` used to pass any JSON value through. Each now refuses a value of another kind with `RUNTIME.DECODE_FAILED`, naming the codec: a text codec takes a JSON string, `pg/int4@1` a JSON integer from -2147483648 to 2147483647, `pg/int2@1` one from -32768 to 32767, `sql/int@1` a safe integer, `pg/bool@1` `true` or `false`, `pg/uuid@1` a hyphenated UUID, and a bit string only `0` and `1`. Every form PostgreSQL and SQLite produce is still read, so query results are unchanged.
+
+Only a hand-edited `contract.json`, or a TypeScript `.default()` given a value its column's type does not take, can hold such a default, and it now fails when a migration is planned. Correct the default in the contract source and emit it again. A `null` literal default is written as `DEFAULT NULL`, as before.
 
 ## `composite-type-attributes-refused`
 
