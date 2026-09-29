@@ -77,7 +77,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
-import { type FieldPresetContext, resolveFieldPreset } from './field-presets';
+import {
+  type FieldPresetContext,
+  type PresetWithoutEffect,
+  resolveFieldPreset,
+} from './field-presets';
 import {
   createMongoBinder,
   findFieldAttributeNode,
@@ -136,6 +140,53 @@ function deprecatedScalarWarner(input: {
           code: 'PSL_DEPRECATED_SCALAR_NAME',
           message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}" (stored as BSON ${descriptor.output.nativeType}).`,
           ...diagnosticSource(input.sources, typeNode).at(),
+        },
+      ],
+      input.sources,
+    );
+    if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
+  };
+}
+
+/**
+ * Reports `PSL_PRESET_WITHOUT_EFFECT` for a preset call that fills nothing, such as `temporal.timestamp()` with no phase: it is stored exactly like the scalar type with the same codec, which the warning names.
+ */
+function presetWithoutEffectWarner(input: {
+  readonly types: AuthoringTypeNamespace | undefined;
+  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  readonly sources: PslSources;
+  readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
+}): (preset: PresetWithoutEffect) => void {
+  const { reportWarning } = input;
+  if (reportWarning === undefined) return () => {};
+  return ({ field, entityLabel, helperPath, descriptor, codecId }) => {
+    const typeName = [...input.scalarTypeCodecIds].find(([name, id]) => {
+      const type = input.types?.[name];
+      const deprecated =
+        type !== undefined &&
+        isAuthoringTypeConstructorDescriptor(type) &&
+        type.deprecated !== undefined;
+      return id === codecId && !deprecated;
+    })?.[0];
+    if (typeName === undefined) return;
+    const phases = (descriptor.args ?? []).flatMap((arg) =>
+      arg.kind === 'option' && arg.name !== undefined
+        ? [{ name: arg.name, value: arg.values[0] }]
+        : [],
+    );
+    const without =
+      phases.length === 0 ? '' : ` without ${phases.map(({ name }) => name).join(' or ')}`;
+    const pass =
+      phases.length === 0
+        ? ''
+        : `, or pass ${phases.map(({ name, value }) => `${name}: ${value}`).join(' or ')}`;
+    const call = field.typeConstructor?.span;
+    const [warning] = mapPslDiagnostics(
+      [
+        {
+          code: 'PSL_PRESET_WITHOUT_EFFECT',
+          message: `${entityLabel} uses ${helperPath}()${without}, so nothing fills it and it is stored exactly like ${typeName}. Write ${typeName}${pass}.`,
+          ...diagnosticSource(input.sources, field.node.syntax).at(call ?? field.span),
         },
       ],
       input.sources,
@@ -1170,6 +1221,12 @@ export function interpretPslDocumentToMongoContract(
     composedExtensions: new Set(input.composedExtensions ?? []),
     sources,
     diagnostics,
+    warnPresetWithoutEffect: presetWithoutEffectWarner({
+      types: input.authoringContributions?.type,
+      scalarTypeCodecIds,
+      sources,
+      reportWarning: input.reportWarning,
+    }),
   };
   const presetExecutionDefaults: PresetExecutionDefault[] = [];
   const warnDeprecatedScalar = deprecatedScalarWarner({

@@ -499,6 +499,7 @@ export function resolveFieldTypeDescriptor(input: {
         entityLabel: input.entityLabel,
         namespace: namespacePrefix,
         helperPath,
+        authoringContributions: input.authoringContributions,
         source,
         span: input.field.typeConstructor.span,
         diagnostics: input.diagnostics,

@@ -7,6 +7,24 @@ import {
 } from './framework-authoring';
 
 /**
+ * How each field preset registered directly under `namespace` is written, with the names of its arguments: `temporal.timestamp(onCreate, onUpdate)`.
+ */
+export function fieldPresetSpellings(
+  contributions: AuthoringContributions | undefined,
+  namespace: string,
+): readonly string[] {
+  const members = contributions?.field?.[namespace];
+  if (members === undefined || isAuthoringFieldPresetDescriptor(members)) return [];
+  return Object.entries(members).flatMap(([name, member]) =>
+    isAuthoringFieldPresetDescriptor(member)
+      ? [
+          `${namespace}.${name}(${(member.args ?? []).map((arg, index) => arg.name ?? `argument${index + 1}`).join(', ')})`,
+        ]
+      : [],
+  );
+}
+
+/**
  * Walks `authoringContributions.field` segment by segment and returns the field-preset descriptor at the path, or `undefined` when none is registered there.
  */
 export function getAuthoringFieldPreset(
