@@ -1,5 +1,5 @@
 import type { MutationDefaultGeneratorDescriptor } from '@internal/framework-components/control';
-import { temporalImplementation } from './temporal-implementation';
+import { requireTemporal } from './require-temporal';
 
 export const INSTANT_NOW_GENERATOR_ID = 'instantNow' as const;
 
@@ -14,5 +14,5 @@ export function instantNowControlDescriptor(): MutationDefaultGeneratorDescripto
 }
 
 export function instantNow(): Temporal.Instant {
-  return temporalImplementation({ generatorId: INSTANT_NOW_GENERATOR_ID }).Now.instant();
+  return requireTemporal({ generatorId: INSTANT_NOW_GENERATOR_ID }).Now.instant();
 }

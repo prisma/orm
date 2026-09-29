@@ -14,7 +14,7 @@ import {
   errorTemporalUnrepresentable,
   errorTemporalWrongType,
 } from './errors';
-import { type TemporalImplementation, temporalImplementation } from './temporal-implementation';
+import { requireTemporal, type TemporalImplementation } from './require-temporal';
 
 const POSTGRES_TEMPORAL_SENTINELS: ReadonlySet<string> = new Set(['infinity', '-infinity']);
 
@@ -55,7 +55,7 @@ function decodeTemporalText<T>(
   parse: (temporal: TemporalImplementation, text: string) => T,
   adapt: (text: string) => string,
 ): T {
-  const temporal = temporalImplementation({ codecId: identity.codecId, operation: 'decode' });
+  const temporal = requireTemporal({ codecId: identity.codecId, operation: 'decode' });
   if (POSTGRES_TEMPORAL_SENTINELS.has(wire)) {
     throw errorTemporalUnrepresentable({
       ...identity,
@@ -81,7 +81,6 @@ function encodeTemporalValue(
   identity: TemporalCodecIdentity,
   value: { readonly calendarId?: string; toString: () => string },
 ): string {
-  temporalImplementation({ codecId: identity.codecId, operation: 'encode' });
   const tag: unknown =
     typeof value === 'object' && value !== null
       ? Reflect.get(value, Symbol.toStringTag)

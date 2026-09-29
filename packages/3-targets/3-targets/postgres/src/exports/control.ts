@@ -9,7 +9,7 @@ import type {
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { registerControlPlaneTemporal } from '../core/control-temporal';
+import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
 import { postgresResolveDefault } from '../core/default-normalizer';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { contractToPostgresDatabaseSchemaNode } from '../core/migrations/contract-to-postgres-database-schema-node';
@@ -23,6 +23,7 @@ import type { PostgresContract } from '../core/postgres-schema';
 import { PostgresSchemaVerifier } from '../core/postgres-schema-verifier';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
 import { buildPostgresPslContract } from '../core/psl-print/psl-contract';
+import { setFallbackTemporal } from '../core/require-temporal';
 import { PostgresDatabaseSchemaNode } from '../core/schema-ir/postgres-database-schema-node';
 import {
   postgresDiffSubjectEntityKind,
@@ -40,7 +41,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
   'postgres',
   PostgresPlanTargetDetails
 > {
-  registerControlPlaneTemporal();
+  setFallbackTemporal(fallbackTemporal);
   return {
     ...postgresTargetDescriptorMeta,
     contractSerializer: new PostgresContractSerializer(),

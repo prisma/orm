@@ -1,5 +1,5 @@
 import type { MutationDefaultGeneratorDescriptor } from '@internal/framework-components/control';
-import { temporalImplementation } from './temporal-implementation';
+import { requireTemporal } from './require-temporal';
 
 /**
  * The "now" generator for `timestamp` (without time zone) columns: the current
@@ -19,7 +19,7 @@ export function plainDateTimeNowControlDescriptor(): MutationDefaultGeneratorDes
 }
 
 export function plainDateTimeNow(): Temporal.PlainDateTime {
-  return temporalImplementation({
+  return requireTemporal({
     generatorId: PLAIN_DATE_TIME_NOW_GENERATOR_ID,
   }).Now.plainDateTimeISO('UTC');
 }
