@@ -174,14 +174,16 @@ function unknownTypeMessages(input: {
     );
   });
   const names = current.map(([name]) => name);
-  const listed =
-    names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join('');
+  const scalarTypes =
+    names.length === 0
+      ? 'No Mongo scalar types are registered.'
+      : `The Mongo scalar types are ${names.length === 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`}.`;
   return (field, ownerName) => {
     const subject = `Field "${ownerName}.${field.name}" has type "${field.typeName}"`;
     const codecId = input.formerScalarCodecIds.get(field.typeName);
     const replacement = current.find(([, id]) => id === codecId)?.[0];
     if (replacement === undefined) {
-      return `${subject}, which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ${listed}.`;
+      return `${subject}, which is not a scalar type, an enum, a composite type or a model. ${scalarTypes}`;
     }
     const type = input.types?.[replacement];
     const stored =

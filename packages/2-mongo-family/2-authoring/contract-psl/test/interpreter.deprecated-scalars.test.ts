@@ -119,6 +119,27 @@ describe('deprecated Mongo PSL scalar names', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('says no scalar types are registered when there are none to list', () => {
+    const { document, sources } = parse('model Post {\n  value Money\n}\n', 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const result = interpretPslDocumentToMongoContract({
+      documents: [document],
+      symbolTable,
+      sources,
+      scalarTypeCodecIds: new Map(),
+      controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. No Mongo scalar types are registered.',
+      }),
+    );
+  });
+
   it('refuses a type that was never a Mongo scalar at the type, listing the scalar types', () => {
     const { result } = interpret(schemaWith('Money'));
     expect(result.ok).toBe(false);

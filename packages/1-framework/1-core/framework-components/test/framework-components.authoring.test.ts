@@ -498,6 +498,12 @@ describe('authoring template resolution', () => {
     ).toThrow('Authoring helper argument at field.test[0] must be "now"; received 42');
   });
 
+  it('says an option that lists no values takes none', () => {
+    expect(() =>
+      validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: [] }], ['now']),
+    ).toThrow('Authoring helper argument at field.test[0] takes no value; received "now"');
+  });
+
   it('names a named argument and lists every value an option takes', () => {
     expect(() =>
       validateAuthoringHelperArguments(

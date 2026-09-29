@@ -1678,10 +1678,13 @@ function validateAuthoringArgument(
   if (descriptor.kind === 'option') {
     if (typeof value !== 'string' || !descriptor.values.includes(value)) {
       const quoted = descriptor.values.map((option) => JSON.stringify(option));
-      const expected = quoted.length === 1 ? quoted.join('') : `one of ${quoted.join(', ')}`;
+      const rule =
+        quoted.length === 0
+          ? 'takes no value'
+          : `must be ${quoted.length === 1 ? quoted.join('') : `one of ${quoted.join(', ')}`}`;
       throw runtimeError(
         'CONTRACT.ARGUMENT_INVALID',
-        `${path} must be ${expected}; received ${describeReceivedArgument(value)}`,
+        `${path} ${rule}; received ${describeReceivedArgument(value)}`,
       );
     }
     return;
