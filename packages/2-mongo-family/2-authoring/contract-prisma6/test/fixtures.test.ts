@@ -25,6 +25,7 @@ const CASES: readonly string[] = [
   'multi-file',
   'naming',
   'native-type-unsupported',
+  'native-types',
   'optional-generated-field',
   'provider-mismatch',
   'provider-missing',

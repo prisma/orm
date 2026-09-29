@@ -102,8 +102,8 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 
 | Concept | Prisma 6/7 name | PostgreSQL | SQLite | MongoDB |
 | --- | --- | --- | --- | --- |
-| 32-bit integer | `Int` | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
-| 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `Int64` |
+| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
+| 64-bit integer | `BigInt` (on MongoDB, also a plain `Int`, which Prisma 6 stores as a BSON long) | `BigInt` | `BigInt` | `Int64` |
 | double | `Float` | `Float` | `Float` | `Double` |
 | decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | `Decimal128` |
 | boolean | `Boolean` | `Boolean` | — | `Bool` |

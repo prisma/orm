@@ -137,6 +137,7 @@ Code that moves from the Prisma 6 client to the Prisma 8 client reads the same d
 - **Optional fields.** An optional field is typed `T | null`. Prisma 6 leaves an unset optional field out of the document, so a document it wrote can read with the field absent rather than `null`; test for it with `== null`, which covers both.
 - **`Bytes` is a `Uint8Array`**, as in Prisma 6. Write a `Uint8Array`, not a driver `Binary`.
 - **`BigInt` is a `bigint`**, as in Prisma 6, with no precision lost above 2^53.
+- **`Int` is a `bigint` too.** Prisma 6 stores a plain `Int` as a BSON long, so Prisma 8 reads it as a `bigint` and writes a `bigint` back as a long, where the Prisma 6 client uses a `number`. `Int @db.Int` is a BSON int and reads as a `number`. Add `@db.Int` to the Prisma 6 schema only if the collection really holds 32-bit ints: Prisma 6 then writes new values as ints too.
 - **`Decimal` is a `string`** in Prisma 8, the decimal's text such as `"12.50"`. Prisma 6 refuses `Decimal` on MongoDB, so a schema Prisma 6 accepts has no `Decimal` field.
 - **`Json` holds JSON values only.** A `Json` value that contains a BSON type JSON cannot represent (a date, an ObjectId, a long above 2^53, and so on), written by other code or by an older Prisma, fails to read in Prisma 8 with `RUNTIME.DECODE_FAILED`.
 

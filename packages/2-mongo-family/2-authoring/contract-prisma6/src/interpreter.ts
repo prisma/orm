@@ -642,6 +642,36 @@ function objectIdRemoval(typeName: string): string {
   return `Removing it makes the Prisma 6 client store new values as BSON ${PRISMA6_SCALAR_BSON[typeName]} instead of objectId, while stored documents keep objectId; changing the type to String makes the Prisma 6 app read and write the value as a hex string, with the stored values unchanged.`;
 }
 
+function nativeTypeCodecId(
+  binding: Prisma6TargetBinding,
+  typeName: string,
+  nativeType: string,
+): string | undefined {
+  if (nativeType === 'db.ObjectId') {
+    return typeName === 'String' ? binding.objectIdCodecId : undefined;
+  }
+  const forType = Object.hasOwn(binding.nativeTypeCodecIds, typeName)
+    ? binding.nativeTypeCodecIds[typeName]
+    : undefined;
+  return forType !== undefined && Object.hasOwn(forType, nativeType)
+    ? forType[nativeType]
+    : undefined;
+}
+
+/** The native types the binding reads, as a message lists them: `@db.ObjectId on a String field and @db.Int and @db.Long on an Int field`. */
+function supportedNativeTypes(binding: Prisma6TargetBinding): string {
+  const byType = [
+    '@db.ObjectId on a String field',
+    ...Object.entries(binding.nativeTypeCodecIds).map(
+      ([typeName, nativeTypes]) =>
+        `${Object.keys(nativeTypes)
+          .map((name) => `@${name}`)
+          .join(' and ')} on ${withArticle(typeName)} field`,
+    ),
+  ];
+  return byType.join(' and ');
+}
+
 /** The field's contract type, or `undefined` after reporting why it has none. */
 function resolveFieldType(
   field: FieldSymbol,
@@ -669,7 +699,7 @@ function resolveFieldType(
         'PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED',
         attribute.name === 'db.ObjectId'
           ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String. ${objectIdRemoval(field.typeName)}`
-          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. ${nativeTypeRemoval(attribute.name, field.typeName)}`,
+          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source, which reads ${supportedNativeTypes(binding)}. ${nativeTypeRemoval(attribute.name, field.typeName)}`,
         sourceId,
         attribute.span,
       ),
@@ -717,10 +747,9 @@ function resolveFieldType(
   }
   let codecId = scalarCodecId;
   if (nativeType !== undefined) {
-    if (nativeType.name !== 'db.ObjectId' || field.typeName !== 'String') {
-      return nativeTypeUnsupported(nativeType);
-    }
-    codecId = binding.objectIdCodecId;
+    const nativeCodecId = nativeTypeCodecId(binding, field.typeName, nativeType.name);
+    if (nativeCodecId === undefined) return nativeTypeUnsupported(nativeType);
+    codecId = nativeCodecId;
   }
   return { type: { kind: 'scalar', codecId }, nullable: field.optional, ...many };
 }

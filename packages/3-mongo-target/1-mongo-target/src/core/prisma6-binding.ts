@@ -17,14 +17,14 @@ import { mongoTargetDescriptorMetaRuntime } from './descriptor-meta-runtime';
 const target: TargetPackRef<'mongo', 'mongo'> = mongoTargetDescriptorMetaRuntime;
 
 /**
- * What the Mongo target supplies to the Prisma 6 schema reader: the datasource provider it reads, the codec each Prisma 6 scalar maps to (the one Prisma 8 PSL gives the same type), the codec `@db.ObjectId` selects, and the generator `now()` and `@updatedAt` lower to.
+ * What the Mongo target supplies to the Prisma 6 schema reader: the datasource provider it reads, the codec each Prisma 6 scalar and native type maps to, the codec `@db.ObjectId` selects, and the generator `now()` and `@updatedAt` lower to. Each codec is the one for the BSON type Prisma 6 stores (ADR 257): a plain `Int` is a BSON long.
  */
 export const prisma6MongoBinding = {
   target,
   providers: ['mongodb'],
   scalarCodecIds: {
     String: MONGO_STRING_CODEC_ID,
-    Int: MONGO_INT32_CODEC_ID,
+    Int: MONGO_INT64_CODEC_ID,
     Float: MONGO_DOUBLE_CODEC_ID,
     Boolean: MONGO_BOOLEAN_CODEC_ID,
     DateTime: MONGO_DATE_CODEC_ID,
@@ -32,6 +32,9 @@ export const prisma6MongoBinding = {
     Decimal: MONGO_DECIMAL128_CODEC_ID,
     Bytes: MONGO_BINARY_CODEC_ID,
     Json: MONGO_JSON_CODEC_ID,
+  },
+  nativeTypeCodecIds: {
+    Int: { 'db.Int': MONGO_INT32_CODEC_ID, 'db.Long': MONGO_INT64_CODEC_ID },
   },
   objectIdCodecId: MONGO_OBJECTID_CODEC_ID,
   timestampGeneratorId: TIMESTAMP_NOW_GENERATOR_ID,

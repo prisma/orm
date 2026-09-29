@@ -7,10 +7,10 @@ describe('prisma6MongoBinding', () => {
     expect(prisma6MongoBinding.target).toMatchObject({ familyId: 'mongo', targetId: 'mongo' });
   });
 
-  it('maps each Prisma 6 scalar to the Mongo codec Prisma 8 PSL gives it', () => {
+  it('maps each Prisma 6 scalar to the codec for the BSON type Prisma 6 stores it as', () => {
     expect(prisma6MongoBinding.scalarCodecIds).toEqual({
       String: 'mongo/string@1',
-      Int: 'mongo/int32@1',
+      Int: 'mongo/int64@1',
       Float: 'mongo/double@1',
       Boolean: 'mongo/bool@1',
       DateTime: 'mongo/date@1',
@@ -18,6 +18,12 @@ describe('prisma6MongoBinding', () => {
       Decimal: 'mongo/decimal128@1',
       Bytes: 'mongo/binary@1',
       Json: 'mongo/json@1',
+    });
+  });
+
+  it('maps the Int native types to the codec for the BSON type each stores', () => {
+    expect(prisma6MongoBinding.nativeTypeCodecIds).toEqual({
+      Int: { 'db.Int': 'mongo/int32@1', 'db.Long': 'mongo/int64@1' },
     });
   });
 

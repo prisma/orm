@@ -11,6 +11,8 @@ export interface Prisma6TargetBinding {
     readonly Int: string;
     readonly DateTime: string;
   };
+  /** The codec each native type other than `@db.ObjectId` selects, keyed by scalar type and then by native type (`db.Int`). A native type missing here is not supported. */
+  readonly nativeTypeCodecIds: Readonly<Record<string, Readonly<Record<string, string>>>>;
   /** The codec `@db.ObjectId` selects on a `String` field. */
   readonly objectIdCodecId: string;
   /** The generator `@default(now())` and `@updatedAt` lower to on a `DateTime` field. */
