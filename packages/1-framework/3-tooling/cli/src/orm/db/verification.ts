@@ -262,6 +262,18 @@ export function schemaFindingBlocks(inputs: {
 }
 
 /**
+ * The advice for a database behind its contract when another tool applies the schema changes: apply the change with that tool, then sign again. `undefined` when Prisma 8 owns the schema.
+ */
+export function schemaOwnerActions(config: PrismaNextConfig): readonly NextAction[] | undefined {
+  const owner = config.contract?.source.schemaOwner;
+  if (owner === undefined) return undefined;
+  return [
+    { kind: 'user-choice', label: owner.applySchemaChange },
+    { kind: 'run-command', label: 'Then sign the database again', command: '{bin} db sign' },
+  ];
+}
+
+/**
  * A failed schema-verification verdict as one envelope diagnostic. `error` is
  * the honest severity: the database does not satisfy the contract. It is legal
  * because both commands settle at exit 4 — the engine refuses a

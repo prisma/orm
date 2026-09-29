@@ -29,6 +29,7 @@ import {
   readEmittedContract,
   requireVerifyConnection,
   schemaFindingBlocks,
+  schemaOwnerActions,
   schemaVerdictDiagnostic,
   verificationThrow,
 } from './verification';
@@ -345,7 +346,7 @@ export function createDbSignCommand(
                   schemaVerdictDiagnostic({
                     result: verified,
                     space: undefined,
-                    nextActions: [
+                    nextActions: schemaOwnerActions(ctx.config) ?? [
                       runCommandAction(
                         'Bring the database up to the contract, then sign again',
                         '{bin} db update',

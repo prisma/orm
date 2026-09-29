@@ -61,14 +61,16 @@ const targetLikeFields = { ...descriptorFields, targetId: 'string' } as const;
 
 /**
  * The contract source provider: `load` closes over the authored contract,
- * `inputs` are paths the schema resolves against the config file, and
- * `format` names the language the inputs are written in. Other keys a
+ * `inputs` are paths the schema resolves against the config file, `format`
+ * names the language the inputs are written in, and `schemaOwner` names the
+ * tool that applies schema changes when that is not Prisma 8. Other keys a
  * provider carries pass through.
  */
 const contractSource = {
   load: 'Function',
   'inputs?': 'path[]',
   format: "'psl' | 'typescript'",
+  'schemaOwner?': { applySchemaChange: 'string' },
 } as const;
 
 /** Each subsection's own shape, without the rules that relate subsections to one another. */

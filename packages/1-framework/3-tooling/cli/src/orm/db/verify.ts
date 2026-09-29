@@ -35,6 +35,7 @@ import {
   readEmittedContract,
   requireVerifyConnection,
   schemaFindingBlocks,
+  schemaOwnerActions,
   schemaVerdictDiagnostic,
   verificationThrow,
 } from './verification';
@@ -126,8 +127,13 @@ function invocation(mode: DbVerifyMode, strict: boolean): string {
 }
 
 /** The marker verdict as a finding, keeping the code the commander raised. */
-function markerFindingDiagnostic(result: VerifyDatabaseResult): Diagnostic {
-  const { ok: _ok, ...diagnostic } = normalizeError(markerFindingError(result)).toEnvelope();
+function markerFindingDiagnostic(
+  result: VerifyDatabaseResult,
+  ownerActions: readonly NextAction[] | undefined,
+): Diagnostic {
+  const { ok: _ok, ...diagnostic } = normalizeError(
+    markerFindingError(result, ownerActions),
+  ).toEnvelope();
   return diagnostic;
 }
 
@@ -141,7 +147,10 @@ function markerDriftDiagnostic(drift: unknown): Diagnostic {
   return diagnostic;
 }
 
-function markerFindingError(result: VerifyDatabaseResult) {
+function markerFindingError(
+  result: VerifyDatabaseResult,
+  ownerActions: readonly NextAction[] | undefined,
+) {
   if (result.code === VERIFY_CODE_MARKER_MISSING) {
     return errorMarkerMissing();
   }
@@ -152,6 +161,7 @@ function markerFindingError(result: VerifyDatabaseResult) {
         why: 'Contract storageHash does not match database marker',
         expected: result.contract.storageHash,
         ...ifDefined('actual', result.marker?.storageHash),
+        ...ifDefined('nextActions', ownerActions),
       });
     }
     const profileMatch =
@@ -328,6 +338,7 @@ function schemaPresentations(inputs: {
 function driftDiagnostics(inputs: {
   readonly perSpace: ReadonlyMap<string, CombinedVerifyResult['result']>;
   readonly combined: CombinedVerifyResult;
+  readonly ownerActions: readonly NextAction[] | undefined;
 }): readonly Diagnostic[] {
   const perSpace = [...inputs.perSpace]
     .filter(([, result]) => !result.ok)
@@ -335,7 +346,7 @@ function driftDiagnostics(inputs: {
       schemaVerdictDiagnostic({
         result,
         space,
-        nextActions: [PUSH_THE_CONTRACT, RECONCILE_BY_HAND],
+        nextActions: inputs.ownerActions ?? [PUSH_THE_CONTRACT, RECONCILE_BY_HAND],
       }),
     );
   if (perSpace.length > 0) {
@@ -412,6 +423,7 @@ export function createDbVerifyCommand(
       }
       const mode = resolved.value;
       const commandInvocation = invocation(mode, strict);
+      const ownerActions = schemaOwnerActions(ctx.config);
 
       const emitted = await readEmittedContract({
         config: ctx.config,
@@ -480,7 +492,11 @@ export function createDbVerifyCommand(
                 exitCode: combined.result.ok ? 0 : FINDINGS_EXIT_CODE,
                 diagnostics: combined.result.ok
                   ? []
-                  : driftDiagnostics({ perSpace: aggregate.value.schemaResults, combined }),
+                  : driftDiagnostics({
+                      perSpace: aggregate.value.schemaResults,
+                      combined,
+                      ownerActions,
+                    }),
               },
               schemaPresentations({ document, header, strict }),
             ),
@@ -514,7 +530,7 @@ export function createDbVerifyCommand(
               {
                 data: document,
                 exitCode: FINDINGS_EXIT_CODE,
-                diagnostics: [markerFindingDiagnostic(verified)],
+                diagnostics: [markerFindingDiagnostic(verified, ownerActions)],
               },
               verifyPresentations({ document, header }),
             ),
@@ -573,6 +589,7 @@ export function createDbVerifyCommand(
                     ? driftDiagnostics({
                         perSpace: aggregate.value.schemaResults,
                         combined: driftCombined,
+                        ownerActions,
                       })
                     : []),
                 ],
@@ -618,6 +635,7 @@ export function createDbVerifyCommand(
                 diagnostics: driftDiagnostics({
                   perSpace: aggregate.value.schemaResults,
                   combined,
+                  ownerActions,
                 }),
               },
               schemaPresentations({ document, header, strict }),

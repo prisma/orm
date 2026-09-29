@@ -92,6 +92,21 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
   };
 }
 
+const OWNED_CONTRACT = {
+  source: {
+    format: 'psl',
+    inputs: [],
+    load: async () => ({}),
+    schemaOwner: { applySchemaChange: 'Apply the schema change with the owning tool' },
+  },
+  output: 'output/contract.json',
+};
+
+const OWNED_ACTIONS = [
+  { kind: 'user-choice', label: 'Apply the schema change with the owning tool' },
+  { kind: 'run-command', label: 'Then sign the database again', command: '{bin} db sign' },
+];
+
 function harness(config: Record<string, unknown>) {
   return createOrmTestCli({ commands, groups, orm: config });
 }
@@ -268,6 +283,25 @@ describe('db verify', () => {
 
       expect(run.exitCode).toBe(4);
       expect(diagnosticsOf(run).map((entry) => entry.code)).toEqual(['CONTRACT.MARKER_MISMATCH']);
+    });
+
+    it('points a hash mismatch at the tool the contract source names as owning the schema', async () => {
+      const dir = await projectDir();
+      mocks.verify.mockResolvedValue(
+        verified({
+          ok: false,
+          code: 'CONTRACT.MARKER_MISMATCH',
+          summary: 'Marker does not match',
+          marker: { storageHash: HASH_B },
+        }),
+      );
+
+      const run = await harness(ormConfig({ contract: OWNED_CONTRACT })).run(
+        ['db', 'verify', '--json'],
+        { cwd: dir },
+      );
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual(OWNED_ACTIONS);
     });
 
     it('reports a target mismatch under its own code', async () => {
@@ -468,6 +502,18 @@ describe('db verify', () => {
           meta: { space: 'app', issues: ['missing: public/users/email'] },
         },
       ]);
+    });
+
+    it('points drift at the tool the contract source names as owning the schema', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));
+
+      const run = await harness(ormConfig({ contract: OWNED_CONTRACT })).run(
+        ['db', 'verify', '--json'],
+        { cwd: dir },
+      );
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual(OWNED_ACTIONS);
     });
 
     it('draws the drift as a tree the engine paints', async () => {

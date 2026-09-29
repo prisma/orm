@@ -30,10 +30,13 @@ export function errorHashMismatch(options?: {
   readonly why?: string;
   readonly expected?: string;
   readonly actual?: string;
+  /** Replaces the default advice, for a database whose schema another tool changes. */
+  readonly nextActions?: readonly NextAction[];
 }): CliStructuredError {
   return new CliStructuredError('CONTRACT.MARKER_MISMATCH', 'Hash mismatch', {
     why: options?.why ?? 'Contract hash does not match database marker',
     fix: 'Migrate database or re-sign if intentional',
+    ...ifDefined('nextActions', options?.nextActions),
     ...(options?.expected !== undefined || options?.actual !== undefined
       ? {
           meta: {

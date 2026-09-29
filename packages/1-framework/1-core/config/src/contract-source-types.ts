@@ -69,6 +69,14 @@ export interface ContractSourceContext {
  */
 export type ContractSourceFormat = 'psl' | 'typescript';
 
+/**
+ * A tool other than Prisma 8 that applies schema changes to the database a contract source describes. Prisma 8 then only signs and verifies that database.
+ */
+export interface ContractSourceSchemaOwner {
+  /** What the user does in that tool to apply a schema change, worded as a next action. */
+  readonly applySchemaChange: string;
+}
+
 export interface ContractSourceProviderBase {
   /**
    * Glob patterns naming the contract source's member files. A wildcard-free
@@ -76,6 +84,10 @@ export interface ContractSourceProviderBase {
    * auto-expanded.
    */
   readonly inputs?: readonly string[];
+  /**
+   * Set when another tool applies schema changes to the database this source describes. When `db verify` or `db sign` finds the database behind the contract, it points at that tool and then at `db sign`, instead of at a Prisma 8 migration.
+   */
+  readonly schemaOwner?: ContractSourceSchemaOwner;
   readonly load: (
     context: ContractSourceContext,
   ) => Promise<Result<Contract, ContractSourceDiagnostics>>;
