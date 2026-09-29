@@ -28,6 +28,7 @@ import {
   decimal128EncodeJson,
   decimalTextBigintLiteral,
   doubleEncode,
+  int32Encode,
   int64Decode,
   int64DecodeJson,
   int64Encode,
@@ -85,7 +86,7 @@ export const mongoDoubleCodec = mongoCodec({
 export const mongoInt32Codec = mongoCodec({
   typeId: MONGO_INT32_CODEC_ID,
   decode: (wire: number) => wire,
-  encode: (value: number) => value,
+  encode: (value: number) => int32Encode(MONGO_INT32_CODEC_ID, value),
 });
 
 export const mongoBooleanCodec = mongoCodec({

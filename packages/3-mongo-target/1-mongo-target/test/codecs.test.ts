@@ -44,6 +44,25 @@ describe('mongoInt32Codec', () => {
     expect(await mongoInt32Codec.decode(42, {})).toBe(42);
     expect(await mongoInt32Codec.encode(42, {})).toBe(42);
   });
+
+  it('encodes both ends of the signed 32-bit range', async () => {
+    expect(await mongoInt32Codec.encode(-(2 ** 31), {})).toBe(-(2 ** 31));
+    expect(await mongoInt32Codec.encode(2 ** 31 - 1, {})).toBe(2 ** 31 - 1);
+  });
+
+  it.each([
+    ['1.5', 1.5],
+    ['2147483648', 2 ** 31],
+    ['1099511627776', 2 ** 40],
+    ['-2147483649', -(2 ** 31) - 1],
+    ['NaN', Number.NaN],
+    ['string "1"', '1'],
+  ])('refuses %s instead of letting the server reject it', async (received, value) => {
+    await expect(mongoInt32Codec.encode(value as number, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `mongo/int32@1 value must be an integer from -2147483648 to 2147483647; received ${received}`,
+    });
+  });
 });
 
 describe('mongoDoubleCodec', () => {
