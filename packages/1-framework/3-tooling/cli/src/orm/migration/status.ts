@@ -52,6 +52,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { schemaOwnerActions } from '../db/verification';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -407,7 +408,7 @@ export const migrationStatusCommand = defineOrmCommand({
       }
       if (connects && markerHash !== undefined && !markerInGraph) {
         divergedMarker ??= { space: entry.space, markerHash };
-        findings.push(markerNotInHistoryFinding(entry.space));
+        findings.push(markerNotInHistoryFinding(entry.space, schemaOwnerActions(ctx.config)));
       }
 
       const ledger = database.ledgersBySpace.get(entry.space) ?? [];

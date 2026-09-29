@@ -16,7 +16,7 @@ import {
 import { maskConnectionUrl, targetSupportsMigrations } from '../../utils/command-helpers';
 import { appRefsDirFor, contractPathFor, displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
-import { errorSchemaOwnedElsewhere, schemaOwnerActions } from './verification';
+import { schemaOwnedRefusal } from './verification';
 
 /**
  * Everything a database-writing migration command needs before it connects:
@@ -78,9 +78,9 @@ export async function prepareMigrationRun(inputs: {
   readonly createClient: CreateControlClient;
 }): Promise<Result<PreparedMigrationRun, CliStructuredError>> {
   const { config, cwd, commandName } = inputs;
-  const ownerActions = schemaOwnerActions(config);
-  if (ownerActions !== undefined) {
-    return notOk(normalizeError(errorSchemaOwnedElsewhere(commandName, ownerActions)));
+  const refusal = schemaOwnedRefusal(config, commandName);
+  if (refusal !== undefined) {
+    return notOk(normalizeError(refusal));
   }
   const contractPath = contractPathFor(config);
   if (contractPath === undefined) {

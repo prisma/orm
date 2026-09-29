@@ -1546,7 +1546,7 @@ A migration's `from` and `to` hashes are identical and it declares no data-trans
 
 ### MIGRATION.SCHEMA_OWNED_ELSEWHERE
 
-`db init`, `db update` or `db migrate` ran on a project whose contract source names another tool as the one that applies schema changes to the database, such as `prisma6Schema` (Prisma 6 `db push`) or `prisma7Schema` (Prisma 7 migrations). Prisma 8 only signs and verifies that database, so the command refuses before it connects, dry runs included. Apply the schema change with that tool, then run `db sign`; the next actions carry the tool's own advice. Payload: none.
+`db init`, `db update`, `db migrate`, `migration plan` or `migration new` ran on a project whose contract source names another tool as the one that applies schema changes to the database, such as `prisma6Schema` (Prisma 6 `db push`) or `prisma7Schema` (Prisma 7 migrations). Prisma 8 only signs and verifies that database, so the command refuses before it connects or writes anything, dry runs included. Apply the schema change with that tool, then run `db sign`; the next actions carry the tool's own advice. Payload: none.
 
 ### MIGRATION.SCHEMA_VERIFY_FAILED
 

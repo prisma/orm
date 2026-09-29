@@ -1087,6 +1087,8 @@ The `contract.output` field specifies the path to `contract.json`. This is the c
 
 Plan a migration from contract changes. Compares a starting contract against a destination contract and produces a new migration package with the required operations. No database connection is needed — fully offline.
 
+In a project whose contract source names another tool as the one that applies schema changes (`prisma6Schema`, `prisma7Schema`), this command and `migration new` refuse with `MIGRATION.SCHEMA_OWNED_ELSEWHERE` before writing anything, and point at that tool and then at `db sign`.
+
 ```bash
 prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--to <contract>] [--json] [-v] [-q] [--color/--no-color]
 ```

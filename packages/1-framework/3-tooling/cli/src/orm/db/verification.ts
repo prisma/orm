@@ -285,8 +285,18 @@ export function ownedExtensionSpaceDriftNextActions(space: string): readonly Nex
   ];
 }
 
-/** A schema-changing command refused because the contract source names another tool as the one that changes the schema. */
-export function errorSchemaOwnedElsewhere(
+/** The refusal for a command that changes the schema or authors migrations, when the contract source names another tool as the one that changes the schema; `undefined` when Prisma 8 owns it. */
+export function schemaOwnedRefusal(
+  config: PrismaNextConfig,
+  commandName: string,
+): CliStructuredError | undefined {
+  const ownerActions = schemaOwnerActions(config);
+  return ownerActions === undefined
+    ? undefined
+    : errorSchemaOwnedElsewhere(commandName, ownerActions);
+}
+
+function errorSchemaOwnedElsewhere(
   commandName: string,
   nextActions: readonly NextAction[],
 ): CliStructuredError {
@@ -294,7 +304,7 @@ export function errorSchemaOwnedElsewhere(
     'MIGRATION.SCHEMA_OWNED_ELSEWHERE',
     "Another tool changes this database's schema",
     {
-      why: `The contract source names another tool as the one that applies schema changes to this database, so ${commandName} does not change it. Prisma 8 only signs and verifies this database.`,
+      why: `The contract source names another tool as the one that applies schema changes to this database, so ${commandName} does not run: Prisma 8 neither changes this database nor authors its migrations. It only signs and verifies it.`,
       nextActions,
       docsUrl: docsUrlFor('MIGRATION.SCHEMA_OWNED_ELSEWHERE'),
     },

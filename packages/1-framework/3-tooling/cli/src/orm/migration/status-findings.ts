@@ -1,5 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
-import type { Diagnostic } from '@prisma/cli-engine/protocol';
+import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import type { StatusDiagnosticJson } from '../../commands/json/schemas';
 import { runCommandAction } from '../../utils/next-actions';
 
@@ -39,27 +39,55 @@ export function contractUnreadableFinding(reason: string): StatusFinding {
   };
 }
 
-export function markerNotInHistoryFinding(space: string): StatusFinding {
-  const message = `Database was updated outside the migration system (marker for space "${space}" does not match any migration)`;
-  const hints = [
+interface FindingAdvice {
+  readonly hints: readonly string[];
+  readonly nextActions: readonly NextAction[];
+}
+
+const MARKER_NOT_IN_HISTORY_ADVICE: FindingAdvice = {
+  hints: [
     "Run '{bin} db sign' to overwrite the marker if the database already matches the contract",
     "Run '{bin} db update' to push the current contract to the database",
-  ];
+  ],
+  nextActions: [
+    runCommandAction(
+      'Overwrite the marker if the database already matches the contract',
+      '{bin} db sign',
+    ),
+    runCommandAction('Or push the current contract to the database', '{bin} db update'),
+  ],
+};
+
+function hintFor(action: NextAction): string {
+  return action.command === undefined ? action.label : `${action.label}: run '${action.command}'`;
+}
+
+/**
+ * A marker the migration graph does not know. `ownerActions` replaces the advice when another tool changes the schema, since `db update` then refuses to run.
+ */
+export function markerNotInHistoryFinding(
+  space: string,
+  ownerActions: readonly NextAction[] | undefined,
+): StatusFinding {
+  const message = `Database was updated outside the migration system (marker for space "${space}" does not match any migration)`;
+  const { hints, nextActions } =
+    ownerActions === undefined
+      ? MARKER_NOT_IN_HISTORY_ADVICE
+      : { hints: ownerActions.map(hintFor), nextActions: ownerActions };
   return {
-    document: { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn', message, hints },
+    document: {
+      code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
+      severity: 'warn',
+      message,
+      hints: [...hints],
+    },
     diagnostic: {
       code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
       severity: 'warn',
       summary: message,
       why: 'The marker the database carries names no contract in the on-disk migration graph.',
       meta: { space },
-      nextActions: [
-        runCommandAction(
-          'Overwrite the marker if the database already matches the contract',
-          '{bin} db sign',
-        ),
-        runCommandAction('Or push the current contract to the database', '{bin} db update'),
-      ],
+      nextActions,
     },
   };
 }

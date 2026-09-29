@@ -10,6 +10,7 @@ import type { MigrationNewResult } from '../../control-api/operations/migration-
 import { executeMigrationNewCommand } from '../../control-api/operations/migration-new';
 import type { CreateControlClient } from '../../control-api/types';
 import { runCommandAction } from '../../utils/next-actions';
+import { schemaOwnedRefusal } from '../db/verification';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { appMigrationsDirFor, baseDirFor, contractPathFor, displayPath } from './paths';
@@ -87,6 +88,10 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
+      const refusal = schemaOwnedRefusal(ctx.config, 'migration new');
+      if (refusal !== undefined) {
+        return notOk(normalizeError(refusal));
+      }
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
