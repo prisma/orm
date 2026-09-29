@@ -19,10 +19,7 @@ import { providePslSignatureHelp } from '../src/signature-help';
 
 vi.mock('@internal/config-loader', { spy: true });
 
-function pipelineWithSymbolTable(
-  filename: string,
-  text: string,
-) {
+function pipelineWithSymbolTable(filename: string, text: string) {
   const snapshot = createDocumentSnapshot(filename, text);
   const pipeline = snapshot.parse();
   const { symbolTable } = buildSymbolTable({

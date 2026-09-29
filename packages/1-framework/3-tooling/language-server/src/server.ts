@@ -43,11 +43,7 @@ import { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { LspControlStack } from './lsp-control-stack';
-import {
-  createProjectArtifacts,
-  type DocumentArtifacts,
-  type ProjectArtifacts,
-} from './project-artifacts';
+import { type DocumentArtifacts, ProjectArtifacts } from './project-artifacts';
 import {
   canonicalFileIdentity,
   isWatcherCacheEligible,
@@ -416,7 +412,7 @@ function createServerOn(connection: Connection): LanguageServer {
     // A fresh store per load: a config reload can change what a parse
     // produces (inputs, control stack), so later reads must derive from the
     // new resolution rather than anything computed under the old one.
-    const artifacts = createProjectArtifacts({
+    const artifacts = new ProjectArtifacts({
       inputs: resolution.inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: (uri, error) => {

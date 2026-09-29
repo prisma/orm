@@ -82,7 +82,11 @@ import {
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
 import { guardedConnection } from '../src/guarded-connection';
-import { createProjectArtifacts, type DocumentArtifacts } from '../src/project-artifacts';
+import {
+  type DocumentArtifacts,
+  ProjectArtifacts,
+  type ProjectArtifactsOptions,
+} from '../src/project-artifacts';
 import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
 import { CONFIG_LOAD_FAILED_CODE, createServer } from '../src/server';
@@ -123,8 +127,8 @@ vi.mock('../src/project-artifacts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../src/project-artifacts')>();
   return {
     ...actual,
-    createProjectArtifacts: vi.fn((options) => {
-      const artifacts = actual.createProjectArtifacts(options);
+    ProjectArtifacts: vi.fn(function MockProjectArtifacts(options: ProjectArtifactsOptions) {
+      const artifacts = new actual.ProjectArtifacts(options);
       artifacts.symbolDiagnostics = vi.fn(artifacts.symbolDiagnostics);
       return artifacts;
     }),
@@ -4064,7 +4068,7 @@ describe('language server whole-project push and freshness', {
         items: [],
         relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
       });
-      const artifacts = vi.mocked(createProjectArtifacts).mock.results.at(-1)?.value;
+      const artifacts = vi.mocked(ProjectArtifacts).mock.results.at(-1)?.value;
       vi.mocked(artifacts.symbolDiagnostics).mockClear();
       interpret.mockClear();
       harness.client.sendNotification(DidChangeTextDocumentNotification.type, {

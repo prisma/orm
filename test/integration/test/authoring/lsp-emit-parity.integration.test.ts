@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../../../../packages/1-framework/3-tooling/language-server/src/config-resolution';
 import type { LspDiagnostic } from '../../../../packages/1-framework/3-tooling/language-server/src/diagnostic-mapping';
 import { DocumentStore } from '../../../../packages/1-framework/3-tooling/language-server/src/document-store';
-import { createProjectArtifacts } from '../../../../packages/1-framework/3-tooling/language-server/src/project-artifacts';
+import { ProjectArtifacts } from '../../../../packages/1-framework/3-tooling/language-server/src/project-artifacts';
 import { startServer } from '../../../../packages/1-framework/3-tooling/language-server/src/start-server';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
@@ -200,7 +200,7 @@ model Widget {
         const resolution = await resolveConfigInputs(ctx.configPath, readText);
         expect(resolution.interpretation).toBeDefined();
         documents.open({ uri, languageId: 'prisma', version: 1, text });
-        const project = createProjectArtifacts({
+        const project = new ProjectArtifacts({
           ...resolution,
           onInterpretationError,
           readSnapshot: documents.readSnapshot,
@@ -279,7 +279,7 @@ namespace billing {
       const resolution = await resolveConfigInputs(configPath, readText);
       expect(resolution.interpretation).toBeDefined();
       const onInterpretationError = vi.fn();
-      const project = createProjectArtifacts({
+      const project = new ProjectArtifacts({
         ...resolution,
         onInterpretationError,
         readSnapshot: documents.readSnapshot,

@@ -40,59 +40,93 @@ export interface ProjectArtifactsOptions {
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
 
-export interface ProjectArtifacts {
-  readonly sources: PslSources;
-  document(uri: string): DocumentArtifacts | undefined;
-  symbolTable(): SymbolTable;
-  symbolDiagnostics(): readonly PslDiagnostic[];
-  documentChanged(uri: string): void;
-  documentClosed(uri: string): void;
-  updateInputs(next: SchemaInputSet): void;
-}
-
-export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const { readSnapshot, interpretation } = options;
-  let inputs = options.inputs;
-  const documents = new Map<string, DocumentSnapshot>();
-  const documentFacades = new WeakMap<DocumentSnapshot, DocumentArtifacts>();
-  let symbolTableResult: SymbolTableResult | undefined;
-  let sources = new PslSources([]);
-  let interpretMemo:
+export class ProjectArtifacts {
+  readonly #options: ProjectArtifactsOptions;
+  readonly #readSnapshot: ProjectArtifactsOptions['readSnapshot'];
+  readonly #interpretation: ProjectInterpretation | undefined;
+  #inputs: SchemaInputSet;
+  readonly #documents = new Map<string, DocumentSnapshot>();
+  readonly #artifactsBySnapshot = new WeakMap<DocumentSnapshot, DocumentArtifacts>();
+  #symbolTableResult: SymbolTableResult | undefined;
+  #sources = new PslSources([]);
+  #interpretMemo:
     | {
         readonly sources: PslSources;
         readonly bySourceId: ReadonlyMap<string, readonly LspDiagnostic[]>;
       }
     | undefined;
 
-  function refreshSources(): void {
-    sources = new PslSources(
+  constructor(options: ProjectArtifactsOptions) {
+    this.#options = options;
+    this.#readSnapshot = options.readSnapshot;
+    this.#interpretation = options.interpretation;
+    this.#inputs = options.inputs;
+  }
+
+  get sources(): PslSources {
+    return this.#sources;
+  }
+
+  document = (uri: string): DocumentArtifacts | undefined => this.#readDocument(uri);
+
+  symbolTable = (): SymbolTable => this.#readSymbolTable();
+
+  symbolDiagnostics = (): readonly PslDiagnostic[] => this.#readSymbolTableResult().diagnostics;
+
+  documentChanged = (uri: string): void => this.#drop(uri);
+
+  documentClosed = this.documentChanged;
+
+  updateInputs = (next: SchemaInputSet): void => {
+    this.#inputs = next;
+    const validIdentities = schemaInputIdentities(next);
+    let changed = false;
+    for (const identity of this.#documents.keys()) {
+      if (!validIdentities.has(identity)) {
+        this.#documents.delete(identity);
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.#refreshSources();
+    }
+  };
+
+  #refreshSources(): void {
+    this.#sources = new PslSources(
       Array.from(
-        documents.values(),
+        this.#documents.values(),
         (snapshot) => [snapshot.parse().document.syntax, snapshot.sourceFile] as const,
       ),
     );
-    symbolTableResult = undefined;
-    interpretMemo = undefined;
+    this.#symbolTableResult = undefined;
+    this.#interpretMemo = undefined;
   }
 
-  function projectInterpretDiagnostics(): ReadonlyMap<string, readonly LspDiagnostic[]> {
-    if (interpretation === undefined) {
+  #projectInterpretDiagnostics(): ReadonlyMap<string, readonly LspDiagnostic[]> {
+    if (this.#interpretation === undefined) {
       return new Map();
     }
-    if (interpretMemo === undefined || interpretMemo.sources !== sources) {
-      interpretMemo = { sources, bySourceId: computeInterpretDistribution(interpretation) };
+    if (this.#interpretMemo === undefined || this.#interpretMemo.sources !== this.#sources) {
+      this.#interpretMemo = {
+        sources: this.#sources,
+        bySourceId: this.#computeInterpretDistribution(this.#interpretation),
+      };
     }
-    return interpretMemo.bySourceId;
+    return this.#interpretMemo.bySourceId;
   }
 
-  function computeInterpretDistribution(
+  #computeInterpretDistribution(
     activeInterpretation: ProjectInterpretation,
   ): ReadonlyMap<string, readonly LspDiagnostic[]> {
-    const currentSymbolTable = readSymbolTable();
-    const allDocuments = Array.from(documents.values(), (snapshot) => snapshot.parse().document);
+    const currentSymbolTable = this.#readSymbolTable();
+    const allDocuments = Array.from(
+      this.#documents.values(),
+      (snapshot) => snapshot.parse().document,
+    );
     const warnings: ContractSourceDiagnostic[] = [];
     const result = activeInterpretation.source.interpret(
-      { documents: allDocuments, sources, symbolTable: currentSymbolTable },
+      { documents: allDocuments, sources: this.#sources, symbolTable: currentSymbolTable },
       {
         ...activeInterpretation.context,
         reportWarning: (diagnostic) => {
@@ -105,7 +139,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       return new Map();
     }
     const sourceFileByFilename = new Map<string, SourceFile>();
-    for (const snapshot of documents.values()) {
+    for (const snapshot of this.#documents.values()) {
       sourceFileByFilename.set(snapshot.uri, snapshot.sourceFile);
     }
     const bySourceId = new Map<string, LspDiagnostic[]>();
@@ -123,16 +157,13 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     return bySourceId;
   }
 
-  function createInterpretSlot(
-    uri: string,
-    sourceFile: SourceFile,
-  ): () => readonly LspDiagnostic[] {
-    if (interpretation === undefined) {
+  #createInterpretSlot(uri: string, sourceFile: SourceFile): () => readonly LspDiagnostic[] {
+    if (this.#interpretation === undefined) {
       return () => [];
     }
     return () => {
       try {
-        return projectInterpretDiagnostics().get(sourceFile.filename) ?? [];
+        return this.#projectInterpretDiagnostics().get(sourceFile.filename) ?? [];
       } catch (error) {
         if (
           error instanceof ResponseError &&
@@ -142,7 +173,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         ) {
           throw error;
         }
-        options.onInterpretationError(uri, error);
+        this.#options.onInterpretationError(uri, error);
         return [
           {
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
@@ -156,41 +187,31 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     };
   }
 
-  function drop(uri: string): void {
-    if (documents.delete(canonicalFileIdentity(uri))) {
-      refreshSources();
+  #drop(uri: string): void {
+    if (this.#documents.delete(canonicalFileIdentity(uri))) {
+      this.#refreshSources();
     }
   }
 
-  function updateInputs(next: SchemaInputSet): void {
-    inputs = next;
-    const validIdentities = schemaInputIdentities(next);
-    let changed = false;
-    for (const identity of documents.keys()) {
-      if (!validIdentities.has(identity)) {
-        documents.delete(identity);
-        changed = true;
-      }
-    }
-    if (changed) {
-      refreshSources();
-    }
-  }
-
-  function readDocument(uri: string): DocumentArtifacts | undefined {
+  #readDocument(uri: string): DocumentArtifacts | undefined {
     const identity = canonicalFileIdentity(uri);
+    const readSnapshot = this.#readSnapshot;
     const snapshot = readSnapshot(uri);
-    if (snapshot === undefined || !inputs.includes(uri) || !isPrismaNextSchema(snapshot.text)) {
-      if (documents.delete(identity)) {
-        refreshSources();
+    if (
+      snapshot === undefined ||
+      !this.#inputs.includes(uri) ||
+      !isPrismaNextSchema(snapshot.text)
+    ) {
+      if (this.#documents.delete(identity)) {
+        this.#refreshSources();
       }
       return undefined;
     }
-    if (documents.get(identity) !== snapshot) {
-      documents.set(identity, snapshot);
-      refreshSources();
+    if (this.#documents.get(identity) !== snapshot) {
+      this.#documents.set(identity, snapshot);
+      this.#refreshSources();
     }
-    let facade = documentFacades.get(snapshot);
+    let facade = this.#artifactsBySnapshot.get(snapshot);
     if (facade === undefined) {
       facade = {
         get document() {
@@ -200,39 +221,27 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
           return snapshot.sourceFile;
         },
         diagnostics: mapParseDiagnostics(snapshot.parse().diagnostics),
-        interpretDiagnostics: createInterpretSlot(snapshot.uri, snapshot.sourceFile),
+        interpretDiagnostics: this.#createInterpretSlot(snapshot.uri, snapshot.sourceFile),
       };
-      documentFacades.set(snapshot, facade);
+      this.#artifactsBySnapshot.set(snapshot, facade);
     }
     return facade;
   }
 
-  function readSymbolTableResult(): SymbolTableResult {
+  #readSymbolTableResult(): SymbolTableResult {
     const currentDocuments: DocumentAst[] = [];
-    for (const uri of inputs.uris()) {
-      const artifacts = readDocument(uri);
+    for (const uri of this.#inputs.uris()) {
+      const artifacts = this.#readDocument(uri);
       if (artifacts !== undefined) currentDocuments.push(artifacts.document);
     }
-    symbolTableResult ??= buildSymbolTable({
+    this.#symbolTableResult ??= buildSymbolTable({
       documents: currentDocuments,
-      sources,
+      sources: this.#sources,
     });
-    return symbolTableResult;
+    return this.#symbolTableResult;
   }
 
-  function readSymbolTable(): SymbolTable {
-    return readSymbolTableResult().symbolTable;
+  #readSymbolTable(): SymbolTable {
+    return this.#readSymbolTableResult().symbolTable;
   }
-
-  return {
-    get sources() {
-      return sources;
-    },
-    document: readDocument,
-    symbolTable: readSymbolTable,
-    symbolDiagnostics: () => readSymbolTableResult().diagnostics,
-    documentChanged: drop,
-    documentClosed: drop,
-    updateInputs,
-  };
 }
