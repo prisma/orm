@@ -15,7 +15,8 @@ import { isStructuredError } from '@internal/utils/structured-error';
  * Resolves a `MongoValue` (which may contain `MongoParamRef` leaves) into the
  * driver-ready wire shape. When a leaf has a `codecId` and the registry has a
  * codec for it, the codec's async `encode` is awaited so codecs may perform
- * asynchronous work (e.g. lookups, key derivations).
+ * asynchronous work (e.g. lookups, key derivations). A `null` leaf is written
+ * as `null` without calling its codec, as the SQL runtime does.
  *
  * Object/array nodes dispatch their child resolutions concurrently via
  * `Promise.all` so independent leaves encode in parallel.
@@ -53,7 +54,7 @@ export async function resolveValue(
   const signal = ctx.signal;
 
   if (value instanceof MongoParamRef) {
-    if (value.codecId) {
+    if (value.codecId && value.value !== null) {
       const codec = codecs.get(value.codecId);
       if (codec?.encode) {
         try {

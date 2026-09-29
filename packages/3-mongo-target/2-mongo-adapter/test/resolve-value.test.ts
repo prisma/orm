@@ -83,6 +83,14 @@ describe('resolveValue', () => {
     expect(result[1]).toBe('b');
   });
 
+  it.each([...buildStandardCodecRegistry()].map((codec) => codec.id))(
+    'passes null for a nullable %s field through without calling the codec',
+    async (codecId) => {
+      const ref = new MongoParamRef(null, { codecId, name: 'avatar', collection: 'users' });
+      expect(await resolveValue(ref, buildStandardCodecRegistry(), noCtx)).toBeNull();
+    },
+  );
+
   it('preserves null, primitive, and Date values', async () => {
     expect(await resolveValue(null, emptyRegistry(), noCtx)).toBeNull();
     expect(await resolveValue(42, emptyRegistry(), noCtx)).toBe(42);

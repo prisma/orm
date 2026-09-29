@@ -23,4 +23,32 @@ describe('Mongo optional fields a stored document leaves out', () => {
       }),
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it(
+    'accept null or no value at all on create, and store null only when given',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        await db.authors.create({ karma: 1n, balance: '1', role: 'USER', avatar: null });
+        await db.authors.create({ karma: 2n, balance: '2', role: 'USER' });
+
+        const stored = await mongoDb
+          .collection('authors')
+          .find({}, { projection: { _id: 0, karma: 1, avatar: 1, address: 1 } })
+          .sort({ karma: 1 })
+          .toArray();
+        expect(
+          stored.map((document) => ({ ...document, karma: String(document['karma']) })),
+        ).toEqual([{ karma: '1', avatar: null }, { karma: '2' }]);
+        expect(
+          (await db.authors.orderBy({ karma: 1 }).all()).map(({ avatar, address }) => ({
+            avatar,
+            address,
+          })),
+        ).toEqual([
+          { avatar: null, address: null },
+          { avatar: null, address: null },
+        ]);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
 });
