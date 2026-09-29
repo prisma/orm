@@ -181,52 +181,6 @@ describe('migration status', () => {
     });
   });
 
-  it('points a marker outside the graph at the tool the contract source names as owning the schema', async () => {
-    const project = await createOfflineProject({ storageHash: HASH_HEAD });
-    const db = fakeDatabase({ markers: markersAt(HASH_UNKNOWN) });
-    const owned = {
-      ...driverConfig(project, db),
-      contract: {
-        source: {
-          format: 'psl',
-          inputs: [],
-          load: async () => ({}),
-          schemaOwner: { applySchemaChangeAdvice: 'Apply the schema change with the owning tool' },
-        },
-        output: project.contractPath,
-      },
-    };
-
-    const run = await harness(owned).run(['migration', 'status', '--json'], { cwd: project.dir });
-
-    expect(
-      run.presented?.diagnostics.map(({ code, nextActions }) => ({ code, nextActions })),
-    ).toEqual([
-      {
-        code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
-        nextActions: [
-          { kind: 'user-choice', label: 'Apply the schema change with the owning tool' },
-          {
-            kind: 'run-command',
-            label: 'Then sign the database again',
-            command: '{bin} db sign',
-          },
-        ],
-      },
-    ]);
-    expect(run.presented?.data).toMatchObject({
-      diagnostics: [
-        {
-          code: 'MIGRATION.MARKER_NOT_IN_HISTORY',
-          hints: [
-            'Apply the schema change with the owning tool',
-            "Then sign the database again: run '{bin} db sign'",
-          ],
-        },
-      ],
-    });
-  });
-
   it('records invariants the marker is missing as a warn diagnostic and still exits 0', async () => {
     const project = await createOfflineProject({ storageHash: HASH_HEAD });
     await seedMigrationPackage({

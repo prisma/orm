@@ -63,17 +63,17 @@ function hintFor(action: NextAction): string {
 }
 
 /**
- * A marker the migration graph does not know. `ownerActions` replaces the advice when another tool changes the schema, since `db update` then refuses to run.
+ * A marker the migration graph does not know. `ownedAdvice` replaces the advice when another tool changes the schema, since `db update` then refuses to run.
  */
 export function markerNotInHistoryFinding(
   space: string,
-  ownerActions: readonly NextAction[] | undefined,
+  ownedAdvice: readonly NextAction[] | undefined,
 ): StatusFinding {
   const message = `Database was updated outside the migration system (marker for space "${space}" does not match any migration)`;
   const { hints, nextActions } =
-    ownerActions === undefined
+    ownedAdvice === undefined
       ? MARKER_NOT_IN_HISTORY_ADVICE
-      : { hints: ownerActions.map(hintFor), nextActions: ownerActions };
+      : { hints: ownedAdvice.map(hintFor), nextActions: ownedAdvice };
   return {
     document: {
       code: 'MIGRATION.MARKER_NOT_IN_HISTORY',

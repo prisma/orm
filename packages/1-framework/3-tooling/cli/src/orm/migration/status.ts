@@ -52,7 +52,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { schemaOwnerActions } from '../db/verification';
+import { ownedExtensionSpaceDriftNextActions, schemaOwnerActions } from '../db/verification';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -363,6 +363,14 @@ export const migrationStatusCommand = defineOrmCommand({
       }
     }
 
+    const ownerActions = schemaOwnerActions(ctx.config);
+    const ownedSpaceAdvice = (space: string) => {
+      if (ownerActions === undefined) return undefined;
+      return space === aggregate.app.spaceId
+        ? ownerActions
+        : ownedExtensionSpaceDriftNextActions(space);
+    };
+
     const glyphMode: GlyphMode = args.flags.ascii ? 'ascii' : 'unicode';
     const styler = createToneMigrationListStyler();
     const showSpaceHeadings = scopedSpaces.length > 1;
@@ -408,7 +416,7 @@ export const migrationStatusCommand = defineOrmCommand({
       }
       if (connects && markerHash !== undefined && !markerInGraph) {
         divergedMarker ??= { space: entry.space, markerHash };
-        findings.push(markerNotInHistoryFinding(entry.space, schemaOwnerActions(ctx.config)));
+        findings.push(markerNotInHistoryFinding(entry.space, ownedSpaceAdvice(entry.space)));
       }
 
       const ledger = database.ledgersBySpace.get(entry.space) ?? [];
