@@ -137,7 +137,11 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 ### CLI.INIT_MISSING_FLAGS
 
-`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. When detection found a Prisma 7 project, the message also names `--from-prisma7-schema <path>` as the alternative. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`, `prisma7SchemaPath` (`null` when nothing Prisma 7 was found).
+`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. When detection found a Prisma 7 project, the message also names `--from-prisma7-schema <path>` as the alternative; a Prisma 6 MongoDB project gets `CLI.INIT_PRISMA6_SCHEMA_FOUND` instead. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`, `prisma7SchemaPath` (`null` when nothing Prisma 7 was found).
+
+### CLI.INIT_PRISMA6_SCHEMA_FOUND
+
+`prisma orm init` found a Prisma 6 MongoDB schema (a `datasource` with `provider = "mongodb"`, which Prisma 7 does not have) at the default path, at the path a Prisma 6 `prisma.config.*` declares, or at the path `--from-prisma7-schema` names. Prisma 8 can read that schema through `prisma6Schema`, but init does not set it up: both CLIs are published as `prisma`, and the Prisma 6 CLI also reads `prisma.config.ts`. Init stops before asking, installing, or writing anything, and its next actions are the side-by-side setup: move the Prisma 6 CLI to an npm alias (`"prisma6": "npm:prisma@<version>"`) run through a `prisma6` script with its own config file, install Prisma 8, write `prisma.config.ts` with `prisma6Schema`, then run `contract emit` and `db sign`. Passing `--target` and `--authoring` skips this and scaffolds a separate starter project, with a warning. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `prismaConfig` (the Prisma 8 config to write), `prisma6Config` (the Prisma 6 config to write; `null` when the project's own `prisma.config.*` is to be renamed instead).
 
 ### CLI.INIT_PRISMA7_CONFIG_COLLISION
 
