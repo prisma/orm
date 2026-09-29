@@ -47,6 +47,13 @@ const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
   value instanceof Temporal.PlainDateTime &&
   roundTripped.equals(value);
 
+/**
+ * The text codecs of the date and time types hand back PostgreSQL's own text, which is what the
+ * projection returns, while `encodeJson` writes the data type's standard text, the one a contract
+ * stores. Both spell the same value, so these cases are judged on the round trip.
+ */
+const sameText = (roundTripped: unknown, value: unknown): boolean => roundTripped === value;
+
 const ENUM_TYPE = 'codec_conformance_mood';
 
 /**
@@ -254,12 +261,14 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: '2026-01-02 03:04:05.123456',
     typeParams: { precision: 6 },
+    valueEquality: sameText,
   },
   {
     codecId: 'pg/timestamptz-string@1',
     label: 'microsecond precision at UTC',
     value: '2026-01-02 03:04:05.123456+00',
     typeParams: { precision: 6 },
+    valueEquality: sameText,
   },
   {
     codecId: 'pg/time-string@1',
@@ -267,12 +276,18 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '03:04:05.123456',
     typeParams: { precision: 6 },
   },
-  { codecId: 'pg/timetz@1', label: 'time of day at UTC', value: '03:04:05+00' },
+  {
+    codecId: 'pg/timetz@1',
+    label: 'time of day at UTC',
+    value: '03:04:05+00',
+    valueEquality: sameText,
+  },
   {
     codecId: 'pg/timetz@1',
     label: 'time of day at UTC under a hostile session',
     value: '03:04:05+00',
     setupSql: HOSTILE_TEMPORAL_SESSION,
+    valueEquality: sameText,
   },
   // An interval's application value is its three stored fields. A month has no
   // fixed length, so `{ months: 1 }` and `{ days: 30 }` stay distinct rather than

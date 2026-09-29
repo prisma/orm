@@ -31,6 +31,7 @@ import {
   sqlIntDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -46,6 +47,7 @@ import {
   sqliteBigint,
   sqliteBlob,
   sqliteDatetime,
+  sqliteDatetimeText,
   sqliteInteger,
   sqliteJson,
   sqliteReal,
@@ -269,7 +271,7 @@ export class SqliteTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return blindCast<string, 'a text column stores its JSON form as the string itself'>(json);
   }
 }
 
@@ -476,7 +478,7 @@ export class SqliteDatetimeCodec extends CodecImpl<
     return this.parseDate(wire);
   }
   encodeJson(value: Date): JsonValue {
-    return value.toISOString();
+    return sqliteDatetimeText(value.toISOString());
   }
   decodeJson(json: JsonValue): Date {
     if (typeof json !== 'string') {
@@ -522,7 +524,9 @@ export class SqliteJsonCodec extends CodecImpl<
     return JSON.stringify(value);
   }
   async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
-    return typeof wire === 'string' ? (JSON.parse(wire) as JsonValue) : wire;
+    return typeof wire === 'string'
+      ? blindCast<JsonValue, 'JSON.parse of stored JSON text yields a JSON value'>(JSON.parse(wire))
+      : wire;
   }
   encodeJson(value: JsonValue): JsonValue {
     return value;

@@ -4183,6 +4183,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.13
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)

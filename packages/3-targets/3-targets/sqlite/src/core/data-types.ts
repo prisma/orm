@@ -11,7 +11,7 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
-import { numeralText } from '@internal/sql-relational-core/ast';
+import { numeralText, standardDateTimeText } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
 
 const unchanged: Cast = (value) => value;
@@ -53,8 +53,18 @@ export const sqliteText: DataType = dataType('sqlite/text', {});
 export const sqliteJson: DataType = dataType('sqlite/json', {});
 export const sqliteInteger: DataType = dataType('sqlite/integer', {});
 
+/**
+ * The standard text of `sqlite/datetime`: an instant in UTC as `Temporal` prints it,
+ * `2024-01-01T12:34:56Z`. Turns written text into it, or refuses the text.
+ */
+export const sqliteDatetimeText = (text: string): string =>
+  standardDateTimeText(text, { shape: 'instant', typeName: 'sqlite/datetime', infinity: false });
+
 export const sqliteDatetime: DataType = dataType('sqlite/datetime', {
-  casts: { [sqliteText.id]: unchanged },
+  casts: {
+    [sqliteText.id]: (value) =>
+      typeof value === 'string' ? sqliteDatetimeText(value) : wrongShape(value, 'text'),
+  },
 });
 
 export const sqliteBlob: DataType = dataType('sqlite/blob', {

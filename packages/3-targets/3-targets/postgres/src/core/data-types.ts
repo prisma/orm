@@ -8,10 +8,15 @@
  * ADR 254.
  */
 
-import type { JsonValue } from '@internal/contract/types';
+import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
 import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
-import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
+import {
+  isNonFiniteText,
+  numeralText,
+  standardDateTimeText,
+} from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
+import { pgIntervalText } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -109,13 +114,83 @@ export const pgUuid: DataType = dataType('pg/uuid', { casts: fromText });
 export const pgInet: DataType = dataType('pg/inet', { casts: fromText });
 export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
 export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });
-export const pgTimetz: DataType = dataType('pg/timetz', { casts: fromText });
-export const pgInterval: DataType = dataType('pg/interval', { casts: fromText });
 export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });
-export const pgDate: DataType = dataType('pg/date', { casts: fromText });
-export const pgTime: DataType = dataType('pg/time', { casts: fromText });
-export const pgTimestamp: DataType = dataType('pg/timestamp', { casts: fromText });
-export const pgTimestamptz: DataType = dataType('pg/timestamptz', { casts: fromText });
+
+/**
+ * The standard text of each date and time type: the text `Temporal` prints, and for `pg/interval`
+ * the ISO 8601 duration `pg/interval@1` writes. Each function turns written text into it, or
+ * refuses the text.
+ */
+export const pgDateText = (text: string): string =>
+  standardDateTimeText(text, { shape: 'date', typeName: 'pg/date', infinity: true });
+export const pgTimeText = (text: string): string =>
+  standardDateTimeText(text, { shape: 'time', typeName: 'pg/time', infinity: false });
+export const pgTimetzText = (text: string): string =>
+  standardDateTimeText(text, {
+    shape: 'timeWithOffset',
+    typeName: 'pg/timetz',
+    infinity: false,
+    maxOffsetHours: 15,
+  });
+export const pgTimestampText = (text: string): string =>
+  standardDateTimeText(text, { shape: 'dateTime', typeName: 'pg/timestamp', infinity: true });
+export const pgTimestamptzText = (text: string): string =>
+  standardDateTimeText(text, { shape: 'instant', typeName: 'pg/timestamptz', infinity: true });
+
+/** A cast from text that turns the text into the receiving type's standard text. */
+const fromTextAs = (standardText: (text: string) => string): Readonly<Record<string, Cast>> => ({
+  [pgText.id]: (value) =>
+    typeof value === 'string' ? standardText(value) : wrongShape(value, 'text'),
+});
+
+export const pgTimetz: DataType = dataType('pg/timetz', { casts: fromTextAs(pgTimetzText) });
+export const pgInterval: DataType = dataType('pg/interval', {
+  casts: fromTextAs(pgIntervalText),
+});
+export const pgDate: DataType = dataType('pg/date', { casts: fromTextAs(pgDateText) });
+export const pgTime: DataType = dataType('pg/time', { casts: fromTextAs(pgTimeText) });
+export const pgTimestamp: DataType = dataType('pg/timestamp', {
+  casts: fromTextAs(pgTimestampText),
+});
+export const pgTimestamptz: DataType = dataType('pg/timestamptz', {
+  casts: fromTextAs(pgTimestamptzText),
+});
+
+/** The standard-text function of each date and time type, by data type id. */
+export const postgresStandardTextByDataType: ReadonlyMap<string, (text: string) => string> =
+  new Map([
+    [pgDate.id, pgDateText],
+    [pgTime.id, pgTimeText],
+    [pgTimetz.id, pgTimetzText],
+    [pgTimestamp.id, pgTimestampText],
+    [pgTimestamptz.id, pgTimestamptzText],
+    [pgInterval.id, pgIntervalText],
+  ]);
+
+function inStandardText(value: JsonValue, standardText: (text: string) => string): JsonValue {
+  if (Array.isArray(value)) return value.map((element) => inStandardText(element, standardText));
+  if (typeof value !== 'string') return value;
+  try {
+    return standardText(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * A literal default of a date or time type in the type's standard text, element by element for a
+ * list. Text the type does not read, and a value of any other type, is returned unchanged.
+ */
+export function postgresStandardDefault(
+  value: ColumnDefaultLiteralInputValue,
+  dataType: string | undefined,
+): ColumnDefaultLiteralInputValue {
+  const standardText =
+    dataType === undefined ? undefined : postgresStandardTextByDataType.get(dataType);
+  return standardText === undefined || value instanceof Date
+    ? value
+    : inStandardText(value, standardText);
+}
 
 /** Every data type this target registers. */
 export const postgresDataTypes: readonly DataType[] = [
