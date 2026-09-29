@@ -570,7 +570,8 @@ interface BuildModelNodeInput {
    */
   readonly modelMappingsByCoordinate: ReadonlyMap<string, ModelNameMapping>;
   readonly modelNames: Set<string>;
-  readonly compositeTypeNames: ReadonlySet<string>;
+  /** The value objects the composite types declare, by name. */
+  readonly valueObjects: ReadonlyMap<string, ValueObjectNode>;
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly composedExtensions: Set<string>;
@@ -687,7 +688,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     enumTypeDescriptors: input.enumTypeDescriptors,
     namedTypeDescriptors: input.namedTypeDescriptors,
     modelNames: input.modelNames,
-    compositeTypeNames: input.compositeTypeNames,
+    valueObjects: input.valueObjects,
     composedExtensions: input.composedExtensions,
     authoringContributions: input.authoringContributions,
     familyId: input.familyId,
@@ -2119,7 +2120,6 @@ export function interpretPslDocumentToSqlContract(
   const defaultNamespaceId = input.target.defaultNamespaceId;
 
   const modelNames = new Set(models.map((model) => model.name));
-  const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
   const composedExtensions = new Set(input.composedExtensions ?? []);
   const composedExtensionContracts: ReadonlyMap<string, Contract> =
     input.composedExtensionContracts;
@@ -2413,6 +2413,27 @@ export function interpretPslDocumentToSqlContract(
     Record<string, Record<string, unknown>>
   >();
 
+  const valueObjects = buildValueObjectNodes({
+    compositeTypes,
+    enumTypeDescriptors: allEnumTypeDescriptors,
+    enumHandles: enumHandlesByName,
+    namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
+    namedTypes: namedTypeResult.storageTypes,
+    scalarColumnDescriptors: input.scalarColumnDescriptors,
+    composedExtensions,
+    familyId: input.target.familyId,
+    targetId: input.target.targetId,
+    authoringContributions: input.authoringContributions,
+    diagnostics,
+    sources: input.sources,
+    defaultNamespaceId,
+    defaultNamespaceExtensionEntities: namespaceExtensionEntities.get(defaultNamespaceId),
+    codecLookup: input.codecLookup,
+  });
+  const valueObjectsByName = new Map(
+    valueObjects.map((valueObject) => [valueObject.name, valueObject]),
+  );
+
   for (const { model, namespaceId } of modelEntries) {
     const coordinate = modelCoordinateKey(namespaceId ?? defaultNamespaceId, model.name);
     const mapping = modelMappingsByCoordinate.get(coordinate);
@@ -2425,7 +2446,7 @@ export function interpretPslDocumentToSqlContract(
       modelMappings,
       modelMappingsByCoordinate,
       modelNames,
-      compositeTypeNames,
+      valueObjects: valueObjectsByName,
       enumTypeDescriptors: allEnumTypeDescriptors,
       namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
       composedExtensions,
@@ -2597,24 +2618,6 @@ export function interpretPslDocumentToSqlContract(
       stiVariantKeys,
       defaultNamespaceId,
     );
-
-  const valueObjects = buildValueObjectNodes({
-    compositeTypes,
-    enumTypeDescriptors: allEnumTypeDescriptors,
-    enumHandles: enumHandlesByName,
-    namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
-    namedTypes: namedTypeResult.storageTypes,
-    scalarColumnDescriptors: input.scalarColumnDescriptors,
-    composedExtensions,
-    familyId: input.target.familyId,
-    targetId: input.target.targetId,
-    authoringContributions: input.authoringContributions,
-    diagnostics,
-    sources: input.sources,
-    defaultNamespaceId,
-    defaultNamespaceExtensionEntities: namespaceExtensionEntities.get(defaultNamespaceId),
-    codecLookup: input.codecLookup,
-  });
 
   if (diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {
     return notOk({

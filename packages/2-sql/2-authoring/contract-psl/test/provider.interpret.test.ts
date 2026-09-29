@@ -199,6 +199,7 @@ model Other {
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
       isListColumn: false,
+      valueObjectDefault: undefined,
       generatorDescriptorById: new Map(),
       defaultFunctionRegistry: new Map(),
       dataTypeSupport: fixtureDataTypeSupport,

@@ -25,6 +25,7 @@ import {
   type AuthoredColumnDefault,
   type EnumTypeHandle,
   storedAsListColumn,
+  type ValueObjectNode,
 } from '@internal/sql-contract-ts/contract-builder';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -157,7 +158,8 @@ export interface CollectResolvedFieldsInput {
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly modelNames: Set<string>;
-  readonly compositeTypeNames: ReadonlySet<string>;
+  /** The value objects the composite types declare, by name. */
+  readonly valueObjects: ReadonlyMap<string, ValueObjectNode>;
   readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly familyId: string;
@@ -418,7 +420,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     enumTypeDescriptors,
     namedTypeDescriptors,
     modelNames,
-    compositeTypeNames,
+    valueObjects,
     composedExtensions,
     authoringContributions,
     binder,
@@ -481,7 +483,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       continue;
     }
 
-    const isValueObjectField = compositeTypeNames.has(field.typeName);
+    const isValueObjectField = valueObjects.has(field.typeName);
     const isListField = field.list;
     const isListColumn = storedAsListColumn({
       list: isListField,
@@ -622,6 +624,9 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             binder: input.binder,
             columnDescriptor: descriptor,
             isListColumn,
+            valueObjectDefault: isValueObjectField
+              ? { valueObjectName: field.typeName, valueObjects }
+              : undefined,
             generatorDescriptorById,
             defaultFunctionRegistry,
             dataTypeSupport,

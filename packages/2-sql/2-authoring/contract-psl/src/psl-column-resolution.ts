@@ -50,7 +50,10 @@ import {
   reportUnknownFieldPreset,
 } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
-import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
+import type {
+  AuthoredColumnDefault,
+  ValueObjectNode,
+} from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import {
@@ -58,6 +61,7 @@ import {
   entryForTag,
   knownTags,
   lowerDataTypeDefault,
+  PSL_DEFAULT_TYPE_INCOMPATIBLE,
   PSL_INVALID_DEFAULT_LITERAL,
   type WrittenValue,
 } from './data-type-default';
@@ -72,6 +76,7 @@ import {
   interpretFieldAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
+import { valueObjectDefaultMismatches } from './value-object-default';
 
 export type ColumnDescriptor = {
   readonly codecId: string;
@@ -609,6 +614,13 @@ export function lowerDefaultForField(input: {
   readonly columnDescriptor: ColumnDescriptor;
   /** Whether the field is stored in a list column. A list of value objects is not: its one column holds the whole list as one JSON array. */
   readonly isListColumn: boolean;
+  /** For a field typed by a value object, the value objects a literal default is checked against. */
+  readonly valueObjectDefault:
+    | {
+        readonly valueObjectName: string;
+        readonly valueObjects: ReadonlyMap<string, ValueObjectNode>;
+      }
+    | undefined;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
@@ -671,6 +683,21 @@ export function lowerDefaultForField(input: {
         ...source.at(),
       });
       return {};
+    }
+    if (input.valueObjectDefault !== undefined) {
+      const mismatches = valueObjectDefaultMismatches({
+        fieldPath: `${input.modelName}.${input.fieldName}`,
+        value: lowered.value,
+        list: input.field.list,
+        ...input.valueObjectDefault,
+        column: input.columnDescriptor,
+        codecLookup: input.codecLookup,
+        support: input.dataTypeSupport,
+      });
+      for (const message of mismatches) {
+        input.diagnostics.push({ code: PSL_DEFAULT_TYPE_INCOMPATIBLE, message, ...source.at() });
+      }
+      if (mismatches.length > 0) return {};
     }
     return { defaultValue: { kind: 'literal' as const, value: lowered.value, canonical: true } };
   };
