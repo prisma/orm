@@ -445,6 +445,56 @@ describe('db init', () => {
     });
   });
 
+  function refusedClass(refusedOperationClass: 'widening' | 'destructive' | 'data') {
+    return {
+      kind: 'policy-violation',
+      summary: `${refusedOperationClass} operation disallowed`,
+      why: `Policy does not allow '${refusedOperationClass}' operations`,
+      refusedOperationClass,
+    };
+  }
+
+  function refusePlanning(...conflicts: ReturnType<typeof refusedClass>[]) {
+    mocks.dbInit.mockResolvedValue(
+      notOk({
+        code: 'PLANNING_FAILED',
+        summary: 'planning failed',
+        why: undefined,
+        conflicts,
+        meta: undefined,
+      }),
+    );
+  }
+
+  it('points a widening refusal at db update without mentioning confirmation', async () => {
+    refusePlanning(refusedClass('widening'));
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        nextActions: [{ label: 'Apply the change with db update', command: '{bin} db update' }],
+      },
+    });
+  });
+
+  it('points a data refusal at a planned migration, since db update does not apply data operations', async () => {
+    refusePlanning(refusedClass('destructive'), refusedClass('data'));
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        nextActions: [
+          {
+            label: 'Plan a migration, since db update does not apply data operations',
+            command: '{bin} migration plan',
+          },
+        ],
+      },
+    });
+  });
+
   it('maps an origin mismatch to the marker code, naming both hashes', async () => {
     mocks.dbInit.mockResolvedValue(
       notOk({
