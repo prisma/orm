@@ -23,6 +23,8 @@ import {
   type Index,
   type SqlStorage,
   StorageColumn,
+  type StorageTypeInstance,
+  storageTypeParams,
 } from '@internal/sql-contract/types';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
@@ -202,6 +204,8 @@ export function refuseFieldColumnMismatch(input: {
   readonly modelName: string;
   readonly singleTableVariant: boolean;
   readonly domainEnumNames: ReadonlySet<string>;
+  /** The named type the column is typed by, whose parameters the column takes. */
+  readonly namedType: StorageTypeInstance | undefined;
 }): void {
   const { field, column, coordinate } = input;
   const fix =
@@ -233,7 +237,11 @@ export function refuseFieldColumnMismatch(input: {
   }
   if (
     field.type.kind === 'scalar' &&
-    (field.type.codecId !== column.codecId || !sameJson(field.type.typeParams, column.typeParams))
+    (field.type.codecId !== column.codecId ||
+      !sameJson(
+        field.type.typeParams,
+        column.typeParams ?? (input.namedType && storageTypeParams(input.namedType)),
+      ))
   ) {
     throw unsupported(
       `field ${coordinate} has a different codec or type parameters from its column, which cannot be written in Prisma 8 PSL.`,

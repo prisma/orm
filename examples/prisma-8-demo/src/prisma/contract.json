@@ -144,7 +144,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/vector@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 1536
+                  }
                 }
               },
               "expiresAt": {

@@ -87,6 +87,7 @@ export {
   StorageColumn,
   StorageTable,
   StorageValueSet,
+  storageTypeParams,
   toStorageTypeInstance,
   UniqueConstraint,
 } from '../types';

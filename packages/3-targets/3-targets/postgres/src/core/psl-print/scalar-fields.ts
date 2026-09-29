@@ -134,6 +134,7 @@ export function buildScalarFields(input: {
       modelName: entry.name,
       singleTableVariant: variant?.singleTable === true,
       domainEnumNames: input.defaultDomainEnumNames,
+      namedType: column.typeRef === undefined ? undefined : input.namedTypes[column.typeRef],
     });
     if (column.typeRef !== undefined) {
       refuseColumnDifferingFromNamedType({

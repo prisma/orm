@@ -43,6 +43,7 @@ export {
   isStorageTypeInstance,
   type StorageTypeInstance,
   type StorageTypeInstanceInput,
+  storageTypeParams,
   toStorageTypeInstance,
 } from './ir/storage-type-instance';
 export {

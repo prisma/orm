@@ -19,7 +19,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/vector@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 1536
+                  }
                 }
               },
               "id": {

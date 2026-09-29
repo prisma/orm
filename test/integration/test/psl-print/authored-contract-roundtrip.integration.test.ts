@@ -332,6 +332,39 @@ namespace public {
   );
 });
 
+describe('a value-object member typed by a named type', () => {
+  it(
+    'is written with the named type inline, and reads back',
+    async () => {
+      const authored = await readPsl(`// use prisma-8
+types {
+  Short = VarChar(10)
+}
+
+type Label {
+  code  Short
+  codes Short[]
+}
+
+model Product {
+  id    Int   @id
+  code  Short
+  label Label
+}
+`);
+      const printed = await printAndReadBack(authored);
+
+      expect(printContract(authored).text).toMatch(
+        /type Label \{\s+code\s+VarChar\(10\)\s+codes\s+VarChar\(10\)\[\]/,
+      );
+      expect(serializedWithoutCapabilities(printed)).toEqual(
+        serializedWithoutCapabilities(authored),
+      );
+    },
+    timeouts.pslRoundTrip,
+  );
+});
+
 describe('a contract the language cannot carry is refused by name', () => {
   it('refuses a to-one relation that travels no foreign key', () => {
     const authored = loadContract(

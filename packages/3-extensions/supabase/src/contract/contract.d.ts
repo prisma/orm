@@ -5718,7 +5718,11 @@ type ContractBase = Omit<
               };
               readonly ipAddress: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 64 };
+                };
               };
               readonly payload: {
                 readonly nullable: true;
@@ -5969,7 +5973,11 @@ type ContractBase = Omit<
             readonly fields: {
               readonly aud: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly bannedUntil: {
                 readonly nullable: true;
@@ -5987,7 +5995,11 @@ type ContractBase = Omit<
               };
               readonly confirmationToken: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly confirmedAt: {
                 readonly nullable: true;
@@ -6012,11 +6024,19 @@ type ContractBase = Omit<
               };
               readonly email: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly emailChange: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly emailChangeConfirmStatus: {
                 readonly nullable: true;
@@ -6031,11 +6051,19 @@ type ContractBase = Omit<
               };
               readonly emailChangeTokenCurrent: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly emailChangeTokenNew: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly emailConfirmedAt: {
                 readonly nullable: true;
@@ -6046,7 +6074,11 @@ type ContractBase = Omit<
               };
               readonly encryptedPassword: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly id: {
                 readonly nullable: false;
@@ -6099,7 +6131,11 @@ type ContractBase = Omit<
               };
               readonly phoneChangeToken: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly phoneConfirmedAt: {
                 readonly nullable: true;
@@ -6125,7 +6161,11 @@ type ContractBase = Omit<
               };
               readonly reauthenticationToken: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly recoverySentAt: {
                 readonly nullable: true;
@@ -6136,11 +6176,19 @@ type ContractBase = Omit<
               };
               readonly recoveryToken: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly role: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly updatedAt: {
                 readonly nullable: true;
@@ -7291,7 +7339,11 @@ type ContractBase = Omit<
               };
               readonly parent: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly revoked: {
                 readonly nullable: true;
@@ -7303,7 +7355,11 @@ type ContractBase = Omit<
               };
               readonly token: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
               readonly updatedAt: {
                 readonly nullable: true;
@@ -7314,7 +7370,11 @@ type ContractBase = Omit<
               };
               readonly userId: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
             };
             readonly relations: {
@@ -7508,7 +7568,11 @@ type ContractBase = Omit<
             readonly fields: {
               readonly version: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
               };
             };
             readonly relations: Record<string, never>;
@@ -8135,7 +8199,11 @@ type ContractBase = Omit<
               };
               readonly hash: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 40 };
+                };
               };
               readonly id: {
                 readonly nullable: false;
@@ -8143,7 +8211,11 @@ type ContractBase = Omit<
               };
               readonly name: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'sql/varchar@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 100 };
+                };
               };
             };
             readonly relations: Record<string, never>;

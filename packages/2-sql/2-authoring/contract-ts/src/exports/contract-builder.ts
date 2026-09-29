@@ -35,7 +35,7 @@ export type {
   ValueObjectMemberNode,
   ValueObjectNode,
 } from '../contract-definition';
-export { isValueObjectNode } from '../contract-definition';
+export { domainTypeParams, isValueObjectNode } from '../contract-definition';
 export type {
   CheckKind,
   ColumnRef,

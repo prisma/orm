@@ -81,6 +81,47 @@ model User {
     });
   });
 
+  it('gives a composite member typed by a named type the domain type a model field of that named type has, single and list', () => {
+    const result = interpretPostgres(`types {
+  Short = VarChar(10)
+  Email = String
+}
+
+type Label {
+  code  Short
+  codes Short[]
+  email Email
+}
+
+model User {
+  id     Int         @id
+  code   Short
+  inline VarChar(10)
+  email  Email
+  label  Label
+}`);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const namespace = result.value.domain.namespaces['public'];
+    const fields = namespace?.models['User']?.fields;
+    const short = {
+      nullable: false,
+      type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
+    };
+    const email = { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } };
+    expect({
+      code: fields?.['code'],
+      inline: fields?.['inline'],
+      email: fields?.['email'],
+    }).toEqual({ code: short, inline: short, email });
+    expect(namespace?.valueObjects?.['Label']?.fields).toEqual({
+      code: short,
+      codes: { ...short, many: true },
+      email,
+    });
+  });
+
   it('lowers composite types to value objects, keeping optional, list and nested value-object members', () => {
     const result = interpretPostgres(`type Address {
   street String

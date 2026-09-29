@@ -52,6 +52,16 @@ export function toStorageTypeInstance(input: StorageTypeInstanceInput): StorageT
 }
 
 /**
+ * The type parameters a codec-typed entry gives a field typed by it. The `{}` that {@link toStorageTypeInstance} stores for a codec without parameters reads as none.
+ */
+export function storageTypeParams(
+  instance: Pick<StorageTypeInstanceInput, 'typeParams'>,
+): Record<string, unknown> | undefined {
+  const { typeParams } = instance;
+  return typeParams !== undefined && Object.keys(typeParams).length > 0 ? typeParams : undefined;
+}
+
+/**
  * Type-guard for codec-typed entries on the polymorphic
  * `SqlStorage.types` slot. Distinguishes `StorageTypeInstance` from
  * any class-instance kinds a target pack contributes.

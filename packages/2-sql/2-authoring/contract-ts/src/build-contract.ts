@@ -84,6 +84,7 @@ import { isStructuredError, type StructuredError } from '@internal/utils/structu
 import {
   type AuthoredColumnDefault,
   type ContractDefinition,
+  domainTypeParams,
   type FieldNode,
   isValueObjectNode,
   type ModelNode,
@@ -878,6 +879,7 @@ function enumValueSetRefs(
 function buildDomainField(
   field: ScalarMemberNode | ValueObjectMemberNode,
   defaultNamespaceId: string,
+  storageTypes: Record<string, StorageTypeInstance>,
 ): ContractField {
   if (isValueObjectNode(field)) {
     return {
@@ -891,7 +893,7 @@ function buildDomainField(
     type: {
       kind: 'scalar',
       codecId: field.descriptor.codecId,
-      ...ifDefined('typeParams', field.descriptor.typeParams),
+      ...ifDefined('typeParams', domainTypeParams(field.descriptor, storageTypes)),
     },
     nullable: field.nullable,
     ...ifDefined('many', field.many ? (true as const) : undefined),
@@ -1253,7 +1255,11 @@ export function buildSqlContractFromDefinition(
         );
       }
 
-      domainFields[field.fieldName] = buildDomainField(resolvedField, defaultNamespaceId);
+      domainFields[field.fieldName] = buildDomainField(
+        resolvedField,
+        defaultNamespaceId,
+        definition.storageTypes ?? {},
+      );
 
       if (executionDefaultPhases) {
         executionDefaults.push({
@@ -1731,7 +1737,10 @@ export function buildSqlContractFromDefinition(
             vo.name,
             {
               fields: Object.fromEntries(
-                vo.fields.map((f) => [f.fieldName, buildDomainField(f, defaultNamespaceId)]),
+                vo.fields.map((f) => [
+                  f.fieldName,
+                  buildDomainField(f, defaultNamespaceId, definition.storageTypes ?? {}),
+                ]),
               ),
             },
           ]),
