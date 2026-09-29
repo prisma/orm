@@ -1,5 +1,9 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import { MongoFieldFilter, type MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import {
+  MongoAndExpr,
+  MongoFieldFilter,
+  type MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
@@ -132,6 +136,27 @@ describe('parameters the Mongo ORM builds', () => {
       { name: 'severity', collection: 'tasks', codecId: string },
       withoutCodec,
       { name: 'type', collection: 'tasks', codecId: string },
+    ]);
+  });
+
+  it('encode the values of a filter expression through the codec of the field it names', async () => {
+    const { executor, plans } = recordingExecutor();
+    await createMongoCollection(contract, 'User', executor)
+      .where(
+        MongoAndExpr.of([
+          MongoFieldFilter.eq('_id', '65f0000000000000000000ab'),
+          MongoFieldFilter.in('loginCount', [1, new MongoParamRef(2)]),
+          MongoFieldFilter.gt('homeAddress.city', 'L'),
+        ]),
+      )
+      .all()
+      .toArray();
+
+    expect(labels(plans)).toEqual([
+      { name: '_id', collection: 'users', codecId: 'mongo/objectId@1' },
+      { name: 'loginCount', collection: 'users', codecId: 'mongo/int32@1' },
+      { name: 'loginCount', collection: 'users', codecId: 'mongo/int32@1' },
+      { name: 'homeAddress.city', collection: 'users', codecId: string },
     ]);
   });
 });
