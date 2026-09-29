@@ -36,6 +36,8 @@ export interface SqlColumnDefaultIRInput {
   readonly codecBaseNativeType?: string;
   /** See {@link import('./sql-column-ir').SqlColumnIRInput.codecNamedType}. */
   readonly codecNamedType?: boolean;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.defaultStandardText}. */
+  readonly standardText?: (text: string) => string;
 }
 
 /**
@@ -67,6 +69,8 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
   declare readonly codecBaseNativeType?: string;
   /** See {@link SqlColumnDefaultIRInput.codecNamedType}. Non-enumerable, same reason as {@link many}. */
   declare readonly codecNamedType?: boolean;
+  /** See {@link SqlColumnDefaultIRInput.standardText}. Non-enumerable, same reason as {@link many}. */
+  declare readonly standardText?: (text: string) => string;
 
   constructor(input: SqlColumnDefaultIRInput) {
     super();
@@ -78,6 +82,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
     defineNonEnumerable(this, 'codecNamedType', input.codecNamedType);
+    defineNonEnumerable(this, 'standardText', input.standardText);
     freezeNode(this);
   }
 
@@ -96,7 +101,8 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
   /**
    * Structured comparison with `this` as the expected side: both sides
    * resolved compare per the relational walk's `columnDefaultsEqual`
-   * semantics; a declared expected default against an unparseable actual
+   * semantics, a literal through the column type's standard text when the
+   * contract-derived side carries one; a declared expected default against an unparseable actual
    * (raw present, no resolved parse) is a mismatch; two raw-only nodes fall
    * back to raw string equality.
    */
@@ -111,6 +117,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
         this.resolved,
         node.resolved,
         node.nativeTypeContext ?? this.nativeTypeContext,
+        this.standardText ?? node.standardText,
       );
     }
     if (this.resolved !== undefined || node.resolved !== undefined) {

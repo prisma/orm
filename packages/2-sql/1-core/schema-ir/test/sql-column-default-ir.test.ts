@@ -41,16 +41,23 @@ describe('SqlColumnDefaultIR', () => {
       expect(expected.isEqualTo(actual)).toBe(true);
     });
 
-    it('temporal literals compare by instant: Date vs equivalent ISO string', () => {
-      const expected = new SqlColumnDefaultIR({
-        resolved: { kind: 'literal', value: new Date('2024-01-02T03:04:05.000Z') },
-        nativeTypeContext: 'timestamptz',
-      });
+    it('a literal compares through the standard text the contract-derived side carries', () => {
+      const standardText = (text: string): string =>
+        text.replace(' ', 'T').replace('.000Z', 'Z').replace('+00', 'Z');
+      const expected = (withStandardText: boolean) =>
+        new SqlColumnDefaultIR({
+          resolved: { kind: 'literal', value: new Date('2024-01-02T03:04:05.000Z') },
+          nativeTypeContext: 'timestamptz',
+          ...(withStandardText ? { standardText } : {}),
+        });
       const actual = new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value: '2024-01-02 03:04:05+00' },
         nativeTypeContext: 'timestamptz',
       });
-      expect(expected.isEqualTo(actual)).toBe(true);
+      expect({
+        withStandardText: expected(true).isEqualTo(actual),
+        withoutStandardText: expected(false).isEqualTo(actual),
+      }).toEqual({ withStandardText: true, withoutStandardText: false });
     });
 
     it('JSON literals compare canonically: object vs equivalent JSON string', () => {

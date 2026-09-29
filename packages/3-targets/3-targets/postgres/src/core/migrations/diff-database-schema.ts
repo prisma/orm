@@ -18,6 +18,7 @@ import {
   postgresDiffSubjectGranularity,
   type SqlSchemaDiffNode,
 } from '../schema-ir/schema-node-kinds';
+import { postgresStandardTextOfCodec } from '../standard-default-text';
 import { contractToPostgresDatabaseSchemaNode } from './contract-to-postgres-database-schema-node';
 import { resolvePostgresNodeIssueControlPolicySubject } from './control-policy';
 
@@ -137,6 +138,7 @@ export function diffPostgresSchema(input: {
     annotationNamespace: 'pg',
     ...ifDefined('expandNativeType', expandNativeType),
     resolveDefault: postgresResolveDefault,
+    standardTextOf: postgresStandardTextOfCodec,
   });
   const expected = pruneTableLessNamespaces(fullExpected);
   const relationalOwned = ownedSchemaNames(expected);
@@ -233,6 +235,7 @@ export function buildPostgresPlanDiff(input: {
     annotationNamespace: 'pg',
     ...ifDefined('expandNativeType', expandNativeType),
     resolveDefault: postgresResolveDefault,
+    standardTextOf: postgresStandardTextOfCodec,
   };
   const fullExpected = contractToPostgresDatabaseSchemaNode(postgresContract, projectionOptions);
   const expected = pruneTableLessNamespaces(fullExpected);

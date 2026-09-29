@@ -27,6 +27,7 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
+import { postgresStandardDefault } from '../data-types';
 import {
   buildCheckAttribute,
   buildIndexAttribute,
@@ -393,10 +394,17 @@ function literalOrRawAttribute(
   defaultMapping: DefaultMappingOptions,
   readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
 ): string | undefined {
+  const printed: ColumnDefault =
+    columnDefault.kind === 'literal'
+      ? {
+          kind: 'literal',
+          value: postgresStandardDefault(columnDefault.value, defaultMapping.columnDataType),
+        }
+      : columnDefault;
   const result =
-    columnDefault.kind === 'literal' && !readsBack(columnDefault.value)
+    printed.kind === 'literal' && !readsBack(printed.value)
       ? undefined
-      : mapDefault(columnDefault, defaultMapping);
+      : mapDefault(printed, defaultMapping);
   if (result !== undefined) return result.attribute;
   return typeof column.default === 'string'
     ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)

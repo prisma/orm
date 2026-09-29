@@ -131,6 +131,7 @@ export function renderColumnDefaultSql(
   const typeLike = columnTypeLike('column default', defaultNode);
   return buildColumnDefaultSql(columnDefault, {
     nativeType: buildColumnTypeSql(typeLike, codecHooks, {}, false),
+    codecId: typeLike.codecId,
     ...ifDefined('many', typeLike.many),
   });
 }

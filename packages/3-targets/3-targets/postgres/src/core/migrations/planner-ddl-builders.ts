@@ -5,6 +5,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { isPgEnumParams } from '../codecs';
 import { postgresError } from '../errors';
 import { escapeLiteral, quoteIdentifier, quoteQualifiedName } from '../sql-utils';
+import { postgresDefaultLiteralText } from '../standard-default-text';
 import type { PostgresColumnDefault } from '../types';
 import { resolveColumnTypeMetadata } from './planner-type-resolution';
 
@@ -139,10 +140,18 @@ function expandParameterizedTypeSql(
   return expanded !== column.nativeType ? expanded : null;
 }
 
+/**
+ * The column a default is written for: its type as SQL, whether it is a list, and the codec that
+ * names its data type, which decides the text a date or time value is written as.
+ */
+type DefaultColumn = Pick<StorageColumn, 'many' | 'nativeType'> & {
+  readonly codecId?: string | undefined;
+};
+
 /** Autoincrement columns use SERIAL types, so this returns empty for them. */
 export function buildColumnDefaultSql(
   columnDefault: PostgresColumnDefault | undefined,
-  column?: Pick<StorageColumn, 'many' | 'nativeType'>,
+  column?: DefaultColumn,
 ): string {
   if (!columnDefault) {
     return '';
@@ -163,21 +172,24 @@ export function buildColumnDefaultSql(
   }
 }
 
-export function renderDefaultLiteral(
-  value: unknown,
-  column?: Pick<StorageColumn, 'many' | 'nativeType'>,
-): string {
-  const isJsonColumn = column?.nativeType === 'json' || column?.nativeType === 'jsonb';
-
+export function renderDefaultLiteral(value: unknown, column?: DefaultColumn): string {
   if (column?.many && Array.isArray(value)) {
-    return renderArrayLiteralDefault(value, column.nativeType);
+    return renderArrayLiteralDefault(value, column.nativeType, column.codecId);
   }
+  const isJsonColumn = column?.nativeType === 'json' || column?.nativeType === 'jsonb';
+  if (isJsonColumn && typeof value === 'object' && value !== null && !(value instanceof Date)) {
+    return `'${escapeLiteral(JSON.stringify(value))}'::${column.nativeType}`;
+  }
+  return renderScalarLiteral(value, column?.codecId);
+}
 
+/** A date or time value is written through the one function every DDL path uses for it. */
+function renderScalarLiteral(value: unknown, codecId: string | undefined): string {
   if (value instanceof Date) {
-    return `'${escapeLiteral(value.toISOString())}'`;
+    return `'${escapeLiteral(postgresDefaultLiteralText(value.toISOString(), codecId))}'`;
   }
   if (typeof value === 'string') {
-    return `'${escapeLiteral(value)}'`;
+    return `'${escapeLiteral(postgresDefaultLiteralText(value, codecId))}'`;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
@@ -185,11 +197,7 @@ export function renderDefaultLiteral(
   if (value === null) {
     return 'NULL';
   }
-  const json = JSON.stringify(value);
-  if (isJsonColumn) {
-    return `'${escapeLiteral(json)}'::${column.nativeType}`;
-  }
-  return `'${escapeLiteral(json)}'`;
+  return `'${escapeLiteral(JSON.stringify(value))}'`;
 }
 
 /**
@@ -199,11 +207,15 @@ export function renderDefaultLiteral(
  * value as ISO text. `nativeType` is the element type or the list type, written as SQL, so a
  * user-defined type name arrives already quoted.
  */
-function renderArrayLiteralDefault(elements: unknown[], nativeType: string): string {
+function renderArrayLiteralDefault(
+  elements: unknown[],
+  nativeType: string,
+  codecId: string | undefined,
+): string {
   if (elements.length === 0) {
     return "'{}'";
   }
-  const rendered = `ARRAY[${elements.map((el) => renderDefaultLiteral(el)).join(', ')}]`;
+  const rendered = `ARRAY[${elements.map((el) => renderScalarLiteral(el, codecId)).join(', ')}]`;
   if (nativeType === '') return rendered;
   return `${rendered}::${nativeType.endsWith('[]') ? nativeType : `${nativeType}[]`}`;
 }

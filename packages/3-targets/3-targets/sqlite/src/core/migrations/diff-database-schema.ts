@@ -19,7 +19,7 @@ import type {
 import { relationalNodeGranularity, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { sqliteResolveDefault } from '../default-normalizer';
+import { sqliteResolveDefault, sqliteStandardTextOfCodec } from '../default-normalizer';
 import { renderDefaultLiteral } from './planner-ddl-builders';
 
 interface SqliteDiffDatabaseSchemaInput {
@@ -64,6 +64,7 @@ export function sqliteContractToSchema(
     annotationNamespace: 'sqlite',
     renderDefault: sqliteRenderDefault,
     resolveDefault: sqliteResolveDefault,
+    standardTextOf: sqliteStandardTextOfCodec,
     ...ifDefined('expandNativeType', extras?.expandNativeType),
   });
 }

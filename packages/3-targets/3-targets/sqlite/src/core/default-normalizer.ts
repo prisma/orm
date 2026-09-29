@@ -8,6 +8,8 @@
  */
 
 import type { ColumnDefault } from '@internal/contract/types';
+import { sqliteDatetime, sqliteDatetimeText } from './data-types';
+import { sqliteCodecDescriptorRegistry } from './registry';
 
 const NULL_PATTERN = /^NULL$/i;
 const INTEGER_PATTERN = /^-?\d+$/;
@@ -105,4 +107,15 @@ export function sqliteResolveDefault(
     return def;
   }
   return parseSqliteDefault(def.expression, resolvedNativeType) ?? def;
+}
+
+/**
+ * The standard-text function of the data type a codec represents, for `sqlite/datetime`, which
+ * stores one standard text for each instant. A datetime column and a text column are both `text` in
+ * the database, so the comparison of a literal default takes the type from the contract's codec.
+ */
+export function sqliteStandardTextOfCodec(codecId: string): ((text: string) => string) | undefined {
+  return sqliteCodecDescriptorRegistry.descriptorFor(codecId)?.dataType === sqliteDatetime.id
+    ? sqliteDatetimeText
+    : undefined;
 }

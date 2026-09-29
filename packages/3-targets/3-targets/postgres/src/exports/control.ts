@@ -29,6 +29,7 @@ import {
   postgresDiffSubjectEntityKind,
   postgresDiffSubjectGranularity,
 } from '../core/schema-ir/schema-node-kinds';
+import { postgresStandardTextOfCodec } from '../core/standard-default-text';
 
 export function postgresRenderDefault(def: ColumnDefault, column: StorageColumn): string {
   if (def.kind === 'function') {
@@ -79,6 +80,7 @@ function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
           ...ifDefined('expandNativeType', expander),
           renderDefault: postgresRenderDefault,
           resolveDefault: postgresResolveDefault,
+          standardTextOf: postgresStandardTextOfCodec,
         });
       },
     },
