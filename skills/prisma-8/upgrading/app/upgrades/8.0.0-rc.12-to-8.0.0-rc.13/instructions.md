@@ -85,7 +85,7 @@ changes:
     detection:
       glob: "**/*.prisma"
       matches:
-        - '^(?![\s\S]*\bprovider\s*=\s*"mongodb")[\s\S]*?(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
+        - '(?<![\s\S])(?![\s\S]*\bprovider\s*=\s*"mongodb")[\s\S]*?(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
   - id: mongo-variant-field-codecs
     summary: |
       Through `.variant(...)`, a field declared only on the variant model is now written and read
