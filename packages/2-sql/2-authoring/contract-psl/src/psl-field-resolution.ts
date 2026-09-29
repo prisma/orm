@@ -514,7 +514,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       if (valueObjectStorageTypeName === undefined) {
         diagnostics.push({
           code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          message: `Field "${model.name}.${field.name}" is typed by the composite type "${field.typeName}", but target "${targetId}" declares no storage type for value objects, so the field has no column to be stored in.`,
+          message: `Field "${model.name}.${field.name}" is typed by the composite type "${field.typeName}", but the adapter of the stack declares no storage type for value objects, so the field has no column to be stored in.`,
           ...source.at(field.span),
         });
         continue;

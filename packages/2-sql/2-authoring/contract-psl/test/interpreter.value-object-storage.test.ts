@@ -215,6 +215,9 @@ model Child {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    expect(result.value.domain.namespaces['public']?.models['Child']?.fields).toEqual({
+      extra: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+    });
     const tables = (result.value.storage as SqlStorage).namespaces['public']?.entries.table;
     expect(tables?.['child']).toEqual({
       columns: {
@@ -243,7 +246,7 @@ model Child {
       {
         code: 'PSL_UNSUPPORTED_FIELD_TYPE',
         message:
-          'Field "User.home" is typed by the composite type "Address", but target "postgres" declares no storage type for value objects, so the field has no column to be stored in.',
+          'Field "User.home" is typed by the composite type "Address", but the adapter of the stack declares no storage type for value objects, so the field has no column to be stored in.',
         sourceId: 'schema.prisma',
         span: {
           start: { offset: 75, line: 7, column: 3 },
@@ -253,7 +256,7 @@ model Child {
       {
         code: 'PSL_UNSUPPORTED_FIELD_TYPE',
         message:
-          'Field "User.addresses" is typed by the composite type "Address", but target "postgres" declares no storage type for value objects, so the field has no column to be stored in.',
+          'Field "User.addresses" is typed by the composite type "Address", but the adapter of the stack declares no storage type for value objects, so the field has no column to be stored in.',
         sourceId: 'schema.prisma',
         span: {
           start: { offset: 96, line: 8, column: 3 },

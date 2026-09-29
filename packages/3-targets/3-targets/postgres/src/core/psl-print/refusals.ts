@@ -209,6 +209,7 @@ export function refuseFieldColumnMismatch(input: {
   const { field, column, coordinate } = input;
   const fix =
     'Make the field and its column agree, or keep authoring this contract in its current source.';
+  const fixForEarlierRelease = `If an earlier release emitted this contract, emit it again. ${fix}`;
   if (input.singleTableVariant && !column.nullable) {
     throw unsupported(
       `column ${coordinate} of single-table variant "${input.modelName}" is not nullable, which cannot be written in Prisma 8 PSL.`,
@@ -245,7 +246,7 @@ export function refuseFieldColumnMismatch(input: {
     throw unsupported(
       `field ${coordinate} has a different codec or type parameters from its column, which cannot be written in Prisma 8 PSL.`,
       "The PSL source derives a scalar field's codec and type parameters from its column.",
-      fix,
+      fixForEarlierRelease,
       { coordinate },
     );
   }
@@ -260,7 +261,7 @@ export function refuseFieldColumnMismatch(input: {
     throw unsupported(
       `field ${coordinate} and its column do not name the enum of the default namespace and its value set that the PSL source derives for a field typed by an enum, which cannot be written in Prisma 8 PSL.`,
       'PSL types the field by the enum name, and the PSL source then points the column at the value set of that enum in the default namespace, and the field at the enum.',
-      fix,
+      fixForEarlierRelease,
       { coordinate },
     );
   }

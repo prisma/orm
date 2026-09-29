@@ -190,6 +190,21 @@ model Person {
 `,
   },
   {
+    name: 'defaults on a value object and on a list of value objects',
+    schema: `type Address {
+  street String
+  zip    String?
+}
+
+model Person {
+  id    Int       @id
+  home  Address   @default(json\`{"street": "x"}\`)
+  homes Address[] @default([])
+  addrs Address[] @default(json\`[{"street": "y", "zip": null}]\`)
+}
+`,
+  },
+  {
     name: 'value-object members with type parameters, single and list',
     schema: `type Price {
   amount  Numeric(65, 30)
