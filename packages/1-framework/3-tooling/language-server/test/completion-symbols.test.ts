@@ -16,7 +16,6 @@ function fields(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const context = classifyPslCompletionContext({
     document,

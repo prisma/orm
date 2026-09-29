@@ -10,7 +10,7 @@
 
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
@@ -45,6 +45,20 @@ const assembled = assembleAuthoringContributions([
   },
 ]);
 
+function blockResolutionBinder(
+  symbolTable: Parameters<typeof interpretExtensionBlocks>[0]['symbolTable'],
+  sources: Parameters<typeof interpretExtensionBlocks>[0]['sources'],
+) {
+  return createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  }).binder;
+}
+
 const postgresTarget = {
   kind: 'target' as const,
   familyId: 'sql' as const,
@@ -62,11 +76,21 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 
 function parsePsl(source: string) {
   const { document, sources } = parse(source, 'psl-policy-map-authoring.test.psl');
-  return buildSymbolTable({
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
+  const blocks = interpretExtensionBlocks({
+    symbolTable,
+    sources,
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+    binder: blockResolutionBinder(symbolTable, sources),
+  });
+  return {
+    symbolTable,
+    parsedBlocks: blocks.parsedBlocks,
+    diagnostics: [...collectionDiagnostics, ...blocks.diagnostics],
+  };
 }
 
 function interpret(source: string) {
@@ -74,7 +98,6 @@ function interpret(source: string) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   expect(diagnostics).toEqual([]);
   return interpretPslDocumentToSqlContract({
@@ -234,15 +257,15 @@ namespace public {
 
   it('two reopened spellings sharing one head stay a duplicate-entity diagnostic (head-keyed)', () => {
     const result = interpret(`
+model profile {
+  id       Int @id
+  owner_id Int
+  email    String
+
+  @@rls
+}
+
 namespace public {
-  model profile {
-    id       Int @id
-    owner_id Int
-    email    String
-
-    @@rls
-  }
-
   policy_select p_read {
     target = profile
     roles  = [app_user]

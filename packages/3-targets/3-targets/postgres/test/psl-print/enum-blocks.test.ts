@@ -7,14 +7,35 @@ import { blindCast } from '@internal/utils/casts';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { PostgresContractSerializer } from '../../src/core/postgres-contract-serializer';
+import { buildDomainEnumBlocks } from '../../src/core/psl-print/enum-blocks';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { testBuildContext } from './build-context';
 import { type ColumnShape, domainFieldOf, INT_COLUMN, table } from './print-support';
 
+describe('domain enum blocks', () => {
+  it('writes JSON expressions and retains the raw codec attribute', () => {
+    const [block] = buildDomainEnumBlocks({
+      Status: {
+        codecId: 'pg/text@1',
+        members: [{ name: 'Quoted', value: 'a"b\\c\n' }],
+      },
+    });
+    expect(block?.parameters['Quoted']?.expression).toBe('"a\\"b\\\\c\\n"');
+    expect(block?.blockAttributes).toEqual([
+      {
+        name: 'type',
+        args: [{ kind: 'positional', value: '"pg/text@1"', span: expect.any(Object) }],
+        span: expect.any(Object),
+      },
+    ]);
+    expect(block).not.toHaveProperty('attributes');
+  });
+});
+
 describe('native enum blocks', () => {
   function blockText(block: PslExtensionBlock): string {
     const members = Object.entries(block.parameters).map(([name, value]) =>
-      value.kind === 'value' ? `${name} = ${value.raw}` : name,
+      value.expression === undefined ? name : `${name} = ${value.expression}`,
     );
     const attributes = block.blockAttributes.map(
       (attribute) => `@@${attribute.name}(${attribute.args.map((arg) => arg.value).join(', ')})`,

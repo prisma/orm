@@ -7,6 +7,27 @@ model Post {
   thumbnail Binary
   meta      Json
   notes     Json?
+  raw       Bson?
 
   @@map("posts")
+}
+
+type Stamp {
+  note Json
+}
+
+model Asset {
+  id   ObjectId @id @map("_id")
+  kind String
+
+  @@discriminator(kind)
+  @@map("assets")
+}
+
+model Photo {
+  ownerId ObjectId
+  exif    Json
+  stamps  Stamp[]
+
+  @@base(Asset, "photo")
 }

@@ -4,6 +4,7 @@ import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 import {
   MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
+  MONGO_BSON_CODEC_ID,
   MONGO_DATE_CODEC_ID,
   MONGO_DECIMAL128_CODEC_ID,
   MONGO_DOUBLE_CODEC_ID,
@@ -24,11 +25,7 @@ export type { MongoControlDriverInstance };
 import { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 
 /**
- * The base PSL scalars as zero-arg type constructors in the unified authoring
- * channel, with explicit `nativeType` values pinned to the codec manifests
- * (`codecLookup.targetTypesFor(codecId)[0]`). `Json` has no BSON type; its
- * `nativeType` names the codec, and the validator reads the codec's empty
- * `targetTypes`, not this value.
+ * The base PSL scalars as zero-arg type constructors in the unified authoring channel. For a codec with one BSON type, `nativeType` is that type (`codecLookup.targetTypesFor(codecId)[0]`). `Json` (several BSON types) and `Bson` (none) have a `nativeType` that names the codec instead; the validator reads the codec's `targetTypes` list, not this value.
  */
 export const mongoScalarAuthoringTypes = {
   String: {
@@ -80,8 +77,14 @@ export const mongoScalarAuthoringTypes = {
   Json: {
     kind: 'typeConstructor',
     documentation:
-      'Any JSON value, stored as the BSON document, array or scalar it maps to. The collection validator does not constrain its type.',
+      'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
     output: { codecId: MONGO_JSON_CODEC_ID, nativeType: 'json' },
+  },
+  Bson: {
+    kind: 'typeConstructor',
+    documentation:
+      'Any BSON value, read as BsonValue; the collection validator does not constrain it.',
+    output: { codecId: MONGO_BSON_CODEC_ID, nativeType: 'bson' },
   },
   Int: {
     kind: 'typeConstructor',

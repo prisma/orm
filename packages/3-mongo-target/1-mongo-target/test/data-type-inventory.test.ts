@@ -14,6 +14,7 @@ const EXPECTED: Readonly<Record<string, string>> = {
   'mongo/decimal128@1': 'mongo/decimal128',
   'mongo/binary@1': 'mongo/binary',
   'mongo/json@1': 'mongo/json',
+  'mongo/bson@1': 'mongo/bson',
 };
 
 describe('Mongo data type inventory', () => {

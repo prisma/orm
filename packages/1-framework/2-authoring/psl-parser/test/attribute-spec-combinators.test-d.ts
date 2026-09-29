@@ -6,7 +6,6 @@ import type {
   BlockSymbol,
   CompositeTypeSymbol,
   FieldAttributeCtx,
-  InspectableArgType,
   ModelAttributeCtx,
   ModelSymbol,
   NamedTypeSymbol,
@@ -33,13 +32,6 @@ import {
   str,
 } from '../src/exports';
 
-test('inspectable lists and records expose ArgType children', () => {
-  type ListMetadata = Extract<InspectableArgType<never>, { kind: 'list' }>;
-  type RecordMetadata = Extract<InspectableArgType<never>, { kind: 'record' }>;
-  expectTypeOf<ListMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
-  expectTypeOf<RecordMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
-});
-
 test('checked reference selectors and wrappers preserve inferred outputs', () => {
   const model = entityRef({ kind: 'model' });
   const composite = entityRef({ kind: 'compositeType' });
@@ -62,21 +54,19 @@ test('checked reference selectors and wrappers preserve inferred outputs', () =>
   expectTypeOf<OutOf<typeof alternative>>().toEqualTypeOf<
     ResolvedEntityReference<ModelSymbol> | string
   >();
-  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<ModelAttributeCtx>();
-  expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sources' | 'symbols'>();
+  expectTypeOf(model.parse).parameter(1).toEqualTypeOf<AttributeCtx>();
   // @ts-expect-error checked references require an expected selector
   entityRef();
   // @ts-expect-error checked references do not accept injected resolvers
   entityRef({ kind: 'model' }, () => undefined);
 });
 
-test('a block attribute cannot name a reference combinator', () => {
+test('a block attribute names checked references but never field-scoped rules', () => {
   blockAttribute('target', {
     documentation: 'Names a model.',
     positional: [
       {
         key: 'model',
-        // @ts-expect-error a block attribute context carries no binder, so it cannot resolve a reference
         type: entityRef({ kind: 'model' }),
         documentation: 'The selected model.',
       },
@@ -87,7 +77,7 @@ test('a block attribute cannot name a reference combinator', () => {
     positional: [
       {
         key: 'field',
-        // @ts-expect-error a block attribute context carries no binder, so it cannot resolve a reference
+        // @ts-expect-error a block attribute has no declaring model, so field-scoped rules cannot enter
         type: fieldRef(),
         documentation: 'The selected field.',
       },
@@ -481,6 +471,7 @@ test('field references have distinct inspectable kinds', () => {
 test('runtime context metadata is rejected from arg types', () => {
   const fake: ArgType<string, AttributeCtx> = {
     kind: 'str',
+    value: undefined,
     label: 'custom',
     // @ts-expect-error parse contexts live in the generic, not runtime metadata
     requiredContext: 'attribute',

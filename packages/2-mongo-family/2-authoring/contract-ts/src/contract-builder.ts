@@ -74,6 +74,7 @@ import {
   type MongoValueSetInput,
 } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
+import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -167,6 +168,7 @@ type MongoCodecTypes = {
   readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
   readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
   readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
+  readonly 'mongo/bson@1': { readonly input: BsonInputValue; readonly output: BsonValue };
 };
 
 type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection<
@@ -1262,6 +1264,9 @@ export const field = {
   },
   json() {
     return createScalarFieldBuilder('mongo/json@1');
+  },
+  bson() {
+    return createScalarFieldBuilder('mongo/bson@1');
   },
   vector<const TypeParams extends Record<string, unknown> | undefined = undefined>(options?: {
     readonly typeParams?: TypeParams;

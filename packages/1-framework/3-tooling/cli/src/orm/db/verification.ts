@@ -22,6 +22,7 @@ import {
   errorUnexpected,
 } from '../../utils/cli-errors';
 import { sanitizeErrorMessage } from '../../utils/command-helpers';
+import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { contractPathFor, displayPath } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 
@@ -287,4 +288,24 @@ export function schemaVerdictDiagnostic(inputs: {
       ...(dotted || code === undefined ? {} : { code }),
     },
   };
+}
+
+export function schemaDriftNextActions(inputs: {
+  readonly verb: 'sign' | 'verify';
+  readonly contractRef: string | undefined;
+}): readonly NextAction[] {
+  const { verb, contractRef } = inputs;
+  const retryAfterEmit =
+    contractRef === undefined
+      ? `${verb} again`
+      : `${verb} the emitted contract instead of "${contractRef}"`;
+  return [
+    runCommandAction(
+      `Change the database to match the contract, then ${verb} again`,
+      contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
+    ),
+    chooseAction(
+      `Or change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`,
+    ),
+  ];
 }

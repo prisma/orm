@@ -13,6 +13,7 @@ import { Cursor, parseAttribute } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { createSyntaxTree } from '../src/syntax/red';
+import { supportBinder } from './support';
 
 describe('declaration documentation', () => {
   it.each([
@@ -61,11 +62,14 @@ describe('declaration documentation', () => {
     const root = createSyntaxTree(parseAttribute(cursor));
     const node = ModelAttributeAst.cast(root);
     if (!node) throw new Error('expected a block attribute');
+    const sources = new PslSources([[root, cursor.sourceFile]]);
+    const symbols = {
+      topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+    };
     const result = interpretAttribute(node, spec, {
-      sources: new PslSources([[root, cursor.sourceFile]]),
-      symbols: {
-        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
-      },
+      sources,
+      symbols,
+      binder: supportBinder({ sources, symbolTable: symbols }),
     });
     expect(result.assertOk()).toStrictEqual({
       value: {

@@ -164,7 +164,6 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents,
         sources,
-        pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
       });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can

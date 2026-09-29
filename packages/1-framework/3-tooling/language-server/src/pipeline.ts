@@ -12,14 +12,6 @@ import {
 } from '@internal/psl-parser/syntax';
 import { type LspDiagnostic, mapParseDiagnostics } from './diagnostic-mapping';
 
-/**
- * `pslBlockDescriptors` is kept complete on the live path so extension-block
- * validation matches the build; the structural diagnostics (duplicate
- * declaration, invalid qualified type) hold even without descriptors.
- * `scalarTypes`, `authoringContributions`, and `controlMutationDefaults` are not
- * consumed by the pipeline itself — they are the control-stack projection
- * semantic tokens and completions classify against.
- */
 export interface PipelineInputs {
   readonly scalarTypes: readonly string[];
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
@@ -42,17 +34,12 @@ export interface PipelineResult {
  * of symbol-table diagnostics. Never throws on malformed input — `parse`
  * recovers and `buildSymbolTable` is documented not to throw.
  */
-export function runPipeline(
-  filename: string,
-  text: string,
-  inputs: PipelineInputs,
-): PipelineResult {
+export function runPipeline(filename: string, text: string): PipelineResult {
   const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: inputs.pslBlockDescriptors,
   });
 
   return {

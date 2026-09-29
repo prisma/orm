@@ -78,7 +78,6 @@ export function buildRoleBlocks(
       name: entity.name,
       parameters: {},
       blockAttributes: [],
-      attributes: {},
       span: SYNTHETIC_SPAN,
     };
   });
@@ -135,21 +134,15 @@ export function buildPolicyBlocks(input: {
       keyword: POLICY_BLOCK_KEYWORDS[policy.operation],
       name: head,
       parameters: {
-        target: { kind: 'ref', identifier: modelName, span: SYNTHETIC_SPAN },
+        target: { expression: modelName, span: SYNTHETIC_SPAN },
         roles: {
-          kind: 'list',
-          items: policy.roles.map((role) => ({
-            kind: 'ref',
-            identifier: role,
-            span: SYNTHETIC_SPAN,
-          })),
+          expression: `[${policy.roles.join(', ')}]`,
           span: SYNTHETIC_SPAN,
         },
         ...(policy.using !== undefined
           ? {
               using: {
-                kind: 'value',
-                raw: JSON.stringify(policy.using),
+                expression: JSON.stringify(policy.using),
                 span: SYNTHETIC_SPAN,
               },
             }
@@ -157,15 +150,12 @@ export function buildPolicyBlocks(input: {
         ...(policy.withCheck !== undefined
           ? {
               withCheck: {
-                kind: 'value',
-                raw: JSON.stringify(policy.withCheck),
+                expression: JSON.stringify(policy.withCheck),
                 span: SYNTHETIC_SPAN,
               },
             }
           : {}),
-        ...(policy.permissive
-          ? {}
-          : { permissive: { kind: 'value', raw: 'false', span: SYNTHETIC_SPAN } }),
+        ...(policy.permissive ? {} : { permissive: { expression: 'false', span: SYNTHETIC_SPAN } }),
       },
       blockAttributes:
         policy.prefix === undefined
@@ -183,10 +173,6 @@ export function buildPolicyBlocks(input: {
               },
             ]
           : [],
-      attributes:
-        policy.prefix === undefined
-          ? { map: { args: { name: policy.name }, span: SYNTHETIC_SPAN } }
-          : {},
       span: SYNTHETIC_SPAN,
     };
   });

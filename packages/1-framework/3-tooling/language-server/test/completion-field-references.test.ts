@@ -56,7 +56,6 @@ function complete(markedSource: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({

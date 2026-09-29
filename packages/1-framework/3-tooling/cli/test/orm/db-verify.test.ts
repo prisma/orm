@@ -470,6 +470,26 @@ describe('db verify', () => {
       ]);
     });
 
+    it('offers to change the database, or the contract source', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then verify again',
+          command: '{bin} db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then verify again',
+        },
+      ]);
+    });
+
     it('draws the drift as a tree the engine paints', async () => {
       const dir = await projectDir();
       mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', DRIFTED]] }));

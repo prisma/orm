@@ -1,3 +1,4 @@
+import { writeRef } from '@internal/migration-tools/refs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CONNECTION,
@@ -12,6 +13,7 @@ import {
   mocks,
   ormConfig,
   projectDir,
+  refsDirOf,
   resetMocks,
   schemaResult,
   signResult,
@@ -150,8 +152,37 @@ describe('db sign', () => {
       expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
         {
           kind: 'run-command',
-          label: 'Bring the database up to the contract, then sign again',
+          label: 'Change the database to match the contract, then sign again',
           command: '{bin} db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
+    });
+
+    it('aims db update at the ref being signed, and the contract change at the emitted contract', async () => {
+      const dir = await projectDir();
+      await writeRef(refsDirOf(dir), 'staging', { hash: HASH_A, invariants: [] });
+      mocks.schemaVerify.mockResolvedValue(DRIFTED);
+
+      const run = await harness(ormConfig()).run(['db', 'sign', 'staging', '--json'], {
+        cwd: dir,
+      });
+
+      expect(run.exitCode).toBe(4);
+      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then sign again',
+          command: '{bin} db update --to "staging"',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign the emitted contract instead of "staging"',
         },
       ]);
     });

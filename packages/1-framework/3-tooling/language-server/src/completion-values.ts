@@ -1,11 +1,7 @@
 import type { ArgType, AttributeSpec } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
-import {
-  type ArgumentSignature,
-  directArgType,
-  resolveGrammar,
-} from './attribute-argument-grammar';
+import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
 import type {
   AttributeArgumentPosition,
   AttributeArgumentSlotPosition,
@@ -95,11 +91,10 @@ function namedKeyItems(
 
 function valueItems(
   input: ValueCompletionInput<AttributeArgumentPosition>,
-  param: ArgType<unknown, never> | undefined,
+  type: ArgType<unknown, never> | undefined,
   syntax: AttributeValuePosition['syntax'],
 ): readonly CompletionItem[] {
-  if (param === undefined) return [];
-  const type = directArgType(param);
+  if (type === undefined) return [];
   if (type.kind === 'oneOf') {
     return type.alternatives.flatMap((alternative) => valueItems(input, alternative, syntax));
   }
@@ -153,6 +148,8 @@ function valueItems(
       return scalarItems(input, type.value === undefined ? [] : [String(type.value)]);
     case 'bool':
       return scalarItems(input, ['true', 'false']);
+    case 'null':
+      return scalarItems(input, ['null']);
     case 'fieldRef':
     case 'referencedFieldRef':
       return scalarItems(input, input.fieldNames(type.kind));
