@@ -44,12 +44,14 @@ import type {
   SqlUniqueIRInput,
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind } from '@internal/sql-schema-ir/types';
-import type { PostgresCodecRegistry } from '@internal/target-postgres/codecs';
+import {
+  type PostgresCodecRegistry,
+  parsePostgresListText,
+} from '@internal/target-postgres/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-postgres/contract-free';
-import { parsePostgresListText } from '@internal/target-postgres/control';
 import type {
   AddColumnAction,
   AlterTableActionVisitor,
