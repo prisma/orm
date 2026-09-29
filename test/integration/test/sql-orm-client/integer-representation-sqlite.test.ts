@@ -135,7 +135,7 @@ describe('integration/integer representation type on sqlite', () => {
     // runtime's column-context envelope, with the codec error on `cause`.
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+      message: `Failed to decode column int_repr_samples.reading with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
@@ -146,9 +146,10 @@ describe('integration/integer representation type on sqlite', () => {
       },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+        message:
+          'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: String(FIRST_UNSAFE) },
+        meta: { codecId: 'sqlite/bigintnumber@1', received: JSON.stringify(String(FIRST_UNSAFE)) },
       },
     });
 
