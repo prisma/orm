@@ -37,7 +37,7 @@ Today `prisma contract emit` fails on this schema in the published CLI, because 
 
 3. **Text that does not meet the rules is refused.** The function refuses, with a message that says what is wrong and shows a correct example: an offset on `pg/timestamp`, `pg/date` or `pg/time`; no offset on `pg/timestamptz` or `pg/timetz`; a date on a time type or a time on `pg/date`; more than six fraction digits; a value that is not a real date or time. It reads what PostgreSQL prints as well as ISO 8601: a space in place of `T`, an offset of `+HH`, `+HH:MM` or `+HH:MM:SS`, and a ` BC` suffix.
 
-4. **The CLI loads a `Temporal` implementation when the runtime has none.** It does nothing when `globalThis.Temporal` exists. This covers every control-plane path that calls a `Temporal` codec: the PSL default check, DDL rendering in `db init` and `db update`, and `contract infer`.
+4. **The Postgres target's date and time code gets `Temporal` from the runtime when it has one, and from the target's own control-plane code when it has none.** Nothing installs a global. The three files that use `Temporal` (`temporal-codec-helpers.ts` and the two `now` generators in `@internal/target-postgres`) read it through one function. That function returns `globalThis.Temporal` when it is defined. Otherwise it returns the implementation that the target's control-plane entry registered, which comes from `temporal-polyfill`. The application runtime entries register nothing and do not import the polyfill, so with no `Temporal` the application still gets `RUNTIME.TEMPORAL_UNAVAILABLE`, as today. This covers every control-plane path with no call at any entry point: the PSL default check, DDL rendering in `db init`, `db update` and `node migration.ts`, `contract infer`, the Vite plugin, the language server and the programmatic control client.
 
 ## Non-goals
 
@@ -52,7 +52,7 @@ Today `prisma contract emit` fails on this schema in the published CLI, because 
 - Every codec of a data type writes that type's standard text from `encodeJson` and reads it in `decodeJson`.
 - A database created from a contract emitted before this project still verifies against the contract emitted after it, with no schema change planned.
 - `contract infer` prints a date or time default as a literal, and emitting the printed schema stores the same text infer read.
-- Nothing in the CLI needs a global `Temporal` to be present before the CLI starts.
+- No control-plane path needs a global `Temporal`, and none creates one.
 - The storage hash changes for a contract whose date or time default was not already in the standard text. The upgrade instructions say how to detect this and what to do.
 
 ## Definition of done
@@ -67,4 +67,5 @@ Today `prisma contract emit` fails on this schema in the published CLI, because 
 
 - The function and `Temporal` disagree on an edge case. A test compares them over a table of inputs.
 - The planner writes a default into DDL as quoted text in one path and through the codec in another. A year outside 0000 to 9999 in ISO form is not valid PostgreSQL input, so every DDL path must render through one function.
-- Shipping the polyfill adds a dependency to the CLI.
+- Shipping the polyfill adds a runtime dependency to the Postgres target's control-plane entry. The application runtime entries must not import it; a bundle-size check proves it.
+- A process can hold two `Temporal` implementations, the runtime's and the polyfill's. The function prefers the runtime's, and the codecs recognise a value by its `Symbol.toStringTag`, not by `instanceof`.

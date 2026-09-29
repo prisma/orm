@@ -2,12 +2,13 @@
 
 Three slices, one pull request each, in order. Slice 2 needs slice 1 to be observable in the built CLI. Slice 3 needs slice 2's functions.
 
-## Slice 1: the CLI loads a `Temporal` implementation (TML-3250)
+## Slice 1: the Postgres control plane works with no global `Temporal` (TML-3250)
 
-- The CLI entry point installs `temporal-polyfill` on `globalThis` only when `globalThis.Temporal` is undefined, before any command runs. The same for the other entry points that run control-plane code in a user's process: the Vite plugin that emits contracts and the language server, if they reach a `Temporal` codec.
-- `temporal-polyfill` is a runtime dependency of the package that loads it, and of the published package that ships it.
-- Tests run the built CLI as a child process with no polyfill preloaded: `contract emit` on a PSL schema with a `DateTime` default, and `db init` on a contract with date, time and list defaults.
-- Done when both tests pass and fail without the change.
+- One function in `@internal/target-postgres` returns the `Temporal` to use: the runtime's when it exists, else the one the control-plane entry registered. The codec helpers and the two `now` generators call it and never read the global.
+- The target's control-plane entry registers `temporal-polyfill`. No runtime entry imports it.
+- `temporal-polyfill` is a runtime dependency of the package that imports it and of the published packages that ship that entry.
+- Tests run the built CLI as a child process that has no `Temporal`: `contract emit` on a PSL schema with a `DateTime` default, `db init` on a contract with date, time and list defaults, and `node migration.ts` with a date default. A test asserts `globalThis.Temporal` is still undefined afterwards.
+- Done when the tests pass, fail without the change, and the runtime bundle sizes are unchanged.
 
 ## Slice 2: standard text in the data types, casts and codecs (TML-3302)
 
