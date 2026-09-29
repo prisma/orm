@@ -49,7 +49,7 @@
  * }
  * ```
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
@@ -133,12 +133,6 @@ CREATE TABLE "raw_list_defaults" (
 );
 `;
 
-/**
- * `db init` renders a raw timestamp default through a codec that needs a global `Temporal`, which
- * the CLI does not install.
- */
-const DB_INIT_UNSUPPORTED_FIELDS = ['stamp'] as const;
-
 interface VerifyIssue {
   readonly path: readonly string[];
 }
@@ -153,13 +147,6 @@ function readContractPsl(ctx: JourneyContext): string {
 
 function output(run: EngineCommandResult): string {
   return `${stripAnsi(run.stderr)}\n${stripAnsi(run.stdout)}`;
-}
-
-function withoutFields(psl: string, fields: readonly string[]): string {
-  return psl
-    .split('\n')
-    .filter((line) => !fields.includes(line.trim().split(/\s+/)[0] ?? ''))
-    .join('\n');
 }
 
 async function inferInto(ctx: JourneyContext): Promise<string> {
@@ -284,8 +271,7 @@ withTempDir(({ createTempDir }) => {
             createTempDir,
             contractMode: 'psl',
           });
-          const psl = withoutFields(await inferInto(ctx), DB_INIT_UNSUPPORTED_FIELDS);
-          writeFileSync(join(ctx.testDir, 'contract.prisma'), psl, 'utf-8');
+          await inferInto(ctx);
 
           const emit = await runContractEmit(ctx);
           expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);

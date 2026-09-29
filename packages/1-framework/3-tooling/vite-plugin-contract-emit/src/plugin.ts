@@ -1,6 +1,10 @@
 import type { ContractEmitResult } from '@internal/cli/control-api';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import { expandContractInputs, loadConfigForSections } from '@internal/config-loader';
+import {
+  expandContractInputs,
+  installTemporalWhenMissing,
+  loadConfigForSections,
+} from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import { dirname, extname, resolve } from 'pathe';
 import type { Plugin, ViteDevServer } from 'vite';
@@ -51,6 +55,8 @@ export function prismaVitePlugin(
   configPath: string = DEFAULT_CONFIG_PATH,
   options?: PrismaVitePluginOptions,
 ): Plugin {
+  installTemporalWhenMissing();
+
   const debounceMs = options?.debounceMs ?? DEFAULT_DEBOUNCE_MS;
   const logLevel = options?.logLevel ?? 'info';
 

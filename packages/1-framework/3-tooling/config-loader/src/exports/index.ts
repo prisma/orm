@@ -1,5 +1,6 @@
 export type { PrismaNextConfig } from '@internal/config/config-types';
 export { expandContractInputs, globContractInputMatching } from '../expand-contract-inputs';
+export { installTemporalWhenMissing } from '../install-temporal';
 export type { ConfigFile, ConfigFiles, LoadedConfig } from '../load';
 export {
   buildLoadedConfig,

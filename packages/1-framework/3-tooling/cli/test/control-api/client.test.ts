@@ -149,6 +149,30 @@ function createMockComponents() {
   };
 }
 
+describe('createControlClient', () => {
+  it('gives the process a Temporal when the runtime has none', () => {
+    const original = Object.getOwnPropertyDescriptor(globalThis, 'Temporal');
+    Reflect.deleteProperty(globalThis, 'Temporal');
+    const { mockFamily, mockTarget, mockAdapter, mockDriverDescriptor } = createMockComponents();
+
+    try {
+      createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+        driver: mockDriverDescriptor,
+      });
+
+      expect(typeof Reflect.get(globalThis, 'Temporal')).toBe('object');
+    } finally {
+      Reflect.deleteProperty(globalThis, 'Temporal');
+      if (original !== undefined) {
+        Object.defineProperty(globalThis, 'Temporal', original);
+      }
+    }
+  });
+});
+
 describe('ControlClient progress emission', () => {
   describe('verify()', () => {
     it('emits connect and verify spans when connection provided', async () => {

@@ -1545,6 +1545,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17
@@ -5353,6 +5356,9 @@ importers:
       strip-ansi:
         specifier: ^7.2.0
         version: 7.2.0
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17

@@ -23,6 +23,7 @@
     "arktype": "^2.2.2",
     "c12": "^3.3.4",
     "pathe": "^2.0.3",
+    "temporal-polyfill": "^1.0.4",
     "tinyglobby": "catalog:"
   },
   "devDependencies": {

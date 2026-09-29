@@ -10,6 +10,7 @@ vi.mock('@internal/cli/control-api', () => ({
 }));
 
 const loadConfigForSectionsMock = vi.hoisted(() => vi.fn());
+const installTemporalWhenMissingMock = vi.hoisted(() => vi.fn());
 
 // The production code consumes `loadConfigForSections`, which wraps the config
 // in a Result. Tests keep resolving plain configs (or rejecting); the wrapper
@@ -24,6 +25,7 @@ vi.mock('@internal/config-loader', async () => {
     loadConfigForSections: async (...args: unknown[]) =>
       ok(await loadConfigForSectionsMock(...args)),
     expandContractInputs: async (patterns: readonly string[] | undefined) => patterns ?? [],
+    installTemporalWhenMissing: installTemporalWhenMissingMock,
   };
 });
 
@@ -213,6 +215,14 @@ describe('prismaVitePlugin', () => {
     const plugin = prismaVitePlugin('prisma.config.ts');
 
     expect(plugin.name).toBe('prisma-vite-plugin-contract-emit');
+  });
+
+  it('gives the process a Temporal when it is created', () => {
+    installTemporalWhenMissingMock.mockClear();
+
+    prismaVitePlugin();
+
+    expect(installTemporalWhenMissingMock).toHaveBeenCalledTimes(1);
   });
 
   it('accepts optional configuration', () => {
