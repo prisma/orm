@@ -19,6 +19,8 @@ The framework imports live at `@internal/framework-components/codec`:
 - `column(codecFactory, codecId, typeParams, nativeType)` — column-spec packager (`nativeType` is the database spelling for migrations and contract meta).
 - `Codec<...>`, `CodecDescriptor<P>`, `AnyCodecDescriptor` — consumer-facing interfaces (consumers depend on these; target-neutral authors extend the `*Impl` classes, while target-bound SQL authors use target-owned bases).
 
+`decodeJson` follows one rule, stated on [`Codec.decodeJson`](../../packages/1-framework/1-core/framework-components/src/shared/codec.ts): it reads a value in a stored JSON form of the codec's type and throws on anything else, and callers use it as the check that a value is valid. The readers in `@internal/framework-components/codec` (`decodeJsonString`, `decodeJsonMatching`, `decodeJsonBoolean`, `decodeJsonInteger`, `decodeJsonIntegerText`, `decodeJsonFloat`) implement it for the common forms and refuse through `refuseJsonValue`, which raises `RUNTIME.DECODE_FAILED` with `meta.codecId` and `meta.received`. A codec built with type parameters checks them there too, as `sql/varchar@1` checks its length.
+
 SQL codecs use the same framework `CodecImpl` base. Their `encodeJson` and `decodeJson` methods define the codec's JSON-safe contract representation; `decode` remains responsible for the driver's ordinary column wire value. Keep that representation stable and mutually consistent, and keep `decodeJson` compatible with the values the current SQL JSON renderer returns for the codec. This distinction matters for types such as PostgreSQL `bytea` and extension-defined types whose values inside database-produced JSON may differ from their normal driver representation.
 
 PostgreSQL and SQLite target descriptors also declare AST-to-AST JSON projection hooks, described below. The production JSON renderers call `projectJson()` for every column-valued entry they build, so a descriptor's projection is what a database actually returns — see [The canonical JSON guarantee](#the-canonical-json-guarantee).
@@ -56,6 +58,7 @@ import {
   CodecImpl,
   type ColumnHelperFor,
   column,
+  decodeJsonString,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { PostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
@@ -71,10 +74,7 @@ class PgTextCodec extends CodecImpl<
   async decode(wire: string, _ctx: CodecCallContext) { return wire; }
   encodeJson(value: string) { return value; }
   decodeJson(json: JsonValue) {
-    if (typeof json !== 'string') {
-      throw new TypeError('Expected a string JSON value');
-    }
-    return json;
+    return decodeJsonString('pg/text@1', json);
   }
 }
 
@@ -436,7 +436,7 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
 }
 ```
 
-Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the value they produce in memory, a `bigint` and a `number`, and both read and write the digit text that type stores. `decodeJson` takes the canonical form and nothing else, and `encodeJson` produces it. A codec has no method for PSL and never sees PSL text.
+Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the value they produce in memory, a `bigint` and a `number`, and both read and write the digit text that type stores. `encodeJson` produces the canonical form, and `decodeJson` takes a stored form of the type and nothing else, as [`Codec.decodeJson`](../../packages/1-framework/1-core/framework-components/src/shared/codec.ts) states. A codec has no method for PSL and never sees PSL text.
 
 An extension's codec does the same. `arktype/json@1` stores a `jsonb` column and validates the document against a schema on the way out, so it names `pg/jsonb` and the extension registers no data type at all. Register a new one only for a database type no pack describes yet, as pgvector does for `vector`. Reusing the target's type is what lets a written `` json`{}` `` reach an arktype column: the tag yields `pg/json`, `pg/jsonb` casts from it unchanged, and the codec validates the document.
 

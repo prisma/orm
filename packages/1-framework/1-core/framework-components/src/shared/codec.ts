@@ -47,7 +47,9 @@ export interface Codec<
   decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
   /** Converts a JS value to the target-defined JSON representation used for contract serialization. This must match the scalar shape produced by the target inside JSON values. Synchronous; called during contract emission. */
   encodeJson(value: TInput): JsonValue;
-  /** Converts the target-defined JSON representation back to the JS input type. Synchronous; called during contract loading via `family.deserializeContract` and may be called by runtimes for embedded JSON values. */
+  /**
+   * Reads a value in a stored JSON form of the codec's type and returns the application value. A stored form is what `encodeJson` writes and what the database writes for the type in JSON; the value comes from a contract's literal default, a member of a JSON document default, an enum member, or JSON the database returns. For any other JSON value — another kind, or one the type with the codec's type parameters does not hold — it throws: the built-in codecs raise `RUNTIME.DECODE_FAILED` through `refuseJsonValue`, with `meta.codecId` and `meta.received`. Callers use it as the check that a value is valid, so a `decodeJson` that returns every value turns that check off. SQL NULL never reaches it. Synchronous.
+   */
   decodeJson(json: JsonValue): TInput;
 }
 
@@ -76,5 +78,6 @@ export abstract class CodecImpl<
   abstract encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
   abstract decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
   abstract encodeJson(value: TInput): JsonValue;
+  /** See {@link Codec.decodeJson}. */
   abstract decodeJson(json: JsonValue): TInput;
 }
