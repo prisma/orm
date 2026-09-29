@@ -1,4 +1,8 @@
-import { MongoFieldFilter, MongoOrExpr } from '@internal/mongo-query-ast/execution';
+import {
+  MongoFieldFilter,
+  type MongoFilterExpr,
+  MongoOrExpr,
+} from '@internal/mongo-query-ast/execution';
 import { Decimal128, Long, ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
@@ -20,7 +24,7 @@ describe('Mongo where filters on a Bson field', () => {
         }
         await db.posts.create({ ...post, raw: 'other' });
 
-        const count = async (filter: Parameters<typeof db.posts.where>[0]) =>
+        const count = async (filter: MongoFilterExpr) =>
           (await db.posts.where(filter).all()).length;
 
         expect({
@@ -34,7 +38,7 @@ describe('Mongo where filters on a Bson field', () => {
               MongoFieldFilter.eq('raw', long as never),
             ]),
           ),
-          object: await count({ raw: objectId }),
+          object: (await db.posts.where({ raw: objectId }).all()).length,
         }).toEqual({ objectId: 1, long: 1, decimal: 1, in: 2, nested: 2, object: 1 });
       }),
     timeouts.spinUpMongoMemoryServer,
