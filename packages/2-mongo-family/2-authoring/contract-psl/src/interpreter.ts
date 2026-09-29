@@ -866,11 +866,27 @@ function nestedIndexPath(
   return undefined;
 }
 
+function nestedIndexPathMessage(
+  path: readonly string[],
+  pslModel: ModelSymbol,
+  compositeTypeNames: ReadonlySet<string>,
+): string {
+  const [root = ''] = path;
+  const label = `Index field "${path.join('.')}" on model "${pslModel.name}"`;
+  const rootType = Object.hasOwn(pslModel.fields, root)
+    ? pslModel.fields[root]?.typeName
+    : undefined;
+  return rootType !== undefined && compositeTypeNames.has(rootType)
+    ? `${label} is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "${pslModel.name}" or remove the index.`
+    : `${label} is a dotted path, but "${root}" is not a field of "${pslModel.name}" whose type is a composite type, so the path names no field. List fields of "${pslModel.name}" by name.`;
+}
+
 function collectIndexes(
   pslModel: ModelSymbol,
   specContext: AttributeSpecContext,
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
+  compositeTypeNames: ReadonlySet<string>,
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
@@ -928,7 +944,7 @@ function collectIndexes(
     if (nested !== undefined) {
       diagnostics.push({
         code: 'PSL_INVALID_INDEX',
-        message: `Index field "${nested.path.join('.')}" on model "${pslModel.name}" is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "${pslModel.name}" or remove the index.`,
+        message: nestedIndexPathMessage(nested.path, pslModel, compositeTypeNames),
         ...source.at(nodePslSpan(nested.syntax, sources)),
       });
       continue;
@@ -1474,6 +1490,7 @@ export function interpretPslDocumentToMongoContract(
       specContext,
       fieldMappings,
       modelNames,
+      compositeTypeNames,
       sources,
       binder,
       diagnostics,

@@ -643,7 +643,7 @@ An `@ignore`d field is used by `@unique`, `@@unique`, `@@index`, `@@fulltext`, o
 
 ### PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED
 
-An index argument a Mongo contract index cannot carry, such as `length`, or an unknown argument. `sort` is read, and `map` and `name` are accepted and dropped, since Mongo verify matches indexes by keys and options. Remove the argument. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An index argument a Mongo contract index cannot carry, such as `length`, an unknown argument, or a dotted path whose first segment is not a composite-type field (`title.first`), which Prisma 6 refuses as an unknown field. `sort` is read, and `map` and `name` are accepted and dropped, since Mongo verify matches indexes by keys and options. Remove the argument. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED
 

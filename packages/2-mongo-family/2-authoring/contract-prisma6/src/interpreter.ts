@@ -832,7 +832,19 @@ function readModel(
     relationFields: [],
     hasId: false,
   };
-  const indexContext = { owner: modelLabel, prefix: '@@' as const, sourceId, sources, diagnostics };
+  const compositeFields = new Set(
+    Object.values(symbol.fields)
+      .filter((field) => ctx.compositeTypeNames.has(field.typeName))
+      .map((field) => field.name),
+  );
+  const indexContext = {
+    owner: modelLabel,
+    prefix: '@@' as const,
+    sourceId,
+    sources,
+    diagnostics,
+    compositeFields,
+  };
   for (const attribute of symbol.attributes) {
     switch (attribute.name) {
       case 'map':
@@ -941,6 +953,7 @@ function readModelField(
           sourceId,
           sources,
           diagnostics,
+          compositeFields: new Set(),
         });
         if (parsed !== undefined) build.uniqueFields.push(parsed);
         break;

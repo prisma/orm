@@ -284,4 +284,20 @@ describe('an index path into a nested document', () => {
       }),
     ]);
   });
+
+  it('says a path through a field that is not a composite type names nothing', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id    ObjectId @id @map("_id")
+          title String
+          @@index([title.value])
+          @@index([missing.city(sort: Desc)])
+        }
+      `).map((diagnostic) => diagnostic.message),
+    ).toEqual([
+      'Index field "title.value" on model "Item" is a dotted path, but "title" is not a field of "Item" whose type is a composite type, so the path names no field. List fields of "Item" by name.',
+      'Index field "missing.city" on model "Item" is a dotted path, but "missing" is not a field of "Item" whose type is a composite type, so the path names no field. List fields of "Item" by name.',
+    ]);
+  });
 });

@@ -13,6 +13,8 @@ model Post {
   @@unique([address.geo.lat])
   @@unique([address.geo.lat(sort: Desc)])
   @@fulltext([address.street])
+  @@index([title.first])
+  @@index([missing.city(sort: Asc)])
 }
 
 type Address {

@@ -34,6 +34,8 @@ interface ParseContext {
   readonly sourceId: string;
   readonly sources: PslSources;
   readonly diagnostics: ContractSourceDiagnostic[];
+  /** The owner's fields whose type is a composite type; an index path must start at one. */
+  readonly compositeFields: ReadonlySet<string>;
 }
 
 function unsupported(
@@ -108,6 +110,14 @@ function readFields(
     const call = FunctionCallAst.cast(element.syntax);
     const path = PathExprAst.cast(element.syntax)?.path() ?? call?.path() ?? [];
     const [callee] = path;
+    if (path.length > 1 && (callee === undefined || !ctx.compositeFields.has(callee))) {
+      return unsupported(
+        attribute,
+        `lists the dotted path "${path.join('.')}", but "${callee ?? ''}" is not a composite-type field of the model, and Prisma 6 refuses the path as an unknown field. List fields of the model by name.`,
+        nodePslSpan(element.syntax, ctx.sources),
+        ctx,
+      );
+    }
     if (path.length > 1) {
       ctx.diagnostics.push(
         prisma6Diagnostic(
