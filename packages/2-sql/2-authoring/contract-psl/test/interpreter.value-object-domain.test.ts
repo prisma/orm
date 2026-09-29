@@ -19,7 +19,6 @@ function interpretPostgres(schema: string) {
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
     target: postgresTarget,

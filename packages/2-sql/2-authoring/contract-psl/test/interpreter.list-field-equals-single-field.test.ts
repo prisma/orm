@@ -171,7 +171,6 @@ model User {
   plans Plan[]
 }`,
       sourceId: 'schema.prisma',
-      pslBlockDescriptors,
     });
     const result = interpretPslDocumentToSqlContract({
       target: postgresTarget,
