@@ -400,8 +400,6 @@ function dottedChainLength(cursor: Cursor): number {
   return length;
 }
 
-const QUALIFIED_NAME_MAX_CHAIN = 3;
-
 /**
  * Whether the next tokens open a call: a dotted chain followed by `(`, such as
  * `autoincrement(`, `temporal.updatedAt(` or `address.geo.lat(`. A dotted chain
@@ -413,10 +411,10 @@ function isCallAhead(cursor: Cursor): boolean {
 }
 
 /**
- * Parses a function/constructor call — bare `autoincrement()` or qualified
- * `temporal.updatedAt()`. A callee with more than one dot, such as the index
- * element `address.geo.lat(sort: Desc)`, is a member path rather than a
- * qualified name, so it is parsed as a `PathExpr`. Returns `undefined` unless
+ * Parses a function/constructor call — bare `autoincrement()` or dotted
+ * `address.city(sort: Asc)`. A dotted callee is a `PathExpr`, the node the same
+ * chain gets without the call, so `address.city` has one shape whether or not
+ * it is called; a bare callee is a `QualifiedName`. Returns `undefined` unless
  * {@link isCallAhead} confirms a trailing `(`, so the `parseExpression` chain
  * falls through to the path, boolean and bare-identifier forms.
  */
@@ -424,7 +422,7 @@ export function parseFunctionCall(cursor: Cursor): GreenNode | undefined {
   if (!isCallAhead(cursor)) return undefined;
   const chain = dottedChainLength(cursor);
   cursor.startNode('FunctionCall');
-  if (chain > QUALIFIED_NAME_MAX_CHAIN) {
+  if (chain > 1) {
     parsePath(cursor, chain);
   } else {
     parseQualifiedName(cursor);

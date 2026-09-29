@@ -57,15 +57,26 @@ describe('a dotted path in expression position', () => {
 });
 
 describe('a call on a dotted path', () => {
-  it('keeps a one-dot callee a qualified name', () => {
-    const { node, diagnostics } = parseOneExpression('address.city(sort: Asc)');
+  it('gives a one-dot callee the node it has without the call', () => {
+    const uncalled = parseOneExpression('address.city');
+    const called = parseOneExpression('address.city(sort: Asc)');
+    const call = FunctionCallAst.cast(createSyntaxTree(called.node));
+
+    expect({
+      callee: call?.memberPath()?.syntax.green,
+      qualified: call?.name() !== undefined,
+      diagnostics: called.diagnostics,
+    }).toEqual({ callee: uncalled.node, qualified: false, diagnostics: [] });
+  });
+
+  it('keeps an undotted callee a name', () => {
+    const { node } = parseOneExpression('now()');
     const call = FunctionCallAst.cast(createSyntaxTree(node));
 
-    expect({ path: call?.path(), qualified: call?.name() !== undefined }).toEqual({
-      path: ['address', 'city'],
-      qualified: true,
+    expect({ name: call?.name()?.identifier()?.name(), path: call?.memberPath() }).toEqual({
+      name: 'now',
+      path: undefined,
     });
-    expect(diagnostics).toEqual([]);
   });
 
   it('reads a deeper callee as a path, with no diagnostic', () => {
@@ -94,6 +105,7 @@ describe('an index over a composite-type field', () => {
       '  address Address',
       '',
       '  @@index([title, address.city])',
+      '  @@index([address.city(sort: Asc)])',
       '  @@unique([address.geo.lat(sort: Desc)])',
       '}',
     ].join('\n');
@@ -111,6 +123,6 @@ describe('an index over a composite-type field', () => {
     });
 
     expect(diagnostics).toEqual([]);
-    expect(elementKinds).toEqual([['Identifier', 'PathExpr'], ['FunctionCall']]);
+    expect(elementKinds).toEqual([['Identifier', 'PathExpr'], ['FunctionCall'], ['FunctionCall']]);
   });
 });

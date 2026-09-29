@@ -301,6 +301,7 @@ describe('semantic token substrate', () => {
         '  title   String',
         '  address Address',
         '  @@index([title, address.city])',
+        '  @@index([address.city(sort: Asc)])',
         '  @@unique([address.geo.lat(sort: Desc)])',
         '}',
       ].join('\n'),
@@ -310,9 +311,19 @@ describe('semantic token substrate', () => {
 
     expect(
       details
-        .filter((token) => token.line >= 3 && token.tokenType === 'property')
-        .map((token) => `${token.line}:${token.text}`),
-    ).toEqual(['3:address', '3:city', '4:address', '4:geo', '4:lat', '4:sort']);
+        .filter(
+          (token) => token.line >= 3 && ['address', 'city', 'geo', 'lat'].includes(token.text),
+        )
+        .map((token) => `${token.line}:${token.text}:${token.tokenType}`),
+    ).toEqual([
+      '3:address:property',
+      '3:city:property',
+      '4:address:property',
+      '4:city:property',
+      '5:address:property',
+      '5:geo:property',
+      '5:lat:property',
+    ]);
   });
 
   it('preserves source order when block attributes precede fields', () => {

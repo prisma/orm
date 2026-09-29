@@ -17,25 +17,23 @@ export class FunctionCallAst implements AstNode {
     this.syntax = syntax;
   }
 
-  /**
-   * The qualified-name callee; `undefined` when the callee is a member path with more than one dot, such as `address.geo.lat(…)`, or when identifier segments sit directly under the node.
-   */
+  /** The callee when it is a bare name, such as `now` in `now()`; `undefined` when the callee is dotted. */
   name(): QualifiedNameAst | undefined {
     return findFirstChild(this.syntax, QualifiedNameAst.cast);
   }
 
   /**
-   * The dotted call path, in source order. A bare `Vector(…)` yields
-   * `['Vector']`; a namespace-qualified `pgvector.Vector(…)` yields
-   * `['pgvector', 'Vector']`; `address.geo.lat(…)` yields
-   * `['address', 'geo', 'lat']`. Empty when the call carries no identifier.
+   * The callee's segments, in source order. A bare `Vector(…)` yields
+   * `['Vector']`; `pgvector.Vector(…)` yields `['pgvector', 'Vector']`;
+   * `address.geo.lat(…)` yields `['address', 'geo', 'lat']`. Empty when the
+   * call carries no identifier.
    */
   path(): readonly string[] {
     const callee = this.name() ?? this.memberPath();
     return segmentNames(callee?.syntax ?? this.syntax);
   }
 
-  /** The callee when it is a member path with more than one dot, such as `address.geo.lat(…)`; `undefined` otherwise. */
+  /** The callee when it is dotted, such as `address.city` in `address.city(sort: Asc)`; `undefined` for a bare callee. */
   memberPath(): PathExprAst | undefined {
     return findFirstChild(this.syntax, PathExprAst.cast);
   }
