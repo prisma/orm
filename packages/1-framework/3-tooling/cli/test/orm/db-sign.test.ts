@@ -163,7 +163,7 @@ describe('db sign', () => {
       ]);
     });
 
-    it('aims db update at the ref being signed', async () => {
+    it('aims db update at the ref being signed, and the contract change at the emitted contract', async () => {
       const dir = await projectDir();
       await writeRef(refsDirOf(dir), 'staging', { hash: HASH_A, invariants: [] });
       mocks.schemaVerify.mockResolvedValue(DRIFTED);
@@ -182,7 +182,7 @@ describe('db sign', () => {
         {
           kind: 'user-choice',
           label:
-            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign the emitted contract instead of "staging"',
         },
       ]);
     });

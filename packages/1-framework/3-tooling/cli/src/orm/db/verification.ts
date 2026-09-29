@@ -295,13 +295,17 @@ export function schemaDriftNextActions(inputs: {
   readonly contractRef: string | undefined;
 }): readonly NextAction[] {
   const { verb, contractRef } = inputs;
+  const retryAfterEmit =
+    contractRef === undefined
+      ? `${verb} again`
+      : `${verb} the emitted contract instead of "${contractRef}"`;
   return [
     runCommandAction(
       `Change the database to match the contract, then ${verb} again`,
       contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
     ),
     chooseAction(
-      `Or change the contract source to describe the database as it is, re-run contract emit, then ${verb} again`,
+      `Or change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`,
     ),
   ];
 }

@@ -32,11 +32,18 @@ describe('schemaDriftNextActions', () => {
     ]);
   });
 
-  it('aims db update at the ref being signed', () => {
-    expect(schemaDriftNextActions({ verb: 'sign', contractRef: 'staging' })[0]).toEqual({
-      kind: 'run-command',
-      label: 'Change the database to match the contract, then sign again',
-      command: '{bin} db update --to "staging"',
-    });
+  it('aims db update at the ref being signed, and the contract change at the emitted contract', () => {
+    expect(schemaDriftNextActions({ verb: 'sign', contractRef: 'staging' })).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Change the database to match the contract, then sign again',
+        command: '{bin} db update --to "staging"',
+      },
+      {
+        kind: 'user-choice',
+        label:
+          'Or change the contract source to describe the database as it is, re-run contract emit, then sign the emitted contract instead of "staging"',
+      },
+    ]);
   });
 });
