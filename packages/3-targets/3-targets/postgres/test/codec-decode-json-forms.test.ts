@@ -81,8 +81,14 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgUuidDescriptor.factory()(ctx),
-    accepts: ['123e4567-e89b-12d3-a456-426614174000', '123E4567-E89B-12D3-A456-426614174000'],
-    rejects: [1, 'not-a-uuid', '123e4567e89b12d3a456426614174000', null],
+    accepts: [
+      '123e4567-e89b-12d3-a456-426614174000',
+      '123E4567-E89B-12D3-A456-426614174000',
+      '123e4567e89b12d3a456426614174000',
+      '{123e4567-e89b-12d3-a456-426614174000}',
+      '123e-4567-e89b-12d3-a456-4266-1417-4000',
+    ],
+    rejects: [1, 'not-a-uuid', '123e4567-e89b-12d3-a456-42661417400', null],
   },
   {
     codec: pgInetDescriptor.factory()(ctx),

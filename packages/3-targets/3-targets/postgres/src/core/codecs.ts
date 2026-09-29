@@ -214,7 +214,10 @@ const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEX
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 const BIT_STRING = /^[01]*$/;
-const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * The uuid input PostgreSQL reads: 32 hex digits in either case, a hyphen allowed after any group of four but the last, and the whole optionally in braces.
+ */
+const UUID_TEXT = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
 
 const decodePostgresNumberWire = (wire: string | number): number =>
   typeof wire === 'string' ? Number(wire) : wire;
@@ -1292,7 +1295,7 @@ export class PgUuidCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonMatching(PG_UUID_CODEC_ID, json, UUID_TEXT, 'a hyphenated UUID');
+    return decodeJsonMatching(PG_UUID_CODEC_ID, json, UUID_TEXT, 'a UUID PostgreSQL reads');
   }
 }
 
