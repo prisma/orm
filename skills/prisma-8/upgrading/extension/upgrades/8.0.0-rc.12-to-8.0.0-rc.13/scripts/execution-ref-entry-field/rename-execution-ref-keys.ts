@@ -59,8 +59,9 @@ function serializeLike(original: string, value: unknown): string {
   return `${JSON.stringify(value, null, indent)}${original.endsWith('\n') ? '\n' : ''}`;
 }
 
-function renameInJson(text: string): string {
+function renameInJson(text: string): string | undefined {
   const contract = parseJson(text);
+  if (contract === undefined) return undefined;
   if (!isObject(contract) || !isObject(contract['execution'])) return text;
   const mutations = contract['execution']['mutations'];
   const defaults = isObject(mutations) ? mutations['defaults'] : undefined;
@@ -166,9 +167,15 @@ async function replaceFile(path: string, content: string): Promise<void> {
 async function main(): Promise<void> {
   const files = await findMigrationFiles(projectRoot);
   let changed = 0;
+  let unparseable = 0;
   for (const path of files.sort()) {
     const before = await readFile(path, 'utf-8');
     const after = path.endsWith('.json') ? renameInJson(before) : renameInDts(before);
+    if (after === undefined) {
+      unparseable += 1;
+      console.log(`NOT JSON ${relative(projectRoot, path)}`);
+      continue;
+    }
     if (after === before) continue;
     changed += 1;
     console.log(`${check ? 'WOULD FIX' : 'FIXED'} ${relative(projectRoot, path)}`);
@@ -177,7 +184,10 @@ async function main(): Promise<void> {
   console.log(
     `${files.length} file(s) under migrations/ scanned, ${changed} ${check ? 'need' : 'got'} the rename.`,
   );
-  if (check && changed > 0) process.exit(1);
+  if (unparseable > 0) {
+    console.log(`${unparseable} .json file(s) could not be parsed; check them by hand.`);
+  }
+  if (unparseable > 0 || (check && changed > 0)) process.exit(1);
 }
 
 void main();
