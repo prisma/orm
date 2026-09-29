@@ -77,11 +77,13 @@ changes:
       Four Mongo PSL scalar names are deprecated in favour of the name of the BSON type they store:
       `Int` → `Int32`, `Float` → `Double`, `Boolean` → `Bool`, `DateTime` → `Date`. The old names
       are still accepted, with a `PSL_DEPRECATED_SCALAR_NAME` warning, and will be removed in a later
-      release; rename them now. Codec ids, `contract.json` and every hash are unchanged.
+      release; rename them now. Codec ids, `contract.json` and every hash are unchanged. Rename only
+      in the Prisma 8 contract source and its `migrations/app/*/contract.prisma` copies, never in a
+      Prisma 6 `schema.prisma`.
     detection:
       glob: "**/*.prisma"
       matches:
-        - '(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
+        - '^(?![\s\S]*\bprovider\s*=\s*"mongodb")[\s\S]*?(?:^|\n)[ \t]*[A-Za-z_][A-Za-z0-9_]*[ \t]+(?:Int|Float|Boolean|DateTime)(?:\[\])?\??(?![ \t]*\{)(?=\s|$)'
   - id: mongo-variant-field-codecs
     summary: |
       Through `.variant(...)`, a field declared only on the variant model is now written and read
@@ -264,7 +266,9 @@ Code that goes through the CLI or `defineConfig` already has the adapter on the 
 
 `Int`, `Float`, `Boolean` and `DateTime` are deprecated in Mongo schemas. They are still accepted, and they produce the same contract as the new names, but `prisma contract emit` and the language server report a `PSL_DEPRECATED_SCALAR_NAME` warning for each use, and a later release removes them. Rename them now.
 
-Apply this only in a schema whose `prisma.config.ts` uses `@prisma/orm-mongo`. The detection pattern also matches Postgres and SQLite schemas, whose scalar names do not change in this release.
+Apply this only to the Prisma 8 Mongo contract source, the `.prisma` file that `prisma.config.ts` passes to `defineConfig` from `@prisma/orm-mongo/config`, and to its copies under `migrations/app/<migration>/contract.prisma`. The detection pattern also matches Postgres and SQLite schemas, whose scalar names do not change in this release; leave them alone.
+
+Never rename in a Prisma 6 `schema.prisma`, such as one kept beside the Prisma 8 contract in a project that still runs Prisma 6: Prisma 6 has no `Int32`, `Double`, `Bool` or `Date`, and would reject the schema. The detection skips a file that declares `provider = "mongodb"`, which every Prisma 6 MongoDB schema does, but a multi-file Prisma 6 schema declares it in one file only, so also skip the other `.prisma` files of a Prisma 6 schema directory.
 
 In each field whose type is one of the deprecated names, replace the type name, keeping any `[]` and `?`:
 
