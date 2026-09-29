@@ -76,8 +76,42 @@ describe('decodeMongoRow', () => {
     };
     const row = { a: null, b: undefined };
     const out = await decodeMongoRow(row, shape, registry, 'c');
-    expect(out).toEqual({ a: null, b: undefined });
+    expect(out).toStrictEqual({ a: null, b: null });
     expect(decodeSpy).not.toHaveBeenCalled();
+  });
+
+  it('reads a nullable field the stored document leaves out as null, at any depth', async () => {
+    const registry = registryWithDefaults();
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: {
+        name: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true },
+        tags: {
+          kind: 'array',
+          nullable: true,
+          element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+        },
+        address: {
+          kind: 'document',
+          nullable: true,
+          fields: { city: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true } },
+        },
+        home: {
+          kind: 'document',
+          nullable: false,
+          fields: { city: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true } },
+        },
+        title: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+      },
+    };
+    const out = await decodeMongoRow({ home: {} }, shape, registry, 'c');
+    expect(out).toStrictEqual({
+      name: null,
+      tags: null,
+      address: null,
+      home: { city: null },
+      title: undefined,
+    });
   });
 
   it('decodes array elements in lockstep with element shape', async () => {
@@ -201,7 +235,7 @@ describe('decodeMongoRow', () => {
     const nullOut = await decodeMongoRow({ nullableTags: null }, shape, registry, 'c');
     expect(nullOut).toEqual({ nullableTags: null });
     const undefOut = await decodeMongoRow({ nullableTags: undefined }, shape, registry, 'c');
-    expect(undefOut).toEqual({ nullableTags: undefined });
+    expect(undefOut).toStrictEqual({ nullableTags: null });
   });
 
   it('null and undefined at document-shaped slots short-circuit without recursion', async () => {
@@ -221,7 +255,7 @@ describe('decodeMongoRow', () => {
     const nullOut = await decodeMongoRow({ addr: null }, shape, registry, 'c');
     expect(nullOut).toEqual({ addr: null });
     const undefOut = await decodeMongoRow({ addr: undefined }, shape, registry, 'c');
-    expect(undefOut).toEqual({ addr: undefined });
+    expect(undefOut).toStrictEqual({ addr: null });
   });
 
   it('array field whose driver value is not an array is yielded as-is', async () => {

@@ -74,6 +74,13 @@ function wrapDecodeFailure(
   throw wrapped;
 }
 
+/**
+ * A document may leave out a nullable field entirely (Prisma 6 and the driver both omit it); the field's type says `null`, so an absent value reads as `null`.
+ */
+function absentAsNull(value: null | undefined, nullable: boolean): null | undefined {
+  return value === undefined && nullable ? null : value;
+}
+
 export async function decodeMongoRow(
   row: unknown,
   shape: MongoResultShape,
@@ -129,14 +136,14 @@ export async function decodeMongoRow(
         return;
       case 'leaf':
         if (value === null || value === undefined) {
-          assign(value);
+          assign(absentAsNull(value, fieldShape.nullable));
           return;
         }
         scheduleLeaf(path, fieldShape.codecId, value, assign);
         return;
       case 'document': {
         if (value === null || value === undefined) {
-          assign(value);
+          assign(absentAsNull(value, fieldShape.nullable));
           return;
         }
         if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -163,7 +170,7 @@ export async function decodeMongoRow(
       }
       case 'array': {
         if (value === null || value === undefined) {
-          assign(value);
+          assign(absentAsNull(value, fieldShape.nullable));
           return;
         }
         if (!Array.isArray(value)) {

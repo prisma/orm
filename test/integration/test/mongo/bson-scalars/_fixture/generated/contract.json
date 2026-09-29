@@ -8,6 +8,14 @@
       "model": "Asset",
       "namespace": "__unbound__"
     },
+    "authors": {
+      "model": "Author",
+      "namespace": "__unbound__"
+    },
+    "books": {
+      "model": "Book",
+      "namespace": "__unbound__"
+    },
     "posts": {
       "model": "Post",
       "namespace": "__unbound__"
@@ -20,6 +28,21 @@
   "domain": {
     "namespaces": {
       "__unbound__": {
+        "enum": {
+          "Role": {
+            "codecId": "mongo/string@1",
+            "members": [
+              {
+                "name": "User",
+                "value": "USER"
+              },
+              {
+                "name": "Admin",
+                "value": "admin"
+              }
+            ]
+          }
+        },
         "models": {
           "Asset": {
             "discriminator": {
@@ -49,6 +72,124 @@
               "Photo": {
                 "value": "photo"
               }
+            }
+          },
+          "Author": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "address": {
+                "nullable": true,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Address"
+                }
+              },
+              "avatar": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/binary@1",
+                  "kind": "scalar"
+                }
+              },
+              "balance": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/decimal128@1",
+                  "kind": "scalar"
+                }
+              },
+              "karma": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Role",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {
+              "books": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "_id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Book",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "collection": "authors"
+            }
+          },
+          "Book": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "_id"
+                  ]
+                },
+                "to": {
+                  "model": "Author",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "collection": "books"
             }
           },
           "Photo": {
@@ -173,6 +314,24 @@
           }
         },
         "valueObjects": {
+          "Address": {
+            "fields": {
+              "city": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "zip": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            }
+          },
           "Stamp": {
             "fields": {
               "note": {
@@ -276,6 +435,101 @@
                 "validationLevel": "strict"
               }
             },
+            "authors": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "address": {
+                      "oneOf": [
+                        {
+                          "bsonType": "null"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "bsonType": "object",
+                          "properties": {
+                            "city": {
+                              "bsonType": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "zip": {
+                              "bsonType": "long"
+                            }
+                          },
+                          "required": [
+                            "zip"
+                          ]
+                        }
+                      ]
+                    },
+                    "avatar": {
+                      "bsonType": [
+                        "null",
+                        "binData"
+                      ]
+                    },
+                    "balance": {
+                      "bsonType": "decimal"
+                    },
+                    "karma": {
+                      "bsonType": "long"
+                    },
+                    "role": {
+                      "bsonType": "string",
+                      "enum": [
+                        "USER",
+                        "admin"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "balance",
+                    "karma",
+                    "role"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "books": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "authorId": {
+                      "bsonType": "objectId"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "authorId",
+                    "title"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
             "posts": {
               "kind": "mongo-collection",
               "validator": {
@@ -362,13 +616,22 @@
                 "validationLevel": "strict"
               }
             }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": [
+                "USER",
+                "admin"
+              ]
+            }
           }
         },
         "id": "__unbound__",
         "kind": "mongo-database"
       }
     },
-    "storageHash": "79ec3c0b5d7478a1796eb5936e76df5b07213158e8dbe3f1d26829a73f228519"
+    "storageHash": "bc85b990d3fd1c3085d08b5e64c27f4408880b23428258e0ade0bcc670bd7952"
   },
   "capabilities": {},
   "extensions": {},
