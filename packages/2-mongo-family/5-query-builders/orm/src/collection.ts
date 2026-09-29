@@ -92,7 +92,7 @@ export interface MongoCollection<
   where(
     filter: MongoWhereFilter<TContract, ModelName>,
   ): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
-  /** Appends a filter condition from a raw filter expression. */
+  /** Appends a filter condition from a raw filter expression. Comparison and `$in`/`$nin` values on a scalar field are encoded through the field's codec. */
   where(filter: MongoFilterExpr): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
   /** Restricts returned fields to the given subset. Returns a new immutable collection. */
   select(
@@ -169,6 +169,16 @@ export interface MongoCollection<
     update: (u: FieldAccessor<TContract, ModelName>) => FieldOperation[];
   }): Promise<IncludedRow<TContract, ModelName, TIncludes>>;
 }
+
+const COMPARISON_OPERATORS: ReadonlySet<string> = new Set([
+  '$eq',
+  '$ne',
+  '$gt',
+  '$gte',
+  '$lt',
+  '$lte',
+]);
+const MEMBERSHIP_OPERATORS: ReadonlySet<string> = new Set(['$in', '$nin']);
 
 function resolveCollectionName(model: MongoModelDefinition, modelName: string): string {
   return model.storage.collection ?? modelName;
@@ -259,7 +269,10 @@ class MongoCollectionImpl<
     filter: MongoWhereFilter<TContract, ModelName> | MongoFilterExpr,
   ): MongoCollection<TContract, ModelName, TIncludes, TVariant> {
     if (isMongoFilterExpr(filter)) {
-      return this.#clone({ filters: [...this.#state.filters, filter] });
+      const encoded = filter.rewrite({
+        field: (fieldFilter) => this.#encodeFieldFilter(fieldFilter),
+      });
+      return this.#clone({ filters: [...this.#state.filters, encoded] });
     }
     const compiled = this.#compileWhereObject(
       blindCast<
@@ -785,6 +798,42 @@ class MongoCollectionImpl<
       filters.push(MongoFieldFilter.eq(key, wrapped));
     }
     return filters;
+  }
+
+  /**
+   * Encodes the comparison values of a filter on a scalar field through the field's codec, as the object form of `where` and every update does. Without it a driver class such as an `ObjectId` would be copied into a plain object and match nothing.
+   */
+  #encodeFieldFilter(filter: MongoFieldFilter): MongoFieldFilter {
+    const field = this.#fieldAtPath(filter.field);
+    if (field?.type.kind !== 'scalar') return filter;
+    const codecId = field.type.codecId;
+    const encode = (value: MongoValue): MongoValue => {
+      if (value instanceof MongoParamRef) {
+        return value.codecId === undefined
+          ? this.#fieldParam(value.value, codecId, filter.field)
+          : value;
+      }
+      return this.#fieldParam(value, codecId, filter.field);
+    };
+    if (COMPARISON_OPERATORS.has(filter.op)) {
+      return MongoFieldFilter.of(filter.field, filter.op, encode(filter.value));
+    }
+    if (MEMBERSHIP_OPERATORS.has(filter.op) && Array.isArray(filter.value)) {
+      return MongoFieldFilter.of(filter.field, filter.op, filter.value.map(encode));
+    }
+    return filter;
+  }
+
+  #fieldAtPath(path: string): ContractField | undefined {
+    const [head, ...rest] = path.split('.');
+    let field: ContractField | undefined =
+      head === undefined ? undefined : this.#modelFields()[head];
+    for (const segment of rest) {
+      if (field?.type.kind !== 'valueObject') return undefined;
+      field = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[field.type.name]
+        ?.fields[segment];
+    }
+    return field;
   }
 
   #wrapFieldValue(value: unknown, field: ContractField | undefined, path: string): MongoValue {
