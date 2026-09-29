@@ -803,6 +803,36 @@ describe('generateValueObjectType', () => {
     expect(result).toContain('readonly children: ReadonlyArray<NavItemOutput>');
   });
 
+  it('types a member with type parameters by the parameterized output type, and keeps the codec input type', () => {
+    const lookup = stubCodecLookup({
+      'sql/varchar@1': stubCodec({
+        id: 'sql/varchar@1',
+        renderOutputType: (p) => `Varchar<${p['length']}>`,
+      }),
+    });
+    const labelVo: ContractValueObject = {
+      fields: {
+        code: {
+          nullable: false,
+          type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
+        },
+        codes: {
+          nullable: false,
+          many: true,
+          type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
+        },
+      },
+    };
+    expect({
+      output: generateValueObjectType('Label', labelVo, {}, 'output', lookup),
+      input: generateValueObjectType('Label', labelVo, {}, 'input', lookup),
+    }).toEqual({
+      output: '{ readonly code: Varchar<10>; readonly codes: ReadonlyArray<Varchar<10>> }',
+      input:
+        '{ readonly code: CodecTypes["sql/varchar@1"]["input"]; readonly codes: ReadonlyArray<CodecTypes["sql/varchar@1"]["input"]> }',
+    });
+  });
+
   it('returns Record<string, never> for empty value object', () => {
     const emptyVo: ContractValueObject = { fields: {} };
     expect(generateValueObjectType('Empty', emptyVo, {})).toBe('Record<string, never>');
