@@ -607,8 +607,8 @@ export function lowerDefaultForField(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly columnDescriptor: ColumnDescriptor;
-  /** Whether the column holds a list. A list of value objects is stored in one column, which does not. */
-  readonly storedAsListColumn: boolean;
+  /** Whether the field is stored in a list column. A list of value objects is not: its one column holds the whole list as one JSON array. */
+  readonly isListColumn: boolean;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
@@ -650,11 +650,11 @@ export function lowerDefaultForField(input: {
     fieldName: input.fieldName,
     columnCodecId: input.columnDescriptor.codecId,
   };
-  // A list field stored in one column (a list of value objects) holds the list as that column's
-  // value: a list literal fills it element by element, as it fills a list column, and any other
-  // literal is read as the whole value.
+  // A list of value objects is stored in one column whose value is the whole list: a list literal
+  // fills it element by element, as it fills a list column, and any other literal is read as the
+  // whole value.
   const readsListElements = (written: WrittenValue) =>
-    input.storedAsListColumn || (input.field.list && written.kind === 'list');
+    input.isListColumn || (input.field.list && written.kind === 'list');
   const readAsLiteral = (written: WrittenValue) => {
     const lowered = lowerDataTypeDefault({
       written,

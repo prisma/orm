@@ -90,6 +90,7 @@ import {
   type ModelNode,
   type RelationNode,
   type ScalarMemberNode,
+  storedAsListColumn,
   type ValueObjectFieldNode,
   type ValueObjectMemberNode,
 } from './contract-definition';
@@ -815,7 +816,10 @@ function buildStorageColumn(
 ): StorageColumn {
   const { descriptor } = field;
   const codecId = descriptor.codecId;
-  const storedAsList = !isValueObjectMember(field) && field.many === true;
+  const isListColumn = storedAsListColumn({
+    list: field.many === true,
+    typedByValueObject: isValueObjectMember(field),
+  });
   const noCheck = isValueObjectMember(field) ? undefined : field.noCheck;
   const encodedDefault =
     field.default !== undefined
@@ -824,7 +828,7 @@ function buildStorageColumn(
           codecLookup,
           (lookup) => columnCodec(codecId, resolvedTypeParams(descriptor, storageTypes), lookup),
           { modelName, fieldName: field.fieldName, codecId },
-          storedAsList,
+          isListColumn,
         )
       : undefined;
 
@@ -838,7 +842,7 @@ function buildStorageColumn(
     nativeType: descriptor.nativeType,
     codecId,
     nullable: field.nullable,
-    ...ifDefined('many', storedAsList ? (true as const) : undefined),
+    ...ifDefined('many', isListColumn ? (true as const) : undefined),
     ...ifDefined('noCheck', noCheck && [...noCheck].sort()),
     ...ifDefined('typeParams', descriptor.typeParams),
     ...ifDefined('default', encodedDefault),

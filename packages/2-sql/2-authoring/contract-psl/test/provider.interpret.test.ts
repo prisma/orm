@@ -198,7 +198,7 @@ model Other {
       symbolTable: input.symbolTable,
       sources: input.sources,
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
-      storedAsListColumn: false,
+      isListColumn: false,
       generatorDescriptorById: new Map(),
       defaultFunctionRegistry: new Map(),
       dataTypeSupport: fixtureDataTypeSupport,

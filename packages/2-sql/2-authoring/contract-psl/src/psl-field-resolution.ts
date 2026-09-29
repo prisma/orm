@@ -21,9 +21,10 @@ import type {
 import { diagnosticSource, type PslDiagnosticCollector } from '@internal/psl-parser';
 import { uncomposedNamespaceDiagnostic } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
-import type {
-  AuthoredColumnDefault,
-  EnumTypeHandle,
+import {
+  type AuthoredColumnDefault,
+  type EnumTypeHandle,
+  storedAsListColumn,
 } from '@internal/sql-contract-ts/contract-builder';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -354,7 +355,7 @@ function lowerNoCheckForField(input: {
   readonly field: FieldSymbol;
   readonly sources: PslSources;
   readonly binder: Binder;
-  readonly isListField: boolean;
+  readonly isListColumn: boolean;
   readonly isDomainEnum: boolean;
   readonly diagnostics: PslDiagnosticCollector;
 }): readonly NoCheckKind[] | undefined {
@@ -375,7 +376,7 @@ function lowerNoCheckForField(input: {
   const span = getAttribute(input.field.attributes, 'noCheck')?.span ?? input.field.span;
   const subject = `Field "${input.model.name}.${input.field.name}"`;
   const derivable: NoCheckKind[] = [];
-  if (input.isListField) derivable.push('elementNotNull');
+  if (input.isListColumn) derivable.push('elementNotNull');
   if (input.isDomainEnum) derivable.push('membership');
 
   const authored = [interpreted.first, interpreted.second].filter(
@@ -482,7 +483,10 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
 
     const isValueObjectField = compositeTypeNames.has(field.typeName);
     const isListField = field.list;
-    const storedAsListColumn = isListField && !isValueObjectField;
+    const isListColumn = storedAsListColumn({
+      list: isListField,
+      typedByValueObject: isValueObjectField,
+    });
 
     let descriptor: ColumnDescriptor | undefined;
     let presetContributions: FieldPresetContributions | undefined;
@@ -617,7 +621,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             sources: input.sources,
             binder: input.binder,
             columnDescriptor: descriptor,
-            storedAsListColumn,
+            isListColumn,
             generatorDescriptorById,
             defaultFunctionRegistry,
             dataTypeSupport,
@@ -713,11 +717,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           field,
           sources: input.sources,
           binder: input.binder,
-          // The storage shape decides, not the PSL shape: a value-object list
-          // lands in one column, which derives no generated checks, so
-          // any waiver on it waives nothing and must be rejected here rather
-          // than persisted as an inert flag.
-          isListField: storedAsListColumn,
+          isListColumn,
           isDomainEnum: enumHandle !== undefined,
           diagnostics,
         })

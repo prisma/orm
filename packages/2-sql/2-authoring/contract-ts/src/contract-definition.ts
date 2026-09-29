@@ -235,6 +235,16 @@ export interface ValueObjectNode {
   readonly fields: readonly (ScalarMemberNode | ValueObjectMemberNode)[];
 }
 
+/**
+ * Whether a field is stored in a list column. A list of scalars is; a list of value objects is not, because it is stored in one column whose value is the whole list, as one JSON array.
+ */
+export function storedAsListColumn(field: {
+  readonly list: boolean;
+  readonly typedByValueObject: boolean;
+}): boolean {
+  return field.list && !field.typedByValueObject;
+}
+
 /** Whether a field or member is typed by a value object. */
 export function isValueObjectMember(
   field: ScalarMemberNode | ValueObjectMemberNode,

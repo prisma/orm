@@ -34,6 +34,7 @@ export type {
   ValueObjectMemberNode,
   ValueObjectNode,
 } from '../contract-definition';
+export { storedAsListColumn } from '../contract-definition';
 export type {
   CheckKind,
   ColumnRef,
