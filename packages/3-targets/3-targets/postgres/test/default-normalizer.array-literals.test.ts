@@ -107,12 +107,31 @@ describe('parsePostgresDefault array literals', () => {
     expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
   });
 
-  it.each(["'{[2}'::jsonb[]", "'{True}'::jsonb[]"])(
-    'fails closed for the unquoted json element that is not JSON in %s',
+  it('fails closed for an unquoted json element that is not JSON', () => {
+    expect(parsePostgresDefault("'{[2}'::jsonb[]", 'jsonb[]')).toEqual({
+      kind: 'function',
+      expression: "'{[2}'::jsonb[]",
+    });
+  });
+
+  it.each([
+    "'{[12345678901234567890]}'::jsonb[]",
+    "'{[1e400]}'::jsonb[]",
+    "'{12345678901234567890}'::jsonb[]",
+    `'{"[12345678901234567890]"}'::jsonb[]`,
+    "ARRAY['12345678901234567890'::jsonb]",
+  ])(
+    'keeps the raw expression when a JavaScript number would change a json number in %s',
     (raw) => {
       expect(parsePostgresDefault(raw, 'jsonb[]')).toEqual({ kind: 'function', expression: raw });
     },
   );
+
+  it('reads json numbers a JavaScript number keeps exactly', () => {
+    expect(
+      parsePostgresDefault(`'{[1.0],1.5,"[0.1]",[100000000000000000000]}'::jsonb[]`, 'jsonb[]'),
+    ).toEqual({ kind: 'literal', value: [[1], 1.5, [0.1], [1e20]] });
+  });
 
   it.each([
     { raw: "'{1,true}'::jsonb[]", nativeType: 'jsonb[]', value: [1, true] },

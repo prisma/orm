@@ -220,7 +220,10 @@ function unquotedElementValue(token: string, elementType: string): JsonValue | u
   if (NUMBER_TYPE_PATTERN.test(elementType)) {
     return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
   }
-  if (isJsonElementType(elementType)) return parseJsonDocument(token)?.value;
+  if (isJsonElementType(elementType)) {
+    const document = readJsonDocument(token);
+    return document.kind === 'json' ? document.value : undefined;
+  }
   return token;
 }
 
@@ -247,7 +250,9 @@ function parseArrayLiteralBody(
     if (token.quoted) {
       // A quoted token is always a string — `"NULL"`, `"true"`, `"1"` are the
       // literal text, never the keyword/number.
-      result.push(textElementValue(token.value, elementType));
+      const value = textElementValue(token.value, elementType);
+      if (value === undefined) return undefined;
+      result.push(value);
       continue;
     }
     const el = token.value.trim();
@@ -317,19 +322,62 @@ function isJsonElementType(elementType: string): boolean {
   return elementType === 'json' || elementType === 'jsonb';
 }
 
-/** A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type. */
-function textElementValue(text: string, elementType: string): JsonValue {
+/**
+ * A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type.
+ * Undefined keeps the raw expression: the document holds a number a JavaScript number would change.
+ */
+function textElementValue(text: string, elementType: string): JsonValue | undefined {
   if (!isJsonElementType(elementType)) return text;
-  const document = parseJsonDocument(text);
-  return document === undefined ? text : document.value;
+  const document = readJsonDocument(text);
+  if (document.kind === 'inexact') return undefined;
+  return document.kind === 'json' ? document.value : text;
 }
 
-function parseJsonDocument(text: string): { readonly value: JsonValue } | undefined {
+type JsonDocument =
+  | { readonly kind: 'json'; readonly value: JsonValue }
+  | { readonly kind: 'inexact' }
+  | { readonly kind: 'invalid' };
+
+type JsonReviver = (key: string, value: unknown, context?: { readonly source?: string }) => unknown;
+
+/**
+ * Parses JSON text. Postgres keeps every digit of a json number, so a document holding a number that
+ * would not print back as the same value once read into a JavaScript number, such as
+ * `12345678901234567890` or `1e400`, is `inexact`. `1.0` prints back as `1`, the same value.
+ */
+function readJsonDocument(text: string): JsonDocument {
+  let exact = true;
+  const reviver: JsonReviver = (_key, value, context) => {
+    if (typeof value === 'number' && !keepsJsonNumber(value, context?.source)) exact = false;
+    return value;
+  };
+  let value: JsonValue;
   try {
-    return { value: blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text)) };
+    value = blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text, reviver));
   } catch {
-    return undefined;
+    return { kind: 'invalid' };
   }
+  return exact ? { kind: 'json', value } : { kind: 'inexact' };
+}
+
+function keepsJsonNumber(value: number, source: string | undefined): boolean {
+  if (!Number.isFinite(value) || source === undefined) return false;
+  const written = decimalValue(source);
+  return written !== undefined && written === decimalValue(String(value));
+}
+
+const DECIMAL_PARTS_PATTERN = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
+/** A numeral's value as `<sign><digits>e<exponent>`, with no leading or trailing zero digits. */
+function decimalValue(numeral: string): string | undefined {
+  const parts = DECIMAL_PARTS_PATTERN.exec(numeral);
+  if (parts === null) return undefined;
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] = parts;
+  const digits = `${whole}${fraction}`.replace(/^0+/, '');
+  if (digits === '') return '0';
+  const significant = digits.replace(/0+$/, '');
+  const shift = Number(exponent) - fraction.length + digits.length - significant.length;
+  return `${sign}${significant}e${shift}`;
 }
 
 function parseArrayConstructor(
@@ -428,12 +476,10 @@ export function parsePostgresDefault(
     return value === undefined ? undefined : { kind: 'literal', value };
   }
 
-  if (normalizedType === 'json' || normalizedType === 'jsonb') {
-    try {
-      return { kind: 'literal', value: JSON.parse(token.text) };
-    } catch {
-      // Keep legacy behavior for malformed/non-JSON string content.
-    }
+  if (normalizedType !== undefined && isJsonElementType(normalizedType)) {
+    const document = readJsonDocument(token.text);
+    if (document.kind === 'inexact') return { kind: 'function', expression: trimmed };
+    if (document.kind === 'json') return { kind: 'literal', value: document.value };
   }
   return { kind: 'literal', value: token.text };
 }
