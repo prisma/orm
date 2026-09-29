@@ -1,5 +1,6 @@
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { extname } from 'pathe';
+import { DB_SIGN_COMMAND, EMIT_COMMAND } from '../../orm/init-diagnostics';
 import { formatAddArgs, formatAddDevArgs, type PackageManager } from './detect-package-manager';
 import type { TargetId } from './templates/code-templates';
 
@@ -112,12 +113,12 @@ export function prisma6SideBySideSetup(inputs: {
       {
         kind: 'run-command',
         label: 'Read the Prisma 6 schema into a contract',
-        command: '{bin} contract emit',
+        command: EMIT_COMMAND,
       },
       {
         kind: 'run-command',
         label: 'Sign the database the Prisma 6 app uses',
-        command: '{bin} db sign',
+        command: DB_SIGN_COMMAND,
       },
     ],
   };

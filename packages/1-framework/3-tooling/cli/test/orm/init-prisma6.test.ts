@@ -125,12 +125,12 @@ describe(
           {
             kind: 'run-command',
             label: 'Read the Prisma 6 schema into a contract',
-            command: '{bin} contract emit',
+            command: 'prisma contract emit',
           },
           {
             kind: 'run-command',
             label: 'Sign the database the Prisma 6 app uses',
-            command: '{bin} db sign',
+            command: 'prisma db sign',
           },
         ],
         meta: {
