@@ -324,6 +324,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
             config: ctx.config,
             contractConfig,
             description: printDescription(sourcePaths),
+            cwd: ctx.cwd,
             signal: ctx.signal,
           },
           { printPsl },

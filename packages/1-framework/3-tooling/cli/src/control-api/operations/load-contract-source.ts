@@ -263,8 +263,8 @@ export async function loadContractSourceWithStack(inputs: {
   readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
-  /** The directory locations are shown relative to; without it a source's paths are shown as it gave them. */
-  readonly cwd?: string;
+  /** The directory the returned error shows locations relative to; `undefined` shows a source's paths as it gave them. */
+  readonly cwd: string | undefined;
 }): Promise<ContractSourceLoadResult> {
   const { stack, source } = inputs;
   const signal = inputs.signal ?? new AbortController().signal;
@@ -351,6 +351,7 @@ export async function loadContractSource(
   const loaded = await loadContractSourceWithStack({
     stack: createControlStack(config),
     source: contractConfig.source,
+    cwd: undefined,
     ...ifDefined('signal', options.signal),
     ...ifDefined('reportWarning', options.onWarning),
   });

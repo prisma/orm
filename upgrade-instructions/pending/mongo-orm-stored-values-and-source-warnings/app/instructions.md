@@ -34,8 +34,9 @@ changes:
     summary: |
       `prisma contract emit` and `prisma contract print` report contract source warnings, such as
       `PSL_DEPRECATED_SCALAR_NAME`, as `warn` diagnostics of the result instead of free-text
-      `warning …` messages. With `--json` they are in the result envelope's `diagnostics`, and the
-      file is shown relative to the working directory.
+      `warning …` messages. With `--json` they are in the result envelope's `diagnostics`. Their
+      file, and the file of a source error from either command, is shown relative to the working
+      directory.
   - id: mongo-ts-preset-field-not-optional
     summary: |
       In a Mongo TypeScript contract, `.optional()` or `.many()` on a field a preset fills, such

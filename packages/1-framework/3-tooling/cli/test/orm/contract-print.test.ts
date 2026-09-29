@@ -402,6 +402,37 @@ describe('contract print', () => {
     expect(await readdir(dir)).not.toContain('generated');
   });
 
+  it('names the source file of a load failure relative to the working directory', async () => {
+    const dir = await projectDir();
+    mocks.load.mockResolvedValue({
+      ok: false,
+      failure: {
+        summary: 'Source interpretation failed',
+        diagnostics: [
+          {
+            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+            message: 'Field "P6.big" has type "BigInt"',
+            sourceId: join(dir, 'prisma', 'schema.prisma'),
+            span: {
+              start: { offset: 4, line: 5, column: 3 },
+              end: { offset: 7, line: 5, column: 6 },
+            },
+          },
+        ],
+      },
+    });
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    expect(erroredEnvelope(run).diagnostics).toEqual([
+      expect.objectContaining({
+        summary:
+          'prisma/schema.prisma:5:3 PSL_UNSUPPORTED_FIELD_TYPE: Field "P6.big" has type "BigInt"',
+        where: { path: 'prisma/schema.prisma', line: 5 },
+      }),
+    ]);
+  });
+
   it('errors when the family cannot print the contract as PSL', async () => {
     const dir = await projectDir();
     mocks.createFamilyInstance.mockReturnValue({ deserializeContract: mocks.deserializeContract });
