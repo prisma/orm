@@ -710,3 +710,26 @@ Per-repo stop conditions beyond the canonical ones:
 **Fix.** Run the check with `--prev $(git rev-parse <base-branch>)` in every dispatch gate on a stacked branch, and add a `changes: []` declaration for additive changes under `packages/3-extensions/**` or `examples/**`.
 
 **Reference incident.** 2026-09-24, the Mongo defaults project's slice 5 PR (#30405, stacked on #30403): the facade widening `contract: string | ContractConfig` was additive, the slice 3 fragment sat on the base branch, and CI refused the PR until a `changes: []` extension declaration was added. Same project, slice 3 (#30403): CI `Lint` failed on biome `no-bare-cast` and `noBannedTypes` because the dispatch briefs never listed the always-run per-package `pnpm lint` from `dod.md`; the F14 rule was already on file, the orchestrator did not thread it into the briefs.
+
+### F36. Stacked PRs that ship in one release each write an upgrade entry relative to the previous slice, so the release guide describes states users never had
+
+**Symptom.** A release's upgrade guide tells users to change something that did not exist in the previous release. A user of the previous tag reads "`Json` now refuses non-JSON values" for a type their version refused outright, or a variant-field entry that names scalar types added in the same release.
+
+**Root cause.** Each stacked PR records a fragment against its own base branch, which is the previous slice, not the previous release. When every slice of a project ships in the same release, the guide concatenates the intermediate steps instead of describing the difference between the two released tags.
+
+**Mitigation.**
+
+- When a project has several stacked PRs, each fragment names the release its "before" state comes from. A fragment whose "before" state is another unreleased slice is folded into that slice's fragment instead of added beside it.
+- At release, check every entry against `git diff <previous tag> <new tag>` and against a checkout of the previous tag: build a small project on the previous tag and follow the guide literally.
+
+**Reference incident.** 2026-09-29, the rc.12 to rc.13 guides: manual QA on a real rc.12 project found `mongo-json-field-semantics` describing a change to Mongo `Json`, which rc.12 did not support, and `mongo-variant-field-codecs` naming `Int64`, `Decimal128`, `Binary` and Prisma 6 contracts, none of which rc.12 had.
+
+### F37. Slice close treats a green review and green CI as manual QA, and the project reaches close-out with no QA run
+
+**Symptom.** Close-out finds no `drive-qa-plan` script and no `drive-qa-run` report for any slice. Manual QA run at close-out against merged `main` then finds user-blocking bugs that every slice's review and CI passed.
+
+**Root cause.** The slice-close walk marked the QA-side items as covered by the reviewer's verdict, which [`dod.md`](./dod.md#slice-close-ritual-added-2026-05-21-retro) already names as a known failure. Nothing stopped the next slice from starting.
+
+**Mitigation.** A slice is not closed until its QA report exists. The orchestrator runs manual QA after each slice merges, against a build of `main`, as a real user following the docs and upgrade guide, before starting the next slice. Where the QA skills are not installed, the runner writes `plan.md` and `run.md` by hand in the format [`drive/qa/README.md`](../qa/README.md) describes.
+
+**Reference incident.** 2026-09-29, the Mongo defaults, codecs and Prisma 6 source project: six slices merged with no manual QA. The close-out QA found that Mongo `db update` could not confirm any destructive change, a `Double` field refused whole numbers, `include()` returned related documents undecoded, a `Bson` filter on an `ObjectId` matched nothing, and `orm init` sent Prisma 6 Mongo users down the Prisma 7 path. Twelve bugs and about thirty points of friction were fixed in follow-up PRs before the project closed.
