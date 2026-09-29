@@ -10,11 +10,15 @@
 
 export interface InsertOneResult {
   readonly insertedId: unknown;
+  /** The inserted document with its `_id`, as a read of it returns it: written to BSON and read back locally with the client's BSON options. */
+  readonly document: unknown;
 }
 
 export interface InsertManyResult {
   readonly insertedIds: ReadonlyArray<unknown>;
   readonly insertedCount: number;
+  /** The inserted documents in input order, each as `InsertOneResult.document` describes. */
+  readonly documents: ReadonlyArray<unknown>;
 }
 
 /**

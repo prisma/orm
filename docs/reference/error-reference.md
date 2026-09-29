@@ -917,7 +917,7 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 ### ORM.MUTATION_ROW_MISSING
 
-A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`. On Mongo, `create()` and `createAll()` read each inserted document back by `_id` so they return it as stored; a document deleted in between raises this code with `method`, `collection` and `id`.
+A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
 
 ### ORM.OPERATION_UNSUPPORTED
 

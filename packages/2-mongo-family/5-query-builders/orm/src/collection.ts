@@ -23,6 +23,8 @@ import type {
 } from '@internal/mongo-contract';
 import type {
   AnyMongoCommand,
+  InsertManyResult,
+  InsertOneResult,
   MongoFieldShape,
   MongoFilterExpr,
   MongoQueryPlan,
@@ -115,11 +117,11 @@ export interface MongoCollection<
   all(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Executes the query with limit 1. Returns the first matching row or `null`. */
   first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null>;
-  /** Inserts the document and returns it as stored, read back by `_id` and decoded like a read. */
+  /** Inserts the document and returns it as stored, decoded like a read, without reading it back. */
   create(
     data: ResolvedCreateInput<TContract, ModelName, TVariant>,
   ): Promise<IncludedRow<TContract, ModelName, TIncludes>>;
-  /** Inserts the documents and returns them as stored, read back by `_id` in input order and decoded like a read. */
+  /** Inserts the documents and returns them as stored, in input order and decoded like a read, without reading them back. */
   createAll(
     data: ReadonlyArray<ResolvedCreateInput<TContract, ModelName, TVariant>>,
   ): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
@@ -406,15 +408,13 @@ class MongoCollectionImpl<
     const document = this.#toDocument(normalized);
     const command = new InsertOneCommand(this.#collectionName, document);
     const results = await this.#drainPlan(command, this.#insertOneResultShape());
-    const insertedId = blindCast<
-      { insertedId: unknown },
-      'InsertOneCommand runtime result exposes the server-assigned insertedId, decoded via the _id codec'
-    >(results[0]).insertedId;
-    const [row] = await this.#readInserted('create', [insertedId]);
     return blindCast<
       IncludedRow<TContract, ModelName, TIncludes>,
-      'the inserted document read back through the model result shape'
-    >(row);
+      'the insert result carries the written document, decoded through the model result shape like a read'
+    >(
+      blindCast<InsertOneResult, 'InsertOneCommand yields one InsertOneResult'>(results[0])
+        .document,
+    );
   }
 
   createAll(
@@ -437,18 +437,20 @@ class MongoCollectionImpl<
           defaultValueCache,
         ),
       );
-      const documents = normalizedRows.map((d) => self.#toDocument(d));
-      const command = new InsertManyCommand(self.#collectionName, documents);
+      const command = new InsertManyCommand(
+        self.#collectionName,
+        normalizedRows.map((d) => self.#toDocument(d)),
+      );
       const results = await self.#drainPlan(command, self.#insertManyResultShape());
-      const insertedIds = blindCast<
-        { insertedIds: readonly unknown[] },
-        'InsertManyCommand runtime result exposes insertedIds in input order, decoded via the _id codec'
-      >(results[0]).insertedIds;
-      for (const row of await self.#readInserted('createAll', insertedIds)) {
+      const { documents } = blindCast<
+        InsertManyResult,
+        'InsertManyCommand yields one InsertManyResult'
+      >(results[0]);
+      for (const document of documents) {
         yield blindCast<
           IncludedRow<TContract, ModelName, TIncludes>,
-          'an inserted document read back through the model result shape'
-        >(row);
+          'the insert result carries the written documents, decoded through the model result shape like a read'
+        >(document);
       }
     }
     return new AsyncIterableResult(gen());
@@ -704,40 +706,6 @@ class MongoCollectionImpl<
     >(results[0]);
   }
 
-  async #readInserted(method: string, ids: readonly unknown[]): Promise<unknown[]> {
-    const idField = this.#modelFields()['_id'];
-    const idFilter = MongoFieldFilter.in(
-      '_id',
-      ids.map((id) => this.#wrapFieldValue(id, idField, '_id')),
-    );
-    const byId = new Map<unknown, unknown>();
-    const reader = this.#clone({
-      filters: [idFilter],
-      includes: [],
-      selectedFields: undefined,
-      orderBy: undefined,
-      limit: undefined,
-      offset: undefined,
-    });
-    for await (const row of reader.#query()) {
-      byId.set(
-        blindCast<Record<string, unknown>, 'a decoded model row is a document'>(row)['_id'],
-        row,
-      );
-    }
-    return ids.map((id) => {
-      const row = byId.get(id);
-      if (row === undefined) {
-        throw ormError(
-          'ORM.MUTATION_ROW_MISSING',
-          `${method}() inserted a document into collection '${this.#collectionName}' but could not read it back by _id`,
-          { meta: { method, collection: this.#collectionName, id: String(id) } },
-        );
-      }
-      return row;
-    });
-  }
-
   async #readMatchingIds(): Promise<unknown[]> {
     const idQuery = this.#clone({
       includes: [],
@@ -838,15 +806,25 @@ class MongoCollectionImpl<
   #insertOneResultShape(): MongoResultShape {
     return freezeMongoResultShape({
       kind: 'document',
-      fields: { insertedId: this.#idFieldShape() },
+      fields: { insertedId: this.#idFieldShape(), document: this.#documentShape() },
     });
   }
 
   #insertManyResultShape(): MongoResultShape {
     return freezeMongoResultShape({
       kind: 'document',
-      fields: { insertedIds: { kind: 'array', nullable: false, element: this.#idFieldShape() } },
+      fields: {
+        insertedIds: { kind: 'array', nullable: false, element: this.#idFieldShape() },
+        documents: { kind: 'array', nullable: false, element: this.#documentShape() },
+      },
     });
+  }
+
+  #documentShape(): MongoFieldShape {
+    const shape = this.#modelResultShape();
+    return shape.kind === 'document'
+      ? { kind: 'document', nullable: false, fields: shape.fields }
+      : { kind: 'unknown' };
   }
 
   #modelResultShape(): MongoResultShape {
