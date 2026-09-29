@@ -108,7 +108,6 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents,
         sources,
-        pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
       });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can

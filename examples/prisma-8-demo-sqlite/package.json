@@ -15,16 +15,16 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.12",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.13",
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.6.1",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/tsconfig": "workspace:8.0.0-rc.13",
     "@types/node": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:"
   },
-  "version": "8.0.0-rc.12"
+  "version": "8.0.0-rc.13"
 }

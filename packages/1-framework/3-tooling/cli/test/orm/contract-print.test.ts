@@ -122,7 +122,6 @@ describe('contract print', () => {
     const [, printOptions] = mocks.printPsl.mock.calls[0] ?? [];
     expect(sourceContext.codecLookup).toBe(stack.codecLookup);
     expect(sourceContext.authoringContributions).toBe(stack.authoringContributions);
-    expect(printOptions.codecLookup).toBe(stack.codecLookup);
     expect(printOptions.pslBlockDescriptors).toBe(stack.authoringContributions.pslBlockDescriptors);
     expect(mocks.buildPslContract).toHaveBeenCalledWith(VALIDATED_CONTRACT);
   });

@@ -1,7 +1,17 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import type { EntitySelector } from '../src/exports';
-import { createBinder, entityRef, identifier, list, modelAttribute, oneOf } from '../src/exports';
+import type { EntitySelector, PslBlockSpecDescriptor } from '../src/exports';
+import {
+  blockAttribute,
+  createBinder,
+  entityRef,
+  identifier,
+  interpretExtensionBlockAttributes,
+  list,
+  modelAttribute,
+  oneOf,
+  structBlock,
+} from '../src/exports';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ModelAttributeAst } from '../src/syntax/ast/attributes';
@@ -30,7 +40,6 @@ function fixture(value: string, local = true) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   expect(diagnostics).toEqual([]);
   const namespace = symbolTable.topLevel.namespaces['Local'];
@@ -77,6 +86,55 @@ function fixture(value: string, local = true) {
 }
 
 describe('syntax-scoped entity resolution', () => {
+  it('supplies the completed table and binder to existing block attribute rules', () => {
+    const { document, sources } = parse(
+      'namespace Local {\n permission Reader {\n @@target(Later)\n }\n model Later {}\n}',
+      'references.prisma',
+    );
+    const target = blockAttribute('target', {
+      documentation: 'Names a model.',
+      positional: [
+        { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'The selected model.' },
+      ],
+    });
+    const descriptor = {
+      name: { required: true },
+      kind: 'pslBlock',
+      keyword: 'permission',
+      discriminator: 'permission',
+      spec: () => structBlock({ parameters: {} }),
+      attributes: { target: () => target },
+    } satisfies PslBlockSpecDescriptor;
+    const result = buildSymbolTable({
+      documents: [document],
+      sources,
+    });
+    expect(result.diagnostics).toEqual([]);
+    const { binder, diagnostics: binderDiagnostics } = createBinder({
+      sources,
+      symbolTable: result.symbolTable,
+      typeConstructors: {},
+      attributeSpecs: { model: {}, field: {} },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+      pslBlockDescriptors: { permission: descriptor },
+    });
+    expect(binderDiagnostics).toEqual([]);
+    const namespace = result.symbolTable.topLevel.namespaces['Local'];
+    const block = namespace?.blocks['Reader'];
+    if (block === undefined) throw new Error('Missing block');
+    const parsed = interpretExtensionBlockAttributes({
+      block,
+      descriptor,
+      symbols: result.symbolTable,
+      sources,
+      binder,
+    });
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.attributes['target']?.args).toEqual({
+      model: { declaration: namespace?.models['Later'], namespace },
+    });
+  });
+
   it('selects the local declaration, including forward references', () => {
     const { expression, ctx, namespace } = fixture('Shared');
     expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
@@ -134,7 +192,6 @@ describe('syntax-scoped entity resolution', () => {
     const { symbolTable, diagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     expect(diagnostics).toEqual([]);
     expect(Object.hasOwn(symbolTable.topLevel.models, '__proto__')).toBe(true);

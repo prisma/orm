@@ -26,7 +26,6 @@ const { document, sources } = parse(schema, 'schema.prisma');
 const { symbolTable } = buildSymbolTable({
   documents: [document],
   sources,
-  pslBlockDescriptors: {},
 });
 
 function fieldOf(modelName: string, fieldName: string): FieldSymbol {

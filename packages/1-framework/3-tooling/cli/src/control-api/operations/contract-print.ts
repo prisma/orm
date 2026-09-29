@@ -76,7 +76,6 @@ export async function executeContractPrint(
   return {
     psl: dependencies.printPsl(document, {
       pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
-      codecLookup: stack.codecLookup,
       description,
     }),
     sourceSettings,

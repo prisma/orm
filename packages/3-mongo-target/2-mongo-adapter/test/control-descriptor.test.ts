@@ -29,6 +29,7 @@ describe('mongoScalarAuthoringTypes', () => {
       [
         ...expectedScalars.map(([name]) => name),
         'Json',
+        'Bson',
         ...deprecatedAliases.map(([name]) => name),
       ].sort(),
     );
@@ -52,12 +53,31 @@ describe('mongoScalarAuthoringTypes', () => {
     },
   );
 
-  it('pins Json, whose codec has no BSON type, to the json native type', () => {
-    expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([]);
+  it('pins Json to the json native type and the JSON-representable BSON types', () => {
+    expect(mongoDescriptorById('mongo/json@1')?.targetTypes).toEqual([
+      'object',
+      'array',
+      'string',
+      'double',
+      'int',
+      'long',
+      'bool',
+      'null',
+    ]);
     expect(mongoScalarAuthoringTypes.Json).toEqual({
       kind: 'typeConstructor',
-      documentation: expect.stringMatching(/\S/),
+      documentation:
+        'A JSON value, stored as BSON object, array, string, double, int, long, bool or null; the collection validator admits only those types at the top level, and the codec refuses anything else at any depth.',
       output: { codecId: 'mongo/json@1', nativeType: 'json' },
+    });
+  });
+
+  it('pins Bson, whose codec declares no BSON type, to the bson native type', () => {
+    expect(mongoDescriptorById('mongo/bson@1')?.targetTypes).toEqual([]);
+    expect(mongoScalarAuthoringTypes['Bson']).toEqual({
+      kind: 'typeConstructor',
+      documentation: expect.stringContaining('the collection validator does not constrain it'),
+      output: { codecId: 'mongo/bson@1', nativeType: 'bson' },
     });
   });
 

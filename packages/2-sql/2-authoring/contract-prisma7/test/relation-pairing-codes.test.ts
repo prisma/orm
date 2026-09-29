@@ -30,7 +30,6 @@ function fieldSymbol(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const field = symbolTable.topLevel.models['Test']?.fields[fieldName];
   if (field === undefined) throw new Error(`field ${fieldName} missing`);

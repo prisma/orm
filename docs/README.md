@@ -25,6 +25,7 @@ This directory contains the primary documentation for the repository.
 - [Commands](./commands/README.md) — command docs and entry points
 - [Reference docs](./reference/) — conventions and patterns used across the codebase
 - [Codec authoring guide](./reference/codec-authoring-guide.md) — class-based codecs (`CodecImpl`, `CodecDescriptorImpl`) and column helpers
+- [Scalar types](./reference/scalar-types.md) — every scalar type per target (PSL name, TS helper, codec, storage and application type) and a cross-target concept table with the Prisma 6/7 names
 - [Integer representation types](./reference/integer-representation-types.md) — choosing `BigInt`, `BigIntNumber`, or `UnboundedInt` by target, storage, application value, and aggregate behavior
 - [Aggregate descriptor guide](./reference/aggregate-descriptor-guide.md) — how a target or extension declares aggregate operations and their result codecs (`SqlAggregateDescriptor` on `types.aggregateDescriptors`)
 - [PSL editor tooling for tagged literal defaults](./reference/psl-editor-tooling-tagged-literals.md) — what the language server, formatter and highlighting need for `` sql`...` `` and `` json`...` `` defaults, and what is not done yet

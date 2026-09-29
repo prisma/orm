@@ -23,7 +23,7 @@
   "dependencies": {
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.12",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.13",
     "dotenv": "^17.4.2",
     "pg": "catalog:",
     "temporal-polyfill": "^1.0.4"
@@ -32,14 +32,14 @@
     "@prisma/cli-engine": "0.6.1",
     "@prisma/dev": "catalog:",
     "@prisma/prisma7": "7.10.0",
-    "@repo/test-utils": "workspace:8.0.0-rc.12",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
+    "@repo/test-utils": "workspace:8.0.0-rc.13",
+    "@repo/tsconfig": "workspace:8.0.0-rc.13",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
-    "prisma": "workspace:@internal/cli@8.0.0-rc.12",
+    "prisma": "workspace:@internal/cli@8.0.0-rc.13",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.12"
+  "version": "8.0.0-rc.13"
 }

@@ -50,10 +50,10 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 |---|---|---|
 | 1 | `mongo-target-owns-codecs` | #30396, merged 2026-09-25 |
 | 2 | `execution-ref-neutral-names` | #30399, merged 2026-09-25 |
-| 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
-| 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
-| 4 | `mongo-generator-runtime-hoist` | #30406, stacked on 5 |
-| 6 | | not started; stacked on 4 |
+| 3 | `mongo-execution-defaults` | #30403, merged 2026-09-25 |
+| 5 | `mongo-prisma6-source` | #30405, merged 2026-09-27 |
+| 4 | `mongo-generator-runtime-hoist` | #30406, merged 2026-09-27 |
+| 6 | `mongo-json-bson` | in progress, stacked on 4 |
 
 ## Dependencies
 
@@ -81,6 +81,14 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 - Mongo TS `field.temporal.timestamp(undefined, 'now')`: TypeScript infers both option arguments as optional, so the create-input type keeps such a field required even though the runtime fills it. `timestamp()` and `timestamp('now', 'now')` resolve exactly. Consider named-object arguments for the TS form; check what SQL's TS `temporal.timestamp` signature does.
 - Mongo update defaults treat every top-level field the update document touches (`$set`, `$unset`, `$inc`, `$push`) as explicit, and an operator-only update as non-empty. Document this beside SQL's `$set`-only rule when the runtime machinery is hoisted (slice 4).
 - The Mongo TypeScript contract builder keeps its own enum encoding and storage hashing; slice 5 unified the PSL interpreter and the Prisma 6 reader on `buildMongoStorage` in `@internal/mongo-contract` but did not move the TS builder onto it. It is part of the pre-existing PSL/TS storage-hash gap above.
+- From the review of slice 6 (#30439), left for later:
+  - The Postgres and SQLite `Json` codecs (`pg/json@1`, `pg/jsonb@1`, `sqlite/json@1`) encode with `JSON.stringify`, so a `Date` becomes text, `undefined` members are dropped and a `Map` becomes `{}`, where Mongo's `Json` refuses such a value with its path. The plain-JSON check does not depend on a target; move it next to `JsonValue` in `@internal/contract` with a target-supplied describer and have the SQL codecs adopt it. Belongs to `target-named-scalars-sql` (`design/scalar-naming.md` § 7).
+  - Nothing a user sees is wrong today, but a future message built from the Mongo scalar map's `nativeType` would print "stored as BSON json" for `Json` and "stored as BSON bson" for `Bson`, because those two entries hold codec tokens, not BSON type names. The framework requires the field, so the fix belongs there: make it optional or add a separate label.
+  - A Mongo enum over a codec with several BSON types, or none, is refused at the `@@type` argument. A SQL enum over such a codec would silently store its members as the codec's first type. No SQL codec declares several types today; add the same refusal to the SQL enum path, or move it into the framework enum path both families use, in `target-named-scalars-sql`.
+  - The Mongo planner classifies any change to an existing property schema as destructive, including a `Json`-to-`Bson` switch (a list to `{}`), which only widens the validator. Teach `isWideningSchemaChange` that `{}` admits everything.
+  - `schema-to-view.ts` prints a `bsonType` list with `String(...)`, so `db schema` shows `meta: object,array,string,double,int,long,bool,null`.
+  - A read through a polymorphic model's base collection (no `.variant(...)`) returns fields declared only on a variant as the driver read them: an `ObjectId` comes back as an `ObjectId`, not a hex string, and a `Json` field is not checked. Reads and writes through `.variant(...)` use the variant's codecs. Decoding each row by its discriminator would close this.
+  - Nothing refuses a variant model field that has the same name as a base model field. If one had a different type, the ORM would write and read it with the variant's codec while the derived collection validator keeps the base field's type, so a write the ORM accepts could fail validation. No committed contract has such a field.
 
 ## Follow-on projects specified in `design/`
 
@@ -94,3 +102,4 @@ The Mongo PSL renames `Int`→`Int32`, `Float`→`Double`, `Boolean`→`Bool`, `
 - `localeCompare` still orders other emitted or hashed output: `contract-psl/src/interpreter.ts` (~560), `contract-ts/src/contract-builder.ts` (~113), `packages/2-mongo-family/3-tooling/emitter/src/index.ts` (~65, ~78), `mongo-schema-ir/src/schema-ir.ts` (~17), `schema-verify/canonicalize-introspection.ts` (~141), and the framework `mergeCapabilityMatrices` key sort feeding `capabilities`. Each is host-locale dependent in the same way the execution sort was; sweep them in one change with the code-unit comparator.
 - The shared PSL parser reads only `a` or `a.b(` in index-field position, so a Prisma 6 `@@index([address.city])` fails with `PSL_INVALID_MODEL_MEMBER` before the Prisma 6 reader can report its own diagnostic; only the call form gets `PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED`. Teaching the parser dotted references touches every grammar, the formatter, and the language server.
 - Language-server completions now carry the deprecated Mongo scalar aliases last with the Deprecated tag; when the aliases are removed (a later release), delete the alias entries and the `deprecated` field consumers together.
+- `prisma contract print` (#30315) ships a Postgres printer only; a Mongo contract refuses with `CONTRACT.PRINT_UNSUPPORTED`. A Mongo printer is new work and must print the target-named scalars and the `temporal.*` presets; it belongs with the Prisma 6 migration story.

@@ -9,3 +9,4 @@ export const MONGO_INT64_CODEC_ID = 'mongo/int64@1' as const;
 export const MONGO_DECIMAL128_CODEC_ID = 'mongo/decimal128@1' as const;
 export const MONGO_BINARY_CODEC_ID = 'mongo/binary@1' as const;
 export const MONGO_JSON_CODEC_ID = 'mongo/json@1' as const;
+export const MONGO_BSON_CODEC_ID = 'mongo/bson@1' as const;

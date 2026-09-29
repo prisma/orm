@@ -91,31 +91,15 @@ export function buildIntrospectedPolicyBlocks(
       keyword: POLICY_BLOCK_KEYWORDS[policy.operation],
       name: head,
       parameters: {
-        target: { kind: 'ref', identifier: modelName, span: SYNTHETIC_SPAN },
-        roles: {
-          kind: 'list',
-          items: policy.roles.map((role) => ({
-            kind: 'ref',
-            identifier: role,
-            span: SYNTHETIC_SPAN,
-          })),
-          span: SYNTHETIC_SPAN,
-        },
+        target: { expression: modelName, span: SYNTHETIC_SPAN },
+        roles: { expression: `[${policy.roles.join(', ')}]`, span: SYNTHETIC_SPAN },
         ...(policy.using !== undefined
-          ? { using: { kind: 'value', raw: JSON.stringify(policy.using), span: SYNTHETIC_SPAN } }
+          ? { using: { expression: JSON.stringify(policy.using), span: SYNTHETIC_SPAN } }
           : {}),
         ...(policy.withCheck !== undefined
-          ? {
-              withCheck: {
-                kind: 'value',
-                raw: JSON.stringify(policy.withCheck),
-                span: SYNTHETIC_SPAN,
-              },
-            }
+          ? { withCheck: { expression: JSON.stringify(policy.withCheck), span: SYNTHETIC_SPAN } }
           : {}),
-        ...(policy.permissive
-          ? {}
-          : { permissive: { kind: 'value', raw: 'false', span: SYNTHETIC_SPAN } }),
+        ...(policy.permissive ? {} : { permissive: { expression: 'false', span: SYNTHETIC_SPAN } }),
       },
       blockAttributes: [
         {
@@ -130,7 +114,6 @@ export function buildIntrospectedPolicyBlocks(
           span: SYNTHETIC_SPAN,
         },
       ],
-      attributes: { map: { args: { name: policy.name }, span: SYNTHETIC_SPAN } },
       span: SYNTHETIC_SPAN,
     });
   }

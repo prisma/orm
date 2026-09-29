@@ -117,7 +117,6 @@ function parseAndInterpret(source: string) {
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
     documents: [document],
@@ -168,7 +167,7 @@ function enumBlock(name: string, members: Record<string, string>): PslExtensionB
     parameters: Object.fromEntries(
       Object.entries(members).map(([memberName, value]) => [
         memberName,
-        { kind: 'value' as const, raw: JSON.stringify(value), span: ZERO_SPAN },
+        { expression: JSON.stringify(value), span: ZERO_SPAN },
       ]),
     ),
     blockAttributes: [
@@ -178,7 +177,6 @@ function enumBlock(name: string, members: Record<string, string>): PslExtensionB
         span: ZERO_SPAN,
       },
     ],
-    attributes: {},
     span: ZERO_SPAN,
   };
 }

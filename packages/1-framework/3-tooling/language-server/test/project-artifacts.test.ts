@@ -9,7 +9,6 @@ import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
-import type { PipelineInputs } from '../src/pipeline';
 import { createProjectArtifacts, type ProjectArtifacts } from '../src/project-artifacts';
 import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
 
@@ -32,11 +31,6 @@ const schemaUri = pathToFileURL('/abs/schema.psl').toString();
 const inputs = resolveSchemaInputs({
   contract: { source: { format: 'psl', inputs: ['/abs/schema.psl'] } },
 });
-
-const controlStack: PipelineInputs = {
-  scalarTypes: ['String', 'Int', 'Boolean', 'DateTime'],
-  pslBlockDescriptors: {},
-};
 
 const directive = '// use prisma-8\n';
 const cleanSource = `${directive}model User {\n  id Int @id\n}\n`;
@@ -64,7 +58,6 @@ function projectWithMirror(interpretation?: ProjectInterpretation): {
   const texts = new Map<string, string>();
   const store = createProjectArtifacts({
     inputs,
-    controlStack,
     onInterpretationError,
     getDocument: (uri) => mirroredDocument(texts, uri),
     ...(interpretation === undefined ? {} : { interpretation }),
@@ -99,7 +92,6 @@ describe('createProjectArtifacts', () => {
       inputs: resolveSchemaInputs({
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
@@ -160,7 +152,6 @@ describe('createProjectArtifacts', () => {
     });
     const artifacts = createProjectArtifacts({
       inputs,
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
@@ -279,7 +270,6 @@ describe('createProjectArtifacts', () => {
     const texts = new Map<string, string>();
     const store = createProjectArtifacts({
       inputs: twoInputs,
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
     });
@@ -319,7 +309,6 @@ describe('createProjectArtifacts', () => {
     const texts = new Map<string, string>();
     const store = createProjectArtifacts({
       inputs: twoInputs,
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
     });
@@ -344,7 +333,6 @@ describe('createProjectArtifacts', () => {
       inputs: resolveSchemaInputs({
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
     });
@@ -415,7 +403,6 @@ describe('createProjectArtifacts', () => {
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
 
     expect(store.document(schemaUri)?.diagnostics).toEqual(mapParseDiagnostics(parseDiagnostics));
@@ -561,7 +548,6 @@ describe('interpret slot', () => {
       inputs: resolveSchemaInputs({
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
@@ -637,7 +623,6 @@ describe('interpret slot', () => {
       inputs: resolveSchemaInputs({
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
-      controlStack,
       getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,

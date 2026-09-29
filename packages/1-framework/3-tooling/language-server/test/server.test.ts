@@ -13,6 +13,7 @@ import {
   blockAttribute,
   bool,
   buildSymbolTable,
+  entityRef,
   fieldAttribute,
   funcCall,
   identifier,
@@ -23,6 +24,7 @@ import {
   optional,
   type SymbolTable,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import type { PslInterpretCapable, PslInterpretInput } from '@internal/psl-parser/interpret';
@@ -139,11 +141,22 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'fixture-policy',
     name: { required: true },
-    parameters: {
-      on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
-      mode: { kind: 'option', values: ['permissive', 'restrictive'] },
-    },
+    spec: () =>
+      structBlock({
+        parameters: {
+          on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+          where: { type: optional(str()), documentation: '' },
+          mode: {
+            type: optional(
+              oneOf(
+                identifier('permissive', { documentation: 'Combined with OR.' }),
+                identifier('restrictive', { documentation: 'Combined with AND.' }),
+              ),
+            ),
+            documentation: '',
+          },
+        },
+      }),
   },
 };
 
@@ -282,7 +295,7 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
       keyword: 'policy',
       discriminator: 'completion-policy',
       name: { required: true },
-      parameters: {},
+      spec: () => structBlock({ parameters: {} }),
       attributes: { probe: () => probeBlock },
     },
   };
@@ -364,7 +377,6 @@ function parseAndSymbolTableDiagnostics(source: string): {
   const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { parseDiagnostics, symbolTableDiagnostics };
 }
@@ -931,7 +943,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const completions = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(completions.map(({ label }) => label)).toContain('Post');
     expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
-    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(alias, updated, expect.any(Object));
+    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(alias, updated);
     expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
     expect(harness.publishCount(schemaUri)).toBe(0);
     expect(harness.publishCount(alias)).toBe(0);
@@ -1316,11 +1328,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     ]);
     await republished;
     expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledWith(
-      schemaUri,
-      updated.source,
-      expect.any(Object),
-    );
+    expect(pipelineMock.runPipeline).toHaveBeenCalledWith(schemaUri, updated.source);
   });
 
   it('returns generic block parameter completions for configured PSL descriptors', async () => {
@@ -1728,7 +1736,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block keys and attributes}\n}`,
       },
     });
   });

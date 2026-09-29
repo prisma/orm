@@ -10,15 +10,19 @@ import { MongoValidator } from '@internal/mongo-contract';
 export type FieldValueSets = Record<string, { readonly values: readonly JsonValue[] }>;
 
 /**
- * `undefined` for a codec the lookup does not know. `null` for one it knows that declares no BSON type (`mongo/json@1` holds any value), which the validator admits unconstrained rather than dropping: with `additionalProperties: false` a dropped field would reject every document that carries it.
+ * The `bsonType` keyword for a list of BSON type names: the name itself for one entry, the list for several.
  */
-function resolveBsonType(
-  codecId: string,
-  codecLookup: CodecLookup | undefined,
-): string | null | undefined {
-  const targetTypes = codecLookup?.targetTypesFor(codecId);
-  if (targetTypes === undefined) return undefined;
-  return targetTypes[0] ?? null;
+function bsonTypeKeyword(bsonTypes: readonly string[]): string | readonly string[] {
+  const [only, ...rest] = bsonTypes;
+  return only !== undefined && rest.length === 0 ? only : [...bsonTypes];
+}
+
+function withNull(bsonTypes: readonly string[]): readonly string[] {
+  return bsonTypes.includes('null') ? bsonTypes : ['null', ...bsonTypes];
+}
+
+function anyValueSchema(field: ContractField): Record<string, unknown> {
+  return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
 }
 
 function fieldToBsonSchema(
@@ -28,11 +32,10 @@ function fieldToBsonSchema(
   valueSets: FieldValueSets | undefined,
 ): Record<string, unknown> | undefined {
   if (field.type.kind === 'scalar') {
-    const bsonType = resolveBsonType(field.type.codecId, codecLookup);
-    if (bsonType === undefined) return undefined;
-    if (bsonType === null) {
-      return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
-    }
+    const bsonTypes = codecLookup?.targetTypesFor(field.type.codecId);
+    if (bsonTypes === undefined) return undefined;
+    if (bsonTypes.length === 0) return anyValueSchema(field);
+    const bsonType = bsonTypeKeyword(bsonTypes);
 
     const enumValues =
       field.valueSet !== undefined
@@ -46,7 +49,7 @@ function fieldToBsonSchema(
     }
 
     if (field.nullable) {
-      const s: Record<string, unknown> = { bsonType: ['null', bsonType] };
+      const s: Record<string, unknown> = { bsonType: bsonTypeKeyword(withNull(bsonTypes)) };
       if (enumValues) s['enum'] = [...enumValues, null];
       return s;
     }

@@ -239,7 +239,11 @@ describe('BSON scalar descriptors', () => {
     [MONGO_INT64_CODEC_ID, ['long'], ['equality', 'order', 'numeric']],
     [MONGO_DECIMAL128_CODEC_ID, ['decimal'], ['equality', 'order', 'numeric']],
     [MONGO_BINARY_CODEC_ID, ['binData'], ['equality']],
-    [MONGO_JSON_CODEC_ID, [], []],
+    [
+      MONGO_JSON_CODEC_ID,
+      ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+      [],
+    ],
   ])('%s declares its BSON type and traits', (codecId, targetTypes, traits) => {
     expect(mongoDescriptorById(codecId)).toMatchObject({ codecId, targetTypes, traits });
   });

@@ -3,20 +3,28 @@ import { NAME_THE_PSL_SOURCE_LOSES } from '../src/name-the-psl-source-loses';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 
-function blockMemberNames(source: string, blockName: string): readonly string[] {
+function blockMemberNames(source: string, blockName: string) {
   const { document, sources } = parse(source, 'test.psl');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
-  return Object.keys(symbolTable.topLevel.blocks[blockName]?.block.parameters ?? {});
+  expect(symbolTable.topLevel.blocks[blockName]).toBeDefined();
+  return Array.from(symbolTable.topLevel.blocks[blockName]!.node.entries(), (entry) =>
+    entry.key()?.name(),
+  );
 }
 
 describe('NAME_THE_PSL_SOURCE_LOSES', () => {
-  it('names a block member the parser does not keep', () => {
+  it('keeps the formerly lost block member name', () => {
     expect(
       blockMemberNames(`enum Status {\n  ${NAME_THE_PSL_SOURCE_LOSES}\n  Active\n}`, 'Status'),
-    ).toEqual(['Active']);
+    ).toEqual(['__proto__', 'Active']);
+  });
+
+  it('keeps prototype-reserved block and member names', () => {
+    expect(
+      blockMemberNames('enum __proto__ {\n  __proto__\n  constructor\n  toString\n}', '__proto__'),
+    ).toEqual(['__proto__', 'constructor', 'toString']);
   });
 });

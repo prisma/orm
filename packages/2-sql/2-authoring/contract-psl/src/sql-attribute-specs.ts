@@ -2,6 +2,7 @@ import type {
   AuthoringContributions,
   AuthoringFieldNamespace,
   AuthoringModelAttributeDescriptor,
+  AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
@@ -148,6 +149,7 @@ export function createSqlBinder(input: {
   readonly authoringContributions?: AuthoringContributions | undefined;
   readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
   readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
   readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
   readonly contributedModelAttributeSpecs?:
     | Readonly<Record<string, ModelAttributeSpecFactory>>
@@ -160,6 +162,9 @@ export function createSqlBinder(input: {
   return createBinder({
     sources: input.sources,
     symbolTable: input.symbolTable,
+    ...(input.pslBlockDescriptors === undefined
+      ? {}
+      : { pslBlockDescriptors: input.pslBlockDescriptors }),
     typeConstructors: {
       ...scalars,
       ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
@@ -344,7 +349,15 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  return Object.keys(block.block.parameters);
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of block.node.entries()) {
+    const key = entry.key()?.name();
+    if (key === undefined || seen.has(key)) continue;
+    seen.add(key);
+    names.push(key);
+  }
+  return names;
 }
 
 function enumDefaultArms(

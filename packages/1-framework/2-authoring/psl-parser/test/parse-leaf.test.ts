@@ -799,6 +799,14 @@ function parseStringValue(literal: string): string | undefined {
 }
 
 describe('StringLiteralExprAst.value() escape decoding', () => {
+  it.each([
+    ['"\\/"', '/'],
+    ['"\\b"', '\b'],
+    ['"\\f"', '\f'],
+  ])('decodes JSON escape %s', (literal, value) => {
+    expect(parseStringValue(literal)).toBe(value);
+  });
+
   it('decodes \\xHH to the matching code unit', () => {
     expect(parseStringValue('"\\x41"')).toBe('A');
   });
