@@ -144,25 +144,33 @@ describe('Mongo temporal presets end to end', () => {
         const y2k = new Date('2000-01-01T00:00:00Z');
         const _id = '65f0000000000000000000f1';
         const upsert = () =>
-          db.posts.where({ _id }).upsert({
-            create: { _id, title: '$literal-looking', touchedAt, updated_at: y2k, note: 'x' },
-            update: (u) => [u.views.inc(2), u.note.unset()],
+          db.counters.where({ _id }).upsert({
+            create: {
+              _id,
+              key: '$literal-looking',
+              tags: ['a'],
+              scores: [],
+              factor: 1,
+              hits: 0,
+              label: 'x',
+              updatedAt: y2k,
+            },
+            update: (u) => [u.hits.inc(2), u.label.unset()],
           });
 
         const inserted = await upsert();
         expect(inserted).toMatchObject({
           _id,
-          title: '$literal-looking',
-          touchedAt,
-          updated_at: y2k,
-          views: 2,
-          note: null,
+          key: '$literal-looking',
+          tags: ['a'],
+          updatedAt: y2k,
+          hits: 2,
+          label: null,
         });
         const updated = await upsert();
-        expect(updated).toMatchObject({ _id, title: '$literal-looking', views: 4, note: null });
-        expect(updated.updated_at.getTime()).toBeGreaterThan(y2k.getTime());
-        expect(updated.touchedAt).toEqual(updated.updated_at);
-        expect(await mongoDb.collection('posts').countDocuments()).toBe(1);
+        expect(updated).toMatchObject({ _id, key: '$literal-looking', hits: 4, label: null });
+        expect(updated.updatedAt.getTime()).toBeGreaterThan(y2k.getTime());
+        expect(await mongoDb.collection('counters').countDocuments()).toBe(1);
       }),
     timeouts.spinUpMongoMemoryServer,
   );
@@ -173,20 +181,20 @@ describe('Mongo temporal presets end to end', () => {
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
         const y2k = new Date('2000-01-01T00:00:00Z');
         for (let round = 0; round < 40; round++) {
-          const title = `race-${round}`;
+          const key = `race-${round}`;
           const results = await Promise.all(
             Array.from({ length: 6 }, () =>
-              db.posts.where({ title }).upsert({
-                create: { title, touchedAt: y2k, updated_at: y2k },
-                update: (u) => [u.views.inc(1)],
+              db.counters.where({ key }).upsert({
+                create: { key, tags: [], scores: [], factor: 1, hits: 0, updatedAt: y2k },
+                update: (u) => [u.hits.inc(1)],
               }),
             ),
           );
-          const stored = await mongoDb.collection('posts').find({ title }).toArray();
-          const inserts = results.filter((row) => row.updated_at.getTime() === y2k.getTime());
-          expect(inserts.every((row) => row.views === 1)).toBe(true);
+          const stored = await mongoDb.collection('counters').find({ key }).toArray();
+          const inserts = results.filter((row) => row.updatedAt.getTime() === y2k.getTime());
+          expect(inserts.every((row) => row.hits === 1)).toBe(true);
           expect(inserts).toHaveLength(stored.length);
-          expect(stored.reduce((sum, doc) => sum + doc['views'], 0)).toBe(6);
+          expect(stored.reduce((sum, doc) => sum + doc['hits'], 0)).toBe(6);
         }
       }),
     timeouts.spinUpMongoMemoryServer,

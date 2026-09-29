@@ -1,25 +1,10 @@
-import { defineContract } from '@internal/mongo/contract-builder';
 import mongo from '@internal/mongo/runtime';
 import { timeouts } from '@repo/test-utils';
 import { MongoClient } from 'mongodb';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-
-const contract = defineContract({}, ({ field, model }) => ({
-  models: {
-    Counter: model('Counter', {
-      collection: 'counters',
-      fields: {
-        _id: field.objectId(),
-        key: field.string(),
-        tags: field.string().many(),
-        scores: field.int32().many(),
-        factor: field.double(),
-        updatedAt: field.temporal.updatedAt(),
-      },
-    }),
-  },
-}));
+import type { Contract } from './_fixture/generated/contract';
+import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
 const y2k = new Date('2000-01-01T00:00:00Z');
 
@@ -46,17 +31,24 @@ describe('Mongo upsert that keeps a create value for a field with an update defa
   }, timeouts.spinUpMongoMemoryServer);
 
   it('applies every update operator the way a plain upsert does, in one command', async () => {
-    const db = mongo({ contract, mongoClient: client, dbName: 'upsert_pipeline' });
+    const db = mongo<Contract>({ contractJson, mongoClient: client, dbName: 'upsert_pipeline' });
     const commands: string[] = [];
     const listen = (event: { commandName: string }) => commands.push(event.commandName);
     const upsert = () =>
       db.orm.counters.where({ key: 'k' }).upsert({
-        create: { key: 'k', tags: ['a', 'b'], scores: [1, 2, 3], factor: 2, updatedAt: y2k },
+        create: {
+          key: 'k',
+          tags: ['a', 'b'],
+          scores: [1, 2, 3],
+          factor: 2,
+          hits: 5,
+          updatedAt: y2k,
+        },
         update: (u) => [u.tags.addToSet('c'), u.scores.pop(1), u.factor.mul(3)],
       });
 
     const inserted = await upsert();
-    expect(inserted).toMatchObject({ key: 'k', tags: ['c'], factor: 0, updatedAt: y2k });
+    expect(inserted).toMatchObject({ key: 'k', tags: ['c'], factor: 0, hits: 5, updatedAt: y2k });
     expect(inserted.scores).toBeUndefined();
 
     await client
@@ -71,7 +63,7 @@ describe('Mongo upsert that keeps a create value for a field with an update defa
     expect(commands.filter((name) => name === 'findAndModify')).toHaveLength(1);
 
     const pulled = await db.orm.counters.where({ key: 'k' }).upsert({
-      create: { key: 'k', tags: [], scores: [], factor: 1, updatedAt: y2k },
+      create: { key: 'k', tags: [], scores: [], factor: 1, hits: 0, updatedAt: y2k },
       update: (u) => [u.tags.pull('a'), u.scores.push(9)],
     });
     expect(pulled).toMatchObject({ tags: ['b', 'c'], scores: [1, 2, 9] });
