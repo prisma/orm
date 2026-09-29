@@ -1,4 +1,3 @@
-import { installTemporalWhenMissing } from '@internal/config-loader';
 import { createConnection, ProposedFeatures } from 'vscode-languageserver/node';
 import { createServer } from './server';
 import type { LanguageServerStreams } from './stdio-transport';
@@ -18,7 +17,6 @@ export function startServer(): void;
  */
 export function startServer(streams: LanguageServerStreams): Promise<number>;
 export function startServer(streams?: LanguageServerStreams): Promise<number> | undefined {
-  installTemporalWhenMissing();
   if (streams === undefined) {
     createServer(createConnection(ProposedFeatures.all));
     return undefined;

@@ -1313,7 +1313,6 @@ See `.cursor/rules/config-validation-and-normalization.mdc` for detailed pattern
 - `src/bin.ts` is the thin process entry: it adapts the host process into the engine's `Runtime` (`runtimeFromProcess`) and exits with the settled code
 - Exit codes, help output, `--json`, and shared flags (`--config`, `-q`, `-v`, `--color`) are engine policy, not implemented here
 - The unified `prisma-cli` bin mounts the same family from `@prisma/orm-toolchain/cli`
-- `src/bin.ts`, the module that defines the command family, and `createControlClient` each call `installTemporalWhenMissing()` from `@internal/config-loader`, so the date and time codecs work on a Node runtime that has no global `Temporal`; an existing global `Temporal` is left as it is
 
 ### Contract Emit Command (`src/orm/contract/emit.ts`)
 - Engine command definition; the handler returns a settled envelope and the engine renders it

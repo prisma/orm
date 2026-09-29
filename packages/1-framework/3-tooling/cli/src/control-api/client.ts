@@ -1,5 +1,4 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { installTemporalWhenMissing } from '@internal/config-loader';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -77,7 +76,6 @@ import type {
  * @see README.md "Programmatic Control API" section for usage examples
  */
 export function createControlClient(options: ControlClientOptions): ControlClient {
-  installTemporalWhenMissing();
   return new ControlClientImpl(options);
 }
 

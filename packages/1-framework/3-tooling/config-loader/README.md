@@ -17,8 +17,6 @@ performs the emitter-derived artifact-collision check (`getEmittedArtifactPaths`
 
 The package also exports the pieces `loadConfig` is built from: `loadConfigFiles` evaluates the config chain and returns each file's sections as written, `evaluateConfigModule` returns one config file's raw default export, and `buildLoadedConfig` validates an `orm` section built in memory, resolving its paths against a given directory as if a `prisma.config.ts` there had written it.
 
-`installTemporalWhenMissing()` sets `globalThis.Temporal` to the `temporal-polyfill` implementation when the runtime has no global `Temporal`, and does nothing when one exists. The CLI, the Vite plugin and the language server call it before they run code that reads a date or time value. It lives here because all three depend on this package. The application runtime must not call it.
-
 ## Usage
 
 ```ts

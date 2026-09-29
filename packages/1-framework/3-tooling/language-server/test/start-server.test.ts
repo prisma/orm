@@ -124,27 +124,6 @@ const initializeParams = {
 };
 
 describe('startServer over injected streams', () => {
-  it('gives the process a Temporal when the runtime has none', async () => {
-    const original = Object.getOwnPropertyDescriptor(globalThis, 'Temporal');
-    Reflect.deleteProperty(globalThis, 'Temporal');
-    const stdin = new PassThrough();
-    const { stdout } = connectedClient(stdin);
-
-    try {
-      const exitCode = startServer({ stdin, stdout, stderr: hostErrors() });
-      const installed = typeof Reflect.get(globalThis, 'Temporal');
-      stdin.end();
-
-      await expect(exitCode).resolves.toBe(1);
-      expect(installed).toBe('object');
-    } finally {
-      Reflect.deleteProperty(globalThis, 'Temporal');
-      if (original !== undefined) {
-        Object.defineProperty(globalThis, 'Temporal', original);
-      }
-    }
-  });
-
   it('answers initialize and exits 0 after shutdown', async () => {
     const stdin = new PassThrough();
     const { client, stdout } = connectedClient(stdin);

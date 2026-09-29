@@ -1,4 +1,4 @@
-import { installTemporalWhenMissing, ormConfigSection } from '@internal/config-loader';
+import { ormConfigSection } from '@internal/config-loader';
 import { DOCS_BASE } from '@internal/utils/structured-error';
 import type { AnyCommand, RedirectSpec } from '@prisma/cli-engine';
 import { defineCommandFamily } from '@prisma/cli-engine';
@@ -25,13 +25,6 @@ import { migrationStatusCommand } from './migration/status';
 import { refDeleteCommand } from './ref/delete';
 import { refListCommand } from './ref/list';
 import { refSetCommand } from './ref/set';
-
-/**
- * The unified `prisma` CLI imports this module and never runs this package's bin, so importing the
- * command family is what gives its process a `Temporal`. The import happens before the host loads
- * `prisma.config.ts`, so a contract module the config imports finds `Temporal` too.
- */
-installTemporalWhenMissing();
 
 /**
  * The engine derives each diagnostic's docs link from this base plus the
