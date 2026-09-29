@@ -1,3 +1,4 @@
+import mongo from '@internal/mongo/runtime';
 import {
   MongoFieldFilter,
   type MongoFilterExpr,
@@ -40,6 +41,44 @@ describe('Mongo where filters on a Bson field', () => {
           ),
           object: (await db.posts.where({ raw: objectId }).all()).length,
         }).toEqual({ objectId: 1, long: 1, decimal: 1, in: 2, nested: 2, object: 1 });
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'match a driver ObjectId on a path inside a Bson field, and in the query builder',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, client, mongoDb }) => {
+        const post = { views: 1n, price: '1', thumbnail: new Uint8Array([1]), meta: {} };
+        const created = await db.posts.create({ ...post, raw: { owner: objectId, count: long } });
+        await db.posts.create({ ...post, raw: { owner: new ObjectId() } });
+
+        const facade = mongo<Contract>({
+          contractJson,
+          mongoClient: client,
+          dbName: mongoDb.databaseName,
+        });
+        try {
+          const runtime = await facade.runtime();
+          const matched = async (filter: MongoFilterExpr) =>
+            (await runtime.query(facade.query.from('posts').match(filter).build()).toArray())
+              .length;
+
+          expect({
+            ormSubPath: (
+              await db.posts.where(MongoFieldFilter.eq('raw.owner', objectId as never)).all()
+            ).length,
+            ormSubPathLong: (
+              await db.posts.where(MongoFieldFilter.eq('raw.count', long as never)).all()
+            ).length,
+            builderId: await matched(
+              MongoFieldFilter.eq('_id', new ObjectId(created._id) as never),
+            ),
+            builderBson: await matched(MongoFieldFilter.eq('raw.owner', objectId as never)),
+          }).toEqual({ ormSubPath: 1, ormSubPathLong: 1, builderId: 1, builderBson: 1 });
+        } finally {
+          await facade.close();
+        }
       }),
     timeouts.spinUpMongoMemoryServer,
   );
