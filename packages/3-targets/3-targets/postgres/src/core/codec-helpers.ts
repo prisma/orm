@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
+import { numeralText } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -218,24 +218,12 @@ export const pgBoolDecodeJson = (json: JsonValue): boolean => {
 };
 
 /**
- * Neither JSON nor a SQL number literal has a form for `NaN` or the infinities; PostgreSQL reads
- * and writes them as the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as
- * that text on the wire and in JSON.
+ * A SQL number literal has no form for `NaN` or the infinities; PostgreSQL reads and writes them as
+ * the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire,
+ * as `sqlFloatEncodeJson` does in JSON.
  */
 export const pgFloatEncode = (value: number): string | number =>
   Number.isFinite(value) ? value : String(value);
-
-export const pgFloatEncodeJson = (value: number): JsonValue => pgFloatEncode(value);
-
-export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
-  if (typeof json === 'number') return json;
-  if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
-  throw postgresError(
-    'RUNTIME.DECODE_FAILED',
-    `${codecId} database JSON value must be a number or the text NaN, Infinity or -Infinity`,
-    { meta: { codecId, received: typeof json } },
-  );
-};
 
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);

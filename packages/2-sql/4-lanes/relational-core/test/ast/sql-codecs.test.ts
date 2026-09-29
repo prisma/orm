@@ -80,14 +80,19 @@ describe('sql-codecs', () => {
     // PostgreSQL emits `"NaN"` and `"Infinity"` — which JSON has no number for.
     // The codec's application type is `number`, so it rejects rather than hand
     // back a string wearing that type.
-    it('rejects a non-finite value it cannot spell as JSON', () => {
-      expect(() => codec.encodeJson(Number.NaN)).toThrow(/finite/);
-      expect(() => codec.encodeJson(Number.POSITIVE_INFINITY)).toThrow(/finite/);
+    it('writes a non-finite value as the text PostgreSQL writes for it', () => {
+      expect(
+        [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
+          codec.encodeJson(value),
+        ),
+      ).toEqual(['NaN', 'Infinity', '-Infinity']);
     });
 
-    it('rejects the strings a database uses for non-finite floats', () => {
-      expect(() => codec.decodeJson('NaN')).toThrow(/sql\/float@1/);
-      expect(() => codec.decodeJson('Infinity')).toThrow(/sql\/float@1/);
+    it('reads the strings a database uses for non-finite floats', () => {
+      expect(['NaN', 'Infinity'].map((json) => codec.decodeJson(json))).toEqual([
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+      ]);
     });
 
     it('rejects a JSON value that is not a number', () => {

@@ -6,6 +6,7 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import { structuredError } from '@internal/utils/structured-error';
+import { isNonFiniteText } from './data-type-support';
 
 export const SQL_CHAR_CODEC_ID = 'sql/char@1' as const;
 export const SQL_VARCHAR_CODEC_ID = 'sql/varchar@1' as const;
@@ -76,31 +77,24 @@ export const sqlFloatEncode = (value: number): number => value;
 export const sqlFloatDecode = (wire: number): number => wire;
 
 /**
- * JSON has no spelling for a non-finite number, and a database that holds one
- * emits it as a string — PostgreSQL writes `"NaN"` and `"Infinity"`. This
- * codec's application type is `number`, so both directions reject rather than
- * carry a value that type cannot hold.
+ * JSON has no spelling for a non-finite number, so a float codec stores NaN and the infinities as
+ * the text PostgreSQL writes for them in JSON: `"NaN"`, `"Infinity"`, `"-Infinity"`.
  */
-export const sqlFloatEncodeJson = (value: number): JsonValue => {
-  if (!Number.isFinite(value)) {
-    throw structuredError(
-      'RUNTIME.ENCODE_FAILED',
-      `${SQL_FLOAT_CODEC_ID} application value must be a finite number, got ${value}`,
-      { meta: { codec: SQL_FLOAT_CODEC_ID } },
-    );
-  }
-  return value;
-};
+export const sqlFloatEncodeJson = (value: number): JsonValue =>
+  Number.isFinite(value) ? value : String(value);
 
-export const sqlFloatDecodeJson = (json: JsonValue): number => {
-  if (typeof json !== 'number' || !Number.isFinite(json)) {
-    throw structuredError(
-      'RUNTIME.DECODE_FAILED',
-      `Expected a finite number for ${SQL_FLOAT_CODEC_ID}, got ${JSON.stringify(json)}`,
-      { meta: { codec: SQL_FLOAT_CODEC_ID } },
-    );
-  }
-  return json;
+/**
+ * Reads a float's stored JSON: a number, or the text PostgreSQL writes for NaN and the infinities.
+ * SQLite writes an infinity as `9.0e+999`, which `JSON.parse` reads as a number.
+ */
+export const sqlFloatDecodeJson = (codecId: string, json: JsonValue): number => {
+  if (typeof json === 'number') return json;
+  if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
+  throw structuredError(
+    'RUNTIME.DECODE_FAILED',
+    `${codecId} database JSON value must be a number or the text NaN, Infinity or -Infinity`,
+    { meta: { codecId, received: typeof json } },
+  );
 };
 
 export const sqlTextEncode = (value: string): string => value;

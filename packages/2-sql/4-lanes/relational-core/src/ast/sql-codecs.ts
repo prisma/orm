@@ -143,7 +143,7 @@ export class SqlFloatCodec extends CodecImpl<
     return sqlFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return sqlFloatDecodeJson(json);
+    return sqlFloatDecodeJson(this.id, json);
   }
 }
 

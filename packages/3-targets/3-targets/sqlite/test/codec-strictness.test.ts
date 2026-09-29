@@ -97,12 +97,15 @@ describe('sqlite/real@1 decodeJson', () => {
   it.each([
     ['digit text', '42'],
     ['decimal text', '1.5'],
-    ['the text NaN', 'NaN'],
-    ['the text Infinity', 'Infinity'],
-    ['the text -Infinity', '-Infinity'],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sqlite/real@1 database JSON value must be a number',
+      'sqlite/real@1 database JSON value must be a number or the text NaN, Infinity or -Infinity',
+    );
+  });
+
+  it('refuses the text NaN, which SQLite cannot store', () => {
+    expect(() => codec.decodeJson('NaN')).toThrow(
+      'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
     );
   });
 });

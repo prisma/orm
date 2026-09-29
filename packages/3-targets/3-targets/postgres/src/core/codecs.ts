@@ -36,7 +36,9 @@ import {
   SqlIntCodec,
   SqlVarcharCodec,
   sqlCharDescriptor,
+  sqlFloatDecodeJson,
   sqlFloatDescriptor,
+  sqlFloatEncodeJson,
   sqlIntDescriptor,
   sqlTextDescriptor,
   sqlVarcharDescriptor,
@@ -56,9 +58,7 @@ import {
   pgByteaDecodeJson,
   pgByteaDecodeWire,
   pgByteaEncodeJson,
-  pgFloatDecodeJson,
   pgFloatEncode,
-  pgFloatEncodeJson,
   pgInt8Decode,
   pgInt8NumberDecode,
   pgInt8NumberDecodeJson,
@@ -844,10 +844,10 @@ export class PgFloat4Codec extends CodecImpl<
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return pgFloatEncodeJson(value);
+    return sqlFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return pgFloatDecodeJson(PG_FLOAT4_CODEC_ID, json);
+    return sqlFloatDecodeJson(PG_FLOAT4_CODEC_ID, json);
   }
 }
 
@@ -892,10 +892,10 @@ export class PgFloat8Codec extends CodecImpl<
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return pgFloatEncodeJson(value);
+    return sqlFloatEncodeJson(value);
   }
   decodeJson(json: JsonValue): number {
-    return pgFloatDecodeJson(PG_FLOAT8_CODEC_ID, json);
+    return sqlFloatDecodeJson(PG_FLOAT8_CODEC_ID, json);
   }
 }
 

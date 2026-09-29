@@ -61,13 +61,13 @@ describe('structured error codes', () => {
     });
   });
 
-  it('real codec encodeJson of a non-finite value raises RUNTIME.ENCODE_FAILED', () => {
+  it('real codec encodeJson of NaN raises RUNTIME.ENCODE_FAILED', () => {
     const realCodec = sqliteRealDescriptor.factory()({ name: 'test' });
-    const error = capture(() => realCodec.encodeJson(Number.POSITIVE_INFINITY));
+    const error = capture(() => realCodec.encodeJson(Number.NaN));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
-      message: 'sqlite/real@1 value must be a finite number',
+      message: 'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
     });
   });
 

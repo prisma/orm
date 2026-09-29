@@ -5,6 +5,9 @@ import {
   pgBitDescriptor,
   pgBoolDescriptor,
   pgEnumDescriptor,
+  pgFloat4Descriptor,
+  pgFloat8Descriptor,
+  pgFloatDescriptor,
   pgInetDescriptor,
   pgInt2Descriptor,
   pgInt4Descriptor,
@@ -59,6 +62,11 @@ const cases: readonly DecodeJsonCase[] = [
     accepts: [7, -32768, 32767],
     rejects: ['7', 1.5, 32768, -32769, null],
   },
+  ...[pgFloat8Descriptor, pgFloat4Descriptor, pgFloatDescriptor].map((descriptor) => ({
+    codec: descriptor.factory()(ctx),
+    accepts: [1.5, -2, 0, 'NaN', 'Infinity', '-Infinity'],
+    rejects: ['1.5', 'nan', true, null, []],
+  })),
   {
     codec: pgBoolDescriptor.factory()(ctx),
     accepts: [true, false],
@@ -128,6 +136,20 @@ const cases: readonly DecodeJsonCase[] = [
     rejects: [1, null],
   },
 ];
+
+describe('the float codecs write NaN and the infinities as the text PostgreSQL writes, and read them back', () => {
+  for (const descriptor of [pgFloat8Descriptor, pgFloat4Descriptor, pgFloatDescriptor]) {
+    it(descriptor.codecId, () => {
+      const codec = descriptor.factory()(ctx);
+      const values = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+      const stored = values.map((value) => codec.encodeJson(value));
+      expect({ stored, read: stored.map((json) => codec.decodeJson(json)) }).toEqual({
+        stored: ['NaN', 'Infinity', '-Infinity'],
+        read: values,
+      });
+    });
+  }
+});
 
 describe('pg/text-array@1 decodeJson', () => {
   it('keeps a NULL element as null', () => {

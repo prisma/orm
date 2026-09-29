@@ -137,6 +137,11 @@ export interface SqliteCodecConformanceCase {
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
+  /**
+   * Judge the case on round-trip equality alone, for a value SQLite writes in a
+   * different JSON form than `encodeJson` while `decodeJson` reads both.
+   */
+  readonly valueEquality?: (roundTripped: unknown, value: unknown) => boolean;
 }
 
 export interface CodecProjectionOutcome {
@@ -316,7 +321,7 @@ export async function runSqliteCodecProjection(
 
   const base = { sql, rawJson, projected, expected } as const;
 
-  if (!isDeepStrictEqual(projected, expected)) {
+  if (conformanceCase.valueEquality === undefined && !isDeepStrictEqual(projected, expected)) {
     return {
       ...base,
       failure: {
@@ -339,7 +344,12 @@ export async function runSqliteCodecProjection(
     };
   }
 
-  if (!isDeepStrictEqual(roundTripped, conformanceCase.value)) {
+  const roundTripAgrees =
+    conformanceCase.valueEquality === undefined
+      ? isDeepStrictEqual(roundTripped, conformanceCase.value)
+      : conformanceCase.valueEquality(roundTripped, conformanceCase.value);
+
+  if (!roundTripAgrees) {
     return {
       ...base,
       failure: {

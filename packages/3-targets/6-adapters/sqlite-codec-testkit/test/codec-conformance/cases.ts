@@ -156,6 +156,37 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     value: 'a\u{1F600}b',
     storageType: 'TEXT',
   },
+  // SQLite writes an infinity as the JSON number 9.0e+999, which parses back to
+  // Infinity, while encodeJson writes the text "Infinity" because JSON has no
+  // infinite number. decodeJson reads both, so these cases compare values.
+  {
+    codecId: 'sqlite/real@1',
+    label: 'positive infinity',
+    value: Number.POSITIVE_INFINITY,
+    storageType: 'REAL',
+    valueEquality: Object.is,
+  },
+  {
+    codecId: 'sqlite/real@1',
+    label: 'negative infinity',
+    value: Number.NEGATIVE_INFINITY,
+    storageType: 'REAL',
+    valueEquality: Object.is,
+  },
+  {
+    codecId: 'sql/float@1',
+    label: 'positive infinity',
+    value: Number.POSITIVE_INFINITY,
+    storageType: 'REAL',
+    valueEquality: Object.is,
+  },
+  {
+    codecId: 'sql/float@1',
+    label: 'negative infinity',
+    value: Number.NEGATIVE_INFINITY,
+    storageType: 'REAL',
+    valueEquality: Object.is,
+  },
   {
     codecId: 'sqlite/real@1',
     label: 'float not exactly representable',

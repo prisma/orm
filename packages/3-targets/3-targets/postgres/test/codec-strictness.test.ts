@@ -127,12 +127,17 @@ describe.each([
 describe('pg/float@1 decodeJson', () => {
   const codec = pgFloatDescriptor.factory()(ctx);
 
-  it.each([['42'], ['1.5'], ['NaN'], ['Infinity'], ['-Infinity']])(
-    'refuses the text %s',
-    (json) => {
-      expect(() => codec.decodeJson(json)).toThrow(
-        `Expected a finite number for sql/float@1, got ${JSON.stringify(json)}`,
-      );
-    },
-  );
+  it.each([['42'], ['1.5']])('refuses the text %s', (json) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      'pg/float@1 database JSON value must be a number or the text NaN, Infinity or -Infinity',
+    );
+  });
+
+  it('reads the text PostgreSQL writes for NaN and the infinities', () => {
+    expect(['NaN', 'Infinity', '-Infinity'].map((json) => codec.decodeJson(json))).toEqual([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]);
+  });
 });

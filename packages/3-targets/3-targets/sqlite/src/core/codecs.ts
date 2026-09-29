@@ -27,7 +27,9 @@ import {
   NullCheckExpr,
   type ProjectionExpr,
   sqlCharDescriptor,
+  sqlFloatDecodeJson,
   sqlFloatDescriptor,
+  sqlFloatEncodeJson,
   sqlIntDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
@@ -133,15 +135,18 @@ const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
 /**
- * JSON has no spelling for an infinity or a NaN, and SQLite renders one as
- * `9.0e+999`, which reads back as `Infinity` rather than failing. A real is
- * therefore carried only where it is finite.
+ * SQLite stores an infinity, and writes it in JSON as `9.0e+999`, but it cannot store NaN, which it
+ * turns into NULL; so a REAL value may be infinite and never NaN.
  */
-const finiteReal = (value: number, code: 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED') => {
-  if (!Number.isFinite(value)) {
-    throw sqliteError(code, 'sqlite/real@1 value must be a finite number', {
-      meta: { codecId: SQLITE_REAL_CODEC_ID, received: String(value) },
-    });
+const refuseNaN = (value: number, code: 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED') => {
+  if (Number.isNaN(value)) {
+    throw sqliteError(
+      code,
+      'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
+      {
+        meta: { codecId: SQLITE_REAL_CODEC_ID, received: String(value) },
+      },
+    );
   }
   return value;
 };
@@ -373,19 +378,10 @@ export class SqliteRealCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: number): JsonValue {
-    return finiteReal(value, 'RUNTIME.ENCODE_FAILED');
+    return sqlFloatEncodeJson(refuseNaN(value, 'RUNTIME.ENCODE_FAILED'));
   }
   decodeJson(json: JsonValue): number {
-    if (typeof json !== 'number') {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/real@1 database JSON value must be a number',
-        {
-          meta: { codecId: SQLITE_REAL_CODEC_ID, received: typeof json },
-        },
-      );
-    }
-    return finiteReal(json, 'RUNTIME.DECODE_FAILED');
+    return refuseNaN(sqlFloatDecodeJson(SQLITE_REAL_CODEC_ID, json), 'RUNTIME.DECODE_FAILED');
   }
 }
 
