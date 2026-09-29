@@ -25,7 +25,6 @@ import {
 } from '../../utils/combine-verify-results';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import type { DbVerifyReport } from '../../utils/formatters/verify';
-import { runCommandAction } from '../../utils/next-actions';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { migrationsDirFor } from '../migration/paths';
@@ -34,6 +33,7 @@ import { controlProgressReporter } from '../progress';
 import {
   readEmittedContract,
   requireVerifyConnection,
+  schemaDriftNextActions,
   schemaFindingBlocks,
   schemaOwnerActions,
   schemaVerdictDiagnostic,
@@ -59,12 +59,6 @@ type DbVerifyDocument = DbVerifyReport & {
 /** The schema-verify document `--schema-only` and the drift branch report. */
 type SchemaVerifyDocument = CombinedVerifyResult['result'] & {
   readonly unclaimed: readonly string[];
-};
-
-const PUSH_THE_CONTRACT = runCommandAction('Push the contract to the database', '{bin} db update');
-const RECONCILE_BY_HAND: NextAction = {
-  kind: 'user-choice',
-  label: 'Or reconcile the differences by hand and verify again',
 };
 
 function errorInvalidVerifyMode(options: {
@@ -346,7 +340,8 @@ function driftDiagnostics(inputs: {
       schemaVerdictDiagnostic({
         result,
         space,
-        nextActions: inputs.ownerActions ?? [PUSH_THE_CONTRACT, RECONCILE_BY_HAND],
+        nextActions:
+          inputs.ownerActions ?? schemaDriftNextActions({ verb: 'verify', contractRef: undefined }),
       }),
     );
   if (perSpace.length > 0) {

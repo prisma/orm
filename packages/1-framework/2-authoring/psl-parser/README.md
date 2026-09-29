@@ -17,7 +17,8 @@ In the provider-based authoring model, PSL providers call `parse` to obtain the 
 - Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
 - Parse attributes generically (namespaced or not), including optional argument lists; target semantics live downstream.
 - Emit attribute nodes with explicit target (`field` / `model` / `namedType`), attribute name, and parsed argument list with spans.
-- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics, named-type binding resolution, and typed block-value interpretation against registered block specs.
+- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics and named-type binding resolution, without interpreting blocks.
+- Provide typed block-value and block-attribute interpretation against registered block specs for consumers to run after collection with the snapshot's binder; consumers own diagnostic reporting.
 - Answer "which declaration does this name denote" for every consumer, once, through the binder — the sole voice of resolution failures.
 
 ## Attributes (generic parsing boundary)

@@ -19,7 +19,6 @@ import {
 } from '../../control-api/operations/ref-advancement';
 import { errorAdvanceRefArgConflict, errorContractArgConflict } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
-import { runCommandAction } from '../../utils/next-actions';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { appRefsDirFor, baseDirFor, displayPath, migrationsDirFor } from '../migration/paths';
@@ -28,6 +27,7 @@ import { controlProgressReporter } from '../progress';
 import {
   readEmittedContract,
   requireVerifyConnection,
+  schemaDriftNextActions,
   schemaFindingBlocks,
   schemaOwnerActions,
   schemaVerdictDiagnostic,
@@ -346,12 +346,9 @@ export function createDbSignCommand(
                   schemaVerdictDiagnostic({
                     result: verified,
                     space: undefined,
-                    nextActions: schemaOwnerActions(ctx.config) ?? [
-                      runCommandAction(
-                        'Bring the database up to the contract, then sign again',
-                        '{bin} db update',
-                      ),
-                    ],
+                    nextActions:
+                      schemaOwnerActions(ctx.config) ??
+                      schemaDriftNextActions({ verb: 'sign', contractRef }),
                   }),
                 ],
               },
