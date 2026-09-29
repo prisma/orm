@@ -1,6 +1,6 @@
 # Plan
 
-Three slices, one pull request each, in order. Slice 2 needs slice 1 to be observable in the built CLI. Slice 3 needs slice 2's functions.
+Two pull requests, in order. Slice 1 is the first. Slices 2 and 3 are one pull request, because changing the stored text alone makes `contract infer` print date defaults as raw SQL (its check that a printed value reads back unchanged fails) and makes `db verify` report a false mismatch for `timetz`. That pull request is stacked on slice 1 and needs it to be observable in the built CLI.
 
 ## Slice 1: the Postgres control plane works with no global `Temporal` (TML-3250)
 
@@ -25,6 +25,4 @@ Three slices, one pull request each, in order. Slice 2 needs slice 1 to be obser
 - Every DDL path renders a date or time default through one function.
 - `contract infer` and `contract print` convert the database's text before the check that a printed value reads back as the stored value.
 - Integration test: a database created from a contract with non-standard default text verifies against the re-emitted contract and plans no change.
-- Close-out: delete this directory.
-
-Slices 2 and 3 may have to merge together if slice 2 alone breaks verification or infer tests. Decide when slice 2's tests run.
+- Close-out, in the same pull request: delete this directory.
