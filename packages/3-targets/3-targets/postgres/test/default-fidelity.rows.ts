@@ -34,7 +34,10 @@ const fn = (
   expect: { function: canonical },
 });
 
-const knownBug = (row: FidelityRow, reason: string): FidelityRow => ({ ...row, knownBug: reason });
+export const knownBug = (row: FidelityRow, reason: string): FidelityRow => ({
+  ...row,
+  knownBug: reason,
+});
 
 export const enumTypes = [{ name: 'Role', values: ['USER', 'ADMIN'] }] as const;
 
@@ -119,10 +122,8 @@ export const rows: readonly FidelityRow[] = [
   literal('timestamp_arr', 'timestamp(3)[]', `'{"2024-01-02 03:04:05.678"}'::timestamp(3)[]`),
   literal('timestamptz_arr', 'timestamptz[]', `'{"2024-01-02 03:04:05+00"}'::timestamptz[]`),
   literal('uuid_arr', 'uuid[]', "'{0e0f0a0b-0000-4000-8000-000000000001}'::uuid[]"),
-  knownBug(
-    literal('json_arr', 'json[]', String.raw`'{"{\"a\":1}","[2]"}'::json[]`),
-    'Postgres prints the json element [2] unquoted, which the live parse refuses',
-  ),
+  literal('json_arr', 'json[]', String.raw`'{"{\"a\":1}","[2]"}'::json[]`),
+  literal('jsonb_arr_unquoted', 'jsonb[]', `'{"[2]","[]"}'`),
   literal('jsonb_arr_ctor', 'jsonb[]', `ARRAY['{"a": 1}'::jsonb, 'null'::jsonb]`),
   literal('enum_arr', '"Role"[]', `'{USER,ADMIN}'::"Role"[]`),
   raw('box_arr', 'box[]', "'{(3,4),(1,2)}'::box[]"),

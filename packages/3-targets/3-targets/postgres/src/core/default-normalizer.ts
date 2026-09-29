@@ -220,11 +220,7 @@ function unquotedElementValue(token: string, elementType: string): JsonValue | u
   if (NUMBER_TYPE_PATTERN.test(elementType)) {
     return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
   }
-  if (isJsonElementType(elementType)) {
-    if (token === 'true') return true;
-    if (token === 'false') return false;
-    return NUMERIC_PATTERN.test(token) ? textElementValue(token, elementType) : undefined;
-  }
+  if (isJsonElementType(elementType)) return parseJsonDocument(token)?.value;
   return token;
 }
 
@@ -324,10 +320,15 @@ function isJsonElementType(elementType: string): boolean {
 /** A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type. */
 function textElementValue(text: string, elementType: string): JsonValue {
   if (!isJsonElementType(elementType)) return text;
+  const document = parseJsonDocument(text);
+  return document === undefined ? text : document.value;
+}
+
+function parseJsonDocument(text: string): { readonly value: JsonValue } | undefined {
   try {
-    return blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text));
+    return { value: blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text)) };
   } catch {
-    return text;
+    return undefined;
   }
 }
 

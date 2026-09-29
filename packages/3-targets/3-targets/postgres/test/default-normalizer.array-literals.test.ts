@@ -101,6 +101,20 @@ describe('parsePostgresDefault array literals', () => {
   });
 
   it.each([
+    { raw: "'{[2],[]}'::jsonb[]", nativeType: 'jsonb[]', value: [[2], []] },
+    { raw: String.raw`'{"{\"a\":1}",[2]}'::json[]`, nativeType: 'json[]', value: [{ a: 1 }, [2]] },
+  ])('reads the unquoted JSON elements Postgres prints in $raw', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each(["'{[2}'::jsonb[]", "'{True}'::jsonb[]"])(
+    'fails closed for the unquoted json element that is not JSON in %s',
+    (raw) => {
+      expect(parsePostgresDefault(raw, 'jsonb[]')).toEqual({ kind: 'function', expression: raw });
+    },
+  );
+
+  it.each([
     { raw: "'{1,true}'::jsonb[]", nativeType: 'jsonb[]', value: [1, true] },
     { raw: "'{-1.5,2,false}'::json[]", nativeType: 'json[]', value: [-1.5, 2, false] },
     { raw: "ARRAY['1'::jsonb, 'true'::jsonb]", nativeType: 'jsonb[]', value: [1, true] },
