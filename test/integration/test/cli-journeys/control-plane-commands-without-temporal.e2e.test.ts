@@ -47,6 +47,16 @@ model Event {
 }
 `;
 
+const ONE_INSTANT_SCHEMA = `// use prisma-8
+
+model Event {
+  id Int      @id
+  a  DateTime @default("2024-01-01T00:00:00Z")
+  b  DateTime @default("2024-01-01T00:00:00.000Z")
+  c  DateTime @default("2024-01-01T01:00:00+01:00")
+}
+`;
+
 const DEFAULTS_SCHEMA = `// use prisma-8
 
 model Event {
@@ -169,6 +179,25 @@ withTempDir(({ createTempDir }) => {
         },
         timeouts.spinUpPpgDev,
       );
+
+      it(
+        'stores one text for three DateTime defaults written for one instant',
+        async () => {
+          const ctx = setupJourney({ createTempDir, contractMode: 'psl', connectionString: 'x' });
+          writeSchema(ctx, ONE_INSTANT_SCHEMA);
+
+          const emit = await runBin(ctx, ['contract', 'emit']);
+
+          expect(emit, childOutput(emit)).toMatchObject({ exitCode: 0, ...NO_GLOBAL_TEMPORAL });
+          const columns = emittedColumns(ctx.testDir);
+          expect([columns['a']?.default, columns['b']?.default, columns['c']?.default]).toEqual([
+            { kind: 'literal', value: '2024-01-01T00:00:00Z' },
+            { kind: 'literal', value: '2024-01-01T00:00:00Z' },
+            { kind: 'literal', value: '2024-01-01T00:00:00Z' },
+          ]);
+        },
+        timeouts.spinUpPpgDev,
+      );
     });
 
     describe('db init', () => {
@@ -242,7 +271,7 @@ withTempDir(({ createTempDir }) => {
           ).toEqual([
             [
               'CREATE TABLE "public"."event" (',
-              `  "history" timestamp(3)[] DEFAULT ARRAY['2024-01-01 00:00:00', '2024-06-30 12:34:56.789']::timestamp(3)[] NOT NULL,`,
+              `  "history" timestamp(3)[] DEFAULT ARRAY['2024-01-01T00:00:00', '2024-06-30T12:34:56.789']::timestamp(3)[] NOT NULL,`,
               '  "id" int4 NOT NULL,',
               `  "instantAt" timestamptz DEFAULT '2024-01-01T00:00:00Z'::timestamptz NOT NULL,`,
               `  "localAt" timestamp(3) DEFAULT '2024-01-01T00:00:00'::timestamp(3) NOT NULL,`,
@@ -303,7 +332,7 @@ withTempDir(({ createTempDir }) => {
       });
 
       it(
-        'prints a timestamp default as a literal',
+        'prints a timestamp default as a literal in the standard text',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -320,8 +349,7 @@ withTempDir(({ createTempDir }) => {
           expect(field?.trim().split(/\s+/)).toEqual([
             'localAt',
             'Timestamp(3)',
-            '@default("2024-01-01',
-            '00:00:00")',
+            '@default("2024-01-01T00:00:00")',
           ]);
         },
         timeouts.spinUpPpgDev,
