@@ -12,6 +12,7 @@ import {
   type MutationDefaults,
   type MutationDefaultsOp,
   type RuntimeStatementStats,
+  runtimeError,
 } from '@internal/framework-components/runtime';
 import type {
   AnyMongoTypeMaps,
@@ -790,6 +791,7 @@ class MongoCollectionImpl<
     if (field === undefined) return new MongoParamRef(value);
 
     if (field.type.kind === 'scalar') {
+      this.#assertEnumValues(field, value, path);
       return this.#fieldParam(value, field.type.codecId, path);
     }
 
@@ -821,6 +823,31 @@ class MongoCollectionImpl<
     }
 
     return new MongoParamRef(value);
+  }
+
+  /**
+   * A contract without a collection validator (TypeScript builder, Prisma 6 schema) stores whatever reaches the driver, so a value outside the field's enum is refused here.
+   */
+  #assertEnumValues(field: ContractField, value: unknown, path: string): void {
+    const valueSet = field.valueSet;
+    if (valueSet === undefined || valueSet.entityKind !== 'enum' || value === null) return;
+    const contractEnum =
+      this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
+    if (contractEnum === undefined) return;
+    const allowed = contractEnum.members.map((member) => member.value);
+    const values = field.many === true && Array.isArray(value) ? value : [value];
+    const outside = values.find((entry) => !allowed.includes(entry));
+    if (outside === undefined) return;
+    const quoted = allowed.map((entry) => JSON.stringify(entry));
+    const list =
+      quoted.length > 1
+        ? `${quoted.slice(0, -1).join(', ')} and ${quoted.at(-1)}`
+        : quoted.join('');
+    throw runtimeError(
+      'RUNTIME.ENCODE_FAILED',
+      `Failed to encode field ${path} in collection '${this.#collectionName}': ${JSON.stringify(outside)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
+      { label: path, collection: this.#collectionName, received: outside, allowed },
+    );
   }
 
   #fieldParam(value: unknown, codecId: string, path: string): MongoParamRef {
@@ -961,6 +988,7 @@ class MongoCollectionImpl<
     }
 
     if (value instanceof MongoParamRef && contractField.type.kind === 'scalar') {
+      this.#assertEnumValues(contractField, value.value, field);
       return this.#fieldParam(value.value, contractField.type.codecId, field);
     }
 
