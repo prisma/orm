@@ -6,7 +6,7 @@ import type {
   TextDocumentItem,
 } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { createDocumentSnapshot, type DocumentSnapshot } from './document-snapshot';
+import { DocumentSnapshot } from './document-snapshot';
 import { canonicalFileIdentity, normalizeFileUri } from './schema-inputs';
 
 interface OverlayEntry {
@@ -40,7 +40,7 @@ function readDiskEntry(path: string, uri: string): DiskEntry | undefined {
     const text = readFileSync(path, 'utf8');
     return {
       origin: 'disk',
-      snapshot: createDocumentSnapshot(uri, text),
+      snapshot: new DocumentSnapshot(uri, text),
       mtime: stats.mtime,
       size: stats.size,
     };
@@ -126,7 +126,7 @@ export class DocumentStore {
     this.entries.set(canonicalFileIdentity(item.uri), {
       origin: 'overlay',
       document,
-      snapshot: createDocumentSnapshot(uri, item.text),
+      snapshot: new DocumentSnapshot(uri, item.text),
     });
     return document;
   }
@@ -148,7 +148,7 @@ export class DocumentStore {
     this.entries.set(canonicalFileIdentity(uri), {
       origin: 'overlay',
       document: updated,
-      snapshot: createDocumentSnapshot(updated.uri, updated.getText()),
+      snapshot: new DocumentSnapshot(updated.uri, updated.getText()),
     });
     return updated;
   }

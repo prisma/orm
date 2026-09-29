@@ -1,14 +1,7 @@
 import { type ParseResult, parse, type SourceFile } from '@internal/psl-parser/syntax';
 import { normalizeFileUri } from './schema-inputs';
 
-export interface DocumentSnapshot {
-  readonly uri: string;
-  readonly text: string;
-  readonly sourceFile: SourceFile;
-  parse(): ParseResult;
-}
-
-class DocumentSnapshotImpl implements DocumentSnapshot {
+export class DocumentSnapshot {
   readonly uri: string;
   readonly text: string;
   #parsed: ParseResult | undefined;
@@ -28,8 +21,4 @@ class DocumentSnapshotImpl implements DocumentSnapshot {
     const { document, sources } = this.parse();
     return sources.sourceFileFor(document.syntax);
   }
-}
-
-export function createDocumentSnapshot(uri: string, text: string): DocumentSnapshot {
-  return new DocumentSnapshotImpl(uri, text);
 }

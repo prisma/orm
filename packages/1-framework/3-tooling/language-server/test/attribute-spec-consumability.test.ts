@@ -14,13 +14,13 @@ import {
 import { ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
-import { createDocumentSnapshot } from '../src/document-snapshot';
+import { DocumentSnapshot } from '../src/document-snapshot';
 import { providePslSignatureHelp } from '../src/signature-help';
 
 vi.mock('@internal/config-loader', { spy: true });
 
 function pipelineWithSymbolTable(filename: string, text: string) {
-  const snapshot = createDocumentSnapshot(filename, text);
+  const snapshot = new DocumentSnapshot(filename, text);
   const pipeline = snapshot.parse();
   const { symbolTable } = buildSymbolTable({
     documents: [pipeline.document],

@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
-import { createDocumentSnapshot, type DocumentSnapshot } from '../src/document-snapshot';
+import { DocumentSnapshot } from '../src/document-snapshot';
 import { DocumentStore } from '../src/document-store';
 import { ProjectArtifacts } from '../src/project-artifacts';
 import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
@@ -57,7 +57,7 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
 function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = false) {
   const snapshots = new Map<string, DocumentSnapshot>();
   const set = (uri: string, text: string) => {
-    const snapshot = createDocumentSnapshot(uri, text);
+    const snapshot = new DocumentSnapshot(uri, text);
     snapshots.set(canonicalFileIdentity(uri), snapshot);
     return snapshot;
   };
