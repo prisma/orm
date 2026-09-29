@@ -1480,7 +1480,7 @@ An apply command (`migrate`/`db update`) cannot find a path through the on-disk 
 
 ### MIGRATION.PLANNING_FAILED
 
-Migration planning (typically during `db init`/`db update`) failed because of conflicts, e.g. the live database already contains objects that clash with the plan. The envelope aggregates each conflict's summary and suggested fix. Payload: `conflicts`.
+Migration planning (typically during `db init`/`db update`) failed because of conflicts, e.g. the live database already contains objects that clash with the plan. The envelope aggregates each conflict's summary and suggested fix. Payload: `conflicts`. `db init` applies only additive operations, so when a conflict is an operation its policy refused (the conflict carries `refusedOperationClass`), such as adding a validator to a Mongo collection that already holds documents, the error's next action is `db update`, which applies the operation after you confirm it.
 
 ### MIGRATION.PLAN_NOT_ARRAY
 

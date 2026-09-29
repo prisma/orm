@@ -2,7 +2,16 @@ import { ifDefined } from '@internal/utils/defined';
 import { assertNever } from '@internal/utils/internal-error';
 import type { DbInitFailure } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
-import { errorMigrationPlanningFailed, errorRunnerFailed, errorRuntime } from './cli-errors';
+import {
+  ActionableCliError,
+  errorMigrationPlanningFailed,
+  errorRunnerFailed,
+  errorRuntime,
+} from './cli-errors';
+import { runCommandAction } from './next-actions';
+
+const DB_INIT_ADDITIVE_ONLY_FIX =
+  '`db init` applies only additive changes. Run `{bin} db update`, which also applies widening and destructive ones after you confirm them by typing the database name, or pass `--no-interactive --confirm <database>` where there is nobody to ask.';
 
 function markerMismatchDetail(failure: DbInitFailure): string {
   const parts: string[] = [];
@@ -35,7 +44,23 @@ function markerMismatchDetail(failure: DbInitFailure): string {
  */
 export function mapDbInitFailure(failure: DbInitFailure): CliStructuredError {
   if (failure.code === 'PLANNING_FAILED') {
-    return errorMigrationPlanningFailed({ conflicts: failure.conflicts ?? [] });
+    const conflicts = failure.conflicts ?? [];
+    const planningFailed = errorMigrationPlanningFailed({ conflicts });
+    if (!conflicts.some((conflict) => conflict.refusedOperationClass !== undefined)) {
+      return planningFailed;
+    }
+    return new ActionableCliError(planningFailed.code, planningFailed.message, {
+      why: planningFailed.why ?? '',
+      fix: DB_INIT_ADDITIVE_ONLY_FIX,
+      nextActions: [
+        runCommandAction(
+          'Apply the change with db update, which lists the destructive operations and asks you to confirm them',
+          '{bin} db update',
+        ),
+      ],
+      ...ifDefined('meta', planningFailed.meta),
+      ...ifDefined('docsUrl', planningFailed.docsUrl),
+    });
   }
 
   if (failure.code === 'MIGRATION.MARKER_ORIGIN_MISMATCH') {

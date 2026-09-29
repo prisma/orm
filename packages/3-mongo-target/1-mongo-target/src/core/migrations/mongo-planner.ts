@@ -340,6 +340,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           kind: 'policy-violation',
           summary: `${call.operationClass} operation disallowed: ${call.label}`,
           why: `Policy does not allow '${call.operationClass}' operations`,
+          refusedOperationClass: call.operationClass,
         });
       }
     }

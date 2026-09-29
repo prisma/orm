@@ -405,6 +405,46 @@ describe('db init', () => {
     });
   });
 
+  it('points a planning failure the additive policy caused at db update', async () => {
+    mocks.dbInit.mockResolvedValue(
+      notOk({
+        code: 'PLANNING_FAILED',
+        summary: 'planning failed',
+        why: undefined,
+        conflicts: [
+          {
+            kind: 'policy-violation',
+            summary: 'destructive operation disallowed: Add validator on events',
+            why: "Policy does not allow 'destructive' operations",
+            refusedOperationClass: 'destructive',
+          },
+        ],
+        meta: undefined,
+      }),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.PLANNING_FAILED',
+        why: 'destructive operation disallowed: Add validator on events',
+        nextActions: [
+          {
+            kind: 'run-command',
+            label:
+              'Apply the change with db update, which lists the destructive operations and asks you to confirm them',
+            command: '{bin} db update',
+          },
+        ],
+      },
+    });
+  });
+
   it('maps an origin mismatch to the marker code, naming both hashes', async () => {
     mocks.dbInit.mockResolvedValue(
       notOk({
