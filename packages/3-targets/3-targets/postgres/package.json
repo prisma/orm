@@ -34,7 +34,8 @@
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.2",
     "pathe": "^2.0.3",
-    "postgres-array": "2.0.0"
+    "postgres-array": "2.0.0",
+    "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
     "@internal/psl-printer": "workspace:8.0.0-rc.13",
@@ -42,7 +43,6 @@
     "@repo/test-utils": "workspace:8.0.0-rc.13",
     "@repo/tsconfig": "workspace:8.0.0-rc.13",
     "@repo/tsdown": "workspace:8.0.0-rc.13",
-    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

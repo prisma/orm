@@ -1,5 +1,5 @@
 import type { MutationDefaultGeneratorDescriptor } from '@internal/framework-components/control';
-import { errorTemporalUnavailableForDefault } from './errors';
+import { temporalImplementation } from './temporal-implementation';
 
 export const INSTANT_NOW_GENERATOR_ID = 'instantNow' as const;
 
@@ -14,8 +14,5 @@ export function instantNowControlDescriptor(): MutationDefaultGeneratorDescripto
 }
 
 export function instantNow(): Temporal.Instant {
-  if (typeof Temporal === 'undefined') {
-    throw errorTemporalUnavailableForDefault(INSTANT_NOW_GENERATOR_ID);
-  }
-  return Temporal.Now.instant();
+  return temporalImplementation({ generatorId: INSTANT_NOW_GENERATOR_ID }).Now.instant();
 }

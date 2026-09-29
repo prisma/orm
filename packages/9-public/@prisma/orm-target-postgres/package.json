@@ -25,7 +25,8 @@
     "pathe": "^2.0.3",
     "pg": "catalog:",
     "pg-cursor": "^2.21.0",
-    "postgres-array": "2.0.0"
+    "postgres-array": "2.0.0",
+    "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.13",

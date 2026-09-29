@@ -9,6 +9,7 @@ import type {
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { registerControlPlaneTemporal } from '../core/control-temporal';
 import { postgresResolveDefault } from '../core/default-normalizer';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { contractToPostgresDatabaseSchemaNode } from '../core/migrations/contract-to-postgres-database-schema-node';
@@ -35,8 +36,12 @@ export function postgresRenderDefault(def: ColumnDefault, column: StorageColumn)
   return renderDefaultLiteral(def.value, column);
 }
 
-const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresPlanTargetDetails> =
-  {
+function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
+  'postgres',
+  PostgresPlanTargetDetails
+> {
+  registerControlPlaneTemporal();
+  return {
     ...postgresTargetDescriptorMeta,
     contractSerializer: new PostgresContractSerializer(),
     schemaVerifier: new PostgresSchemaVerifier(),
@@ -97,6 +102,9 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
       return createPostgresMigrationRunner(family);
     },
   };
+}
+
+const postgresTargetDescriptor = createPostgresTargetDescriptor();
 
 export {
   INSTANT_NOW_GENERATOR_ID,
