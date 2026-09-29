@@ -283,12 +283,17 @@ export function interpretPrisma6Documents(
     }
   }
 
-  checkDatasource(
+  const providerMismatch = checkDatasource(
     datasources,
     input.documents[0]?.sourceId ?? 'schema.prisma',
     binding,
-    diagnostics,
   );
+  if (providerMismatch !== undefined) {
+    return notOk({
+      summary: SUMMARY,
+      diagnostics: inSourceOrder([...input.seedDiagnostics, providerMismatch], input.documents),
+    });
+  }
 
   const enums = new Map<string, EnumBuild>();
   for (const located of enumBlocks) {
@@ -357,7 +362,7 @@ export function interpretPrisma6Documents(
   }
 
   if (diagnostics.length > 0) {
-    return notOk({ summary: SUMMARY, diagnostics });
+    return notOk({ summary: SUMMARY, diagnostics: inSourceOrder(diagnostics, input.documents) });
   }
 
   return ok(
@@ -374,24 +379,35 @@ export function interpretPrisma6Documents(
   );
 }
 
+/**
+ * Diagnostics by file, in the order the schema files were read, then by position; one with no position comes first in its file.
+ */
+function inSourceOrder(
+  diagnostics: readonly ContractSourceDiagnostic[],
+  documents: readonly Prisma6Document[],
+): ContractSourceDiagnostic[] {
+  const fileOrder = new Map(documents.map((document, index) => [document.sourceId, index]));
+  const fileRank = (diagnostic: ContractSourceDiagnostic) =>
+    fileOrder.get(diagnostic.sourceId) ?? documents.length;
+  const offset = (diagnostic: ContractSourceDiagnostic) => diagnostic.span?.start.offset ?? -1;
+  return [...diagnostics].sort((a, b) => fileRank(a) - fileRank(b) || offset(a) - offset(b));
+}
+
+/** The provider-mismatch diagnostic, or `undefined` when the schema names a provider the target reads. */
 function checkDatasource(
   datasources: readonly Located<BlockSymbol>[],
   fallbackSourceId: string,
   binding: Prisma6TargetBinding,
-  diagnostics: Diagnostics,
-): void {
+): ContractSourceDiagnostic | undefined {
   const [datasource] = datasources;
   const [namedProvider] = binding.providers;
   if (datasource === undefined) {
-    diagnostics.push(
-      prisma6Diagnostic(
-        'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
-        `No datasource block found; add \`datasource db { provider = "${namedProvider}" }\`.`,
-        fallbackSourceId,
-        undefined,
-      ),
+    return prisma6Diagnostic(
+      'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
+      `No datasource block found; add \`datasource db { provider = "${namedProvider}" }\`.`,
+      fallbackSourceId,
+      undefined,
     );
-    return;
   }
   const block = datasource.symbol;
   let parameter: KeyValuePairAst | undefined;
@@ -403,18 +419,15 @@ function checkDatasource(
   }
   const expression = parameter?.value();
   const provider = expression instanceof StringLiteralExprAst ? expression.value() : undefined;
-  if (provider === undefined || !binding.providers.includes(provider)) {
-    diagnostics.push(
-      prisma6Diagnostic(
-        'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
-        provider === undefined
-          ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`
-          : `The datasource provider is "${provider}"; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`,
-        datasource.sourceId,
-        parameter === undefined ? block.span : nodePslSpan(parameter.syntax, datasource.sources),
-      ),
-    );
-  }
+  if (provider !== undefined && binding.providers.includes(provider)) return undefined;
+  return prisma6Diagnostic(
+    'PSL.PRISMA6_MONGO_PROVIDER_MISMATCH',
+    provider === undefined
+      ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`
+      : `The datasource provider is "${provider}"; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`,
+    datasource.sourceId,
+    parameter === undefined ? block.span : nodePslSpan(parameter.syntax, datasource.sources),
+  );
 }
 
 function buildEnum(

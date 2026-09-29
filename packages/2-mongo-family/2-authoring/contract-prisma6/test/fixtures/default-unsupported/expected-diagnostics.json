@@ -2,12 +2,6 @@
   {
     "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
     "file": "schema.prisma",
-    "line": 22,
-    "message": "Field \"Address.city\": @default(\"unknown\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every \"Address\" value the Prisma 6 app writes must then include \"city\". Set the value in the application code that creates documents, then remove the default."
-  },
-  {
-    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
-    "file": "schema.prisma",
     "line": 8,
     "message": "Field \"Post.title\": @default(\"untitled\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"title\". Set the value in the application code that creates documents, then remove the default."
   },
@@ -64,5 +58,11 @@
     "file": "schema.prisma",
     "line": 17,
     "message": "Field \"Post.nickname\": @default(\"anon\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: a Prisma 6 create call that leaves \"nickname\" out no longer gets the default value. Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 22,
+    "message": "Field \"Address.city\": @default(\"unknown\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every \"Address\" value the Prisma 6 app writes must then include \"city\". Set the value in the application code that creates documents, then remove the default."
   }
 ]

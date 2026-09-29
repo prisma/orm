@@ -1,3 +1,7 @@
 model Post {
   id String @id @default(auto()) @map("_id") @db.ObjectId
 }
+
+model Tag {
+  id Int @id
+}

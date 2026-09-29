@@ -655,7 +655,7 @@ A `@db.*` attribute other than `@db.ObjectId`, or `@db.ObjectId` on a field that
 
 ### PSL.PRISMA6_MONGO_PROVIDER_MISMATCH
 
-The Prisma 6 schema has no `datasource` block, or its `provider` is not `mongodb`. Use the source only with a MongoDB schema. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+The Prisma 6 schema has no `datasource` block, or its `provider` is not `mongodb`. Use the source only with a MongoDB schema. The source stops at this finding and reports nothing about the models, so the only other findings are parse errors. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED
 
@@ -663,7 +663,7 @@ The Prisma 6 schema has no `datasource` block, or its `provider` is not `mongodb
 
 ### PSL.PRISMA6_MONGO_SCHEMA_READ_FAILED
 
-The schema path could not be read, or the schema directory holds no `.prisma` file. Fix the path. Reported at the schema path by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file> <message>` (the terminal prints the code before it), and `where` carries `path`. Payload: none; the error's `providerMeta` carries the schema path.
+The schema path could not be read, or the schema directory holds no `.prisma` file. When nothing exists at the path, the message says so and names `prisma6Schema()` in `prisma.config.ts` as the place to fix it. Reported at the schema path by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file> <message>` (the terminal prints the code before it), and `where` carries `path`. Payload: none; the error's `providerMeta` carries the schema path.
 
 ### PSL.PRISMA6_MONGO_SCHEMA_UNSUPPORTED
 
@@ -747,7 +747,7 @@ A relation field that cannot be paired: no matching side, an ambiguous unnamed p
 
 ### PSL.PRISMA7_SCHEMA_READ_FAILED
 
-The schema path could not be read, or the schema directory holds no `.prisma` file. Fix the path. Reported at the schema path by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none; the error's `providerMeta` carries the schema path.
+The schema path could not be read, or the schema directory holds no `.prisma` file. When nothing exists at the path, the message says so and names `prisma6Schema()` in `prisma.config.ts` as the place to fix it. Reported at the schema path by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none; the error's `providerMeta` carries the schema path.
 
 ### PSL.PRISMA7_TABLE_COLLISION
 
