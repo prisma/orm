@@ -17,7 +17,9 @@ export class FunctionCallAst implements AstNode {
     this.syntax = syntax;
   }
 
-  /** The qualified-name callee, or `undefined` when identifier segments sit directly under the node. */
+  /**
+   * The qualified-name callee; `undefined` when the callee is a member path with more than one dot, such as `address.geo.lat(…)`, or when identifier segments sit directly under the node.
+   */
   name(): QualifiedNameAst | undefined {
     return findFirstChild(this.syntax, QualifiedNameAst.cast);
   }
@@ -25,16 +27,12 @@ export class FunctionCallAst implements AstNode {
   /**
    * The dotted call path, in source order. A bare `Vector(…)` yields
    * `['Vector']`; a namespace-qualified `pgvector.Vector(…)` yields
-   * `['pgvector', 'Vector']`. Empty when the call carries no identifier.
+   * `['pgvector', 'Vector']`; `address.geo.lat(…)` yields
+   * `['address', 'geo', 'lat']`. Empty when the call carries no identifier.
    */
   path(): readonly string[] {
-    const qualified = this.name();
-    const segments: string[] = [];
-    for (const segment of filterChildren(qualified?.syntax ?? this.syntax, IdentifierAst.cast)) {
-      const text = segment.token()?.text;
-      if (text !== undefined) segments.push(text);
-    }
-    return segments;
+    const callee = this.name() ?? findFirstChild(this.syntax, PathExprAst.cast);
+    return segmentNames(callee?.syntax ?? this.syntax);
   }
 
   lparen(): SyntaxToken | undefined {
@@ -51,6 +49,37 @@ export class FunctionCallAst implements AstNode {
 
   static cast(node: SyntaxNode): FunctionCallAst | undefined {
     return node.kind === 'FunctionCall' ? new FunctionCallAst(node) : undefined;
+  }
+}
+
+function segmentNames(node: SyntaxNode): readonly string[] {
+  const segments: string[] = [];
+  for (const segment of filterChildren(node, IdentifierAst.cast)) {
+    const text = segment.token()?.text;
+    if (text !== undefined) segments.push(text);
+  }
+  return segments;
+}
+
+/** A dotted member path in expression position, such as `address.city` in `@@index([address.city])`. */
+export class PathExprAst implements AstNode {
+  readonly syntax: SyntaxNode;
+
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+
+  *segments(): Iterable<IdentifierAst> {
+    yield* filterChildren(this.syntax, IdentifierAst.cast);
+  }
+
+  /** The segment names, in source order: `['address', 'city']` for `address.city`. */
+  path(): readonly string[] {
+    return segmentNames(this.syntax);
+  }
+
+  static cast(node: SyntaxNode): PathExprAst | undefined {
+    return node.kind === 'PathExpr' ? new PathExprAst(node) : undefined;
   }
 }
 
@@ -384,6 +413,7 @@ export type ExpressionAst =
   | NumberLiteralExprAst
   | BooleanLiteralExprAst
   | ObjectLiteralExprAst
+  | PathExprAst
   | IdentifierAst;
 
 export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
@@ -395,6 +425,7 @@ export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
     NumberLiteralExprAst.cast(node) ??
     BooleanLiteralExprAst.cast(node) ??
     ObjectLiteralExprAst.cast(node) ??
+    PathExprAst.cast(node) ??
     IdentifierAst.cast(node)
   );
 }

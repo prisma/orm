@@ -35,6 +35,7 @@ export {
   NumberLiteralExprAst,
   ObjectFieldAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   StringLiteralExprAst,
   TaggedLiteralExprAst,
 } from '../syntax/ast/expressions';

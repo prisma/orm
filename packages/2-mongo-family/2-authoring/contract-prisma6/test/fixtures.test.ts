@@ -6,7 +6,6 @@ import { fixturesDir, loadPrisma6Schema, serializeMongoContract } from './suppor
 const CASES: readonly string[] = [
   'composite-id',
   'composite-index-path',
-  'composite-index-path-parse-error',
   'composite-map-unsupported',
   'composite-types',
   'default-unsupported',

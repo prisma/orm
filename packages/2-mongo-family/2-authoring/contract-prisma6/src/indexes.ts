@@ -6,6 +6,7 @@ import {
   type ExpressionAst,
   FunctionCallAst,
   IdentifierAst,
+  PathExprAst,
   type PslSources,
 } from '@internal/psl-parser/syntax';
 import { prisma6Diagnostic } from './diagnostics';
@@ -105,7 +106,7 @@ function readFields(
       continue;
     }
     const call = FunctionCallAst.cast(element.syntax);
-    const path = call?.path() ?? [];
+    const path = PathExprAst.cast(element.syntax)?.path() ?? call?.path() ?? [];
     const [callee] = path;
     if (path.length > 1) {
       ctx.diagnostics.push(

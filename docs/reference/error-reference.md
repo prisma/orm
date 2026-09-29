@@ -615,7 +615,7 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 
 ### PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED
 
-An `@@index`, `@@unique`, or `@@fulltext` path that reaches into a composite type, such as `address.city(sort: Asc)`, which the Mongo contract cannot express yet. Index a top-level field or remove the index. A dotted path without a call, such as `address.city`, fails at parse time instead. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An `@@index`, `@@unique`, or `@@fulltext` path that reaches into a composite type, such as `address.city` or `address.city(sort: Asc)`, which the Mongo contract cannot express yet. Index a top-level field or remove the index. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED
 

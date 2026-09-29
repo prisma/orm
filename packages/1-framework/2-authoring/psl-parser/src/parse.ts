@@ -186,6 +186,7 @@ export function parseExpression(cursor: Cursor): GreenNode | undefined {
     parseObjectLiteralExpr(cursor) ??
     parseTaggedLiteral(cursor) ??
     parseFunctionCall(cursor) ??
+    parsePathExpr(cursor) ??
     parseBooleanLiteralExpr(cursor) ??
     parseIdentifierExpr(cursor)
   );
@@ -387,33 +388,69 @@ export function parseObjectField(cursor: Cursor): GreenNode {
 }
 
 /**
- * Whether the next tokens open a call: a bare `Ident(` or a namespace-qualified
- * `Ident.Ident(`. The lookahead is deliberately bounded so a bare dotted
- * reference like `a.b` is not mistaken for a call, rather than scanning an
- * unbounded dotted chain ahead to find the paren.
+ * The number of significant tokens in the dotted chain `Ident ('.' Ident)*` at
+ * the cursor: 1 for `a`, 3 for `a.b`, 5 for `a.b.c`; 0 when no `Ident` is next.
+ */
+function dottedChainLength(cursor: Cursor): number {
+  if (cursor.peekKind() !== 'Ident') return 0;
+  let length = 1;
+  while (cursor.peekKind(length) === 'Dot' && cursor.peekKind(length + 1) === 'Ident') {
+    length += 2;
+  }
+  return length;
+}
+
+const QUALIFIED_NAME_MAX_CHAIN = 3;
+
+/**
+ * Whether the next tokens open a call: a dotted chain followed by `(`, such as
+ * `autoincrement(`, `temporal.updatedAt(` or `address.geo.lat(`. A dotted chain
+ * with no `(` after it, like `a.b`, is a path, not a call.
  */
 function isCallAhead(cursor: Cursor): boolean {
-  if (cursor.peekKind() !== 'Ident') return false;
-  if (cursor.peekKind(1) === 'LParen') return true;
-  return (
-    cursor.peekKind(1) === 'Dot' &&
-    cursor.peekKind(2) === 'Ident' &&
-    cursor.peekKind(3) === 'LParen'
-  );
+  const chain = dottedChainLength(cursor);
+  return chain > 0 && cursor.peekKind(chain) === 'LParen';
 }
 
 /**
  * Parses a function/constructor call — bare `autoincrement()` or qualified
- * `temporal.updatedAt()`. Returns `undefined` unless {@link isCallAhead}
- * confirms a trailing `(`, so the `parseExpression` chain falls through to the
- * boolean and bare-identifier forms.
+ * `temporal.updatedAt()`. A callee with more than one dot, such as the index
+ * element `address.geo.lat(sort: Desc)`, is a member path rather than a
+ * qualified name, so it is parsed as a `PathExpr`. Returns `undefined` unless
+ * {@link isCallAhead} confirms a trailing `(`, so the `parseExpression` chain
+ * falls through to the path, boolean and bare-identifier forms.
  */
 export function parseFunctionCall(cursor: Cursor): GreenNode | undefined {
   if (!isCallAhead(cursor)) return undefined;
+  const chain = dottedChainLength(cursor);
   cursor.startNode('FunctionCall');
-  parseQualifiedName(cursor);
+  if (chain > QUALIFIED_NAME_MAX_CHAIN) {
+    parsePath(cursor, chain);
+  } else {
+    parseQualifiedName(cursor);
+  }
   if (cursor.peekKind() === 'LParen') {
     parseParenArgs(cursor);
+  }
+  return cursor.finishNode();
+}
+
+/**
+ * Parses a member path `Ident ('.' Ident)+` that is neither a call nor the tag
+ * of a tagged literal, such as `address.city` in `@@index([address.city])`.
+ */
+export function parsePathExpr(cursor: Cursor): GreenNode | undefined {
+  const chain = dottedChainLength(cursor);
+  if (chain < 3) return undefined;
+  return parsePath(cursor, chain);
+}
+
+function parsePath(cursor: Cursor, chain: number): GreenNode {
+  cursor.startNode('PathExpr');
+  parseIdentifier(cursor);
+  for (let consumed = 1; consumed < chain; consumed += 2) {
+    cursor.bump();
+    parseIdentifier(cursor);
   }
   return cursor.finishNode();
 }
