@@ -424,7 +424,11 @@ describe('emitter', () => {
       queryOperationTypeImports,
     };
 
-    const result = await emit(ir, options, mockSqlHook);
+    const hookUsingQueryOperations = createMockSpi({
+      getFamilyTypeAliases: () => 'export type QueryOperationTypes = ExtQueryOpTypes<CodecTypes>;',
+    });
+
+    const result = await emit(ir, options, hookUsingQueryOperations);
     expect(result.contractDts).toContain("from '@ext/query'");
   });
 
