@@ -173,9 +173,6 @@ describe('mongoJsonCodec decode', () => {
     ['timestamp', new Timestamp({ t: 1, i: 1 })],
     ['long', Long.fromBigInt(2n ** 53n)],
     ['long', 2n ** 53n],
-    ['double', Number.NaN],
-    ['double', Number.POSITIVE_INFINITY],
-    ['double', new Double(Number.NEGATIVE_INFINITY)],
     ['undefined', undefined],
     ['symbol', new BSONSymbol('s')],
     ['javascript', new Code('x')],
@@ -185,6 +182,18 @@ describe('mongoJsonCodec decode', () => {
     await expect(
       mongoJsonCodec.decode(wire({ outer: { items: [0, { value }] } }), {}),
     ).rejects.toThrow(decodeRefusal(type, 'outer.items.1.value'));
+  });
+
+  it.each([
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', new Double(Number.NEGATIVE_INFINITY)],
+  ])('names a stored %s rather than calling every double non-JSON', async (received, value) => {
+    await expect(mongoJsonCodec.decode(wire({ n: [value] }), {})).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      message: `mongo/json@1 wire value contains ${received} at n.0; a JSON number cannot be NaN or Infinity`,
+      meta: { received, valuePath: 'n.0' },
+    });
   });
 
   it('refuses an object the driver does not produce instead of dropping its contents', async () => {

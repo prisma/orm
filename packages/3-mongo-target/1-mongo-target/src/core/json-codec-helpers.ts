@@ -124,7 +124,13 @@ function safeLong(value: bigint, path: string): number {
 }
 
 function finiteDouble(value: number, path: string): number {
-  return Number.isFinite(value) ? value : decodeRefused('double', path);
+  if (Number.isFinite(value)) return value;
+  const received = String(value);
+  throw mongoTargetError(
+    'RUNTIME.DECODE_FAILED',
+    `${MONGO_JSON_CODEC_ID} wire value contains ${received} at ${where(path)}; a JSON number cannot be NaN or Infinity`,
+    { meta: { codecId: MONGO_JSON_CODEC_ID, received, valuePath: path } },
+  );
 }
 
 function decodeEntries(
