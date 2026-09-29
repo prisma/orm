@@ -622,24 +622,15 @@ function acceptedByPrisma6(nativeType: string, typeName: string): boolean {
   return accepted?.includes(nativeType) === true;
 }
 
-/** What removing a native type other than `@db.ObjectId` does to the Prisma 6 app. */
-function nativeTypeRemoval(nativeType: string, typeName: string): string {
+/** Why the reader refuses a native type, and what removing it does to the Prisma 6 app. */
+function nativeTypeRefusal(label: string, nativeType: string, typeName: string): string {
+  const refused = `${label}: native type "@${nativeType}" is not supported`;
   if (!acceptedByPrisma6(nativeType, typeName)) {
-    return `Prisma 6 does not accept @${nativeType} on ${withArticle(typeName)} field either; remove it.`;
+    return `${refused}, and Prisma 6 does not accept it on ${withArticle(typeName)} field either. Remove it.`;
   }
   const declared = PRISMA6_NATIVE_TYPE_BSON[nativeType];
   const plain = PRISMA6_SCALAR_BSON[typeName];
-  return declared === plain
-    ? `Remove it: Prisma 6 stores ${withArticle(typeName)} field as BSON ${plain} without it too, so removing it changes nothing in the Prisma 6 app.`
-    : `Remove it; this also changes the Prisma 6 app: its client then stores new ${typeName} values as BSON ${plain} instead of ${declared}, while stored documents keep ${declared}.`;
-}
-
-/** What each fix for `@db.ObjectId` on a field that is not a `String` does to the Prisma 6 app. */
-function objectIdRemoval(typeName: string): string {
-  if (!acceptedByPrisma6('db.ObjectId', typeName)) {
-    return `Prisma 6 does not accept @db.ObjectId on ${withArticle(typeName)} field either.`;
-  }
-  return `Removing it makes the Prisma 6 client store new values as BSON ${PRISMA6_SCALAR_BSON[typeName]} instead of objectId, while stored documents keep objectId; changing the type to String makes the Prisma 6 app read and write the value as a hex string, with the stored values unchanged.`;
+  return `${refused}: Prisma 6 stores it as a BSON ${declared}, and Prisma 8 has no codec for that BSON type. Remove it; this also changes the Prisma 6 app: its client then stores new ${typeName} values as BSON ${plain} instead of ${declared}. Documents already stored keep their ${declared} values, so rewrite them as ${plain}s before Prisma 8 reads them.`;
 }
 
 function nativeTypeCodecId(
@@ -647,29 +638,12 @@ function nativeTypeCodecId(
   typeName: string,
   nativeType: string,
 ): string | undefined {
-  if (nativeType === 'db.ObjectId') {
-    return typeName === 'String' ? binding.objectIdCodecId : undefined;
-  }
   const forType = Object.hasOwn(binding.nativeTypeCodecIds, typeName)
     ? binding.nativeTypeCodecIds[typeName]
     : undefined;
   return forType !== undefined && Object.hasOwn(forType, nativeType)
     ? forType[nativeType]
     : undefined;
-}
-
-/** The native types the binding reads, as a message lists them: `@db.ObjectId on a String field and @db.Int and @db.Long on an Int field`. */
-function supportedNativeTypes(binding: Prisma6TargetBinding): string {
-  const byType = [
-    '@db.ObjectId on a String field',
-    ...Object.entries(binding.nativeTypeCodecIds).map(
-      ([typeName, nativeTypes]) =>
-        `${Object.keys(nativeTypes)
-          .map((name) => `@${name}`)
-          .join(' and ')} on ${withArticle(typeName)} field`,
-    ),
-  ];
-  return byType.join(' and ');
 }
 
 /** The field's contract type, or `undefined` after reporting why it has none. */
@@ -697,9 +671,7 @@ function resolveFieldType(
     diagnostics.push(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED',
-        attribute.name === 'db.ObjectId'
-          ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String. ${objectIdRemoval(field.typeName)}`
-          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source, which reads ${supportedNativeTypes(binding)}. ${nativeTypeRemoval(attribute.name, field.typeName)}`,
+        nativeTypeRefusal(label, attribute.name, field.typeName),
         sourceId,
         attribute.span,
       ),

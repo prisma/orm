@@ -5,9 +5,7 @@ datasource db {
 
 model Post {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  title     String   @db.String
   number    Int      @db.ObjectId
   stamp     DateTime @db.Timestamp
   ratio     Float    @db.Decimal
-  reference Bytes    @db.ObjectId
 }

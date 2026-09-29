@@ -4,9 +4,9 @@ changes:
     summary: |
       A contract read with `prisma6Schema(...)` now gives a plain Prisma 6 `Int` field the codec for the BSON
       long Prisma 6 stores: in `contract.d.ts` the field changes from `number` to `bigint`, reads return a
-      `bigint`, and writes take a `bigint` and store a long. `Int @db.Int` stays a `number`, and `@db.Int`
-      and `@db.Long` on an `Int` field are now read instead of refused. Re-emit the contract, then pass and
-      expect `bigint` values for those fields.
+      `bigint`, and writes take a `bigint` and store a long. `Int @db.Int` stays a `number`. Every native
+      type Prisma 6 accepts except `DateTime @db.Timestamp` is now read instead of refused. Re-emit the
+      contract, then pass and expect `bigint` values for those fields.
     detection:
       glob: "**/prisma.config.{ts,mts,cts,js,mjs}"
       matches:

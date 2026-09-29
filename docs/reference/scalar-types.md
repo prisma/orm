@@ -113,3 +113,5 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | JSON | `Json` | `Json`, `Jsonb` | `Json` | `Json` |
 | any value | — | — | — | `Bson` |
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | `ObjectId` |
+
+A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` and `BigInt @db.Long` are `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.

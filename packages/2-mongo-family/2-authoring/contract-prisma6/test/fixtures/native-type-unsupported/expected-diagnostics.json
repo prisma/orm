@@ -3,30 +3,18 @@
     "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 8,
-    "message": "Field \"Post.title\": native type \"@db.String\" is not supported by the Prisma 6 MongoDB contract source, which reads @db.ObjectId on a String field and @db.Int and @db.Long on an Int field. Remove it: Prisma 6 stores a String field as BSON string without it too, so removing it changes nothing in the Prisma 6 app."
+    "message": "Field \"Post.number\": native type \"@db.ObjectId\" is not supported, and Prisma 6 does not accept it on an Int field either. Remove it."
   },
   {
     "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 9,
-    "message": "Field \"Post.number\": @db.ObjectId is only supported on a String field, and this field is \"Int\". Remove @db.ObjectId, or change the field type to String. Prisma 6 does not accept @db.ObjectId on an Int field either."
+    "message": "Field \"Post.stamp\": native type \"@db.Timestamp\" is not supported: Prisma 6 stores it as a BSON timestamp, and Prisma 8 has no codec for that BSON type. Remove it; this also changes the Prisma 6 app: its client then stores new DateTime values as BSON date instead of timestamp. Documents already stored keep their timestamp values, so rewrite them as dates before Prisma 8 reads them."
   },
   {
     "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 10,
-    "message": "Field \"Post.stamp\": native type \"@db.Timestamp\" is not supported by the Prisma 6 MongoDB contract source, which reads @db.ObjectId on a String field and @db.Int and @db.Long on an Int field. Remove it; this also changes the Prisma 6 app: its client then stores new DateTime values as BSON date instead of timestamp, while stored documents keep timestamp."
-  },
-  {
-    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
-    "file": "schema.prisma",
-    "line": 11,
-    "message": "Field \"Post.ratio\": native type \"@db.Decimal\" is not supported by the Prisma 6 MongoDB contract source, which reads @db.ObjectId on a String field and @db.Int and @db.Long on an Int field. Prisma 6 does not accept @db.Decimal on a Float field either; remove it."
-  },
-  {
-    "code": "PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED",
-    "file": "schema.prisma",
-    "line": 12,
-    "message": "Field \"Post.reference\": @db.ObjectId is only supported on a String field, and this field is \"Bytes\". Remove @db.ObjectId, or change the field type to String. Removing it makes the Prisma 6 client store new values as BSON binData instead of objectId, while stored documents keep objectId; changing the type to String makes the Prisma 6 app read and write the value as a hex string, with the stored values unchanged."
+    "message": "Field \"Post.ratio\": native type \"@db.Decimal\" is not supported, and Prisma 6 does not accept it on a Float field either. Remove it."
   }
 ]
