@@ -177,6 +177,27 @@ describe(
       });
     });
 
+    it('aliases the Prisma 6 line when the project declares no Prisma 6 CLI', async () => {
+      writeManifest({ name: 'p6-shop', dependencies: { '@prisma/client': '^6.19.0' } });
+      write('prisma/schema.prisma', PRISMA6_SCHEMA);
+      const { prompt } = scriptedPrompt();
+
+      const error = await rejectionOf(
+        resolveInputs({ cwd: projectDir, flags: flags(), prompt, packageManager: 'pnpm' }),
+      );
+
+      expect(error).toMatchObject({
+        code: 'CLI.INIT_PRISMA6_SCHEMA_FOUND',
+        nextActions: expect.arrayContaining([
+          {
+            kind: 'edit-file',
+            label:
+              'In package.json, install the Prisma 6 CLI under another name: add the dev dependency "prisma6": "npm:prisma@6", add the script "prisma6": "node node_modules/prisma6/build/index.js --config prisma6.config.ts", and run every Prisma 6 command through it, as in `pnpm prisma6 db push` and `pnpm prisma6 generate`.',
+          },
+        ]),
+      });
+    });
+
     it('finds a multi-file Prisma 6 schema in the prisma/schema folder', async () => {
       writeManifest(PRISMA6_MANIFEST);
       const [datasource, models] = PRISMA6_SCHEMA.split('model User');

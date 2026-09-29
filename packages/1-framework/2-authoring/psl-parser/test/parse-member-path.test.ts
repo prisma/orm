@@ -10,7 +10,7 @@ import {
 } from '../src/syntax/ast/expressions';
 import { IdentifierAst } from '../src/syntax/ast/identifier';
 import { printSyntax } from '../src/syntax/ast-helpers';
-import type { GreenNode } from '../src/syntax/green';
+import { type GreenNode, greenNode, greenToken } from '../src/syntax/green';
 import { createSyntaxTree } from '../src/syntax/red';
 import { printTree } from './support';
 
@@ -50,6 +50,17 @@ describe('a dotted path in expression position', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('yields one identifier per segment', () => {
+    const { node } = parseOneExpression('address.geo.lat');
+    const path = PathExprAst.cast(createSyntaxTree(node));
+
+    expect([...(path?.segments() ?? [])].map((segment) => segment.name())).toEqual([
+      'address',
+      'geo',
+      'lat',
+    ]);
+  });
+
   it('keeps a single identifier an Identifier', () => {
     const { node } = parseOneExpression('city');
 
@@ -68,6 +79,26 @@ describe('a call on a dotted path', () => {
       qualified: call?.name() !== undefined,
       diagnostics: called.diagnostics,
     }).toEqual({ callee: uncalled.node, qualified: false, diagnostics: [] });
+  });
+
+  it('reads identifier segments that sit directly under the call node', () => {
+    const call = FunctionCallAst.cast(
+      createSyntaxTree(
+        greenNode('FunctionCall', [
+          greenNode('Identifier', [greenToken('Ident', 'pgvector')]),
+          greenToken('Dot', '.'),
+          greenNode('Identifier', [greenToken('Ident', 'Vector')]),
+          greenToken('LParen', '('),
+          greenToken('RParen', ')'),
+        ]),
+      ),
+    );
+
+    expect({ name: call?.name(), memberPath: call?.memberPath(), path: call?.path() }).toEqual({
+      name: undefined,
+      memberPath: undefined,
+      path: ['pgvector', 'Vector'],
+    });
   });
 
   it('keeps an undotted callee a name', () => {

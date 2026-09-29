@@ -87,7 +87,11 @@ export function prisma6SideBySideSetup(inputs: {
     steps: [
       {
         kind: 'edit-file',
-        label: `In package.json, keep the Prisma 6 CLI under another name: replace the "prisma" dev dependency with "prisma6": "npm:prisma@${inputs.cliVersion ?? '6'}", add the script "prisma6": "node node_modules/prisma6/build/index.js --config ${prisma6ConfigFile}", and run every Prisma 6 command through it, as in \`${runPrisma6(packageManager, 'db push')}\` and \`${runPrisma6(packageManager, 'generate')}\`.`,
+        label: `In package.json, ${
+          inputs.cliVersion === undefined
+            ? 'install the Prisma 6 CLI under another name: add the dev dependency "prisma6": "npm:prisma@6"'
+            : `keep the Prisma 6 CLI under another name: replace the "prisma" dev dependency with "prisma6": "npm:prisma@${inputs.cliVersion}"`
+        }, add the script "prisma6": "node node_modules/prisma6/build/index.js --config ${prisma6ConfigFile}", and run every Prisma 6 command through it, as in \`${runPrisma6(packageManager, 'db push')}\` and \`${runPrisma6(packageManager, 'generate')}\`.`,
       },
       prisma6Config === null
         ? {
