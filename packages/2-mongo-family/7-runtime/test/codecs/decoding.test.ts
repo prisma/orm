@@ -20,6 +20,12 @@ function deferred<T>(): {
   return { promise, resolve, reject };
 }
 
+function cyclic(): Record<string, unknown> {
+  const value: Record<string, unknown> = {};
+  value['self'] = value;
+  return value;
+}
+
 function registryWithDefaults(): MongoCodecRegistry {
   const registry = newMongoCodecRegistry();
   registry.register(
@@ -397,6 +403,37 @@ describe('decodeMongoRow', () => {
         details: { path: 'f', documentId: '65f0000000000000000000a2' },
       });
     });
+
+    it('by a numeric _id', async () => {
+      await expect(
+        decodeMongoRow({ _id: 7, f: 1 }, shape, throwingRegistry(), 'items'),
+      ).rejects.toMatchObject({
+        message:
+          "Failed to decode field f of the document with _id 7 in collection 'items' with codec 'throws@1': boom",
+        details: { documentId: '7' },
+      });
+    });
+
+    it('and previews a bigint the driver read with useBigInt64 as its digits and n', async () => {
+      await expect(
+        decodeMongoRow({ _id: 'a', f: { count: 2n ** 60n } }, shape, throwingRegistry(), 'items'),
+      ).rejects.toMatchObject({ details: { wirePreview: '{"count":"1152921504606846976n"}' } });
+    });
+
+    it.each([
+      ['a function', () => 1, '() => 1'],
+      ['a cyclic object', cyclic(), '[object Object]'],
+    ])(
+      'and previews %s, which JSON cannot write, as its String() text',
+      async (_kind, wire, preview) => {
+        await expect(
+          decodeMongoRow({ _id: 'a', f: wire }, shape, throwingRegistry(), 'items'),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          details: { wirePreview: preview },
+        });
+      },
+    );
 
     it('by a string _id, quoted', async () => {
       await expect(
