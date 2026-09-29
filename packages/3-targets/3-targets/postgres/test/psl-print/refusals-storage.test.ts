@@ -1,8 +1,6 @@
 import type { ContractField } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
-import { extensionCodec, testBuildContext } from './build-context';
-import { fieldText } from './print-support';
+import { addressContract, countryValueSet, withCountryMembers } from './member-support';
 import {
   deserialize,
   deserializeEdited,
@@ -263,16 +261,6 @@ describe('row-level security', () => {
 });
 
 describe('value objects', () => {
-  function addressContract(field: ContractField) {
-    return deserialize(
-      widgetContract({
-        columns: { address: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
-        fields: { address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } } },
-        domain: { valueObjects: { Address: { fields: { street: field } } } },
-      }),
-    );
-  }
-
   function withAddress(field: ContractField) {
     return printing(addressContract(field));
   }
@@ -332,105 +320,6 @@ describe('value objects', () => {
         details: { codecId: 'pg/text@1', typeParams: { length: 2 } },
       }),
     );
-  });
-
-  it('writes a value-object member typed by a codec only the stack knows, as the type constructor that produces it', () => {
-    const context = testBuildContext({
-      codecs: [extensionCodec],
-      types: {
-        ext: {
-          Citext: {
-            kind: 'typeConstructor',
-            output: { codecId: extensionCodec.codecId, nativeType: 'citext' },
-          },
-        },
-      },
-    });
-    const document = buildPostgresPslContract(
-      addressContract({
-        nullable: false,
-        type: { kind: 'scalar', codecId: extensionCodec.codecId },
-      }),
-      context,
-    );
-
-    expect(
-      document.namespaces.flatMap((namespace) =>
-        namespace.compositeTypes.flatMap((compositeType) =>
-          compositeType.fields.map((field) => field.typeName),
-        ),
-      ),
-    ).toEqual(['ext.Citext']);
-  });
-
-  it('writes a value-object member whose type carries type parameters, as the type constructor called with them', () => {
-    const numeric = {
-      kind: 'scalar',
-      codecId: 'pg/numeric@1',
-      typeParams: { precision: 65, scale: 30 },
-    } as const;
-    const document = buildPostgresPslContract(
-      deserialize(
-        widgetContract({
-          columns: { price: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
-          fields: { price: { nullable: false, type: { kind: 'valueObject', name: 'Price' } } },
-          domain: {
-            valueObjects: {
-              Price: {
-                fields: {
-                  amount: { nullable: false, type: numeric },
-                  history: { nullable: false, many: true, type: numeric },
-                },
-              },
-            },
-          },
-        }),
-      ),
-      testBuildContext(),
-    );
-
-    expect(
-      document.namespaces.flatMap((namespace) =>
-        namespace.compositeTypes.flatMap((compositeType) => compositeType.fields.map(fieldText)),
-      ),
-    ).toEqual(['amount Numeric(65, 30)', 'history Numeric(65, 30)[]']);
-  });
-
-  const countryEnumParts = {
-    enum: { Country: { codecId: 'pg/text@1', members: [{ name: 'DE', value: 'DE' }] } },
-  } as const;
-  const countryValueSet = {
-    plane: 'domain',
-    entityKind: 'enum',
-    namespaceId: 'public',
-    entityName: 'Country',
-  } as const;
-
-  function withCountryMembers(fields: Record<string, ContractField>) {
-    return deserialize(
-      widgetContract({
-        columns: { address: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
-        fields: { address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } } },
-        domain: { ...countryEnumParts, valueObjects: { Address: { fields } } },
-        entries: { valueSet: { Country: { kind: 'valueSet', values: ['DE'] } } },
-      }),
-    );
-  }
-
-  it('writes a value-object member typed by a domain enum as the enum name, single and list', () => {
-    const document = buildPostgresPslContract(
-      withCountryMembers({
-        country: { ...TEXT_FIELD, valueSet: countryValueSet },
-        countries: { ...TEXT_FIELD, many: true, valueSet: countryValueSet },
-      }),
-      testBuildContext(),
-    );
-
-    expect(
-      document.namespaces.flatMap((namespace) =>
-        namespace.compositeTypes.flatMap((compositeType) => compositeType.fields.map(fieldText)),
-      ),
-    ).toEqual(['country Country', 'countries Country[]']);
   });
 
   it('refuses a value-object member whose value set is not a domain enum of the default namespace', () => {

@@ -86,7 +86,7 @@ import {
   type ContractDefinition,
   domainTypeParams,
   type FieldNode,
-  isValueObjectNode,
+  isValueObjectMember,
   type ModelNode,
   type RelationNode,
   type ScalarMemberNode,
@@ -824,8 +824,8 @@ function buildStorageColumn(
 ): StorageColumn {
   const { descriptor } = field;
   const codecId = descriptor.codecId;
-  const storedAsList = !isValueObjectNode(field) && field.many === true;
-  const noCheck = isValueObjectNode(field) ? undefined : field.noCheck;
+  const storedAsList = !isValueObjectMember(field) && field.many === true;
+  const noCheck = isValueObjectMember(field) ? undefined : field.noCheck;
   const encodedDefault =
     field.default !== undefined
       ? encodeColumnDefault(
@@ -881,7 +881,7 @@ function buildDomainField(
   defaultNamespaceId: string,
   storageTypes: Record<string, StorageTypeInstance>,
 ): ContractField {
-  if (isValueObjectNode(field)) {
+  if (isValueObjectMember(field)) {
     return {
       type: { kind: 'valueObject', name: field.valueObjectName },
       nullable: field.nullable,
@@ -1174,7 +1174,7 @@ export function buildSqlContractFromDefinition(
         }
       }
 
-      const enumHandle = !isValueObjectNode(field) ? field.enumTypeHandle : undefined;
+      const enumHandle = !isValueObjectMember(field) ? field.enumTypeHandle : undefined;
 
       // A field authored through a deferred entity-ref column helper (e.g.
       // `pg.enum(handle)`) carries `descriptor.entityRef`: the referenced
@@ -1189,7 +1189,7 @@ export function buildSqlContractFromDefinition(
       // TS `pg.enum(handle)` path (via `entityRef`) and the PSL `pg.enum(Ref)`
       // path (resolved inline in the interpreter, no `entityRef`).
       let resolvedField = field;
-      if (!isValueObjectNode(field)) {
+      if (!isValueObjectMember(field)) {
         let descriptor = field.descriptor;
         const entityRef = descriptor.entityRef;
         if (entityRef !== undefined) {
@@ -1202,7 +1202,7 @@ export function buildSqlContractFromDefinition(
         }
       }
 
-      if (!isValueObjectNode(resolvedField) && resolvedField.noCheck !== undefined) {
+      if (!isValueObjectMember(resolvedField) && resolvedField.noCheck !== undefined) {
         const { noCheck: authoredNoCheck, ...withoutNoCheck } = resolvedField;
         // A non-`managed` table derives no checks, so an opt-out there is a
         // tolerated no-op (never persisted): policy may also be stamped
@@ -1240,7 +1240,7 @@ export function buildSqlContractFromDefinition(
       // IS the storage-level enforcement — including array columns, since the
       // target enforces membership on every element of a native-typed array.
       if (renderCheckExpressions !== undefined && derivesChecks) {
-        const waivedKinds = !isValueObjectNode(resolvedField) ? resolvedField.noCheck : undefined;
+        const waivedKinds = !isValueObjectMember(resolvedField) ? resolvedField.noCheck : undefined;
         checksForTable.push(
           ...lowerRenderedChecks(
             tableName,

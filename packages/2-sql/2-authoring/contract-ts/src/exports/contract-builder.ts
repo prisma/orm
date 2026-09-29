@@ -25,7 +25,6 @@ export type {
   FieldNode,
   ForeignKeyNode,
   IndexNode,
-  MemberTypeDescriptor,
   ModelNode,
   PrimaryKeyNode,
   RelationNode,
@@ -35,7 +34,7 @@ export type {
   ValueObjectMemberNode,
   ValueObjectNode,
 } from '../contract-definition';
-export { domainTypeParams, isValueObjectNode } from '../contract-definition';
+export { domainTypeParams } from '../contract-definition';
 export type {
   CheckKind,
   ColumnRef,

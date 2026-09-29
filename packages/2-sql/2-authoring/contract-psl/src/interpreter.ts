@@ -1505,7 +1505,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
   };
 }
 
-interface BuildValueObjectsInput {
+interface BuildValueObjectNodesInput {
   readonly compositeTypes: readonly CompositeTypeSymbol[];
   readonly enumTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly enumHandles: ReadonlyMap<string, EnumTypeHandle>;
@@ -1527,7 +1527,7 @@ interface BuildValueObjectsInput {
   readonly codecLookup: CodecLookup | undefined;
 }
 
-function buildValueObjectNodes(input: BuildValueObjectsInput): ValueObjectNode[] {
+function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNode[] {
   const { compositeTypes, enumHandles, diagnostics, sources } = input;
   const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
 

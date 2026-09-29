@@ -179,16 +179,16 @@ export function refuseUnwrittenExecutionDefaults(
 // Fields and columns
 
 /**
- * The value-set references the PSL source gives a field typed by a domain enum and its column: the
- * column names the enum's value set and the field names the enum, both in the default namespace. A
- * field with no domain enum has neither.
+ * The value-set references the PSL source gives a field typed by a domain enum, one per plane: the
+ * domain names the enum and the storage column names the enum's value set, both in the default
+ * namespace. A field with no domain enum has neither.
  */
 function derivedValueSetRefs(enumName: string | undefined) {
-  if (enumName === undefined) return { field: undefined, column: undefined };
+  if (enumName === undefined) return { domain: undefined, storage: undefined };
   const common = { namespaceId: DEFAULT_NAMESPACE_ID, entityName: enumName };
   return {
-    field: { plane: 'domain', entityKind: 'enum', ...common },
-    column: { plane: 'storage', entityKind: 'valueSet', ...common },
+    domain: { plane: 'domain', entityKind: 'enum', ...common },
+    storage: { plane: 'storage', entityKind: 'valueSet', ...common },
   };
 }
 
@@ -254,8 +254,8 @@ export function refuseFieldColumnMismatch(input: {
   const enumName = column.valueSet?.entityName;
   const derived = derivedValueSetRefs(enumName);
   if (
-    !sameJson(field.valueSet, derived.field) ||
-    !sameJson(column.valueSet, derived.column) ||
+    !sameJson(field.valueSet, derived.domain) ||
+    !sameJson(column.valueSet, derived.storage) ||
     (enumName !== undefined && !input.domainEnumNames.has(enumName))
   ) {
     throw unsupported(
@@ -306,7 +306,7 @@ export function refuseUnderivedMemberValueSet(input: {
   if (valueSet === undefined) return;
   const domainEnum = input.domainEnums[valueSet.entityName];
   if (
-    sameJson(valueSet, derivedValueSetRefs(valueSet.entityName).field) &&
+    sameJson(valueSet, derivedValueSetRefs(valueSet.entityName).domain) &&
     domainEnum?.codecId === type.codecId &&
     type.typeParams === undefined
   ) {

@@ -56,8 +56,8 @@ export type AuthoredColumnDefault =
       readonly canonical?: boolean;
     };
 
-/** The type of a scalar that has no column: a codec and its type parameters. */
-export type MemberTypeDescriptor = Pick<ColumnTypeDescriptor, 'codecId' | 'typeParams'>;
+/** The type of a scalar: a codec and its type parameters, the domain's `ScalarFieldType` without its kind. */
+export type ScalarTypeDescriptor = Pick<ColumnTypeDescriptor, 'codecId' | 'typeParams'>;
 
 /**
  * The type parameters of a field's domain type. A field typed by a named storage type takes that type's parameters inline, so it has the domain type of a field that writes the named type out.
@@ -76,7 +76,7 @@ export function domainTypeParams(
  */
 export interface ScalarMemberNode {
   readonly fieldName: string;
-  readonly descriptor: MemberTypeDescriptor;
+  readonly descriptor: ScalarTypeDescriptor;
   readonly nullable: boolean;
   readonly many?: boolean;
   /** Present when the field is typed by an enum. */
@@ -249,7 +249,7 @@ export interface ValueObjectNode {
 }
 
 /** Whether a field or member is typed by a value object. */
-export function isValueObjectNode(
+export function isValueObjectMember(
   field: ScalarMemberNode | ValueObjectMemberNode,
 ): field is ValueObjectMemberNode {
   return 'valueObjectName' in field;
