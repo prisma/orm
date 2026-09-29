@@ -221,8 +221,14 @@ export function binaryEncode(codecId: string, value: Uint8Array): Binary {
   return new Binary(value);
 }
 
-export function binaryDecode(codecId: string, wire: Binary): Uint8Array {
-  if (!isBinary(wire)) return decodeFailed(codecId, 'wire value must be a Binary', wire);
+/**
+ * The driver reads binData as a `Binary`, or as a `Buffer` with `promoteBuffers: true`; either becomes a plain `Uint8Array` copy of the bytes.
+ */
+export function binaryDecode(codecId: string, wire: Binary | Uint8Array): Uint8Array {
+  if (wire instanceof Uint8Array) return new Uint8Array(wire);
+  if (!isBinary(wire)) {
+    return decodeFailed(codecId, 'wire value must be a Binary or a Uint8Array', wire);
+  }
   return new Uint8Array(wire.value());
 }
 

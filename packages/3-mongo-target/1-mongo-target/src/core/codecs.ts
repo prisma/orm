@@ -143,7 +143,7 @@ export const mongoDecimal128Codec = mongoCodec({
  */
 export const mongoBinaryCodec = mongoCodec({
   typeId: MONGO_BINARY_CODEC_ID,
-  decode: (wire: Binary) => binaryDecode(MONGO_BINARY_CODEC_ID, wire),
+  decode: (wire: Binary | Uint8Array) => binaryDecode(MONGO_BINARY_CODEC_ID, wire),
   encode: (value: Uint8Array) => binaryEncode(MONGO_BINARY_CODEC_ID, value),
   encodeJson: binaryEncodeJson,
   decodeJson: (json) => binaryDecodeJson(MONGO_BINARY_CODEC_ID, json),
