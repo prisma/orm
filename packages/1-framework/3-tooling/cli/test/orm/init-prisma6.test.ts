@@ -162,6 +162,59 @@ describe(
       expect(check.requests).toEqual([]);
     });
 
+    it('finds a Prisma 6 schema that package.json names', async () => {
+      writeManifest({ ...PRISMA6_MANIFEST, prisma: { schema: 'db/schema.prisma' } });
+      write('db/schema.prisma', PRISMA6_SCHEMA);
+      const { prompt } = scriptedPrompt();
+
+      const error = await rejectionOf(
+        resolveInputs({ cwd: projectDir, flags: flags(), prompt, packageManager: 'pnpm' }),
+      );
+
+      expect(error).toMatchObject({
+        code: 'CLI.INIT_PRISMA6_SCHEMA_FOUND',
+        meta: { schemaPath: 'db/schema.prisma' },
+      });
+    });
+
+    it('finds a multi-file Prisma 6 schema in the prisma/schema folder', async () => {
+      writeManifest(PRISMA6_MANIFEST);
+      const [datasource, models] = PRISMA6_SCHEMA.split('model User');
+      write('prisma/schema/schema.prisma', datasource ?? '');
+      write('prisma/schema/user.prisma', `model User${models ?? ''}`);
+      const { prompt } = scriptedPrompt();
+
+      const error = await rejectionOf(
+        resolveInputs({ cwd: projectDir, flags: flags(), prompt, packageManager: 'pnpm' }),
+      );
+
+      expect(error).toMatchObject({
+        code: 'CLI.INIT_PRISMA6_SCHEMA_FOUND',
+        meta: { schemaPath: 'prisma/schema' },
+      });
+    });
+
+    it('warns a starter run about a Prisma 6 schema that package.json names', async () => {
+      writeManifest({ ...PRISMA6_MANIFEST, prisma: { schema: 'db/schema.prisma' } });
+      write('db/schema.prisma', PRISMA6_SCHEMA);
+      const { prompt } = scriptedPrompt();
+
+      const inputs = await resolveInputs({
+        cwd: projectDir,
+        flags: flags({
+          target: 'mongodb',
+          authoring: 'psl',
+          schemaPath: 'src/prisma/contract.prisma',
+        }),
+        prompt,
+        packageManager: 'pnpm',
+      });
+
+      expect(inputs.warnings).toEqual([
+        expect.stringMatching(/^db\/schema\.prisma is a Prisma 6 MongoDB schema/),
+      ]);
+    });
+
     it('tells npm users to pass the command after --', async () => {
       writePrisma6Project();
       const { prompt } = scriptedPrompt();

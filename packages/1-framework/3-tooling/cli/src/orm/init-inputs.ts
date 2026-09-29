@@ -24,9 +24,9 @@ import {
 } from '../commands/init/input-values';
 import { prisma6OnlyTarget, prisma6SideBySideSetup } from '../commands/init/prisma6-side-by-side';
 import {
+  conventionalSchemaPath,
   detectPrisma7Project,
   detectSchema,
-  PRISMA7_DEFAULT_SCHEMA_PATH,
   type Prisma7Detection,
   type Prisma7SchemaDetection,
 } from '../commands/init/prisma7-detect';
@@ -662,7 +662,7 @@ function prisma6SchemaFound(
 
 /** Said to a starter run in a Prisma 6 project, which it leaves alone but crowds. */
 function starterBesidePrisma6Warnings(cwd: string): readonly string[] {
-  const found = prisma6Schema(detectSchema(cwd, PRISMA7_DEFAULT_SCHEMA_PATH));
+  const found = prisma6Schema(detectSchema(cwd, conventionalSchemaPath(cwd).path));
   if (found === undefined) return [];
   return [
     `${found.schema.path} is a Prisma 6 ${targetLabel(found.target)} schema, which this run leaves alone. The Prisma 8 project it sets up takes the \`prisma\` package name, which the Prisma 6 CLI has now, and writes prisma.config.ts, which the Prisma 6 CLI also reads. Run \`prisma orm init\` without --target and --authoring to see how to keep Prisma 6 working and read this schema instead.`,
