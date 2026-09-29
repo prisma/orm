@@ -1,3 +1,4 @@
+import { Decimal128, Long } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
@@ -35,6 +36,26 @@ describe('Mongo enum fields', () => {
         ).rejects.toMatchObject(refusal);
 
         expect(await mongoDb.collection('authors').distinct('role')).toEqual(['admin']);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'query for a value outside the enum, so stored strays can be found',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        await mongoDb.collection('authors').insertOne(
+          {
+            karma: Long.fromNumber(1),
+            balance: Decimal128.fromString('1'),
+            role: 'ADMIN',
+          },
+          { bypassDocumentValidation: true },
+        );
+
+        expect(await db.authors.where({ role: untypedRole('ADMIN') }).all()).toMatchObject([
+          { role: 'ADMIN' },
+        ]);
       }),
     timeouts.spinUpMongoMemoryServer,
   );

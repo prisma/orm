@@ -1,3 +1,4 @@
+import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { Decimal128, Long, ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
@@ -48,6 +49,30 @@ describe('Mongo optional fields a stored document leaves out', () => {
           { avatar: null, address: null },
           { avatar: null, address: null },
         ]);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'refuse null for a required field on write, naming it, and still filter by null',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        await expect(
+          db.authors.create({ karma: null as unknown as bigint, balance: '1', role: 'USER' }),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message:
+            "Failed to encode field karma in collection 'authors': the field is required and cannot be null",
+          details: { label: 'karma', collection: 'authors' },
+        });
+        await expect(
+          db.authors.create({ karma: 1n, balance: '1', role: null as unknown as 'USER' }),
+        ).rejects.toMatchObject({ code: 'RUNTIME.ENCODE_FAILED', details: { label: 'role' } });
+        expect(await mongoDb.collection('authors').countDocuments()).toBe(0);
+
+        await db.authors.create({ karma: 1n, balance: '1', role: 'USER', avatar: null });
+        expect(await db.authors.where(MongoFieldFilter.eq('avatar', null)).all()).toHaveLength(1);
+        expect(await db.authors.where({ karma: null as unknown as bigint }).all()).toHaveLength(0);
       }),
     timeouts.spinUpMongoMemoryServer,
   );

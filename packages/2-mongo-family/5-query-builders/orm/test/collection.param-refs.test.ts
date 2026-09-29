@@ -1,5 +1,5 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import { MongoFieldFilter, type MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from '../../../1-foundation/mongo-contract/test/fixtures/orm-contract';
@@ -48,7 +48,7 @@ function labels(plans: readonly MongoQueryPlan[]) {
 }
 
 const string = 'mongo/string@1';
-const embeddedRelationWithoutCodec = { name: undefined, collection: undefined, codecId: undefined };
+const withoutCodec = { name: undefined, collection: undefined, codecId: undefined };
 
 describe('parameters the Mongo ORM builds', () => {
   it('name each field of a create by its path, nested value-object fields included', async () => {
@@ -130,8 +130,53 @@ describe('parameters the Mongo ORM builds', () => {
       { name: 'title', collection: 'tasks', codecId: string },
       { name: 'assigneeId', collection: 'tasks', codecId: 'mongo/objectId@1' },
       { name: 'severity', collection: 'tasks', codecId: string },
-      embeddedRelationWithoutCodec,
+      withoutCodec,
       { name: 'type', collection: 'tasks', codecId: string },
+    ]);
+  });
+});
+
+describe('null in the Mongo ORM', () => {
+  it('is refused for a required field on create and update, naming the field', async () => {
+    const { executor, plans } = recordingExecutor();
+    const users = createMongoCollection(contract, 'User', executor);
+    const refused = {
+      code: 'RUNTIME.ENCODE_FAILED',
+      message:
+        "Failed to encode field loginCount in collection 'users': the field is required and cannot be null",
+      details: { label: 'loginCount', collection: 'users' },
+    };
+
+    await expect(users.create({ ...user, loginCount: null as never })).rejects.toMatchObject(
+      refused,
+    );
+    await expect(
+      users.where({ email: 'a@b.c' }).update({ loginCount: null as never }),
+    ).rejects.toMatchObject(refused);
+    await expect(
+      users.where({ email: 'a@b.c' }).update((u) => [u.loginCount.set(null as never)]),
+    ).rejects.toMatchObject(refused);
+    expect(plans).toEqual([]);
+  });
+
+  it('is written without a codec to a nullable field and compared without one in a filter', async () => {
+    const { executor, plans } = recordingExecutor();
+    const users = createMongoCollection(contract, 'User', executor);
+    await users.create({ ...user, homeAddress: null });
+    await users
+      .where({ loginCount: null as never })
+      .all()
+      .toArray();
+    await users.where(MongoFieldFilter.eq('loginCount', null)).all().toArray();
+
+    expect(labels(plans)).toEqual([
+      { name: 'name', collection: 'users', codecId: string },
+      { name: 'email', collection: 'users', codecId: string },
+      { name: 'loginCount', collection: 'users', codecId: 'mongo/int32@1' },
+      { name: 'tags.0', collection: 'users', codecId: string },
+      withoutCodec,
+      withoutCodec,
+      withoutCodec,
     ]);
   });
 });

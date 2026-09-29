@@ -21,12 +21,15 @@ changes:
       glob: "**/*.{ts,mts,cts}"
       matches:
         - '\bMongoFieldFilter\.(?:eq|neq|gt|gte|lt|lte|in|nin|of)\('
-  - id: mongo-writes-check-int32-and-enum-values
+  - id: mongo-writes-check-int32-enum-and-null-values
     summary: |
       The Mongo ORM refuses, with `RUNTIME.ENCODE_FAILED` naming the field, a write of a fraction
-      or an out-of-range number to an `Int32` field and of a value outside the field's enum. Before,
-      a contract with a collection validator got a bare "Document failed validation" from the
-      server, and one without a validator (TypeScript builder, Prisma 6 schema) stored the value.
+      or an out-of-range number to an `Int32` field, of a value outside the field's enum, and of
+      `null` to a field that is not nullable. Before, depending on the field's type, the field's
+      codec refused it, a contract with a collection validator got a bare "Document failed
+      validation" from the server, or a contract without one (TypeScript builder, Prisma 6 schema)
+      stored the value. Filters still accept a value outside the enum and `null`, so they can find
+      documents that hold one.
   - id: contract-source-warnings-are-diagnostics
     summary: |
       `prisma contract emit` and `prisma contract print` report contract source warnings, such as
@@ -60,11 +63,11 @@ Remove code that converted driver classes by hand in included documents or compo
 
 For each match, pass the field's application value: a `bigint` for an `Int64` field (`MongoFieldFilter.gt('views', 5n)`, not `5`), decimal text for a `Decimal128` field, a hex string or an `ObjectId` for an `ObjectId` field. A value the field's codec refuses now fails with `RUNTIME.ENCODE_FAILED` before the query runs; before, it was sent as is. A filter on a `Bson` field with an `ObjectId`, `Long` or `Decimal128` now matches the stored value; before, it matched nothing.
 
-## `mongo-writes-check-int32-and-enum-values`
+## `mongo-writes-check-int32-enum-and-null-values`
 
 This change has no detection pattern: which writes carry such values depends on the data.
 
-Round a number before writing it to an `Int32` field, or declare the field `Double` or `Int64`. Map any value outside an enum, such as a Prisma 6 member name like `'ADMIN'` where the stored value is `'admin'`, to one of the enum's values. The error's `details.allowed` lists them.
+Round a number before writing it to an `Int32` field, or declare the field `Double` or `Int64`. Map any value outside an enum, such as a Prisma 6 member name like `'ADMIN'` where the stored value is `'admin'`, to one of the enum's values. The error's `details.allowed` lists them. Instead of writing `null` to a required field, write a value, or declare the field optional (`String?`) when documents may hold `null`.
 
 ## `contract-source-warnings-are-diagnostics`
 

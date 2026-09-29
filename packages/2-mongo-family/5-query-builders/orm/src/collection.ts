@@ -185,6 +185,8 @@ const COMPARISON_OPERATORS: ReadonlySet<string> = new Set([
 ]);
 const MEMBERSHIP_OPERATORS: ReadonlySet<string> = new Set(['$in', '$nin']);
 
+type ValuePurpose = 'write' | 'filter';
+
 function resolveCollectionName(model: MongoModelDefinition, modelName: string): string {
   return model.storage.collection ?? modelName;
 }
@@ -844,7 +846,7 @@ class MongoCollectionImpl<
     const filters: MongoFilterExpr[] = [];
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
-      const wrapped = this.#wrapFieldValue(value, fields[key], key);
+      const wrapped = this.#wrapFieldValue(value, fields[key], key, 'filter');
       filters.push(MongoFieldFilter.eq(key, wrapped));
     }
     return filters;
@@ -859,10 +861,10 @@ class MongoCollectionImpl<
     const encode = (value: MongoValue): MongoValue => {
       if (value instanceof MongoParamRef) {
         return value.codecId === undefined
-          ? this.#scalarParam(value.value, field, filter.field)
+          ? this.#wrapFieldValue(value.value, field, filter.field, 'filter')
           : value;
       }
-      return this.#scalarParam(value, field, filter.field);
+      return this.#wrapFieldValue(value, field, filter.field, 'filter');
     };
     if (COMPARISON_OPERATORS.has(filter.op)) {
       return MongoFieldFilter.of(filter.field, filter.op, encode(filter.value));
@@ -885,18 +887,27 @@ class MongoCollectionImpl<
     return field;
   }
 
-  #wrapFieldValue(value: unknown, field: ContractField | undefined, path: string): MongoValue {
+  /**
+   * A value written to a field is checked against the field's enum and must not be `null` unless the field is nullable; a value compared in a filter is not, so a filter can find stored values the contract does not allow.
+   */
+  #wrapFieldValue(
+    value: unknown,
+    field: ContractField | undefined,
+    path: string,
+    purpose: ValuePurpose,
+  ): MongoValue {
     if (field === undefined) return new MongoParamRef(value);
+    if (value === null) return this.#nullParam(field, path, purpose);
 
     if (field.type.kind === 'scalar') {
-      this.#assertEnumValues(field, value, path);
+      if (purpose === 'write') this.#assertEnumValues(field, value, path);
       return this.#scalarParam(value, field, path);
     }
 
     if (field.type.kind === 'valueObject') {
       const voName = field.type.name;
       const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[voName];
-      if (!voDef || value === null) return new MongoParamRef(value);
+      if (!voDef) return new MongoParamRef(value);
 
       if (field.many && Array.isArray(value)) {
         return value.map((item, index) =>
@@ -907,6 +918,7 @@ class MongoCollectionImpl<
             >(item),
             voDef,
             `${path}.${index}`,
+            purpose,
           ),
         );
       }
@@ -917,10 +929,22 @@ class MongoCollectionImpl<
         >(value),
         voDef,
         path,
+        purpose,
       );
     }
 
     return new MongoParamRef(value);
+  }
+
+  #nullParam(field: ContractField, path: string, purpose: ValuePurpose): MongoParamRef {
+    if (purpose === 'write' && !field.nullable) {
+      throw runtimeError(
+        'RUNTIME.ENCODE_FAILED',
+        `Failed to encode field ${path} in collection '${this.#collectionName}': the field is required and cannot be null`,
+        { label: path, collection: this.#collectionName },
+      );
+    }
+    return new MongoParamRef(null);
   }
 
   /**
@@ -968,12 +992,13 @@ class MongoCollectionImpl<
     data: Record<string, unknown>,
     voDef: ContractValueObject,
     path: string,
+    purpose: ValuePurpose,
   ): Record<string, MongoValue> {
     const doc: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value === undefined) continue;
       const fieldDef = voDef.fields[key];
-      doc[key] = this.#wrapFieldValue(value, fieldDef, `${path}.${key}`);
+      doc[key] = this.#wrapFieldValue(value, fieldDef, `${path}.${key}`, purpose);
     }
     return doc;
   }
@@ -983,7 +1008,7 @@ class MongoCollectionImpl<
     const doc: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(data)) {
       if (value !== undefined) {
-        doc[key] = this.#wrapFieldValue(value, fields[key], key);
+        doc[key] = this.#wrapFieldValue(value, fields[key], key, 'write');
       }
     }
     return doc;
@@ -999,7 +1024,7 @@ class MongoCollectionImpl<
         });
       }
       if (value !== undefined) {
-        result[key] = this.#wrapFieldValue(value, fields[key], key);
+        result[key] = this.#wrapFieldValue(value, fields[key], key, 'write');
       }
     }
     return result;
@@ -1094,14 +1119,15 @@ class MongoCollectionImpl<
     }
     const field = this.#fieldAtPath(path);
     if (field === undefined) return value;
-    if (operator === '$set') return this.#wrapFieldValue(value.value, field, path);
+    if (operator === '$set') return this.#wrapFieldValue(value.value, field, path, 'write');
+    if (operator === '$pull') return this.#wrapFieldValue(value.value, field, path, 'filter');
     if (field.type.kind === 'scalar') {
       this.#assertEnumValues(field, field.many === true ? [value.value] : value.value, path);
       return this.#fieldParam(value.value, field.type.codecId, path);
     }
     if (field.type.kind === 'valueObject' && isUnknownRecord(value.value)) {
       const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[field.type.name];
-      if (voDef) return this.#wrapValueObject(value.value, voDef, path);
+      if (voDef) return this.#wrapValueObject(value.value, voDef, path, 'write');
     }
     return value;
   }

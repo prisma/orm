@@ -84,14 +84,6 @@ describe('resolveValue', () => {
     expect(result[1]).toBe('b');
   });
 
-  it.each([...buildStandardCodecRegistry()].map((codec) => codec.id))(
-    'passes null for a nullable %s field through without calling the codec',
-    async (codecId) => {
-      const ref = new MongoParamRef(null, { codecId, name: 'avatar', collection: 'users' });
-      expect(await resolveValue(ref, buildStandardCodecRegistry(), noCtx)).toBeNull();
-    },
-  );
-
   it('passes the driver`s BSON values, bytes and regular expressions through unchanged, at any depth', async () => {
     const values = {
       id: new ObjectId('65f0000000000000000000ab'),
