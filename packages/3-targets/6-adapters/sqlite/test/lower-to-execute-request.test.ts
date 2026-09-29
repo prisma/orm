@@ -197,6 +197,17 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — codec routing + DDL sha
     expect(result.sql).not.toContain('plaintext');
   });
 
+  it('renders a null literal default on a codec-bearing column as DEFAULT NULL', async () => {
+    const ast = new SqliteCreateTable({
+      table: 'notes',
+      columns: [
+        col('body', 'TEXT', { default: lit(null), codecRef: { codecId: 'sqlite/text@1' } }),
+      ],
+    });
+    const result = await adapter.lowerToExecuteRequest(ast, ctx);
+    expect(result.sql).toBe('CREATE TABLE "notes" (\n  "body" TEXT DEFAULT NULL\n)');
+  });
+
   it('renders IF NOT EXISTS with quoted identifiers (bootstrap control-table shape)', async () => {
     const ast = new SqliteCreateTable({
       table: '_prisma_marker',

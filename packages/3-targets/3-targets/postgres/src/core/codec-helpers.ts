@@ -154,6 +154,70 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
   decimalIntegerDecode('pg/unboundedint@1', wire);
 
 /**
+ * Reads a JSON value a codec stores as a string, refusing any other kind. PostgreSQL writes every
+ * text-like type — `text`, an enum, `uuid`, `inet`, `bit`, `tsquery`, a time of day, and a date or
+ * time cast to text — as a JSON string.
+ */
+export const pgStringDecodeJson = (codecId: string, json: JsonValue): string => {
+  if (typeof json !== 'string') {
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} database JSON value must be a string`,
+      {
+        meta: { codecId, received: typeof json },
+      },
+    );
+  }
+  return json;
+};
+
+/** Reads a JSON string that must also match `pattern`, which names the form in `form`. */
+export const pgPatternDecodeJson = (
+  codecId: string,
+  json: JsonValue,
+  pattern: RegExp,
+  form: string,
+): string => {
+  const text = pgStringDecodeJson(codecId, json);
+  if (!pattern.test(text)) {
+    throw postgresError('RUNTIME.DECODE_FAILED', `${codecId} database JSON value must be ${form}`, {
+      meta: { codecId, received: text },
+    });
+  }
+  return text;
+};
+
+/** Reads a JSON integer within the range its type holds; PostgreSQL writes `int2` and `int4` as JSON numbers. */
+export const pgIntegerDecodeJson = (
+  codecId: string,
+  json: JsonValue,
+  min: number,
+  max: number,
+): number => {
+  if (typeof json !== 'number' || !Number.isInteger(json) || json < min || json > max) {
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} database JSON value must be an integer from ${min} to ${max}`,
+      { meta: { codecId, received: typeof json === 'number' ? json : typeof json } },
+    );
+  }
+  return json;
+};
+
+export const pgBoolDecodeJson = (json: JsonValue): boolean => {
+  if (typeof json !== 'boolean') {
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      'pg/bool@1 database JSON value must be a boolean',
+      {
+        meta: { codecId: 'pg/bool@1', received: typeof json },
+      },
+    );
+  }
+  return json;
+};
+
+/**
  * Neither JSON nor a SQL number literal has a form for `NaN` or the infinities; PostgreSQL reads
  * and writes them as the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as
  * that text on the wire and in JSON.

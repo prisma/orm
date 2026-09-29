@@ -1,8 +1,8 @@
-import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
+import type { ContractMarkerRecord, JsonValue, LedgerEntryRecord } from '@internal/contract/types';
 import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/errors/execution';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
@@ -738,6 +738,22 @@ function sqliteInlineLiteral(wire: unknown): string {
   );
 }
 
+const SQL_NULL = Symbol('SQL NULL');
+
+/**
+ * Reads a literal default back through the column's codec. A JSON codec reads `null` as the JSON
+ * value null; every other codec refuses it, because SQL NULL has no stored form of its own, and for
+ * those a `null` default is SQL NULL.
+ */
+function readDefault(codec: Codec, value: JsonValue): unknown {
+  try {
+    return codec.decodeJson(value);
+  } catch (error) {
+    if (value === null) return SQL_NULL;
+    throw error;
+  }
+}
+
 async function sqliteRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
   codecLookup: CodecLookup,
@@ -760,7 +776,8 @@ async function sqliteRenderDdlColumnDefault(
       // for a `bigint`, which `encode` does not take. A `Date` is the one
       // authored value JSON has no notation for, so it is the one that
       // arrives as itself.
-      const value = def.value instanceof Date ? def.value : codec.decodeJson(def.value);
+      const value = def.value instanceof Date ? def.value : readDefault(codec, def.value);
+      if (value === SQL_NULL) return 'DEFAULT NULL';
       const wire = await codec.encode(value, {});
       return `DEFAULT ${sqliteInlineLiteral(wire)}`;
     }

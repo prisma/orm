@@ -8,10 +8,14 @@ import {
   column,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
-import { blindCast } from '@internal/utils/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import { type PrecisionParams, precisionParamsSchema, renderPrecision } from './codec-helpers';
+import {
+  type PrecisionParams,
+  pgStringDecodeJson,
+  precisionParamsSchema,
+  renderPrecision,
+} from './codec-helpers';
 import {
   PG_DATE_STRING_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
@@ -42,9 +46,7 @@ export class PgDateStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'date-string columns serialize to JSON as their wire string form'>(
-      json,
-    );
+    return pgStringDecodeJson(PG_DATE_STRING_CODEC_ID, json);
   }
 }
 
@@ -89,10 +91,7 @@ export class PgTimestampStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<
-      string,
-      'timestamp-string columns serialize to JSON as their wire string form'
-    >(json);
+    return pgStringDecodeJson(PG_TIMESTAMP_STRING_CODEC_ID, json);
   }
 }
 
@@ -148,10 +147,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<
-      string,
-      'timestamptz-string columns serialize to JSON as their wire string form'
-    >(json);
+    return pgStringDecodeJson(PG_TIMESTAMPTZ_STRING_CODEC_ID, json);
   }
 }
 
@@ -207,9 +203,7 @@ export class PgTimeStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'time-string columns serialize to JSON as their wire string form'>(
-      json,
-    );
+    return pgStringDecodeJson(PG_TIME_STRING_CODEC_ID, json);
   }
 }
 

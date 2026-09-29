@@ -12,9 +12,10 @@ import { describe, expect, it } from 'vitest';
 
 const sqliteStack = createControlStack({ family: sql, target: sqlite, adapter: sqliteAdapter });
 
-async function loadSqlite(pslSchema: string) {
-  const schemaPath = join(mkdtempSync(join(tmpdir(), 'value-object-defaults-')), 'schema.prisma');
-  writeFileSync(schemaPath, `// use prisma-8\n\n${pslSchema}`, 'utf-8');
+const SCHEMA_PREFIX = '// use prisma-8\n\n';
+
+async function loadSqlite(pslSchema: string, schemaPath = newSchemaPath()) {
+  writeFileSync(schemaPath, `${SCHEMA_PREFIX}${pslSchema}`, 'utf-8');
   return prismaContract(schemaPath, {
     target: sqlitePackRef,
     createNamespace: sqliteCreateNamespace,
@@ -37,11 +38,32 @@ async function sqliteUserColumns(pslSchema: string) {
   return Object.values(storage.namespaces)[0]?.entries.table?.['User']?.columns;
 }
 
-async function sqliteDiagnostics(pslSchema: string) {
-  const result = await loadSqlite(pslSchema);
-  return result.ok
-    ? []
-    : result.failure.diagnostics.map(({ code, message }) => ({ code, message }));
+function newSchemaPath(): string {
+  return join(mkdtempSync(join(tmpdir(), 'value-object-defaults-')), 'schema.prisma');
+}
+
+/** The span of the `@default(...)` attribute on the line declaring `field`, in the file the schema is written to. */
+function defaultSpanOf(pslSchema: string, field: string) {
+  const text = `${SCHEMA_PREFIX}${pslSchema}`;
+  const lines = text.split('\n');
+  const lineIndex = lines.findIndex((line) => new RegExp(`^\\s+${field}\\s`).test(line));
+  const line = lines[lineIndex] ?? '';
+  const startColumn = line.indexOf('@default(') + 1;
+  const endColumn = line.lastIndexOf(')') + 2;
+  const lineOffset = lines
+    .slice(0, lineIndex)
+    .reduce((sum, previous) => sum + previous.length + 1, 0);
+  return {
+    start: { offset: lineOffset + startColumn - 1, line: lineIndex + 1, column: startColumn },
+    end: { offset: lineOffset + endColumn - 1, line: lineIndex + 1, column: endColumn },
+  };
+}
+
+/** Every diagnostic loading the schema reports, whole, with the path it was written to. */
+async function sqliteDiagnosticsOf(pslSchema: string) {
+  const schemaPath = newSchemaPath();
+  const result = await loadSqlite(pslSchema, schemaPath);
+  return { schemaPath, diagnostics: result.ok ? [] : result.failure.diagnostics };
 }
 
 describe('value-object defaults on the SQLite stack', () => {
@@ -101,9 +123,7 @@ model User {
   });
 
   it('refuses a default that does not match the composite type', async () => {
-    const incompatible = (message: string) => ({ code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE', message });
-    expect(
-      await sqliteDiagnostics(`type Address {
+    const schema = `type Address {
   street String
   zip    String?
 }
@@ -121,25 +141,37 @@ model User {
   unknown Address   @default(json\`{"street":"x","city":"y"}\`)
   missing Address   @default(json\`{"zip":"1"}\`)
   nested  Outer     @default(json\`{"inner":{"street":"x","city":"y"}}\`)
-}`),
-    ).toEqual([
+}`;
+    const { schemaPath, diagnostics } = await sqliteDiagnosticsOf(schema);
+    const incompatible = (field: string, message: string) => ({
+      code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+      message,
+      sourceId: schemaPath,
+      span: defaultSpanOf(schema, field),
+    });
+    expect(diagnostics).toEqual([
       incompatible(
+        'objects',
         'Field "User.objects": the default of a list of value objects is a JSON array, not a JSON object',
       ),
       incompatible(
+        'strings',
         'Field "User.strings": the default of a list of value objects is a JSON array, not a JSON string',
       ),
       incompatible(
+        'array',
         'Field "User.array": the default of a value object is a JSON object, not a JSON array',
       ),
       incompatible(
+        'numbers',
         'Field "User.numbers[0]": a value of "Address" is a JSON object, not a JSON number',
       ),
-      incompatible('Field "User.unknown": "city" is not a member of "Address"'),
+      incompatible('unknown', 'Field "User.unknown": "city" is not a member of "Address"'),
       incompatible(
+        'missing',
         'Field "User.missing.street": the member is required, and the default has no value for it',
       ),
-      incompatible('Field "User.nested.inner": "city" is not a member of "Address"'),
+      incompatible('nested', 'Field "User.nested.inner": "city" is not a member of "Address"'),
     ]);
   });
 
@@ -155,21 +187,27 @@ model User {
   a  Amounts @default(json\`${value}\`)
 }`;
     const accepted = await Promise.all(
-      ['"x"', '1', 'true', '{}', '[1]', 'null'].map((payload) =>
-        sqliteDiagnostics(schema(`{"price": "1.5", "big": "1", "payload": ${payload}}`)),
+      ['"x"', '1', 'true', '{}', '[1]', 'null'].map(
+        async (payload) =>
+          (await sqliteDiagnosticsOf(schema(`{"price": "1.5", "big": "1", "payload": ${payload}}`)))
+            .diagnostics,
       ),
     );
-    expect({
-      accepted,
-      refused: await sqliteDiagnostics(schema('{"price": 1.5, "big": 1, "payload": {}}')),
-    }).toEqual({
+    const refusedSchema = schema('{"price": 1.5, "big": 1, "payload": {}}');
+    const refused = await sqliteDiagnosticsOf(refusedSchema);
+    const invalidLiteral = (message: string) => ({
+      code: 'PSL_INVALID_DEFAULT_LITERAL',
+      message,
+      sourceId: refused.schemaPath,
+      span: defaultSpanOf(refusedSchema, 'a'),
+    });
+    expect({ accepted, refused: refused.diagnostics }).toEqual({
       accepted: [[], [], [], [], [], []],
       refused: [
-        {
-          code: 'PSL_INVALID_DEFAULT_LITERAL',
-          message:
-            'Field "User.a.big": sqlite/bigint@1 database JSON value must be a decimal string',
-        },
+        invalidLiteral('Field "User.a.price": sqlite/text@1 database JSON value must be a string'),
+        invalidLiteral(
+          'Field "User.a.big": sqlite/bigint@1 database JSON value must be a decimal string',
+        ),
       ],
     });
   });
@@ -193,5 +231,25 @@ model User {
         default: { kind: 'literal', value: null },
       },
     });
+  });
+
+  it('refuses a member value the member codec does not read, with the codec message', async () => {
+    const schema = `type Address {
+  street String
+}
+
+model User {
+  id   Int     @id
+  home Address @default(json\`{"street": 1}\`)
+}`;
+    const { schemaPath, diagnostics } = await sqliteDiagnosticsOf(schema);
+    expect(diagnostics).toEqual([
+      {
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        message: 'Field "User.home.street": sqlite/text@1 database JSON value must be a string',
+        sourceId: schemaPath,
+        span: defaultSpanOf(schema, 'home'),
+      },
+    ]);
   });
 });

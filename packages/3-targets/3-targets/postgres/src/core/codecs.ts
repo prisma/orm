@@ -52,6 +52,7 @@ import {
   type PrecisionParams,
   pgBigintEncode,
   pgBigintEncodeJson,
+  pgBoolDecodeJson,
   pgByteaDecodeJson,
   pgByteaDecodeWire,
   pgByteaEncodeJson,
@@ -63,6 +64,7 @@ import {
   pgInt8NumberDecodeJson,
   pgInt8NumberEncode,
   pgInt8NumberEncodeJson,
+  pgIntegerDecodeJson,
   pgIntervalDecode,
   pgIntervalDecodeJson,
   pgIntervalEncodeJson,
@@ -73,6 +75,8 @@ import {
   pgJsonEncode,
   pgNumericDecode,
   pgNumericRenderOutputType,
+  pgPatternDecodeJson,
+  pgStringDecodeJson,
   pgUnboundedIntDecode,
   precisionParamsSchema,
   renderLength,
@@ -205,6 +209,9 @@ const CANONICAL_NUMERIC_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
 const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEXT.test(value);
 
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
+
+const BIT_STRING = /^[01]*$/;
+const UUID_TEXT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const decodePostgresNumberWire = (wire: string | number): number =>
   typeof wire === 'string' ? Number(wire) : wire;
@@ -367,9 +374,7 @@ export class PgTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
-      json,
-    );
+    return pgStringDecodeJson(PG_TEXT_CODEC_ID, json);
   }
 }
 
@@ -436,10 +441,7 @@ export class PgEnumCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<
-      string,
-      'text codec: a native-enum member value is stored as its wire string form'
-    >(json);
+    return pgStringDecodeJson(PG_ENUM_CODEC_ID, json);
   }
 }
 
@@ -561,20 +563,39 @@ export function postgresQualifyColumnType(
 export class PgTextArrayCodec extends CodecImpl<
   typeof PG_TEXT_ARRAY_CODEC_ID,
   readonly ['equality'],
-  readonly string[],
-  readonly string[]
+  readonly (string | null)[],
+  readonly (string | null)[]
 > {
-  async encode(value: readonly string[], _ctx: CodecCallContext): Promise<readonly string[]> {
+  async encode(
+    value: readonly (string | null)[],
+    _ctx: CodecCallContext,
+  ): Promise<readonly (string | null)[]> {
     return value;
   }
-  async decode(wire: readonly string[], _ctx: CodecCallContext): Promise<readonly string[]> {
+  async decode(
+    wire: readonly (string | null)[],
+    _ctx: CodecCallContext,
+  ): Promise<readonly (string | null)[]> {
     return wire;
   }
-  encodeJson(value: readonly string[]): JsonValue {
+  encodeJson(value: readonly (string | null)[]): JsonValue {
     return [...value];
   }
-  decodeJson(json: JsonValue): readonly string[] {
-    return Array.isArray(json) ? json.map((entry) => String(entry)) : [];
+  /** A `text[]` may hold NULL elements, which PostgreSQL writes as JSON `null`. */
+  decodeJson(json: JsonValue): readonly (string | null)[] {
+    const refuse = (received: string) =>
+      postgresError(
+        'RUNTIME.DECODE_FAILED',
+        `${PG_TEXT_ARRAY_CODEC_ID} database JSON value must be an array of strings and nulls`,
+        { meta: { codecId: PG_TEXT_ARRAY_CODEC_ID, received } },
+      );
+    if (!Array.isArray(json)) throw refuse(json === null ? 'null' : typeof json);
+    const elements: (string | null)[] = [];
+    for (const entry of json) {
+      if (entry !== null && typeof entry !== 'string') throw refuse(typeof entry);
+      elements.push(entry);
+    }
+    return elements;
   }
 }
 
@@ -613,9 +634,7 @@ export class PgInt4Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
-      json,
-    );
+    return pgIntegerDecodeJson(PG_INT4_CODEC_ID, json, -2147483648, 2147483647);
   }
 }
 
@@ -663,9 +682,7 @@ export class PgInt2Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
-      json,
-    );
+    return pgIntegerDecodeJson(PG_INT2_CODEC_ID, json, -32768, 32767);
   }
 }
 
@@ -926,7 +943,7 @@ export class PgBoolCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): boolean {
-    return blindCast<boolean, 'boolean columns serialize JSON in their wire boolean form'>(json);
+    return pgBoolDecodeJson(json);
   }
 }
 
@@ -1102,9 +1119,7 @@ export class PgTimetzCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
-      json,
-    );
+    return pgStringDecodeJson(PG_TIMETZ_CODEC_ID, json);
   }
 }
 
@@ -1153,9 +1168,7 @@ export class PgBitCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
-      json,
-    );
+    return pgPatternDecodeJson(PG_BIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
   }
 }
 
@@ -1203,9 +1216,7 @@ export class PgVarbitCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
-      json,
-    );
+    return pgPatternDecodeJson(PG_VARBIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
   }
 }
 
@@ -1300,7 +1311,7 @@ export class PgUuidCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'uuid columns serialize to JSON as their wire string form'>(json);
+    return pgPatternDecodeJson(PG_UUID_CODEC_ID, json, UUID_TEXT, 'a hyphenated UUID');
   }
 }
 
@@ -1347,7 +1358,7 @@ export class PgInetCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return blindCast<string, 'inet columns serialize to JSON as their wire string form'>(json);
+    return pgStringDecodeJson(PG_INET_CODEC_ID, json);
   }
 }
 
@@ -1402,8 +1413,8 @@ export class PgTsqueryCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): TsqueryValue {
-    return blindCast<TsqueryValue, 'tsquery values serialize to JSON as their wire string form'>(
-      json,
+    return blindCast<TsqueryValue, 'a tsquery value is the text PostgreSQL writes for it'>(
+      pgStringDecodeJson(PG_TSQUERY_CODEC_ID, json),
     );
   }
 }

@@ -191,6 +191,7 @@ describe('PostgresCreateTable DDL lowering', () => {
         col('a_float', 'float8', { default: lit(3.14) }),
         col('a_bool', 'boolean', { default: lit(true) }),
         col('a_nullable', 'uuid', { default: lit(null) }),
+        col('a_null_text', 'text', { default: lit(null), codecRef: { codecId: 'pg/text@1' } }),
       ],
     });
     const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
@@ -199,7 +200,22 @@ describe('PostgresCreateTable DDL lowering', () => {
     expect(lowered.sql).toContain('"a_float" float8 DEFAULT 3.14');
     expect(lowered.sql).toContain('"a_bool" boolean DEFAULT true');
     expect(lowered.sql).toContain('"a_nullable" uuid DEFAULT NULL');
+    expect(lowered.sql).toContain('"a_null_text" text DEFAULT NULL');
     expect(lowered.sql).not.toContain('::');
+  });
+
+  it('renders a null literal default as SQL NULL on a text column and as the JSON null on a jsonb column', async () => {
+    const ast = new PostgresCreateTable({
+      table: 'defaults',
+      columns: [
+        col('note', 'text', { default: lit(null), codecRef: { codecId: 'pg/text@1' } }),
+        col('doc', 'jsonb', { default: lit(null), codecRef: { codecId: 'pg/jsonb@1' } }),
+      ],
+    });
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(ast, { contract: {} as PostgresContract });
+    expect(lowered.sql).toContain('"note" text DEFAULT NULL');
+    expect(lowered.sql).toContain(`"doc" jsonb DEFAULT 'null'::jsonb`);
   });
 
   it('omits the cast on function defaults — a `DEFAULT (expr)` already returns the column type', async () => {

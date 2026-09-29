@@ -1,6 +1,7 @@
 import type {
   ColumnDefault,
   ContractMarkerRecord,
+  JsonValue,
   LedgerEntryRecord,
 } from '@internal/contract/types';
 import {
@@ -10,7 +11,7 @@ import {
 } from '@internal/errors/execution';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { materializeCodec } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -1840,6 +1841,22 @@ const SERIAL_FAMILY_TYPES = new Set([
   'serial2',
 ]);
 
+const SQL_NULL = Symbol('SQL NULL');
+
+/**
+ * Reads a literal default back through the column's codec. A JSON codec reads `null` as the JSON
+ * value null; every other codec refuses it, because SQL NULL has no stored form of its own, and for
+ * those a `null` default is SQL NULL.
+ */
+function readDefault(codec: Codec, value: JsonValue): unknown {
+  try {
+    return codec.decodeJson(value);
+  } catch (error) {
+    if (value === null) return SQL_NULL;
+    throw error;
+  }
+}
+
 async function pgRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
   nativeType: string,
@@ -1880,7 +1897,8 @@ async function pgRenderDdlColumnDefault(
       // `bigint`, which `encode` does not take. A `Date` is the one authored
       // value JSON has no notation for, so it is the one that arrives as
       // itself.
-      const value = def.value instanceof Date ? def.value : codec.decodeJson(def.value);
+      const value = def.value instanceof Date ? def.value : readDefault(codec, def.value);
+      if (value === SQL_NULL) return 'DEFAULT NULL';
       const wire = await codec.encode(value, {});
       return `DEFAULT ${pgInlineLiteral(wire, nativeType)}`;
     }

@@ -36,6 +36,8 @@ import {
   sqlFloatEncodeJson,
   sqlIntDecode,
   sqlIntEncode,
+  sqlIntegerDecodeJson,
+  sqlStringDecodeJson,
   sqlTextDecode,
   sqlTextEncode,
   sqlVarcharDecode,
@@ -65,7 +67,7 @@ export class SqlTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return sqlStringDecodeJson(this.id, json);
   }
 }
 
@@ -103,7 +105,7 @@ export class SqlIntCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return json as number;
+    return sqlIntegerDecodeJson(this.id, json);
   }
 }
 
@@ -179,7 +181,7 @@ export class SqlCharCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return sqlStringDecodeJson(this.id, json);
   }
 }
 
@@ -220,7 +222,7 @@ export class SqlVarcharCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return sqlStringDecodeJson(this.id, json);
   }
 }
 

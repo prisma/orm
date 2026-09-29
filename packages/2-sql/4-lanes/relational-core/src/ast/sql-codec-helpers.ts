@@ -13,6 +13,32 @@ export const SQL_INT_CODEC_ID = 'sql/int@1' as const;
 export const SQL_FLOAT_CODEC_ID = 'sql/float@1' as const;
 export const SQL_TEXT_CODEC_ID = 'sql/text@1' as const;
 
+/** Reads a JSON value a codec stores as a string, refusing any other kind. */
+export const sqlStringDecodeJson = (codecId: string, json: JsonValue): string => {
+  if (typeof json !== 'string') {
+    throw structuredError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} database JSON value must be a string`,
+      {
+        meta: { codecId, received: typeof json },
+      },
+    );
+  }
+  return json;
+};
+
+/** Reads a JSON integer a JavaScript `number` holds exactly. */
+export const sqlIntegerDecodeJson = (codecId: string, json: JsonValue): number => {
+  if (typeof json !== 'number' || !Number.isSafeInteger(json)) {
+    throw structuredError(
+      'RUNTIME.DECODE_FAILED',
+      `${codecId} database JSON value must be an integer within the safe integer range`,
+      { meta: { codecId, received: typeof json === 'number' ? json : typeof json } },
+    );
+  }
+  return json;
+};
+
 export const sqlCharEncode = (value: string): string => value;
 export const sqlCharDecode = (wire: string): string => wire.trimEnd();
 export const sqlCharRenderOutputType = (typeParams: { readonly length?: number }) => {

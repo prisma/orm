@@ -269,7 +269,16 @@ export class SqliteTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    if (typeof json !== 'string') {
+      throw sqliteError(
+        'RUNTIME.DECODE_FAILED',
+        'sqlite/text@1 database JSON value must be a string',
+        {
+          meta: { codecId: SQLITE_TEXT_CODEC_ID, received: typeof json },
+        },
+      );
+    }
+    return json;
   }
 }
 
