@@ -16,5 +16,5 @@ type TypeScriptContractCodecTypes = ExtractMongoCodecTypes<
 >;
 
 test('a TypeScript contract carries the target`s codec types for every built-in codec', () => {
-  expectTypeOf<Pick<TypeScriptContractCodecTypes, keyof CodecTypes>>().toEqualTypeOf<CodecTypes>();
+  expectTypeOf<Omit<TypeScriptContractCodecTypes, 'probe/text@1'>>().toEqualTypeOf<CodecTypes>();
 });
