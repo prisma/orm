@@ -66,9 +66,9 @@ const elementTypeOf = (storageType: string): string => storageType.replace(/\[\]
  * is stored in a column of the element type and read back (`INSERT ... RETURNING v::text`), so two
  * spellings of one value agree and a value the column refuses fails. Before that, both sides go
  * through the column codec's JSON form, so a value of the wrong JSON type fails. json and jsonb
- * values are compared as jsonb text instead: the parsed value is sent as `JSON.stringify(value)`,
- * and the stored text is used as Postgres prints it, because the json codec reads numbers into
- * JavaScript numbers. A stored array is split into elements by `postgres-array`, not by the parser
+ * values are compared as jsonb instead, because the json codec reads numbers into JavaScript numbers:
+ * the parsed value is sent as `JSON.stringify(value)`, the stored text is used as Postgres prints it,
+ * and jsonb `=` decides, so `1` matches a stored `1.0`. A stored array is split into elements by `postgres-array`, not by the parser
  * under test.
  */
 async function storedValue(
@@ -101,6 +101,7 @@ async function parsedValue(
   parsed: ColumnDefault | undefined,
   storageType: string,
   nativeType: string,
+  stored: JsonValue,
 ): Promise<Compared> {
   if (parsed?.kind !== 'literal') return parsed;
   const { value } = parsed;
@@ -110,10 +111,14 @@ async function parsedValue(
       return await inColumn(oracle, literalAsJson(value, nativeType), storageType);
     }
     if (!storageType.endsWith('[]') || !Array.isArray(value)) {
-      return await asJsonb(oracle, JSON.stringify(value));
+      return await jsonbMatching(oracle, value, stored);
     }
     const elements: JsonValue[] = [];
-    for (const element of value) elements.push(await asJsonb(oracle, JSON.stringify(element)));
+    for (const [index, element] of value.entries()) {
+      elements.push(
+        await jsonbMatching(oracle, element, Array.isArray(stored) ? stored[index] : null),
+      );
+    }
     return elements;
   } catch (error) {
     return { rejected: error instanceof Error ? error.message : String(error) };
@@ -151,6 +156,23 @@ async function inColumn(oracle: Oracle, json: JsonValue, storageType: string): P
 
 function asJsonb(oracle: Oracle, text: string): Promise<string> {
   return singleValue(oracle, 'SELECT $1::jsonb::text AS value', text);
+}
+
+/** The parsed value as jsonb text, or the stored text when the two are equal as jsonb. */
+async function jsonbMatching(
+  oracle: Oracle,
+  value: JsonValue,
+  stored: JsonValue | undefined,
+): Promise<string> {
+  const text = JSON.stringify(value);
+  if (typeof stored === 'string') {
+    const result = await oracle.client.query<{ equal: boolean }>(
+      'SELECT $1::jsonb = $2::jsonb AS equal',
+      [text, stored],
+    );
+    if (result.rows[0]?.equal === true) return stored;
+  }
+  return asJsonb(oracle, text);
 }
 
 async function singleValue(oracle: Oracle, sql: string, parameter: string): Promise<string> {
@@ -220,14 +242,15 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
           { kind: 'function', expression: row.written },
           nativeType,
         );
-        const values =
-          row.expect === 'literal'
-            ? {
-                live: await parsedValue(oracle, live, row.storageType, nativeType),
-                contract: await parsedValue(oracle, contract, row.storageType, nativeType),
-                stored: await storedValue(oracle, storedText, row.storageType, nativeType),
-              }
-            : undefined;
+        let values: ComparedValues | undefined;
+        if (row.expect === 'literal') {
+          const stored = await storedValue(oracle, storedText, row.storageType, nativeType);
+          values = {
+            live: await parsedValue(oracle, live, row.storageType, nativeType, stored),
+            contract: await parsedValue(oracle, contract, row.storageType, nativeType, stored),
+            stored,
+          };
+        }
         observations.set(row.name, {
           columnDefault: column.columnDefault,
           live,
