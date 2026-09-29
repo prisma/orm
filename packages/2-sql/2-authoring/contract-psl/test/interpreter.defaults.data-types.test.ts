@@ -95,6 +95,12 @@ describe('written defaults a column takes', () => {
     ['a whole number on a float column', 'ratio Float @default(1)', 'ratio', 1],
     ['a whole number on a decimal column', 'price Decimal @default(42)', 'price', '42'],
     ['a whole number on a bigint column', 'balance BigInt @default(42)', 'balance', '42'],
+    [
+      'a whole number on a numeric column',
+      'discountPercent Numeric(5, 2) @default(0)',
+      'discountPercent',
+      '0',
+    ],
     ['a decimal keeping its trailing zeros', 'price Decimal @default(1.50)', 'price', '1.50'],
     ['leading zeros dropped', 'price Decimal @default(007.50)', 'price', '7.50'],
     ['the sign of zero dropped', 'price Decimal @default(-0.0)', 'price', '0.0'],

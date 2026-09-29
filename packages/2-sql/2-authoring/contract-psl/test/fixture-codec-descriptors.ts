@@ -187,7 +187,7 @@ const vectorParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
 function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const codec = fixtureCodecs[codecId];
   if (codec === undefined) return undefined;
-  const parameterized = codecId === 'pg/vector@1';
+  const parameterized = codecId === 'pg/vector@1' || codecId === 'pg/numeric@1';
   return {
     codecId,
     dataType: dataTypeByCodecId[codecId] ?? pgText.id,
