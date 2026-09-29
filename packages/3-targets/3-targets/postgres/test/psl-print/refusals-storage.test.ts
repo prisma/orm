@@ -312,7 +312,26 @@ describe('value objects', () => {
   it('refuses a value-object member whose codec names a native type only from type parameters', () => {
     expect(
       withAddress({ nullable: false, type: { kind: 'scalar', codecId: 'pg/enum@1' } }),
-    ).toThrow(refusal({ coordinate: '"public".Address.street', codecId: 'pg/enum@1' }));
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining('type parameters the member does not carry'),
+        meta: { coordinate: '"public".Address.street', codecId: 'pg/enum@1' },
+      }),
+    );
+  });
+
+  it('reports the codec error, not a missing-parameters refusal, for a value-object member whose type parameters its codec rejects', () => {
+    expect(
+      withAddress({
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'pg/text@1', typeParams: { length: 2 } },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.TYPE_PARAMS_INVALID',
+        details: { codecId: 'pg/text@1', typeParams: { length: 2 } },
+      }),
+    );
   });
 
   it('writes a value-object member typed by a codec only the stack knows, as the type constructor that produces it', () => {

@@ -40,14 +40,14 @@ function nativeTypeOfMember(
   if (!isPostgresCodecDescriptor(descriptor)) {
     refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }
-  try {
+  if (type.typeParams !== undefined) {
     return descriptor.nativeTypeFor({
       codecId,
-      ...ifDefined(
-        'typeParams',
-        blindCast<JsonValue | undefined, 'contract type parameters are JSON'>(type.typeParams),
-      ),
+      typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(type.typeParams),
     });
+  }
+  try {
+    return descriptor.nativeTypeFor({ codecId });
   } catch {
     refuseMemberCodecNeedingTypeParameters(codecId, coordinate);
   }
