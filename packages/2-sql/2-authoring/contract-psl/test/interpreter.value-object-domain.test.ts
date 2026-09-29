@@ -201,6 +201,42 @@ model User {
     ]);
   });
 
+  it('reports an attribute no component registers, on a composite type or its member, once', () => {
+    const result = interpretPostgres(`type Address {
+  street String @foo
+
+  @@bar
+}
+
+model User {
+  id   Int     @id
+  home Address
+}`);
+
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE',
+        message:
+          'Composite type "Address" uses attribute "@@bar", which a composite type does not take',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 39, line: 4, column: 3 },
+          end: { offset: 44, line: 4, column: 8 },
+        },
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Member "street" of composite type "Address" uses attribute "@foo", which a composite type member does not take',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 31, line: 2, column: 17 },
+          end: { offset: 35, line: 2, column: 21 },
+        },
+      },
+    ]);
+  });
+
   it('omits valueObjects from the contract when no composite types exist', () => {
     const result = interpretPostgres(`model User {
   id Int @id

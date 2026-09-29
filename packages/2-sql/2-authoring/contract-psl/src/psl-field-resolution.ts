@@ -232,6 +232,8 @@ export function describeUnsupportedSqlAttribute(input: {
     authoringContributions: input.authoringContributions,
   };
   return ({ attribute, level, owner, field }) => {
+    // A composite type takes no attributes at all; `buildValueObjectNodes` refuses each one once.
+    if (owner.kind === 'compositeType') return undefined;
     if (level === 'model') {
       const source = diagnosticSource(input.sources, owner.node.syntax);
       const uncomposedNamespace = checkUncomposedNamespace(
