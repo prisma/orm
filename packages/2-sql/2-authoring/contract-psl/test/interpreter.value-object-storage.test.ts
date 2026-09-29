@@ -144,37 +144,44 @@ model User {
     });
   });
 
-  it('reads a default on a list of value objects as the default of its one column', () => {
+  it('reads a list literal and a JSON literal as the same default of the one column of a list of value objects', () => {
     const result = interpretPostgres(`type Address {
   street String
 }
 
 model User {
-  id    Int       @id
-  homes Address[] @default(json\`[{"street": "x"}]\`)
+  id       Int       @id
+  emptyA   Address[] @default([])
+  emptyB   Address[] @default(json\`[]\`)
+  filledA  Address[] @default([json\`{"street": "x"}\`])
+  filledB  Address[] @default(json\`[{"street": "x"}]\`)
 }`);
 
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
     if (!result.ok) return;
+    const jsonbWithDefault = (value: unknown) => ({
+      nativeType: 'jsonb',
+      codecId: 'pg/jsonb@1',
+      nullable: false,
+      default: { kind: 'literal', value },
+    });
     expect(userFieldsAndColumns(result.value).columns).toEqual({
       id: idColumn,
-      homes: {
-        nativeType: 'jsonb',
-        codecId: 'pg/jsonb@1',
-        nullable: false,
-        default: { kind: 'literal', value: [{ street: 'x' }] },
-      },
+      emptyA: jsonbWithDefault([]),
+      emptyB: jsonbWithDefault([]),
+      filledA: jsonbWithDefault([{ street: 'x' }]),
+      filledB: jsonbWithDefault([{ street: 'x' }]),
     });
   });
 
-  it('refuses a list literal as the default of a list of value objects, whose one column holds no list', () => {
+  it('refuses a list literal as the default of a single value object', () => {
     const result = interpretPostgres(`type Address {
   street String
 }
 
 model User {
-  id    Int       @id
-  homes Address[] @default([])
+  id   Int     @id
+  home Address @default([])
 }`);
 
     expect(
@@ -182,7 +189,7 @@ model User {
     ).toEqual([
       {
         code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
-        message: 'Field "User.homes": pg/jsonb has no cast from a list; it casts from pg/json',
+        message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
       },
     ]);
   });

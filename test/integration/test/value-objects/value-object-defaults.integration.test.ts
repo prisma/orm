@@ -61,4 +61,31 @@ model User {
       },
     });
   });
+  it('reads a list literal and a JSON literal as the same default of the one column of a list of value objects', async () => {
+    const columns = await sqliteUserColumns(`type Address {
+  street String
+}
+
+model User {
+  id      Int       @id
+  emptyA  Address[] @default([])
+  emptyB  Address[] @default(json\`[]\`)
+  filledA Address[] @default([json\`{"street":"x"}\`])
+  filledB Address[] @default(json\`[{"street":"x"}]\`)
+}`);
+
+    const jsonWithDefault = (value: unknown) => ({
+      nativeType: 'text',
+      codecId: 'sqlite/json@1',
+      nullable: false,
+      default: { kind: 'literal', value },
+    });
+    expect(columns).toEqual({
+      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      emptyA: jsonWithDefault([]),
+      emptyB: jsonWithDefault([]),
+      filledA: jsonWithDefault([{ street: 'x' }]),
+      filledB: jsonWithDefault([{ street: 'x' }]),
+    });
+  });
 });

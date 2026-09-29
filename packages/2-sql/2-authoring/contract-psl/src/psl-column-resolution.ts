@@ -650,10 +650,15 @@ export function lowerDefaultForField(input: {
     fieldName: input.fieldName,
     columnCodecId: input.columnDescriptor.codecId,
   };
+  // A list field stored in one column (a list of value objects) holds the list as that column's
+  // value: a list literal fills it element by element, as it fills a list column, and any other
+  // literal is read as the whole value.
+  const readsListElements = (written: WrittenValue) =>
+    input.storedAsListColumn || (input.field.list && written.kind === 'list');
   const readAsLiteral = (written: WrittenValue) => {
     const lowered = lowerDataTypeDefault({
       written,
-      isList: input.storedAsListColumn,
+      isList: readsListElements(written),
       column: input.columnDescriptor,
       codecLookup: input.codecLookup,
       support: input.dataTypeSupport,
