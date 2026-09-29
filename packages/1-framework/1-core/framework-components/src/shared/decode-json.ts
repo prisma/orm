@@ -104,7 +104,7 @@ export function encodeJsonFloat(value: number): JsonValue {
 }
 
 export function decodeJsonFloat(codecId: string, json: JsonValue): number {
-  if (typeof json === 'number') return json;
+  if (typeof json === 'number' && Number.isFinite(json)) return json;
   if (typeof json === 'string' && NON_FINITE_TEXT.has(json)) return Number(json);
-  return refuseJsonValue(codecId, 'a number or the text NaN, Infinity or -Infinity', json);
+  return refuseJsonValue(codecId, 'a finite number or the text NaN, Infinity or -Infinity', json);
 }

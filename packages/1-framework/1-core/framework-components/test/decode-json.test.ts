@@ -150,11 +150,13 @@ describe('the float pair', () => {
     ['1.5', '"1.5"'],
     ['nan', '"nan"'],
     ['inf', '"inf"'],
+    [Number.POSITIVE_INFINITY, 'Infinity'],
+    [Number.NaN, 'NaN'],
     [true, 'true'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
     expect(() => decodeJsonFloat('demo/float@1', json)).toThrow(
-      refusal('demo/float@1', 'a number or the text NaN, Infinity or -Infinity', received),
+      refusal('demo/float@1', 'a finite number or the text NaN, Infinity or -Infinity', received),
     );
   });
 });

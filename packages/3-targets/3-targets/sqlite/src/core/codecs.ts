@@ -30,6 +30,7 @@ import {
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
 import {
+  BinaryExpr,
   CaseExpr,
   CastExpr,
   FunctionCallExpr,
@@ -104,6 +105,24 @@ const hexJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
     FunctionCallExpr.of('hex', [expression]),
   );
 
+/**
+ * Projects a REAL as SQLite writes it in JSON, except an infinity, which SQLite writes as `9.0e+999` and which becomes the text `Infinity` or `-Infinity` that `encodeJson` writes. No finite double is larger in magnitude than `Number.MAX_VALUE`. SQLite cannot store NaN.
+ */
+const floatJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CaseExpr.of(
+    [
+      {
+        condition: BinaryExpr.gt(expression, LiteralExpr.of(Number.MAX_VALUE)),
+        value: LiteralExpr.of('Infinity'),
+      },
+      {
+        condition: BinaryExpr.lt(expression, LiteralExpr.of(-Number.MAX_VALUE)),
+        value: LiteralExpr.of('-Infinity'),
+      },
+    ],
+    expression,
+  );
+
 const JSON_RETAG_FN = 'json' as const;
 
 /**
@@ -142,10 +161,7 @@ const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
 const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
-/**
- * SQLite stores an infinity, and writes it in JSON as `9.0e+999`, but it cannot store NaN, which it
- * turns into NULL; so a REAL value may be infinite and never NaN.
- */
+/** SQLite stores an infinity but not NaN, which it turns into NULL. */
 const refuseNaN = (value: number) => {
   if (Number.isNaN(value)) {
     throw sqliteError(
@@ -263,7 +279,7 @@ export const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {
 
 export const sqliteSqlFloatDescriptor = sqliteCodec(sqlFloatDescriptor, {
   dataType: sqliteReal.id,
-  jsonProjection: identityJsonProjection,
+  jsonProjection: floatJsonProjection,
 });
 
 export class SqliteTextCodec extends CodecImpl<
@@ -370,7 +386,7 @@ export class SqliteRealCodec extends CodecImpl<
     if (Number.isNaN(value)) {
       return refuseJsonValue(
         SQLITE_REAL_CODEC_ID,
-        'a number or the text Infinity or -Infinity; SQLite cannot store NaN',
+        'a finite number or the text Infinity or -Infinity; SQLite cannot store NaN',
         json,
       );
     }
@@ -380,7 +396,7 @@ export class SqliteRealCodec extends CodecImpl<
 
 export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return floatJsonProjection(expression);
   }
   override readonly dataType = sqliteReal.id;
   override readonly codecId = SQLITE_REAL_CODEC_ID;

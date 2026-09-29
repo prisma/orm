@@ -1,10 +1,6 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import {
-  sqliteRealDescriptor,
-  sqliteSqlFloatDescriptor,
-  sqliteTextDescriptor,
-} from '../src/core/codecs';
+import { sqliteRealDescriptor, sqliteTextDescriptor } from '../src/core/codecs';
 
 const ctx: CodecInstanceContext = { name: 'decode-json-forms' };
 
@@ -34,17 +30,11 @@ describe('sqlite/text@1 decodeJson', () => {
 describe('sqlite/real@1 decodeJson and encodeJson', () => {
   const codec = sqliteRealDescriptor.factory()(ctx);
 
-  // SQLite stores an infinity and writes it in JSON as 9.0e+999, which JSON.parse reads as Infinity; it cannot store NaN, which becomes NULL.
-  it('reads finite numbers, the infinities SQLite writes, and the text encodeJson writes for them', () => {
-    expect(
-      [1.5, 0, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 'Infinity', '-Infinity'].map(
-        (json) => codec.decodeJson(json),
-      ),
-    ).toEqual([
+  // SQLite writes an infinity in JSON as 9.0e+999, so the float projections write the text encodeJson writes instead; SQLite cannot store NaN, which becomes NULL.
+  it('reads finite numbers and the text the projection and encodeJson write for the infinities', () => {
+    expect([1.5, 0, 'Infinity', '-Infinity'].map((json) => codec.decodeJson(json))).toEqual([
       1.5,
       0,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
       Number.POSITIVE_INFINITY,
       Number.NEGATIVE_INFINITY,
     ]);
@@ -62,23 +52,12 @@ describe('sqlite/real@1 decodeJson and encodeJson', () => {
     );
   });
 
-  it.each([['NaN'], ['1.5'], [true], [null]])('refuses %j', (json) => {
+  it.each([['NaN'], [Number.POSITIVE_INFINITY], ['1.5'], [true], [null]])('refuses %j', (json) => {
     expect(() => codec.decodeJson(json)).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.DECODE_FAILED',
         meta: expect.objectContaining({ codecId: 'sqlite/real@1' }),
       }),
     );
-  });
-});
-
-describe('sql/float@1 on SQLite decodeJson', () => {
-  it('reads the infinities SQLite writes in JSON', () => {
-    const codec = sqliteSqlFloatDescriptor.factory()(ctx);
-    expect(
-      [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1.5].map((json) =>
-        codec.decodeJson(json),
-      ),
-    ).toEqual([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1.5]);
   });
 });

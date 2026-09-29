@@ -25,9 +25,10 @@ describe('sql/float@1 decodeJson', () => {
     ['negative decimal text', '-1.50'],
     ['a boolean', true],
     ['null', null],
+    ['an infinite number', Number.POSITIVE_INFINITY],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sql/float@1 JSON value must be a number or the text NaN, Infinity or -Infinity',
+      'sql/float@1 JSON value must be a finite number or the text NaN, Infinity or -Infinity',
     );
   });
 });

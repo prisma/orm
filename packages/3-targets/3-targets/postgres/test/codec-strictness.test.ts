@@ -119,7 +119,7 @@ describe.each([
     ['decimal text', '1.5'],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      `${codecId} JSON value must be a number or the text NaN, Infinity or -Infinity`,
+      `${codecId} JSON value must be a finite number or the text NaN, Infinity or -Infinity`,
     );
   });
 });
@@ -129,7 +129,7 @@ describe('pg/float@1 decodeJson', () => {
 
   it.each([['42'], ['1.5']])('refuses the text %s', (json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'pg/float@1 JSON value must be a number or the text NaN, Infinity or -Infinity',
+      'pg/float@1 JSON value must be a finite number or the text NaN, Infinity or -Infinity',
     );
   });
 

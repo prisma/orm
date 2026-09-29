@@ -20,11 +20,11 @@ const cases: readonly {
   { codec: sqlTextDescriptor.factory()(ctx), accepts: ['hello', ''], rejects: [1, true, null, []] },
   { codec: sqlCharDescriptor.factory({})(ctx), accepts: ['a  ', 'a'], rejects: [1, null] },
   { codec: sqlVarcharDescriptor.factory({})(ctx), accepts: ['hi'], rejects: [1, null] },
-  // PostgreSQL writes a float8 NaN or infinity as the JSON strings "NaN", "Infinity", "-Infinity"; SQLite writes an infinity as 9.0e+999, which JSON.parse reads as Infinity.
+  // A float writes NaN and the infinities as the text PostgreSQL writes for them in JSON; SQLite's float projections write the same text.
   {
     codec: sqlFloatDescriptor.factory()(ctx),
-    accepts: [1.5, 0, -2, 'NaN', 'Infinity', '-Infinity', Number.POSITIVE_INFINITY],
-    rejects: ['1.5', 'nan', 'inf', true, null, {}],
+    accepts: [1.5, 0, -2, 'NaN', 'Infinity', '-Infinity'],
+    rejects: ['1.5', 'nan', 'inf', Number.POSITIVE_INFINITY, true, null, {}],
   },
   {
     codec: sqlIntDescriptor.factory()(ctx),
