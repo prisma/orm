@@ -125,6 +125,8 @@ function createServerOn(connection: Connection): LanguageServer {
     { readonly disposable: Disposable; readonly schemaInputConfig: SchemaInputConfig }
   >();
   const schemaWatchGenerations = new Map<string, number>();
+  const membershipGenerations = new Map<string, number>();
+  let membershipGeneration = 0;
   let rootPath = process.cwd();
   let watchedConfigGlob = join(rootPath, '**', CONFIG_FILENAME);
   let clientCapabilities = noClientCapabilities;
@@ -308,6 +310,7 @@ function createServerOn(connection: Connection): LanguageServer {
   // config reload await the fresh resolution instead of the pre-reload
   // project.
   function startProjectLoad(configPath: string): Promise<ProjectState> {
+    membershipGenerations.set(configPath, ++membershipGeneration);
     clearSchemaWatcher(configPath);
     const existing = managedProjects.get(configPath);
     const previousLoad = existing?.status === 'loading' ? existing.load : undefined;
@@ -628,6 +631,7 @@ function createServerOn(connection: Connection): LanguageServer {
   });
 
   async function handleSchemaMemberChange(uri: string): Promise<boolean> {
+    const generation = ++membershipGeneration;
     documents.invalidate(uri);
     const filePath = filePathFromUri(uri);
     if (filePath === undefined) {
@@ -643,17 +647,33 @@ function createServerOn(connection: Connection): LanguageServer {
       return false;
     }
     const entry = managedProjects.get(configPath);
-    if (entry === undefined || entry.status === 'failed') {
+    if (
+      entry === undefined ||
+      entry.status === 'failed' ||
+      (membershipGenerations.get(configPath) ?? 0) > generation
+    ) {
       return false;
     }
+    membershipGenerations.set(configPath, generation);
+    currentProjectState(configPath)?.artifacts.documentChanged(uri);
     const project =
       entry.status === 'loaded' ? entry.project : await entry.load.catch(() => undefined);
-    if (project === undefined) {
+    const isCurrent = (): boolean => {
+      const current = managedProjects.get(configPath);
+      return (
+        current?.status === 'loaded' &&
+        current.project === project &&
+        membershipGenerations.get(configPath) === generation
+      );
+    };
+    if (project === undefined || !isCurrent()) {
       return false;
     }
     const readText = (candidate: string): string | undefined => documents.text(candidate);
     const nextInputs = await resolveSchemaInputs(project.schemaInputConfig, readText);
-    project.artifacts.documentChanged(uri);
+    if (!isCurrent()) {
+      return false;
+    }
     project.artifacts.updateInputs(nextInputs);
     const updated: ProjectState = { ...project, inputs: nextInputs };
     managedProjects.set(configPath, { status: 'loaded', project: updated });
@@ -676,7 +696,7 @@ function createServerOn(connection: Connection): LanguageServer {
     }
 
     const changedConfigPaths = configPathsFromWatchedChanges(configChanges.map(filePathFromUri));
-    for (const configPath of changedConfigPaths) {
+    const configRefreshes = Array.from(changedConfigPaths, async (configPath) => {
       if (managedProjects.has(configPath)) {
         try {
           const project = await refreshProject(configPath);
@@ -685,14 +705,13 @@ function createServerOn(connection: Connection): LanguageServer {
           // Failure consequences live in the load chain; nothing to do here.
         }
       }
-    }
-
-    let handledMemberChange = false;
-    for (const uri of memberChanges) {
-      if (await handleSchemaMemberChange(uri)) {
-        handledMemberChange = true;
-      }
-    }
+      return undefined;
+    });
+    const [, memberResults] = await Promise.all([
+      Promise.all(configRefreshes),
+      Promise.all(memberChanges.map(handleSchemaMemberChange)),
+    ]);
+    const handledMemberChange = memberResults.some(Boolean);
 
     if (
       clientCapabilities.pullDiagnostics &&

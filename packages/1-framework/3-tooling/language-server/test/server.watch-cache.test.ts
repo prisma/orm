@@ -308,8 +308,7 @@ describe('schema watcher disk caching', { timeout: timeouts.databaseOperation },
     h.coverage.mockClear();
     await h.accept(1, file.config);
     release.resolve();
-    const read = vi.spyOn(DocumentStore.prototype, 'text');
-    await vi.waitFor(() => expect(read).toHaveBeenCalledWith(file.uri));
+    await h.read(file.uri);
     await h.changed(file.path);
     await h.read(file.uri);
     vi.mocked(statSync).mockClear();
