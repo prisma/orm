@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import type { ContractDefinition } from '../src/contract-definition';
-import { modelsOf } from './contract-test-helpers';
 import { unboundTables } from './unbound-tables';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
@@ -75,11 +74,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
   it('maps a value-object field to its column in the storage bridge', () => {
     const contract = buildSqlContractFromDefinition(userWithAddresses(jsonb));
 
-    const models = modelsOf(contract) as unknown as Record<
-      string,
-      { readonly storage: { readonly fields: Record<string, unknown> } } | undefined
-    >;
-    expect(models['User']?.storage.fields).toEqual({
+    expect(contract.domain.namespaces['public']?.models['User']?.storage['fields']).toEqual({
       id: { column: 'id' },
       home: { column: 'home_address' },
       addresses: { column: 'addresses' },

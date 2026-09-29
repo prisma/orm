@@ -2716,7 +2716,7 @@ export function interpretPslDocumentToSqlContract(
   }
 
   const polyDiagnostics = createPslDiagnosticCollector(input.sources);
-  const patchedModels = resolvePolymorphism(
+  const polymorphicModels = resolvePolymorphism(
     modelsByCoordinate,
     discriminatorDeclarations,
     baseDeclarations,
@@ -2751,7 +2751,7 @@ export function interpretPslDocumentToSqlContract(
             models: Object.fromEntries(
               Object.entries(namespaceSlice.models).map(([modelName, model]) => [
                 modelName,
-                patchedModels[modelCoordinateKey(namespaceId, modelName)] ?? model,
+                polymorphicModels[modelCoordinateKey(namespaceId, modelName)] ?? model,
               ]),
             ),
             ...ifDefined('enum', namespaceSlice.enum),

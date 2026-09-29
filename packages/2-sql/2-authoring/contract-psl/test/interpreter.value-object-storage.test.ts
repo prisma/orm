@@ -101,11 +101,13 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
 
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      const { fields, columns } = userFieldsAndColumns(result.value);
-      expect({ fields, columns }).toEqual({
-        fields: { id: fields?.['id'], ...addressFields },
+      expect(userFieldsAndColumns(result.value)).toEqual({
+        fields: {
+          id: { nullable: false, type: { kind: 'scalar', codecId: 'sqlite/integer@1' } },
+          ...addressFields,
+        },
         columns: {
-          id: columns?.['id'],
+          id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
           home: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
           addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
         },

@@ -305,9 +305,9 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a column has both an id generator and a database default (meta: `coordinate`, `onCreate`);
   - a generated value names a column no field is stored in (meta: `coordinate`).
 - Fields and columns:
-  - a field and its column disagree where PSL writes them once: the field is optional and the column is not nullable or the reverse, a column of a single-table variant is not nullable, one of them is a list and the other is not, a scalar field's codec or type parameters differ from its column's, or they do not name the enum and value set the PSL source derives for a field typed by an enum (meta: `coordinate`);
+  - a field and its column disagree where PSL writes them once: the field is optional and the column is not nullable or the reverse, a column of a single-table variant is not nullable, one of them is a list and the other is not, a scalar field's codec or type parameters differ from its column's (a column typed by a named type has that type's parameters), or they do not name the enum and value set the PSL source derives for a field typed by an enum (meta: `coordinate`);
   - a model field's or value-object member's type is a union of types (meta: `coordinate`, `kind`), or a field or member is a dictionary (meta: `coordinate`);
-  - a value-object member carries a value set other than the enum of the default namespace the PSL source derives for a member typed by an enum, its codec differs from that enum's, or it has type parameters (meta: `coordinate`);
+  - a value-object member typed by an enum names a value set other than the enum of the default namespace the PSL source derives, has a codec other than that enum's, or has type parameters (meta: `coordinate`);
   - a value-object member uses a codec that no Postgres codec in the configured stack names a native type for (meta: `coordinate`, `codecId`);
   - a value-object member uses a codec that names a native type only from type parameters the member does not carry (meta: `coordinate`, `codecId`);
   - a field is stored in no column (meta: `namespaceId`, `modelName`, `field`);
