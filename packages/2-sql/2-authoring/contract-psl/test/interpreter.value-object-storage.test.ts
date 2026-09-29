@@ -184,12 +184,15 @@ model User {
   home Address @default([])
 }`);
 
-    expect(
-      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
-    ).toEqual([
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       {
         code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
         message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 81, line: 7, column: 16 },
+          end: { offset: 93, line: 7, column: 28 },
+        },
       },
     ]);
   });
