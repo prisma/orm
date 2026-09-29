@@ -140,9 +140,14 @@ describe('codecs that check the type of the value they write', () => {
       'abcdefabcdef',
     ],
     [
-      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received ObjectId not created by bson 7',
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
       mongoObjectIdCodec,
       { _bsontype: 'ObjectId' },
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
+      mongoObjectIdCodec,
+      { _bsontype: 'ObjectId', toHexString: () => 'not hex' },
     ],
     [
       'mongo/vector@1 value must be an array of numbers; received an array',
@@ -162,6 +167,18 @@ describe('codecs that check the type of the value they write', () => {
       new DriverObjectId(hex) as unknown as string,
       {},
     );
+    expect(encoded).toBeInstanceOf(ObjectId);
+    expect(encoded.toHexString()).toBe(hex);
+  });
+
+  it('ObjectId takes an ObjectId from another major version of bson, by its hex string', async () => {
+    const hex = '65f0000000000000000000a2';
+    const otherMajorObjectId = {
+      _bsontype: 'ObjectId',
+      [Symbol.for('@@mdb.bson.version')]: 6,
+      toHexString: () => hex,
+    };
+    const encoded = await mongoObjectIdCodec.encode(otherMajorObjectId as unknown as string, {});
     expect(encoded).toBeInstanceOf(ObjectId);
     expect(encoded.toHexString()).toBe(hex);
   });

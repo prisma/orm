@@ -1,6 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
-import { BSON_MAJOR, createdByBsonMajor } from './bson-walk';
 import { mongoTargetError } from './mongo-target-errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -30,10 +29,6 @@ function isDecimal128(value: unknown): value is Decimal128 {
 
 function isBinary(value: unknown): value is Binary {
   return hasBsonTypeTag(value, 'Binary');
-}
-
-function isObjectId(value: unknown): value is ObjectId {
-  return hasBsonTypeTag(value, 'ObjectId');
 }
 
 function decodeFailed(codecId: string, message: string, received: unknown): never {
@@ -92,22 +87,32 @@ export function dateEncode(codecId: string, value: Date): Date {
 
 const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
 
+function hexStringOf(value: object): string | undefined {
+  const toHexString: unknown = Reflect.get(value, 'toHexString');
+  if (typeof toHexString !== 'function') return undefined;
+  const hex: unknown = Reflect.apply(toHexString, value, []);
+  return typeof hex === 'string' && OBJECT_ID_HEX.test(hex) ? hex : undefined;
+}
+
 /**
- * `new ObjectId(...)` makes a fresh id from `null` or `undefined` and reads a number as a timestamp, so only a 24-digit hex string or an `ObjectId` is accepted.
+ * `new ObjectId(...)` makes a fresh id from `null` or `undefined` and reads a number as a timestamp, so only a 24-digit hex string or an `ObjectId` is accepted. An `ObjectId` is rebuilt from its hex string, so one from any major version of `bson` works.
  */
 export function objectIdEncode(codecId: string, value: string): ObjectId {
   const expected = 'a 24-digit hex string or an ObjectId';
   if (typeof value === 'string' && OBJECT_ID_HEX.test(value)) return new ObjectId(value);
-  if (!isObjectId(value)) return refuseType(codecId, expected, value);
-  if (!createdByBsonMajor(value)) {
+  if (typeof value !== 'object' || value === null || !hasBsonTypeTag(value, 'ObjectId')) {
+    return refuseType(codecId, expected, value);
+  }
+  const hex = hexStringOf(value);
+  if (hex === undefined) {
     return refuseType(
       codecId,
       expected,
       value,
-      `ObjectId not created by bson ${String(BSON_MAJOR)}`,
+      'an object tagged ObjectId whose toHexString() does not return 24 hex digits',
     );
   }
-  return new ObjectId(value.toHexString());
+  return new ObjectId(hex);
 }
 
 export function vectorEncode(codecId: string, value: readonly number[]): readonly number[] {
