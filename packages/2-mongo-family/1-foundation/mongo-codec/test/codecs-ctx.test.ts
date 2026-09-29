@@ -1,6 +1,7 @@
 import type { CodecCallContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { mongoCodec } from '../src/codecs';
+import { decodeJsonString } from '../src/decode-json';
 
 describe('mongoCodec() factory — CodecCallContext arity', () => {
   it('lifts a single-arg `(value)` author unchanged (back-compat)', async () => {
@@ -8,6 +9,7 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
       typeId: 'demo/single-arg-encode@1',
       encode: (value: string) => value.toUpperCase(),
       decode: (wire: string) => wire,
+      decodeJson: (json) => decodeJsonString('demo/single-arg-encode@1', json),
     });
     expect(await c.encode('hi', {})).toBe('HI');
   });
@@ -21,6 +23,7 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         return value;
       },
       decode: (wire: string) => wire,
+      decodeJson: (json) => decodeJsonString('demo/ctx-encode@1', json),
     });
     const controller = new AbortController();
     const ctx: CodecCallContext = { signal: controller.signal };
@@ -38,6 +41,7 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         observed = ctx;
         return wire;
       },
+      decodeJson: (json) => decodeJsonString('demo/ctx-decode@1', json),
     });
     const controller = new AbortController();
     const ctx: CodecCallContext = { signal: controller.signal };
@@ -55,6 +59,7 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         return value;
       },
       decode: (wire: string) => wire,
+      decodeJson: (json) => decodeJsonString('demo/identity@1', json),
     });
     const controller = new AbortController();
     await c.encode('x', { signal: controller.signal });
@@ -70,6 +75,7 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
         return value;
       },
       decode: (wire: string) => wire,
+      decodeJson: (json) => decodeJsonString('demo/empty-ctx@1', json),
     });
     const ctx: CodecCallContext = {};
     await c.encode('x', ctx);
@@ -81,6 +87,7 @@ describe('mongoCodec() factory — CodecCallContext arity', () => {
       typeId: 'demo/async-ctx@1',
       encode: async (value: string, _ctx?: CodecCallContext) => `enc:${value}`,
       decode: (wire: string) => wire,
+      decodeJson: (json) => decodeJsonString('demo/async-ctx@1', json),
     });
     expect(await c.encode('x', { signal: new AbortController().signal })).toBe('enc:x');
   });

@@ -1,4 +1,4 @@
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import type { AnyMongoCommand } from '@internal/mongo-query-ast/execution';
 import {
@@ -381,6 +381,7 @@ describe('MongoAdapter with codec registry', () => {
     typeId: 'test/uppercase@1',
     decode: (wire: string) => wire.toLowerCase(),
     encode: (value: string) => value.toUpperCase(),
+    decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
   });
 
   function registryWithUppercase() {

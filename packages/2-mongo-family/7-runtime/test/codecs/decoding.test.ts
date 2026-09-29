@@ -1,5 +1,10 @@
 import { isRuntimeError } from '@internal/framework-components/runtime';
-import { type MongoCodecRegistry, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import {
+  decodeJsonString,
+  type MongoCodecRegistry,
+  mongoCodec,
+  newMongoCodecRegistry,
+} from '@internal/mongo-codec';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
 import { structuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'mongodb';
@@ -27,6 +32,7 @@ function registryWithDefaults(): MongoCodecRegistry {
       typeId: 'mongo/string@1',
       encode: (v: string) => v,
       decode: (w: string) => w,
+      decodeJson: (json) => decodeJsonString('mongo/string@1', json),
     }),
   );
   registry.register(
@@ -34,6 +40,7 @@ function registryWithDefaults(): MongoCodecRegistry {
       typeId: 'mongo/objectId@1',
       encode: (v: string) => new ObjectId(v),
       decode: (w: { toHexString: () => string }) => w.toHexString(),
+      decodeJson: (json) => decodeJsonString('mongo/objectId@1', json),
     }),
   );
   return registry;
@@ -65,6 +72,7 @@ describe('decodeMongoRow', () => {
         typeId: 'test/spy@1',
         encode: (v: string) => v,
         decode: decodeSpy,
+        decodeJson: (json) => decodeJsonString('test/spy@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -127,6 +135,7 @@ describe('decodeMongoRow', () => {
           if (w === 'bad') throw new Error('boom');
           return w;
         },
+        decodeJson: (json) => decodeJsonString('throws-on-b@1', json),
       }),
     );
     const shapeThrow: MongoResultShape = {
@@ -251,6 +260,7 @@ describe('decodeMongoRow', () => {
           // Codec authors throwing a non-Error happens — the wrapper has to render something for the message. The cast is a deliberate exercise of `wrapDecodeFailure`'s `error instanceof Error` false-branch (pure type-system: `throw` accepts `unknown`).
           throw 'string-error' as unknown as Error;
         },
+        decodeJson: (json) => decodeJsonString('throws-string@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -278,6 +288,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('boom');
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -306,6 +317,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('boom');
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -408,6 +420,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('inner');
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -449,6 +462,7 @@ describe('decodeMongoRow', () => {
             { meta: { codecId: 'mongo/decimal128@1', received: typeof wire } },
           );
         },
+        decodeJson: (json) => decodeJsonString('mongo/decimal128@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -490,6 +504,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw envelope;
         },
+        decodeJson: (json) => decodeJsonString('structured-ext@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -519,6 +534,7 @@ describe('decodeMongoRow', () => {
           callOrder.push('a-start');
           return dA.promise.then((s) => `${w}:${s}`);
         },
+        decodeJson: (json) => decodeJsonString('slow-a@1', json),
       }),
     );
     registry.register(
@@ -529,6 +545,7 @@ describe('decodeMongoRow', () => {
           callOrder.push('b-start');
           return dB.promise.then((s) => `${w}:${s}`);
         },
+        decodeJson: (json) => decodeJsonString('slow-b@1', json),
       }),
     );
     const shape: MongoResultShape = {

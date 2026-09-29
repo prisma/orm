@@ -1,5 +1,5 @@
 import type { CodecCallContext } from '@internal/framework-components/codec';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   AggregateCommand,
   DeleteOneCommand,
@@ -31,6 +31,7 @@ function recordingRegistry(observed: (CodecCallContext | undefined)[]) {
         observed.push(ctx);
         return v;
       },
+      decodeJson: (json) => decodeJsonString('test/recorder@1', json),
     }),
   );
   return registry;
@@ -201,6 +202,7 @@ describe('MongoAdapter — CodecCallContext threading', () => {
               callCount += 1;
               return v;
             },
+            decodeJson: (json) => decodeJsonString('test/counter@1', json),
           }),
         );
         return reg;

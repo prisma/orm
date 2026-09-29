@@ -1,5 +1,5 @@
 import type { PlanMeta } from '@internal/contract/types';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';
@@ -42,6 +42,7 @@ function runtimeOver(driver: MongoDriver) {
             typeId: 'test/upper@1',
             decode: (wire: string) => wire.toUpperCase(),
             encode: (value: string) => value,
+            decodeJson: (json) => decodeJsonString('test/upper@1', json),
           }),
         );
         return registry;

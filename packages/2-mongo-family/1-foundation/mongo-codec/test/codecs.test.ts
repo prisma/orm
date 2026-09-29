@@ -3,6 +3,7 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { newMongoCodecRegistry } from '../src/codec-registry';
 import { type MongoCodec, mongoCodec } from '../src/codecs';
+import { decodeJsonString } from '../src/decode-json';
 
 describe('mongoCodec()', () => {
   it('creates a codec with the given config', async () => {
@@ -10,6 +11,7 @@ describe('mongoCodec()', () => {
       typeId: 'test/string@1',
       decode: (wire: string) => wire,
       encode: (value: string) => value,
+      decodeJson: (json) => decodeJsonString('test/string@1', json),
     });
 
     expect(codec.id).toBe('test/string@1');
@@ -22,6 +24,7 @@ describe('mongoCodec()', () => {
       typeId: 'test/upper@1',
       decode: (wire: string) => wire.toUpperCase(),
       encode: (value: string) => value.toLowerCase(),
+      decodeJson: (json) => decodeJsonString('test/upper@1', json),
     });
 
     expect(await codec.decode('hello', {})).toBe('HELLO');
@@ -33,6 +36,7 @@ describe('mongoCodec()', () => {
       typeId: 'test/sync@1',
       decode: (wire: string) => wire,
       encode: (value: string) => value,
+      decodeJson: (json) => decodeJsonString('test/sync@1', json),
     });
 
     const decoded = codec.decode('x', {});
@@ -46,6 +50,7 @@ describe('mongoCodec()', () => {
       typeId: 'test/async@1',
       decode: async (wire: string) => `decoded:${wire}`,
       encode: async (value: string) => `encoded:${value}`,
+      decodeJson: (json) => decodeJsonString('test/async@1', json),
     });
 
     expect(await codec.decode('a', {})).toBe('decoded:a');

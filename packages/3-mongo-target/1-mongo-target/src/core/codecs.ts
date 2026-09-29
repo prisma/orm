@@ -2,6 +2,8 @@ import type { JsonValue } from '@internal/contract/types';
 import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
 import { renderTsLiteral } from '@internal/framework-components/codec';
 import {
+  decodeJsonBoolean,
+  decodeJsonString,
   type MongoCodec,
   type MongoCodecRegistry,
   mongoCodec,
@@ -22,7 +24,6 @@ import {
   binaryDecodeJson,
   binaryEncode,
   binaryEncodeJson,
-  booleanDecodeJson,
   dateDecodeJson,
   dateEncodeJson,
   decimal128Decode,
@@ -40,7 +41,6 @@ import {
   int64EncodeJson,
   objectIdDecodeJson,
   objectIdEncodeJson,
-  stringDecodeJson,
   vectorDecodeJson,
 } from './bson-scalar-helpers';
 import {
@@ -86,7 +86,7 @@ export const mongoStringCodec = mongoCodec({
   typeId: MONGO_STRING_CODEC_ID,
   decode: (wire: string) => wire,
   encode: (value: string) => value,
-  decodeJson: (json) => stringDecodeJson(MONGO_STRING_CODEC_ID, json),
+  decodeJson: (json) => decodeJsonString(MONGO_STRING_CODEC_ID, json),
 });
 
 export const mongoDoubleCodec = mongoCodec({
@@ -109,7 +109,7 @@ export const mongoBooleanCodec = mongoCodec({
   typeId: MONGO_BOOLEAN_CODEC_ID,
   decode: (wire: boolean) => wire,
   encode: (value: boolean) => value,
-  decodeJson: (json) => booleanDecodeJson(MONGO_BOOLEAN_CODEC_ID, json),
+  decodeJson: (json) => decodeJsonBoolean(MONGO_BOOLEAN_CODEC_ID, json),
 });
 
 export const mongoDateCodec = mongoCodec({

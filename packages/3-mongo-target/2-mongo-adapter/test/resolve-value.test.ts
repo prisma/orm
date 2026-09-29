@@ -1,4 +1,4 @@
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
@@ -15,6 +15,7 @@ const uppercaseCodec = mongoCodec({
   typeId: 'test/uppercase@1',
   decode: (wire: string) => wire.toLowerCase(),
   encode: (value: string) => value.toUpperCase(),
+  decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
 });
 
 function testRegistry() {
@@ -109,6 +110,7 @@ describe('resolveValue', () => {
           callOrder.push('encode-a-start');
           return dA.promise.then((suffix) => `${value}:${suffix}`);
         },
+        decodeJson: (json) => decodeJsonString('test/async-a@1', json),
       });
       const asyncBCodec = mongoCodec({
         typeId: 'test/async-b@1',
@@ -117,6 +119,7 @@ describe('resolveValue', () => {
           callOrder.push('encode-b-start');
           return dB.promise.then((suffix) => `${value}:${suffix}`);
         },
+        decodeJson: (json) => decodeJsonString('test/async-b@1', json),
       });
 
       const registry = newMongoCodecRegistry();
@@ -155,6 +158,7 @@ describe('resolveValue', () => {
           if (value === 'one') return d1.promise;
           return d2.promise;
         },
+        decodeJson: (json) => decodeJsonString('test/seq@1', json),
       });
 
       const registry = newMongoCodecRegistry();
@@ -193,6 +197,7 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('kms-key-resolution-failed');
         },
+        decodeJson: (json) => decodeJsonString('test/failing@1', json),
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -217,6 +222,7 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('boom');
         },
+        decodeJson: (json) => decodeJsonString('test/failing@1', json),
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -240,6 +246,7 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('boom');
         },
+        decodeJson: (json) => decodeJsonString('test/failing@1', json),
       });
       const registry = newMongoCodecRegistry();
       registry.register(failingCodec);
@@ -304,6 +311,7 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw envelope;
         },
+        decodeJson: (json) => decodeJsonString('test/structured@1', json),
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);
@@ -321,6 +329,7 @@ describe('resolveValue', () => {
         encode: async (_v: string) => {
           throw new Error('plain failure');
         },
+        decodeJson: (json) => decodeJsonString('test/plain-failure@1', json),
       });
       const registry = newMongoCodecRegistry();
       registry.register(innerCodec);

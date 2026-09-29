@@ -58,16 +58,6 @@ export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
   return json;
 }
 
-export function stringDecodeJson(codecId: string, json: JsonValue): string {
-  if (typeof json !== 'string') return decodeFailed(codecId, 'JSON value must be a string', json);
-  return json;
-}
-
-export function booleanDecodeJson(codecId: string, json: JsonValue): boolean {
-  if (typeof json !== 'boolean') return decodeFailed(codecId, 'JSON value must be a boolean', json);
-  return json;
-}
-
 const INT32_MIN = -(2 ** 31);
 const INT32_MAX = 2 ** 31 - 1;
 const INT32_RULE = `must be an integer from ${INT32_MIN} to ${INT32_MAX}`;

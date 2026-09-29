@@ -125,6 +125,8 @@ Both SQL and Mongo families define structurally identical codec interfaces (`Cod
 
 For JSON-safe types (strings, numbers, booleans, null), the methods are identity functions. The `defineCodec()` factory provides these defaults when not explicitly supplied, so codecs for JSON-safe types need no additional boilerplate.
 
+> **Later change.** An identity `decodeJson` returns any JSON value as the codec's type, so a string codec handed a number returns the number. `decodeJson` now refuses a JSON value of another kind with `RUNTIME.DECODE_FAILED`. SQL codecs extend `CodecImpl`, where it is abstract; `defineCodec()` is retired. `mongoCodec()` defaults `decodeJson` to identity only when the application type is exactly `JsonValue`, and does not compile without one for a narrower type. An identity `encodeJson` stays the default for any JSON type.
+
 ### Contract loading integrates decoding
 
 Decoding contract values (calling `codec.decodeJson()` on literal defaults, discriminator values, etc.) is part of the contract loading pipeline, not a separate post-validation step. The codec registry flows into `validateContract` alongside the existing storage validator, and decoding happens as part of the same call. Callers never see undecoded values.

@@ -1,6 +1,6 @@
 import type { ExecutionMutationDefault } from '@internal/contract/types';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { describe, expect, it } from 'vitest';
 import {
   createMongoExecutionContext,
@@ -16,7 +16,12 @@ function registryWith(...ids: readonly string[]) {
   const registry = newMongoCodecRegistry();
   for (const id of ids) {
     registry.register(
-      mongoCodec({ typeId: id, decode: (w: string) => w, encode: (v: string) => v }),
+      mongoCodec({
+        typeId: id,
+        decode: (w: string) => w,
+        encode: (v: string) => v,
+        decodeJson: (json) => decodeJsonString(id, json),
+      }),
     );
   }
   return registry;
