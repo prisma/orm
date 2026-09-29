@@ -68,7 +68,7 @@ For each `(from, to)` step in the chain:
 3. **Read the upgrade instructions.** Re-sync the skills (`prisma skills sync`) so the tree matches the version just installed, then load `../upgrading/app/upgrades/<from>-to-<to>/instructions.md`. Parse the YAML frontmatter and pay particular attention to its `changes[]` array.
 
 4. **Apply each change.** For each entry in `changes[]`:
-   - If the entry has a `detection` block (glob + content predicate), run it; skip the change if no files match. No `detection` → apply unconditionally.
+   - If the entry has a `detection` block (glob + content predicate), run it; skip the change if no files match. No `detection` → apply unconditionally. Run the glob over the project's own files: skip `node_modules`, and build output such as `dist`, `build`, `.next` or `out` (whatever directories the project's build writes). A match there is generated code, which the next build rewrites; editing it changes nothing. Migration snapshots under `migrations/snapshots/` are committed files, not build output, so keep them.
    - If the entry names a `script:` (a relative path next to `instructions.md`), invoke it from the project root:
      - `*.ts` → `pnpm exec tsx <skill>/upgrading/app/upgrades/<from>-to-<to>/<script>`
      - `*.sh` → `bash <skill>/upgrading/app/upgrades/<from>-to-<to>/<script>`
