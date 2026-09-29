@@ -211,6 +211,20 @@ const CANONICAL_NUMERIC_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
 
 const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEXT.test(value);
 
+/**
+ * Whether canonical numeric text is a value `numeric(precision, scale)` stores without rounding: at most `scale` digits after the point, not counting trailing zeros, and at most `precision` significant digits once written to `scale` places. NaN fits; an infinity does not.
+ */
+function fitsNumeric(text: string, precision: number, scale: number): boolean {
+  if (text === 'NaN') return true;
+  if (text.endsWith('Infinity')) return false;
+  const [whole = '', fraction = ''] = text.replace(/^-/, '').split('.');
+  const significantFraction = fraction.replace(/0+$/, '');
+  if (significantFraction.length > scale) return false;
+  return `${whole}${significantFraction.padEnd(scale, '0')}`.replace(/^0+/, '').length <= precision;
+}
+
+const INT4_RANGE = { min: -2147483648, max: 2147483647 } as const;
+
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 const BIT_STRING = /^[01]*$/;
@@ -993,10 +1007,30 @@ export class PgNumericCodec extends CodecImpl<
     }
     return value;
   }
+  constructor(
+    descriptor: PgNumericDescriptor,
+    private readonly params: NumericParams,
+  ) {
+    super(descriptor);
+  }
   decodeJson(json: JsonValue): string {
-    if (typeof json !== 'string')
-      return refuseJsonValue(PG_NUMERIC_CODEC_ID, 'a decimal string', json);
-    return json;
+    const text = decodeJsonMatching(
+      PG_NUMERIC_CODEC_ID,
+      json,
+      CANONICAL_NUMERIC_TEXT,
+      'a decimal string',
+    );
+    const { precision } = this.params;
+    if (precision === undefined) return text;
+    const scale = this.params.scale ?? 0;
+    if (!fitsNumeric(text, precision, scale)) {
+      return refuseJsonValue(
+        PG_NUMERIC_CODEC_ID,
+        `a decimal string that numeric(${precision}, ${scale}) stores without rounding`,
+        json,
+      );
+    }
+    return text;
   }
 }
 
@@ -1015,8 +1049,8 @@ export class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams> 
   override renderOutputType(params: NumericParams): string | undefined {
     return pgNumericRenderOutputType(params);
   }
-  override factory(_params: NumericParams): (ctx: CodecInstanceContext) => PgNumericCodec {
-    return () => new PgNumericCodec(this);
+  override factory(params: NumericParams): (ctx: CodecInstanceContext) => PgNumericCodec {
+    return () => new PgNumericCodec(this, params ?? {});
   }
 }
 
@@ -1151,8 +1185,27 @@ export class PgBitCodec extends CodecImpl<
   encodeJson(value: string): JsonValue {
     return value;
   }
+  constructor(
+    descriptor: PgBitDescriptor,
+    private readonly length: number | undefined,
+  ) {
+    super(descriptor);
+  }
   decodeJson(json: JsonValue): string {
-    return decodeJsonMatching(PG_BIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
+    const bits = decodeJsonMatching(
+      PG_BIT_CODEC_ID,
+      json,
+      BIT_STRING,
+      'a string of 0 and 1 digits',
+    );
+    if (this.length !== undefined && bits.length !== this.length) {
+      return refuseJsonValue(
+        PG_BIT_CODEC_ID,
+        `a string of exactly ${this.length} 0 and 1 digits`,
+        json,
+      );
+    }
+    return bits;
   }
 }
 
@@ -1171,8 +1224,8 @@ export class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override renderOutputType(params: LengthParams): string | undefined {
     return renderLength('Bit', params);
   }
-  override factory(_params: LengthParams): (ctx: CodecInstanceContext) => PgBitCodec {
-    return () => new PgBitCodec(this);
+  override factory(params: LengthParams): (ctx: CodecInstanceContext) => PgBitCodec {
+    return () => new PgBitCodec(this, params?.length);
   }
 }
 
@@ -1199,8 +1252,27 @@ export class PgVarbitCodec extends CodecImpl<
   encodeJson(value: string): JsonValue {
     return value;
   }
+  constructor(
+    descriptor: PgVarbitDescriptor,
+    private readonly length: number | undefined,
+  ) {
+    super(descriptor);
+  }
   decodeJson(json: JsonValue): string {
-    return decodeJsonMatching(PG_VARBIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
+    const bits = decodeJsonMatching(
+      PG_VARBIT_CODEC_ID,
+      json,
+      BIT_STRING,
+      'a string of 0 and 1 digits',
+    );
+    if (this.length !== undefined && bits.length > this.length) {
+      return refuseJsonValue(
+        PG_VARBIT_CODEC_ID,
+        `a string of at most ${this.length} 0 and 1 digits`,
+        json,
+      );
+    }
+    return bits;
   }
 }
 
@@ -1219,8 +1291,8 @@ export class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override renderOutputType(params: LengthParams): string | undefined {
     return renderLength('VarBit', params);
   }
-  override factory(_params: LengthParams): (ctx: CodecInstanceContext) => PgVarbitCodec {
-    return () => new PgVarbitCodec(this);
+  override factory(params: LengthParams): (ctx: CodecInstanceContext) => PgVarbitCodec {
+    return () => new PgVarbitCodec(this, params?.length);
   }
 }
 
@@ -1605,6 +1677,9 @@ export class PgIntCodec extends SqlIntCodec {
   override async decode(wire: string | number, _ctx: CodecCallContext): Promise<number> {
     return decodePostgresNumberWire(wire);
   }
+  override decodeJson(json: JsonValue): number {
+    return decodeJsonInteger(this.id, json, INT4_RANGE);
+  }
 }
 
 export class PgFloatCodec extends SqlFloatCodec {
@@ -1631,8 +1706,8 @@ export class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
-  override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
-    return () => new SqlCharCodec(this);
+  override factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
+    return () => new SqlCharCodec(this, params?.length);
   }
 }
 
@@ -1661,8 +1736,8 @@ export class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
-  override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
-    return () => new SqlVarcharCodec(this);
+  override factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
+    return () => new SqlVarcharCodec(this, params?.length);
   }
 }
 

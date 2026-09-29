@@ -12,6 +12,14 @@ export const SQL_INT_CODEC_ID = 'sql/int@1' as const;
 export const SQL_FLOAT_CODEC_ID = 'sql/float@1' as const;
 export const SQL_TEXT_CODEC_ID = 'sql/text@1' as const;
 
+/**
+ * Whether text fits `length` characters, counted as PostgreSQL counts them: code points. A blank-padded type (`char`) pads a shorter value with spaces and drops trailing spaces past its length, so they do not count.
+ */
+export function fitsCharacterLength(text: string, length: number, blankPadded: boolean): boolean {
+  const counted = blankPadded ? text.replace(/ +$/, '') : text;
+  return counted.length <= length || [...counted].length <= length;
+}
+
 export const sqlCharEncode = (value: string): string => value;
 export const sqlCharDecode = (wire: string): string => wire.trimEnd();
 export const sqlCharRenderOutputType = (typeParams: { readonly length?: number }) => {

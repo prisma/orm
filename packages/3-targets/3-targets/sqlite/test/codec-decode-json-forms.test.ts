@@ -1,6 +1,11 @@
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
-import { sqliteRealDescriptor, sqliteTextDescriptor } from '../src/core/codecs';
+import {
+  sqliteRealDescriptor,
+  sqliteSqlCharDescriptor,
+  sqliteSqlVarcharDescriptor,
+  sqliteTextDescriptor,
+} from '../src/core/codecs';
 
 const ctx: CodecInstanceContext = { name: 'decode-json-forms' };
 
@@ -59,5 +64,17 @@ describe('sqlite/real@1 decodeJson and encodeJson', () => {
         meta: expect.objectContaining({ codecId: 'sqlite/real@1' }),
       }),
     );
+  });
+});
+
+describe('sql/char@1 and sql/varchar@1 on SQLite decodeJson', () => {
+  // SQLite does not enforce a declared length, so a column can hold longer text, and the codec reads what it holds.
+  it('reads text longer than the declared length', () => {
+    const varchar = sqliteSqlVarcharDescriptor.factory({ length: 3 })(ctx);
+    const char = sqliteSqlCharDescriptor.factory({ length: 3 })(ctx);
+    expect([varchar.decodeJson('toolong'), char.decodeJson('toolong')]).toEqual([
+      'toolong',
+      'toolong',
+    ]);
   });
 });

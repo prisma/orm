@@ -30,6 +30,16 @@ const cases: readonly {
     codec: sqlIntDescriptor.factory()(ctx),
     accepts: [42, -2147483648, 9007199254740991],
     rejects: ['42', 1.5, 9007199254740992, true, null],
+  }, // A length counts characters as PostgreSQL does, as code points; a char value may carry trailing spaces past it.
+  {
+    codec: sqlVarcharDescriptor.factory({ length: 3 })(ctx),
+    accepts: ['abc', '', '\u{1F600}\u{1F600}\u{1F600}'],
+    rejects: ['abcd', 'ab  ', '\u{1F600}\u{1F600}\u{1F600}\u{1F600}'],
+  },
+  {
+    codec: sqlCharDescriptor.factory({ length: 3 })(ctx),
+    accepts: ['abc', 'ab ', 'abc  ', '\u{1F600}\u{1F600}\u{1F600}'],
+    rejects: ['abcd', 'a bc'],
   },
 ];
 

@@ -186,6 +186,40 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/bool@1', label: 'true', value: true },
   { codecId: 'pg/bit@1', label: 'single bit', value: '1' },
+  // Values at the limit their type parameters set, which decodeJson checks. The harness stores a value in a
+  // column of the codec's native type without its type parameters, and a bare char or bit holds one character
+  // or bit, so type-params.integration.test.ts covers those two.
+  {
+    codecId: 'sql/varchar@1',
+    label: 'text at its declared length',
+    value: 'abc',
+    typeParams: { length: 3 },
+  },
+  {
+    codecId: 'sql/varchar@1',
+    label: 'characters beyond the basic plane at its declared length',
+    value: '\u{1F600}\u{1F600}\u{1F600}',
+    typeParams: { length: 3 },
+  },
+  {
+    codecId: 'pg/varchar@1',
+    label: 'text at its declared length',
+    value: 'ab',
+    typeParams: { length: 2 },
+  },
+  {
+    codecId: 'pg/varbit@1',
+    label: 'bits under their declared length',
+    value: '101',
+    typeParams: { length: 4 },
+  },
+  {
+    codecId: 'pg/numeric@1',
+    label: 'decimal at its declared precision and scale',
+    value: '-999.99',
+    typeParams: { precision: 5, scale: 2 },
+  },
+  { codecId: 'pg/int@1', label: 'int4 upper bound', value: 2147483647 },
   { codecId: 'pg/varbit@1', label: 'bit string', value: '1010' },
   { codecId: 'pg/bytea@1', label: 'byte string', value: new Uint8Array([0, 1, 255]) },
   // RFC 2045 base64 breaks every 76 characters, which is 57 bytes in. A value

@@ -11,6 +11,8 @@ import {
   pgInetDescriptor,
   pgInt2Descriptor,
   pgInt4Descriptor,
+  pgIntDescriptor,
+  pgNumericDescriptor,
   pgTextArrayDescriptor,
   pgTextDescriptor,
   pgTimetzDescriptor,
@@ -74,6 +76,36 @@ const cases: readonly DecodeJsonCase[] = [
   },
   { codec: pgTimetzDescriptor.factory({})(ctx), accepts: ['03:04:05+02'], rejects: [1, null] },
   { codec: pgBitDescriptor.factory({})(ctx), accepts: ['1', '0'], rejects: [1, '2', 'a', null] },
+  {
+    codec: pgBitDescriptor.factory({ length: 4 })(ctx),
+    accepts: ['1010'],
+    rejects: ['101', '10101'],
+  },
+  {
+    codec: pgVarbitDescriptor.factory({ length: 4 })(ctx),
+    accepts: ['1010', '1', ''],
+    rejects: ['10101'],
+  },
+  {
+    codec: pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
+    accepts: ['123.45', '-999.99', '1.5', '1.50', '0', '0.01', 'NaN'],
+    rejects: ['1234.5', '1000', '1.555', '0.001', 'Infinity', '-Infinity', '1e3', '+1', 'abc'],
+  },
+  {
+    codec: pgNumericDescriptor.factory({ precision: 3 })(ctx),
+    accepts: ['999', '-999', '007'],
+    rejects: ['1000', '1.5'],
+  },
+  {
+    codec: pgNumericDescriptor.factory({})(ctx),
+    accepts: ['123456789012345678901234567890.123', 'Infinity', 'NaN'],
+    rejects: ['1e3', 'abc', ''],
+  },
+  {
+    codec: pgIntDescriptor.factory()(ctx),
+    accepts: [2147483647, -2147483648],
+    rejects: [2147483648, 3000000000, -2147483649],
+  },
   {
     codec: pgVarbitDescriptor.factory({})(ctx),
     accepts: ['1010', ''],

@@ -262,14 +262,19 @@ const safeIntegerFromBigint = (value: bigint): number => {
   return Number(value);
 };
 
+/** SQLite does not enforce a declared character length, so a column holds longer text, and its codec reads it. */
+const storesAnyLength = (): { readonly length?: number } => ({});
+
 export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
   dataType: sqliteText.id,
   jsonProjection: identityJsonProjection,
+  codecParams: storesAnyLength,
 });
 
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {
   dataType: sqliteText.id,
   jsonProjection: identityJsonProjection,
+  codecParams: storesAnyLength,
 });
 
 export const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {

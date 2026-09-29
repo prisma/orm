@@ -62,6 +62,8 @@ export interface SqliteCodecOptions<P> {
   /** The data type the adapted codec represents here. A template names none; this target does. */
   readonly dataType: DataTypeId;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
+  /** The type parameters the codec is built with, where SQLite does not enforce the column's own. Absent means the column's. */
+  readonly codecParams?: (params: P) => P;
 }
 
 export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
@@ -120,7 +122,7 @@ class SqliteCodecDescriptorAdapter<
   override readonly factory = (
     params: DescriptorParams<D>,
   ): ((ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>) =>
-    this.descriptor.factory(params);
+    this.descriptor.factory(this.options.codecParams?.(params) ?? params);
 
   protected override jsonProjection(
     expression: ProjectionExpr,
