@@ -10,7 +10,7 @@ import {
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
+import { type Binary, type Decimal128, type Double, type Long, ObjectId } from 'bson';
 import {
   decodeBsonJson,
   decodeBsonValue,
@@ -27,6 +27,7 @@ import {
   decimal128Encode,
   decimal128EncodeJson,
   decimalTextBigintLiteral,
+  doubleEncode,
   int64Decode,
   int64DecodeJson,
   int64Encode,
@@ -77,8 +78,8 @@ export const mongoStringCodec = mongoCodec({
 
 export const mongoDoubleCodec = mongoCodec({
   typeId: MONGO_DOUBLE_CODEC_ID,
-  decode: (wire: number) => wire,
-  encode: (value: number) => value,
+  decode: (wire: number | Double) => Number(wire),
+  encode: (value: number): number | Double => doubleEncode(MONGO_DOUBLE_CODEC_ID, value),
 });
 
 export const mongoInt32Codec = mongoCodec({

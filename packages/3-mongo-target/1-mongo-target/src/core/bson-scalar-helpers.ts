@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import { Binary, Decimal128, Long } from 'bson';
+import { Binary, Decimal128, Double, Long } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -40,6 +40,43 @@ function encodeFailed(codecId: string, message: string, received: unknown): neve
   throw mongoTargetError('RUNTIME.ENCODE_FAILED', `${codecId} ${message}`, {
     meta: { codecId, received: String(received).slice(0, RECEIVED_PREVIEW_LIMIT) },
   });
+}
+
+function describeReceived(value: unknown): string {
+  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'string') {
+    return `string ${JSON.stringify(value.slice(0, RECEIVED_PREVIEW_LIMIT))}`;
+  }
+  return value === null ? 'null' : typeof value;
+}
+
+/**
+ * Wraps the number in the driver's `Double`, because the driver writes a whole JavaScript number in the int32 range as a BSON `int`, which a `double` validator refuses.
+ */
+export function doubleEncode(codecId: string, value: number): Double {
+  if (typeof value !== 'number') {
+    encodeFailed(codecId, `value must be a number; received ${describeReceived(value)}`, value);
+  }
+  return new Double(value);
+}
+
+const INT32_MIN = -(2 ** 31);
+const INT32_MAX = 2 ** 31 - 1;
+
+export function int32Encode(codecId: string, value: number): number {
+  if (
+    typeof value !== 'number' ||
+    !Number.isInteger(value) ||
+    value < INT32_MIN ||
+    value > INT32_MAX
+  ) {
+    encodeFailed(
+      codecId,
+      `value must be an integer from ${INT32_MIN} to ${INT32_MAX}; received ${describeReceived(value)}`,
+      value,
+    );
+  }
+  return value;
 }
 
 const INT64_MIN = -(2n ** 63n);

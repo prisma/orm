@@ -12,6 +12,14 @@ model Post {
   @@map("posts")
 }
 
+model Reading {
+  id    ObjectId @id @map("_id")
+  ratio Double
+  count Int32
+
+  @@map("readings")
+}
+
 type Stamp {
   note Json
 }

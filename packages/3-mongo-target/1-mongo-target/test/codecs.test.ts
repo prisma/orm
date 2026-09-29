@@ -1,5 +1,5 @@
 import { isStructuredError } from '@internal/utils/structured-error';
-import { ObjectId } from 'bson';
+import { BSON, Double, ObjectId } from 'bson';
 import { describe, expect, it } from 'vitest';
 import { MONGO_DOUBLE_CODEC_ID, MONGO_VECTOR_CODEC_ID } from '../src/core/codec-ids';
 import {
@@ -49,7 +49,23 @@ describe('mongoInt32Codec', () => {
 describe('mongoDoubleCodec', () => {
   it('round-trips floating-point number values', async () => {
     expect(await mongoDoubleCodec.decode(42.5, {})).toBe(42.5);
-    expect(await mongoDoubleCodec.encode(42.5, {})).toBe(42.5);
+    expect(await mongoDoubleCodec.encode(42.5, {})).toEqual(new Double(42.5));
+  });
+
+  it('encodes a whole number so that it is stored as a BSON double, not an int', async () => {
+    const stored = BSON.deserialize(
+      BSON.serialize({ value: await mongoDoubleCodec.encode(2, {}) }),
+      { promoteValues: false },
+    );
+    expect(stored['value']).toMatchObject({ _bsontype: 'Double' });
+    expect(stored['value'].valueOf()).toBe(2);
+  });
+
+  it('refuses a value that is not a number', async () => {
+    await expect(mongoDoubleCodec.encode('2' as unknown as number, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: 'mongo/double@1 value must be a number; received string "2"',
+    });
   });
 
   it('has id mongo/double@1', () => {
