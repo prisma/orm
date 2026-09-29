@@ -1,6 +1,6 @@
 // Renames `table`/`column` to `entry`/`field` in execution default refs of contracts under `migrations/`.
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, relative, sep } from 'node:path';
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist']);
 const RENAMES = new Map([
@@ -152,6 +152,17 @@ function renameInDts(text: string): string {
   return renamed;
 }
 
+async function replaceFile(path: string, content: string): Promise<void> {
+  const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`);
+  try {
+    await writeFile(temporary, content, 'utf-8');
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+}
+
 async function main(): Promise<void> {
   const files = await findMigrationFiles(projectRoot);
   let changed = 0;
@@ -161,7 +172,7 @@ async function main(): Promise<void> {
     if (after === before) continue;
     changed += 1;
     console.log(`${check ? 'WOULD FIX' : 'FIXED'} ${relative(projectRoot, path)}`);
-    if (!check) await writeFile(path, after, 'utf-8');
+    if (!check) await replaceFile(path, after);
   }
   console.log(
     `${files.length} file(s) under migrations/ scanned, ${changed} ${check ? 'need' : 'got'} the rename.`,
