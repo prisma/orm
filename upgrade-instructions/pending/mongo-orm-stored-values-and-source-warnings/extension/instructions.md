@@ -56,6 +56,13 @@ changes:
       The Mongo adapter's `resolveValue` passes an instance of a `bson` class (an object with a
       `_bsontype` tag and a class prototype), a `RegExp` and a `Uint8Array` through unchanged
       instead of copying their fields into a plain object, at any depth of a command.
+  - id: mongo-codec-types-carry-traits
+    summary: |
+      Each entry of the Mongo `CodecTypes` map (`@prisma/orm-mongo/target/codec-types`,
+      `@internal/target-mongo/codec-types`) carries `traits`, the union of its codec descriptor's
+      traits. The ORM's field accessor gives `inc` and `mul` to a field whose codec has the
+      `numeric` trait, taking the codec's input type, and `FieldExpression` takes that operand
+      type as an optional second type parameter.
   - id: mongo-field-builder-preset-not-optional
     summary: |
       The Mongo `FieldBuilder` (`@prisma/orm-mongo/contract-builder`,
@@ -91,6 +98,12 @@ A driver of your own yields `{ insertedId, document }` for `insertOne`, where `d
 This change has no detection pattern: it changes what reaches the driver, not how the adapter is called.
 
 A codec or middleware that received a copied plain object in place of a `bson` class instance, and rebuilt the instance from it, now receives the instance. Remove the rebuilding.
+
+## `mongo-codec-types-carry-traits`
+
+This change has no detection pattern: few extensions build a Mongo codec types map themselves.
+
+A type you declare to satisfy the Mongo `CodecTypes` shape, or a codec types map of your own that should get `inc` and `mul`, adds `traits` to each entry, such as `readonly traits: 'equality' | 'order' | 'numeric'` for a numeric codec.
 
 ## `mongo-field-builder-preset-not-optional`
 

@@ -30,6 +30,7 @@ The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of
 ### Values through the Mongo ORM
 
 - A whole number written to a `Double` field is stored as a BSON `double`, not an `int`, so `$type: 'double'` matches it. An `Int32` field refuses a fraction or a number outside the signed 32-bit range with `RUNTIME.ENCODE_FAILED`.
+- The update operations `inc` and `mul` exist on required single-valued `Int32`, `Double`, `Int64` and `Decimal128` fields and take the field's write type: a `number`, a `bigint` for `Int64` (`u.karma.inc(2n)`), and decimal text for `Decimal128` (`u.balance.inc('0.5')`).
 - A list field is encoded element by element through its element codec, so an `ObjectId[]` field stores hex strings as `ObjectId`s and an `Int64[]` field stores `bigint`s as `long`s.
 - `create()` and `createAll()` return each document as stored, decoded as a read decodes it. The ORM computes it from the document it sent, without a second query: a `Bson` field comes back as a read returns it, and a nullable field left out comes back as `null`.
 - A nullable field missing from a stored document reads as `null`, the same as one that holds `null`.
