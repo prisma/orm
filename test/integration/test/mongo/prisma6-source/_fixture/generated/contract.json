@@ -7,6 +7,10 @@
     "Counter": {
       "model": "Counter",
       "namespace": "__unbound__"
+    },
+    "Tally": {
+      "model": "Tally",
+      "namespace": "__unbound__"
     }
   },
   "domain": {
@@ -55,6 +59,56 @@
             "storage": {
               "collection": "Counter"
             }
+          },
+          "Tally": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "address": {
+                "nullable": true,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Address"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "scores": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Tally"
+            }
+          }
+        },
+        "valueObjects": {
+          "Address": {
+            "fields": {
+              "zip": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            }
           }
         }
       }
@@ -67,6 +121,9 @@
           "collection": {
             "Counter": {
               "kind": "mongo-collection"
+            },
+            "Tally": {
+              "kind": "mongo-collection"
             }
           }
         },
@@ -74,7 +131,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "d48905a273f925f9a6a37d09f7b009426c1c59b2bef9e68b1110fa6021319896"
+    "storageHash": "4437f81a7adbcbf818bc57a01eeae876338e847c850fca1b59a3de9110919258"
   },
   "capabilities": {},
   "extensions": {},

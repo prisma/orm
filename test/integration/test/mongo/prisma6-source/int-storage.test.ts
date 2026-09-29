@@ -1,4 +1,4 @@
-import { Int32, Long } from 'mongodb';
+import { Double, Int32, Long } from 'mongodb';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
@@ -47,6 +47,87 @@ describe('an Int in a Prisma 6 MongoDB schema', () => {
           .toArray();
 
         expect(stored).toEqual([{ hits: 'long', small: 'int', large: 'long' }]);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'refuses a fractional double, and reads the field once the upgrade guide repairs it',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const counters = mongoDb.collection('Counter');
+        const rest = { small: new Int32(1), large: Long.fromNumber(1) };
+        await counters.insertMany([
+          { name: 'fractional', hits: new Double(2.5), ...rest },
+          { name: 'whole double', hits: new Double(4), ...rest },
+          { name: 'long', hits: Long.fromNumber(6), ...rest },
+        ]);
+        const tallies = mongoDb.collection('Tally');
+        await tallies.insertOne({
+          name: 'mixed',
+          scores: [Long.fromNumber(1), new Double(3.7)],
+          address: { zip: new Double(12.2) },
+        });
+
+        await expect(db.Counter.all().toArray()).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          message: expect.stringContaining('fractional double 2.5'),
+        });
+
+        const fractional = await counters
+          .aggregate([
+            {
+              $match: {
+                hits: { $type: 'double' },
+                $expr: { $ne: ['$hits', { $trunc: '$hits' }] },
+              },
+            },
+            { $project: { _id: 0, name: 1 } },
+          ])
+          .toArray();
+        expect(fractional).toEqual([{ name: 'fractional' }]);
+
+        await counters.updateMany({ hits: { $type: 'double' } }, [
+          { $set: { hits: { $toLong: { $round: ['$hits', 0] } } } },
+        ]);
+        await tallies.updateMany({ scores: { $type: 'double' } }, [
+          {
+            $set: {
+              scores: {
+                $map: {
+                  input: '$scores',
+                  in: {
+                    $cond: [
+                      { $eq: [{ $type: '$$this' }, 'double'] },
+                      { $toLong: { $round: ['$$this', 0] } },
+                      '$$this',
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        ]);
+
+        await tallies.updateMany({ 'address.zip': { $type: 'double' } }, [
+          { $set: { 'address.zip': { $toLong: { $round: ['$address.zip', 0] } } } },
+        ]);
+
+        const read = await db.Counter.all().toArray();
+        expect(Object.fromEntries(read.map(({ name, hits }) => [name, hits]))).toEqual({
+          fractional: 2n,
+          'whole double': 4n,
+          long: 6n,
+        });
+        expect(await db.Tally.where({ name: 'mixed' }).first()).toMatchObject({ scores: [1n, 4n] });
+        expect(
+          await tallies
+            .aggregate([
+              { $match: { name: 'mixed' } },
+              { $project: { _id: 0, zip: '$address.zip', type: { $type: '$address.zip' } } },
+            ])
+            .toArray(),
+        ).toEqual([{ zip: 12, type: 'long' }]);
       }),
     timeouts.spinUpMongoMemoryServer,
   );

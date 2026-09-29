@@ -69,6 +69,13 @@ export function int64Decode(codecId: string, wire: Long | number | bigint): bigi
   if (typeof wire === 'bigint') return wire;
   if (isLong(wire)) return wire.toBigInt();
   if (typeof wire === 'number' && Number.isSafeInteger(wire)) return BigInt(wire);
+  if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
+    return decodeFailed(
+      codecId,
+      `wire value is the fractional double ${wire}, and a 64-bit integer holds whole numbers only. Store the field as a whole number, rounded or cut off, with an update pipeline: [{ $set: { <field>: { $toLong: { $round: ["$<field>", 0] } } } }], or $trunc in place of $round.`,
+      wire,
+    );
+  }
   return decodeFailed(codecId, 'wire value must be a Long or a safe integer', wire);
 }
 

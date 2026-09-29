@@ -57,6 +57,12 @@ describe('mongoInt64Codec', () => {
     await expect(mongoInt64Codec.decode(2 ** 60, {})).rejects.toThrow(decodeFailed);
   });
 
+  it('says a fractional double on the wire is no whole number, and how to store one', async () => {
+    await expect(mongoInt64Codec.decode(2.5, {})).rejects.toThrow(
+      'mongo/int64@1 wire value is the fractional double 2.5, and a 64-bit integer holds whole numbers only. Store the field as a whole number, rounded or cut off, with an update pipeline: [{ $set: { <field>: { $toLong: { $round: ["$<field>", 0] } } } }], or $trunc in place of $round.',
+    );
+  });
+
   it('refuses an application value that is not a bigint', async () => {
     await expect(mongoInt64Codec.encode(wrongWire<bigint>(42), {})).rejects.toThrow(encodeFailed);
   });

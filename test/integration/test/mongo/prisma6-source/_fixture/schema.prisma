@@ -10,3 +10,14 @@ model Counter {
   small Int    @db.Int
   large Int    @db.Long
 }
+
+model Tally {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  name    String
+  scores  Int[]
+  address Address?
+}
+
+type Address {
+  zip Int
+}
