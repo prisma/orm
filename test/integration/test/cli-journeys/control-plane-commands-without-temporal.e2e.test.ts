@@ -1,16 +1,21 @@
 /**
- * The built bin and a scaffolded `migration.ts`, each run as a child process that has no
- * `Temporal`, read, check and render date and time column defaults, and leave the process without
- * a global `Temporal`.
+ * The CLI commands, the language server and a scaffolded `migration.ts`, each run as a child
+ * process that has no global `Temporal`, read, check and render date and time column defaults, and
+ * set no global `Temporal`.
+ *
+ * Each of them loads `prisma.config.ts`, which loads the Postgres target's control entry. The
+ * control entry sets a fallback `Temporal` when it is loaded, and the target's codecs use it.
  *
  * The other journeys run commands in this process, where the vitest setup file has installed a
- * `Temporal` polyfill. Only a child process shows what the control plane does on its own.
+ * global `Temporal`. Only a child process shows what the control plane does on its own.
  */
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { withClient } from '@repo/test-utils';
 import { join, resolve } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from '../utils/cli-test-helpers';
+import { emittedColumns } from '../utils/emitted-columns';
 import {
   getLatestMigrationDir,
   type JourneyContext,
@@ -24,8 +29,10 @@ import {
   type ChildRun,
   childOutput,
   NO_GLOBAL_TEMPORAL,
+  reportedTemporal,
   runNodeWithoutTemporal,
-} from '../utils/without-temporal';
+  spawnNodeWithoutTemporal,
+} from '../utils/node-without-temporal';
 
 const BIN_PATH = resolve(
   import.meta.dirname,
@@ -61,8 +68,70 @@ CREATE TABLE "event" (
 );
 `;
 
+interface MigrationOperation {
+  readonly id: string;
+  readonly execute: readonly { readonly sql: string }[];
+}
+
 function runBin(ctx: JourneyContext, argv: readonly string[]): Promise<ChildRun> {
   return runNodeWithoutTemporal([BIN_PATH, ...argv], { cwd: ctx.testDir });
+}
+
+interface LanguageServerResponse {
+  readonly id?: number;
+  readonly result?: unknown;
+  readonly error?: unknown;
+}
+
+/** `prisma lsp` as a child process with no `Temporal`, spoken to over its standard streams. */
+function languageServerWithoutTemporal(ctx: JourneyContext) {
+  const child = spawnNodeWithoutTemporal([BIN_PATH, 'lsp', '--stdio'], { cwd: ctx.testDir });
+  const responses = new Map<number, (response: LanguageServerResponse) => void>();
+  let received = Buffer.alloc(0);
+  let stderr = '';
+  let lastId = 0;
+  child.stderr.on('data', (chunk: Buffer) => {
+    stderr += chunk.toString('utf8');
+  });
+  child.stdout.on('data', (chunk: Buffer) => {
+    received = Buffer.concat([received, chunk]);
+    for (;;) {
+      const headerEnd = received.indexOf('\r\n\r\n');
+      if (headerEnd < 0) return;
+      const length = Number(
+        /Content-Length: (\d+)/i.exec(received.subarray(0, headerEnd).toString())?.[1],
+      );
+      const end = headerEnd + 4 + length;
+      if (received.length < end) return;
+      const message: LanguageServerResponse = JSON.parse(
+        received.subarray(headerEnd + 4, end).toString(),
+      );
+      received = received.subarray(end);
+      if (message.id !== undefined) {
+        responses.get(message.id)?.(message);
+        responses.delete(message.id);
+      }
+    }
+  });
+  function send(message: object): void {
+    const body = JSON.stringify({ jsonrpc: '2.0', ...message });
+    child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+  }
+  return {
+    notify: (method: string, params: object) => send({ method, params }),
+    request(method: string, params: object): Promise<LanguageServerResponse> {
+      lastId += 1;
+      const id = lastId;
+      const response = new Promise<LanguageServerResponse>((resolve) => responses.set(id, resolve));
+      send({ id, method, params });
+      return response;
+    },
+    exited: new Promise<{ exitCode: number | null } & ReturnType<typeof reportedTemporal>>(
+      (resolve) => {
+        child.on('close', (exitCode) => resolve({ exitCode, ...reportedTemporal(stderr) }));
+      },
+    ),
+  };
 }
 
 function writeSchema(ctx: JourneyContext, schema: string): void {
@@ -73,34 +142,6 @@ async function emitInThisProcess(ctx: JourneyContext, schema: string): Promise<v
   writeSchema(ctx, schema);
   const emit = await runContractEmit(ctx);
   expect(emit.exitCode, `contract emit\n${emit.stderr}\n${emit.stdout}`).toBe(0);
-}
-
-interface EmittedColumn {
-  readonly default?: unknown;
-}
-
-interface EmittedContract {
-  readonly storage: {
-    readonly namespaces: {
-      readonly public: {
-        readonly entries: {
-          readonly table: Record<string, { readonly columns: Record<string, EmittedColumn> }>;
-        };
-      };
-    };
-  };
-}
-
-function emittedColumns(ctx: JourneyContext): Record<string, EmittedColumn> {
-  const contractJson: EmittedContract = JSON.parse(
-    readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8'),
-  );
-  const tables = Object.values(contractJson.storage.namespaces.public.entries.table);
-  const [table, ...rest] = tables;
-  if (table === undefined || rest.length > 0) {
-    throw new Error(`expected one table, got ${tables.length}`);
-  }
-  return table.columns;
 }
 
 withTempDir(({ createTempDir }) => {
@@ -121,7 +162,7 @@ withTempDir(({ createTempDir }) => {
           const emit = await runBin(ctx, ['contract', 'emit']);
 
           expect(emit, childOutput(emit)).toMatchObject({ exitCode: 0, ...NO_GLOBAL_TEMPORAL });
-          expect(emittedColumns(ctx)['createdAt']?.default).toEqual({
+          expect(emittedColumns(ctx.testDir)['createdAt']?.default).toEqual({
             kind: 'literal',
             value: '2024-01-01T00:00:00Z',
           });
@@ -195,11 +236,62 @@ withTempDir(({ createTempDir }) => {
           });
 
           expect(run, childOutput(run)).toMatchObject({ exitCode: 0, ...NO_GLOBAL_TEMPORAL });
-          const ops = readFileSync(opsPath, 'utf-8');
-          expect({
-            localAt: ops.includes(`DEFAULT '2024-01-01T00:00:00'`),
-            instantAt: ops.includes(`DEFAULT '2024-01-01T00:00:00Z'`),
-          }).toEqual({ localAt: true, instantAt: true });
+          const ops: readonly MigrationOperation[] = JSON.parse(readFileSync(opsPath, 'utf-8'));
+          expect(
+            ops.find((op) => op.id === 'table.event')?.execute.map((step) => step.sql.split('\n')),
+          ).toEqual([
+            [
+              'CREATE TABLE "public"."event" (',
+              `  "history" timestamp(3)[] DEFAULT ARRAY['2024-01-01 00:00:00', '2024-06-30 12:34:56.789']::timestamp(3)[] NOT NULL,`,
+              '  "id" int4 NOT NULL,',
+              `  "instantAt" timestamptz DEFAULT '2024-01-01T00:00:00Z'::timestamptz NOT NULL,`,
+              `  "localAt" timestamp(3) DEFAULT '2024-01-01T00:00:00'::timestamp(3) NOT NULL,`,
+              '  PRIMARY KEY ("id"),',
+              '  CONSTRAINT "event_history_elem_not_null_98e8e785" CHECK (array_position("history", NULL) IS NULL)',
+              ')',
+            ],
+          ]);
+        },
+        timeouts.spinUpPpgDev,
+      );
+    });
+
+    describe('the language server', () => {
+      it(
+        'reports no diagnostic for a DateTime default',
+        async () => {
+          const ctx = setupJourney({ createTempDir, contractMode: 'psl', connectionString: 'x' });
+          writeSchema(ctx, EMIT_SCHEMA);
+          const uri = pathToFileURL(join(ctx.testDir, 'contract.prisma')).href;
+          const server = languageServerWithoutTemporal(ctx);
+
+          const initialized = await server.request('initialize', {
+            processId: null,
+            rootUri: pathToFileURL(ctx.testDir).href,
+            capabilities: { textDocument: { diagnostic: {} } },
+          });
+          server.notify('initialized', {});
+          server.notify('textDocument/didOpen', {
+            textDocument: { uri, languageId: 'prisma', version: 1, text: EMIT_SCHEMA },
+          });
+          const clean = await server.request('textDocument/diagnostic', { textDocument: { uri } });
+          server.notify('textDocument/didChange', {
+            textDocument: { uri, version: 2 },
+            contentChanges: [{ text: EMIT_SCHEMA.replace('2024-01-01T00:00:00Z', 'not a date') }],
+          });
+          const broken = await server.request('textDocument/diagnostic', { textDocument: { uri } });
+          await server.request('shutdown', {});
+          server.notify('exit', {});
+
+          expect(await server.exited).toEqual({ exitCode: 0, ...NO_GLOBAL_TEMPORAL });
+          expect(initialized.error).toBeUndefined();
+          expect(clean).toMatchObject({ result: { kind: 'full', items: [] } });
+          expect(broken).toMatchObject({
+            result: {
+              kind: 'full',
+              items: [expect.objectContaining({ code: 'PSL_INVALID_DEFAULT_LITERAL' })],
+            },
+          });
         },
         timeouts.spinUpPpgDev,
       );

@@ -2,7 +2,7 @@
  * Runs Node as a child process that has no `Temporal`, on any Node version, and that reports
  * whether a global `Temporal` exists before the program starts and when the process exits.
  */
-import { execFile } from 'node:child_process';
+import { type ChildProcessWithoutNullStreams, execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
@@ -67,11 +67,27 @@ export async function runNodeWithoutTemporal(
       return { exitCode: error.code, stdout: error.stdout, stderr: error.stderr };
     },
   );
-  return {
-    ...settled,
-    temporalBefore: reported(settled.stderr, BEFORE),
-    temporalAfter: reported(settled.stderr, AFTER),
-  };
+  return { ...settled, ...reportedTemporal(settled.stderr) };
+}
+
+/** The same child, left running, for a program the test talks to over its standard streams. */
+export function spawnNodeWithoutTemporal(
+  args: readonly string[],
+  options: { readonly cwd: string; readonly env?: NodeJS.ProcessEnv },
+): ChildProcessWithoutNullStreams {
+  return spawn('node', ['--import', PRELOAD_URL, ...args], {
+    cwd: options.cwd,
+    env: childEnv(options.env ?? {}),
+    stdio: 'pipe',
+  });
+}
+
+/** What the child reported about its global `Temporal`, read from what it wrote to stderr. */
+export function reportedTemporal(stderr: string): {
+  readonly temporalBefore: string | undefined;
+  readonly temporalAfter: string | undefined;
+} {
+  return { temporalBefore: reported(stderr, BEFORE), temporalAfter: reported(stderr, AFTER) };
 }
 
 export function childOutput(run: ChildRun): string {

@@ -1,14 +1,18 @@
 /**
  * The Vite plugin and the programmatic control client run inside a process the user owns. In a
- * process with no `Temporal` they read and render date and time defaults, and they leave the
- * process without a global `Temporal`, so application code in that process behaves as it does in
- * production.
+ * process with no global `Temporal` they read and render date and time defaults, and they set no
+ * global `Temporal`.
+ *
+ * Both load the Postgres target's control entry, which sets a fallback `Temporal` when it is
+ * loaded. The fallback is held once per process, so application code in the same process decodes
+ * dates too; `temporal-fallback-entries.test.ts` in `@prisma/orm-target-postgres` shows that.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { withTempDir } from './utils/cli-test-helpers';
+import { emittedColumns } from './utils/emitted-columns';
 import {
   type JourneyContext,
   runContractEmit,
@@ -16,7 +20,11 @@ import {
   timeouts,
   useDevDatabase,
 } from './utils/journey-test-helpers';
-import { childOutput, NO_GLOBAL_TEMPORAL, runNodeWithoutTemporal } from './utils/without-temporal';
+import {
+  childOutput,
+  NO_GLOBAL_TEMPORAL,
+  runNodeWithoutTemporal,
+} from './utils/node-without-temporal';
 
 const SCHEMA = `// use prisma-8
 
@@ -102,9 +110,10 @@ withTempDir(({ createTempDir }) => {
           stdout: '[]',
           ...NO_GLOBAL_TEMPORAL,
         });
-        expect(readFileSync(join(ctx.testDir, 'contract.json'), 'utf-8')).toContain(
-          '"value": "2024-01-01T00:00:00Z"',
-        );
+        expect(emittedColumns(ctx.testDir)['createdAt']?.default).toEqual({
+          kind: 'literal',
+          value: '2024-01-01T00:00:00Z',
+        });
       },
       timeouts.spinUpPpgDev,
     );
