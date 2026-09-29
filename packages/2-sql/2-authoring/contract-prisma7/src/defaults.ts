@@ -322,7 +322,7 @@ function refusalReason(refusal: DefaultRefusal): string {
       return 'holds a single value on a list column, which takes a list literal.';
     case 'no-cast':
       return `holds a ${refusal.valueType} value${at}, which ${refusal.columnType} has no cast from; ${refusal.casts.length === 0 ? 'it casts from nothing' : `it casts from ${refusal.casts.join(', ')}`}.`;
-    case 'undecodable':
+    case 'refused-by-codec':
       return `holds a value${at} that ${refusal.codecId} does not read: ${refusal.message}`;
   }
 }

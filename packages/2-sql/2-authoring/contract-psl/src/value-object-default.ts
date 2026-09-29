@@ -16,9 +16,9 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  checkStoredValue,
   PSL_DEFAULT_TYPE_INCOMPATIBLE,
   PSL_INVALID_DEFAULT_LITERAL,
+  readStoredValue,
 } from './data-type-default';
 
 /** The value objects of a document, and every member each composite type declares. */
@@ -109,15 +109,15 @@ export function valueObjectDefaultMismatches(
       else checkObject(value, member.valueObjectName, path);
       return;
     }
-    const read = checkStoredValue({
+    const reading = readStoredValue({
       value,
       column: member.descriptor,
       codecLookup: input.codecLookup,
       fieldPath: path,
     });
-    if (!read.ok) {
+    if (!reading.ok) {
       if (value === null) shape(path, notNull);
-      else mismatches.push({ code: read.code, message: read.message });
+      else mismatches.push({ code: reading.code, message: reading.message });
       return;
     }
     const enumMismatch = enumValueMismatch(value, member, path, input.codecLookup);
