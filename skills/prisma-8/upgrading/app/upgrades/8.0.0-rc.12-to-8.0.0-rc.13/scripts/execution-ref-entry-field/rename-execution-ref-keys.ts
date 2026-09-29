@@ -80,19 +80,76 @@ function renameInJson(text: string): string {
   return changed ? serializeLike(text, contract) : text;
 }
 
-const REF_BLOCK = /readonly ref: \{([^{}]*)\}/g;
-const REF_MEMBER = /readonly (\w+): ('[^']*'|"[^"]*")/g;
+const DEFAULT_ELEMENT_PATH = ['execution', 'mutations', 'defaults', ''];
+const MEMBER_BEFORE_OPENER = /readonly (\w+): (?:readonly )?$/;
+const REF_MEMBER = /readonly (\w+): ('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g;
+
+interface OpenBlock {
+  readonly member: string;
+  readonly start: number;
+  readonly isDefaultRef: boolean;
+}
+
+interface Span {
+  readonly start: number;
+  readonly end: number;
+}
+
+function closingQuote(text: string, start: number): number {
+  let i = start + 1;
+  while (i < text.length && text[i] !== text[start]) i += text[i] === '\\' ? 2 : 1;
+  return i;
+}
+
+function commentEnd(text: string, start: number): number {
+  const end =
+    text[start + 1] === '/' ? text.indexOf('\n', start) : text.indexOf('*/', start + 2) + 1;
+  return end > start ? end : text.length;
+}
+
+function isDefaultElement(open: readonly OpenBlock[]): boolean {
+  const members = open.slice(-DEFAULT_ELEMENT_PATH.length).map((block) => block.member);
+  return members.join('/') === DEFAULT_ELEMENT_PATH.join('/');
+}
+
+function executionDefaultRefs(text: string): Span[] {
+  const open: OpenBlock[] = [];
+  const refs: Span[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === "'" || char === '"' || char === '`') {
+      i = closingQuote(text, i);
+    } else if (char === '/' && (text[i + 1] === '/' || text[i + 1] === '*')) {
+      i = commentEnd(text, i);
+    } else if (char === '{' || char === '[') {
+      const member = MEMBER_BEFORE_OPENER.exec(text.slice(Math.max(0, i - 64), i))?.[1] ?? '';
+      const isDefaultRef = char === '{' && member === 'ref' && isDefaultElement(open);
+      open.push({ member, start: i, isDefaultRef });
+    } else if (char === '}' || char === ']') {
+      const block = open.pop();
+      if (block?.isDefaultRef) refs.push({ start: block.start, end: i + 1 });
+    }
+  }
+  return refs;
+}
+
+function renameRefMembers(block: string): string {
+  const members = [...block.matchAll(REF_MEMBER)];
+  if (!members.some(([, key = '']) => RENAMES.has(key))) return block;
+  const sorted = members
+    .map(([, key = '', value = '']) => `readonly ${RENAMES.get(key) ?? key}: ${value}`)
+    .sort();
+  let i = 0;
+  return block.replace(REF_MEMBER, () => sorted[i++] ?? '');
+}
 
 function renameInDts(text: string): string {
-  return text.replace(REF_BLOCK, (block, body: string) => {
-    const members = [...body.matchAll(REF_MEMBER)];
-    if (!members.some(([, key = '']) => RENAMES.has(key))) return block;
-    const sorted = members
-      .map(([, key = '', value = '']) => `readonly ${RENAMES.get(key) ?? key}: ${value}`)
-      .sort();
-    let i = 0;
-    return `readonly ref: {${body.replace(REF_MEMBER, () => sorted[i++] ?? '')}}`;
-  });
+  let renamed = text;
+  for (const { start, end } of executionDefaultRefs(text).reverse()) {
+    const block = renameRefMembers(renamed.slice(start, end));
+    renamed = `${renamed.slice(0, start)}${block}${renamed.slice(end)}`;
+  }
+  return renamed;
 }
 
 async function main(): Promise<void> {
