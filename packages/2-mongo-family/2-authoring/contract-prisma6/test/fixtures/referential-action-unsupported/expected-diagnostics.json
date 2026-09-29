@@ -3,18 +3,18 @@
     "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 16,
-    "message": "Relation field \"Post.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove \"onDelete\" and handle related documents in application code."
+    "message": "Relation field \"Post.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates them, so removing \"onDelete: Cascade\" also changes the Prisma 6 app: its client stops applying Cascade and falls back to its default action for this relation. Handle related documents in application code, then remove \"onDelete\"."
   },
   {
     "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 22,
-    "message": "Relation field \"Comment.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove \"onUpdate\" and handle related documents in application code."
+    "message": "Relation field \"Comment.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates them, so removing \"onUpdate: Cascade\" also changes the Prisma 6 app: its client stops applying Cascade and falls back to its default action for this relation. Handle related documents in application code, then remove \"onUpdate\"."
   },
   {
     "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 28,
-    "message": "Relation field \"Like.user\": @relation argument \"map\" is not supported; it names a foreign key constraint, and MongoDB has none. Remove \"map\"."
+    "message": "Relation field \"Like.user\": @relation argument \"map\" is not supported; it names a foreign key constraint, and MongoDB has none. Remove \"map\"; the Prisma 6 app has no foreign key on MongoDB either, so nothing changes there."
   }
 ]

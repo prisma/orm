@@ -3,30 +3,30 @@
     "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 11,
-    "message": "Index path \"address.city\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+    "message": "Index path \"address.city\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose `db push` builds its indexes from this schema."
   },
   {
     "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 12,
-    "message": "Index path \"address.city\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+    "message": "Index path \"address.city\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose `db push` builds its indexes from this schema."
   },
   {
     "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 13,
-    "message": "Index path \"address.geo.lat\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+    "message": "Index path \"address.geo.lat\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose `db push` builds its indexes from this schema."
   },
   {
     "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 14,
-    "message": "Index path \"address.geo.lat\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+    "message": "Index path \"address.geo.lat\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose `db push` builds its indexes from this schema."
   },
   {
     "code": "PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 15,
-    "message": "Index path \"address.street\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index."
+    "message": "Index path \"address.street\" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose `db push` builds its indexes from this schema."
   }
 ]

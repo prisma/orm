@@ -17,9 +17,9 @@ model Post {
 }
 
 model Comment {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
-  authorId String @db.ObjectId
-  author   User   @relation(fields: [authorId], references: [id], onUpdate: Cascade)
+  id       String  @id @default(auto()) @map("_id") @db.ObjectId
+  authorId String? @db.ObjectId
+  author   User?   @relation(fields: [authorId], references: [id], onUpdate: Cascade, onDelete: SetNull)
 }
 
 model Like {

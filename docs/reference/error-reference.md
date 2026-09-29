@@ -615,7 +615,7 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 
 ### PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED
 
-An `@@index`, `@@unique`, or `@@fulltext` path that reaches into a composite type, such as `address.city` or `address.city(sort: Asc)`, which the Mongo contract cannot express yet. Index a top-level field or remove the index. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An `@@index`, `@@unique`, or `@@fulltext` path that reaches into a composite type, such as `address.city` or `address.city(sort: Asc)`, which the Mongo contract cannot express yet. Index a top-level field or remove the index; either change also reaches the Prisma 6 app, whose `db push` builds its indexes from the schema. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED
 
@@ -627,11 +627,11 @@ The Prisma 6 MongoDB schema gives a contract that Prisma 8 rejects, for a cause 
 
 ### PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED
 
-A `@default` other than `now()` on a `DateTime` field and `auto()` on the id: a literal, `uuid()`, `cuid()`, `dbgenerated(...)`, `now()` on another type, or `auto()` on another field. MongoDB has no stored defaults, and Prisma 8 fills only `now()`. Remove the default and set the value when documents are created. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@default` other than `now()` on a `DateTime` field and `auto()` on the id: a literal, `uuid()`, `cuid()`, `dbgenerated(...)`, `now()` on another type, or `auto()` on another field. MongoDB has no stored defaults, and Prisma 8 fills only `now()`. The Prisma 6 client fills the default today, so the message says what removing it does to the Prisma 6 app: a required field must then be passed to every Prisma 6 create call, and an optional or list field no longer gets the default. Set the value in application code, then remove the default. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_ID_NOT_OBJECTID
 
-The model's `@id` is not a required `String @db.ObjectId` stored as `_id`. Declare it as `id String @id @default(auto()) @map("_id") @db.ObjectId`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+The model's `@id` is not a required `String @db.ObjectId` stored as `_id`. Declare it as `id String @id @default(auto()) @map("_id") @db.ObjectId`. Stored documents keep their `_id` values, so a model whose stored `_id` values are not ObjectIds cannot use the source until they, and every field that refers to them, are rewritten. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED
 
@@ -643,15 +643,15 @@ An index argument a Mongo contract index cannot carry, such as `length`, or an u
 
 ### PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED
 
-A list relation whose keys live in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields and keep the key list as a plain field. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A list relation whose keys live in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields and keep the key list as a plain field; the Prisma 6 client then loses the relation fields too, so Prisma 6 code that uses them has to use the key list. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED
 
-A `@db.*` attribute other than `@db.ObjectId`, or `@db.ObjectId` on a field that is not a `String`. Remove it; the stored BSON type then follows the field type. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@db.*` attribute other than `@db.ObjectId`, or `@db.ObjectId` on a field that is not a `String`. Remove it; the stored BSON type then follows the field type. When the attribute is not the default BSON type for the field type, removing it also changes what the Prisma 6 client writes for new values, while stored documents keep the old type. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED
 
-`@default(now())` or `@updatedAt` on an optional field. Make the field required, or remove the attribute and set the value when documents are written. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`@default(now())` or `@updatedAt` on an optional field. Make the field required once every stored document has a value, or remove the attribute and set the value in application code. Either fix also changes the Prisma 6 app: the Prisma 6 client fails on a stored document that lacks a required field, and without the attribute it no longer fills the field. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_PROVIDER_MISMATCH
 
@@ -659,7 +659,7 @@ The Prisma 6 schema has no `datasource` block, or its `provider` is not `mongodb
 
 ### PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED
 
-`onDelete`, `onUpdate`, or `map` on `@relation`. Prisma 8 enforces no referential actions on MongoDB, and MongoDB has no foreign key constraint for `map` to name. Remove the argument and handle related documents in application code. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`onDelete`, `onUpdate`, or `map` on `@relation`. Prisma 8 enforces no referential actions on MongoDB, and MongoDB has no foreign key constraint for `map` to name. The Prisma 6 client emulates referential actions, so removing `onDelete` or `onUpdate` also changes the Prisma 6 app: its client falls back to its default action for the relation. Handle related documents in application code, then remove the argument. Removing `map` changes nothing in the Prisma 6 app. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_SCHEMA_READ_FAILED
 
@@ -683,11 +683,11 @@ A field of type `Unsupported("...")`, which has no Prisma 8 codec, or of a type 
 
 ### PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED
 
-`@updatedAt` on a field that is not a `DateTime`. Remove `@updatedAt` and set the value when documents are written. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`@updatedAt` on a field that is not a `DateTime`. Removing it also stops the Prisma 6 client from setting the field on every update; set the value in application code, then remove `@updatedAt`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_VIEW_UNSUPPORTED
 
-A `view` block; Prisma 8 has no views on MongoDB. Remove the view from the schema the source reads. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `view` block; Prisma 8 has no views on MongoDB. Remove the view from the schema the source reads; the Prisma 6 client then loses the view's model too. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_CONTRACT_INVALID
 

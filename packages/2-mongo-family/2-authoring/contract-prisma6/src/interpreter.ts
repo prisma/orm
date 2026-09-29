@@ -252,7 +252,7 @@ export function interpretPrisma6Documents(
           diagnostics.push(
             prisma6Diagnostic(
               'PSL.PRISMA6_MONGO_VIEW_UNSUPPORTED',
-              `View "${block.name}" is not supported; Prisma 8 has no views on MongoDB. Remove the view from the schema this contract source reads.`,
+              `View "${block.name}" is not supported; Prisma 8 has no views on MongoDB. Remove the view from the schema this contract source reads. The Prisma 6 client then loses the view's model too.`,
               sourceId,
               keywordPslSpan(block.node.syntax, block.keyword, sources),
             ),
@@ -562,8 +562,8 @@ function resolveFieldType(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED',
         attribute.name === 'db.ObjectId'
-          ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String.`
-          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. Remove it: the stored BSON type then follows the field type.`,
+          ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String. Either change also reaches the Prisma 6 app: its client then writes and reads this field with the new type, while stored documents keep their ObjectId values.`
+          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. Remove it: the stored BSON type then follows the field type. If "@${attribute.name}" is not the default BSON type for ${field.typeName}, removing it also changes the Prisma 6 app: its client then writes the default type for new values, while stored documents keep the old one.`,
         sourceId,
         attribute.span,
       ),
@@ -647,7 +647,15 @@ function readCompositeFields(
         );
         rejected = true;
       } else if (attribute.name === 'default') {
-        ctx.diagnostics.push(defaultUnsupported(label, attribute, sourceId));
+        ctx.diagnostics.push(
+          defaultUnsupported(
+            label,
+            attribute,
+            { kind: 'type', name: symbol.name },
+            field,
+            sourceId,
+          ),
+        );
         rejected = true;
       } else {
         ctx.diagnostics.push(unknownAttribute(label, attribute, '@', sourceId));
@@ -667,14 +675,28 @@ function readCompositeFields(
   return fields;
 }
 
+/** What the Prisma 6 app loses when the Prisma 6 client stops filling a default. */
+function defaultRemovalConsequence(owner: FieldOwner, field: FieldSymbol): string {
+  if (field.optional || field.list) {
+    return owner.kind === 'model'
+      ? `a Prisma 6 create call that leaves "${field.name}" out no longer gets the default value`
+      : `a "${owner.name}" value written without "${field.name}" no longer gets the default value`;
+  }
+  return owner.kind === 'model'
+    ? `every Prisma 6 create call must then pass "${field.name}"`
+    : `every "${owner.name}" value the Prisma 6 app writes must then include "${field.name}"`;
+}
+
 function defaultUnsupported(
   label: string,
   attribute: ResolvedAttribute,
+  owner: FieldOwner,
+  field: FieldSymbol,
   sourceId: string,
 ): ContractSourceDiagnostic {
   return prisma6Diagnostic(
     'PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED',
-    `${label}: ${attributeText(attribute)} is not supported. MongoDB has no stored defaults, and Prisma 8 fills only \`now()\` on DateTime fields. Remove the default and set the value when you create documents.`,
+    `${label}: ${attributeText(attribute)} is not supported. MongoDB has no stored defaults, and Prisma 8 fills only \`now()\` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: ${defaultRemovalConsequence(owner, field)}. Set the value in the application code that creates documents, then remove the default.`,
     sourceId,
     attribute.span,
   );
@@ -828,13 +850,8 @@ function readModelField(
   build.storedNames.set(field.name, storedName);
   if (field.malformedType) return;
 
-  const resolved = resolveFieldType(
-    field,
-    { kind: 'model', name: symbol.name },
-    nativeType,
-    sourceId,
-    ctx,
-  );
+  const owner: FieldOwner = { kind: 'model', name: symbol.name };
+  const resolved = resolveFieldType(field, owner, nativeType, sourceId, ctx);
   if (resolved === undefined) return;
   const codecId = resolved.type.kind === 'scalar' ? resolved.type.codecId : undefined;
 
@@ -849,7 +866,7 @@ function readModelField(
       diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_ID_NOT_OBJECTID',
-          `${label} is the model's @id, but it is not a required ObjectId stored as "_id". Prisma 8 identifies a MongoDB document by an ObjectId "_id"; declare the id as \`${field.name} String @id @default(auto()) @map("_id") @db.ObjectId\`.`,
+          `${label} is the model's @id, but it is not a required ObjectId stored as "_id". Prisma 8 identifies a MongoDB document by an ObjectId "_id"; declare the id as \`${field.name} String @id @default(auto()) @map("_id") @db.ObjectId\`. If stored documents have "_id" values that are not ObjectIds, this model cannot use this contract source until they are rewritten with ObjectId "_id" values, along with every field that refers to them.`,
           sourceId,
           idAttribute.span,
         ),
@@ -857,7 +874,7 @@ function readModelField(
       return;
     }
     if (defaultAttribute !== undefined && defaultKind(defaultAttribute) !== 'auto') {
-      diagnostics.push(defaultUnsupported(label, defaultAttribute, sourceId));
+      diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
       return;
     }
     build.fields[storedName] = resolved;
@@ -869,7 +886,7 @@ function readModelField(
     diagnostics.push(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED',
-        `${label}: @updatedAt is only supported on a DateTime field. Remove @updatedAt and set the value when you write documents.`,
+        `${label}: @updatedAt is only supported on a DateTime field. Removing it also stops the Prisma 6 client from setting the field on every update. Set the value in application code when you write documents, then remove @updatedAt.`,
         sourceId,
         updatedAt.span,
       ),
@@ -878,7 +895,7 @@ function readModelField(
   }
   const defaultIsNow = defaultAttribute !== undefined && defaultKind(defaultAttribute) === 'now';
   if (defaultAttribute !== undefined && (!defaultIsNow || !isDateTime)) {
-    diagnostics.push(defaultUnsupported(label, defaultAttribute, sourceId));
+    diagnostics.push(defaultUnsupported(label, defaultAttribute, owner, field, sourceId));
     return;
   }
   const generator = { kind: 'generator' as const, id: binding.timestampGeneratorId };
@@ -890,10 +907,11 @@ function readModelField(
         : undefined;
   if (phases !== undefined && field.optional) {
     const written = updatedAt ?? defaultAttribute;
+    const generator = written === undefined ? 'the generator' : attributeText(written);
     diagnostics.push(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
-        `${label} is optional and its value comes from ${written === undefined ? 'a generator' : attributeText(written)}, which Prisma 8 cannot express on an optional field yet. Make the field required, or remove ${written === undefined ? 'the generator' : attributeText(written)} and set the value when you write documents.`,
+        `${label} is optional and its value comes from ${generator}, which Prisma 8 cannot express on an optional field yet. Either fix also changes the Prisma 6 app: a required field makes the Prisma 6 client fail on a stored document that lacks it, and without ${generator} the Prisma 6 client no longer fills it. Make the field required once every stored document has a value, or set the value in application code and remove ${generator}.`,
         sourceId,
         written?.span ?? field.span,
       ),
@@ -972,8 +990,8 @@ function readRelationArguments(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED',
             key === 'map'
-              ? `${label}: @relation argument "map" is not supported; it names a foreign key constraint, and MongoDB has none. Remove "map".`
-              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove "${key}" and handle related documents in application code.`,
+              ? `${label}: @relation argument "map" is not supported; it names a foreign key constraint, and MongoDB has none. Remove "map"; the Prisma 6 app has no foreign key on MongoDB either, so nothing changes there.`
+              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates them, so removing "${key}: ${arg.value}" also changes the Prisma 6 app: its client stops applying ${arg.value} and falls back to its default action for this relation. Handle related documents in application code, then remove "${key}".`,
             sourceId,
             arg.span,
           ),
@@ -1048,7 +1066,7 @@ function readRelationFields(
       diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED',
-          `${label} is a list relation that stores its keys in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields from the schema this contract source reads and keep the key list as a plain field.`,
+          `${label} is a list relation that stores its keys in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields from the schema this contract source reads and keep the key list as a plain field. The Prisma 6 client then loses the relation fields too, so Prisma 6 code that reads or writes the relation through them (\`include\`, \`connect\`) has to use the key list instead.`,
           sourceId,
           relation?.span ?? field.span,
         ),

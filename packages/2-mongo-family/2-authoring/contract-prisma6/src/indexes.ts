@@ -112,7 +112,7 @@ function readFields(
       ctx.diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED',
-          `Index path "${path.join('.')}" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index.`,
+          `Index path "${path.join('.')}" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose \`db push\` builds its indexes from this schema.`,
           ctx.sourceId,
           nodePslSpan(element.syntax, ctx.sources),
         ),
