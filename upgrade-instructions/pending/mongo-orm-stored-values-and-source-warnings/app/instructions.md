@@ -2,10 +2,11 @@
 changes:
   - id: mongo-create-returns-stored-document
     summary: |
-      Mongo `create()` and `createAll()` now read the inserted documents back by `_id` and return
-      them decoded like a read, instead of returning the input with the new `_id`. A `Bson` field
-      comes back as a read returns it (a `Long` in the safe-integer range as a number, bytes as
-      `Binary`, a `BSONRegExp` as a `RegExp`), and a nullable field left out comes back as `null`.
+      Mongo `create()` and `createAll()` now return each inserted document as stored, decoded like
+      a read, instead of the input with the new `_id`. The ORM computes it from the document it
+      sent, through the client's BSON options, without a second query. A `Bson` field comes back
+      as a read returns it (a `Long` in the safe-integer range as a number, bytes as `Binary`, a
+      `BSONRegExp` as a `RegExp`), and a nullable field left out comes back as `null`.
   - id: mongo-reads-decode-includes-value-objects-and-absent-fields
     summary: |
       Mongo reads now decode included documents (`include(...)`) and composite-type (value
@@ -13,14 +14,17 @@ changes:
       reads as `null` instead of `undefined`.
   - id: mongo-where-filter-expressions-encoded
     summary: |
-      A `MongoFieldFilter` passed to the Mongo ORM's `where()` now encodes its comparison and
-      `$in`/`$nin` values through the field's codec, as the object form of `where()` does. Pass
-      application values: a `bigint` for an `Int64` field, a hex string or an `ObjectId` for an
-      `ObjectId` field.
+      A filter expression passed to the Mongo ORM's `where()` now encodes its comparison and
+      `$in`/`$nin` values through the field's codec, as the object form of `where()` does, and each
+      element of a whole-list comparison through the element codec. A value the codec refuses,
+      such as a driver `Long` for an `Int64` field (the codec takes a `bigint`) or a fraction for
+      an `Int32` field, fails with `RUNTIME.ENCODE_FAILED`. The object form of `where()` now also
+      refuses a fraction or an out-of-range number for an `Int32` field. This applies to the ORM
+      only: the query builder's `match()` sends values as given.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '\bMongoFieldFilter\.(?:eq|neq|gt|gte|lt|lte|in|nin|of)\('
+        - '\.where\(\s*(?:MongoFieldFilter|MongoAndExpr|MongoOrExpr|MongoNotExpr)\.'
   - id: mongo-writes-check-int32-enum-and-null-values
     summary: |
       The Mongo ORM refuses, with `RUNTIME.ENCODE_FAILED` naming the field, a write of a fraction
@@ -30,6 +34,25 @@ changes:
       validation" from the server, or a contract without one (TypeScript builder, Prisma 6 schema)
       stored the value. Filters still accept a value outside the enum and `null`, so they can find
       documents that hold one.
+  - id: mongo-list-elements-encoded
+    summary: |
+      The Mongo ORM encodes each element of a list field through the field's codec, on writes and
+      in filters. An `ObjectId[]`, `Int64[]`, `Decimal128[]` or `Binary[]` field now stores its
+      elements as `ObjectId`, `long`, `decimal` and `binData`, where before the whole list reached
+      the element codec and the write failed with `RUNTIME.ENCODE_FAILED`. A whole number in a
+      `Double[]` field is stored as a `double`.
+  - id: mongo-query-builder-bson-values-match
+    summary: |
+      A query-builder filter or raw command that compares with a driver class such as `ObjectId`,
+      `Long`, `Decimal128` or `Binary` now sends it as that BSON value. Before, the Mongo adapter
+      copied it into a plain object, so the filter matched nothing.
+  - id: mongo-upsert-keeps-create-values
+    summary: |
+      When `create` sets a field that has an update default (`@updatedAt`,
+      `temporal.updatedAt()`, `temporal.timestamp(onUpdate: now)`), `upsert()` now inserts the
+      `create` value, and still applies the update default on update, in one atomic command.
+      Before, the insert got the current time instead. Such an upsert refuses `pull()` by a match
+      document with `ORM.OPERATION_UNSUPPORTED`.
   - id: contract-source-warnings-are-diagnostics
     summary: |
       `prisma contract emit` and `prisma contract print` report contract source warnings, such as
@@ -52,7 +75,7 @@ changes:
 
 This change has no detection pattern: it depends on what the code does with the value `create()` or `createAll()` returns.
 
-Code that relied on getting its input objects back, such as a `Long`, `Int32`, `Double` or `Uint8Array` inside a `Bson` field, or a key missing for a nullable field it did not pass, now gets the values a read returns. Compare with what a read returns, or keep a reference to the input instead. Each create also reads the documents back, which adds one query per call.
+Code that relied on getting its input objects back, such as a `Long`, `Int32`, `Double` or `Uint8Array` inside a `Bson` field, or a key missing for a nullable field it did not pass, now gets the values a read returns. Compare with what a read returns, or keep a reference to the input instead.
 
 ## `mongo-reads-decode-includes-value-objects-and-absent-fields`
 
@@ -62,7 +85,27 @@ Remove code that converted driver classes by hand in included documents or compo
 
 ## `mongo-where-filter-expressions-encoded`
 
-For each match, pass the field's application value: a `bigint` for an `Int64` field (`MongoFieldFilter.gt('views', 5n)`, not `5`), decimal text for a `Decimal128` field, a hex string or an `ObjectId` for an `ObjectId` field. A value the field's codec refuses now fails with `RUNTIME.ENCODE_FAILED` before the query runs; before, it was sent as is. A filter on a `Bson` field with an `ObjectId`, `Long` or `Decimal128` now matches the stored value; before, it matched nothing.
+The pattern finds filter expressions written inside `where(...)`; also check expressions built elsewhere and passed to the ORM's `where()`. Leave filters passed to the query builder's `match()` as they are.
+
+For each field filter, pass the field's application value: a `bigint` for an `Int64` field, decimal text for a `Decimal128` field, a hex string or an `ObjectId` for an `ObjectId` field, and an integer in the signed 32-bit range for an `Int32` field. A value that is not a `MongoValue`, such as a `bigint`, an `ObjectId` or a driver `Long`, goes in a `MongoParamRef` from `@prisma/orm-mongo/value`: write `MongoFieldFilter.gt('views', new MongoParamRef(5n))` in place of `MongoFieldFilter.gt('views', Long.fromNumber(5))` or `5`. A value the field's codec refuses now fails with `RUNTIME.ENCODE_FAILED` before the query runs; before, it was sent as is. A filter on a `Bson` field with an `ObjectId`, `Long` or `Decimal128` now matches the stored value; before, it matched nothing.
+
+## `mongo-list-elements-encoded`
+
+This change has no detection pattern: it applies to every list field.
+
+Remove workarounds for list fields that failed to write, such as declaring an `ObjectId[]` field as `String[]` or `Bson`.
+
+## `mongo-query-builder-bson-values-match`
+
+This change has no detection pattern: filters that matched nothing do not look different in code.
+
+Remove workarounds for query-builder filters that compared with a driver class and matched nothing, such as running those queries through the driver's own collection.
+
+## `mongo-upsert-keeps-create-values`
+
+This change has no detection pattern: it depends on which fields `create` sets.
+
+Remove code that corrected such a field after an upsert inserted a document. If an upsert whose `create` sets such a field pulls by a match document, pull a single value instead, or leave the field out of `create` so the update default applies.
 
 ## `mongo-writes-check-int32-enum-and-null-values`
 
