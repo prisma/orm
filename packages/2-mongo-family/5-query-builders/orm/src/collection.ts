@@ -74,6 +74,7 @@ import type {
   ResolvedCreateInput,
   VariantNames,
 } from './types';
+import { upsertPipeline } from './upsert-pipeline';
 
 type ModelFieldKeys<
   TContract extends MongoContract,
@@ -160,7 +161,7 @@ export interface MongoCollection<
   /**
    * On insert: `update` fields are applied via `$set`, remaining `create` fields via `$setOnInsert`.
    * This means `update` values take precedence over `create` for overlapping fields on insert.
-   * A field that `create` sets and that has an update default (such as `temporal.updatedAt()`) keeps the `create` value on insert and advances on update: the update is tried first and the insert runs only when it matched nothing, so this case takes two commands instead of one.
+   * A field that `create` sets and that has an update default (such as `temporal.updatedAt()`) keeps the `create` value on insert and advances on update; that case is sent as one upsert with an update pipeline that tells an insert from an update.
    * Requires `.where()`.
    */
   upsert(input: {
@@ -658,25 +659,24 @@ class MongoCollectionImpl<
       return this.#upsertCommand(filter, withUpdateDefaults, allCreateFields);
     }
 
-    const updated = await this.#drainPlan(
-      new FindOneAndUpdateCommand(this.#collectionName, filter, withUpdateDefaults, false),
+    const results = await this.#drainPlan(
+      new FindOneAndUpdateCommand(
+        this.#collectionName,
+        filter,
+        upsertPipeline({
+          filter,
+          update: withUpdateDefaults,
+          create: allCreateFields,
+          createWins: new Set(generatedSetByCreate),
+        }),
+        true,
+      ),
       this.#modelResultShape(),
     );
-    if (updated[0] !== undefined) {
-      return blindCast<
-        IncludedRow<TContract, ModelName, TIncludes>,
-        'FindOneAndUpdateCommand plan carries the model resultShape; the runtime decodes the returned document like a read'
-      >(updated[0]);
-    }
-    const { $set: setWithDefaults = {}, ...otherOperators } = withUpdateDefaults;
-    const insertSet = Object.fromEntries(
-      Object.entries(setWithDefaults).filter(([field]) => !generatedSetByCreate.includes(field)),
-    );
-    return this.#upsertCommand(
-      filter,
-      Object.keys(insertSet).length > 0 ? { ...otherOperators, $set: insertSet } : otherOperators,
-      allCreateFields,
-    );
+    return blindCast<
+      IncludedRow<TContract, ModelName, TIncludes>,
+      'FindOneAndUpdateCommand upsert plan carries the model resultShape; the runtime decodes the returned document like a read'
+    >(results[0]);
   }
 
   async #upsertCommand(

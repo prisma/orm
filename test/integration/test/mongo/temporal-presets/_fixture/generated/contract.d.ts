@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'f00103a374af650f981aa1c58701ad19ffa4eec3cf0e42c937b561543bb8dcb3'>;
+  StorageHashBase<'bcce40f2de5df827f46fb9675429586ce44f811aedcc5eb0373dc83cca0d2301'>;
 export type ExecutionHash =
   ExecutionHashBase<'fc6b534a4d35b72e0713e30332f0ff28c10df68fcbbeea311c0df1a82cacb080'>;
 export type ProfileHash =
@@ -37,9 +37,11 @@ export type FieldOutputTypes = {
     readonly Post: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
       readonly createdAt: CodecTypes['mongo/date@1']['output'];
+      readonly note: CodecTypes['mongo/string@1']['output'] | null;
       readonly title: CodecTypes['mongo/string@1']['output'];
       readonly touchedAt: CodecTypes['mongo/date@1']['output'];
       readonly updated_at: CodecTypes['mongo/date@1']['output'];
+      readonly views: CodecTypes['mongo/int32@1']['output'] | null;
     };
     readonly View: { readonly path: CodecTypes['mongo/string@1']['output'] };
   };
@@ -55,9 +57,11 @@ export type FieldInputTypes = {
     readonly Post: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
       readonly createdAt: CodecTypes['mongo/date@1']['input'];
+      readonly note: CodecTypes['mongo/string@1']['input'] | null;
       readonly title: CodecTypes['mongo/string@1']['input'];
       readonly touchedAt: CodecTypes['mongo/date@1']['input'];
       readonly updated_at: CodecTypes['mongo/date@1']['input'];
+      readonly views: CodecTypes['mongo/int32@1']['input'] | null;
     };
     readonly View: { readonly path: CodecTypes['mongo/string@1']['input'] };
   };
@@ -80,9 +84,11 @@ export namespace Models {
   export type unbound_Post = {
     _id: CodecTypes['mongo/objectId@1']['output'];
     createdAt: CodecTypes['mongo/date@1']['output'];
+    note: CodecTypes['mongo/string@1']['output'] | null;
     title: CodecTypes['mongo/string@1']['output'];
     touchedAt: CodecTypes['mongo/date@1']['output'];
     updated_at: CodecTypes['mongo/date@1']['output'];
+    views: CodecTypes['mongo/int32@1']['output'] | null;
     readonly [RelationKeys]?: never;
   };
   export type unbound_View = {
@@ -163,9 +169,11 @@ type ContractBase = Omit<
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
                     readonly createdAt: { readonly bsonType: 'date' };
+                    readonly note: { readonly bsonType: readonly ['null', 'string'] };
                     readonly title: { readonly bsonType: 'string' };
                     readonly touchedAt: { readonly bsonType: 'date' };
                     readonly updated_at: { readonly bsonType: 'date' };
+                    readonly views: { readonly bsonType: readonly ['null', 'int'] };
                   };
                   readonly required: readonly [
                     '_id',
@@ -245,6 +253,10 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
               };
+              readonly note: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
               readonly title: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
@@ -256,6 +268,10 @@ type ContractBase = Omit<
               readonly updated_at: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
+              };
+              readonly views: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
               };
             };
             readonly relations: Record<string, never>;

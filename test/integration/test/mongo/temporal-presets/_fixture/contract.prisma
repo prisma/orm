@@ -6,6 +6,8 @@ model Post {
   createdAt temporal.createdAt()
   updatedAt temporal.updatedAt() @map("updated_at")
   touchedAt temporal.timestamp(onUpdate: now)
+  views     Int32?
+  note      String?
 
   @@map("posts")
 }

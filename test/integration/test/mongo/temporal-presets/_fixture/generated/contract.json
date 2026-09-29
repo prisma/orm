@@ -92,6 +92,13 @@
                   "kind": "scalar"
                 }
               },
+              "note": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
               "title": {
                 "nullable": false,
                 "type": {
@@ -110,6 +117,13 @@
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "views": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/int32@1",
                   "kind": "scalar"
                 }
               }
@@ -235,6 +249,12 @@
                     "createdAt": {
                       "bsonType": "date"
                     },
+                    "note": {
+                      "bsonType": [
+                        "null",
+                        "string"
+                      ]
+                    },
                     "title": {
                       "bsonType": "string"
                     },
@@ -243,6 +263,12 @@
                     },
                     "updated_at": {
                       "bsonType": "date"
+                    },
+                    "views": {
+                      "bsonType": [
+                        "null",
+                        "int"
+                      ]
                     }
                   },
                   "required": [
@@ -264,7 +290,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "f00103a374af650f981aa1c58701ad19ffa4eec3cf0e42c937b561543bb8dcb3"
+    "storageHash": "bcce40f2de5df827f46fb9675429586ce44f811aedcc5eb0373dc83cca0d2301"
   },
   "execution": {
     "executionHash": "fc6b534a4d35b72e0713e30332f0ff28c10df68fcbbeea311c0df1a82cacb080",

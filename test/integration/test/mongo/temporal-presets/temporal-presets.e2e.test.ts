@@ -138,6 +138,61 @@ describe('Mongo temporal presets end to end', () => {
   );
 
   it(
+    'upsert that keeps create values runs as one command, with update operators, filtered by _id',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const y2k = new Date('2000-01-01T00:00:00Z');
+        const _id = '65f0000000000000000000f1';
+        const upsert = () =>
+          db.posts.where({ _id }).upsert({
+            create: { _id, title: '$literal-looking', touchedAt, updated_at: y2k, note: 'x' },
+            update: (u) => [u.views.inc(2), u.note.unset()],
+          });
+
+        const inserted = await upsert();
+        expect(inserted).toMatchObject({
+          _id,
+          title: '$literal-looking',
+          touchedAt,
+          updated_at: y2k,
+          views: 2,
+          note: null,
+        });
+        const updated = await upsert();
+        expect(updated).toMatchObject({ _id, title: '$literal-looking', views: 4, note: null });
+        expect(updated.updated_at.getTime()).toBeGreaterThan(y2k.getTime());
+        expect(updated.touchedAt).toEqual(updated.updated_at);
+        expect(await mongoDb.collection('posts').countDocuments()).toBe(1);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'concurrent upserts that keep create values never lose the update default',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const y2k = new Date('2000-01-01T00:00:00Z');
+        for (let round = 0; round < 40; round++) {
+          const title = `race-${round}`;
+          const results = await Promise.all(
+            Array.from({ length: 6 }, () =>
+              db.posts.where({ title }).upsert({
+                create: { title, touchedAt: y2k, updated_at: y2k },
+                update: (u) => [u.views.inc(1)],
+              }),
+            ),
+          );
+          const stored = await mongoDb.collection('posts').find({ title }).toArray();
+          const inserts = results.filter((row) => row.updated_at.getTime() === y2k.getTime());
+          expect(inserts.every((row) => row.views === 1)).toBe(true);
+          expect(inserts).toHaveLength(stored.length);
+          expect(stored.reduce((sum, doc) => sum + doc['views'], 0)).toBe(6);
+        }
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'mongo() fills generated fields through the facade',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ client, mongoDb }) => {

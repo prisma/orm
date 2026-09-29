@@ -258,27 +258,33 @@ describe('ORM upsert applies both halves', () => {
     expect(defaults.calls[1]?.defaultValueCache).toBe(defaults.calls[0]?.defaultValueCache);
   });
 
-  it('when create sets a field with an update default, tries the update first and inserts that value', async () => {
-    const { executor, plans } = recordingExecutor([], []);
+  it('when create sets a field with an update default, sends one upsert whose pipeline picks the create value on insert', async () => {
+    const { executor, plans } = recordingExecutor([]);
     await users(executor, fakeMutationDefaults())
       .where(byEmail)
       .upsert({ create: input({ ...userData, loginCount: 3 }), update: { name: 'X' } });
-    const { name: _, ...insertOnly } = userData;
-    expect(
-      plans.map((plan) => {
-        const command = plan.command as unknown as Record<string, unknown>;
-        return { upsert: command['upsert'], update: unwrap(command['update']) };
-      }),
-    ).toEqual([
-      { upsert: false, update: { $set: { name: 'X', loginCount: 9 } } },
-      {
-        upsert: true,
-        update: {
-          $set: { name: 'X' },
-          $setOnInsert: { ...insertOnly, loginCount: 3 },
-        },
-      },
-    ]);
+    expect(plans).toHaveLength(1);
+    const command = plans[0]!.command as unknown as {
+      upsert: boolean;
+      update: ReadonlyArray<{ kind: string; fields: Record<string, unknown> }>;
+    };
+    expect(command.upsert).toBe(true);
+    expect(command.update.map((stage) => stage.kind)).toEqual(['addFields']);
+    const fields = command.update[0]!.fields;
+    expect(Object.keys(fields).sort()).toEqual(Object.keys({ ...userData, loginCount: 0 }).sort());
+    expect(fields['loginCount']).toMatchObject({
+      kind: 'cond',
+      then_: { kind: 'literal', value: expect.objectContaining({ value: 3 }) },
+      else_: { kind: 'literal', value: expect.objectContaining({ value: 9 }) },
+    });
+    expect(fields['name']).toMatchObject({
+      kind: 'literal',
+      value: expect.objectContaining({ value: 'X' }),
+    });
+    expect(fields['email']).toMatchObject({
+      kind: 'cond',
+      else_: { kind: 'fieldRef', path: 'email' },
+    });
   });
 
   it('with an empty update half, writes the create defaults on insert only', async () => {

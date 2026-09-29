@@ -23,6 +23,8 @@ export const contract = defineContract({}, ({ field, model }) => {
           createdAt: field.temporal.createdAt(),
           updated_at: field.temporal.updatedAt(),
           touchedAt: field.temporal.timestamp(undefined, 'now'),
+          views: field.int32().optional(),
+          note: field.string().optional(),
         },
       }),
       Event,
