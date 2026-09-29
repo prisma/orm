@@ -86,22 +86,19 @@ The contract carries no `$jsonSchema` validators, because a Prisma 6 database ha
 
 ##### Running the Prisma 6 and Prisma 8 CLIs in one project
 
-Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`:
+Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`, at the version of your `@prisma/client` (6.19.3 here):
+
+```sh
+pnpm add @prisma/orm-mongo@latest dotenv mongodb
+pnpm add -D prisma@latest prisma6@npm:prisma@6.19.3
+```
+
+Then add a script that runs the aliased Prisma 6 CLI:
 
 ```json
 {
   "scripts": {
     "prisma6": "node node_modules/prisma6/build/index.js --config prisma6.config.ts"
-  },
-  "dependencies": {
-    "@prisma/client": "6.19.3",
-    "@prisma/orm-mongo": "8.0.0-rc.13",
-    "dotenv": "^17.0.0",
-    "mongodb": "^7.0.0"
-  },
-  "devDependencies": {
-    "prisma": "8.0.0-rc.18",
-    "prisma6": "npm:prisma@6.19.3"
   }
 }
 ```
@@ -119,9 +116,10 @@ export default defineConfig({ schema: 'prisma/schema.prisma' });
 - With a config file, neither CLI loads `.env` by itself, so both config files import `dotenv/config`.
 - `@prisma/client` stays at the Prisma 6 CLI's version, and `prisma6 generate` generates it as before.
 - `mongodb` 7 is a peer dependency of `@prisma/orm-mongo`. Declare it: a package manager does not always add it for you (pnpm leaves it out when another package asks for a different major).
+- pnpm 10 runs no dependency install scripts until you approve them. Run `pnpm approve-builds` and approve `prisma`, `@prisma/engines` and `@prisma/client`: their scripts download the Prisma 6 engines and generate the Prisma 6 client.
 - `prisma orm init` in a Prisma 6 MongoDB project prints these steps instead of scaffolding (`CLI.INIT_PRISMA6_SCHEMA_FOUND`).
 
-This setup was run with pnpm 10.27, Prisma 6.19.3 and Prisma 8.0.0-rc.18 against a MongoDB replica set: `prisma6 db push` and `prisma6 generate`, a write through the generated Prisma 6 client, then `prisma contract emit`, `prisma db sign` and `prisma db verify`.
+This setup was run with pnpm 10.27 and Prisma 6.19.3 against a MongoDB replica set: `prisma6 db push` and `prisma6 generate`, a write through the generated Prisma 6 client, then `prisma contract emit`, `prisma db sign` and `prisma db verify`.
 
 ##### Keeping Prisma 8 in step with Prisma 6
 

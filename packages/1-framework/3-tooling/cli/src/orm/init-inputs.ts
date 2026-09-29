@@ -38,6 +38,7 @@ import {
   targetEntrypoint,
   targetLabel,
   targetPackageName,
+  targetPeerPackages,
 } from '../commands/init/templates/code-templates';
 import {
   type CheckPrisma7Source,
@@ -655,6 +656,7 @@ function prisma6SchemaFound(
       cliVersion: cli.kind === 'earlier' ? cli.version : undefined,
       ownConfigPath,
       targetPackage: targetPackageName(target, resolveImportSpecifier),
+      peerPackages: targetPeerPackages(target),
       targetConfigEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
     }),
   });

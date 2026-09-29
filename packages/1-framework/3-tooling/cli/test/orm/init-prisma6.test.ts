@@ -111,7 +111,7 @@ describe(
           {
             kind: 'run-command',
             label: 'Install the Prisma 8 packages',
-            command: 'pnpm add @prisma/orm-mongo dotenv',
+            command: 'pnpm add @prisma/orm-mongo dotenv mongodb',
           },
           {
             kind: 'run-command',

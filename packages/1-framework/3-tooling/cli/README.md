@@ -66,7 +66,7 @@ Each engine command declares a `brief` (one-liner used in command trees and head
 
 ### `prisma orm init`
 
-Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, `dotenv`, and `prisma@latest`; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
+Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, the driver it declares as a peer dependency (`mongodb` for MongoDB), `dotenv`, and `prisma@latest`; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
 
 **Canonical command:**
 ```bash
