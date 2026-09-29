@@ -112,7 +112,10 @@ const byEmail = MongoFieldFilter.eq('email', 'a@b.c');
 describe('ORM create paths apply onCreate defaults', () => {
   it('create writes the generated value and returns it on the row', async () => {
     const defaults = fakeMutationDefaults();
-    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }]);
+    const { executor, plans } = recordingExecutor(
+      [{ insertedId: 'id-1' }],
+      [{ _id: 'id-1', ...userData, loginCount: 7 }],
+    );
     const row = await users(executor, defaults).create(input(userData));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toEqual({
       ...userData,
@@ -130,14 +133,20 @@ describe('ORM create paths apply onCreate defaults', () => {
   });
 
   it('create keeps an explicit value', async () => {
-    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }]);
+    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }], [{ _id: 'id-1' }]);
     await users(executor, fakeMutationDefaults()).create(input({ ...userData, loginCount: 3 }));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toMatchObject({ loginCount: 3 });
   });
 
   it('createAll applies defaults per document through one shared cache', async () => {
     const defaults = fakeMutationDefaults();
-    const { executor, plans } = recordingExecutor([{ insertedIds: ['a', 'b'] }]);
+    const { executor, plans } = recordingExecutor(
+      [{ insertedIds: ['a', 'b'] }],
+      [
+        { _id: 'a', loginCount: 7 },
+        { _id: 'b', loginCount: 7 },
+      ],
+    );
     const rows = await users(executor, defaults)
       .createAll([input(userData), input({ ...userData, name: 'Bob' })])
       .toArray();
@@ -153,7 +162,7 @@ describe('ORM create paths apply onCreate defaults', () => {
 
   it('create drops an explicit undefined before applying defaults, so the default fills it', async () => {
     const defaults = fakeMutationDefaults();
-    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }]);
+    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }], [{ _id: 'id-1' }]);
     await users(executor, defaults).create(input({ ...userData, loginCount: undefined }));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toEqual({
       ...userData,
@@ -286,7 +295,7 @@ describe('mongoOrm', () => {
   });
 
   it('passes mutationDefaults to every root collection', async () => {
-    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }]);
+    const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }], [{ _id: 'id-1' }]);
     const orm = mongoOrm({ contract, executor, mutationDefaults: fakeMutationDefaults() });
     await orm.users.create(input(userData));
     expect(unwrap(commandOf(plans, 'insertOne')['document'])).toMatchObject({ loginCount: 7 });

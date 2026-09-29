@@ -114,11 +114,11 @@ export interface MongoCollection<
   all(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Executes the query with limit 1. Returns the first matching row or `null`. */
   first(): Promise<IncludedRow<TContract, ModelName, TIncludes> | null>;
-  /** Returns the input data with the server-assigned `_id`. Does not re-read the stored document. */
+  /** Inserts the document and returns it as stored, read back by `_id` and decoded like a read. */
   create(
     data: ResolvedCreateInput<TContract, ModelName, TVariant>,
   ): Promise<IncludedRow<TContract, ModelName, TIncludes>>;
-  /** Returns input rows with server-assigned `_id`s. Does not re-read stored documents. */
+  /** Inserts the documents and returns them as stored, read back by `_id` in input order and decoded like a read. */
   createAll(
     data: ReadonlyArray<ResolvedCreateInput<TContract, ModelName, TVariant>>,
   ): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
@@ -408,10 +408,11 @@ class MongoCollectionImpl<
       { insertedId: unknown },
       'InsertOneCommand runtime result exposes the server-assigned insertedId, decoded via the _id codec'
     >(results[0]).insertedId;
+    const [row] = await this.#readInserted('create', [insertedId]);
     return blindCast<
       IncludedRow<TContract, ModelName, TIncludes>,
-      'created row combines resolved model input with the server-assigned _id'
-    >({ _id: insertedId, ...normalized });
+      'the inserted document read back through the model result shape'
+    >(row);
   }
 
   createAll(
@@ -441,11 +442,11 @@ class MongoCollectionImpl<
         { insertedIds: readonly unknown[] },
         'InsertManyCommand runtime result exposes insertedIds in input order, decoded via the _id codec'
       >(results[0]).insertedIds;
-      for (let i = 0; i < normalizedRows.length; i++) {
+      for (const row of await self.#readInserted('createAll', insertedIds)) {
         yield blindCast<
           IncludedRow<TContract, ModelName, TIncludes>,
-          'created row combines resolved model input with its server-assigned _id'
-        >({ _id: insertedIds[i], ...normalizedRows[i] });
+          'an inserted document read back through the model result shape'
+        >(row);
       }
     }
     return new AsyncIterableResult(gen());
@@ -664,6 +665,43 @@ class MongoCollectionImpl<
       IncludedRow<TContract, ModelName, TIncludes>,
       'FindOneAndUpdateCommand upsert plan carries the model resultShape; the runtime decodes the returned document like a read'
     >(results[0]);
+  }
+
+  /**
+   * Reads the inserted documents back by `_id`, in the order of `ids`, so a create returns what is stored decoded as a read decodes it, as the SQL ORM client's `RETURNING` does.
+   */
+  async #readInserted(method: string, ids: readonly unknown[]): Promise<unknown[]> {
+    const idField = this.#modelFields()['_id'];
+    const idFilter = MongoFieldFilter.in(
+      '_id',
+      ids.map((id) => this.#wrapFieldValue(id, idField, '_id')),
+    );
+    const byId = new Map<unknown, unknown>();
+    const reader = this.#clone({
+      filters: [idFilter],
+      includes: [],
+      selectedFields: undefined,
+      orderBy: undefined,
+      limit: undefined,
+      offset: undefined,
+    });
+    for await (const row of reader.#query()) {
+      byId.set(
+        blindCast<Record<string, unknown>, 'a decoded model row is a document'>(row)['_id'],
+        row,
+      );
+    }
+    return ids.map((id) => {
+      const row = byId.get(id);
+      if (row === undefined) {
+        throw ormError(
+          'ORM.MUTATION_ROW_MISSING',
+          `${method}() inserted a document into collection '${this.#collectionName}' but could not read it back by _id`,
+          { meta: { method, collection: this.#collectionName, id: String(id) } },
+        );
+      }
+      return row;
+    });
   }
 
   async #readMatchingIds(): Promise<unknown[]> {
