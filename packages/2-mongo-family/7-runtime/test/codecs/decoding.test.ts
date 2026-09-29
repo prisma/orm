@@ -292,9 +292,58 @@ describe('decodeMongoRow', () => {
     } catch (e) {
       if (!isRuntimeError(e)) throw e;
       const preview = (e.details as { wirePreview: string }).wirePreview;
-      // String([object Object]) = '[object Object]'.
-      expect(preview).toBe('[object Object]');
+      expect(preview).toBe('{"nested":1}');
     }
+  });
+
+  describe('a decode failure names the document it read', () => {
+    const throwingRegistry = () => {
+      const registry = newMongoCodecRegistry();
+      registry.register(
+        mongoCodec({
+          typeId: 'throws@1',
+          encode: (v: string) => v,
+          decode: () => {
+            throw new Error('boom');
+          },
+        }),
+      );
+      return registry;
+    };
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: { f: { kind: 'leaf', codecId: 'throws@1', nullable: false } },
+    };
+
+    it('by its ObjectId _id, and previews BSON values in the field', async () => {
+      const id = new ObjectId('65f0000000000000000000a1');
+      await expect(
+        decodeMongoRow(
+          { _id: id, f: { owner: id, at: new Date(0) } },
+          shape,
+          throwingRegistry(),
+          'items',
+        ),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          "Failed to decode field f of the document with _id 65f0000000000000000000a1 in collection 'items' with codec 'throws@1': boom",
+        details: {
+          documentId: '65f0000000000000000000a1',
+          wirePreview: '{"owner":"65f0000000000000000000a1","at":"1970-01-01T00:00:00.000Z"}',
+        },
+      });
+    });
+
+    it('by a string _id, quoted', async () => {
+      await expect(
+        decodeMongoRow({ _id: 'order-7', f: 1 }, shape, throwingRegistry(), 'items'),
+      ).rejects.toMatchObject({
+        message:
+          "Failed to decode field f of the document with _id \"order-7\" in collection 'items' with codec 'throws@1': boom",
+        details: { documentId: '"order-7"' },
+      });
+    });
   });
 
   it('truncates long string wirePreviews to 100 chars with an ellipsis', async () => {

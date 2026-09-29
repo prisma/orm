@@ -2,27 +2,52 @@ import type { CodecCallContext } from '@internal/framework-components/codec';
 import { runtimeError } from '@internal/framework-components/runtime';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { MongoCodecLookup } from '../mongo-execution-stack';
 
 const WIRE_PREVIEW_LIMIT = 100;
 
-function previewWireValue(wireValue: unknown): string {
-  if (typeof wireValue === 'string') {
-    return wireValue.length > WIRE_PREVIEW_LIMIT
-      ? `${wireValue.substring(0, WIRE_PREVIEW_LIMIT)}...`
-      : wireValue;
-  }
-  return String(wireValue).substring(0, WIRE_PREVIEW_LIMIT);
+function truncate(text: string): string {
+  return text.length > WIRE_PREVIEW_LIMIT ? `${text.substring(0, WIRE_PREVIEW_LIMIT)}...` : text;
 }
 
 /**
- * Every decode failure names the collection and field. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) passes through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
+ * JSON text of the wire value, using each BSON class's own JSON form (an `ObjectId` as its hex string, a `Date` as ISO text), or `String(value)` when it has none.
+ */
+function previewWireValue(wireValue: unknown): string {
+  if (typeof wireValue === 'string') return truncate(wireValue);
+  try {
+    const json = JSON.stringify(wireValue, (_key, value: unknown) =>
+      typeof value === 'bigint' ? `${value}n` : value,
+    );
+    return truncate(json ?? String(wireValue));
+  } catch {
+    return truncate(String(wireValue));
+  }
+}
+
+function hasHexString(value: object): value is { toHexString(): string } {
+  return 'toHexString' in value && typeof value.toHexString === 'function';
+}
+
+function describeDocumentId(id: unknown): string | undefined {
+  if (id === undefined) return undefined;
+  if (typeof id === 'string') return JSON.stringify(id);
+  if (typeof id === 'object' && id !== null && hasHexString(id)) return id.toHexString();
+  return previewWireValue(id);
+}
+
+/**
+ * Every decode failure names the collection and field, and the `_id` of the document when the row carries one. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) passes through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
  */
 function wrapDecodeFailure(
   error: unknown,
-  collection: string,
-  path: string,
+  location: {
+    readonly collection: string;
+    readonly path: string;
+    readonly documentId: string | undefined;
+  },
   codecId: string,
   wireValue: unknown,
 ): never {
@@ -30,14 +55,17 @@ function wrapDecodeFailure(
   if (isStructuredError(error) && error.code !== 'RUNTIME.DECODE_FAILED') {
     throw error;
   }
+  const { collection, path, documentId } = location;
   const message = error instanceof Error ? error.message : String(error);
+  const document = documentId === undefined ? '' : ` of the document with _id ${documentId}`;
   const wrapped = runtimeError(
     'RUNTIME.DECODE_FAILED',
-    `Failed to decode field ${path} in collection '${collection}' with codec '${codecId}': ${message}`,
+    `Failed to decode field ${path}${document} in collection '${collection}' with codec '${codecId}': ${message}`,
     {
       ...codecDetails,
       collection,
       path,
+      ...ifDefined('documentId', documentId),
       codec: codecId,
       wirePreview: previewWireValue(wireValue),
     },
@@ -60,6 +88,7 @@ export async function decodeMongoRow(
     return row;
   }
   const rowObj = blindCast<Record<string, unknown>, 'a non-null object row is a document'>(row);
+  const documentId = describeDocumentId(rowObj['_id']);
   const out: Record<string, unknown> = {};
   const tasks: Array<Promise<void>> = [];
 
@@ -79,7 +108,7 @@ export async function decodeMongoRow(
         try {
           assign(await codec.decode(wire, ctx));
         } catch (error) {
-          wrapDecodeFailure(error, collection, path, codecId, wire);
+          wrapDecodeFailure(error, { collection, path, documentId }, codecId, wire);
         }
       })(),
     );
