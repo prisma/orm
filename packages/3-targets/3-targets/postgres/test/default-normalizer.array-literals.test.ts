@@ -260,9 +260,29 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
-  it('skips array parsing when the value is not a brace-delimited literal', () => {
-    expect(parsePostgresDefault('NULL', 'text[]')).toEqual({ kind: 'literal', value: null });
+  it.each(['NULL', 'NULL::text[]'])(
+    'reads the SQL NULL default %s on an array column as null',
+    (raw) => {
+      expect(parsePostgresDefault(raw, 'text[]')).toEqual({ kind: 'literal', value: null });
+    },
+  );
+
+  it('reads an array literal written without the outer cast', () => {
+    expect(parsePostgresDefault("'{a,b}'", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
   });
+
+  it.each([
+    { raw: "'{{a,b},{c,d}}'", nativeType: 'text[]' },
+    { raw: `'{"[12345678901234567890]"}'`, nativeType: 'jsonb[]' },
+  ])(
+    'keeps the raw expression for $raw on a $nativeType column when no array reader reads it',
+    ({ raw, nativeType }) => {
+      expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'function', expression: raw });
+    },
+  );
 
   it('does not treat a brace literal as an array default without an array native type', () => {
     expect(parsePostgresDefault("'{1,2}'::integer[]")).toEqual({

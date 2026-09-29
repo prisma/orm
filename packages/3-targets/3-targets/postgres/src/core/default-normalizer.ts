@@ -440,6 +440,8 @@ export function parsePostgresDefault(
         return { kind: 'literal', value: parsed };
       }
     }
+    if (NULL_PATTERN.test(trimmed)) return { kind: 'literal', value: null };
+    return { kind: 'function', expression: trimmed };
   }
 
   const canonicalTimestamp = canonicalizeTimestampDefault(trimmed);
