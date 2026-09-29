@@ -33,10 +33,15 @@ const BSON_VALUE_TAGS: ReadonlySet<string> = new Set([
 const BSON_VERSION = Symbol.for('@@mdb.bson.version');
 const BSON_MAJOR: unknown = Reflect.get(new MinKey(), BSON_VERSION);
 
+const ENCODE_FIX_BY_RECEIVED: Readonly<Record<string, string>> = {
+  DBRef: 'Write it as a { $ref, $id } document instead.',
+};
+
 function encodeRefused(received: string, path: string): never {
+  const fix = ENCODE_FIX_BY_RECEIVED[received];
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
-    `${MONGO_BSON_CODEC_ID} value must be a BSON value; received ${received} at ${where(path)}`,
+    `${MONGO_BSON_CODEC_ID} value must be a BSON value; received ${received} at ${where(path)}${fix === undefined ? '' : `. ${fix}`}`,
     { meta: { codecId: MONGO_BSON_CODEC_ID, received, valuePath: path } },
   );
 }

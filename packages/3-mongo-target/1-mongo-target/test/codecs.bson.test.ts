@@ -68,11 +68,20 @@ describe('mongoBsonCodec encode', () => {
     ['bigint', 1n],
     ['symbol', Symbol('s')],
     ['function', () => 1],
-    ['DBRef', new DBRef('c', new ObjectId())],
   ])('refuses %s nested in an object and an array, naming the path', async (received, value) => {
     await expect(
       mongoBsonCodec.encode(notBson({ outer: { items: [0, { value }] } }), {}),
     ).rejects.toThrow(encodeRefusal(received, 'outer.items.1.value'));
+  });
+
+  it('refuses the driver`s DBRef class and says to write the document it stands for', async () => {
+    await expect(
+      mongoBsonCodec.encode(notBson({ link: new DBRef('c', new ObjectId()) }), {}),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message:
+        'mongo/bson@1 value must be a BSON value; received DBRef at link. Write it as a { $ref, $id } document instead.',
+    });
   });
 
   it.each([
