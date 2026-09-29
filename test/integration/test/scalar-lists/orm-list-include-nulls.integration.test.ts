@@ -39,6 +39,18 @@ model Item {
 }
 `;
 
+interface ItemsQuery {
+  select(...fields: readonly string[]): ItemsQuery;
+  orderBy(order: (item: { readonly id: { asc(): unknown } }) => unknown): ItemsQuery;
+}
+
+interface OwnerCollection {
+  include(
+    relation: 'items',
+    refine: (items: ItemsQuery) => ItemsQuery,
+  ): { all(): Promise<readonly unknown[]> };
+}
+
 const controlStack = createControlStack({
   family: sql,
   target: postgres,
@@ -132,7 +144,10 @@ describe('an included relation with list columns', { concurrent: false }, () => 
             extensions: [],
           }),
         });
-        const db = orm({ runtime, context });
+        // The contract is authored at test time, so the ORM is not typed by an emitted contract; this names the part of it the test uses.
+        const db = orm({ runtime, context }) as unknown as {
+          readonly public: { readonly Owner: OwnerCollection };
+        };
 
         const owners = await db.public.Owner.include('items', (items) =>
           items.select('id', 'tags', 'scores', 'labels').orderBy((item) => item.id.asc()),
