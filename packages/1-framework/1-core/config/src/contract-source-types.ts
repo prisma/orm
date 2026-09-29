@@ -70,11 +70,11 @@ export interface ContractSourceContext {
 export type ContractSourceFormat = 'psl' | 'typescript';
 
 /**
- * A tool other than Prisma 8 that applies schema changes to the database a contract source describes. Prisma 8 then only signs and verifies that database.
+ * A tool other than Prisma 8 that applies schema changes to the database a contract source describes. Prisma 8 then only signs and verifies that database: `db init`, `db update` and `db migrate` refuse to change it.
  */
 export interface ContractSourceSchemaOwner {
-  /** What the user does in that tool to apply a schema change, worded as a next action. */
-  readonly applySchemaChange: string;
+  /** Advice text, worded as a next action: what the user does in that tool to apply a schema change. */
+  readonly applySchemaChangeAdvice: string;
 }
 
 export interface ContractSourceProviderBase {
@@ -85,7 +85,7 @@ export interface ContractSourceProviderBase {
    */
   readonly inputs?: readonly string[];
   /**
-   * Set when another tool applies schema changes to the database this source describes. When `db verify` or `db sign` finds the database behind the contract, it points at that tool and then at `db sign`, instead of at a Prisma 8 migration.
+   * Set when another tool applies schema changes to the database this source describes. When `db verify` or `db sign` finds the app's schema behind the contract, it points at that tool and then at `db sign`, instead of at a Prisma 8 migration, and `db init`, `db update` and `db migrate` refuse to run.
    */
   readonly schemaOwner?: ContractSourceSchemaOwner;
   readonly load: (

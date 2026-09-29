@@ -97,7 +97,7 @@ const OWNED_CONTRACT = {
     format: 'psl',
     inputs: [],
     load: async () => ({}),
-    schemaOwner: { applySchemaChange: 'Apply the schema change with the owning tool' },
+    schemaOwner: { applySchemaChangeAdvice: 'Apply the schema change with the owning tool' },
   },
   output: 'output/contract.json',
 };
@@ -514,6 +514,34 @@ describe('db verify', () => {
       );
 
       expect(diagnosticsOf(run)[0]?.nextActions).toEqual(OWNED_ACTIONS);
+    });
+
+    it('keeps the owning tool to the app space, which the contract source describes', async () => {
+      const dir = await projectDir();
+      mocks.dbVerify.mockResolvedValue(
+        aggregateOk({
+          perSpace: [
+            ['app', DRIFTED],
+            ['supabase', DRIFTED],
+          ],
+        }),
+      );
+
+      const run = await harness(ormConfig({ contract: OWNED_CONTRACT })).run(
+        ['db', 'verify', '--json'],
+        { cwd: dir },
+      );
+
+      expect(diagnosticsOf(run).map((entry) => entry.nextActions)).toEqual([
+        OWNED_ACTIONS,
+        [
+          {
+            kind: 'user-choice',
+            label:
+              'Make the database match the "supabase" extension package this project installs, or install the version that matches the database, then verify again',
+          },
+        ],
+      ]);
     });
 
     it('offers to change the database, or the contract source', async () => {

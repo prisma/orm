@@ -31,6 +31,7 @@ import { migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
+  ownedExtensionSpaceDriftNextActions,
   readEmittedContract,
   requireVerifyConnection,
   schemaDriftNextActions,
@@ -331,18 +332,22 @@ function schemaPresentations(inputs: {
  */
 function driftDiagnostics(inputs: {
   readonly perSpace: ReadonlyMap<string, CombinedVerifyResult['result']>;
+  readonly appSpaceId: string;
   readonly combined: CombinedVerifyResult;
   readonly ownerActions: readonly NextAction[] | undefined;
 }): readonly Diagnostic[] {
+  const nextActionsFor = (space: string): readonly NextAction[] => {
+    if (inputs.ownerActions === undefined) {
+      return schemaDriftNextActions({ verb: 'verify', contractRef: undefined });
+    }
+    return space === inputs.appSpaceId
+      ? inputs.ownerActions
+      : ownedExtensionSpaceDriftNextActions(space);
+  };
   const perSpace = [...inputs.perSpace]
     .filter(([, result]) => !result.ok)
     .map(([space, result]) =>
-      schemaVerdictDiagnostic({
-        result,
-        space,
-        nextActions:
-          inputs.ownerActions ?? schemaDriftNextActions({ verb: 'verify', contractRef: undefined }),
-      }),
+      schemaVerdictDiagnostic({ result, space, nextActions: nextActionsFor(space) }),
     );
   if (perSpace.length > 0) {
     return perSpace;
@@ -489,6 +494,7 @@ export function createDbVerifyCommand(
                   ? []
                   : driftDiagnostics({
                       perSpace: aggregate.value.schemaResults,
+                      appSpaceId: aggregate.value.appSpaceId,
                       combined,
                       ownerActions,
                     }),
@@ -583,6 +589,7 @@ export function createDbVerifyCommand(
                   ...(driftCombined !== undefined && !driftCombined.result.ok
                     ? driftDiagnostics({
                         perSpace: aggregate.value.schemaResults,
+                        appSpaceId: aggregate.value.appSpaceId,
                         combined: driftCombined,
                         ownerActions,
                       })
@@ -629,6 +636,7 @@ export function createDbVerifyCommand(
                 exitCode: FINDINGS_EXIT_CODE,
                 diagnostics: driftDiagnostics({
                   perSpace: aggregate.value.schemaResults,
+                  appSpaceId: aggregate.value.appSpaceId,
                   combined,
                   ownerActions,
                 }),

@@ -1544,6 +1544,10 @@ Generic wrapper for a migration runner failure during execution that has no more
 
 A migration's `from` and `to` hashes are identical and it declares no data-transform operations, a pure no-op self-edge, which is only allowed when the migration runs at least one `dataTransform`. Change the contract, add a dataTransform, or delete the migration. Payload: `dirName`, `hash`.
 
+### MIGRATION.SCHEMA_OWNED_ELSEWHERE
+
+`db init`, `db update` or `db migrate` ran on a project whose contract source names another tool as the one that applies schema changes to the database, such as `prisma6Schema` (Prisma 6 `db push`) or `prisma7Schema` (Prisma 7 migrations). Prisma 8 only signs and verifies that database, so the command refuses before it connects, dry runs included. Apply the schema change with that tool, then run `db sign`; the next actions carry the tool's own advice. Payload: none.
+
 ### MIGRATION.SCHEMA_VERIFY_FAILED
 
 After applying migrations, the runner introspected the database and the resulting schema does not satisfy the destination contract; the apply is rolled back. Runner-level failure during `db init`/`db update`/`migrate`. Payload: `issues` (schema diff issues).

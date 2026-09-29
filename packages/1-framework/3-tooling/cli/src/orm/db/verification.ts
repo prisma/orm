@@ -9,7 +9,7 @@ import type {
 import { createControlStack, issueOutcome } from '@internal/framework-components/control';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { isStructuredErrorCode } from '@internal/utils/structured-error';
+import { docsUrlFor, isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
@@ -263,15 +263,42 @@ export function schemaFindingBlocks(inputs: {
 }
 
 /**
- * The advice for a database behind its contract when another tool applies the schema changes: apply the change with that tool, then sign again. `undefined` when Prisma 8 owns the schema.
+ * The advice for an app schema behind its contract when another tool applies the schema changes: apply the change with that tool, then sign again. `undefined` when Prisma 8 owns the schema.
  */
 export function schemaOwnerActions(config: PrismaNextConfig): readonly NextAction[] | undefined {
   const owner = config.contract?.source.schemaOwner;
   if (owner === undefined) return undefined;
   return [
-    { kind: 'user-choice', label: owner.applySchemaChange },
+    { kind: 'user-choice', label: owner.applySchemaChangeAdvice },
     { kind: 'run-command', label: 'Then sign the database again', command: '{bin} db sign' },
   ];
+}
+
+/**
+ * The advice for an extension's contract space behind its contract when another tool owns the schema. The contract source does not describe the space, so that tool's advice does not apply, and `db update` refuses to run.
+ */
+export function ownedExtensionSpaceDriftNextActions(space: string): readonly NextAction[] {
+  return [
+    chooseAction(
+      `Make the database match the "${space}" extension package this project installs, or install the version that matches the database, then verify again`,
+    ),
+  ];
+}
+
+/** A schema-changing command refused because the contract source names another tool as the one that changes the schema. */
+export function errorSchemaOwnedElsewhere(
+  commandName: string,
+  nextActions: readonly NextAction[],
+): CliStructuredError {
+  return new CliStructuredError(
+    'MIGRATION.SCHEMA_OWNED_ELSEWHERE',
+    "Another tool changes this database's schema",
+    {
+      why: `The contract source names another tool as the one that applies schema changes to this database, so ${commandName} does not change it. Prisma 8 only signs and verifies this database.`,
+      nextActions,
+      docsUrl: docsUrlFor('MIGRATION.SCHEMA_OWNED_ELSEWHERE'),
+    },
+  );
 }
 
 /**

@@ -90,7 +90,7 @@ export function prisma6Contract(
       format: 'psl',
       inputs: [schemaPath],
       schemaOwner: {
-        applySchemaChange:
+        applySchemaChangeAdvice:
           'Apply the schema change with Prisma 6 first: run `db push` with the Prisma 6 CLI (the `prisma6` script when both CLIs share the project)',
       },
       async load(context) {

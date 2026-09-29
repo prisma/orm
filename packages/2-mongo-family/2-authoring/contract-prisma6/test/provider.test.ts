@@ -46,7 +46,7 @@ describe('prisma6Contract', () => {
     expect(
       prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding }).source.schemaOwner,
     ).toEqual({
-      applySchemaChange:
+      applySchemaChangeAdvice:
         'Apply the schema change with Prisma 6 first: run `db push` with the Prisma 6 CLI (the `prisma6` script when both CLIs share the project)',
     });
   });

@@ -196,7 +196,9 @@ describe('db sign', () => {
             format: 'psl',
             inputs: [],
             load: async () => ({}),
-            schemaOwner: { applySchemaChange: 'Apply the schema change with the owning tool' },
+            schemaOwner: {
+              applySchemaChangeAdvice: 'Apply the schema change with the owning tool',
+            },
           },
           output: 'output/contract.json',
         },
