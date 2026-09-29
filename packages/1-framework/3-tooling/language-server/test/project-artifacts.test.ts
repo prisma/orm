@@ -12,23 +12,18 @@ import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
-import { type DocumentSnapshot, DocumentStore } from '../src/document-store';
+import { createDocumentSnapshot, type DocumentSnapshot } from '../src/document-snapshot';
+import { DocumentStore } from '../src/document-store';
 import { createProjectArtifacts, type ProjectArtifacts } from '../src/project-artifacts';
 import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
 
-const pipelineMock = vi.hoisted(() => ({
-  runPipeline: vi.fn<typeof import('../src/pipeline')['runPipeline']>(),
-}));
-
-// Pass-through spy on the parse seam so tests can count parses.
-vi.mock('../src/pipeline', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/pipeline')>();
-  pipelineMock.runPipeline.mockImplementation(actual.runPipeline);
-  return { ...actual, runPipeline: pipelineMock.runPipeline };
+vi.mock('@internal/psl-parser/syntax', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@internal/psl-parser/syntax')>();
+  return { ...actual, parse: vi.fn(actual.parse) };
 });
 
 afterEach(() => {
-  pipelineMock.runPipeline.mockClear();
+  vi.mocked(parse).mockClear();
 });
 
 const schemaUri = pathToFileURL('/abs/schema.psl').toString();
@@ -52,7 +47,7 @@ class TextMirror extends Map<string, string> {
   }
 
   override set(uri: string, text: string): this {
-    this.snapshots.set(uri, Object.freeze({ uri, text }));
+    this.snapshots.set(uri, createDocumentSnapshot(uri, text));
     return super.set(uri, text);
   }
 
@@ -119,6 +114,85 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
 }
 
 describe('createProjectArtifacts', () => {
+  it('shares snapshot parsing across project and interpretation replacements', () => {
+    const documents = new DocumentStore();
+    documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: cleanSource });
+    const firstInterpretation = interpretationDouble(() => ok({} as never));
+    const nextInterpretation = interpretationDouble(() =>
+      notOk({
+        summary: 'changed config',
+        diagnostics: [{ sourceId: schemaUri, code: 'CHANGED', message: 'changed' }],
+      }),
+    );
+    const create = (interpretation: ProjectInterpretation) =>
+      createProjectArtifacts({ inputs, readSnapshot: documents.readSnapshot,
+      onInterpretationError: vi.fn(),
+      interpretation, });
+    const first = create(firstInterpretation.interpretation);
+    const second = create(nextInterpretation.interpretation);
+    expect(parse).not.toHaveBeenCalled();
+    const previous = first.document(schemaUri)!;
+    expect(previous.interpretDiagnostics()).toEqual([]);
+    const current = second.document(schemaUri)!;
+    expect(current.document).toBe(previous.document);
+    expect(current.sourceFile).toBe(previous.sourceFile);
+    expect(current.interpretDiagnostics().map(({ code }) => code)).toEqual(['CHANGED']);
+    expect(firstInterpretation.spy).toHaveBeenCalledTimes(1);
+    expect(nextInterpretation.spy).toHaveBeenCalledTimes(1);
+    expect(parse).toHaveBeenCalledTimes(1);
+    expect(second.symbolTable()).not.toBe(first.symbolTable());
+  });
+
+  it('invalidates project artifacts on membership changes without reparsing retained snapshots', async () => {
+    const siblingUri = 'file:///abs/sibling.psl';
+    const texts = new TextMirror([
+      [schemaUri, cleanSource],
+      [siblingUri, twoModelSource],
+    ]);
+    const bothInputs = await resolveSchemaInputs(
+      { contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } } },
+      alwaysMember,
+    );
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    const project = createProjectArtifacts({ inputs: bothInputs, readSnapshot: texts.readSnapshot,
+    onInterpretationError: vi.fn(),
+    interpretation, });
+    const first = project.document(schemaUri)!;
+    const sibling = project.document(siblingUri)!;
+    const originalSources = project.sources;
+    const originalSymbols = project.symbolTable();
+    first.interpretDiagnostics();
+    expect(project.symbolDiagnostics()).toHaveLength(1);
+    project.updateInputs(inputs);
+    expect(project.document(siblingUri)).toBeUndefined();
+    expect(project.document(schemaUri)).toBe(first);
+    expect(project.sources).not.toBe(originalSources);
+    expect(() => project.sources.sourceFileFor(sibling.document.syntax)).toThrow(/No SourceFile/);
+    expect(project.symbolTable()).not.toBe(originalSymbols);
+    expect(project.symbolDiagnostics()).toEqual([]);
+    first.interpretDiagnostics();
+    project.updateInputs(bothInputs);
+    expect(project.document(siblingUri)?.document).toBe(sibling.document);
+    expect(project.symbolDiagnostics()).toHaveLength(1);
+    first.interpretDiagnostics();
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(parse).toHaveBeenCalledTimes(2);
+    expect(originalSources.sourceFileFor(sibling.document.syntax)).toBe(sibling.sourceFile);
+  });
+
+  it('maps malformed parser diagnostics without adding symbol diagnostics to the document', () => {
+    const { texts, store } = projectWithMirror();
+    const source = `${directive}model {`;
+    texts.set(schemaUri, source);
+    const result = store.document(schemaUri)!;
+    expect(result.diagnostics).toEqual(mapParseDiagnostics(parse(source, schemaUri).diagnostics));
+    expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result).not.toHaveProperty('symbolTable');
+    texts.set(schemaUri, `${cleanSource}\nmodel User {\n id Int @id\n}`);
+    expect(store.document(schemaUri)?.diagnostics.map(({ code }) => code)).not.toContain(
+      'PSL_DUPLICATE_DECLARATION',
+    );
+  });
   it.each([false, true])('refreshes disk artifacts with watcher coverage %s', async (watched) => {
     const dir = await mkdtemp(join(tmpdir(), 'project-artifacts-'));
     try {
@@ -135,7 +209,7 @@ describe('createProjectArtifacts', () => {
       const first = project.document(uri);
       expect(first).toBeDefined();
       expect(project.document(uri)).toBe(first);
-      expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
       await writeFile(path, twoModelSource);
       if (watched) {
         expect(project.document(uri)).toBe(first);
@@ -145,7 +219,7 @@ describe('createProjectArtifacts', () => {
       expect(second).not.toBe(first);
       expect(Object.keys(project.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
       expect(project.document(uri)).toBe(second);
-      expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(parse)).toHaveBeenCalledTimes(2);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -166,7 +240,7 @@ describe('createProjectArtifacts', () => {
     project.symbolTable();
     expect(project.document(liveUri)).toBe(first);
     expect(first.sourceFile.filename).toBe(schemaUri);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
     expect(
       documents.change({ uri: schemaUri, version: 2 }, [
         {
@@ -178,14 +252,14 @@ describe('createProjectArtifacts', () => {
     const second = project.document(schemaUri)!;
     expect(second).not.toBe(first);
     expect(project.document(liveUri)).toBe(second);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(2);
     documents.close(liveUri);
     documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: cleanSource });
     const third = project.document(liveUri)!;
     expect(third).not.toBe(first);
     expect(third.sourceFile.filename).toBe(schemaUri);
     expect(project.document(schemaUri)).toBe(third);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(3);
   });
   it('owns symbol diagnostics at project level in configured order with source filenames', async () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
@@ -204,7 +278,7 @@ describe('createProjectArtifacts', () => {
     interpretation, });
     const sibling = store.document(siblingUri)!;
     expect(sibling.diagnostics).toEqual([]);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
     expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
     const first = store.document(schemaUri)!;
     expect(store.symbolTable().topLevel.models['User']?.node.syntax.root()).toBe(
@@ -342,7 +416,7 @@ describe('createProjectArtifacts', () => {
   it('returns undefined for documents without mirrored text', () => {
     const { store } = projectWithMirror();
     expect(store.document(schemaUri)).toBeUndefined();
-    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('returns undefined for documents that are not configured inputs', () => {
@@ -351,7 +425,7 @@ describe('createProjectArtifacts', () => {
     texts.set(otherUri, cleanSource);
 
     expect(store.document(otherUri)).toBeUndefined();
-    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('returns undefined for a configured input without the prisma-8 directive', () => {
@@ -359,7 +433,7 @@ describe('createProjectArtifacts', () => {
     texts.set(schemaUri, unmarkedSource);
 
     expect(store.document(schemaUri)).toBeUndefined();
-    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('serves a configured input again once an edit adds the directive', () => {
@@ -430,7 +504,7 @@ describe('createProjectArtifacts', () => {
     texts.set(schemaUri, cleanSource);
 
     expect(Object.keys(store.symbolTable().topLevel.models)).toContain('User');
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
   });
 
   it('a document read after a symbol-table read reuses the same parse', () => {
@@ -439,7 +513,7 @@ describe('createProjectArtifacts', () => {
 
     store.symbolTable();
     expect(store.document(schemaUri)?.document).toBeDefined();
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
   });
 
   it('rebuilds the symbol table from a sibling input after the contributing document closes', async () => {
@@ -502,7 +576,7 @@ describe('createProjectArtifacts', () => {
     expect(store.document(schemaUri)).toBeUndefined();
     expect(() => store.sources.sourceFileFor(edited.document.syntax)).toThrow(/No SourceFile/);
     expect(store.sources.sourceFileFor(sibling.document.syntax)).toBe(sibling.sourceFile);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(3);
   });
 
   it('a replacement project rejects roots from the previous configuration', () => {
@@ -526,7 +600,7 @@ describe('createProjectArtifacts', () => {
     expect(() => store.symbolTable()).not.toThrow();
     expect(Object.keys(store.symbolTable().topLevel.models)).toEqual([]);
     expect(store.symbolDiagnostics()).toEqual([]);
-    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('keeps computing after its last open document closes (design decision 8)', () => {
@@ -733,7 +807,7 @@ describe('interpret slot', () => {
     expect(spy.mock.calls[2]?.[0].sources).toBe(store.sources);
     expect(spy.mock.calls[2]?.[0].symbolTable).toBe(store.symbolTable());
     expect(store.symbolTable()).not.toBe(siblingSymbols);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(2);
 
     texts.set(siblingUri, twoModelSource);
     store.document(siblingUri);

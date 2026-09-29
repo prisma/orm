@@ -41,7 +41,7 @@ import {
 import { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
-import type { PipelineInputs } from './pipeline';
+import type { LspControlStack } from './lsp-control-stack';
 import {
   createProjectArtifacts,
   type DocumentArtifacts,
@@ -78,7 +78,7 @@ interface ProjectState {
    * Resolved once per config and refreshed by the config-watch path — never
    * rebuilt per document.
    */
-  readonly controlStack: PipelineInputs;
+  readonly controlStack: LspControlStack;
   readonly interpretation?: ProjectInterpretation;
   readonly artifacts: ProjectArtifacts;
 }

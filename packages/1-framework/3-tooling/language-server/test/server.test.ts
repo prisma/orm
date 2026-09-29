@@ -100,9 +100,6 @@ const configLoaderMock = vi.hoisted(() => ({
 const configResolutionMock = vi.hoisted(() => ({
   resolveConfigInputs: vi.fn<ResolveInputs>(),
 }));
-const pipelineMock = vi.hoisted(() => ({
-  runPipeline: vi.fn<typeof import('../src/pipeline')['runPipeline']>(),
-}));
 
 vi.mock('@internal/config-loader', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@internal/config-loader')>();
@@ -117,11 +114,9 @@ vi.mock('../src/config-resolution', async (importOriginal) => {
   return { ...actual, resolveConfigInputs: configResolutionMock.resolveConfigInputs };
 });
 
-// Pass-through spy on the parse seam so tests can count parses.
-vi.mock('../src/pipeline', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/pipeline')>();
-  pipelineMock.runPipeline.mockImplementation(actual.runPipeline);
-  return { ...actual, runPipeline: pipelineMock.runPipeline };
+vi.mock('@internal/psl-parser/syntax', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@internal/psl-parser/syntax')>();
+  return { ...actual, parse: vi.fn(actual.parse) };
 });
 
 const root = tmpdir();
@@ -883,7 +878,7 @@ afterEach(async () => {
   harness = undefined;
   configResolutionMock.resolveConfigInputs.mockReset();
   configLoaderMock.findNearestConfigPathForFile.mockReset();
-  pipelineMock.runPipeline.mockClear();
+  vi.mocked(parse).mockClear();
 });
 
 describe('language server', { timeout: timeouts.databaseOperation }, () => {
@@ -987,7 +982,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const completions = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(completions.map(({ label }) => label)).toContain('Post');
     expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
-    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(schemaUri, updated);
+    expect(vi.mocked(parse)).toHaveBeenLastCalledWith(updated, schemaUri);
     expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
     expect(harness.publishCount(schemaUri)).toBe(0);
     expect(harness.publishCount(alias)).toBe(0);
@@ -1327,12 +1322,12 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     openDocument(harness, schemaUri, source);
     await harness.waitForDiagnosticsCount(schemaUri, 1);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     const items = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(items.map((item) => item.label)).toContain('User');
     await expect(requestSemanticTokens(harness, schemaUri)).resolves.not.toEqual({ data: [] });
     await expect(requestFoldingRanges(harness, schemaUri)).resolves.not.toEqual([]);
-    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('parses once for an edit followed by an immediate completion', async () => {
@@ -1354,7 +1349,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     openDocument(harness, schemaUri, initial);
     await harness.waitForDiagnosticsCount(schemaUri, 1);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     const republished = harness.waitForDiagnosticsCount(schemaUri, 2);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
@@ -1371,8 +1366,8 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       'User',
     ]);
     await republished;
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
-    expect(pipelineMock.runPipeline).toHaveBeenCalledWith(schemaUri, updated.source);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledWith(updated.source, schemaUri);
   });
 
   it('returns generic block parameter completions for configured PSL descriptors', async () => {
@@ -2916,7 +2911,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     openDocument(harness, schemaUri, '// use prisma-8\nmodel User {\n  id Int @id\n}\n');
     expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([]);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: duplicateModelSource }],
@@ -2926,20 +2921,20 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     expect(fullReportItems(report).map((diagnostic) => diagnostic.code)).toContain(
       'PSL_DUPLICATE_DECLARATION',
     );
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
 
     closeDocument(harness, schemaUri);
     await settle();
     expect(harness.publishCount(schemaUri)).toBe(0);
   });
 
-  it('reparses on the next pull after a config reload', async () => {
+  it('reuses the snapshot parse on the next pull after a config reload', async () => {
     harness = startHarness(resolveToSchema, pullDiagnosticsWithRefreshCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, duplicateModelSource);
     expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).not.toEqual([]);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     const refreshed = harness.waitForDiagnosticRefresh();
     harness.notifyConfigChanged();
     await refreshed;
@@ -2948,7 +2943,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     expect(fullReportItems(report).map((diagnostic) => diagnostic.code)).toContain(
       'PSL_DUPLICATE_DECLARATION',
     );
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('requests a diagnostics refresh instead of republishing when a config changes', async () => {

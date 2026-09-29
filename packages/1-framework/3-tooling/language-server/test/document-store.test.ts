@@ -40,11 +40,17 @@ describe('document store', () => {
     expect(second).not.toBe(first);
     expect(first.text).toBe('first');
     expect(second.text).toBe('second');
+    expect(first.sourceFile.text).toBe('first');
+    expect(second.sourceFile.text).toBe('second');
+    expect(first.parse()).toBe(first.parse());
+    expect(second.parse()).not.toBe(first.parse());
     store.close(alias);
     open(store, uri, 'first');
     const reopened = store.readSnapshot(alias)!;
     expect(reopened).not.toBe(first);
     expect(reopened).toEqual({ uri, text: 'first' });
+    expect(reopened.sourceFile.text).toBe('first');
+    expect(reopened.parse()).not.toBe(first.parse());
   });
   it('preserves non-file document URIs', () => {
     const store = new DocumentStore();
@@ -170,6 +176,9 @@ describe('document store', () => {
         expect(second).not.toBe(first);
         expect(second.text).toBe('changed content');
         expect(first.text).toBe('first');
+        expect(first.sourceFile.text).toBe('first');
+        expect(second.sourceFile.text).toBe('changed content');
+        expect(first.parse()).not.toBe(second.parse());
         expect(store.readSnapshot(file.uri)).toBe(second);
         open(store, file.uri, 'overlay');
         const overlay = store.readSnapshot(file.uri);

@@ -4,11 +4,7 @@ import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
-import type {
-  AttributeSpecContext,
-  AttributeSpecNamespace,
-  SymbolTable,
-} from '@internal/psl-parser';
+import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl-parser';
 import {
   assembleAttributeSpecs,
   buildSymbolTable,
@@ -18,7 +14,7 @@ import {
 import { ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
-import { type PipelineResult, runPipeline } from '../src/pipeline';
+import { createDocumentSnapshot } from '../src/document-snapshot';
 import { providePslSignatureHelp } from '../src/signature-help';
 
 vi.mock('@internal/config-loader', { spy: true });
@@ -26,13 +22,14 @@ vi.mock('@internal/config-loader', { spy: true });
 function pipelineWithSymbolTable(
   filename: string,
   text: string,
-): PipelineResult & { readonly symbolTable: SymbolTable } {
-  const pipeline = runPipeline(filename, text);
+) {
+  const snapshot = createDocumentSnapshot(filename, text);
+  const pipeline = snapshot.parse();
   const { symbolTable } = buildSymbolTable({
     documents: [pipeline.document],
     sources: pipeline.sources,
   });
-  return { ...pipeline, symbolTable };
+  return { ...pipeline, sourceFile: snapshot.sourceFile, symbolTable };
 }
 
 const rlsSpec = modelAttribute('rls', {
@@ -131,7 +128,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
         { key: 'value', type: { kind: 'str' } },
       ],
     });
-    expect(pipeline.parseDiagnostics).toEqual([]);
+    expect(pipeline.diagnostics).toEqual([]);
     const signature = providePslSignatureHelp({
       document: pipeline.document,
       sourceFile: pipeline.sourceFile,

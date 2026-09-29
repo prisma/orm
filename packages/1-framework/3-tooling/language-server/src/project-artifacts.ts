@@ -1,6 +1,7 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import {
   buildSymbolTable,
+  isPrismaNextSchema,
   type PslDiagnostic,
   type SymbolTable,
   type SymbolTableResult,
@@ -11,11 +12,11 @@ import type { ProjectInterpretation } from './config-resolution';
 import {
   type LspDiagnostic,
   mapInterpreterDiagnostic,
+  mapParseDiagnostics,
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
-import { computeDocumentDiagnostics } from './document-diagnostics';
-import type { DocumentSnapshot } from './document-store';
-import { canonicalFileIdentity, normalizeFileUri, type SchemaInputSet } from './schema-inputs';
+import type { DocumentSnapshot } from './document-snapshot';
+import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
   return new Set(Array.from(inputs.uris(), canonicalFileIdentity));
@@ -49,15 +50,11 @@ export interface ProjectArtifacts {
   updateInputs(next: SchemaInputSet): void;
 }
 
-interface CachedDocument {
-  readonly snapshot: DocumentSnapshot;
-  readonly artifacts: DocumentArtifacts;
-}
-
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
   const { readSnapshot, interpretation } = options;
   let inputs = options.inputs;
-  const documents = new Map<string, CachedDocument>();
+  const documents = new Map<string, DocumentSnapshot>();
+  const documentFacades = new WeakMap<DocumentSnapshot, DocumentArtifacts>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
   let interpretMemo:
@@ -71,7 +68,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     sources = new PslSources(
       Array.from(
         documents.values(),
-        ({ artifacts }) => [artifacts.document.syntax, artifacts.sourceFile] as const,
+        (snapshot) => [snapshot.parse().document.syntax, snapshot.sourceFile] as const,
       ),
     );
     symbolTableResult = undefined;
@@ -92,7 +89,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     activeInterpretation: ProjectInterpretation,
   ): ReadonlyMap<string, readonly LspDiagnostic[]> {
     const currentSymbolTable = readSymbolTable();
-    const allDocuments = Array.from(documents.values(), ({ artifacts }) => artifacts.document);
+    const allDocuments = Array.from(documents.values(), (snapshot) => snapshot.parse().document);
     const warnings: ContractSourceDiagnostic[] = [];
     const result = activeInterpretation.source.interpret(
       { documents: allDocuments, sources, symbolTable: currentSymbolTable },
@@ -108,8 +105,8 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       return new Map();
     }
     const sourceFileByFilename = new Map<string, SourceFile>();
-    for (const { artifacts } of documents.values()) {
-      sourceFileByFilename.set(artifacts.sourceFile.filename, artifacts.sourceFile);
+    for (const snapshot of documents.values()) {
+      sourceFileByFilename.set(snapshot.uri, snapshot.sourceFile);
     }
     const bySourceId = new Map<string, LspDiagnostic[]>();
     for (const diagnostic of diagnostics) {
@@ -183,33 +180,31 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
   function readDocument(uri: string): DocumentArtifacts | undefined {
     const identity = canonicalFileIdentity(uri);
     const snapshot = readSnapshot(uri);
-    if (snapshot === undefined) {
+    if (snapshot === undefined || !inputs.includes(uri) || !isPrismaNextSchema(snapshot.text)) {
       if (documents.delete(identity)) {
         refreshSources();
       }
       return undefined;
     }
-    const existing = documents.get(identity);
-    if (existing !== undefined && existing.snapshot === snapshot) {
-      return existing.artifacts;
+    if (documents.get(identity) !== snapshot) {
+      documents.set(identity, snapshot);
+      refreshSources();
     }
-    const resolvedUri = normalizeFileUri(snapshot.uri);
-    const computed = computeDocumentDiagnostics(resolvedUri, snapshot.text, inputs);
-    if (computed === null) {
-      if (documents.delete(identity)) {
-        refreshSources();
-      }
-      return undefined;
+    let facade = documentFacades.get(snapshot);
+    if (facade === undefined) {
+      facade = {
+        get document() {
+          return snapshot.parse().document;
+        },
+        get sourceFile() {
+          return snapshot.sourceFile;
+        },
+        diagnostics: mapParseDiagnostics(snapshot.parse().diagnostics),
+        interpretDiagnostics: createInterpretSlot(snapshot.uri, snapshot.sourceFile),
+      };
+      documentFacades.set(snapshot, facade);
     }
-    const artifacts: DocumentArtifacts = {
-      document: computed.document,
-      sourceFile: computed.sourceFile,
-      diagnostics: computed.parseDiagnostics,
-      interpretDiagnostics: createInterpretSlot(resolvedUri, computed.sourceFile),
-    };
-    documents.set(identity, { snapshot, artifacts });
-    refreshSources();
-    return artifacts;
+    return facade;
   }
 
   function readSymbolTableResult(): SymbolTableResult {
