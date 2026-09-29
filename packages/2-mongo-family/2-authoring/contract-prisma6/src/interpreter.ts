@@ -956,9 +956,49 @@ function identifierList(
   return names;
 }
 
+/** The relation a `@relation` attribute sits on: the model that holds the key, the model it refers to, and whether the relation is optional. */
+interface RelationSides {
+  readonly model: string;
+  readonly target: string;
+  readonly optional: boolean;
+}
+
+/**
+ * What removing `onDelete` or `onUpdate` does to the Prisma 6 app. The Prisma 6 client emulates referential actions on MongoDB with these defaults: `onDelete` is `Restrict` on a required relation (a delete fails with P2014) and `SetNull` on an optional one, and `onUpdate` is `Cascade`.
+ */
+function referentialActionRemoval(
+  key: 'onDelete' | 'onUpdate',
+  declared: string,
+  sides: RelationSides,
+): string {
+  const fallback =
+    key === 'onUpdate'
+      ? {
+          action: 'Cascade',
+          when: 'its default',
+          effect: `changing the field a ${sides.model} refers to in a ${sides.target} updates the key in its ${sides.model} documents`,
+        }
+      : sides.optional
+        ? {
+            action: 'SetNull',
+            when: 'its default for an optional relation',
+            effect: `deleting a ${sides.target} sets the key to null in its ${sides.model} documents`,
+          }
+        : {
+            action: 'Restrict',
+            when: 'its default for a required relation',
+            effect: `deleting a ${sides.target} that still has ${sides.model} documents fails with P2014`,
+          };
+  if (declared === fallback.action) {
+    return `Removing "${key}: ${declared}" leaves the Prisma 6 app as it is: ${declared} is already what the Prisma 6 client does for this relation.`;
+  }
+  return `The Prisma 6 client emulates referential actions, so removing "${key}: ${declared}" also changes the Prisma 6 app: its client then applies ${fallback.action}, ${fallback.when}, so ${fallback.effect}.`;
+}
+
 function readRelationArguments(
   attribute: ResolvedAttribute,
   label: string,
+  sides: RelationSides,
   sourceId: string,
   diagnostics: Diagnostics,
 ): RelationArguments | undefined {
@@ -1004,7 +1044,7 @@ function readRelationArguments(
             'PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED',
             key === 'map'
               ? `${label}: @relation argument "map" is not supported; it names a foreign key constraint, and MongoDB has none. Remove "map"; the Prisma 6 app has no foreign key on MongoDB either, so nothing changes there.`
-              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates them, so removing "${key}: ${arg.value}" also changes the Prisma 6 app: its client stops applying ${arg.value} and falls back to its default action for this relation. Handle related documents in application code, then remove "${key}".`,
+              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. ${referentialActionRemoval(key, arg.value, sides)} Handle related documents in application code, then remove "${key}".`,
             sourceId,
             arg.span,
           ),
@@ -1056,7 +1096,13 @@ function readRelationFields(
     const args =
       relation === undefined
         ? undefined
-        : readRelationArguments(relation, label, sourceId, diagnostics);
+        : readRelationArguments(
+            relation,
+            label,
+            { model: symbol.name, target: field.typeName, optional: field.optional },
+            sourceId,
+            diagnostics,
+          );
     if (relation !== undefined && args === undefined) {
       reject();
       continue;
