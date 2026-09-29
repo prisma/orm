@@ -1111,14 +1111,15 @@ function readRelationArguments(
   let name: string | undefined;
   let fields: readonly string[] | undefined;
   let references: readonly string[] | undefined;
-  const invalid = (what: string, span: PslSpan): undefined => {
+  let rejected = false;
+  const invalid = (what: string, span: PslSpan): void => {
+    rejected = true;
     diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
       message: `${label}: @relation ${what}.`,
       sourceId,
       span,
     });
-    return undefined;
   };
   for (const arg of attribute.args) {
     const key = arg.kind === 'positional' ? 'name' : arg.name;
@@ -1129,22 +1130,21 @@ function readRelationArguments(
           expression === undefined
             ? undefined
             : StringLiteralExprAst.cast(expression.syntax)?.value();
-        if (name === undefined) return invalid('name must be a string', arg.span);
+        if (name === undefined) invalid('name must be a string', arg.span);
         break;
       }
       case 'fields':
         fields = identifierList(arg);
-        if (fields === undefined) return invalid('fields must be a list of field names', arg.span);
+        if (fields === undefined) invalid('fields must be a list of field names', arg.span);
         break;
       case 'references':
         references = identifierList(arg);
-        if (references === undefined) {
-          return invalid('references must be a list of field names', arg.span);
-        }
+        if (references === undefined) invalid('references must be a list of field names', arg.span);
         break;
       case 'onDelete':
       case 'onUpdate':
       case 'map':
+        rejected = true;
         diagnostics.push(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED',
@@ -1155,12 +1155,12 @@ function readRelationArguments(
             arg.span,
           ),
         );
-        return undefined;
+        break;
       default:
-        return invalid(`argument "${key ?? ''}" is not supported`, arg.span);
+        invalid(`argument "${key ?? ''}" is not supported`, arg.span);
     }
   }
-  return { name, fields, references };
+  return rejected ? undefined : { name, fields, references };
 }
 
 /** What uses an ignored field: an index (or `@unique`) Prisma 6 `db push` maintains, or a relation field of the Prisma 6 client. */

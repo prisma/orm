@@ -8,8 +8,20 @@
   {
     "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
+    "line": 17,
+    "message": "Relation field \"Post.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. The Prisma 6 client emulates referential actions, so removing \"onUpdate: Restrict\" also changes the Prisma 6 app: its client then applies Cascade, its default, so changing the field a Post refers to in a User updates the key in its Post documents. Handle related documents in application code, then remove \"onUpdate\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
     "line": 23,
     "message": "Relation field \"Comment.author\": @relation argument \"onUpdate\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Removing \"onUpdate: Cascade\" leaves the Prisma 6 app as it is: Cascade is already what the Prisma 6 client does for this relation. Handle related documents in application code, then remove \"onUpdate\"."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 23,
+    "message": "Relation field \"Comment.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Removing \"onDelete: SetNull\" leaves the Prisma 6 app as it is: SetNull is already what the Prisma 6 client does for this relation. Handle related documents in application code, then remove \"onDelete\"."
   },
   {
     "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
