@@ -49,6 +49,7 @@ Unsupported PSL constructs in v1 (strict errors):
 
 - **Scalar lists need the target's `scalarList` capability.** `String[]`, `Int[]` and enum lists such as `Role[]` lower to native array columns when the adapter reports `scalarList` (Postgres). On a target that does not (SQLite) they are `PSL_SCALAR_LIST_UNSUPPORTED_TARGET`.
 - **Value-object fields need the stack's value-object storage type.** A field typed by a composite type is stored in one column of the storage type the adapter declares (`Jsonb` on Postgres, `Json` on SQLite), a list of value objects included. On a stack that declares none, each such field is `PSL_UNSUPPORTED_FIELD_TYPE`.
+- **Composite types take no attributes.** An attribute on a member, such as `street String @default("x")`, is `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`, and a block attribute on the type, such as `@@map`, is `PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE`. A default for a value object is written on the model field, as a whole value.
 - **Relation navigation lists are supported** when they can be matched to an FK-side relation:
   - Example: `User.posts Post[]` + `Post.user User @relation(fields: [userId], references: [id])`
   - Matching may use `@relation("Name")` or `@relation(name: "Name")` when multiple candidates exist

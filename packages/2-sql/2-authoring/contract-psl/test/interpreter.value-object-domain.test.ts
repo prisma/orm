@@ -159,6 +159,48 @@ model Order {
     });
   });
 
+  it('refuses an attribute on a composite type member and on the composite type, which neither takes', () => {
+    const result = interpretPostgres(`type Address {
+  street String @default("x")
+  zip    String @map("postal_code")
+
+  @@map("addresses")
+}
+
+model User {
+  id   Int     @id
+  home Address
+}`);
+
+    const span = (line: number, start: [number, number], end: [number, number]) => ({
+      start: { offset: start[0], line, column: start[1] },
+      end: { offset: end[0], line, column: end[1] },
+    });
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE',
+        message:
+          'Composite type "Address" uses attribute "@@map", which a composite type does not take',
+        sourceId: 'schema.prisma',
+        span: span(5, [84, 3], [102, 21]),
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Member "street" of composite type "Address" uses attribute "@default", which a composite type member does not take',
+        sourceId: 'schema.prisma',
+        span: span(2, [31, 17], [44, 30]),
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Member "zip" of composite type "Address" uses attribute "@map", which a composite type member does not take',
+        sourceId: 'schema.prisma',
+        span: span(3, [61, 17], [80, 36]),
+      },
+    ]);
+  });
+
   it('omits valueObjects from the contract when no composite types exist', () => {
     const result = interpretPostgres(`model User {
   id Int @id

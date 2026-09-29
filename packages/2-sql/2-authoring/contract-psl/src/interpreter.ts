@@ -1533,8 +1533,22 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
   const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
 
   return compositeTypes.map((compositeType) => {
+    for (const attribute of compositeType.attributes) {
+      diagnostics.push({
+        code: 'PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE',
+        message: `Composite type "${compositeType.name}" uses attribute "@@${attribute.name}", which a composite type does not take`,
+        ...diagnosticSource(sources, compositeType.node.syntax).at(attribute.span),
+      });
+    }
     const fields: (ScalarMemberNode | ValueObjectMemberNode)[] = [];
     for (const field of Object.values(compositeType.fields)) {
+      for (const attribute of field.attributes) {
+        diagnostics.push({
+          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+          message: `Member "${field.name}" of composite type "${compositeType.name}" uses attribute "@${attribute.name}", which a composite type member does not take`,
+          ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
+        });
+      }
       const common = {
         fieldName: field.name,
         nullable: field.optional,
