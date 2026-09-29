@@ -50,7 +50,7 @@ The SQL and Mongo family interpreters are the first consumers. They define their
 
 The kit consumes `ExpressionAst` directly. No intermediate argument representation is introduced, and no combinator reparses flattened source text except `json()`, the deliberate quoted-JSON-object exception.
 
-Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts, and symbol-table construction interprets them after collecting all declarations.
+Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts. Symbol-table construction collects declarations without interpreting blocks; consumers then bind references and interpret block values and attributes against the complete snapshot, as described in ADR 255.
 
 ---
 
@@ -83,9 +83,9 @@ A combinator declares what it reads. The contexts nest by what the site being pa
 
 ```ts
 interface AttributeCtx {
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly symbols: SymbolTable;
+  readonly binder: Binder;
 }
 
 interface ModelAttributeCtx extends AttributeCtx {
@@ -94,11 +94,10 @@ interface ModelAttributeCtx extends AttributeCtx {
 
 interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 ```
 
-A block has no model, so a block attribute is parsed without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references derive their lexical scope from the expression's syntax ancestry; the parse context carries no owner or scope field.
+A block has no model, so a block attribute is parsed without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references read committed resolutions through `ctx.binder.symbolForNode`, rather than deriving scope from expression ancestry. The binder must use the same symbol table, sources, and registries as interpretation. It owns unresolved-reference diagnostics; combinators own expression-shape and entity-selector diagnostics and fail without additional diagnostics for absent or unresolved bindings.
 
 A spec fixes the attribute level and name, declares its arguments, and may refine the parsed result:
 
