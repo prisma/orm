@@ -1233,12 +1233,7 @@ describe('generateBothFieldTypesMaps with resolveFieldValueSet', () => {
       fieldName === 'priority'
         ? { encodedValues: ['low', 'high', 'urgent'], codecId: 'pg/text@1' }
         : undefined;
-    const result = generateBothFieldTypesMaps(
-      models,
-      literalCodecLookup(),
-      undefined,
-      resolveFieldValueSet,
-    );
+    const result = generateBothFieldTypesMaps(models, literalCodecLookup(), resolveFieldValueSet);
     expect(result.output).toContain('readonly priority: "low" | "high" | "urgent"');
     expect(result.input).toContain('readonly priority: "low" | "high" | "urgent"');
     expect(result.output).toContain('readonly title: CodecTypes["pg/text@1"]["output"]');
@@ -1257,76 +1252,8 @@ describe('generateBothFieldTypesMaps with resolveFieldValueSet', () => {
         storage: {},
       },
     };
-    const result = generateBothFieldTypesMaps(
-      models,
-      literalCodecLookup(),
-      undefined,
-      () => undefined,
-    );
+    const result = generateBothFieldTypesMaps(models, literalCodecLookup(), () => undefined);
     expect(result.output).toContain('readonly title: CodecTypes["pg/text@1"]["output"]');
-  });
-});
-
-describe('generateBothFieldTypesMaps with resolveFieldTypeParams', () => {
-  // SQL `typeRef`-shaped columns carry their `typeParams` on a named `storage.types[ref]` entry rather than inline on the framework's domain `ContractField`. The framework emit path consults a per-family resolver (`EmissionSpi.resolveFieldTypeParams`) to recover those typeParams so the codec's `renderOutputType` runs and the parameterized output type is emitted instead of the generic `CodecTypes[...]['output']` fallback.
-
-  it('uses resolved typeParams from the family resolver when domain field has none', () => {
-    const lookup = stubCodecLookup({
-      'pg/vector@1': stubCodec({
-        id: 'pg/vector@1',
-        renderOutputType: (p) => `Vector<${p['length']}>`,
-      }),
-    });
-    const models: Record<string, ContractModel> = {
-      Post: {
-        fields: {
-          embedding: {
-            nullable: true,
-            type: { kind: 'scalar', codecId: 'pg/vector@1' },
-          },
-        },
-        relations: {},
-        storage: {},
-      },
-    };
-    const resolveFieldTypeParams = (
-      modelName: string,
-      fieldName: string,
-      _model: ContractModel,
-    ): Record<string, unknown> | undefined =>
-      modelName === 'Post' && fieldName === 'embedding' ? { length: 1536 } : undefined;
-    const result = generateBothFieldTypesMaps(models, lookup, resolveFieldTypeParams);
-    expect(result.output).toContain('readonly embedding: Vector<1536> | null');
-    expect(result.output).not.toContain('CodecTypes["pg/vector@1"]["output"]');
-  });
-
-  it('prefers inline typeParams over the resolver (regression guard)', () => {
-    const lookup = stubCodecLookup({
-      'pg/vector@1': stubCodec({
-        id: 'pg/vector@1',
-        renderOutputType: (p) => `Vector<${p['length']}>`,
-      }),
-    });
-    const models: Record<string, ContractModel> = {
-      Post: {
-        fields: {
-          embedding: {
-            nullable: false,
-            type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 768 } },
-          },
-        },
-        relations: {},
-        storage: {},
-      },
-    };
-    const resolveFieldTypeParams = (
-      _modelName: string,
-      _fieldName: string,
-      _model: ContractModel,
-    ): Record<string, unknown> | undefined => ({ length: 1536 });
-    const result = generateBothFieldTypesMaps(models, lookup, resolveFieldTypeParams);
-    expect(result.output).toContain('readonly embedding: Vector<768>');
-    expect(result.output).not.toContain('Vector<1536>');
   });
 });
 
@@ -1344,7 +1271,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       type: { kind: 'scalar', codecId: 'pg/int4@1' },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, {
+    const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [1, 10],
       codecId: 'pg/int4@1',
     });
@@ -1358,7 +1285,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       type: { kind: 'scalar', codecId: 'pg/bool@1' },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, {
+    const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [true, false],
       codecId: 'pg/bool@1',
     });
@@ -1371,7 +1298,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, {
+    const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: ['low'],
       codecId: 'pg/text@1',
     });
@@ -1385,7 +1312,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, undefined);
+    const result = resolveFieldType(field, literalCodecLookup(), undefined);
     expect(result.output).toBe('CodecTypes["pg/text@1"]["output"]');
   });
 
@@ -1395,7 +1322,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, {
+    const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [],
       codecId: 'pg/text@1',
     });
@@ -1408,7 +1335,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       type: { kind: 'scalar', codecId: 'pg/jsonb@1' },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, {
+    const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: [{ nested: 1 }],
       codecId: 'pg/jsonb@1',
     });
@@ -1427,7 +1354,7 @@ describe('resolveFieldType value-set narrowing edge cases', () => {
       },
       valueSet: priorityRef,
     };
-    const result = resolveFieldType(field, literalCodecLookup(), undefined, {
+    const result = resolveFieldType(field, literalCodecLookup(), {
       encodedValues: ['low', 'high'],
       codecId: 'pg/text@1',
     });

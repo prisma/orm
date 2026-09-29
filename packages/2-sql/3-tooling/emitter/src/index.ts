@@ -416,42 +416,6 @@ export const sqlEmission = {
     return `{ ${storageParts.join('; ')} }`;
   },
 
-  resolveFieldTypeParams(
-    _modelName: string,
-    fieldName: string,
-    model: ContractModelBase,
-    contract: Contract,
-  ): Record<string, unknown> | undefined {
-    const sqlModel = model as ContractModel<SqlModelStorage>;
-    const storageField = sqlModel.storage?.fields?.[fieldName];
-    if (!storageField) return undefined;
-
-    const storage = contract.storage as unknown as SqlStorage | undefined;
-    if (!storage) return undefined;
-
-    const tableName = sqlModel.storage.table;
-    const storageNamespaceId = sqlModel.storage.namespaceId;
-    if (!storageNamespaceId) return undefined;
-
-    const table = entityAt<StorageTable>(storage, {
-      namespaceId: storageNamespaceId,
-      entityKind: 'table',
-      entityName: tableName,
-    });
-    if (!table) return undefined;
-
-    const column = table.columns[storageField.column];
-    if (!column) return undefined;
-
-    if (column.typeRef) {
-      const typeInstance = storage.types?.[column.typeRef];
-      if (typeInstance === undefined) return undefined;
-      const codecShape = typeInstance as Partial<StorageTypeInstance>;
-      return codecShape.typeParams;
-    }
-    return column.typeParams;
-  },
-
   resolveFieldValueSet(
     _modelName: string,
     fieldName: string,

@@ -43,13 +43,6 @@ export interface EmissionSpi {
 
   getContractWrapper(contractBaseName: string, typeMapsName: string): string;
 
-  resolveFieldTypeParams?(
-    modelName: string,
-    fieldName: string,
-    model: ContractModelBase,
-    contract: Contract,
-  ): Record<string, unknown> | undefined;
-
   /**
    * Resolves a field's permitted values (codec-encoded) plus the codec that types them, or
    * `undefined` for a field with no restricted value set. The framework renders the values into a TS
