@@ -29,7 +29,11 @@ function wire(value: unknown): JsonValue {
 function encodeRefusal(received: string, path: string) {
   return expect.objectContaining({
     code: 'RUNTIME.ENCODE_FAILED',
-    message: `mongo/json@1 value must be a JSON value; received ${received} at ${path}`,
+    message: expect.stringMatching(
+      new RegExp(
+        `^mongo/json@1 value must be a JSON value; received ${received.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} at ${path}\\. `,
+      ),
+    ),
   });
 }
 
@@ -112,6 +116,44 @@ describe('mongoJsonCodec encode', () => {
     await expect(mongoJsonCodec.encode(notJson(new Date(0)), {})).rejects.toThrow(
       encodeRefusal('Date', 'the root'),
     );
+  });
+});
+
+describe('mongoJsonCodec encode refusals say how to store the value', () => {
+  it.each([
+    ['Date', new Date(0), 'Store the date as an ISO 8601 string, or declare the field Bson.'],
+    [
+      'bigint',
+      1n,
+      'Store it as a number in the safe-integer range or as decimal text, or declare the field Int64 or Bson.',
+    ],
+    [
+      'NaN',
+      Number.NaN,
+      'JSON has no NaN or Infinity; store null or a string, or declare the field Bson.',
+    ],
+    [
+      'Infinity',
+      Number.POSITIVE_INFINITY,
+      'JSON has no NaN or Infinity; store null or a string, or declare the field Bson.',
+    ],
+    ['undefined', undefined, 'Leave the key out, or store null.'],
+    [
+      'Uint8Array',
+      new Uint8Array([1]),
+      'Store the bytes as a base64 string, or declare the field Binary or Bson.',
+    ],
+    [
+      'ObjectId',
+      new ObjectId('65f000000000000000000009'),
+      'Store its hex string, or declare the field ObjectId or Bson.',
+    ],
+    ['Int32', new Int32(1), 'Pass a plain number.'],
+    ['Map', new Map(), 'Convert it to a plain object or array.'],
+  ])('%s', async (received, value, fix) => {
+    await expect(mongoJsonCodec.encode(notJson({ at: value }), {})).rejects.toMatchObject({
+      message: `mongo/json@1 value must be a JSON value; received ${received} at at. ${fix}`,
+    });
   });
 });
 
