@@ -339,32 +339,58 @@ describe('contract emit', () => {
     });
   });
 
-  it('reports each contract source warning as a warning event with its location', async () => {
-    executeContractEmit.mockResolvedValue(
-      emitResult({
-        sourceWarnings: [
-          {
-            code: 'PSL_DEPRECATED_SCALAR_NAME',
-            message:
-              'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
-            sourceId: 'prisma/schema.prisma',
-            span: {
-              start: { offset: 30, line: 3, column: 9 },
-              end: { offset: 33, line: 3, column: 12 },
-            },
-            severity: 'warning',
-          },
-        ],
-      }),
-    );
-
-    const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
-
-    expect(run.exitCode).toBe(0);
-    expect(run.events).toContainEqual({
-      kind: 'message',
+  describe('contract source warnings', () => {
+    const span = {
+      start: { offset: 30, line: 3, column: 9 },
+      end: { offset: 33, line: 3, column: 12 },
+    };
+    const warning = (sourceId: string) => ({
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message:
+        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      sourceId,
+      span,
+      severity: 'warning',
+    });
+    const diagnostic = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC',
       severity: 'warn',
-      text: 'warning prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      summary:
+        'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      nextActions: [],
+      where: { path: 'prisma/schema.prisma', line: 3 },
+      meta: { code: 'PSL_DEPRECATED_SCALAR_NAME', span },
+    };
+
+    it('are diagnostics of the result, with code, file, line and column', async () => {
+      executeContractEmit.mockResolvedValue(
+        emitResult({ sourceWarnings: [warning('prisma/schema.prisma')] }),
+      );
+
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      expect(run.exitCode).toBe(0);
+      const terminal = run.json.at(-1);
+      expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+        ok: true,
+        diagnostics: [expect.objectContaining(diagnostic)],
+      });
+      expect(
+        run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      ).toEqual([]);
+    });
+
+    it('name a file under the working directory by its relative path', async () => {
+      executeContractEmit.mockResolvedValue(
+        emitResult({ sourceWarnings: [warning(`${PROJECT_DIR}/prisma/schema.prisma`)] }),
+      );
+
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      const terminal = run.json.at(-1);
+      expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+        diagnostics: [expect.objectContaining(diagnostic)],
+      });
     });
   });
 

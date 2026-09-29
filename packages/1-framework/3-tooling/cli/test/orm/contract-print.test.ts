@@ -275,10 +275,19 @@ describe('contract print', () => {
     const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(0);
-    expect(run.events).toContainEqual({
-      kind: 'message',
-      severity: 'warn',
-      text: 'warning prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME Scalar type "Int" is deprecated; use "Int32".',
+    const terminal = run.json.at(-1);
+    expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+      ok: true,
+      diagnostics: [
+        expect.objectContaining({
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+          severity: 'warn',
+          summary:
+            'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated; use "Int32".',
+          where: { path: 'prisma/schema.prisma', line: 3 },
+          meta: expect.objectContaining({ code: 'PSL_DEPRECATED_SCALAR_NAME' }),
+        }),
+      ],
     });
   });
 
