@@ -86,6 +86,10 @@ function validateInterpretedContract(contract: Contract): void {
   validateModelStorageReferences(sqlContract);
 }
 
+function isMissingPath(error: unknown): boolean {
+  return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
+}
+
 export function prisma7Contract(
   schemaPath: string,
   options: Prisma7ContractOptions,
@@ -109,13 +113,16 @@ export function prisma7Contract(
         try {
           files = await listSchemaFiles(absolutePath, schemaPath);
         } catch (error) {
-          const message = String(error);
+          const cause = String(error);
+          const message = isMissingPath(error)
+            ? `There is no file or directory at "${schemaPath}". Fix the path passed to prisma7Schema() in prisma.config.ts.`
+            : cause;
           return notOk({
             summary: `Failed to read Prisma 7 schema at "${schemaPath}"`,
             diagnostics: [
               prisma7Diagnostic('PSL.PRISMA7_SCHEMA_READ_FAILED', message, schemaPath, undefined),
             ],
-            meta: { schemaPath, absolutePath, cause: message },
+            meta: { schemaPath, absolutePath, cause },
           });
         }
         if (files.length === 0) {

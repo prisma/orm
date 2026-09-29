@@ -312,7 +312,14 @@ describe('prisma7Contract', () => {
       ok: false,
       failure: {
         summary: 'Failed to read Prisma 7 schema at "prisma/missing.prisma"',
-        diagnostics: [expect.objectContaining({ code: 'PSL.PRISMA7_SCHEMA_READ_FAILED' })],
+        diagnostics: [
+          {
+            code: 'PSL.PRISMA7_SCHEMA_READ_FAILED',
+            message:
+              'There is no file or directory at "prisma/missing.prisma". Fix the path passed to prisma7Schema() in prisma.config.ts.',
+            sourceId: 'prisma/missing.prisma',
+          },
+        ],
       },
     });
   });

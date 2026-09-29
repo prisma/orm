@@ -751,7 +751,7 @@ A relation field that cannot be paired: no matching side, an ambiguous unnamed p
 
 ### PSL.PRISMA7_SCHEMA_READ_FAILED
 
-The schema path could not be read, or the schema directory holds no `.prisma` file. When nothing exists at the path, the message says so and names `prisma6Schema()` in `prisma.config.ts` as the place to fix it. Reported at the schema path by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none; the error's `providerMeta` carries the schema path.
+The schema path could not be read, or the schema directory holds no `.prisma` file. When nothing exists at the path, the message says so and names `prisma7Schema()` in `prisma.config.ts` as the place to fix it. Reported at the schema path by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none; the error's `providerMeta` carries the schema path.
 
 ### PSL.PRISMA7_TABLE_COLLISION
 
