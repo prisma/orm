@@ -17,10 +17,10 @@ describe('sqlite/text@1 decodeJson', () => {
   });
 
   it.each([
-    [42, 'number'],
-    [true, 'boolean'],
+    [42, '42'],
+    [true, 'true'],
     [null, 'null'],
-    [['a'], 'array'],
+    [['a'], '["a"]'],
   ])('refuses %j', (json, received) => {
     expect(() => codec.decodeJson(json)).toThrow(
       expect.objectContaining({

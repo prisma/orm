@@ -5,29 +5,20 @@ import { structuredError } from '@internal/utils/structured-error';
  * Readers for the JSON forms codecs share, each built as {@link Codec.decodeJson} requires: it returns the application value for a stored form of the codec's type and refuses anything else with {@link refuseJsonValue}.
  */
 
-export type JsonKind = 'string' | 'number' | 'boolean' | 'null' | 'array' | 'object';
+const RECEIVED_PREVIEW_LIMIT = 100;
 
-export function jsonKind(json: JsonValue): JsonKind {
-  if (json === null) return 'null';
-  if (Array.isArray(json)) return 'array';
-  switch (typeof json) {
-    case 'string':
-      return 'string';
-    case 'number':
-      return 'number';
-    case 'boolean':
-      return 'boolean';
-    default:
-      return 'object';
-  }
+/** The value a refusal names: its JSON text, or its digits for a number JSON cannot write, cut to 100 characters. */
+function receivedPreview(json: JsonValue): string {
+  const text = typeof json === 'number' ? String(json) : JSON.stringify(json);
+  return text.slice(0, RECEIVED_PREVIEW_LIMIT);
 }
 
 /**
- * The refusal every `decodeJson` raises: `RUNTIME.DECODE_FAILED`, `<codecId> JSON value must be <expected>`, with `meta.codecId` and `meta.received`, the kind of JSON value it was given.
+ * The refusal every `decodeJson` raises: `RUNTIME.DECODE_FAILED`, `<codecId> JSON value must be <expected>`, with `meta.codecId` and `meta.received`, the value it was given as JSON text, cut to 100 characters.
  */
 export function refuseJsonValue(codecId: string, expected: string, json: JsonValue): never {
   throw structuredError('RUNTIME.DECODE_FAILED', `${codecId} JSON value must be ${expected}`, {
-    meta: { codecId, received: jsonKind(json) },
+    meta: { codecId, received: receivedPreview(json) },
   });
 }
 

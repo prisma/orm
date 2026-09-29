@@ -8,7 +8,6 @@ import {
   decodeJsonMatching,
   decodeJsonString,
   encodeJsonFloat,
-  jsonKind,
   refuseJsonValue,
 } from '../src/shared/decode-json';
 
@@ -19,23 +18,16 @@ const refusal = (codecId: string, expected: string, received: string) =>
     meta: { codecId, received },
   });
 
-describe('jsonKind', () => {
-  it('names each kind of JSON value', () => {
-    expect(['a', 1, true, null, [1], { a: 1 }].map((json: JsonValue) => jsonKind(json))).toEqual([
-      'string',
-      'number',
-      'boolean',
-      'null',
-      'array',
-      'object',
-    ]);
-  });
-});
-
 describe('refuseJsonValue', () => {
-  it('throws RUNTIME.DECODE_FAILED naming the codec, what it takes and the kind it got', () => {
+  it('throws RUNTIME.DECODE_FAILED naming the codec and what it takes, with the value it got', () => {
     expect(() => refuseJsonValue('demo/x@1', 'a thing', [1])).toThrow(
-      refusal('demo/x@1', 'a thing', 'array'),
+      refusal('demo/x@1', 'a thing', '[1]'),
+    );
+  });
+
+  it('keeps the first 100 characters of the value it got', () => {
+    expect(() => refuseJsonValue('demo/x@1', 'a thing', 'x'.repeat(200))).toThrow(
+      refusal('demo/x@1', 'a thing', `"${'x'.repeat(99)}`),
     );
   });
 });
@@ -46,11 +38,11 @@ describe('decodeJsonString', () => {
   });
 
   it.each<readonly [JsonValue, string]>([
-    [1, 'number'],
-    [true, 'boolean'],
+    [1, '1'],
+    [true, 'true'],
     [null, 'null'],
-    [['a'], 'array'],
-    [{ a: 'b' }, 'object'],
+    [['a'], '["a"]'],
+    [{ a: 'b' }, '{"a":"b"}'],
   ])('refuses %j', (json, received) => {
     expect(() => decodeJsonString('demo/text@1', json)).toThrow(
       refusal('demo/text@1', 'a string', received),
@@ -67,8 +59,8 @@ describe('decodeJsonMatching', () => {
   });
 
   it.each<readonly [JsonValue, string]>([
-    ['012', 'string'],
-    [101, 'number'],
+    ['012', '"012"'],
+    [101, '101'],
   ])('refuses %j', (json, received) => {
     expect(() => read(json)).toThrow(refusal('demo/bits@1', 'binary digits', received));
   });
@@ -83,8 +75,8 @@ describe('decodeJsonBoolean', () => {
   });
 
   it.each<readonly [JsonValue, string]>([
-    ['true', 'string'],
-    [0, 'number'],
+    ['true', '"true"'],
+    [0, '0'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
     expect(() => decodeJsonBoolean('demo/flag@1', json)).toThrow(
@@ -103,10 +95,10 @@ describe('decodeJsonInteger', () => {
   });
 
   it.each<readonly [JsonValue, string]>([
-    [128, 'number'],
-    [-129, 'number'],
-    [1.5, 'number'],
-    ['1', 'string'],
+    [128, '128'],
+    [-129, '-129'],
+    [1.5, '1.5'],
+    ['1', '"1"'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
     expect(() => decodeJsonInteger('demo/int@1', json, range)).toThrow(
@@ -126,11 +118,11 @@ describe('decodeJsonIntegerText', () => {
   });
 
   it.each<readonly [JsonValue, string]>([
-    ['128', 'string'],
-    ['-129', 'string'],
-    ['1.5', 'string'],
-    ['1e3', 'string'],
-    [12, 'number'],
+    ['128', '"128"'],
+    ['-129', '"-129"'],
+    ['1.5', '"1.5"'],
+    ['1e3', '"1e3"'],
+    [12, '12'],
   ])('refuses %j against a range', (json, received) => {
     expect(() => decodeJsonIntegerText('demo/big@1', json, range)).toThrow(
       refusal('demo/big@1', 'a decimal integer string from -128 to 127', received),
@@ -139,7 +131,7 @@ describe('decodeJsonIntegerText', () => {
 
   it('refuses a non-integer without a range', () => {
     expect(() => decodeJsonIntegerText('demo/big@1', '1.5')).toThrow(
-      refusal('demo/big@1', 'a decimal integer string', 'string'),
+      refusal('demo/big@1', 'a decimal integer string', '"1.5"'),
     );
   });
 });
@@ -155,10 +147,10 @@ describe('the float pair', () => {
   });
 
   it.each<readonly [JsonValue, string]>([
-    ['1.5', 'string'],
-    ['nan', 'string'],
-    ['inf', 'string'],
-    [true, 'boolean'],
+    ['1.5', '"1.5"'],
+    ['nan', '"nan"'],
+    ['inf', '"inf"'],
+    [true, 'true'],
     [null, 'null'],
   ])('refuses %j', (json, received) => {
     expect(() => decodeJsonFloat('demo/float@1', json)).toThrow(

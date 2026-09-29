@@ -70,7 +70,7 @@ describe('pg/timestamptz-date@1', () => {
             code: 'RUNTIME.DECODE_FAILED',
             message:
               'pg/timestamptz-date@1 JSON value must be a timestamp with time zone as PostgreSQL writes it',
-            meta: { codecId: 'pg/timestamptz-date@1', received: 'string' },
+            meta: { codecId: 'pg/timestamptz-date@1', received: JSON.stringify(wire) },
           }),
         );
       }
@@ -100,9 +100,9 @@ describe('pg/timestamptz-date@1', () => {
 
   it.each([
     [null, 'null'],
-    [0, 'number'],
-    [{}, 'object'],
-    [[], 'array'],
+    [0, '0'],
+    [{}, '{}'],
+    [[], '[]'],
   ])('rejects non-string JSON %s', (value, received) => {
     expect(() => codec.decodeJson(value)).toThrow(
       expect.objectContaining({

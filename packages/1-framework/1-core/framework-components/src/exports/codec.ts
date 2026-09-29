@@ -44,7 +44,7 @@ export {
   dataType,
   dataTypeId,
 } from '../shared/data-type';
-export type { BigIntRange, IntegerRange, JsonKind } from '../shared/decode-json';
+export type { BigIntRange, IntegerRange } from '../shared/decode-json';
 export {
   decodeJsonBoolean,
   decodeJsonFloat,
@@ -54,7 +54,6 @@ export {
   decodeJsonString,
   encodeJsonFloat,
   INT64_RANGE,
-  jsonKind,
   refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,
   SAFE_INTEGER_RANGE,
