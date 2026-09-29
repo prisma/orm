@@ -86,7 +86,7 @@ Every lowering rule is checked against SQL that the earlier version's own toolch
 
 ```mermaid
 flowchart LR
-  schema["schema.prisma<br/>(Prisma 7)"] --> parser["@internal/psl-parser<br/>one grammar for every PSL document"]
+  schema["schema.prisma<br/>(Prisma 7)"] --> parser["@internal/psl-parser<br/>shared by every PSL source"]
   parser --> interpreter["@internal/sql-contract-prisma7<br/>rules of the Prisma 7 language for the SQL family"]
   binding["@internal/target-postgres<br/>prisma7PostgresBinding: what Postgres creates"] --> interpreter
   interpreter --> contract["Contract"]
@@ -94,7 +94,7 @@ flowchart LR
   facade -. wires .-> binding
 ```
 
-**The parser is shared, and it has one grammar.** `@internal/psl-parser` parses every PSL document the same way, whichever Prisma version wrote it. The two constructs the earlier language needs, attributes on enum members and field lines inside a `view` block, parse in every document. Each reader decides what it accepts. The Prisma 8 readers report an attribute on an enum member, and report a `view` block like any other block whose keyword no composed pack claims, so a Prisma 8 PSL contract that uses either fails. The Prisma 7 reader reads enum member attributes and refuses a `view` with the error shown above.
+**The parser is shared.** `@internal/psl-parser` parses every PSL document, whichever Prisma version wrote it. The earlier language needs two constructs that Prisma 8 does not use: attributes on enum members, and field lines inside a `view` block. Attributes on enum members parse in every document. Field lines inside a `view` block parse only when the source asks for them: a PSL contract source declares the parser options its files need in `parserOptions`, and the Prisma 7 and Prisma 6 sources set `viewBodyAsModelFields`. Every tool that parses a source's files, `contract format` included, passes the source's options to the parser. Without the option, a `view` body parses as `key = value` entries, so a field line with an attribute is a parse error. Each reader decides what it accepts. The Prisma 8 readers report an attribute on an enum member, and report a `view` block like any other block whose keyword no composed pack claims, so a Prisma 8 PSL contract that uses either fails. The Prisma 7 reader reads enum member attributes and refuses a `view` with the error shown above.
 
 **Rules of the language live in the family authoring package.** `@internal/sql-contract-prisma7` holds everything that is true of the Prisma 7 language for the SQL family: blocks and attributes, relation pairing, junction tables, defaults, and the diagnostics. It knows nothing about a particular database and depends on no Prisma 7 package.
 
