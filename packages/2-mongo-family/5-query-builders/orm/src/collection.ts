@@ -825,7 +825,7 @@ class MongoCollectionImpl<
   #documentShape(): MongoFieldShape {
     const shape = this.#modelResultShape();
     return shape.kind === 'document'
-      ? { kind: 'document', nullable: false, fields: shape.fields }
+      ? { kind: 'document', nullable: false, fields: shape.fields, row: true }
       : { kind: 'unknown' };
   }
 

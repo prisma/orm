@@ -369,6 +369,35 @@ describe('decodeMongoRow', () => {
       });
     });
 
+    it('nested in a command result, by that document`s _id and its own field path', async () => {
+      const id = new ObjectId('65f0000000000000000000a2');
+      const row: MongoFieldShape = {
+        kind: 'document',
+        nullable: false,
+        row: true,
+        fields: shape.fields,
+      };
+      const insertResult: MongoResultShape = {
+        kind: 'document',
+        fields: {
+          insertedIds: { kind: 'unknown' },
+          documents: { kind: 'array', nullable: false, element: row },
+        },
+      };
+      await expect(
+        decodeMongoRow(
+          { insertedIds: ['a', id], documents: [{ _id: 'a' }, { _id: id, f: 1 }] },
+          insertResult,
+          throwingRegistry(),
+          'items',
+        ),
+      ).rejects.toMatchObject({
+        message:
+          "Failed to decode field f of the document with _id 65f0000000000000000000a2 in collection 'items' with codec 'throws@1': boom",
+        details: { path: 'f', documentId: '65f0000000000000000000a2' },
+      });
+    });
+
     it('by a string _id, quoted', async () => {
       await expect(
         decodeMongoRow({ _id: 'order-7', f: 1 }, shape, throwingRegistry(), 'items'),

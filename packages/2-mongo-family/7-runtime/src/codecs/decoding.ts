@@ -39,7 +39,7 @@ function describeDocumentId(id: unknown): string | undefined {
 }
 
 /**
- * Every decode failure names the collection and field, and the `_id` of the document when the row carries one. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) passes through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
+ * Every decode failure names the collection and field, and the `_id` of the document when the row carries one; inside a document shape marked `row`, that document's `_id` and the field's path from it. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) passes through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
  */
 function wrapDecodeFailure(
   error: unknown,
@@ -95,12 +95,12 @@ export async function decodeMongoRow(
     return row;
   }
   const rowObj = blindCast<Record<string, unknown>, 'a non-null object row is a document'>(row);
-  const documentId = describeDocumentId(rowObj['_id']);
   const out: Record<string, unknown> = {};
   const tasks: Array<Promise<void>> = [];
 
   function scheduleLeaf(
     path: string,
+    documentId: string | undefined,
     codecId: string,
     wire: unknown,
     assign: (v: unknown) => void,
@@ -125,6 +125,7 @@ export async function decodeMongoRow(
     value: unknown,
     fieldShape: MongoFieldShape,
     path: string,
+    documentId: string | undefined,
     assign: (v: unknown) => void,
   ): void {
     // Exhaustive over `MongoFieldShape['kind']` by construction:
@@ -139,7 +140,7 @@ export async function decodeMongoRow(
           assign(absentAsNull(value, fieldShape.nullable));
           return;
         }
-        scheduleLeaf(path, fieldShape.codecId, value, assign);
+        scheduleLeaf(path, documentId, fieldShape.codecId, value, assign);
         return;
       case 'document': {
         if (value === null || value === undefined) {
@@ -162,9 +163,15 @@ export async function decodeMongoRow(
         const nested: Record<string, unknown> = { ...vObj };
         assign(nested);
         for (const [fk, fShape] of Object.entries(fieldShape.fields)) {
-          walkField(vObj[fk], fShape, `${path}.${fk}`, (v) => {
-            nested[fk] = v;
-          });
+          walkField(
+            vObj[fk],
+            fShape,
+            fieldShape.row ? fk : `${path}.${fk}`,
+            fieldShape.row ? describeDocumentId(vObj['_id']) : documentId,
+            (v) => {
+              nested[fk] = v;
+            },
+          );
         }
         return;
       }
@@ -181,7 +188,7 @@ export async function decodeMongoRow(
         assign(arr);
         for (let i = 0; i < value.length; i++) {
           const el = value[i];
-          walkField(el, fieldShape.element, `${path}.${i}`, (v) => {
+          walkField(el, fieldShape.element, `${path}.${i}`, documentId, (v) => {
             arr[i] = v;
           });
         }
@@ -196,8 +203,9 @@ export async function decodeMongoRow(
     /* v8 ignore stop */
   }
 
+  const documentId = describeDocumentId(rowObj['_id']);
   for (const [k, fShape] of Object.entries(shape.fields)) {
-    walkField(rowObj[k], fShape, k, (v) => {
+    walkField(rowObj[k], fShape, k, documentId, (v) => {
       out[k] = v;
     });
   }

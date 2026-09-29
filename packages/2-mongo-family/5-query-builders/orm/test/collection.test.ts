@@ -601,7 +601,7 @@ describe('MongoCollection write methods', () => {
       }
     });
 
-    it('attaches a result shape decoding insertedId and the document through the model', async () => {
+    it('attaches a result shape decoding insertedId and the document through the model, as a row', async () => {
       const executor = createMockExecutor([{ insertedId: 'id', document: { _id: 'id' } }]);
       const col = createMongoCollection(contract, 'User', executor);
       await col.create(defaultUserData);
@@ -612,6 +612,7 @@ describe('MongoCollection write methods', () => {
           document: {
             kind: 'document',
             nullable: false,
+            row: true,
             fields: { name: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false } },
           },
         },
@@ -646,7 +647,7 @@ describe('MongoCollection write methods', () => {
       expect(executor.plans.map((plan) => plan.command.kind)).toEqual(['insertMany']);
     });
 
-    it('attaches a result shape decoding each insertedId and each document through the model', async () => {
+    it('attaches a result shape decoding each insertedId and each document through the model, as rows', async () => {
       const executor = createMockExecutor([
         { insertedIds: ['id-1'], insertedCount: 1, documents: [{ _id: 'id-1' }] },
       ]);
@@ -665,7 +666,7 @@ describe('MongoCollection write methods', () => {
           documents: {
             kind: 'array',
             nullable: false,
-            element: { kind: 'document', nullable: false },
+            element: { kind: 'document', nullable: false, row: true },
           },
         },
       });
