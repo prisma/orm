@@ -39,7 +39,7 @@ import type {
   PslSources,
   SourceFile,
 } from '@internal/psl-parser/syntax';
-import { StringLiteralExprAst } from '@internal/psl-parser/syntax';
+import { dottedPathsIn, StringLiteralExprAst } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
@@ -167,6 +167,27 @@ function parameterSpan(source: SourceBlock, key: string): PslSpan {
   return entry === undefined ? source.block.span : nodePslSpan(entry.syntax, source.sources);
 }
 
+/** Prisma 7 accepts no dotted path in a datasource or generator block, though the parser reads one as a value. */
+function reportDottedBlockValues(
+  block: BlockSymbol,
+  sourceId: string,
+  sources: PslSources,
+  diagnostics: ContractSourceDiagnostic[],
+): void {
+  for (const entry of block.node.entries()) {
+    const value = entry.value();
+    if (value === undefined) continue;
+    for (const path of dottedPathsIn(value)) {
+      diagnostics.push({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        message: `${block.keyword} "${block.name}": the value of "${entry.key()?.name() ?? ''}" holds the dotted path ${path.path().join('.')}, which Prisma 7 does not accept in a ${block.keyword} block.`,
+        sourceId,
+        span: nodePslSpan(path.syntax, sources),
+      });
+    }
+  }
+}
+
 function reportDuplicateBlockEntries(
   source: SourceBlock,
   diagnostics: ContractSourceDiagnostic[],
@@ -241,8 +262,10 @@ export function interpretPrisma7Documents(
       switch (block.keyword) {
         case 'datasource':
           datasources.push({ block, sourceId, sources, sourceFile });
+          reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'generator':
+          reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'enum':
           if (claimName('enum', block.name, sourceId, block.span)) {

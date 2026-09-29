@@ -22,5 +22,17 @@
     "file": "schema.prisma",
     "line": 13,
     "message": "\"Post\": @index type \"constructor\" is not an index type Prisma 8 supports."
+  },
+  {
+    "code": "PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "\"Post\": @index lists the dotted path \"title.length\"; an index lists fields of its model by name, and Prisma 7 refuses the path as an unknown field."
+  },
+  {
+    "code": "PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 15,
+    "message": "\"Post\": @unique lists the dotted path \"body.length\"; an index lists fields of its model by name, and Prisma 7 refuses the path as an unknown field."
   }
 ]

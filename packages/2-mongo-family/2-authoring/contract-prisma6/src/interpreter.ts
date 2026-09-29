@@ -61,6 +61,7 @@ import type {
 } from '@internal/psl-parser/syntax';
 import {
   ArrayLiteralAst,
+  dottedPathsIn,
   FunctionCallAst,
   IdentifierAst,
   StringLiteralExprAst,
@@ -240,8 +241,10 @@ export function interpretPrisma6Documents(
       switch (block.keyword) {
         case 'datasource':
           datasources.push({ symbol: block, sourceId, sources });
+          reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'generator':
+          reportDottedBlockValues(block, sourceId, sources, diagnostics);
           break;
         case 'enum':
           if (claimName('enum', block.name, sourceId, block.span)) {
@@ -391,6 +394,27 @@ function inSourceOrder(
     fileOrder.get(diagnostic.sourceId) ?? documents.length;
   const offset = (diagnostic: ContractSourceDiagnostic) => diagnostic.span?.start.offset ?? -1;
   return [...diagnostics].sort((a, b) => fileRank(a) - fileRank(b) || offset(a) - offset(b));
+}
+
+/** Prisma 6 accepts no dotted path in a datasource or generator block, though the parser reads one as a value. */
+function reportDottedBlockValues(
+  block: BlockSymbol,
+  sourceId: string,
+  sources: PslSources,
+  diagnostics: Diagnostics,
+): void {
+  for (const entry of block.node.entries()) {
+    const value = entry.value();
+    if (value === undefined) continue;
+    for (const path of dottedPathsIn(value)) {
+      diagnostics.push({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        message: `${block.keyword} "${block.name}": the value of "${entry.key()?.name() ?? ''}" holds the dotted path ${path.path().join('.')}, which Prisma 6 does not accept in a ${block.keyword} block.`,
+        sourceId,
+        span: nodePslSpan(path.syntax, sources),
+      });
+    }
+  }
 }
 
 /** The provider-mismatch diagnostic, or `undefined` when the schema names a provider the target reads. */

@@ -419,6 +419,16 @@ export type ExpressionAst =
   | PathExprAst
   | IdentifierAst;
 
+/** Every dotted path in an expression: the expression itself, a dotted callee, or a path inside a list, record or call argument. */
+export function dottedPathsIn(expression: ExpressionAst): readonly PathExprAst[] {
+  const paths: PathExprAst[] = [];
+  for (const element of expression.syntax.descendants()) {
+    const path = element instanceof SyntaxNode ? PathExprAst.cast(element) : undefined;
+    if (path !== undefined) paths.push(path);
+  }
+  return paths;
+}
+
 export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
   return (
     FunctionCallAst.cast(node) ??

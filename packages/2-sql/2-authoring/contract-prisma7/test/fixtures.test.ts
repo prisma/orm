@@ -44,6 +44,7 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
 describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
     expect(cases).toEqual([
+      'block-dotted-value',
       'datetime-defaults',
       'dbgenerated-without-expression',
       'dbgenerated-without-expression-optional',

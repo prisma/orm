@@ -707,7 +707,7 @@ An `@ignore`d field is used by `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, 
 
 ### PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED
 
-An index argument Prisma 8 indexes cannot carry (`sort`, `length`, `ops`, an unknown index type), or an indexed field that is not a column. Remove the argument. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An index argument Prisma 8 indexes cannot carry (`sort`, `length`, `ops`, an unknown index type), a dotted path such as `title.length` (Prisma 7 refuses it as an unknown field), or an indexed field that is not a column. Remove the argument, or list fields of the model by name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED
 

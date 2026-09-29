@@ -31,6 +31,7 @@ export {
   AttributeArgAst,
   BooleanLiteralExprAst,
   castExpression,
+  dottedPathsIn,
   FunctionCallAst,
   NumberLiteralExprAst,
   ObjectFieldAst,

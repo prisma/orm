@@ -4,6 +4,7 @@ import { ModelDeclarationAst } from '../src/syntax/ast/declarations';
 import {
   ArrayLiteralAst,
   castExpression,
+  dottedPathsIn,
   FunctionCallAst,
   PathExprAst,
 } from '../src/syntax/ast/expressions';
@@ -94,6 +95,19 @@ describe('a call on a dotted path', () => {
       args: ['sort: Desc'],
     });
     expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('dottedPathsIn', () => {
+  it('finds a dotted path at any depth of an expression', () => {
+    const { node } = parseOneExpression('[a.b, "x.y", f(c.d), e.f(), { k: g.h }, plain]');
+
+    expect(dottedPathsIn(expressionOf(node)).map((path) => path.path())).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+      ['e', 'f'],
+      ['g', 'h'],
+    ]);
   });
 });
 

@@ -13,7 +13,7 @@ Reads a Prisma 6 MongoDB `schema.prisma` as a Prisma 8 contract source. During t
 
 | Prisma 6 | Contract |
 |---|---|
-| `datasource` with `provider = "mongodb"` | Required (`PSL.PRISMA6_MONGO_PROVIDER_MISMATCH`); `generator` and `previewFeatures` are ignored. |
+| `datasource` with `provider = "mongodb"` | Required (`PSL.PRISMA6_MONGO_PROVIDER_MISMATCH`); `generator` and `previewFeatures` are ignored. A dotted path in a `datasource` or `generator` value (`url = env.DATABASE_URL`) is `PSL_INVALID_EXTENSION_BLOCK_MEMBER`, because Prisma 6 accepts none there. |
 | `id String @id @default(auto()) @map("_id") @db.ObjectId` | `_id` with the ObjectId codec; `auto()` is dropped. Any other id: `PSL.PRISMA6_MONGO_ID_NOT_OBJECTID`; `@@id`: `PSL.PRISMA6_MONGO_COMPOSITE_ID_UNSUPPORTED`. |
 | Scalars, `String @db.ObjectId`, lists, composite types, enums | The codecs the binding names; `many: true` for lists; value objects; enums with the text codec and the member `@map` value. Other `@db.*`: `PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED`. |
 | `DateTime @default(now())`, `DateTime @updatedAt` | `onCreate`, or `onCreate` and `onUpdate`, with the timestamp generator. Other defaults, optional generated fields, and `@updatedAt` on other types are hard errors. |

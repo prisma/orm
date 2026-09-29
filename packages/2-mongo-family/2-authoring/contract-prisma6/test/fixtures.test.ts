@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { fixturesDir, loadPrisma6Schema, serializeMongoContract } from './support';
 
 const CASES: readonly string[] = [
+  'block-dotted-value',
   'composite-id',
   'composite-index-path',
   'composite-map-unsupported',
