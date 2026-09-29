@@ -482,6 +482,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
 
     const isValueObjectField = compositeTypeNames.has(field.typeName);
     const isListField = field.list;
+    const storedAsListColumn = isListField && !isValueObjectField;
 
     let descriptor: ColumnDescriptor | undefined;
     let presetContributions: FieldPresetContributions | undefined;
@@ -608,6 +609,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             sources: input.sources,
             binder: input.binder,
             columnDescriptor: descriptor,
+            storedAsListColumn,
             generatorDescriptorById,
             defaultFunctionRegistry,
             dataTypeSupport,
@@ -707,7 +709,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           // lands in one column, which derives no generated checks, so
           // any waiver on it waives nothing and must be rejected here rather
           // than persisted as an inert flag.
-          isListField: isListField && !isValueObjectField,
+          isListField: storedAsListColumn,
           isDomainEnum: enumHandle !== undefined,
           diagnostics,
         })

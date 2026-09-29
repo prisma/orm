@@ -35,6 +35,7 @@ it('pushes owned default diagnostics with filename and range rather than a provi
     sources,
     binder: createSqlBinder({ symbolTable, sources }).binder,
     columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
+    storedAsListColumn: false,
     generatorDescriptorById: new Map(),
     defaultFunctionRegistry: new Map(),
     dataTypeSupport: fixtureDataTypeSupport,

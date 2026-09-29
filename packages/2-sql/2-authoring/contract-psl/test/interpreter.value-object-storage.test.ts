@@ -142,6 +142,49 @@ model User {
     });
   });
 
+  it('reads a default on a list of value objects as the default of its one column', () => {
+    const result = interpretPostgres(`type Address {
+  street String
+}
+
+model User {
+  id    Int       @id
+  homes Address[] @default(json\`[{"street": "x"}]\`)
+}`);
+
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
+    if (!result.ok) return;
+    expect(userFieldsAndColumns(result.value).columns).toEqual({
+      id: idColumn,
+      homes: {
+        nativeType: 'jsonb',
+        codecId: 'pg/jsonb@1',
+        nullable: false,
+        default: { kind: 'literal', value: [{ street: 'x' }] },
+      },
+    });
+  });
+
+  it('refuses a list literal as the default of a list of value objects, whose one column holds no list', () => {
+    const result = interpretPostgres(`type Address {
+  street String
+}
+
+model User {
+  id    Int       @id
+  homes Address[] @default([])
+}`);
+
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map(({ code, message }) => ({ code, message })),
+    ).toEqual([
+      {
+        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+        message: 'Field "User.homes": pg/jsonb has no cast from a list; it casts from pg/json',
+      },
+    ]);
+  });
+
   it('links a multi-table-inheritance variant to a base keyed by a value-object field', () => {
     const result = interpretPostgres(`type Key {
   a Int

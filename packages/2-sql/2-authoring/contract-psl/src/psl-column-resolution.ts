@@ -607,6 +607,8 @@ export function lowerDefaultForField(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly columnDescriptor: ColumnDescriptor;
+  /** Whether the column holds a list. A list of value objects is stored in one column, which does not. */
+  readonly storedAsListColumn: boolean;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
@@ -651,7 +653,7 @@ export function lowerDefaultForField(input: {
   const readAsLiteral = (written: WrittenValue) => {
     const lowered = lowerDataTypeDefault({
       written,
-      isList: input.field.list,
+      isList: input.storedAsListColumn,
       column: input.columnDescriptor,
       codecLookup: input.codecLookup,
       support: input.dataTypeSupport,
