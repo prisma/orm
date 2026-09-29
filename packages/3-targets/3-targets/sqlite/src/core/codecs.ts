@@ -373,7 +373,7 @@ export class SqliteRealCodec extends CodecImpl<
   number
 > {
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+    return refuseNaN(value);
   }
   async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
     return wire;

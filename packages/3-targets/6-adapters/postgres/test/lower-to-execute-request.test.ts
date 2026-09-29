@@ -157,16 +157,24 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — DDL literal defaults'
 });
 
 describe('PostgresControlAdapter.lowerToExecuteRequest — guards', () => {
-  it('throws when a numeric literal default is non-finite (NaN / ±Infinity)', async () => {
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      const ast = new PostgresCreateTable({
-        table: 'defaults',
-        columns: [col('x', 'double precision', { default: lit(value) })],
-      });
-      await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
-        /non-finite number wire value/,
-      );
-    }
+  it('renders a NaN or infinite numeric literal default as the text PostgreSQL reads, cast to the column type', async () => {
+    const lowered = await Promise.all(
+      [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
+        adapter.lowerToExecuteRequest(
+          new PostgresCreateTable({
+            table: 'defaults',
+            columns: [col('x', 'double precision', { default: lit(value) })],
+          }),
+          ctx,
+        ),
+      ),
+    );
+    expect(lowered.map(({ sql }) => sql)).toEqual(
+      ['NaN', 'Infinity', '-Infinity'].map(
+        (text) =>
+          `CREATE TABLE "defaults" (\n  "x" double precision DEFAULT '${text}'::double precision\n)`,
+      ),
+    );
   });
 
   it('throws when a Date literal default is invalid', async () => {

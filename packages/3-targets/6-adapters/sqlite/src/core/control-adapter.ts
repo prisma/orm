@@ -705,12 +705,13 @@ function sqliteInlineLiteral(wire: unknown): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? '1' : '0';
   if (typeof wire === 'number') {
-    if (!Number.isFinite(wire)) {
+    if (Number.isNaN(wire)) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',
-        `sqliteRenderDdlExecuteRequest: non-finite number wire value ${String(wire)} cannot be emitted as a DEFAULT literal`,
+        'sqliteRenderDdlExecuteRequest: a NaN default cannot be emitted, because SQLite stores NaN as NULL',
       );
     }
+    if (!Number.isFinite(wire)) return wire > 0 ? '9e999' : '-9e999';
     return String(wire);
   }
   if (typeof wire === 'bigint') return String(wire);

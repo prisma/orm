@@ -113,10 +113,10 @@ describe('structured error codes', () => {
     });
   });
 
-  it('CONTRACT.DEFAULT_INVALID on a non-finite number literal default', async () => {
+  it('CONTRACT.DEFAULT_INVALID on a NaN number literal default', async () => {
     const ast = new SqliteCreateTable({
       table: 'defaults',
-      columns: [col('x', 'INTEGER', { default: lit(Number.POSITIVE_INFINITY) })],
+      columns: [col('x', 'REAL', { default: lit(Number.NaN) })],
     });
     const err = await catchAsyncError(() =>
       controlAdapter.lowerToExecuteRequest(ast, { contract }),

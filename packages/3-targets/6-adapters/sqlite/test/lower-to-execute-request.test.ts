@@ -159,16 +159,31 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — DDL literal defaults', 
 });
 
 describe('SqliteControlAdapter.lowerToExecuteRequest — guards', () => {
-  it('throws when a numeric literal default is non-finite (NaN / ±Infinity)', async () => {
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      const ast = new SqliteCreateTable({
-        table: 'defaults',
-        columns: [col('x', 'INTEGER', { default: lit(value) })],
-      });
-      await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
-        /non-finite number wire value/,
-      );
-    }
+  it('throws when a numeric literal default is NaN, which SQLite stores as NULL', async () => {
+    const ast = new SqliteCreateTable({
+      table: 'defaults',
+      columns: [col('x', 'REAL', { default: lit(Number.NaN) })],
+    });
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      'sqliteRenderDdlExecuteRequest: a NaN default cannot be emitted, because SQLite stores NaN as NULL',
+    );
+  });
+
+  it('renders an infinite numeric literal default as the number SQLite reads as an infinity', async () => {
+    const lowered = await Promise.all(
+      [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
+        adapter.lowerToExecuteRequest(
+          new SqliteCreateTable({
+            table: 'defaults',
+            columns: [col('x', 'REAL', { default: lit(value) })],
+          }),
+          ctx,
+        ),
+      ),
+    );
+    expect(lowered.map(({ sql }) => sql)).toEqual(
+      ['9e999', '-9e999'].map((text) => `CREATE TABLE "defaults" (\n  "x" REAL DEFAULT ${text}\n)`),
+    );
   });
 
   it('throws when a Date literal default is invalid', async () => {

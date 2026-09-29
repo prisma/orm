@@ -109,3 +109,26 @@ describe('sqlite/real@1 decodeJson', () => {
     );
   });
 });
+
+describe('sqlite/real@1 encode', () => {
+  const codec = sqliteRealDescriptor.factory()(ctx);
+
+  it('writes an infinity, which SQLite stores', async () => {
+    expect(
+      await Promise.all(
+        [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
+          codec.encode(value, {}),
+        ),
+      ),
+    ).toEqual([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]);
+  });
+
+  it('refuses NaN, which SQLite would store as NULL', async () => {
+    await expect(codec.encode(Number.NaN, {})).rejects.toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message: 'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
+      }),
+    );
+  });
+});

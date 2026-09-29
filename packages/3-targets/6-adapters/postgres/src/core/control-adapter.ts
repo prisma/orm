@@ -1790,13 +1790,7 @@ function pgInlineLiteral(wire: unknown, nativeType: string): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? 'true' : 'false';
   if (typeof wire === 'number') {
-    if (!Number.isFinite(wire)) {
-      throw adapterError(
-        'CONTRACT.DEFAULT_INVALID',
-        `pgRenderDdlExecuteRequest: non-finite number wire value ${String(wire)} cannot be emitted as a DEFAULT literal for native type "${nativeType}"`,
-        { meta: { nativeType } },
-      );
-    }
+    if (!Number.isFinite(wire)) return `'${String(wire)}'::${nativeType}`;
     return String(wire);
   }
   if (typeof wire === 'bigint') return String(wire);
