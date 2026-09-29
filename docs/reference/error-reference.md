@@ -1162,7 +1162,9 @@ The check is lazy: registering the target, validating a contract, building a run
 
 That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode: selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
 
-Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type (`DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`) to read and write PostgreSQL's own text, which needs no Temporal at all.
+This error can occur in the application runtime only. The CLI, the Vite plugin, the language server and the programmatic control API load a `Temporal` implementation themselves when the runtime has none, and leave an existing global `Temporal` as it is. So `prisma contract emit`, `prisma db init` and the other commands read and write date and time defaults on Node 24 with no set-up. The application's own process gets no such help: nothing in the ORM client installs a `Temporal`.
+
+In the application, install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type (`DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`) to read and write PostgreSQL's own text, which needs no Temporal at all.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
