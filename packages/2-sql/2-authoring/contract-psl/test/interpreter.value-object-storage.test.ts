@@ -142,6 +142,46 @@ model User {
     });
   });
 
+  it('links a multi-table-inheritance variant to a base keyed by a value-object field', () => {
+    const result = interpretPostgres(`type Key {
+  a Int
+}
+
+model Base {
+  key  Key    @id
+  kind String
+
+  @@discriminator(kind)
+}
+
+model Child {
+  extra String
+
+  @@base(Base, "child")
+  @@map("child")
+}`);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const tables = (result.value.storage as SqlStorage).namespaces['public']?.entries.table;
+    expect(tables?.['child']).toEqual({
+      columns: {
+        key: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        extra: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      },
+      primaryKey: { columns: ['key'] },
+      uniques: [],
+      indexes: [],
+      foreignKeys: [
+        {
+          source: { namespaceId: 'public', tableName: 'child', columns: ['key'] },
+          target: { namespaceId: 'public', tableName: 'Base', columns: ['key'] },
+          onDelete: 'cascade',
+        },
+      ],
+    });
+  });
+
   it('skips value-object fields when the stack declares no value-object storage type', () => {
     // The scalar map still contains Jsonb/Json entries; the family layer
     // must not fall back to hardcoded type names.

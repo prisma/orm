@@ -89,7 +89,6 @@ import {
   type FieldNode,
   type ForeignKeyNode,
   type IndexNode,
-  isValueObjectNode,
   type ModelNode,
   type PrimaryKeyNode,
   type RelationNode,
@@ -1840,9 +1839,7 @@ function materializeMtiVariantStorageLinks(
     const linkFields: FieldNode[] = [];
     for (const pkColumn of basePrimaryKey.columns) {
       if (existingColumns.has(pkColumn)) continue;
-      const baseField = baseNode.fields.find(
-        (field): field is FieldNode => !isValueObjectNode(field) && field.columnName === pkColumn,
-      );
+      const baseField = baseNode.fields.find((field) => field.columnName === pkColumn);
       if (!baseField) continue;
       linkFields.push({
         fieldName: baseField.fieldName,
