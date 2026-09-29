@@ -7,9 +7,16 @@ import {
   mongoCodec,
   newMongoCodecRegistry,
 } from '@internal/mongo-codec';
+import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type Binary, type Decimal128, type Long, ObjectId } from 'bson';
+import {
+  decodeBsonJson,
+  decodeBsonValue,
+  encodeBsonJson,
+  encodeBsonValue,
+} from './bson-codec-helpers';
 import {
   binaryDecode,
   binaryDecodeJson,
@@ -28,6 +35,7 @@ import {
 import {
   MONGO_BINARY_CODEC_ID,
   MONGO_BOOLEAN_CODEC_ID,
+  MONGO_BSON_CODEC_ID,
   MONGO_DATE_CODEC_ID,
   MONGO_DECIMAL128_CODEC_ID,
   MONGO_DOUBLE_CODEC_ID,
@@ -41,6 +49,7 @@ import {
 import {
   mongoBinary,
   mongoBool,
+  mongoBson,
   mongoDate,
   mongoDecimal128,
   mongoDouble,
@@ -51,6 +60,7 @@ import {
   mongoString,
   mongoVector,
 } from './data-types';
+import { decodeJsonValue, encodeJsonValue } from './json-codec-helpers';
 import { mongoTargetError } from './mongo-target-errors';
 
 export const mongoObjectIdCodec = mongoCodec({
@@ -138,12 +148,29 @@ export const mongoBinaryCodec = mongoCodec({
 });
 
 /**
- * Any JSON value, stored as the BSON document, array or scalar it maps to.
+ * A JSON value, stored as the BSON object, array, string, number, boolean or null it maps to. Encode and decode refuse any other value at any depth, naming its path.
  */
 export const mongoJsonCodec = mongoCodec({
   typeId: MONGO_JSON_CODEC_ID,
-  decode: (wire: JsonValue) => wire,
-  encode: (value: JsonValue) => value,
+  decode: (wire: JsonValue) => decodeJsonValue(wire),
+  encode: (value: JsonValue) => encodeJsonValue(value),
+});
+
+/**
+ * Any BSON value, passed through unchanged except that decode turns a `DBRef` back into the `{ $ref, $id }` document it was stored as. Encode takes a `BsonInputValue` and decode returns a `BsonValue`. Its JSON form is canonical MongoDB Extended JSON v2, written with each number and `Uint8Array` as the BSON type the driver stores, so a round trip keeps the BSON bytes but may return wrapper classes such as `Int32` and `Double`.
+ */
+export const mongoBsonCodec = mongoCodec<
+  typeof MONGO_BSON_CODEC_ID,
+  readonly [],
+  BsonInputValue,
+  BsonInputValue,
+  BsonValue
+>({
+  typeId: MONGO_BSON_CODEC_ID,
+  decode: (wire: BsonInputValue) => decodeBsonValue(wire),
+  encode: (value: BsonInputValue) => encodeBsonValue(value),
+  encodeJson: encodeBsonJson,
+  decodeJson: decodeBsonJson,
 });
 
 /**
@@ -163,6 +190,7 @@ export const mongoStandardCodecs = [
   mongoDecimal128Codec,
   mongoBinaryCodec,
   mongoJsonCodec,
+  mongoBsonCodec,
 ] as const;
 
 /**
@@ -283,6 +311,11 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   }),
   descriptorFor(mongoJsonCodec, {
     dataType: mongoJson.id,
+    traits: [],
+    targetTypes: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'],
+  }),
+  descriptorFor(mongoBsonCodec, {
+    dataType: mongoBson.id,
     traits: [],
     targetTypes: [],
   }),

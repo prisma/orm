@@ -274,6 +274,30 @@ describe('createMongoParamRefMutator', () => {
       }
     });
 
+    it('keeps the name, codec id and collection of a parameter it replaces', () => {
+      const ref = new MongoParamRef('Alice', {
+        name: 'profile.name',
+        codecId: 'mongo/string@1',
+        collection: 'users',
+      });
+      const draft: MongoLoweredDraft = {
+        kind: 'insertOne',
+        collection: 'users',
+        document: { profile: { name: ref } },
+      };
+      const mutator = createMongoParamRefMutator(draft);
+      const [entry] = [...mutator.entries()];
+      mutator.replaceValues([{ ref: entry!.ref, newValue: 'Bob' }]);
+
+      expect([...flattenMongoParamRefs(mutator.currentDraft())]).toEqual([
+        new MongoParamRef('Bob', {
+          name: 'profile.name',
+          codecId: 'mongo/string@1',
+          collection: 'users',
+        }),
+      ]);
+    });
+
     it('replaceValue with typed codecId-matched handle writes the new value', () => {
       const ref = new MongoParamRef('Alice', { codecId: 'encrypt' });
       const draft: MongoLoweredDraft = {

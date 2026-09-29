@@ -21,7 +21,7 @@ import {
   type AuthoringEntityContext,
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
-  type PslExtensionBlock,
+  type ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
@@ -53,7 +53,12 @@ import {
   readResolvedAttributes,
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
-import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
+import type {
+  DocumentAst,
+  KeyValuePairAst,
+  PslSources,
+  SourceFile,
+} from '@internal/psl-parser/syntax';
 import {
   ArrayLiteralAst,
   FunctionCallAst,
@@ -214,7 +219,6 @@ export function interpretPrisma6Documents(
     const { symbolTable, diagnostics: tableDiagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     for (const diagnostic of tableDiagnostics) {
       diagnostics.push({
@@ -389,17 +393,16 @@ function checkDatasource(
     );
     return;
   }
-  const block = datasource.symbol.block;
-  const parameter = block.parameters['provider'];
-  let provider: string | undefined;
-  if (parameter?.kind === 'value') {
-    try {
-      const parsed: unknown = JSON.parse(parameter.raw);
-      provider = typeof parsed === 'string' ? parsed : undefined;
-    } catch {
-      provider = undefined;
+  const block = datasource.symbol;
+  let parameter: KeyValuePairAst | undefined;
+  for (const entry of block.node.entries()) {
+    if (entry.key()?.name() === 'provider') {
+      parameter = entry;
+      break;
     }
   }
+  const expression = parameter?.value();
+  const provider = expression instanceof StringLiteralExprAst ? expression.value() : undefined;
   if (provider === undefined || !binding.providers.includes(provider)) {
     diagnostics.push(
       prisma6Diagnostic(
@@ -408,7 +411,7 @@ function checkDatasource(
           ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`
           : `The datasource provider is "${provider}"; this contract source reads Prisma 6 schemas for provider "${namedProvider}".`,
         datasource.sourceId,
-        parameter === undefined ? block.span : parameter.span,
+        parameter === undefined ? block.span : nodePslSpan(parameter.syntax, datasource.sources),
       ),
     );
   }
@@ -428,7 +431,8 @@ function buildEnum(
     }
     diagnostics.push(unknownAttribute(`Enum "${block.name}"`, attribute, '@@', sourceId));
   }
-  const parameters: PslExtensionBlock['parameters'] = {};
+  const values: Record<string, string> = Object.create(null);
+  const parameterSpans: Record<string, PslSpan> = Object.create(null);
   for (const entry of block.node.entries()) {
     const name = entry.key()?.name();
     if (name === undefined) continue;
@@ -445,11 +449,8 @@ function buildEnum(
         );
       }
     }
-    parameters[name] = {
-      kind: 'value',
-      raw: JSON.stringify(value),
-      span: nodePslSpan(entry.syntax, sources),
-    };
+    values[name] = value;
+    parameterSpans[name] = nodePslSpan(entry.syntax, sources);
   }
   const descriptor = input.authoringContributions.entityTypes['enum'];
   if (descriptor === undefined || !isAuthoringEntityTypeDescriptor(descriptor)) {
@@ -488,11 +489,11 @@ function buildEnum(
         kind: 'enum',
         keyword: 'enum',
         name: block.name,
-        parameters,
-        blockAttributes: [],
+        values,
+        parameterSpans,
         attributes: {},
         span: block.span,
-      } satisfies PslExtensionBlock,
+      } satisfies ParsedPslExtensionBlock<Record<string, string>>,
     ],
     context,
   );

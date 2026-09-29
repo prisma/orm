@@ -8,6 +8,7 @@ import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { Document, MongoValue } from '@internal/mongo-value';
 import { MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 /**
@@ -155,7 +156,7 @@ function paramRefLabel(ref: MongoParamRef, codecId: string): string {
 }
 
 /**
- * Every encode failure names the parameter. A codec's own `RUNTIME.ENCODE_FAILED` keeps its code and details, with the label added; any other structured envelope passes through unchanged; everything else is wrapped in a `RUNTIME.ENCODE_FAILED` envelope. The original error is the `cause`.
+ * Every encode failure names the parameter, or the field and collection when the ORM supplied them. A codec's own `RUNTIME.ENCODE_FAILED` keeps its code and details, with the label added; any other structured envelope passes through unchanged; everything else is wrapped in a `RUNTIME.ENCODE_FAILED` envelope. The original error is the `cause`.
  */
 function wrapEncodeFailure(error: unknown, ref: MongoParamRef, codecId: string): never {
   const codecDetails = isStructuredError(error) ? error.meta : undefined;
@@ -164,10 +165,14 @@ function wrapEncodeFailure(error: unknown, ref: MongoParamRef, codecId: string):
   }
   const label = paramRefLabel(ref, codecId);
   const message = error instanceof Error ? error.message : String(error);
+  const subject =
+    ref.name !== undefined && ref.collection !== undefined
+      ? `field ${ref.name} in collection '${ref.collection}'`
+      : `parameter ${label}`;
   const wrapped = runtimeError(
     'RUNTIME.ENCODE_FAILED',
-    `Failed to encode parameter ${label} with codec '${codecId}': ${message}`,
-    { ...codecDetails, label, codec: codecId },
+    `Failed to encode ${subject} with codec '${codecId}': ${message}`,
+    { ...codecDetails, label, ...ifDefined('collection', ref.collection), codec: codecId },
   );
   wrapped.cause = error;
   throw wrapped;

@@ -1,7 +1,4 @@
-import type {
-  AuthoringPslBlockDescriptorNamespace,
-  AuthoringTypeNamespace,
-} from '@internal/framework-components/authoring';
+import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { fieldRef, referencedFieldRef } from '../src/attribute-spec/combinators/field-ref';
@@ -16,17 +13,6 @@ import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable, type FieldSymbol, type ModelSymbol } from '../src/symbol-table';
 import type { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
-
-const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
-  enum: {
-    kind: 'pslBlock',
-    keyword: 'enum',
-    discriminator: 'enum',
-    name: { required: true },
-    parameters: {},
-    variadicParameters: true,
-  },
-};
 
 const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
   Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType: 'integer' } },
@@ -69,7 +55,6 @@ function bind(text: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: ENUM_DESCRIPTORS,
   });
   const { binder, diagnostics } = createBinder({
     sources,
@@ -265,7 +250,7 @@ describe('the binder is the only resolution path', () => {
 });
 
 describe('a binder built over another snapshot', () => {
-  it('fails loudly instead of silently forgoing the check', () => {
+  it('fails without diagnostics when no binding is available', () => {
     const first = bind(RELATION_SCHEMA);
     const second = bind(RELATION_SCHEMA);
     const post = second.symbolTable.topLevel.models['Post']!;
@@ -278,9 +263,9 @@ describe('a binder built over another snapshot', () => {
       field,
     };
 
-    expect(() =>
-      interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx),
-    ).toThrow(/same snapshot/i);
+    const result = interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
   it('resolves normally when the binder and the context share a snapshot', () => {

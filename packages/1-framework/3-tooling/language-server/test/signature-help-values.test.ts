@@ -54,7 +54,6 @@ it.each([
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     parseIdentifier.mockClear();
     const result = providePslSignatureHelp({

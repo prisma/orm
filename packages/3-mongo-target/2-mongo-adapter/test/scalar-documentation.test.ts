@@ -20,7 +20,9 @@ describe('scalar documentation', () => {
     expect(mongoScalarAuthoringTypes[name].documentation).toContain(`stored as BSON ${bsonType}`);
   });
 
-  it('documents that Json fields are not constrained by a BSON type', () => {
-    expect(mongoScalarAuthoringTypes.Json.documentation).toMatch(/any JSON value/i);
+  it('documents Json by the JSON-representable BSON types it is stored as', () => {
+    expect(mongoScalarAuthoringTypes.Json.documentation).toContain(
+      'stored as BSON object, array, string, double, int, long, bool or null',
+    );
   });
 });

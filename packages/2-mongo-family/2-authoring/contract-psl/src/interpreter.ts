@@ -21,6 +21,7 @@ import type {
   AuthoringContributions,
   AuthoringEntityContext,
   AuthoringTypeNamespace,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
   instantiateAuthoringEntityType,
@@ -57,6 +58,7 @@ import {
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
+  interpretExtensionBlocks,
   mapPslDiagnostics,
   nodePslSpan,
   type PslDiagnostic,
@@ -1101,6 +1103,7 @@ function resolveNonRelationField(
 
 function processEnumDeclarations(input: {
   readonly enumSymbols: readonly BlockSymbol[];
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly authoringContributions: AuthoringContributions | undefined;
@@ -1122,7 +1125,7 @@ function processEnumDeclarations(input: {
       const source = diagnosticSource(input.sources, enumSymbol.node.syntax);
       input.diagnostics.push({
         code: 'PSL_ENUM_MISSING_FACTORY',
-        message: `enum "${enumSymbol.block.name}" requires an "enum" entityType factory in the active authoring contributions`,
+        message: `enum "${enumSymbol.name}" requires an "enum" entityType factory in the active authoring contributions`,
         ...source.at(enumSymbol.span),
       });
     }
@@ -1131,18 +1134,19 @@ function processEnumDeclarations(input: {
 
   for (const enumSymbol of input.enumSymbols) {
     const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
-    const decl = enumSymbol.block;
+    const envelope = input.parsedBlocks.get(enumSymbol);
     input.diagnostics.push(...enumMemberAttributeDiagnostics(enumSymbol, input.sources));
+    if (envelope === undefined) continue;
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
-      [decl],
+      [envelope],
       { ...input.entityContext, sourceId: sourceFile.filename },
     );
 
     if (handle === undefined || handle === null) continue;
 
-    builtEnums[decl.name] = {
+    builtEnums[envelope.name] = {
       codecId: handle.codecId,
       members: handle.enumMembers.map((m) => ({
         name: m.name,
@@ -1183,6 +1187,13 @@ export function interpretPslDocumentToMongoContract(
   diagnostics.push(
     ...binderDiagnostics.filter((diagnostic) => diagnostic.data?.['reference'] !== 'type'),
   );
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+    symbolTable,
+    sources,
+    pslBlockDescriptors: input.authoringContributions?.pslBlockDescriptors ?? {},
+    binder,
+  });
+  diagnostics.push(...blockDiagnostics);
   const topLevel = symbolTable.topLevel;
   validateNamespaceBlocksForMongoTarget({
     namespaces: Object.values(topLevel.namespaces),
@@ -1233,6 +1244,7 @@ export function interpretPslDocumentToMongoContract(
 
   const builtEnums = processEnumDeclarations({
     enumSymbols: topLevelEnumSymbols,
+    parsedBlocks,
     sources,
     binder,
     authoringContributions: input.authoringContributions,

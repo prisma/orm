@@ -1,17 +1,3 @@
-/**
- * Shape-only types for the PSL source-position primitives, diagnostic
- * codes, extension-block descriptor vocabulary, and the uniform
- * extension-block AST node base.
- *
- * These live in the shared plane so an extension's authoring descriptor
- * (`AuthoringPslBlockDescriptor` in `framework-authoring`) can reference
- * them without crossing the shared → migration-plane boundary. The
- * migration-plane `psl-ast.ts` re-exports everything here for consumers
- * that import PSL AST types from the control entrypoint.
- */
-
-import type { AuthoringOption } from './option-descriptor';
-
 export interface PslPosition {
   readonly offset: number;
   readonly line: number;
@@ -95,22 +81,7 @@ export type PslDiagnosticCode =
    * A required parameter declared in the descriptor is absent from the parsed block.
    */
   | 'PSL_EXTENSION_MISSING_REQUIRED_PARAMETER'
-  /**
-   * An `option`-kind parameter value is not one of the allowed tokens listed
-   * in the descriptor's `values` array.
-   */
-  | 'PSL_EXTENSION_OPTION_OUT_OF_SET'
-  /**
-   * A `value`-kind parameter's raw text is not a valid JSON literal, or the
-   * parsed JSON value was rejected by the codec's `decodeJson` method, or the
-   * codec id is not registered in the lookup.
-   */
   | 'PSL_EXTENSION_INVALID_VALUE'
-  /**
-   * A `ref`-kind parameter identifier does not resolve to a declared entity of
-   * the required `refKind` within the declared scope.
-   */
-  | 'PSL_EXTENSION_UNRESOLVED_REF'
   /**
    * A parameter key appears more than once in an extension block body.
    * The first occurrence is kept; subsequent occurrences emit this diagnostic.
@@ -139,107 +110,8 @@ export type PslDiagnosticCode =
  */
 export type ContributedPslDiagnosticCode = `PSL_${string}`;
 
-/**
- * Descriptor vocabulary for a single parameter on a declared block.
- *
- * Four kinds:
- * - `ref` — the parameter value is an identifier that must resolve to a
- *   declared entity of `refKind` within the declared `scope`.
- * - `value` — the parameter value is a PSL literal parsed and printed
- *   through the codec identified by `codecId`.
- * - `option` — the parameter value is one of the literal tokens in `values`.
- *   Not a codec; not persisted data. A closed authoring-time constraint only.
- * - `list` — a bracketed list whose elements each match the `of` descriptor.
- */
-export type PslBlockParam =
-  | PslBlockParamRef
-  | PslBlockParamValue
-  | PslBlockParamOption
-  | PslBlockParamList;
-
-export interface PslBlockParamRef {
-  readonly documentation?: string;
-  readonly kind: 'ref';
-  readonly refKind: string;
-  readonly scope: 'same-namespace' | 'same-space' | 'cross-space';
-  readonly required?: boolean;
-}
-
-export interface PslBlockParamValue {
-  readonly documentation?: string;
-  readonly kind: 'value';
-  readonly codecId: string;
-  readonly required?: boolean;
-}
-
-export interface PslBlockParamOption extends AuthoringOption {
-  readonly documentation?: string;
-  readonly required?: boolean;
-}
-
-export interface PslBlockParamList {
-  readonly documentation?: string;
-  readonly kind: 'list';
-  readonly of: PslBlockParam;
-  readonly required?: boolean;
-}
-
-/**
- * The parsed representation of a single parameter value on a uniform
- * extension-block AST node. Mirrors the `PslBlockParam` descriptor
- * vocabulary, plus `bare` for keyonly entries:
- *
- * - `ref`    → `PslExtensionBlockParamRef` — a raw identifier string
- *   (resolution runs in the validator, not the parser).
- * - `value`  → `PslExtensionBlockParamScalarValue` — a raw PSL literal string
- *   (codec validation runs in the validator).
- * - `option` → `PslExtensionBlockParamOption` — the chosen token.
- * - `list`   → `PslExtensionBlockParamList` — ordered list of the above.
- * - `bare`   → `PslExtensionBlockParamBare` — a bare identifier line with no
- *   `= value` (e.g. `Low` in an enum block). The name is the key in
- *   `parameters`; the interpreting consumer decides the default value.
- *
- * These shapes are intentionally minimal. The validator and lowering refine
- * and consume them; the generic framework parser produces them.
- */
-export type PslExtensionBlockParamValue =
-  | PslExtensionBlockParamRef
-  | PslExtensionBlockParamScalarValue
-  | PslExtensionBlockParamOption
-  | PslExtensionBlockParamList
-  | PslExtensionBlockParamBare;
-
-export interface PslExtensionBlockParamRef {
-  readonly kind: 'ref';
-  readonly identifier: string;
-  readonly span: PslSpan;
-}
-
-export interface PslExtensionBlockParamScalarValue {
-  readonly kind: 'value';
-  readonly raw: string;
-  readonly span: PslSpan;
-}
-
-export interface PslExtensionBlockParamOption {
-  readonly kind: 'option';
-  readonly token: string;
-  readonly span: PslSpan;
-}
-
-export interface PslExtensionBlockParamList {
-  readonly kind: 'list';
-  readonly items: readonly PslExtensionBlockParamValue[];
-  readonly span: PslSpan;
-}
-
-/**
- * A bare identifier line inside an extension block — a key with no `= value`.
- * Emitted when a line matches `/^[A-Za-z_]\w*$/` with no assignment. The
- * consumer decides what default value (if any) to apply.
- */
-export interface PslExtensionBlockParamBare {
-  readonly kind: 'bare';
+export interface PslExtensionBlockPrintEntry {
+  readonly expression?: string;
   readonly span: PslSpan;
 }
 
@@ -267,40 +139,10 @@ export interface PslExtensionBlockAttribute {
 
 export interface PslExtensionBlockParsedAttribute {
   readonly args: Readonly<Record<string, unknown>>;
+  readonly argSpans?: Readonly<Record<string, PslSpan>>;
   readonly span: PslSpan;
 }
 
-/**
- * Base shape for a uniform extension-contributed top-level PSL block
- * node, as produced by the generic framework parser and consumed by the
- * validator, printer, and lowering factory.
- *
- * - `kind` is the routing discriminant, equal to the descriptor's
- *   `discriminator`. The framework parser sets this to
- *   `descriptor.discriminator` for every block it parses. Several keywords
- *   may share one discriminator (e.g. `policy_select`/`policy_insert` both
- *   route to `kind: 'policy'`) — `kind` identifies the entity/storage kind,
- *   not the source syntax.
- * - `keyword` is the source PSL keyword the block was declared with
- *   (`policy_select`, `policy_insert`, …) — the parse-dispatch identity.
- *   Distinct from `kind` precisely when a discriminator is shared by more
- *   than one keyword; a lowering factory that contributes several keywords
- *   under one discriminator reads `keyword` to tell its blocks apart, and
- *   the printer re-emits each block under its own `keyword` regardless of
- *   how many other keywords share its `kind`.
- * - `name` is the block's declared name (the identifier after the keyword).
- * - `parameters` is the descriptor-driven parameter map. Keys are
- *   parameter names from the descriptor; values are the parsed parameter
- *   representations. Only parameters present in the source are included
- *   — absence of a required parameter is a validator concern, not a
- *   parser concern. Insertion order is preserved; the first occurrence of a
- *   duplicate key is retained and subsequent occurrences emit
- *   `PSL_EXTENSION_DUPLICATE_PARAMETER`.
- * - `blockAttributes` are `@@`-prefixed attribute lines inside the block, in
- *   declaration order. Captured generically — names and args are not validated
- *   by the parser.
- * - `span` covers the full block from keyword to closing brace.
- */
 export interface PslExtensionBlock {
   readonly kind: string;
   /**
@@ -311,8 +153,17 @@ export interface PslExtensionBlock {
    */
   readonly keyword: string;
   readonly name: string;
-  readonly parameters: Record<string, PslExtensionBlockParamValue>;
+  readonly parameters: Record<string, PslExtensionBlockPrintEntry>;
   readonly blockAttributes: readonly PslExtensionBlockAttribute[];
+  readonly span: PslSpan;
+}
+
+export interface ParsedPslExtensionBlock<Values = Readonly<Record<string, unknown>>> {
+  readonly kind: string;
+  readonly keyword: string;
+  readonly name: string;
+  readonly values: Values;
+  readonly parameterSpans: Readonly<Record<string, PslSpan>>;
   readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
   readonly span: PslSpan;
 }

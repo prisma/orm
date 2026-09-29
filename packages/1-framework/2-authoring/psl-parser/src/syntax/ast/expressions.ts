@@ -99,6 +99,18 @@ function decodeStringLiteral(raw: string): string {
     }
     const next = raw.charAt(i + 1);
     switch (next) {
+      case '/':
+        out += '/';
+        i += 2;
+        continue;
+      case 'b':
+        out += '\b';
+        i += 2;
+        continue;
+      case 'f':
+        out += '\f';
+        i += 2;
+        continue;
       case 'n':
         out += '\n';
         i += 2;

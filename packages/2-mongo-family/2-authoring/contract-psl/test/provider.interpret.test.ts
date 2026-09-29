@@ -6,7 +6,7 @@ import type {
 } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, jsonValue, mapBlock } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
@@ -48,17 +48,9 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
   };
 }
 
-function buildInterpretInput(
-  schema: string,
-  context: ContractSourceContext,
-  filename = SOURCE_ID,
-): PslInterpretInput {
+function buildInterpretInput(schema: string, filename = SOURCE_ID): PslInterpretInput {
   const { document, sources } = parse(schema, filename);
-  const { symbolTable } = buildSymbolTable({
-    documents: [document],
-    sources,
-    pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
-  });
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
   return { documents: [document], sources, symbolTable };
 }
 
@@ -109,10 +101,7 @@ model User {
     if (loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(
-      buildInterpretInput(schema, context, schemaPath),
-      context,
-    );
+    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
 
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
@@ -149,10 +138,7 @@ model User {
     if (!loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(
-      buildInterpretInput(schema, context, schemaPath),
-      context,
-    );
+    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
 
     expect(interpretResult.ok).toBe(true);
     if (!interpretResult.ok) return;
@@ -174,7 +160,7 @@ model Other {
 `;
     const source = interpretCapableSource(SOURCE_ID);
     const context = createMongoTestContext();
-    const input = buildInterpretInput(schema, context);
+    const input = buildInterpretInput(schema);
 
     let result: ReturnType<typeof source.interpret> | undefined;
     expect(() => {
@@ -198,7 +184,7 @@ model Other {
 `;
     const source = interpretCapableSource(SOURCE_ID);
     const context = createMongoTestContext();
-    const input = buildInterpretInput(schema, context);
+    const input = buildInterpretInput(schema);
 
     let result: ReturnType<typeof source.interpret> | undefined;
     expect(() => {
@@ -248,7 +234,7 @@ model Post {
 
     for (const testCase of cases) {
       const result = source.interpret(
-        buildInterpretInput(testCase.schema, context, 'memory-schema.prisma'),
+        buildInterpretInput(testCase.schema, 'memory-schema.prisma'),
         context,
       );
 
@@ -300,10 +286,7 @@ model Other {
     if (loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(
-      buildInterpretInput(schema, context, schemaPath),
-      context,
-    );
+    const interpretResult = source.interpret(buildInterpretInput(schema, schemaPath), context);
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
 
@@ -330,7 +313,6 @@ it('attributes multi-document semantic failures to the owning file, not the entr
   const { symbolTable } = buildSymbolTable({
     documents: [entry.document, owned.document],
     sources,
-    pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
   const result = interpretCapableSource('provider.prisma').interpret(
     { documents: [entry.document], sources, symbolTable },
@@ -372,8 +354,11 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
           keyword: 'enum',
           discriminator: 'enum',
           name: { required: true },
-          parameters: {},
-          variadicParameters: true,
+          spec: () =>
+            mapBlock({
+              value: { type: jsonValue(), documentation: 'The member value.' },
+              allowBare: true,
+            }),
         },
       },
       entityTypes: {
@@ -395,7 +380,6 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
   };
   const input = buildInterpretInput(
     'enum Role { User }\nmodel User { id ObjectId @id @map("_id") }',
-    customContext,
     'owned.prisma',
   );
   const entry = parse('', 'entry.prisma');
