@@ -238,3 +238,50 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ).toEqual([]);
   });
 });
+
+describe('an index path into a nested document', () => {
+  const nestedPathMessage = (path: string) =>
+    `Index field "${path}" on model "Item" is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "Item" or remove the index.`;
+
+  it('refuses each dotted form with its own diagnostic, not a parse error', () => {
+    expect(
+      diagnosticsOf(`
+        type Geo {
+          lat String
+        }
+        type Address {
+          city String
+          geo  Geo
+        }
+        model Item {
+          id      ObjectId @id @map("_id")
+          title   String
+          address Address
+          @@index([title, address.city])
+          @@index([address.city(sort: Desc)])
+          @@unique([address.geo.lat])
+          @@textIndex([address.city])
+        }
+      `),
+    ).toEqual([
+      {
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+        sourceId: 'schema.prisma',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 13 }) }),
+      },
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+      }),
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.geo.lat'),
+      }),
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+      }),
+    ]);
+  });
+});
