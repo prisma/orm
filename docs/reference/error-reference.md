@@ -639,7 +639,7 @@ The model's `@id` is not a required `String @db.ObjectId` stored as `_id`. Decla
 
 ### PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED
 
-An `@ignore`d field is used by `@unique`, `@@unique`, `@@index`, `@@fulltext`, or a relation's `fields:` or `references:`, and Prisma 6 still creates that index or reads that key. Remove `@ignore` from the field, or remove what uses it. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An `@ignore`d field is used by `@unique`, `@@unique`, `@@index`, `@@fulltext`, or a relation's `fields:` or `references:`, and Prisma 6 still creates that index or reads that key. Remove `@ignore` from the field, which adds it to the Prisma 6 client, or remove what uses it: removing an index makes Prisma 6 `db push` drop it, and removing a relation field removes that relation from the Prisma 6 client. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED
 
@@ -651,7 +651,7 @@ A list relation whose keys live in a list field (a many-to-many relation on Mong
 
 ### PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED
 
-A `@db.*` attribute other than `@db.ObjectId`, or `@db.ObjectId` on a field that is not a `String`. Remove it; the stored BSON type then follows the field type. When the attribute is not the default BSON type for the field type, removing it also changes what the Prisma 6 client writes for new values, while stored documents keep the old type. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@db.*` attribute other than `@db.ObjectId`, or `@db.ObjectId` on a field that is not a `String`. Remove it. The message says what that does to the Prisma 6 app, from what Prisma 6.19 stores: nothing changes when the attribute names the BSON type Prisma 6 already stores for the field type (`@db.Long` on `Int`, whose plain values Prisma 6 stores as long; `@db.Date` on `DateTime`; `@db.String` on `String`), and otherwise new values are stored as the field type's plain BSON type while stored documents keep the old one. An attribute Prisma 6 itself rejects on that type is named as such. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED
 

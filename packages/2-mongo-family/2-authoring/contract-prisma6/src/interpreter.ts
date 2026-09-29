@@ -549,6 +549,75 @@ function unsupportedTypeMessage(label: string, typeName: string, owner: FieldOwn
   return `${base} Adding @@ignore to model "${owner.name}" keeps the model out of the contract, but the model disappears from the Prisma 6 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 6 client as well.`;
 }
 
+/** The native types Prisma 6 accepts on each MongoDB scalar, checked with Prisma 6.19. */
+const PRISMA6_NATIVE_TYPES: Readonly<Record<string, readonly string[]>> = {
+  String: ['db.String', 'db.ObjectId'],
+  Boolean: ['db.Bool'],
+  Int: ['db.Int', 'db.Long'],
+  BigInt: ['db.Long'],
+  Float: ['db.Double'],
+  DateTime: ['db.Date', 'db.Timestamp'],
+  Bytes: ['db.BinData', 'db.ObjectId'],
+  Json: ['db.Json'],
+};
+
+/** The BSON type Prisma 6 stores for each native type. */
+const PRISMA6_NATIVE_TYPE_BSON: Readonly<Record<string, string>> = {
+  'db.String': 'string',
+  'db.ObjectId': 'objectId',
+  'db.Bool': 'bool',
+  'db.Int': 'int',
+  'db.Long': 'long',
+  'db.Double': 'double',
+  'db.Date': 'date',
+  'db.Timestamp': 'timestamp',
+  'db.BinData': 'binData',
+  'db.Json': 'object',
+};
+
+/** The BSON type Prisma 6 stores for each MongoDB scalar that has no native type. `Int` is a long. */
+const PRISMA6_SCALAR_BSON: Readonly<Record<string, string>> = {
+  String: 'string',
+  Boolean: 'bool',
+  Int: 'long',
+  BigInt: 'long',
+  Float: 'double',
+  DateTime: 'date',
+  Bytes: 'binData',
+  Json: 'object',
+};
+
+function withArticle(typeName: string): string {
+  return `${/^[AEIOU]/.test(typeName) ? 'an' : 'a'} ${typeName}`;
+}
+
+function acceptedByPrisma6(nativeType: string, typeName: string): boolean {
+  const accepted = Object.hasOwn(PRISMA6_NATIVE_TYPES, typeName)
+    ? PRISMA6_NATIVE_TYPES[typeName]
+    : undefined;
+  return accepted?.includes(nativeType) === true;
+}
+
+/** What removing a native type other than `@db.ObjectId` does to the Prisma 6 app. */
+function nativeTypeRemoval(nativeType: string, typeName: string): string {
+  if (!acceptedByPrisma6(nativeType, typeName)) {
+    return `Prisma 6 does not accept @${nativeType} on ${withArticle(typeName)} field either; remove it.`;
+  }
+  const declared = PRISMA6_NATIVE_TYPE_BSON[nativeType];
+  const plain = PRISMA6_SCALAR_BSON[typeName];
+  return declared === plain
+    ? `Remove it: Prisma 6 stores ${withArticle(typeName)} field as BSON ${plain} without it too, so removing it changes nothing in the Prisma 6 app.`
+    : `Remove it; this also changes the Prisma 6 app: its client then stores new ${typeName} values as BSON ${plain} instead of ${declared}, while stored documents keep ${declared}.`;
+}
+
+/** What each fix for `@db.ObjectId` on a field that is not a `String` does to the Prisma 6 app. */
+function objectIdRemoval(typeName: string): string {
+  if (!acceptedByPrisma6('db.ObjectId', typeName)) {
+    return `Prisma 6 does not accept @db.ObjectId on ${withArticle(typeName)} field either.`;
+  }
+  return `Removing it makes the Prisma 6 client store new values as BSON ${PRISMA6_SCALAR_BSON[typeName]} instead of objectId, while stored documents keep objectId; changing the type to String makes the Prisma 6 app read and write the value as a hex string, with the stored values unchanged.`;
+}
+
 /** The field's contract type, or `undefined` after reporting why it has none. */
 function resolveFieldType(
   field: FieldSymbol,
@@ -575,8 +644,8 @@ function resolveFieldType(
       prisma6Diagnostic(
         'PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED',
         attribute.name === 'db.ObjectId'
-          ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String. Either change also reaches the Prisma 6 app: its client then writes and reads this field with the new type, while stored documents keep their ObjectId values.`
-          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. Remove it: the stored BSON type then follows the field type. If "@${attribute.name}" is not the default BSON type for ${field.typeName}, removing it also changes the Prisma 6 app: its client then writes the default type for new values, while stored documents keep the old one.`,
+          ? `${label}: @db.ObjectId is only supported on a String field, and this field is "${field.typeName}". Remove @db.ObjectId, or change the field type to String. ${objectIdRemoval(field.typeName)}`
+          : `${label}: native type "@${attribute.name}" is not supported by the Prisma 6 MongoDB contract source; only @db.ObjectId is. ${nativeTypeRemoval(attribute.name, field.typeName)}`,
         sourceId,
         attribute.span,
       ),
@@ -800,7 +869,7 @@ function readModelField(
         ignoredFieldReferenced(
           symbol.name,
           [field.name],
-          `@unique on field "${symbol.name}.${field.name}"`,
+          { kind: 'index', text: `@unique on field "${symbol.name}.${field.name}"` },
           sourceId,
           unique.span,
         ),
@@ -1057,18 +1126,28 @@ function readRelationArguments(
   return { name, fields, references };
 }
 
+/** What uses an ignored field: an index (or `@unique`) Prisma 6 `db push` maintains, or a relation field of the Prisma 6 client. */
+interface IgnoredFieldUse {
+  readonly kind: 'index' | 'relation';
+  readonly text: string;
+}
+
 function ignoredFieldReferenced(
   modelName: string,
   fieldNames: readonly string[],
-  usedBy: string,
+  usedBy: IgnoredFieldUse,
   sourceId: string,
   span: PslSpan,
 ): ContractSourceDiagnostic {
   const one = fieldNames.length === 1;
   const fields = fieldNames.map((name) => `"${modelName}.${name}"`).join(', ');
+  const removal =
+    usedBy.kind === 'index'
+      ? 'which makes Prisma 6 `db push` drop the index'
+      : 'which removes that relation from the Prisma 6 client';
   return prisma6Diagnostic(
     'PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED',
-    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${usedBy} uses ${one ? 'it' : 'them'}. Remove @ignore from ${fields}, or remove ${usedBy}.`,
+    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${usedBy.text} uses ${one ? 'it' : 'them'}. Remove @ignore from ${fields}, which adds ${one ? 'it' : 'them'} to the Prisma 6 client, or remove ${usedBy.text}, ${removal}.`,
     sourceId,
     span,
   );
@@ -1141,7 +1220,7 @@ function readRelationFields(
         ignoredFieldReferenced(
           symbol.name,
           ignoredLocal,
-          `relation field "${symbol.name}.${field.name}"`,
+          { kind: 'relation', text: `relation field "${symbol.name}.${field.name}"` },
           sourceId,
           relation?.span ?? field.span,
         ),
@@ -1155,7 +1234,7 @@ function readRelationFields(
         ignoredFieldReferenced(
           target.located.symbol.name,
           ignoredTarget,
-          `relation field "${symbol.name}.${field.name}"`,
+          { kind: 'relation', text: `relation field "${symbol.name}.${field.name}"` },
           sourceId,
           relation?.span ?? field.span,
         ),
@@ -1228,9 +1307,12 @@ function buildIndexes(build: ModelBuild, diagnostics: Diagnostics): MongoIndex[]
   });
   for (const attribute of [...build.uniqueFields, ...build.modelIndexes]) {
     const names = attribute.fields.map((field) => field.name);
-    const usedBy = build.uniqueFields.includes(attribute)
-      ? `@unique on field "${symbol.name}.${attribute.fields[0]?.name ?? ''}"`
-      : `@@${attribute.kind} on model "${symbol.name}"`;
+    const usedBy: IgnoredFieldUse = {
+      kind: 'index',
+      text: build.uniqueFields.includes(attribute)
+        ? `@unique on field "${symbol.name}.${attribute.fields[0]?.name ?? ''}"`
+        : `@@${attribute.kind} on model "${symbol.name}"`,
+    };
     const ignored = names.filter((name) => build.ignoredFields.has(name));
     if (ignored.length > 0) {
       diagnostics.push(
