@@ -207,8 +207,8 @@ model Widget {
         });
         const document = project.document(uri);
         expect(document).toBeDefined();
-        expect(document?.diagnostics).toEqual([]);
-        expect(document?.interpretDiagnostics().map((diagnostic) => diagnostic.code)).toEqual(
+        expect(document?.parse().diagnostics).toEqual([]);
+        expect(project.diagnostics(uri).map((diagnostic) => diagnostic.code)).toEqual(
           diagnosticCodes,
         );
         expect(onInterpretationError).not.toHaveBeenCalled();
@@ -294,16 +294,7 @@ namespace billing {
       const document = project.document(uri);
       expect(document, `Loaded member ${uri}`).toBeDefined();
       if (document === undefined) throw new Error(`Missing member ${uri}`);
-      const symbolDiagnostics = project
-        .symbolDiagnostics()
-        .filter((diagnostic) => diagnostic.filename === document.sourceFile.filename)
-        .map((diagnostic) => ({
-          code: diagnostic.code,
-          message: diagnostic.message,
-          range: diagnostic.range,
-          severity: 1,
-        }));
-      return [...document.diagnostics, ...symbolDiagnostics, ...document.interpretDiagnostics()];
+      return project.diagnostics(uri);
     }
 
     async function emitDiagnosticsFor(configPath: string) {

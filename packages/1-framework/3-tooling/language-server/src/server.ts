@@ -34,16 +34,13 @@ import {
   type ProjectInterpretation,
   resolveConfigInputs,
 } from './config-resolution';
-import {
-  type LspDiagnostic,
-  mapParseDiagnostics,
-  ParseDiagnosticSeverity,
-} from './diagnostic-mapping';
+import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
+import type { DocumentSnapshot } from './document-snapshot';
 import { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { LspControlStack } from './lsp-control-stack';
-import { type DocumentArtifacts, ProjectArtifacts } from './project-artifacts';
+import { ProjectArtifacts } from './project-artifacts';
 import {
   canonicalFileIdentity,
   isWatcherCacheEligible,
@@ -62,7 +59,7 @@ export interface LanguageServer {
    * Exposed for future features (completion, semantic tokens); nothing consumes
    * them yet.
    */
-  getDocumentAst(uri: string): DocumentArtifacts | undefined;
+  getDocumentAst(uri: string): DocumentSnapshot | undefined;
   getProjectSymbolTable(uri: string): SymbolTable | undefined;
 }
 
@@ -145,12 +142,10 @@ function createServerOn(connection: Connection): LanguageServer {
     const nextLedger = new Set<string>();
     const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
     for (const candidateUri of project.inputs.uris()) {
-      const artifacts = project.artifacts.document(candidateUri);
       const uri = normalizeFileUri(candidateUri);
       sendDiagnostics({
         uri,
-        diagnostics:
-          artifacts === undefined ? [] : combinedDiagnostics(artifacts, projectSymbolDiagnostics),
+        diagnostics: toDiagnostics(project.artifacts.diagnostics(uri, projectSymbolDiagnostics)),
       });
       nextLedger.add(uri);
     }
@@ -222,36 +217,16 @@ function createServerOn(connection: Connection): LanguageServer {
     void registerSchemaWatcher(project);
   }
 
-  // The single diagnostics assembly — push and pull must serve the same
-  // combined response, and interpretation runs only from here.
-  function combinedDiagnostics(
-    artifacts: DocumentArtifacts,
-    projectSymbolDiagnostics: ReturnType<ProjectArtifacts['symbolDiagnostics']>,
-  ): Diagnostic[] {
-    const symbolDiagnostics = projectSymbolDiagnostics.filter(
-      (diagnostic) => diagnostic.filename === artifacts.sourceFile.filename,
-    );
-    return toDiagnostics([
-      ...artifacts.diagnostics,
-      ...mapParseDiagnostics(symbolDiagnostics),
-      ...artifacts.interpretDiagnostics(),
-    ]);
-  }
-
   function buildDocumentDiagnosticReport(
     project: ProjectState,
     requestedUri: string,
   ): RelatedFullDocumentDiagnosticReport {
     const uri = normalizeFileUri(requestedUri);
     const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
-    const reportFor = (memberUri: string): FullDocumentDiagnosticReport => {
-      const artifacts = project.artifacts.document(memberUri);
-      return {
-        kind: DocumentDiagnosticReportKind.Full,
-        items:
-          artifacts === undefined ? [] : combinedDiagnostics(artifacts, projectSymbolDiagnostics),
-      };
-    };
+    const reportFor = (memberUri: string): FullDocumentDiagnosticReport => ({
+      kind: DocumentDiagnosticReportKind.Full,
+      items: toDiagnostics(project.artifacts.diagnostics(memberUri, projectSymbolDiagnostics)),
+    });
     const members = new Set(Array.from(project.inputs.uris(), normalizeFileUri));
     const previous = reportedRelatedMembers.get(project.configPath) ?? new Set<string>();
     const relatedDocuments: Record<string, FullDocumentDiagnosticReport> = {};
@@ -517,7 +492,7 @@ function createServerOn(connection: Connection): LanguageServer {
     }
 
     const source = {
-      document: artifacts.document,
+      document: artifacts.parse().document,
       sourceFile: artifacts.sourceFile,
       symbolTable: project.artifacts.symbolTable(),
       scalarTypes: project.controlStack.scalarTypes,
@@ -543,7 +518,7 @@ function createServerOn(connection: Connection): LanguageServer {
 
     try {
       const context = classifyPslCompletionContext({
-        document: artifacts.document,
+        document: artifacts.parse().document,
         sourceFile: artifacts.sourceFile,
         position,
       });
@@ -586,7 +561,7 @@ function createServerOn(connection: Connection): LanguageServer {
     try {
       return providePslSignatureHelp({
         clientSupportsLabelOffsets: clientCapabilities.signatureLabelOffsets,
-        document: artifacts.document,
+        document: artifacts.parse().document,
         sourceFile: artifacts.sourceFile,
         position,
         candidates: {
@@ -765,7 +740,7 @@ function createServerOn(connection: Connection): LanguageServer {
     if (artifacts === undefined) {
       return [];
     }
-    return computeFoldingRanges(artifacts.document, project.artifacts.sources);
+    return computeFoldingRanges(artifacts.parse().document, project.artifacts.sources);
   });
 
   function documentChanged(uri: string): void {

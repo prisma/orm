@@ -21,7 +21,7 @@ In pull mode, `interFileDependencies: true` tells the client that editor edits c
 
 Equivalent file URIs share one document and one normalized URI for source filenames and diagnostic publications, including clears. Normalization follows file-path identity: percent encoding is standardized, Windows paths are case-folded, and UNC authorities are preserved. The server does not resolve symlinks or preserve the editor's original URI spelling.
 
-Each immutable document snapshot parses lazily, at most once, and owns its AST, source registry, and raw parser diagnostics. Reading text alone does not parse. Projects reuse unchanged snapshots across configuration reloads while independently rebuilding combined sources, symbols, and interpretation. Protocol diagnostic mapping remains project-owned; edits and disk invalidation produce new snapshots without changing previous parses.
+Each immutable document snapshot parses lazily, at most once, and owns its AST, source registry, and raw parser diagnostics. Reading text alone does not parse. Projects reuse unchanged snapshots across configuration reloads while independently rebuilding combined sources, symbols, and interpretation. `ProjectArtifacts.document(uri)` returns the snapshot itself without parsing. `ProjectArtifacts.diagnostics(uri)` combines mapped parse, symbol, and interpretation diagnostics; whole-project reports supply precomputed symbol diagnostics so each report scans the project once for symbols. Interpretation is memoized per project revision, not attached to a document snapshot. Edits and disk invalidation produce new snapshots without changing previous parses.
 
 ## Completion
 

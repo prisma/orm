@@ -81,12 +81,9 @@ import {
   UnregistrationRequest,
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
+import type { DocumentSnapshot } from '../src/document-snapshot';
 import { guardedConnection } from '../src/guarded-connection';
-import {
-  type DocumentArtifacts,
-  ProjectArtifacts,
-  type ProjectArtifactsOptions,
-} from '../src/project-artifacts';
+import { ProjectArtifacts, type ProjectArtifactsOptions } from '../src/project-artifacts';
 import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
 import { CONFIG_LOAD_FAILED_CODE, createServer } from '../src/server';
@@ -433,7 +430,7 @@ interface Harness {
   readonly diagnosticRefreshCount: () => number;
   readonly waitForDiagnosticRefresh: () => Promise<void>;
   readonly notifyConfigChanged: (uri?: string) => void;
-  readonly getDocumentAst: (uri: string) => DocumentArtifacts | undefined;
+  readonly getDocumentAst: (uri: string) => DocumentSnapshot | undefined;
   readonly getProjectSymbolTable: (uri: string) => SymbolTable | undefined;
   readonly delayNextSchemaWatcherRegistration: () => Promise<{
     readonly id: string;
@@ -3114,7 +3111,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     const broken = await harness.waitForDiagnostics(schemaUri);
     expect(broken.map((diagnostic) => diagnostic.code)).toContain('PSL_DUPLICATE_DECLARATION');
     const firstAst = harness.getDocumentAst(schemaUri);
-    expect(firstAst?.document).toBeDefined();
+    expect(firstAst?.parse().document).toBeDefined();
 
     const cleared = harness.waitForDiagnosticsMatching(
       schemaUri,
@@ -3131,7 +3128,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     await cleared;
 
     const secondAst = harness.getDocumentAst(schemaUri);
-    expect(secondAst?.document).not.toBe(firstAst?.document);
+    expect(secondAst?.parse().document).not.toBe(firstAst?.parse().document);
     expect(Object.keys(harness.getProjectSymbolTable(schemaUri)?.topLevel.models ?? {})).toEqual(
       expect.arrayContaining(['User', 'Post']),
     );
@@ -3887,7 +3884,7 @@ describe('project symbol diagnostics assembly', () => {
           },
         });
       }
-      expect(harness.getDocumentAst(siblingUri)?.diagnostics).toEqual([]);
+      expect(harness.getDocumentAst(siblingUri)?.parse().diagnostics).toEqual([]);
     },
   );
 });

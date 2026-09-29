@@ -22,17 +22,6 @@ function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
   return new Set(Array.from(inputs.uris(), canonicalFileIdentity));
 }
 
-export interface DocumentArtifacts {
-  readonly document: DocumentAst;
-  readonly sourceFile: SourceFile;
-  readonly diagnostics: readonly LspDiagnostic[];
-  /**
-   * Interpreter findings, computed on first pull at diagnostics-assembly time
-   * and memoized for the current project source registry.
-   */
-  interpretDiagnostics(): readonly LspDiagnostic[];
-}
-
 export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
   readonly readSnapshot: (uri: string) => DocumentSnapshot | undefined;
@@ -46,15 +35,9 @@ export class ProjectArtifacts {
   readonly #interpretation: ProjectInterpretation | undefined;
   #inputs: SchemaInputSet;
   readonly #documents = new Map<string, DocumentSnapshot>();
-  readonly #artifactsBySnapshot = new WeakMap<DocumentSnapshot, DocumentArtifacts>();
   #symbolTableResult: SymbolTableResult | undefined;
-  #sources = new PslSources([]);
-  #interpretMemo:
-    | {
-        readonly sources: PslSources;
-        readonly bySourceId: ReadonlyMap<string, readonly LspDiagnostic[]>;
-      }
-    | undefined;
+  #sources: PslSources | undefined;
+  #interpretMemo: ReadonlyMap<string, readonly LspDiagnostic[]> | undefined;
 
   constructor(options: ProjectArtifactsOptions) {
     this.#options = options;
@@ -64,10 +47,32 @@ export class ProjectArtifacts {
   }
 
   get sources(): PslSources {
+    this.#sources ??= new PslSources(
+      Array.from(
+        this.#documents.values(),
+        (snapshot) => [snapshot.parse().document.syntax, snapshot.sourceFile] as const,
+      ),
+    );
     return this.#sources;
   }
 
-  document = (uri: string): DocumentArtifacts | undefined => this.#readDocument(uri);
+  document = (uri: string): DocumentSnapshot | undefined => this.#readDocument(uri);
+
+  diagnostics = (
+    uri: string,
+    projectSymbolDiagnostics?: readonly PslDiagnostic[],
+  ): readonly LspDiagnostic[] => {
+    const snapshot = this.#readDocument(uri);
+    if (snapshot === undefined) return [];
+    const symbolDiagnostics = (projectSymbolDiagnostics ?? this.symbolDiagnostics()).filter(
+      (diagnostic) => diagnostic.filename === snapshot.uri,
+    );
+    return [
+      ...mapParseDiagnostics(snapshot.parse().diagnostics),
+      ...mapParseDiagnostics(symbolDiagnostics),
+      ...this.#interpretDiagnostics(snapshot.uri),
+    ];
+  };
 
   symbolTable = (): SymbolTable => this.#readSymbolTable();
 
@@ -93,12 +98,7 @@ export class ProjectArtifacts {
   };
 
   #refreshSources(): void {
-    this.#sources = new PslSources(
-      Array.from(
-        this.#documents.values(),
-        (snapshot) => [snapshot.parse().document.syntax, snapshot.sourceFile] as const,
-      ),
-    );
+    this.#sources = undefined;
     this.#symbolTableResult = undefined;
     this.#interpretMemo = undefined;
   }
@@ -107,26 +107,22 @@ export class ProjectArtifacts {
     if (this.#interpretation === undefined) {
       return new Map();
     }
-    if (this.#interpretMemo === undefined || this.#interpretMemo.sources !== this.#sources) {
-      this.#interpretMemo = {
-        sources: this.#sources,
-        bySourceId: this.#computeInterpretDistribution(this.#interpretation),
-      };
-    }
-    return this.#interpretMemo.bySourceId;
+    this.#interpretMemo ??= this.#computeInterpretDistribution(this.#interpretation);
+    return this.#interpretMemo;
   }
 
   #computeInterpretDistribution(
     activeInterpretation: ProjectInterpretation,
   ): ReadonlyMap<string, readonly LspDiagnostic[]> {
-    const currentSymbolTable = this.#readSymbolTable();
+    const currentSymbolTable = (this.#symbolTableResult ?? this.#readSymbolTableResult())
+      .symbolTable;
     const allDocuments = Array.from(
       this.#documents.values(),
       (snapshot) => snapshot.parse().document,
     );
     const warnings: ContractSourceDiagnostic[] = [];
     const result = activeInterpretation.source.interpret(
-      { documents: allDocuments, sources: this.#sources, symbolTable: currentSymbolTable },
+      { documents: allDocuments, sources: this.sources, symbolTable: currentSymbolTable },
       {
         ...activeInterpretation.context,
         reportWarning: (diagnostic) => {
@@ -157,34 +153,29 @@ export class ProjectArtifacts {
     return bySourceId;
   }
 
-  #createInterpretSlot(uri: string, sourceFile: SourceFile): () => readonly LspDiagnostic[] {
-    if (this.#interpretation === undefined) {
-      return () => [];
-    }
-    return () => {
-      try {
-        return this.#projectInterpretDiagnostics().get(sourceFile.filename) ?? [];
-      } catch (error) {
-        if (
-          error instanceof ResponseError &&
-          (error.code === LSPErrorCodes.RequestCancelled ||
-            error.code === LSPErrorCodes.ServerCancelled ||
-            error.code === LSPErrorCodes.ContentModified)
-        ) {
-          throw error;
-        }
-        this.#options.onInterpretationError(uri, error);
-        return [
-          {
-            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
-            code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
-            message:
-              'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
-            severity: ParseDiagnosticSeverity.Error,
-          },
-        ];
+  #interpretDiagnostics(uri: string): readonly LspDiagnostic[] {
+    try {
+      return this.#projectInterpretDiagnostics().get(uri) ?? [];
+    } catch (error) {
+      if (
+        error instanceof ResponseError &&
+        (error.code === LSPErrorCodes.RequestCancelled ||
+          error.code === LSPErrorCodes.ServerCancelled ||
+          error.code === LSPErrorCodes.ContentModified)
+      ) {
+        throw error;
       }
-    };
+      this.#options.onInterpretationError(uri, error);
+      return [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+          code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+          message:
+            'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
+          severity: ParseDiagnosticSeverity.Error,
+        },
+      ];
+    }
   }
 
   #drop(uri: string): void {
@@ -193,7 +184,7 @@ export class ProjectArtifacts {
     }
   }
 
-  #readDocument(uri: string): DocumentArtifacts | undefined {
+  #readDocument(uri: string): DocumentSnapshot | undefined {
     const identity = canonicalFileIdentity(uri);
     const readSnapshot = this.#readSnapshot;
     const snapshot = readSnapshot(uri);
@@ -211,32 +202,18 @@ export class ProjectArtifacts {
       this.#documents.set(identity, snapshot);
       this.#refreshSources();
     }
-    let facade = this.#artifactsBySnapshot.get(snapshot);
-    if (facade === undefined) {
-      facade = {
-        get document() {
-          return snapshot.parse().document;
-        },
-        get sourceFile() {
-          return snapshot.sourceFile;
-        },
-        diagnostics: mapParseDiagnostics(snapshot.parse().diagnostics),
-        interpretDiagnostics: this.#createInterpretSlot(snapshot.uri, snapshot.sourceFile),
-      };
-      this.#artifactsBySnapshot.set(snapshot, facade);
-    }
-    return facade;
+    return snapshot;
   }
 
   #readSymbolTableResult(): SymbolTableResult {
     const currentDocuments: DocumentAst[] = [];
     for (const uri of this.#inputs.uris()) {
-      const artifacts = this.#readDocument(uri);
-      if (artifacts !== undefined) currentDocuments.push(artifacts.document);
+      const snapshot = this.#readDocument(uri);
+      if (snapshot !== undefined) currentDocuments.push(snapshot.parse().document);
     }
     this.#symbolTableResult ??= buildSymbolTable({
       documents: currentDocuments,
-      sources: this.#sources,
+      sources: this.sources,
     });
     return this.#symbolTableResult;
   }
