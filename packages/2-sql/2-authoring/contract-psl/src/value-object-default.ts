@@ -1,7 +1,8 @@
 /**
  * Checking a value-object field's literal default against its composite type. The default is one
- * JSON value of the field's column; it must have the shape of the value object, or of a list of
- * them, and each member's value must be a value of the member's type.
+ * JSON value of the field's column, holding each member in the stored form its codec writes. It
+ * must have the shape of the value object, or of a list of them, and each member's codec must read
+ * the member's value.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -14,45 +15,73 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import {
+  checkStoredValue,
   type DataTypeSupport,
   type DefaultColumn,
-  lowerDataTypeDefault,
-  type WrittenValue,
+  PSL_DEFAULT_TYPE_INCOMPATIBLE,
 } from './data-type-default';
+
+/** The value objects of a document, and every member each composite type declares. */
+export interface ValueObjectTypes {
+  readonly nodes: ReadonlyMap<string, ValueObjectNode>;
+  /** Includes a member whose type did not resolve, which has no node and is reported once, where it is declared. */
+  readonly declaredMembers: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+export interface ValueObjectDefaultMismatch {
+  readonly code: string;
+  readonly message: string;
+}
 
 export interface ValueObjectDefaultInput {
   /** `Model.field`, the start of every path a mismatch names. */
   readonly fieldPath: string;
   readonly value: JsonValue;
   readonly list: boolean;
+  readonly nullable: boolean;
   readonly valueObjectName: string;
-  readonly valueObjects: ReadonlyMap<string, ValueObjectNode>;
+  readonly types: ValueObjectTypes;
   /** The descriptor of the one column the value object is stored in. */
   readonly column: DefaultColumn;
   readonly codecLookup: CodecLookup | undefined;
   readonly support: DataTypeSupport;
 }
 
-/** Each way the default does not match the composite type, as a diagnostic message. */
-export function valueObjectDefaultMismatches(input: ValueObjectDefaultInput): readonly string[] {
-  const mismatches: string[] = [];
-  const at = (path: string, message: string) => mismatches.push(`Field "${path}": ${message}`);
-  const documentType = dataTypeOf(input.column.codecId, input);
+/** Each way the default does not match the composite type. */
+export function valueObjectDefaultMismatches(
+  input: ValueObjectDefaultInput,
+): readonly ValueObjectDefaultMismatch[] {
+  const mismatches: ValueObjectDefaultMismatch[] = [];
+  const shape = (path: string, message: string) =>
+    mismatches.push({
+      code: PSL_DEFAULT_TYPE_INCOMPATIBLE,
+      message: `Field "${path}": ${message}`,
+    });
+  const documentType = dataTypeOf(input.column.codecId, input.codecLookup);
+
+  const holdsJsonDocuments = (member: ScalarMemberNode) => {
+    const memberType = dataTypeOf(member.descriptor.codecId, input.codecLookup);
+    return (
+      memberType === documentType ||
+      input.support.lookup.get(memberType)?.casts[documentType] !== undefined ||
+      input.support.lookup.get(documentType)?.casts[memberType] !== undefined
+    );
+  };
 
   const checkObject = (value: JsonValue, valueObjectName: string, path: string) => {
-    const valueObject = input.valueObjects.get(valueObjectName);
-    if (valueObject === undefined) {
+    const valueObject = input.types.nodes.get(valueObjectName);
+    const declared = input.types.declaredMembers.get(valueObjectName);
+    if (valueObject === undefined || declared === undefined) {
       throw new InternalError(
         `Field "${path}" is typed by the value object "${valueObjectName}", which the contract does not declare.`,
       );
     }
     if (!isJsonObject(value)) {
-      at(path, `a value of "${valueObjectName}" is a JSON object, not ${jsonKind(value)}`);
+      shape(path, `a value of "${valueObjectName}" is a JSON object, not ${jsonKind(value)}`);
       return;
     }
-    const members = new Map(valueObject.fields.map((member) => [member.fieldName, member]));
     for (const key of Object.keys(value)) {
-      if (!members.has(key)) at(path, `"${key}" is not a member of "${valueObjectName}"`);
+      if (!declared.has(key)) shape(path, `"${key}" is not a member of "${valueObjectName}"`);
     }
     for (const member of valueObject.fields) {
       checkMember(value[member.fieldName], member, `${path}.${member.fieldName}`);
@@ -64,44 +93,62 @@ export function valueObjectDefaultMismatches(input: ValueObjectDefaultInput): re
     member: ScalarMemberNode | ValueObjectMemberNode,
     path: string,
   ) => {
-    if (value === undefined || value === null) {
-      if (member.nullable) return;
-      at(
-        path,
-        value === undefined
-          ? 'the member is required, and the default has no value for it'
-          : 'the member is not optional, so its value is not null',
-      );
+    if (value === undefined) {
+      if (!member.nullable)
+        shape(path, 'the member is required, and the default has no value for it');
       return;
     }
+    if (value === null && member.nullable) return;
     if (member.many === true) {
       if (!Array.isArray(value)) {
-        at(path, `the member is a list, so its value is a JSON array, not ${jsonKind(value)}`);
+        shape(path, `the member is a list, so its value is a JSON array, not ${jsonKind(value)}`);
         return;
       }
-      for (const [index, element] of value.entries())
-        checkOne(element, member, `${path}[${index}]`);
+      for (const [index, element] of value.entries()) {
+        checkOne(element, member, `${path}[${index}]`, 'an element of the member is not null');
+      }
       return;
     }
-    checkOne(value, member, path);
+    checkOne(value, member, path, 'the member is not optional, so its value is not null');
   };
 
   const checkOne = (
     value: JsonValue,
     member: ScalarMemberNode | ValueObjectMemberNode,
     path: string,
+    notNull: string,
   ) => {
     if (isValueObjectMember(member)) {
-      checkObject(value, member.valueObjectName, path);
+      if (value === null) shape(path, notNull);
+      else checkObject(value, member.valueObjectName, path);
       return;
     }
-    const mismatch = scalarMismatch(value, member.descriptor, documentType, path, input);
-    if (mismatch !== undefined) mismatches.push(mismatch);
+    if (value === null && !holdsJsonDocuments(member)) {
+      shape(path, notNull);
+      return;
+    }
+    const read = checkStoredValue({
+      value,
+      column: member.descriptor,
+      codecLookup: input.codecLookup,
+      fieldPath: path,
+    });
+    if (!read.ok) mismatches.push({ code: read.code, message: read.message });
   };
 
+  if (input.value === null) {
+    if (input.nullable) return mismatches;
+    shape(
+      input.fieldPath,
+      input.list
+        ? 'the default of a list of value objects is a JSON array, not null'
+        : 'the default of a value object is a JSON object, not null',
+    );
+    return mismatches;
+  }
   if (input.list) {
     if (!Array.isArray(input.value)) {
-      at(
+      shape(
         input.fieldPath,
         `the default of a list of value objects is a JSON array, not ${jsonKind(input.value)}`,
       );
@@ -113,7 +160,7 @@ export function valueObjectDefaultMismatches(input: ValueObjectDefaultInput): re
     return mismatches;
   }
   if (!isJsonObject(input.value)) {
-    at(
+    shape(
       input.fieldPath,
       `the default of a value object is a JSON object, not ${jsonKind(input.value)}`,
     );
@@ -123,50 +170,8 @@ export function valueObjectDefaultMismatches(input: ValueObjectDefaultInput): re
   return mismatches;
 }
 
-/**
- * Why a member's value is not a value of the member's scalar type. A string, number or boolean is read as the literal of that syntax, as a `@default` of a column of the member's type would be, and the type must store it as the same JSON kind. An object or array is part of the JSON document the value object is stored as, so the member's type must be that document's type or cast to or from it.
- */
-function scalarMismatch(
-  value: JsonValue,
-  member: DefaultColumn,
-  documentType: DataTypeId,
-  path: string,
-  input: ValueObjectDefaultInput,
-): string | undefined {
-  const written = writtenLiteral(value);
-  if (written === undefined) {
-    const memberType = dataTypeOf(member.codecId, input);
-    if (
-      memberType === documentType ||
-      input.support.lookup.get(memberType)?.casts[documentType] !== undefined ||
-      input.support.lookup.get(documentType)?.casts[memberType] !== undefined
-    ) {
-      return undefined;
-    }
-    return `Field "${path}": its type ${memberType} does not store ${jsonKind(value)}`;
-  }
-  const read = lowerDataTypeDefault({
-    written,
-    isList: false,
-    column: member,
-    codecLookup: input.codecLookup,
-    support: input.support,
-    fieldPath: path,
-  });
-  if (!read.ok) return read.message;
-  if (jsonKind(read.value) === jsonKind(value)) return undefined;
-  return `Field "${path}": its type stores ${jsonKind(read.value)}, not ${jsonKind(value)}`;
-}
-
-function writtenLiteral(value: JsonValue): WrittenValue | undefined {
-  if (typeof value === 'string') return { kind: 'string', text: value };
-  if (typeof value === 'boolean') return { kind: 'boolean', value };
-  if (typeof value === 'number') return { kind: 'number', text: String(value) };
-  return undefined;
-}
-
-function dataTypeOf(codecId: string, input: ValueObjectDefaultInput): DataTypeId {
-  const descriptor = input.codecLookup?.descriptorFor?.(codecId);
+function dataTypeOf(codecId: string, codecLookup: CodecLookup | undefined): DataTypeId {
+  const descriptor = codecLookup?.descriptorFor?.(codecId);
   if (descriptor === undefined) {
     throw new InternalError(
       `No codec descriptor is registered for "${codecId}", but a value-object default was read through it.`,

@@ -120,7 +120,7 @@ model User {
   numbers Address[] @default([json\`1\`])
   unknown Address   @default(json\`{"street":"x","city":"y"}\`)
   missing Address   @default(json\`{"zip":"1"}\`)
-  nested  Outer     @default(json\`{"inner":{"street":1}}\`)
+  nested  Outer     @default(json\`{"inner":{"street":"x","city":"y"}}\`)
 }`),
     ).toEqual([
       incompatible(
@@ -139,9 +139,59 @@ model User {
       incompatible(
         'Field "User.missing.street": the member is required, and the default has no value for it',
       ),
-      incompatible(
-        'Field "User.nested.inner.street": sqlite/text has no cast from sqlite/integer; it casts from nothing',
-      ),
+      incompatible('Field "User.nested.inner": "city" is not a member of "Address"'),
     ]);
+  });
+
+  it('reads each member value the way its codec does: a decimal string for Decimal and BigInt, and any JSON value for Json', async () => {
+    const schema = (value: string) => `type Amounts {
+  price   Decimal
+  big     BigInt
+  payload Json
+}
+
+model User {
+  id Int     @id
+  a  Amounts @default(json\`${value}\`)
+}`;
+    const accepted = await Promise.all(
+      ['"x"', '1', 'true', '{}', '[1]', 'null'].map((payload) =>
+        sqliteDiagnostics(schema(`{"price": "1.5", "big": "1", "payload": ${payload}}`)),
+      ),
+    );
+    expect({
+      accepted,
+      refused: await sqliteDiagnostics(schema('{"price": 1.5, "big": 1, "payload": {}}')),
+    }).toEqual({
+      accepted: [[], [], [], [], [], []],
+      refused: [
+        {
+          code: 'PSL_INVALID_DEFAULT_LITERAL',
+          message:
+            'Field "User.a.big": sqlite/bigint@1 database JSON value must be a decimal string',
+        },
+      ],
+    });
+  });
+
+  it('takes JSON null as the default of an optional value object', async () => {
+    expect(
+      await sqliteUserColumns(`type Address {
+  street String
+}
+
+model User {
+  id   Int      @id
+  home Address? @default(json\`null\`)
+}`),
+    ).toEqual({
+      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      home: {
+        nativeType: 'text',
+        codecId: 'sqlite/json@1',
+        nullable: true,
+        default: { kind: 'literal', value: null },
+      },
+    });
   });
 });

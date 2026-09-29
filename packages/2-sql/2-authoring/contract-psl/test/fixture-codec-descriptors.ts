@@ -174,8 +174,8 @@ const fixtureCodecs: Readonly<
   };
 })();
 
-/** Passes `typeParams` through: the fixture vector type constructor already validates its length. */
-const vectorParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
+/** Passes `typeParams` through: the fixture type constructors already validate them. */
+const passThroughParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
   '~standard': {
     version: 1,
     vendor: 'contract-psl-fixtures',
@@ -183,17 +183,24 @@ const vectorParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
   },
 };
 
-/** A descriptor for a fixture codec, parameterized only for `pg/vector@1`, whose length the codec checks. */
+const parameterizedCodecIds: ReadonlySet<string> = new Set([
+  'pg/vector@1',
+  'pg/numeric@1',
+  'sql/char@1',
+  'sql/varchar@1',
+]);
+
+/** A descriptor for a fixture codec, parameterized as the real codec is; only `pg/vector@1` checks its parameters. */
 function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const codec = fixtureCodecs[codecId];
   if (codec === undefined) return undefined;
-  const parameterized = codecId === 'pg/vector@1';
+  const parameterized = parameterizedCodecIds.has(codecId);
   return {
     codecId,
     dataType: dataTypeByCodecId[codecId] ?? pgText.id,
     traits: codec.traits,
     targetTypes: targetTypesByCodecId[codecId] ?? [],
-    paramsSchema: parameterized ? vectorParamsSchema : undefined,
+    paramsSchema: parameterized ? passThroughParamsSchema : undefined,
     isParameterized: parameterized,
     factory: (params: unknown) => () => ({
       id: codecId,

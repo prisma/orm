@@ -137,6 +137,7 @@ import {
   PSL_CHECK_ON_STI_VARIANT,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
+import type { ValueObjectTypes } from './value-object-default';
 
 export interface InterpretPslDocumentToSqlContractInput {
   readonly documents: readonly DocumentAst[];
@@ -571,7 +572,7 @@ interface BuildModelNodeInput {
   readonly modelMappingsByCoordinate: ReadonlyMap<string, ModelNameMapping>;
   readonly modelNames: Set<string>;
   /** The value objects the composite types declare, by name. */
-  readonly valueObjects: ReadonlyMap<string, ValueObjectNode>;
+  readonly valueObjectTypes: ValueObjectTypes;
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly composedExtensions: Set<string>;
@@ -688,7 +689,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     enumTypeDescriptors: input.enumTypeDescriptors,
     namedTypeDescriptors: input.namedTypeDescriptors,
     modelNames: input.modelNames,
-    valueObjects: input.valueObjects,
+    valueObjectTypes: input.valueObjectTypes,
     composedExtensions: input.composedExtensions,
     authoringContributions: input.authoringContributions,
     familyId: input.familyId,
@@ -2444,9 +2445,15 @@ export function interpretPslDocumentToSqlContract(
     defaultNamespaceExtensionEntities: namespaceExtensionEntities.get(defaultNamespaceId),
     codecLookup: input.codecLookup,
   });
-  const valueObjectsByName = new Map(
-    valueObjects.map((valueObject) => [valueObject.name, valueObject]),
-  );
+  const valueObjectTypes: ValueObjectTypes = {
+    nodes: new Map(valueObjects.map((valueObject) => [valueObject.name, valueObject])),
+    declaredMembers: new Map(
+      compositeTypes.map((compositeType) => [
+        compositeType.name,
+        new Set(Object.keys(compositeType.fields)),
+      ]),
+    ),
+  };
 
   for (const { model, namespaceId } of modelEntries) {
     const coordinate = modelCoordinateKey(namespaceId ?? defaultNamespaceId, model.name);
@@ -2460,7 +2467,7 @@ export function interpretPslDocumentToSqlContract(
       modelMappings,
       modelMappingsByCoordinate,
       modelNames,
-      valueObjects: valueObjectsByName,
+      valueObjectTypes,
       enumTypeDescriptors: allEnumTypeDescriptors,
       namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
       composedExtensions,

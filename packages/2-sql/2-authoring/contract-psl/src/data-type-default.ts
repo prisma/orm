@@ -12,7 +12,12 @@ import type {
   DataTypeAuthoringEntry,
 } from '@internal/framework-components/authoring';
 import { isDataTypeLoweringEntry } from '@internal/framework-components/authoring';
-import type { CodecLookup, DataTypeId, DataTypeLookup } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  CodecLookup,
+  DataTypeId,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import { materializeCodec } from '@internal/framework-components/codec';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
@@ -256,19 +261,16 @@ function codecRefTypeParams(
 }
 
 /**
- * Read one `@default(...)` value for a column, refusing in parts so each contract source words its
- * own diagnostic. `isList` selects the check: a list column's elements are each read and cast
- * against the element codec's data type, while a scalar column takes a written list only through
- * its type's list cast — which is how `pgvector.Vector(3) @default([0.1, 0.2])` is read.
+ * The column's codec descriptor, and a check of a value in its stored JSON form: the value is taken when the column's codec, built with the column's type parameters, reads it.
  */
-export function readDataTypeDefault(input: {
-  readonly written: WrittenValue;
-  readonly isList: boolean;
+function columnCodecReader(input: {
   readonly column: DefaultColumn;
   readonly codecLookup: CodecLookup | undefined;
-  readonly support: DataTypeSupport;
   readonly fieldPath: string;
-}): ReadDefaultResult {
+}): {
+  readonly descriptor: AnyCodecDescriptor;
+  readonly validate: (value: JsonValue, elementIndex: number | undefined) => ReadDefaultResult;
+} {
   const descriptorFor = input.codecLookup?.descriptorFor;
   if (descriptorFor === undefined) {
     throw new InternalError(
@@ -281,8 +283,6 @@ export function readDataTypeDefault(input: {
       `Field "${input.fieldPath}": no codec descriptor is registered for "${input.column.codecId}", but the column was resolved from one.`,
     );
   }
-  const columnType = descriptor.dataType;
-
   const codec = materializeCodec(
     descriptor,
     {
@@ -307,6 +307,38 @@ export function readDataTypeDefault(input: {
       };
     }
   };
+  return { descriptor, validate };
+}
+
+/**
+ * Check a value already in its stored JSON form, such as one member of a JSON document default, the way the column's codec reads it. Worded as {@link lowerDataTypeDefault} words a codec refusal.
+ */
+export function checkStoredValue(input: {
+  readonly value: JsonValue;
+  readonly column: DefaultColumn;
+  readonly codecLookup: CodecLookup | undefined;
+  readonly fieldPath: string;
+}): LowerDefaultResult {
+  const read = columnCodecReader(input).validate(input.value, undefined);
+  return read.ok ? read : refusalDiagnostic(read.refusal, input.fieldPath);
+}
+
+/**
+ * Read one `@default(...)` value for a column, refusing in parts so each contract source words its
+ * own diagnostic. `isList` selects the check: a list column's elements are each read and cast
+ * against the element codec's data type, while a scalar column takes a written list only through
+ * its type's list cast — which is how `pgvector.Vector(3) @default([0.1, 0.2])` is read.
+ */
+export function readDataTypeDefault(input: {
+  readonly written: WrittenValue;
+  readonly isList: boolean;
+  readonly column: DefaultColumn;
+  readonly codecLookup: CodecLookup | undefined;
+  readonly support: DataTypeSupport;
+  readonly fieldPath: string;
+}): ReadDefaultResult {
+  const { descriptor, validate } = columnCodecReader(input);
+  const columnType = descriptor.dataType;
 
   const readOne = (
     written: Exclude<WrittenValue, { kind: 'list' }>,
@@ -431,9 +463,15 @@ export function lowerDataTypeDefault(input: {
   readonly fieldPath: string;
 }): LowerDefaultResult {
   const read = readDataTypeDefault(input);
-  if (read.ok) return read;
-  const { refusal } = read;
-  const where = `Field "${input.fieldPath}"${at(refusal.elementIndex)}`;
+  return read.ok ? read : refusalDiagnostic(read.refusal, input.fieldPath);
+}
+
+/** A refusal worded as a PSL diagnostic's code and message. */
+function refusalDiagnostic(
+  refusal: DefaultRefusal,
+  fieldPath: string,
+): Extract<LowerDefaultResult, { readonly ok: false }> {
+  const where = `Field "${fieldPath}"${at(refusal.elementIndex)}`;
   switch (refusal.kind) {
     case 'unreadable':
       return {
