@@ -105,6 +105,45 @@ describe('init scaffold', () => {
     );
 
     it(
+      'keeps the module type of an existing project that declares dependencies, and says why',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app', dependencies: { express: '^5.0.0' } }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).not.toHaveProperty('type');
+        expect(run.presented?.data).toMatchObject({
+          warnings: expect.arrayContaining([
+            expect.stringContaining('package.json declares no "type"'),
+          ]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'sets the module type of a manifest that declares no dependencies yet',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app' }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).toMatchObject({ type: 'module' });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
       'leaves a deno project without a package.json',
       async () => {
         writeFileSync(join(projectDir, 'deno.json'), '{}\n', 'utf-8');
