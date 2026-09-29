@@ -1,3 +1,5 @@
+import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
+import { MongoParamRef } from '@internal/mongo-value';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { timeouts, withMongoPort } from '../../_harness/mongo';
@@ -79,10 +81,12 @@ describe('Mongo list fields', () => {
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
         await db.series.create(empty);
 
-        await db.series.where({ ints: [] }).update({ ints: [3, 4], longs: [1n], ids: [idA] });
-        expect(await db.series.where({ ints: [3, 4] }).all()).toHaveLength(1);
         await db.series
-          .where({ longs: [1n] })
+          .where(MongoFieldFilter.eq('ints', []))
+          .update({ ints: [3, 4], longs: [1n], ids: [idA] });
+        expect(await db.series.where(MongoFieldFilter.eq('ints', [3, 4])).all()).toHaveLength(1);
+        await db.series
+          .where(MongoFieldFilter.eq('longs', [new MongoParamRef(1n)]))
           .update((u) => [u.longs.push(2n), u.ids.addToSet(idB), u.doubles.push(2), u.ints.pop(1)]);
 
         const [stored] = await mongoDb

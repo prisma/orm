@@ -864,6 +864,7 @@ class MongoCollectionImpl<
           ? this.#wrapFieldValue(value.value, field, filter.field, 'filter')
           : value;
       }
+      if (field.many === true && Array.isArray(value)) return value.map(encode);
       return this.#wrapFieldValue(value, field, filter.field, 'filter');
     };
     if (COMPARISON_OPERATORS.has(filter.op)) {

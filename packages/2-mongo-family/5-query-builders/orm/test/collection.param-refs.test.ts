@@ -159,6 +159,20 @@ describe('parameters the Mongo ORM builds', () => {
       { name: 'homeAddress.city', collection: 'users', codecId: string },
     ]);
   });
+
+  it('encode each element of a whole-list comparison once, wrapped or not', async () => {
+    const { executor, plans } = recordingExecutor();
+    await createMongoCollection(contract, 'User', executor)
+      .where(MongoFieldFilter.eq('tags', [new MongoParamRef('x'), 'y']))
+      .all()
+      .toArray();
+
+    const refs = plans.flatMap((plan) => paramRefs(plan.command));
+    expect(refs.map(({ value, codecId }) => ({ value, codecId }))).toEqual([
+      { value: 'x', codecId: string },
+      { value: 'y', codecId: string },
+    ]);
+  });
 });
 
 describe('null in the Mongo ORM', () => {
