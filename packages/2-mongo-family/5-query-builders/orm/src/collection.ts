@@ -157,6 +157,7 @@ export interface MongoCollection<
   /**
    * On insert: `update` fields are applied via `$set`, remaining `create` fields via `$setOnInsert`.
    * This means `update` values take precedence over `create` for overlapping fields on insert.
+   * A field that `create` sets and that has an update default (such as `temporal.updatedAt()`) keeps the `create` value on insert and advances on update: the update is tried first and the insert runs only when it matched nothing, so this case takes two commands instead of one.
    * Requires `.where()`.
    */
   upsert(input: {
@@ -597,18 +598,16 @@ class MongoCollectionImpl<
     const filter = this.#mergeFilters();
     const defaultValueCache = new Map<string, unknown>();
 
-    const allCreateFields = this.#toDocument(
-      this.#withCreateDefaults(
-        this.#injectDiscriminator(
-          this.#stripUndefined(
-            blindCast<
-              Record<string, unknown>,
-              'resolved Mongo upsert create input is a model-field value record'
-            >(input.create),
-          ),
-        ),
-        defaultValueCache,
+    const explicitCreate = this.#injectDiscriminator(
+      this.#stripUndefined(
+        blindCast<
+          Record<string, unknown>,
+          'resolved Mongo upsert create input is a model-field value record'
+        >(input.create),
       ),
+    );
+    const allCreateFields = this.#toDocument(
+      this.#withCreateDefaults(explicitCreate, defaultValueCache),
     );
 
     let updateDoc: Record<string, Record<string, MongoValue>>;
@@ -647,7 +646,41 @@ class MongoCollectionImpl<
       }
     }
 
-    updateDoc = this.#withUpdateDefaults(updateDoc, defaultValueCache);
+    const explicitUpdateFields = topLevelUpdateFields(updateDoc);
+    const withUpdateDefaults = this.#withUpdateDefaults(updateDoc, defaultValueCache);
+    const generatedSetByCreate = Object.keys(withUpdateDefaults['$set'] ?? {}).filter(
+      (field) => !explicitUpdateFields.has(field) && Object.hasOwn(explicitCreate, field),
+    );
+    if (generatedSetByCreate.length === 0) {
+      return this.#upsertCommand(filter, withUpdateDefaults, allCreateFields);
+    }
+
+    const updated = await this.#drainPlan(
+      new FindOneAndUpdateCommand(this.#collectionName, filter, withUpdateDefaults, false),
+      this.#modelResultShape(),
+    );
+    if (updated[0] !== undefined) {
+      return blindCast<
+        IncludedRow<TContract, ModelName, TIncludes>,
+        'FindOneAndUpdateCommand plan carries the model resultShape; the runtime decodes the returned document like a read'
+      >(updated[0]);
+    }
+    const { $set: setWithDefaults = {}, ...otherOperators } = withUpdateDefaults;
+    const insertSet = Object.fromEntries(
+      Object.entries(setWithDefaults).filter(([field]) => !generatedSetByCreate.includes(field)),
+    );
+    return this.#upsertCommand(
+      filter,
+      Object.keys(insertSet).length > 0 ? { ...otherOperators, $set: insertSet } : otherOperators,
+      allCreateFields,
+    );
+  }
+
+  async #upsertCommand(
+    filter: MongoFilterExpr,
+    updateDoc: Record<string, Record<string, MongoValue>>,
+    allCreateFields: Record<string, MongoValue>,
+  ): Promise<IncludedRow<TContract, ModelName, TIncludes>> {
     const updatedFields = topLevelUpdateFields(updateDoc);
     const insertOnlyFields: Record<string, MongoValue> = {};
     for (const [key, value] of Object.entries(allCreateFields)) {
@@ -655,11 +688,14 @@ class MongoCollectionImpl<
         insertOnlyFields[key] = value;
       }
     }
-    if (Object.keys(insertOnlyFields).length > 0) {
-      updateDoc['$setOnInsert'] = insertOnlyFields;
-    }
-
-    const command = new FindOneAndUpdateCommand(this.#collectionName, filter, updateDoc, true);
+    const command = new FindOneAndUpdateCommand(
+      this.#collectionName,
+      filter,
+      Object.keys(insertOnlyFields).length > 0
+        ? { ...updateDoc, $setOnInsert: insertOnlyFields }
+        : updateDoc,
+      true,
+    );
     const results = await this.#drainPlan(command, this.#modelResultShape());
     return blindCast<
       IncludedRow<TContract, ModelName, TIncludes>,
@@ -667,9 +703,6 @@ class MongoCollectionImpl<
     >(results[0]);
   }
 
-  /**
-   * Reads the inserted documents back by `_id`, in the order of `ids`, so a create returns what is stored decoded as a read decodes it, as the SQL ORM client's `RETURNING` does.
-   */
   async #readInserted(method: string, ids: readonly unknown[]): Promise<unknown[]> {
     const idField = this.#modelFields()['_id'];
     const idFilter = MongoFieldFilter.in(

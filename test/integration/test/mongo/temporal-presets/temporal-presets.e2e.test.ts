@@ -111,6 +111,33 @@ describe('Mongo temporal presets end to end', () => {
   );
 
   it(
+    'upsert keeps the values create sets explicitly when it inserts, and advances them when it updates',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db }) => {
+        const y2k = new Date('2000-01-01T00:00:00Z');
+        const create = { title: 'b', touchedAt, createdAt: y2k, updated_at: y2k };
+
+        const inserted = await db.posts
+          .where({ title: 'b' })
+          .upsert({ create, update: { title: 'b' } });
+        expect({
+          createdAt: inserted.createdAt,
+          updated_at: inserted.updated_at,
+          touchedAt: inserted.touchedAt,
+        }).toEqual({ createdAt: y2k, updated_at: y2k, touchedAt });
+
+        const updated = await db.posts
+          .where({ title: 'b' })
+          .upsert({ create, update: { title: 'b' } });
+        expect(updated.createdAt).toEqual(y2k);
+        expect(updated.updated_at.getTime()).toBeGreaterThan(y2k.getTime());
+        expect(updated.touchedAt.getTime()).toBeGreaterThan(touchedAt.getTime());
+        expect(updated.touchedAt).toEqual(updated.updated_at);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'mongo() fills generated fields through the facade',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ client, mongoDb }) => {

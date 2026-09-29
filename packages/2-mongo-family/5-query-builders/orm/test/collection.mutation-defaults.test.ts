@@ -253,6 +253,29 @@ describe('ORM upsert applies both halves', () => {
     expect(defaults.calls[1]?.defaultValueCache).toBe(defaults.calls[0]?.defaultValueCache);
   });
 
+  it('when create sets a field with an update default, tries the update first and inserts that value', async () => {
+    const { executor, plans } = recordingExecutor([], []);
+    await users(executor, fakeMutationDefaults())
+      .where(byEmail)
+      .upsert({ create: input({ ...userData, loginCount: 3 }), update: { name: 'X' } });
+    const { name: _, ...insertOnly } = userData;
+    expect(
+      plans.map((plan) => {
+        const command = plan.command as unknown as Record<string, unknown>;
+        return { upsert: command['upsert'], update: unwrap(command['update']) };
+      }),
+    ).toEqual([
+      { upsert: false, update: { $set: { name: 'X', loginCount: 9 } } },
+      {
+        upsert: true,
+        update: {
+          $set: { name: 'X' },
+          $setOnInsert: { ...insertOnly, loginCount: 3 },
+        },
+      },
+    ]);
+  });
+
   it('with an empty update half, writes the create defaults on insert only', async () => {
     const { executor, plans } = recordingExecutor([]);
     await users(executor, fakeMutationDefaults())
