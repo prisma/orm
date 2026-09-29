@@ -162,7 +162,7 @@ describe('createMongoExecutionContext composition', () => {
       expect.objectContaining({
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         message:
-          "Contract requires mutation default generator(s) 'clock', but no runtime component provides them.",
+          "Contract requires mutation default generator 'clock' for posts.createdAt, but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
       }),
     );
   });

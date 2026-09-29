@@ -1115,7 +1115,7 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 
-The contract declares column or field defaults produced by a mutation default generator (e.g. a nanoid/uuid generator, or `timestampNow` behind `temporal.createdAt()`) that no runtime component provides, detected up front when the SQL context or the Mongo execution context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. Payload: `ids` (validation pass) or `id` (resolution).
+The contract declares column or field defaults produced by a mutation default generator (e.g. a nanoid/uuid generator, or `timestampNow` behind `temporal.createdAt()`) that no runtime component provides, detected up front when the SQL context or the Mongo execution context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. The message names each missing generator with the `<collection or table>.<field>` entries that need it, and says where generators come from: the built-in ones, `timestampNow` among them, from the database adapter's runtime descriptor, others from the extension pack that defines them. Payload: `ids` and `fields` (validation pass) or `id` (resolution).
 
 ### RUNTIME.NAMESPACE_UNKNOWN
 
