@@ -106,7 +106,7 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - Views: no schema node, introspection selects `BASE TABLE` only (`control-adapter.ts:750-756`), verify reports a missing table.
 - Mongo execution defaults: filled by `projects/mongo-defaults-codecs-prisma6-source/` (PRs #30396, #30403, and its Prisma 6 MongoDB source PR).
 - Mongo codecs for BSON binary, Decimal128 and Int64, plus a `Json` codec. Embedded documents need no codec: they are value objects, and the Prisma 6 MongoDB source reads Prisma 6 `type` blocks into them. Filled by `projects/mongo-defaults-codecs-prisma6-source/` (PRs #30396, #30403, and its Prisma 6 MongoDB source PR).
-- A `pg/opaque` codec carrying the native type name, which also repairs `contract infer` emitting `Unsupported(...)` that nothing reads back.
+- `contract infer` prints `Unsupported(...)` for a column type with no codec, and nothing reads that back. It should fail and name the column and the missing codec. Prisma 8 will not add an opaque column type, because a column the contract cannot describe cannot be verified.
 - A cuid v1 generator, if mapping `cuid()` to cuid2 turns out to matter.
 - Referential-action emulation on Mongo.
 - `Bytes` and `DateTime` literal defaults are carried as the SQL literal of the default Postgres stores (`'\x68656c6c6f'`, `'2024-01-01 00:00:00'`), not the text Prisma 7 writes, in the raw-expression form the schema IR already models, because their codec JSON forms are not what introspection reads back. Verification is exact; the cost is that `contract print` writes them as `sql` tagged literals rather than typed literals.
