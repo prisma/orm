@@ -93,7 +93,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'In a Prisma 6 MongoDB project, init changes nothing: it prints how to install\n' +
         'Prisma 8 beside Prisma 6 and read schema.prisma through prisma6Schema in\n' +
         'prisma.config.ts, keeping the Prisma 6 CLI as an alias with its own config.\n' +
-        'Pass --target and --authoring to scaffold a separate starter project instead.',
+        'Passing --target and --authoring sets up a starter in the same project instead,\n' +
+        'which breaks the Prisma 6 CLI.',
       examples: [
         'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target

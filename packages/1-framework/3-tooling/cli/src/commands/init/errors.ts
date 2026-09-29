@@ -533,7 +533,7 @@ export function errorInitPrisma6SchemaFound(options: {
     'CLI.INIT_PRISMA6_SCHEMA_FOUND',
     `Prisma 6 ${database} schema found`,
     {
-      why: `${options.schemaPath} is a Prisma 6 ${database} schema. Prisma 8 can read it as its contract source through prisma6Schema while Prisma 6 keeps running the app, but init does not set that up: both CLIs are published as \`prisma\`, and the Prisma 6 CLI also reads prisma.config.ts. Nothing was changed. Follow the steps below, or pass --target and --authoring to scaffold a separate Prisma 8 starter project here.`,
+      why: `${options.schemaPath} is a Prisma 6 ${database} schema. Prisma 8 can read it as its contract source through prisma6Schema while Prisma 6 keeps running the app, but init does not set that up: both CLIs are published as \`prisma\`, and the Prisma 6 CLI also reads prisma.config.ts. Nothing was changed. Follow the steps below. Passing --target and --authoring instead sets up a Prisma 8 starter in this same project, which breaks the Prisma 6 CLI: it writes prisma.config.ts, so every Prisma 6 command fails until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with prisma@latest.`,
       nextActions: options.setup.steps,
       docsUrl: docsUrlFor('CLI.INIT_PRISMA6_SCHEMA_FOUND'),
       meta: {

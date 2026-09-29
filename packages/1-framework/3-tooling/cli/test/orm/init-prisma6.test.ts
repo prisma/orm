@@ -97,7 +97,7 @@ describe(
       expect(error).toMatchObject({
         code: 'CLI.INIT_PRISMA6_SCHEMA_FOUND',
         message: 'Prisma 6 MongoDB schema found',
-        why: 'prisma/schema.prisma is a Prisma 6 MongoDB schema. Prisma 8 can read it as its contract source through prisma6Schema while Prisma 6 keeps running the app, but init does not set that up: both CLIs are published as `prisma`, and the Prisma 6 CLI also reads prisma.config.ts. Nothing was changed. Follow the steps below, or pass --target and --authoring to scaffold a separate Prisma 8 starter project here.',
+        why: 'prisma/schema.prisma is a Prisma 6 MongoDB schema. Prisma 8 can read it as its contract source through prisma6Schema while Prisma 6 keeps running the app, but init does not set that up: both CLIs are published as `prisma`, and the Prisma 6 CLI also reads prisma.config.ts. Nothing was changed. Follow the steps below. Passing --target and --authoring instead sets up a Prisma 8 starter in this same project, which breaks the Prisma 6 CLI: it writes prisma.config.ts, so every Prisma 6 command fails until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with prisma@latest.',
         nextActions: [
           {
             kind: 'edit-file',
@@ -279,7 +279,7 @@ describe(
         expect(manifest).not.toHaveProperty('type');
         expect(run.presented?.data).toMatchObject({
           warnings: expect.arrayContaining([
-            'prisma/schema.prisma is a Prisma 6 MongoDB schema, which this run leaves alone. The Prisma 8 project it sets up takes the `prisma` package name, which the Prisma 6 CLI has now, and writes prisma.config.ts, which the Prisma 6 CLI also reads. Run `prisma orm init` without --target and --authoring to see how to keep Prisma 6 working and read this schema instead.',
+            'prisma/schema.prisma is a Prisma 6 MongoDB schema, which this run leaves alone, but this run breaks the Prisma 6 CLI: it writes prisma.config.ts, which the Prisma 6 CLI reads too, so every Prisma 6 command fails until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with prisma@latest. Run `prisma orm init` without --target and --authoring to see how to keep Prisma 6 working and read this schema instead.',
           ]),
         });
         expect(existsSync(join(projectDir, 'prisma/schema.prisma'))).toBe(true);

@@ -665,7 +665,7 @@ function starterBesidePrisma6Warnings(cwd: string): readonly string[] {
   const found = prisma6Schema(detectSchema(cwd, conventionalSchemaPath(cwd).path));
   if (found === undefined) return [];
   return [
-    `${found.schema.path} is a Prisma 6 ${targetLabel(found.target)} schema, which this run leaves alone. The Prisma 8 project it sets up takes the \`prisma\` package name, which the Prisma 6 CLI has now, and writes prisma.config.ts, which the Prisma 6 CLI also reads. Run \`prisma orm init\` without --target and --authoring to see how to keep Prisma 6 working and read this schema instead.`,
+    `${found.schema.path} is a Prisma 6 ${targetLabel(found.target)} schema, which this run leaves alone, but this run breaks the Prisma 6 CLI: it writes prisma.config.ts, which the Prisma 6 CLI reads too, so every Prisma 6 command fails until Prisma 6 gets its own config file, and its install step replaces the Prisma 6 CLI with prisma@latest. Run \`prisma orm init\` without --target and --authoring to see how to keep Prisma 6 working and read this schema instead.`,
   ];
 }
 
