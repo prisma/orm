@@ -112,7 +112,10 @@ async function harness(watched = true) {
   await client.sendRequest(InitializeRequest.type, {
     processId: null,
     rootUri: null,
-    capabilities: { workspace: { didChangeWatchedFiles: { dynamicRegistration: watched } } },
+    capabilities: {
+      textDocument: { diagnostic: { relatedDocumentSupport: true } },
+      workspace: { didChangeWatchedFiles: { dynamicRegistration: watched } },
+    },
   });
   return {
     registrations,

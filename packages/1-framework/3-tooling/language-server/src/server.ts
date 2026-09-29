@@ -21,6 +21,7 @@ import {
   type PublishDiagnosticsParams,
   type Range,
   RegistrationRequest,
+  type RelatedFullDocumentDiagnosticReport,
   type SemanticTokens,
   type SignatureHelp,
   TextDocumentSyncKind,
@@ -125,6 +126,7 @@ function createServerOn(connection: Connection): LanguageServer {
   const managedProjects = new Map<string, ManagedProject>();
   const documentConfigPaths = new Map<string, string>();
   const publishedMembers = new Map<string, ReadonlySet<string>>();
+  const reportedRelatedMembers = new Map<string, ReadonlySet<string>>();
   const schemaWatchRegistrations = new Map<
     string,
     { readonly disposable: Disposable; readonly schemaInputConfig: SchemaInputConfig }
@@ -142,28 +144,17 @@ function createServerOn(connection: Connection): LanguageServer {
     connection.console.warn(message);
   }
 
-  function membersToPush(project: ProjectState): readonly string[] {
-    const members = Array.from(project.inputs.uris());
-    return clientCapabilities.pullDiagnostics
-      ? members.filter((uri) => getOpenDocument(uri) === undefined)
-      : members;
-  }
-
   function publishProjectMembers(project: ProjectState): void {
+    if (clientCapabilities.pullDiagnostics) return;
     const nextLedger = new Set<string>();
     const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
-    for (const candidateUri of membersToPush(project)) {
+    for (const candidateUri of project.inputs.uris()) {
       const artifacts = project.artifacts.document(candidateUri);
-      if (artifacts === undefined && getOpenDocument(candidateUri) === undefined) {
-        continue;
-      }
       const uri = normalizeFileUri(candidateUri);
       sendDiagnostics({
         uri,
         diagnostics:
-          artifacts === undefined
-            ? []
-            : combinedDiagnostics(project.artifacts, artifacts, projectSymbolDiagnostics),
+          artifacts === undefined ? [] : combinedDiagnostics(artifacts, projectSymbolDiagnostics),
       });
       nextLedger.add(uri);
     }
@@ -238,11 +229,8 @@ function createServerOn(connection: Connection): LanguageServer {
   // The single diagnostics assembly — push and pull must serve the same
   // combined response, and interpretation runs only from here.
   function combinedDiagnostics(
-    project: ProjectArtifacts,
     artifacts: DocumentArtifacts,
-    projectSymbolDiagnostics: ReturnType<
-      ProjectArtifacts['symbolDiagnostics']
-    > = project.symbolDiagnostics(),
+    projectSymbolDiagnostics: ReturnType<ProjectArtifacts['symbolDiagnostics']>,
   ): Diagnostic[] {
     const symbolDiagnostics = projectSymbolDiagnostics.filter(
       (diagnostic) => diagnostic.filename === artifacts.sourceFile.filename,
@@ -254,18 +242,35 @@ function createServerOn(connection: Connection): LanguageServer {
     ]);
   }
 
-  /**
-   * Project-scoped so a future multi-input symbol table can attach
-   * `relatedDocuments` for cross-file effects.
-   */
   function buildDocumentDiagnosticReport(
     project: ProjectState,
-    uri: string,
-  ): FullDocumentDiagnosticReport {
-    const artifacts = project.artifacts.document(uri);
+    requestedUri: string,
+  ): RelatedFullDocumentDiagnosticReport {
+    const uri = normalizeFileUri(requestedUri);
+    const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
+    const reportFor = (memberUri: string): FullDocumentDiagnosticReport => {
+      const artifacts = project.artifacts.document(memberUri);
+      return {
+        kind: DocumentDiagnosticReportKind.Full,
+        items:
+          artifacts === undefined ? [] : combinedDiagnostics(artifacts, projectSymbolDiagnostics),
+      };
+    };
+    const members = new Set(Array.from(project.inputs.uris(), normalizeFileUri));
+    const previous = reportedRelatedMembers.get(project.configPath) ?? new Set<string>();
+    const relatedDocuments: Record<string, FullDocumentDiagnosticReport> = {};
+    for (const memberUri of new Set([...members, ...previous])) {
+      if (memberUri === uri) continue;
+      relatedDocuments[memberUri] = members.has(memberUri)
+        ? reportFor(memberUri)
+        : { kind: DocumentDiagnosticReportKind.Full, items: [] };
+    }
+    const report = reportFor(uri);
+    if (previous.has(uri)) members.add(uri);
+    reportedRelatedMembers.set(project.configPath, members);
     return {
-      kind: DocumentDiagnosticReportKind.Full,
-      items: artifacts === undefined ? [] : combinedDiagnostics(project.artifacts, artifacts),
+      ...report,
+      ...(Object.keys(relatedDocuments).length > 0 ? { relatedDocuments } : {}),
     };
   }
 
@@ -741,13 +746,18 @@ function createServerOn(connection: Connection): LanguageServer {
   );
 
   connection.languages.diagnostics.on(async (params): Promise<DocumentDiagnosticReport> => {
-    const project = await resolveProjectForDocument(params.textDocument.uri);
-    if (project === undefined) {
+    if (!clientCapabilities.pullDiagnostics) {
       return { kind: DocumentDiagnosticReportKind.Full, items: [] };
     }
-    const report = buildDocumentDiagnosticReport(project, params.textDocument.uri);
-    publishProjectMembers(project);
-    return report;
+    const uri = normalizeFileUri(params.textDocument.uri);
+    const project = await projectForNearestConfig(uri);
+    if (
+      project === undefined ||
+      (!project.inputs.includes(uri) && !reportedRelatedMembers.get(project.configPath)?.has(uri))
+    ) {
+      return { kind: DocumentDiagnosticReportKind.Full, items: [] };
+    }
+    return buildDocumentDiagnosticReport(project, uri);
   });
 
   connection.onFoldingRanges(async (params): Promise<FoldingRange[]> => {
@@ -784,7 +794,7 @@ function createServerOn(connection: Connection): LanguageServer {
     documentConfigPaths.delete(canonicalFileIdentity(uri));
     const project = currentProjectState(configPath);
     if (project === undefined) {
-      sendDiagnostics({ uri, diagnostics: [] });
+      if (!clientCapabilities.pullDiagnostics) sendDiagnostics({ uri, diagnostics: [] });
       return;
     }
     publishProjectMembers(project);
@@ -894,7 +904,7 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
       params.initializationOptions,
       'supportsTriggerParameterHintsCommand',
     ),
-    pullDiagnostics: params.capabilities.textDocument?.diagnostic !== undefined,
+    pullDiagnostics: params.capabilities.textDocument?.diagnostic?.relatedDocumentSupport === true,
     diagnosticsRefresh: params.capabilities.workspace?.diagnostics?.refreshSupport === true,
   };
 }

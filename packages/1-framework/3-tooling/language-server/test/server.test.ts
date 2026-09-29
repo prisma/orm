@@ -82,7 +82,7 @@ import {
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
 import { guardedConnection } from '../src/guarded-connection';
-import type { DocumentArtifacts } from '../src/project-artifacts';
+import { createProjectArtifacts, type DocumentArtifacts } from '../src/project-artifacts';
 import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
 import { CONFIG_LOAD_FAILED_CODE, createServer } from '../src/server';
@@ -117,6 +117,18 @@ vi.mock('../src/config-resolution', async (importOriginal) => {
 vi.mock('@internal/psl-parser/syntax', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@internal/psl-parser/syntax')>();
   return { ...actual, parse: vi.fn(actual.parse) };
+});
+
+vi.mock('../src/project-artifacts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/project-artifacts')>();
+  return {
+    ...actual,
+    createProjectArtifacts: vi.fn((options) => {
+      const artifacts = actual.createProjectArtifacts(options);
+      artifacts.symbolDiagnostics = vi.fn(artifacts.symbolDiagnostics);
+      return artifacts;
+    }),
+  };
 });
 
 const root = tmpdir();
@@ -391,11 +403,11 @@ const snippetCompletionCapabilities: ClientCapabilities = {
 };
 
 const pullDiagnosticsCapabilities: ClientCapabilities = {
-  textDocument: { diagnostic: {} },
+  textDocument: { diagnostic: { relatedDocumentSupport: true } },
 };
 
 const pullDiagnosticsWithRefreshCapabilities: ClientCapabilities = {
-  textDocument: { diagnostic: {} },
+  textDocument: { diagnostic: { relatedDocumentSupport: true } },
   workspace: { diagnostics: { refreshSupport: true } },
 };
 
@@ -2869,10 +2881,16 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     });
   });
 
-  it('does not advertise the diagnostic provider to push clients', async () => {
-    harness = startHarness(resolveToSchema);
+  it.each<ClientCapabilities>([
+    {},
+    { textDocument: { diagnostic: {} } },
+    { textDocument: { diagnostic: { relatedDocumentSupport: false } } },
+  ])('uses push without advertising a diagnostic provider for %j', async (capabilities) => {
+    harness = startHarness(resolveToSchema, capabilities);
     const result = await harness.initialize();
     expect(result.capabilities.diagnosticProvider).toBeUndefined();
+    openDocument(harness, schemaUri, duplicateModelSource);
+    expect(await harness.waitForDiagnostics(schemaUri)).not.toEqual([]);
   });
 
   it('serves a full report through pull without pushing publishDiagnostics', async () => {
@@ -3011,9 +3029,9 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     openDocument(harness, schemaUri, duplicateModelSource);
     expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
     openDocument(harness, schema2Uri, formattedPsl);
-    expect(await harness.waitForDiagnostics(schema2Uri)).toEqual([
-      expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' }),
-    ]);
+    expect(
+      await harness.waitForDiagnosticsMatching(schema2Uri, (diagnostics) => diagnostics.length > 0),
+    ).toEqual([expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })]);
 
     const cleared = harness.waitForDiagnosticsMatching(
       schema2Uri,
@@ -3844,18 +3862,25 @@ describe('project symbol diagnostics assembly', () => {
         },
       ];
       if (mode === 'push') {
-        expect(await harness.waitForDiagnostics(pathToFileURL(siblingPath).toString())).toEqual(
-          expected,
-        );
+        expect(
+          await harness.waitForDiagnosticsMatching(
+            pathToFileURL(siblingPath).toString(),
+            (diagnostics) => diagnostics.length > 0,
+          ),
+        ).toEqual(expected);
         expect(harness.latestDiagnostics(schemaUri)).toEqual([]);
       } else {
         expect(await requestPullDiagnostics(harness, siblingUri)).toEqual({
           kind: DocumentDiagnosticReportKind.Full,
           items: expected,
+          relatedDocuments: { [schemaUri]: { kind: 'full', items: [] } },
         });
         expect(await requestPullDiagnostics(harness, schemaUri)).toEqual({
           kind: DocumentDiagnosticReportKind.Full,
           items: [],
+          relatedDocuments: {
+            [pathToFileURL(siblingPath).toString()]: { kind: 'full', items: expected },
+          },
         });
       }
       expect(harness.getDocumentAst(siblingUri)?.diagnostics).toEqual([]);
@@ -4009,40 +4034,232 @@ describe('language server whole-project push and freshness', {
   const isDuplicateDeclaration = (diagnostics: readonly Diagnostic[]): boolean =>
     diagnostics.some((diagnostic) => diagnostic.code === 'PSL_DUPLICATE_DECLARATION');
 
-  it('produces then clears a diagnostic in a closed sibling from an edit in an open member', async () => {
-    const dir = await fixtureDir();
-    const memberAPath = join(dir, 'a.prisma');
-    const memberBPath = join(dir, 'b.prisma');
-    const memberAUri = pathToFileURL(memberAPath).toString();
-    const memberBUri = pathToFileURL(memberBPath).toString();
-    await writeFile(memberAPath, userSchema, 'utf8');
-    await writeFile(memberBPath, postSchema, 'utf8');
+  it.each([false, true])(
+    'returns related diagnostics for an open sibling=%s without member pushes',
+    async (openSibling) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      const alias = memberAUri.replace('a.prisma', '%61.prisma');
+      await writeFile(memberAPath, userSchema);
+      await writeFile(memberBPath, postSchema);
+      const interpret = vi.fn(completionInterpretationSource.interpret);
+      harness = startHarness(
+        async () => ({
+          ...(await resolutionForInputs([memberAPath, memberBPath])),
+          interpretation: {
+            source: { ...completionInterpretationSource, interpret },
+            context: completionInterpretationContext,
+          },
+        }),
+        pullDiagnosticsCapabilities,
+      );
+      await harness.initialize();
+      openDocument(harness, alias, userSchema);
+      if (openSibling) openDocument(harness, memberBUri, postSchema);
+      expect(await requestPullDiagnostics(harness, alias)).toEqual({
+        kind: 'full',
+        items: [],
+        relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
+      });
+      const artifacts = vi.mocked(createProjectArtifacts).mock.results.at(-1)?.value;
+      vi.mocked(artifacts.symbolDiagnostics).mockClear();
+      interpret.mockClear();
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: alias, version: 2 },
+        contentChanges: [{ text: conflictingSchema }],
+      });
+      const report = await requestPullDiagnostics(harness, alias);
+      expect(report).toMatchObject({
+        relatedDocuments: {
+          [memberBUri]: {
+            kind: 'full',
+            items: [expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })],
+          },
+        },
+      });
+      expect(artifacts.symbolDiagnostics).toHaveBeenCalledTimes(1);
+      expect(interpret).toHaveBeenCalledTimes(1);
+      await requestPullDiagnostics(harness, memberBUri);
+      expect(interpret).toHaveBeenCalledTimes(1);
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: alias, version: 3 },
+        contentChanges: [{ text: userSchema }],
+      });
+      expect(await requestPullDiagnostics(harness, alias)).toEqual({
+        kind: 'full',
+        items: [],
+        relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
+      });
+      closeDocument(harness, alias);
+      await requestPullDiagnostics(harness, memberAUri);
+      await settle();
+      expect(harness.publishCount(memberAUri)).toBe(0);
+      expect(harness.publishCount(memberBUri)).toBe(0);
+      expect(harness.publishCount(alias)).toBe(0);
+    },
+  );
 
-    harness = startHarness(async () => resolutionForInputs([memberAPath, memberBPath]));
-    await harness.initialize();
+  it.each(['delete', 'directive', 'config', 'replace-config'] as const)(
+    'clears previously related members after %s even when the excluded member is pulled first',
+    async (removal) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      await writeFile(memberAPath, userSchema);
+      await writeFile(memberBPath, selfDuplicatePostSchema);
+      let inputs = [memberAPath, memberBPath];
+      harness = startHarness(
+        async () => resolutionForInputs(inputs),
+        pullDiagnosticsWithRefreshCapabilities,
+      );
+      await harness.initialize();
+      openDocument(harness, memberAUri, userSchema);
+      expect(await requestPullDiagnostics(harness, memberAUri)).toMatchObject({
+        relatedDocuments: {
+          [memberBUri]: { items: [expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })] },
+        },
+      });
+      if (removal === 'delete') await rm(memberBPath);
+      if (removal === 'directive')
+        await writeFile(memberBPath, selfDuplicatePostSchema.replace('// use prisma-8\n', ''));
+      const refreshed = harness.waitForDiagnosticRefresh();
+      let nextPullUri = memberAUri;
+      if (removal === 'config' || removal === 'replace-config') {
+        const replacementPath = join(dir, 'replacement.prisma');
+        await writeFile(replacementPath, postSchema);
+        inputs = removal === 'replace-config' ? [replacementPath] : [memberAPath];
+        if (removal === 'replace-config') nextPullUri = pathToFileURL(replacementPath).toString();
+        harness.notifyConfigChanged();
+      } else {
+        harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+          changes: [
+            {
+              uri: memberBUri,
+              type: removal === 'delete' ? FileChangeType.Deleted : FileChangeType.Changed,
+            },
+          ],
+        });
+      }
+      await refreshed;
+      expect(fullReportItems(await requestPullDiagnostics(harness, memberBUri))).toEqual([]);
+      expect(await requestPullDiagnostics(harness, nextPullUri)).toMatchObject({
+        relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
+      });
+      expect(harness.publishCount(memberBUri)).toBe(0);
+    },
+  );
 
-    openDocument(harness, memberAUri, userSchema);
-    await harness.waitForDiagnostics(memberAUri);
-    expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+  it.each([false, true])(
+    'observes external edits with refresh support=%s without falling back to push',
+    async (refreshSupport) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      await writeFile(memberAPath, userSchema);
+      await writeFile(memberBPath, postSchema);
+      harness = startHarness(
+        async () => resolutionForInputs([memberAPath, memberBPath]),
+        refreshSupport ? pullDiagnosticsWithRefreshCapabilities : pullDiagnosticsCapabilities,
+      );
+      await harness.initialize();
+      openDocument(harness, memberAUri, userSchema);
+      await requestPullDiagnostics(harness, memberAUri);
+      await writeFile(memberBPath, selfDuplicatePostSchema);
+      harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+        changes: [{ uri: memberBUri, type: FileChangeType.Changed }],
+      });
+      if (refreshSupport) await harness.waitForDiagnosticRefresh();
+      else await settle();
+      expect(await requestPullDiagnostics(harness, memberAUri)).toMatchObject({
+        relatedDocuments: {
+          [memberBUri]: { items: [expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })] },
+        },
+      });
+      expect(harness.diagnosticRefreshCount()).toBe(refreshSupport ? 1 : 0);
+      expect(harness.publishCount(memberAUri)).toBe(0);
+      expect(harness.publishCount(memberBUri)).toBe(0);
+    },
+  );
 
-    const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
-    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
-      textDocument: { uri: memberAUri, version: 2 },
-      contentChanges: [{ text: conflictingSchema }],
-    });
-    expect(isDuplicateDeclaration(await conflicted)).toBe(true);
-    expect(harness.publishCount(memberBUri)).toBeGreaterThan(0);
-
-    const cleared = harness.waitForDiagnosticsMatching(
-      memberBUri,
-      (diagnostics) => diagnostics.length === 0,
+  it('does not mix related reports or pending clears between projects', async () => {
+    const firstDir = await fixtureDir();
+    const secondDir = await fixtureDir();
+    const firstPaths = [join(firstDir, 'a.prisma'), join(firstDir, 'b.prisma')];
+    const secondPaths = [join(secondDir, 'c.prisma'), join(secondDir, 'd.prisma')];
+    const firstUris = firstPaths.map((path) => pathToFileURL(path).toString());
+    const secondUris = secondPaths.map((path) => pathToFileURL(path).toString());
+    await Promise.all([...firstPaths, ...secondPaths].map((path) => writeFile(path, userSchema)));
+    harness = startHarness(
+      async (path) => resolutionForInputs(path.startsWith(firstDir) ? firstPaths : secondPaths),
+      pullDiagnosticsWithRefreshCapabilities,
+      async (path) => join(path.startsWith(firstDir) ? firstDir : secondDir, 'prisma.config.ts'),
     );
-    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
-      textDocument: { uri: memberAUri, version: 3 },
-      contentChanges: [{ text: userSchema }],
+    await harness.initialize();
+    const first = await requestPullDiagnostics(harness, firstUris[0]!);
+    expect(first.kind === 'full' && Object.keys(first.relatedDocuments ?? {})).toEqual([
+      firstUris[1],
+    ]);
+    const second = await requestPullDiagnostics(harness, secondUris[0]!);
+    expect(second.kind === 'full' && Object.keys(second.relatedDocuments ?? {})).toEqual([
+      secondUris[1],
+    ]);
+    await rm(firstPaths[1]!);
+    harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: firstUris[1]!, type: FileChangeType.Deleted }],
     });
-    expect(await cleared).toEqual([]);
+    await harness.waitForDiagnosticRefresh();
+    const secondAgain = await requestPullDiagnostics(harness, secondUris[0]!);
+    expect(secondAgain).toEqual(second);
+    expect(harness.publishCount(firstUris[1]!)).toBe(0);
   });
+
+  it.each<ClientCapabilities>([{}, { textDocument: { diagnostic: {} } }])(
+    'produces then clears a diagnostic in a closed sibling from an edit in an open member for %j',
+    async (capabilities) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      await writeFile(memberAPath, userSchema, 'utf8');
+      await writeFile(memberBPath, postSchema, 'utf8');
+
+      harness = startHarness(
+        async () => resolutionForInputs([memberAPath, memberBPath]),
+        capabilities,
+      );
+      await harness.initialize();
+
+      openDocument(harness, memberAUri, userSchema);
+      await harness.waitForDiagnostics(memberAUri);
+      expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+
+      const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: memberAUri, version: 2 },
+        contentChanges: [{ text: conflictingSchema }],
+      });
+      expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+      expect(harness.publishCount(memberBUri)).toBeGreaterThan(0);
+
+      const cleared = harness.waitForDiagnosticsMatching(
+        memberBUri,
+        (diagnostics) => diagnostics.length === 0,
+      );
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: memberAUri, version: 3 },
+        contentChanges: [{ text: userSchema }],
+      });
+      expect(await cleared).toEqual([]);
+    },
+  );
 
   it('picks up an external edit to a closed member via a watch event', async () => {
     const dir = await fixtureDir();
@@ -4138,7 +4355,7 @@ describe('language server whole-project push and freshness', {
     expect(isDuplicateDeclaration(await conflicted)).toBe(true);
   });
 
-  it.each(['push', 'pull'] as const)(
+  it.each(['push', 'pull-without-related'] as const)(
     'publishes and clears a closed aliased member at its normalized URI over %s',
     async (mode) => {
       const dir = await fixtureDir();
@@ -4148,15 +4365,11 @@ describe('language server whole-project push and freshness', {
       await writeFile(memberPath, selfDuplicatePostSchema, 'utf8');
       harness = startHarness(
         async () => resolutionForInputs([memberPath]),
-        mode === 'pull' ? pullDiagnosticsCapabilities : undefined,
+        mode === 'pull-without-related' ? { textDocument: { diagnostic: {} } } : undefined,
       );
       await harness.initialize();
       openDocument(harness, alias, postSchema);
-      if (mode === 'pull') {
-        expect(fullReportItems(await requestPullDiagnostics(harness, alias))).toEqual([]);
-      } else {
-        expect(await harness.waitForDiagnostics(memberUri)).toEqual([]);
-      }
+      expect(await harness.waitForDiagnostics(memberUri)).toEqual([]);
       const closed = harness.waitForDiagnosticsMatching(memberUri, isDuplicateDeclaration);
       closeDocument(harness, memberUri);
       expect(isDuplicateDeclaration(await closed)).toBe(true);
@@ -4170,7 +4383,7 @@ describe('language server whole-project push and freshness', {
         changes: [{ uri: alias, type: FileChangeType.Deleted }],
       });
       expect(await cleared).toEqual([]);
-      expect(harness.publishCount(memberUri)).toBe(mode === 'pull' ? 2 : 3);
+      expect(harness.publishCount(memberUri)).toBe(3);
       expect(harness.publishCount(alias)).toBe(0);
     },
   );

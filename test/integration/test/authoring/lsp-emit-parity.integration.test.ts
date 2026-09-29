@@ -123,7 +123,7 @@ withTempDir(({ createTempDir }) => {
           const initialized = await client.request('initialize', {
             processId: null,
             rootUri: pathToFileURL(ctx.testDir).href,
-            capabilities: { textDocument: { diagnostic: {} } },
+            capabilities: { textDocument: { diagnostic: { relatedDocumentSupport: true } } },
           });
           expect(initialized.error).toBeUndefined();
           client.notify('initialized', {});
