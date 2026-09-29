@@ -234,16 +234,32 @@ model Child {
     });
   });
 
-  it('skips value-object fields when the stack declares no value-object storage type', () => {
+  it('refuses each value-object field when the stack declares no value-object storage type', () => {
     // The scalar map still contains Jsonb/Json entries; the family layer
     // must not fall back to hardcoded type names.
     const result = interpretPostgres(userWithAddresses, {});
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(userFieldsAndColumns(result.value)).toEqual({
-      fields: { id: idField },
-      columns: { id: idColumn },
-    });
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "User.home" is typed by the composite type "Address", but target "postgres" declares no storage type for value objects, so the field has no column to be stored in.',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 75, line: 7, column: 3 },
+          end: { offset: 93, line: 7, column: 21 },
+        },
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "User.addresses" is typed by the composite type "Address", but target "postgres" declares no storage type for value objects, so the field has no column to be stored in.',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 96, line: 8, column: 3 },
+          end: { offset: 115, line: 8, column: 22 },
+        },
+      },
+    ]);
   });
 });

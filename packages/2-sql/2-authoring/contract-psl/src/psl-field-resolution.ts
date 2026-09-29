@@ -505,12 +505,20 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     };
 
     if (isValueObjectField) {
-      // A stack that declares no valueObjectStorageType has no value-object
-      // storage — the field is skipped.
-      descriptor =
-        valueObjectStorageTypeName !== undefined
-          ? scalarColumnDescriptors.get(valueObjectStorageTypeName)
-          : undefined;
+      if (valueObjectStorageTypeName === undefined) {
+        diagnostics.push({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: `Field "${model.name}.${field.name}" is typed by the composite type "${field.typeName}", but target "${targetId}" declares no storage type for value objects, so the field has no column to be stored in.`,
+          ...source.at(field.span),
+        });
+        continue;
+      }
+      descriptor = scalarColumnDescriptors.get(valueObjectStorageTypeName);
+      if (descriptor === undefined) {
+        throw new InternalError(
+          `The stack declares "${valueObjectStorageTypeName}" as its value-object storage type, but it is not one of the stack's scalar types; the control stack checks this when it is assembled.`,
+        );
+      }
     } else if (isListField) {
       if (capabilities['sql']?.['scalarList'] !== true) {
         diagnostics.push({
