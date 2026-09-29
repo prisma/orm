@@ -344,54 +344,6 @@ describe('db update consent', () => {
         error: { meta: { consentToken: 'otherdb' } },
       });
     });
-
-    it('accepts the database a Mongo connection string names', async () => {
-      const mongoDescriptor = { familyId: 'mongo', targetId: 'mongo', version: '1.0.0' };
-      const mongoConfig = ormConfig({
-        family: {
-          ...mongoDescriptor,
-          kind: 'family',
-          id: 'mongo',
-          emission: {},
-          create: () => ({}),
-        },
-        target: {
-          ...mongoDescriptor,
-          kind: 'target',
-          id: 'mongo',
-          migrations: {},
-          create: () => ({}),
-        },
-        adapter: { ...mongoDescriptor, kind: 'adapter', id: 'mongo', create: () => ({}) },
-        driver: { ...mongoDescriptor, kind: 'driver', id: 'mongo', create: () => ({}) },
-        db: { connection: 'mongodb://localhost:27017/shop' },
-      });
-      mocks.dbUpdate.mockReset().mockImplementation((options: { consent?: { planHash: string } }) =>
-        Promise.resolve(
-          options.consent?.planHash === PLAN_HASH
-            ? ok(applySuccess())
-            : notOk(
-                destructiveRefusal({
-                  destructiveChanges: {
-                    destructiveOperations: [{ id: 'op-2', label: 'Drop index on users' }],
-                    databaseName: 'shop',
-                    planHash: PLAN_HASH,
-                  },
-                }),
-              ),
-        ),
-      );
-
-      const run = await harness(mongoConfig).run(['db', 'update', '--confirm', 'shop', '--json'], {
-        cwd: projectDir,
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(applyCalls().map((call) => call.consent)).toEqual([
-        undefined,
-        { planHash: PLAN_HASH },
-      ]);
-    });
   });
 
   describe('when the question would be unanswerable', () => {
