@@ -34,6 +34,13 @@ changes:
       validation" from the server, or a contract without one (TypeScript builder, Prisma 6 schema)
       stored the value. Filters still accept a value outside the enum and `null`, so they can find
       documents that hold one.
+  - id: mongo-codecs-check-value-types
+    summary: |
+      The Mongo `String`, `Bool`, `Date`, `ObjectId` and vector codecs refuse a value of the wrong
+      type with `RUNTIME.ENCODE_FAILED` naming the field, in writes and filters, as `Int32` and
+      `Double` do. Before, a `null` element in a `String[]`, `Bool[]` or `Date[]` list or a
+      mistyped value was stored as given, an invalid `Date` was stored as the epoch, and `null`,
+      `undefined` or a number for an `ObjectId` field became a new id or a timestamp.
   - id: mongo-list-elements-encoded
     summary: |
       The Mongo ORM encodes each element of a list field through the field's codec, on writes and
@@ -88,6 +95,12 @@ Remove code that converted driver classes by hand in included documents or compo
 The pattern finds filter expressions written inside `where(...)`; also check expressions built elsewhere and passed to the ORM's `where()`. Leave filters passed to the query builder's `match()` as they are.
 
 For each field filter, pass the field's application value: a `bigint` for an `Int64` field, decimal text for a `Decimal128` field, a hex string or an `ObjectId` for an `ObjectId` field, and an integer in the signed 32-bit range for an `Int32` field. A value that is not a `MongoValue`, such as a `bigint`, an `ObjectId` or a driver `Long`, goes in a `MongoParamRef` from `@prisma/orm-mongo/value`: write `MongoFieldFilter.gt('views', new MongoParamRef(5n))` in place of `MongoFieldFilter.gt('views', Long.fromNumber(5))` or `5`. A value the field's codec refuses now fails with `RUNTIME.ENCODE_FAILED` before the query runs; before, it was sent as is. A filter on a `Bson` field with an `ObjectId`, `Long` or `Decimal128` now matches the stored value; before, it matched nothing.
+
+## `mongo-codecs-check-value-types`
+
+This change has no detection pattern: which writes carry such values depends on the data.
+
+Pass each field's application type: a string for `String`, a boolean for `Bool`, a valid `Date` for `Date`, and a 24-digit hex string or an `ObjectId` for `ObjectId`. Remove `null` elements from lists before writing them; a list field's elements cannot be `null`.
 
 ## `mongo-list-elements-encoded`
 

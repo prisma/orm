@@ -36,7 +36,10 @@ changes:
       `mongoStandardCodecs` in `@prisma/orm-mongo/target/codecs`, `@internal/target-mongo/codecs`)
       returns the driver's `Double` wrapping the number, so a whole number is stored as a BSON
       double; it refuses a value that is not a number. The `mongo/int32@1` codec's `encode` refuses
-      a value that is not an integer in the signed 32-bit range.
+      a value that is not an integer in the signed 32-bit range. The `mongo/string@1`,
+      `mongo/bool@1`, `mongo/date@1`, `mongo/objectId@1` and `mongo/vector@1` codecs' `encode`
+      refuse a value of the wrong type, and `mongo/binary@1` decodes a `Buffer` or `Uint8Array` as
+      well as a `Binary`.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -87,7 +90,7 @@ Add the `authoringContributions` your interpreter already holds to each call.
 
 ## `mongo-double-codec-encodes-double`
 
-Code that compares what the `mongo/double@1` codec's `encode` returns with a number unwraps it with `.valueOf()` or `Number(...)`. A test double or fixture that passed a fraction or an out-of-range number through the `mongo/int32@1` codec's `encode` now gets `RUNTIME.ENCODE_FAILED`; pass an integer.
+Code that compares what the `mongo/double@1` codec's `encode` returns with a number unwraps it with `.valueOf()` or `Number(...)`. A test double or fixture that passed a fraction or an out-of-range number through the `mongo/int32@1` codec's `encode` now gets `RUNTIME.ENCODE_FAILED`; pass an integer. The same holds for a test double that passes a value of the wrong type through the string, boolean, date, ObjectId or vector codec, such as a number for an ObjectId; pass a 24-digit hex string or an `ObjectId`.
 
 ## `mongo-insert-results-carry-documents`
 

@@ -1,5 +1,6 @@
 import { isStructuredError } from '@internal/utils/structured-error';
 import { BSON, Double, ObjectId } from 'bson';
+import { ObjectId as DriverObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { MONGO_DOUBLE_CODEC_ID, MONGO_VECTOR_CODEC_ID } from '../src/core/codec-ids';
 import {
@@ -104,6 +105,60 @@ describe('mongoDateCodec', () => {
     const date = new Date('2024-01-15T10:30:00Z');
     expect(await mongoDateCodec.decode(date, {})).toBe(date);
     expect(await mongoDateCodec.encode(date, {})).toBe(date);
+  });
+});
+
+describe('codecs that check the type of the value they write', () => {
+  it.each<[string, { encode(value: never, ctx: object): unknown }, unknown]>([
+    ['mongo/string@1 value must be a string; received null', mongoStringCodec, null],
+    ['mongo/string@1 value must be a string; received 5', mongoStringCodec, 5],
+    ['mongo/bool@1 value must be a boolean; received string "true"', mongoBooleanCodec, 'true'],
+    ['mongo/bool@1 value must be a boolean; received null', mongoBooleanCodec, null],
+    [
+      'mongo/date@1 value must be a valid Date; received string "2020-01-01"',
+      mongoDateCodec,
+      '2020-01-01',
+    ],
+    [
+      'mongo/date@1 value must be a valid Date; received an invalid Date',
+      mongoDateCodec,
+      new Date('not a date'),
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received null',
+      mongoObjectIdCodec,
+      null,
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received 1700000000',
+      mongoObjectIdCodec,
+      1700000000,
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received string "abcdefabcdef"',
+      mongoObjectIdCodec,
+      'abcdefabcdef',
+    ],
+    [
+      'mongo/vector@1 value must be an array of numbers; received an array',
+      mongoVectorCodec,
+      [1, '2'],
+    ],
+    ['mongo/vector@1 value must be an array of numbers; received null', mongoVectorCodec, null],
+  ])('refuses with: %s', async (message, codec, value) => {
+    await expect(
+      Promise.resolve().then(() => codec.encode(value as never, {})),
+    ).rejects.toMatchObject({ code: 'RUNTIME.ENCODE_FAILED', message });
+  });
+
+  it('ObjectId takes the driver`s ObjectId as well as a hex string', async () => {
+    const hex = '65f0000000000000000000a1';
+    const encoded = await mongoObjectIdCodec.encode(
+      new DriverObjectId(hex) as unknown as string,
+      {},
+    );
+    expect(encoded).toBeInstanceOf(ObjectId);
+    expect(encoded.toHexString()).toBe(hex);
   });
 });
 

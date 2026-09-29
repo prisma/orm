@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import { Binary, Decimal128, Double, Long } from 'bson';
+import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -10,7 +10,10 @@ const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3
 /**
  * Checks the BSON type tag rather than `instanceof`: the driver deserialises with its own load of `bson` (CommonJS, where this module may be loaded as ESM), so a value read from the database need not be an instance of the class imported here.
  */
-function hasBsonTypeTag(value: unknown, tag: 'Long' | 'Decimal128' | 'Binary'): boolean {
+function hasBsonTypeTag(
+  value: unknown,
+  tag: 'Long' | 'Decimal128' | 'Binary' | 'ObjectId',
+): boolean {
   return (
     typeof value === 'object' && value !== null && '_bsontype' in value && value._bsontype === tag
   );
@@ -26,6 +29,10 @@ function isDecimal128(value: unknown): value is Decimal128 {
 
 function isBinary(value: unknown): value is Binary {
   return hasBsonTypeTag(value, 'Binary');
+}
+
+function isObjectId(value: unknown): value is ObjectId {
+  return hasBsonTypeTag(value, 'ObjectId');
 }
 
 function decodeFailed(codecId: string, message: string, received: unknown): never {
@@ -47,7 +54,56 @@ function describeReceived(value: unknown): string {
   if (typeof value === 'string') {
     return `string ${JSON.stringify(value.slice(0, RECEIVED_PREVIEW_LIMIT))}`;
   }
-  return value === null ? 'null' : typeof value;
+  if (value === null) return 'null';
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? 'an invalid Date' : 'a Date';
+  if (Array.isArray(value)) return 'an array';
+  return typeof value;
+}
+
+function refuseType(codecId: string, expected: string, value: unknown): never {
+  return encodeFailed(
+    codecId,
+    `value must be ${expected}; received ${describeReceived(value)}`,
+    value,
+  );
+}
+
+export function stringEncode(codecId: string, value: string): string {
+  if (typeof value !== 'string') refuseType(codecId, 'a string', value);
+  return value;
+}
+
+export function booleanEncode(codecId: string, value: boolean): boolean {
+  if (typeof value !== 'boolean') refuseType(codecId, 'a boolean', value);
+  return value;
+}
+
+/**
+ * The driver writes an invalid `Date` as the epoch, so one is refused with any other non-`Date` value.
+ */
+export function dateEncode(codecId: string, value: Date): Date {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    refuseType(codecId, 'a valid Date', value);
+  }
+  return value;
+}
+
+const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
+
+/**
+ * `new ObjectId(...)` makes a fresh id from `null` or `undefined` and reads a number as a timestamp, so only a 24-digit hex string or an `ObjectId` is accepted.
+ */
+export function objectIdEncode(codecId: string, value: string): ObjectId {
+  if (typeof value === 'string' && OBJECT_ID_HEX.test(value)) return new ObjectId(value);
+  if (isObjectId(value)) return new ObjectId(value.toHexString());
+  return refuseType(codecId, 'a 24-digit hex string or an ObjectId', value);
+}
+
+export function vectorEncode(codecId: string, value: readonly number[]): readonly number[] {
+  if (!Array.isArray(value) || !value.every((element) => typeof element === 'number')) {
+    refuseType(codecId, 'an array of numbers', value);
+  }
+  return value;
 }
 
 /**

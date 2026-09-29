@@ -114,4 +114,24 @@ describe('Mongo list fields', () => {
       }),
     timeouts.spinUpMongoMemoryServer,
   );
+
+  it.each([
+    ['words', 'mongo/string@1', 'must be a string'],
+    ['flags', 'mongo/bool@1', 'must be a boolean'],
+    ['dates', 'mongo/date@1', 'must be a valid Date'],
+    ['ids', 'mongo/objectId@1', 'must be a 24-digit hex string or an ObjectId'],
+  ] as const)(
+    'refuse a null element in a %s list, naming the element',
+    (field, codec, rule) =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        await expect(
+          db.series.create({ ...empty, [field]: [null] } as unknown as typeof empty),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message: `Failed to encode field ${field}.0 in collection 'series' with codec '${codec}': ${codec} value ${rule}; received null`,
+        });
+        expect(await mongoDb.collection('series').countDocuments()).toBe(0);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
 });
