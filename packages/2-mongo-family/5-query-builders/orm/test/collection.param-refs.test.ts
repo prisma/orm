@@ -59,7 +59,7 @@ describe('parameters the Mongo ORM builds', () => {
       { name: 'name', collection: 'users', codecId: string },
       { name: 'email', collection: 'users', codecId: string },
       { name: 'loginCount', collection: 'users', codecId: 'mongo/int32@1' },
-      { name: 'tags', collection: 'users', codecId: string },
+      { name: 'tags.0', collection: 'users', codecId: string },
       { name: 'homeAddress.city', collection: 'users', codecId: string },
       { name: 'homeAddress.country', collection: 'users', codecId: string },
     ]);
@@ -114,7 +114,7 @@ describe('parameters the Mongo ORM builds', () => {
     expect(namesIn('$setOnInsert')).toEqual([
       { name: 'email', collection: 'users' },
       { name: 'loginCount', collection: 'users' },
-      { name: 'tags', collection: 'users' },
+      { name: 'tags.0', collection: 'users' },
       { name: 'homeAddress.city', collection: 'users' },
       { name: 'homeAddress.country', collection: 'users' },
     ]);

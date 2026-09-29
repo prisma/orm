@@ -52,6 +52,27 @@ model Book {
   @@map("books")
 }
 
+type Point {
+  x    Int32
+  tags Int64[]
+}
+
+model Series {
+  id       ObjectId     @id @map("_id")
+  ints     Int32[]
+  doubles  Double[]
+  longs    Int64[]
+  ids      ObjectId[]
+  decimals Decimal128[]
+  bytes    Binary[]
+  words    String[]
+  flags    Bool[]
+  dates    Date[]
+  points   Point[]
+
+  @@map("series")
+}
+
 type Stamp {
   note Json
 }

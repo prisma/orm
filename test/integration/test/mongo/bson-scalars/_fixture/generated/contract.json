@@ -23,6 +23,10 @@
     "readings": {
       "model": "Reading",
       "namespace": "__unbound__"
+    },
+    "series": {
+      "model": "Series",
+      "namespace": "__unbound__"
     }
   },
   "domain": {
@@ -311,6 +315,101 @@
             "storage": {
               "collection": "readings"
             }
+          },
+          "Series": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytes": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/binary@1",
+                  "kind": "scalar"
+                }
+              },
+              "dates": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "decimals": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/decimal128@1",
+                  "kind": "scalar"
+                }
+              },
+              "doubles": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "flags": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "ids": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "ints": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              },
+              "longs": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              },
+              "points": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Point"
+                }
+              },
+              "words": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "series"
+            }
           }
         },
         "valueObjects": {
@@ -327,6 +426,25 @@
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            }
+          },
+          "Point": {
+            "fields": {
+              "tags": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              },
+              "x": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
                   "kind": "scalar"
                 }
               }
@@ -615,6 +733,112 @@
                 "validationAction": "error",
                 "validationLevel": "strict"
               }
+            },
+            "series": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "bytes": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "binData"
+                      }
+                    },
+                    "dates": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "date"
+                      }
+                    },
+                    "decimals": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "decimal"
+                      }
+                    },
+                    "doubles": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "double"
+                      }
+                    },
+                    "flags": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "bool"
+                      }
+                    },
+                    "ids": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "objectId"
+                      }
+                    },
+                    "ints": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "int"
+                      }
+                    },
+                    "longs": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "long"
+                      }
+                    },
+                    "points": {
+                      "bsonType": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "tags": {
+                            "bsonType": "array",
+                            "items": {
+                              "bsonType": "long"
+                            }
+                          },
+                          "x": {
+                            "bsonType": "int"
+                          }
+                        },
+                        "required": [
+                          "tags",
+                          "x"
+                        ]
+                      }
+                    },
+                    "words": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "bytes",
+                    "dates",
+                    "decimals",
+                    "doubles",
+                    "flags",
+                    "ids",
+                    "ints",
+                    "longs",
+                    "points",
+                    "words"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
             }
           },
           "valueSet": {
@@ -631,7 +855,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "bc85b990d3fd1c3085d08b5e64c27f4408880b23428258e0ade0bcc670bd7952"
+    "storageHash": "e6b8f0ca84154e70d8240cabf47951883d699f4a84e45131c60f899dd900deb4"
   },
   "capabilities": {},
   "extensions": {},

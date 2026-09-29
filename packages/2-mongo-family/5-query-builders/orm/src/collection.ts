@@ -59,6 +59,7 @@ import {
   createFieldAccessor,
   type FieldAccessor,
   type FieldOperation,
+  type UpdateOperator,
 } from './field-accessor';
 import { ormError } from './orm-errors';
 import type {
@@ -877,14 +878,13 @@ class MongoCollectionImpl<
   #encodeFieldFilter(filter: MongoFieldFilter): MongoFieldFilter {
     const field = this.#fieldAtPath(filter.field);
     if (field?.type.kind !== 'scalar') return filter;
-    const codecId = field.type.codecId;
     const encode = (value: MongoValue): MongoValue => {
       if (value instanceof MongoParamRef) {
         return value.codecId === undefined
-          ? this.#fieldParam(value.value, codecId, filter.field)
+          ? this.#scalarParam(value.value, field, filter.field)
           : value;
       }
-      return this.#fieldParam(value, codecId, filter.field);
+      return this.#scalarParam(value, field, filter.field);
     };
     if (COMPARISON_OPERATORS.has(filter.op)) {
       return MongoFieldFilter.of(filter.field, filter.op, encode(filter.value));
@@ -912,7 +912,7 @@ class MongoCollectionImpl<
 
     if (field.type.kind === 'scalar') {
       this.#assertEnumValues(field, value, path);
-      return this.#fieldParam(value, field.type.codecId, path);
+      return this.#scalarParam(value, field, path);
     }
 
     if (field.type.kind === 'valueObject') {
@@ -968,6 +968,18 @@ class MongoCollectionImpl<
       `Failed to encode field ${path} in collection '${this.#collectionName}': ${JSON.stringify(outside)} is not a value of enum ${valueSet.entityName}; the values are ${list}`,
       { label: path, collection: this.#collectionName, received: outside, allowed },
     );
+  }
+
+  /**
+   * A scalar field's value as parameters: a list field's array is encoded element by element through the element codec, so the codec never sees the whole list.
+   */
+  #scalarParam(value: unknown, field: ContractField, path: string): MongoValue {
+    if (field.type.kind !== 'scalar') return new MongoParamRef(value);
+    const codecId = field.type.codecId;
+    if (field.many === true && Array.isArray(value)) {
+      return value.map((element, index) => this.#fieldParam(element, codecId, `${path}.${index}`));
+    }
+    return this.#fieldParam(value, codecId, path);
   }
 
   #fieldParam(value: unknown, codecId: string, path: string): MongoParamRef {
@@ -1095,66 +1107,24 @@ class MongoCollectionImpl<
     );
   }
 
-  #wrapFieldOpValue(field: string, value: MongoValue, operator?: string): MongoValue {
-    if (operator === '$unset') return value;
-
-    const topLevelField = field.split('.')[0] ?? field;
-    const fields = this.#modelFields();
-    const contractField = fields[topLevelField];
-    if (!contractField) return value;
-
-    if (field.includes('.')) {
-      return this.#wrapDotPathValue(field, value);
+  /**
+   * `$set` carries the field's whole value; `$push`, `$addToSet`, `$pull`, `$inc` and `$mul` carry one element or number; `$pop` and `$unset` carry no field value and are not encoded.
+   */
+  #wrapFieldOpValue(path: string, value: MongoValue, operator: UpdateOperator): MongoValue {
+    if (operator === '$unset' || operator === '$pop' || !(value instanceof MongoParamRef)) {
+      return value;
     }
-
-    if (value instanceof MongoParamRef && contractField.type.kind === 'scalar') {
-      this.#assertEnumValues(contractField, value.value, field);
-      return this.#fieldParam(value.value, contractField.type.codecId, field);
+    const field = this.#fieldAtPath(path);
+    if (field === undefined) return value;
+    if (operator === '$set') return this.#wrapFieldValue(value.value, field, path);
+    if (field.type.kind === 'scalar') {
+      this.#assertEnumValues(field, field.many === true ? [value.value] : value.value, path);
+      return this.#fieldParam(value.value, field.type.codecId, path);
     }
-
-    if (contractField.type.kind === 'valueObject' && value instanceof MongoParamRef) {
-      const raw = value.value;
-      if (isUnknownRecord(raw)) {
-        const voName = contractField.type.name;
-        const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[voName];
-        if (voDef) {
-          return this.#wrapValueObject(raw, voDef, field);
-        }
-      }
+    if (field.type.kind === 'valueObject' && isUnknownRecord(value.value)) {
+      const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[field.type.name];
+      if (voDef) return this.#wrapValueObject(value.value, voDef, path);
     }
-
-    return value;
-  }
-
-  #wrapDotPathValue(dotPath: string, value: MongoValue): MongoValue {
-    const parts = dotPath.split('.');
-    const fields = this.#modelFields();
-    let currentField: ContractField | undefined = parts[0] ? fields[parts[0]] : undefined;
-
-    for (let i = 1; i < parts.length; i++) {
-      if (currentField?.type.kind !== 'valueObject') return value;
-      const voName = currentField.type.name;
-      const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[voName];
-      if (!voDef) return value;
-      const partKey = parts[i];
-      currentField = partKey ? voDef.fields[partKey] : undefined;
-    }
-
-    if (currentField?.type.kind === 'scalar' && value instanceof MongoParamRef) {
-      return this.#fieldParam(value.value, currentField.type.codecId, dotPath);
-    }
-
-    if (currentField?.type.kind === 'valueObject' && value instanceof MongoParamRef) {
-      const raw = value.value;
-      if (isUnknownRecord(raw)) {
-        const voName = currentField.type.name;
-        const voDef = domainValueObjectsAtDefaultNamespace(this.#contract.domain)?.[voName];
-        if (voDef) {
-          return this.#wrapValueObject(raw, voDef, dotPath);
-        }
-      }
-    }
-
     return value;
   }
 
