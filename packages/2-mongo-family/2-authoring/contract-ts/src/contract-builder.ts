@@ -198,10 +198,10 @@ export interface FieldBuilder<
   readonly __enumHandle: Handle;
   readonly __executionDefaults?: ExecutionDefaults;
   readonly optional: FilledOnWrite<ExecutionDefaults> extends true
-    ? (presetFieldCannotBeOptional: never) => never
+    ? (this: 'A preset fills this field on write, so it cannot be optional') => never
     : () => FieldBuilder<Type, true, Many, Handle, ExecutionDefaults>;
   readonly many: FilledOnWrite<ExecutionDefaults> extends true
-    ? (presetFieldCannotBeAList: never) => never
+    ? (this: 'A preset fills this field on write, so it cannot be a list') => never
     : () => FieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>;
 }
 

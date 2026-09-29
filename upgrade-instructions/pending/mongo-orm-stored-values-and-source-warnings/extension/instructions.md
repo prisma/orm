@@ -40,7 +40,8 @@ changes:
   - id: mongo-field-builder-preset-not-optional
     summary: |
       The Mongo `FieldBuilder`'s `optional` and `many` are properties whose type refuses a call when
-      the builder carries execution defaults. The widest constraint,
+      the builder carries execution defaults: a function whose `this` type is a string that says
+      why. The widest constraint,
       `FieldBuilder<ContractFieldType, boolean, boolean, EnumTypeHandle | undefined, ExecutionMutationDefaultPhases | undefined>`,
       still accepts every builder.
 ---

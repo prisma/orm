@@ -40,8 +40,8 @@ changes:
   - id: mongo-ts-preset-field-not-optional
     summary: |
       In a Mongo TypeScript contract, `.optional()` or `.many()` on a field a preset fills, such
-      as `field.temporal.createdAt()`, is now a type error; it always failed when the contract was
-      built.
+      as `field.temporal.createdAt()`, is now a type error that says "A preset fills this field on
+      write, so it cannot be optional" (or "a list"); it always failed when the contract was built.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
