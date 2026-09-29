@@ -18,11 +18,21 @@ changes:
         - '^\s*type\s+\w+\s*\{'
   - id: codecs-check-stored-json
     summary: |
-      The built-in SQL, PostgreSQL and SQLite codecs now refuse a JSON value that is not the stored form of their type, where they used to pass it through: a literal column default of the wrong JSON kind now fails when a migration is planned. Correct the default.
+      The built-in SQL, PostgreSQL and SQLite codecs now refuse a JSON value that is not a stored form of their type, including one its type parameters rule out, where they used to pass it through: a hand-edited or TypeScript literal default of that kind now fails when a migration is planned. Correct the default.
     detection:
       glob: "**/contract.json"
       matches:
         - '"kind"\s*:\s*"literal"'
+  - id: psl-values-checked-by-codecs
+    summary: |
+      A PSL schema whose SQL enum member its codec does not take, or whose literal default its column's type does not hold, is now refused at `contract emit`, where it used to load. Correct the member or the default.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '@@type\(\s*"(?:pg|sql|sqlite)/'
+        - '^\s*\w+\s*=\s*-?\d{10,}\s*$'
+        - '\bUuid\b[^\n]*@default\(\s*"'
+        - '\b(?:VarChar|Char|Bit|VarBit|Numeric)\s*\(\s*\d[^\n]*@default\('
   - id: mongo-codecs-check-json
     summary: |
       The built-in Mongo codecs now refuse a JSON value that is not the JSON form of their type, where most passed it through: a PSL enum member whose value its `@@type` codec does not take is now refused. Correct the member.
@@ -72,13 +82,31 @@ Correct the value the diagnostic names.
 
 ## `codecs-check-stored-json`
 
-A codec's `decodeJson` reads a value in the stored JSON form of its type: a column's literal default in `contract.json`, a member of a value-object default, and a value inside the JSON the database returns for an included relation. The text codecs (`pg/text@1`, `sql/text@1`, `sql/char@1`, `sql/varchar@1`, `sqlite/text@1`, `pg/enum@1`, `pg/uuid@1`, `pg/inet@1`, `pg/bit@1`, `pg/varbit@1`, `pg/tsquery@1`, `pg/timetz@1`, `pg/text-array@1` and the date and time codecs), the integer codecs `pg/int4@1`, `pg/int2@1` and `sql/int@1`, and `pg/bool@1` used to pass any JSON value through. Each now refuses a value of another kind with `RUNTIME.DECODE_FAILED`, naming the codec: a text codec takes a JSON string, `pg/int4@1` a JSON integer from -2147483648 to 2147483647, `pg/int2@1` one from -32768 to 32767, `sql/int@1` a safe integer, `pg/bool@1` `true` or `false`, `pg/uuid@1` a UUID in any form PostgreSQL reads (either case, with or without hyphens after a group of four digits, optionally in braces), and a bit string only `0` and `1`. Every form PostgreSQL and SQLite produce is still read, so query results are unchanged.
+A codec's `decodeJson` reads a value in the stored JSON form of its type: a column's literal default in `contract.json`, a member of a value-object default, and a value inside the JSON the database returns for an included relation. The text codecs (`pg/text@1`, `sql/text@1`, `sql/char@1`, `sql/varchar@1`, `sqlite/text@1`, `pg/enum@1`, `pg/uuid@1`, `pg/inet@1`, `pg/bit@1`, `pg/varbit@1`, `pg/tsquery@1`, `pg/timetz@1`, `pg/text-array@1` and the date and time codecs), the integer codecs `pg/int4@1`, `pg/int2@1` and `sql/int@1`, and `pg/bool@1` used to pass any JSON value through. Each now refuses a value of another kind with `RUNTIME.DECODE_FAILED`, naming the codec: a text codec takes a JSON string, `pg/int4@1` a JSON integer from -2147483648 to 2147483647, `pg/int2@1` one from -32768 to 32767, `sql/int@1` a safe integer, `pg/bool@1` `true` or `false`, `pg/uuid@1` a UUID in any form PostgreSQL reads (either case, with or without hyphens after a group of four digits, optionally in braces), and a bit string only `0` and `1`. `pg/int8@1` and `sqlite/bigint@1` take decimal text in the signed 64-bit range. `pg/timestamptz-date@1` refused a bad string with a plain `RangeError`; it now raises `RUNTIME.DECODE_FAILED` like the others. Every form PostgreSQL and SQLite write for a value the application type holds is still read. Two stored values the application type cannot hold now throw instead of reading wrong: a two-dimensional `text[]` value, which `pg/text-array@1` read as the text `"a,b"`, and, on SQLite, an INTEGER past 2^53 or a REAL stored in an INTEGER column, which `sql/int@1` read rounded or with a fraction.
+
+`pg/text-array@1` reads a `text[]` column's NULL elements as `null`, so its application type is `readonly (string | null)[]` where it was `readonly string[]`. Code typed by a contract-free `textArray()` column, or by `min` or `max` over one, sees `string | null` elements; handle the `null`.
 
 The float codecs `pg/float8@1`, `pg/float4@1`, `pg/float@1`, `sql/float@1` and `sqlite/real@1` take a finite JSON number or the text `"NaN"`, `"Infinity"` or `"-Infinity"`, which PostgreSQL writes for those values in JSON, and `encodeJson` writes that text for them. SQLite writes an infinity in JSON as `9.0e+999`, so on SQLite the float codecs' JSON projection writes the text instead. `sql/float@1`, `pg/float@1` and `sqlite/real@1` used to refuse NaN and the infinities, so an `.include()` of a row holding one failed with `RUNTIME.DECODE_FAILED`; it now reads the value. SQLite cannot store NaN, so `sqlite/real@1` still refuses it. No change is needed.
 
 The codecs also check the type parameters PostgreSQL enforces. `VarChar(n)` and `Char(n)` (`sql/varchar@1`, `sql/char@1`, `pg/varchar@1`, `pg/char@1`) take at most n characters, counted as PostgreSQL counts them, by code point, and a `Char` value's trailing spaces do not count. `Bit(n)` takes exactly n bits and `VarBit(n)` at most n. `Numeric(p, s)` takes a value it stores without rounding, and `pg/numeric@1` takes only decimal text without an exponent or a leading `+`. `pg/int@1`, the codec of an enum whose members are integers, takes an integer from -2147483648 to 2147483647. A default that breaks one of these, such as `VarChar(3) @default("toolong")`, used to load and fail when the migration ran; it is now refused when the contract is emitted, with `PSL_INVALID_DEFAULT_LITERAL`. Shorten or correct the value. SQLite does not enforce a declared length, so on SQLite the char and varchar codecs read longer text.
 
-Only a hand-edited `contract.json`, or a TypeScript `.default()` given a value its column's type does not take, can hold such a default, and it now fails when a migration is planned. Correct the default in the contract source and emit it again. A `null` literal default is written as `DEFAULT NULL`, as before.
+A hand-edited `contract.json`, or a TypeScript `.default()` given a value its column's type does not take, still loads and now fails when a migration is planned. Correct the default in the contract source and emit it again. A PSL schema is refused earlier, when it is emitted; see `psl-values-checked-by-codecs`. A `null` literal default is written as `DEFAULT NULL`, as before.
+
+## `psl-values-checked-by-codecs`
+
+The PSL reader reads each literal default, and each member of a SQL `enum`, with the column's codec, so the stricter codecs refuse schemas that loaded before. Each of these is now refused at `contract emit`:
+
+| Schema | Diagnostic |
+| --- | --- |
+| `enum P { @@type("pg/int4@1") Low = "low" }` | `PSL_EXTENSION_INVALID_VALUE`: `enum "P" member "Low" was rejected by codec "pg/int4@1": pg/int4@1 JSON value must be an integer from -2147483648 to 2147483647` |
+| the same enum with a bare `Low` | `PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC`: `enum "P" member "Low" has no value and codec "pg/int4@1" does not accept a bare name as input` |
+| `enum P { @@type("pg/text@1") Low = 1 }` | `PSL_EXTENSION_INVALID_VALUE`, `pg/text@1 JSON value must be a string` |
+| an enum without `@@type` whose integer members include one outside -2147483648 to 2147483647, such as `Low = 3000000000` | `PSL_EXTENSION_INVALID_VALUE`, `pg/int@1 JSON value must be an integer from -2147483648 to 2147483647` |
+| `u Uuid @default("nope")` | `PSL_INVALID_DEFAULT_LITERAL`, `pg/uuid@1 JSON value must be a UUID PostgreSQL reads` |
+| `s VarChar(3) @default("toolong")` | `PSL_INVALID_DEFAULT_LITERAL`, `sql/varchar@1 JSON value must be a string of at most 3 characters` |
+| `n Numeric(5, 2) @default(1.555)` | `PSL_INVALID_DEFAULT_LITERAL`, `pg/numeric@1 JSON value must be a decimal string that numeric(5, 2) stores without rounding` |
+
+Give each enum member a value its codec takes, and each default a value its column's type holds unchanged. A `Uuid` default may be written in any form PostgreSQL reads: either case, with or without a hyphen after any group of four digits, and optionally in braces.
 
 ## `mongo-codecs-check-json`
 
@@ -106,6 +134,9 @@ An attribute inside a `type` block was ignored: `street String @default("x")` st
 - `EmissionSpi.resolveFieldTypeParams` is removed. A field's type parameters come from its domain type only; a family whose domain fields do not carry them puts them there when it builds the contract.
 - `generateFieldOutputTypesMap` from `@internal/emitter` takes `(models, codecLookup)`: its third parameter, the type-parameter resolver, is removed with the hook.
 - Code that calls a built-in codec's `decodeJson` must pass the stored JSON form of its type; another kind now throws `RUNTIME.DECODE_FAILED` with the codec id in `meta`. A codec an extension contributes should do the same: refuse a JSON value that is not a stored form of its type, and accept every form the database writes for it.
+- `pg/text-array@1`'s entry in the Postgres `CodecTypes` is `readonly (string | null)[]` where it was `readonly string[]`.
+- A SQLite codec descriptor adapted with `sqliteCodec(descriptor, options)` may set `options.codecParams`, the type parameters its codec is built with where SQLite does not enforce the column's own; the SQLite char and varchar descriptors use it to build their codecs without a length.
+- `readLiteralDefault(codec, value)` and `literalDefaultCodec(codecLookup, codecRef)` from `@internal/sql-relational-core/ast` turn a column's literal default into SQL NULL or the value to encode; a control adapter that renders DDL defaults should call them.
 - `mongoCodec` now requires `decodeJson` when the codec's application type is narrower than `JsonValue`, such as `string` or `number`; only a codec whose application type is exactly `JsonValue` may leave it out. A codec that leaves it out no longer compiles. Supply a `decodeJson` that refuses a JSON value of another kind with `RUNTIME.DECODE_FAILED`, such as one of the readers below.
 - `@internal/framework-components/codec` exports the JSON readers every family's codecs share: `decodeJsonString`, `decodeJsonMatching`, `decodeJsonBoolean`, `decodeJsonInteger` (with an `IntegerRange`), `decodeJsonIntegerText` (decimal text, with an optional `BigIntRange`), `decodeJsonFloat` and `encodeJsonFloat`, and `refuseJsonValue`, which raises the refusal they all raise: `RUNTIME.DECODE_FAILED`, `<codecId> JSON value must be <what it takes>`, with `meta.codecId` and `meta.received`, the value it got as JSON text, cut to 100 characters. The built-in codecs' refusals no longer say `database JSON value`.
 - Removed, with their replacements: `sqlFloatEncodeJson` and `sqlFloatDecodeJson` from `@internal/sql-relational-core/ast` (use `encodeJsonFloat` and `decodeJsonFloat(codecId, json)`); `decodeJsonString` and `decodeJsonBoolean` from `@internal/mongo-codec` (import them from `@internal/framework-components/codec`).

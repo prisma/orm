@@ -84,6 +84,23 @@ model Token {
     ]);
   });
 
+  it('a Numeric default the type would round is refused', async () => {
+    expect(
+      await diagnosticsOf(`
+model Price {
+  id Int            @id
+  n  Numeric(5, 2) @default(1.555)
+}
+`),
+    ).toEqual([
+      {
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        message:
+          'Field "Price.n": pg/numeric@1 JSON value must be a decimal string that numeric(5, 2) stores without rounding',
+      },
+    ]);
+  });
+
   it('an inferred integer enum member outside the int4 range is refused', async () => {
     expect(
       await diagnosticsOf(`
@@ -103,5 +120,46 @@ model Task {
           'enum "Priority" member "Low" was rejected by codec "pg/int@1": pg/int@1 JSON value must be an integer from -2147483648 to 2147483647',
       },
     ]);
+  });
+
+  describe('an enum member its @@type codec does not take', () => {
+    const enumOf = (members: string) => `
+enum Priority {
+${members}
+}
+
+model Task {
+  id Int @id
+}
+`;
+
+    it.each([
+      [
+        'a text member under an integer codec',
+        '  @@type("pg/int4@1")\n  Low = "low"',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/int4@1": pg/int4@1 JSON value must be an integer from -2147483648 to 2147483647',
+      ],
+      [
+        'a bare member under an integer codec',
+        '  @@type("pg/int4@1")\n  Low',
+        'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
+        'enum "Priority" member "Low" has no value and codec "pg/int4@1" does not accept a bare name as input',
+      ],
+      [
+        'a number member under a text codec',
+        '  @@type("pg/text@1")\n  Low = 1',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/text@1": pg/text@1 JSON value must be a string',
+      ],
+      [
+        'a fraction under an integer codec',
+        '  @@type("pg/int4@1")\n  Low = 1.5',
+        'PSL_EXTENSION_INVALID_VALUE',
+        'enum "Priority" member "Low" was rejected by codec "pg/int4@1": pg/int4@1 JSON value must be an integer from -2147483648 to 2147483647',
+      ],
+    ])('refuses %s', async (_name, members, code, message) => {
+      expect(await diagnosticsOf(enumOf(members))).toEqual([{ code, message }]);
+    });
   });
 });
