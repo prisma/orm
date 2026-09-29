@@ -1,15 +1,26 @@
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
 
 function build(source: string) {
   const { document, sources } = parse(source, 'schema.prisma');
-  return buildSymbolTable({
-    documents: [document],
+  const result = buildSymbolTable({ documents: [document], sources });
+  const { binder } = createBinder({
     sources,
+    symbolTable: result.symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
     pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
   });
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
+    pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+    binder,
+  });
+  return { ...result, blockDiagnostics, parsedBlocks };
 }
 
 describe('enum @@type through the family descriptor', () => {
@@ -17,20 +28,26 @@ describe('enum @@type through the family descriptor', () => {
     const result = build('enum Role {\n  @@type("pg/text@1")\n  Admin\n}');
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.symbolTable.topLevel.blocks['Role']?.block.attributes['type']?.args).toEqual({
+    const block = result.symbolTable.topLevel.blocks['Role'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(result.parsedBlocks.get(block)?.attributes['type']?.args).toEqual({
       codecId: 'pg/text@1',
     });
   });
 
-  it('rejects a non-string argument at symbol-table time', () => {
+  it('rejects a non-string argument when the blocks are resolved', () => {
     const result = build('enum Role {\n  @@type(foo)\n  Admin\n}');
 
-    expect(result.diagnostics).toEqual([
+    expect(result.blockDiagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Expected a string literal',
       }),
     ]);
-    expect(result.symbolTable.topLevel.blocks['Role']?.block.attributes).toEqual({});
+    const block = result.symbolTable.topLevel.blocks['Role'];
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(result.parsedBlocks.has(block)).toBe(false);
   });
 });

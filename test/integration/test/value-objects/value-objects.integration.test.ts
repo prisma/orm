@@ -80,7 +80,6 @@ function interpretMongoPsl(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
     documents: [document],
@@ -109,7 +108,6 @@ function interpretSqlPsl(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
     documents: [document],

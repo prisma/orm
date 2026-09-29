@@ -45,10 +45,6 @@ export interface PrintedContract {
   readonly sourceSettings: PslSourceSettings;
 }
 
-/**
- * Prints a contract as PSL text the way `contract print` does: through the SQL family instance
- * created from the stack, then the PSL printer with the stack's block descriptors and codecs.
- */
 export function printContract(
   contract: Contract<SqlStorage>,
   stack: PostgresStack = composePostgresStack(),
@@ -57,7 +53,6 @@ export function printContract(
   return {
     text: printPsl(document, {
       pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
-      codecLookup: stack.codecLookup,
     }),
     sourceSettings,
   };

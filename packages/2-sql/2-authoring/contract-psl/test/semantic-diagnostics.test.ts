@@ -15,7 +15,6 @@ it('pushes owned default diagnostics with filename and range rather than a provi
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const model = symbolTable.topLevel.models['User'];
   const field = model?.fields['id'];

@@ -4,18 +4,12 @@ import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import { computeDocumentDiagnostics } from '../src/document-diagnostics';
-import type { PipelineInputs } from '../src/pipeline';
 import { resolveSchemaInputs } from '../src/schema-inputs';
 
 const schemaUri = pathToFileURL('/abs/schema.psl').toString();
 const inputs = resolveSchemaInputs({
   contract: { source: { format: 'psl', inputs: ['/abs/schema.psl'] } },
 });
-
-const controlStack: PipelineInputs = {
-  scalarTypes: ['String', 'Int', 'Boolean', 'DateTime'],
-  pslBlockDescriptors: {},
-};
 
 const directive = '// use prisma-8';
 
@@ -33,7 +27,7 @@ const duplicateModelSource = [
 describe('computeDocumentDiagnostics', () => {
   it('publishes parser diagnostics for a configured PSL input with a parse error', () => {
     const source = '// use prisma-8\nmodel {';
-    const result = computeDocumentDiagnostics(schemaUri, source, inputs, controlStack);
+    const result = computeDocumentDiagnostics(schemaUri, source, inputs);
     expect(result).not.toBeNull();
     expect(result?.diagnostics).toEqual(
       mapParseDiagnostics(parse(source, 'language-server-test.psl').diagnostics),
@@ -46,29 +40,23 @@ describe('computeDocumentDiagnostics', () => {
       schemaUri,
       '// use prisma-8\nmodel User {\n  id Int @id\n}\n',
       inputs,
-      controlStack,
     );
     expect(result?.diagnostics).toEqual([]);
   });
 
   it('returns null for a document that is not a configured input', () => {
     const otherUri = pathToFileURL('/abs/not-a-schema.psl').toString();
-    const result = computeDocumentDiagnostics(otherUri, 'model {', inputs, controlStack);
+    const result = computeDocumentDiagnostics(otherUri, 'model {', inputs);
     expect(result).toBeNull();
   });
 
   it('returns null for a configured input without the prisma-8 directive', () => {
-    const result = computeDocumentDiagnostics(schemaUri, 'model {', inputs, controlStack);
+    const result = computeDocumentDiagnostics(schemaUri, 'model {', inputs);
     expect(result).toBeNull();
   });
 
   it('runs the symbol-table tier and reports a duplicate top-level declaration', () => {
-    const result = computeDocumentDiagnostics(
-      schemaUri,
-      duplicateModelSource,
-      inputs,
-      controlStack,
-    );
+    const result = computeDocumentDiagnostics(schemaUri, duplicateModelSource, inputs);
     expect(result?.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
       'PSL_DUPLICATE_DECLARATION',
     );
@@ -84,10 +72,9 @@ describe('computeDocumentDiagnostics', () => {
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
 
-    const result = computeDocumentDiagnostics(schemaUri, source, inputs, controlStack);
+    const result = computeDocumentDiagnostics(schemaUri, source, inputs);
 
     expect(result?.diagnostics).toEqual(
       mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
@@ -99,7 +86,6 @@ describe('computeDocumentDiagnostics', () => {
       schemaUri,
       '// use prisma-8\nmodel User {\n  id Int @id\n}\n',
       inputs,
-      controlStack,
     );
     expect(result?.document).toBeDefined();
     expect(result?.sourceFile).toBeDefined();
@@ -108,19 +94,12 @@ describe('computeDocumentDiagnostics', () => {
 
   it('returns null for a document that is not a configured input', () => {
     const otherUri = pathToFileURL('/abs/not-a-schema.psl').toString();
-    expect(
-      computeDocumentDiagnostics(otherUri, duplicateModelSource, inputs, controlStack),
-    ).toBeNull();
+    expect(computeDocumentDiagnostics(otherUri, duplicateModelSource, inputs)).toBeNull();
   });
 
   it('does not throw on a malformed, half-typed buffer', () => {
     expect(() =>
-      computeDocumentDiagnostics(
-        schemaUri,
-        '// use prisma-8\nmodel User {\n  id ',
-        inputs,
-        controlStack,
-      ),
+      computeDocumentDiagnostics(schemaUri, '// use prisma-8\nmodel User {\n  id ', inputs),
     ).not.toThrow();
   });
 });

@@ -1,7 +1,7 @@
 import type { ContractEnum } from '@internal/contract/types';
 import type {
   PslExtensionBlock,
-  PslExtensionBlockParamValue,
+  PslExtensionBlockPrintEntry,
 } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { escapePslString } from '@internal/sql-relational-core/ast';
@@ -25,12 +25,9 @@ export function buildDomainEnumBlocks(
   return Object.entries(enums).map(([name, domainEnum]): PslExtensionBlock => {
     refuseUnwritableName('enum', name);
     const parameters = Object.fromEntries(
-      domainEnum.members.map((member): [string, PslExtensionBlockParamValue] => {
+      domainEnum.members.map((member): [string, PslExtensionBlockPrintEntry] => {
         refuseUnwritableName('enum member', member.name);
-        return [
-          member.name,
-          { kind: 'value', raw: JSON.stringify(member.value), span: SYNTHETIC_SPAN },
-        ];
+        return [member.name, { expression: JSON.stringify(member.value), span: SYNTHETIC_SPAN }];
       }),
     );
     return {
@@ -51,7 +48,6 @@ export function buildDomainEnumBlocks(
           span: SYNTHETIC_SPAN,
         },
       ],
-      attributes: { type: { args: { codec: domainEnum.codecId }, span: SYNTHETIC_SPAN } },
       span: SYNTHETIC_SPAN,
     };
   });

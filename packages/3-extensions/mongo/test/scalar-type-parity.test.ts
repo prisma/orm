@@ -56,7 +56,6 @@ function emit(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToMongoContract({
     documents: [document],
@@ -221,7 +220,6 @@ describe('deprecated Mongo scalar names through the PSL contract source', () => 
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
     });
     const warnings: ContractSourceDiagnostic[] = [];
     const source = mongoContract('schema.prisma').source;

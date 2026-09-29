@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-toolchain",
-  "version": "8.0.0-rc.12",
+  "version": "8.0.0-rc.13",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.12",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.13",
     "@vercel/detect-agent": "^1.2.4",
     "arktype": "catalog:",
     "c12": "^3.3.4",
@@ -35,16 +35,16 @@
     "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
-    "@internal/cli": "workspace:8.0.0-rc.12",
-    "@internal/cli-telemetry": "workspace:8.0.0-rc.12",
-    "@internal/config-loader": "workspace:8.0.0-rc.12",
-    "@internal/emitter": "workspace:8.0.0-rc.12",
-    "@internal/language-server": "workspace:8.0.0-rc.12",
-    "@internal/migration-tools": "workspace:8.0.0-rc.12",
-    "@internal/publish-surface": "workspace:8.0.0-rc.12",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
-    "@repo/tsdown": "workspace:8.0.0-rc.12",
-    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.12",
+    "@internal/cli": "workspace:8.0.0-rc.13",
+    "@internal/cli-telemetry": "workspace:8.0.0-rc.13",
+    "@internal/config-loader": "workspace:8.0.0-rc.13",
+    "@internal/emitter": "workspace:8.0.0-rc.13",
+    "@internal/language-server": "workspace:8.0.0-rc.13",
+    "@internal/migration-tools": "workspace:8.0.0-rc.13",
+    "@internal/publish-surface": "workspace:8.0.0-rc.13",
+    "@repo/tsconfig": "workspace:8.0.0-rc.13",
+    "@repo/tsdown": "workspace:8.0.0-rc.13",
+    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.13",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },

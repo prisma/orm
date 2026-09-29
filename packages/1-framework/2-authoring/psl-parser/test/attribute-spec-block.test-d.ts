@@ -121,7 +121,7 @@ test('fieldRef and referencedFieldRef expose distinct context metadata', () => {
   expectTypeOf(referencedField.kind).toEqualTypeOf<'referencedFieldRef'>();
 });
 
-test('a block spec is accepted where a bare-ctx spec is expected', () => {
+test('a block spec is accepted where a binder-ctx spec is expected', () => {
   const blockSpec = blockAttribute('map', {
     documentation: 'Declares a block attribute for argument binding.',
     positional: [

@@ -38,7 +38,6 @@ function parseSemanticTokenSource(source: string): ParsedSemanticTokenSource {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { document, sourceFile, symbolTable, scalarTypes };
 }

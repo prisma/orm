@@ -1,3 +1,4 @@
+import { structBlock } from '@internal/psl-parser';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -544,7 +545,7 @@ model Doc {
         keyword: 'test_block',
         discriminator: 'test-custom-block',
         name: { required: true },
-        parameters: {},
+        spec: () => structBlock({ parameters: {} }),
       },
     };
     const authoringContributions = {
@@ -579,7 +580,6 @@ namespace public {
 }
 `,
       sourceId: 'schema.prisma',
-      pslBlockDescriptors,
     });
 
     const result = interpretPslDocumentToSqlContract({
@@ -612,7 +612,7 @@ namespace public {
         keyword: 'top_thing',
         discriminator: 'top-thing',
         name: { required: true },
-        parameters: {},
+        spec: () => structBlock({ parameters: {} }),
       },
     };
     const topThingAuthoringContributions = {
@@ -648,7 +648,6 @@ model Foo {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: topThingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -696,7 +695,6 @@ namespace auth {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: topThingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -745,7 +743,6 @@ namespace auth {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: topThingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -777,7 +774,7 @@ namespace auth {
         keyword: 'thing',
         discriminator: 'thing',
         name: { required: true },
-        parameters: {},
+        spec: () => structBlock({ parameters: {} }),
       },
     };
     const thingAuthoringContributions = {
@@ -804,7 +801,6 @@ namespace __unbound__ {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: thingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({
@@ -847,7 +843,6 @@ namespace __unbound__ {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: thingPslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({

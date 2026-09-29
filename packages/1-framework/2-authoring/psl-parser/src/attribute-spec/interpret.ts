@@ -192,7 +192,7 @@ function parseArgValue<Ctx extends AttributeCtx>(
   return argType.parse(value, ctx);
 }
 
-function isOptionalArgType<Ctx extends AttributeCtx>(
+export function isOptionalArgType<Ctx extends AttributeCtx>(
   param: ArgType<unknown, Ctx>,
 ): param is OptionalArgType<unknown, Ctx> {
   return 'optional' in param && param.optional === true;

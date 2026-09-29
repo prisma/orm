@@ -16,7 +16,6 @@ function modelSymbolFor(source: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { symbolTable, model: symbolTable.topLevel.models['Widget'] };
 }

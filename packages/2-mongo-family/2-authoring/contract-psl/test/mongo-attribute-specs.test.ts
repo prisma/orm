@@ -3,8 +3,6 @@ import type {
   AttributeCtx,
   AttributeSpecContext,
   FieldAttributeSpecContext,
-  FuncCallSig,
-  ModelAttributeCtx,
   ModelSymbol,
   Param,
   ResolvedEntityReference,
@@ -19,45 +17,24 @@ import {
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
 
-interface ListMetadata<T, Ctx extends AttributeCtx> extends ArgType<readonly T[], Ctx> {
-  readonly kind: 'list';
-  readonly of: ArgType<T, Ctx>;
-  readonly allowEmpty: boolean;
-}
-
-interface RecordMetadata<T, Ctx extends AttributeCtx> extends ArgType<Record<string, T>, Ctx> {
-  readonly kind: 'record';
-  readonly of: ArgType<T, Ctx>;
-}
-
-interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'oneOf';
-  readonly alternatives: readonly ArgType<unknown, Ctx>[];
-}
-
-interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'funcCall';
-  readonly name: string;
-  readonly signature: FuncCallSig;
-}
-
-function listMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): ListMetadata<T, Ctx> {
+function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'list') throw new Error('argument is a list');
-  return type as unknown as ListMetadata<T, Ctx>;
+  return type;
 }
 
-function recordMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): RecordMetadata<T, Ctx> {
+function recordMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'record') throw new Error('argument is a record');
-  return type as unknown as RecordMetadata<T, Ctx>;
+  return type;
 }
 
-function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): OneOfMetadata<Ctx> {
+function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'oneOf') throw new Error('argument is oneOf');
-  return type as unknown as OneOfMetadata<Ctx>;
+  return type;
+}
+
+function funcCallMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx> | undefined) {
+  if (type?.kind !== 'funcCall') throw new Error('argument is a function call');
+  return type;
 }
 
 function positionalType<Ctx extends AttributeCtx>(spec: {
@@ -90,7 +67,6 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   const model = symbolTable.topLevel.models['Widget'];
   const field = model?.fields['name'];
@@ -117,7 +93,6 @@ model Base { id String }`,
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     const model = symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
@@ -201,14 +176,12 @@ model Base { id String }`,
 
   it('exposes model-specific index field alternatives from the actual factory', () => {
     const { model } = contexts();
-    const fields = listMetadata<string | unknown, ModelAttributeCtx>(
-      positionalType(mongoAttributeSpecs.model.index(model)),
-    );
+    const fields = listMetadata(positionalType(mongoAttributeSpecs.model.index(model)));
     const element = oneOfMetadata(fields.of);
 
     expect(fields).toMatchObject({ kind: 'list', allowEmpty: false });
     expect(element.alternatives[0]).toMatchObject({ kind: 'fieldRef' });
-    const wildcard = element.alternatives[1] as FuncCallMetadata<ModelAttributeCtx>;
+    const wildcard = funcCallMetadata(element.alternatives[1]);
     expect(wildcard).toMatchObject({ kind: 'funcCall', name: 'wildcard' });
     expect(wildcard.signature.positional?.[0]).toMatchObject({ key: 'scope' });
     expect(wildcard.signature.positional?.[0]?.type).toMatchObject({
@@ -216,11 +189,12 @@ model Base { id String }`,
       name: undefined,
       optional: true,
     });
-    expect(
-      element.alternatives.slice(2).map((alt) => (alt as FuncCallMetadata<ModelAttributeCtx>).name),
-    ).toEqual(['id', 'name']);
+    expect(element.alternatives.slice(2).map((alt) => funcCallMetadata(alt).name)).toEqual([
+      'id',
+      'name',
+    ]);
 
-    const nameField = element.alternatives[3] as FuncCallMetadata<ModelAttributeCtx>;
+    const nameField = funcCallMetadata(element.alternatives[3]);
     const sort = nameField.signature.named?.['sort'];
     if (sort === undefined) throw new Error('field sort argument is present');
     expect(nameField.signature.documentation).toBe(
@@ -246,13 +220,11 @@ model Base { id String }`,
       expect.objectContaining({ kind: 'str', value: 'hashed' }),
     ]);
 
-    const include = listMetadata<string, ModelAttributeCtx>(
-      namedType(mongoAttributeSpecs.model.index(model), 'include'),
-    );
+    const include = listMetadata(namedType(mongoAttributeSpecs.model.index(model), 'include'));
     expect(include).toMatchObject({ kind: 'list', optional: true });
     expect(include.of).toMatchObject({ kind: 'str', value: undefined });
 
-    const weights = recordMetadata<number, ModelAttributeCtx>(
+    const weights = recordMetadata(
       namedType(mongoAttributeSpecs.model.textIndex(model), 'weights'),
     );
     expect(weights).toMatchObject({ kind: 'record', optional: true });

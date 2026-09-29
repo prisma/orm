@@ -72,7 +72,6 @@ function pslIndexes() {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const result = interpretPslDocumentToSqlContract({
     documents: [document],

@@ -35,7 +35,6 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: modelSources,
-    pslBlockDescriptors: {},
   });
   const selfModel = symbolTable.topLevel.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
@@ -60,7 +59,6 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources: registry,
-    pslBlockDescriptors: {},
   });
   const model = symbolTable.topLevel.models['Post'];
   if (!model) throw new Error('expected model Post');
@@ -601,11 +599,13 @@ describe('oneOf', () => {
     const { expr, ctx } = argOf('Cascade');
     const first: ArgType<'first', AttributeCtx> = {
       kind: 'str',
+      value: undefined,
       label: 'first',
       parse: () => ok('first'),
     };
     const second: ArgType<'second', AttributeCtx> = {
       kind: 'str',
+      value: undefined,
       label: 'second',
       parse: () => ok('second'),
     };
@@ -755,7 +755,6 @@ describe('entityRef', () => {
     const { symbolTable } = buildSymbolTable({
       documents: [document],
       sources,
-      pslBlockDescriptors: {},
     });
     const selfModel = symbolTable.topLevel.models['M'];
     const field = selfModel?.fields['id'];

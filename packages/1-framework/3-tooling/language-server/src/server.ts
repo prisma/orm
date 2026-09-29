@@ -332,7 +332,6 @@ function createServerOn(connection: Connection): LanguageServer {
     // new resolution rather than anything computed under the old one.
     const artifacts = createProjectArtifacts({
       inputs: resolution.inputs,
-      controlStack: resolution.controlStack,
       getDocument,
       onInterpretationError: (uri, error) => {
         const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
