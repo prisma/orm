@@ -31,8 +31,13 @@ export class FunctionCallAst implements AstNode {
    * `['address', 'geo', 'lat']`. Empty when the call carries no identifier.
    */
   path(): readonly string[] {
-    const callee = this.name() ?? findFirstChild(this.syntax, PathExprAst.cast);
+    const callee = this.name() ?? this.memberPath();
     return segmentNames(callee?.syntax ?? this.syntax);
+  }
+
+  /** The callee when it is a member path with more than one dot, such as `address.geo.lat(…)`; `undefined` otherwise. */
+  memberPath(): PathExprAst | undefined {
+    return findFirstChild(this.syntax, PathExprAst.cast);
   }
 
   lparen(): SyntaxToken | undefined {
