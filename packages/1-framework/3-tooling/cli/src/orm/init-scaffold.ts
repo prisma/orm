@@ -141,11 +141,9 @@ export interface ScaffoldOutcome {
  * `devDependencies`. Transitive presence is deliberately ignored: detecting it
  * needs the lockfile, and the realistic risk is a direct pin being clobbered.
  */
-function declaresDependencies(parsed: Record<string, unknown> | null): boolean {
-  return ['dependencies', 'devDependencies'].some((field) => {
-    const value = parsed?.[field];
-    return value !== null && typeof value === 'object' && Object.keys(value).length > 0;
-  });
+function declaresRuntimeDependencies(parsed: Record<string, unknown> | null): boolean {
+  const value = parsed?.['dependencies'];
+  return value !== null && typeof value === 'object' && Object.keys(value).length > 0;
 }
 
 function hasDirectDep(parsed: Record<string, unknown>, name: string): boolean {
@@ -379,7 +377,7 @@ function planScaffold(ctx: {
       changed = true;
     }
     const { content: withType, warning: typeWarning } = ensureEsmModuleType(working, {
-      existingProject: manifestExisted && declaresDependencies(parsedManifest),
+      existingProject: manifestExisted && declaresRuntimeDependencies(parsedManifest),
     });
     if (withType !== null) {
       working = withType;

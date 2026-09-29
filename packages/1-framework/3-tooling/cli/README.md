@@ -107,7 +107,7 @@ It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")
 - From a Prisma 7 config init reads only `schema`. The new config connects with `process.env['DATABASE_URL']!`: copying the Prisma 7 `datasource.url` expression would need a TypeScript rewrite of user code, and matching its resolved value back to an environment variable assumes the URL came from one.
 - Init's files go under `src/prisma/`, where a fresh init puts them, so an upgraded project is shaped like a new one. `prisma/` belongs to Prisma 7.
 - The Prisma 7-specific edits (renaming the config, changing its import, rewriting scripts that call `prisma`, moving the Prisma 7 packages) all happen under one consent; the file merges a fresh init makes happen as usual. Renaming the config alone would leave scripts calling a `prisma` binary that is now Prisma 8, and `@prisma/client` moves with the Prisma 7 CLI because Prisma 7 requires both at the same version.
-- `package.json#type` and `tsconfig.json` are handled as on a fresh init (an existing project that declares dependencies keeps its module type); see [TypeScript module settings for Prisma 8 projects](../../../../docs/reference/typescript-module-settings.md).
+- `package.json#type` and `tsconfig.json` are handled as on a fresh init (an existing project that declares `dependencies` keeps its module type); see [TypeScript module settings for Prisma 8 projects](../../../../docs/reference/typescript-module-settings.md).
 - There is no cutover step. The next steps list only what the user runs right after init.
 
 **Exit codes:**

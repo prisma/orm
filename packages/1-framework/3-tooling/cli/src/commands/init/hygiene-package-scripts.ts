@@ -143,7 +143,7 @@ export interface EsmModuleTypeResult {
 export function ensureEsmModuleType(
   existing: string,
   options: {
-    /** An app that already declares dependencies: its `type` is left alone, since changing it changes how the app's own files load. */
+    /** An app that already declares runtime dependencies: its `type` is left alone, since changing it changes how the app's own files load. */
     readonly existingProject: boolean;
   } = { existingProject: false },
 ): EsmModuleTypeResult {
@@ -161,7 +161,7 @@ export function ensureEsmModuleType(
     return {
       content: null,
       warning:
-        'package.json declares no "type", so Node loads the project\'s .js files as CommonJS. init leaves that alone, because setting it would change how the project\'s own files load. The scaffolded db.ts uses an ESM-only import attribute (`with { type: \'json\' }`) and loads only as an ES module: set "type": "module" in package.json when the project is ready for it.',
+        'package.json declares no "type", so Node loads the project\'s .js files as CommonJS. init leaves that alone, because setting it would change how the project\'s own files load. The scaffolded db.ts is an ES module (it imports the contract with `with { type: \'json\' }`): Node still loads it, and CommonJS code can require it, but Node prints a MODULE_TYPELESS_PACKAGE_JSON warning and reparses the file as an ES module; a TypeScript runner such as tsx loads it without the warning. Set "type": "module" in package.json when the project is ready for it, and the warning goes away.',
     };
   }
 

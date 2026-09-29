@@ -119,9 +119,28 @@ describe('init scaffold', () => {
         expect(manifest).not.toHaveProperty('type');
         expect(run.presented?.data).toMatchObject({
           warnings: expect.arrayContaining([
-            expect.stringContaining('package.json declares no "type"'),
+            expect.stringMatching(
+              /^package\.json declares no "type".*MODULE_TYPELESS_PACKAGE_JSON warning/,
+            ),
           ]),
         });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'sets the module type of a TypeScript project that declares only devDependencies',
+      async () => {
+        writeFileSync(
+          join(projectDir, 'package.json'),
+          `${JSON.stringify({ name: 'app', devDependencies: { typescript: '^5.9.0', tsx: '^4.0.0' } }, null, 2)}\n`,
+          'utf-8',
+        );
+
+        await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+
+        expect(manifest).toMatchObject({ type: 'module' });
       },
       timeouts.coldTransformImport,
     );
