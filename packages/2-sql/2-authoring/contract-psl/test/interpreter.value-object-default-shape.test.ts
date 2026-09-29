@@ -146,6 +146,19 @@ describe('a default on a value-object field matches its composite type', () => {
     ]);
   });
 
+  it('refuses an enum member value that is not a value of the enum', () => {
+    expect(
+      diagnosticsOf(
+        '  a Amounts @default(json`{"price": "1.5", "cents": "1.50", "big": "1", "payload": {}, "role": "Z"}`)',
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Field "User.a.role": Expected one of: "a" | "b"',
+      },
+    ]);
+  });
+
   it('accepts JSON null as the default of an optional value object or list of them, and refuses it on a required one', () => {
     expect(
       diagnosticsOf(`  a Address?   @default(json\`null\`)

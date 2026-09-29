@@ -133,7 +133,12 @@ export function valueObjectDefaultMismatches(
       codecLookup: input.codecLookup,
       fieldPath: path,
     });
-    if (!read.ok) mismatches.push({ code: read.code, message: read.message });
+    if (!read.ok) {
+      mismatches.push({ code: read.code, message: read.message });
+      return;
+    }
+    const enumMismatch = enumValueMismatch(value, member, path, input.codecLookup);
+    if (enumMismatch !== undefined) mismatches.push(enumMismatch);
   };
 
   if (input.value === null) {
@@ -168,6 +173,28 @@ export function valueObjectDefaultMismatches(
   }
   checkObject(input.value, input.valueObjectName, input.fieldPath);
   return mismatches;
+}
+
+/**
+ * A member typed by an enum takes only the enum's values, in the form its codec stores them, as a model field of that enum takes only its members.
+ */
+function enumValueMismatch(
+  value: JsonValue,
+  member: ScalarMemberNode,
+  path: string,
+  codecLookup: CodecLookup | undefined,
+): ValueObjectDefaultMismatch | undefined {
+  const handle = member.enumTypeHandle;
+  if (handle === undefined) return undefined;
+  const codec = codecLookup?.get(handle.codecId);
+  const stored = handle.values.map((enumValue) =>
+    codec === undefined ? enumValue : codec.encodeJson(enumValue),
+  );
+  if (stored.some((storedValue) => storedValue === value)) return undefined;
+  return {
+    code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+    message: `Field "${path}": Expected one of: ${stored.map((storedValue) => JSON.stringify(storedValue)).join(' | ')}`,
+  };
 }
 
 function dataTypeOf(codecId: string, codecLookup: CodecLookup | undefined): DataTypeId {
