@@ -5,7 +5,6 @@ export interface FidelityRow {
   readonly storageType: string;
   readonly written: string;
   readonly expect: FidelityExpectation;
-  readonly knownBug?: string;
 }
 
 const literal = (name: string, storageType: string, written: string): FidelityRow => ({
@@ -34,11 +33,6 @@ const fn = (
   expect: { function: canonical },
 });
 
-export const knownBug = (row: FidelityRow, reason: string): FidelityRow => ({
-  ...row,
-  knownBug: reason,
-});
-
 export const enumTypes = [{ name: 'Role', values: ['USER', 'ADMIN'] }] as const;
 
 export const rows: readonly FidelityRow[] = [
@@ -55,6 +49,7 @@ export const rows: readonly FidelityRow[] = [
   literal('text_cast', 'text', "'x'::text"),
   literal('varchar_plain', 'varchar(10)', "'abc'"),
   literal('varchar_quote', 'varchar(10)', "'a''b'"),
+  literal('varchar_full', 'varchar(3)', "'abc'"),
   literal('char_full', 'char(3)', "'abc'"),
   literal('char_padded', 'char(3)', "'ab'"),
   literal('bool_true', 'boolean', 'true'),

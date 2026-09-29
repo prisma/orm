@@ -49,27 +49,75 @@ function columnCodec(nativeType: string): Codec {
   }
   return materializeCodec(descriptor, { codecId }, { name: `<fidelity:${codecId}>` });
 }
-
 type PgClient = Parameters<Parameters<typeof withClient>[1]>[0];
+
+interface Oracle {
+  readonly client: PgClient;
+  /** A temporary table per element type, with one column `v` of that type. */
+  readonly tables: ReadonlyMap<string, string>;
+}
 
 const JSON_ELEMENT_TYPES: ReadonlySet<string> = new Set(['json', 'jsonb']);
 
+const elementTypeOf = (storageType: string): string => storageType.replace(/\[\]$/, '');
+
 /*
- * Each parse is compared with the stored value on its own. Both sides go through the column codec's
- * JSON form, so a value of the wrong JSON type fails. Postgres then reads each string in the
- * column's element type and prints it back (`CAST(value AS type)::text`), so two spellings of one
- * value agree; json and jsonb values compare by deep equality. The stored value is split into
- * elements by `postgres-array`, not by the parser under test.
+ * Each parse is compared with the stored value on its own, and Postgres decides equality. A string
+ * is stored in a column of the element type and read back (`INSERT ... RETURNING v::text`), so two
+ * spellings of one value agree and a value the column refuses fails. Before that, both sides go
+ * through the column codec's JSON form, so a value of the wrong JSON type fails. json and jsonb
+ * values are compared as jsonb text instead: the parsed value is sent as `JSON.stringify(value)`,
+ * and the stored text is used as Postgres prints it, because the json codec reads numbers into
+ * JavaScript numbers. A stored array is split into elements by `postgres-array`, not by the parser
+ * under test.
  */
-async function storedAsJson(stored: string | null, nativeType: string): Promise<JsonValue> {
+async function storedValue(
+  oracle: Oracle,
+  stored: string | null,
+  storageType: string,
+  nativeType: string,
+): Promise<JsonValue> {
   if (stored === null) return null;
+  const many = storageType.endsWith('[]');
+  if (JSON_ELEMENT_TYPES.has(elementTypeOf(storageType))) {
+    if (!many) return asJsonb(oracle, stored);
+    const elements: JsonValue[] = [];
+    for (const element of parsePostgresListText(stored)) {
+      elements.push(typeof element === 'string' ? await asJsonb(oracle, element) : null);
+    }
+    return elements;
+  }
   const codec = columnCodec(nativeType);
-  if (!nativeType.endsWith('[]')) return codec.encodeJson(await codec.decode(stored, {}));
+  if (!many) return inColumn(oracle, codec.encodeJson(await codec.decode(stored, {})), storageType);
   const elements: JsonValue[] = [];
   for (const element of parsePostgresListText(stored)) {
     elements.push(element === null ? null : codec.encodeJson(await codec.decode(element, {})));
   }
-  return elements;
+  return inColumn(oracle, elements, storageType);
+}
+
+async function parsedValue(
+  oracle: Oracle,
+  parsed: ColumnDefault | undefined,
+  storageType: string,
+  nativeType: string,
+): Promise<Compared> {
+  if (parsed?.kind !== 'literal') return parsed;
+  const { value } = parsed;
+  if (value instanceof Date) return parsed;
+  try {
+    if (!JSON_ELEMENT_TYPES.has(elementTypeOf(storageType))) {
+      return await inColumn(oracle, literalAsJson(value, nativeType), storageType);
+    }
+    if (!storageType.endsWith('[]') || !Array.isArray(value)) {
+      return await asJsonb(oracle, JSON.stringify(value));
+    }
+    const elements: JsonValue[] = [];
+    for (const element of value) elements.push(await asJsonb(oracle, JSON.stringify(element)));
+    return elements;
+  } catch (error) {
+    return { rejected: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function literalAsJson(value: JsonValue, nativeType: string): JsonValue {
@@ -83,43 +131,49 @@ function literalAsJson(value: JsonValue, nativeType: string): JsonValue {
   );
 }
 
-async function inColumnType(
-  client: PgClient,
-  json: JsonValue,
-  storageType: string,
-): Promise<JsonValue> {
-  const many = storageType.endsWith('[]');
-  const elementType = many ? storageType.slice(0, -2) : storageType;
-  const printed = async (value: JsonValue): Promise<JsonValue> => {
-    if (typeof value !== 'string' || JSON_ELEMENT_TYPES.has(elementType)) return value;
-    const result = await client.query<{ value: string }>(
-      `SELECT CAST($1::text AS ${elementType})::text AS value`,
-      [value],
+async function inColumn(oracle: Oracle, json: JsonValue, storageType: string): Promise<JsonValue> {
+  const elementType = elementTypeOf(storageType);
+  const table = oracle.tables.get(elementType);
+  if (table === undefined) throw new Error(`no table for ${elementType}`);
+  const stored = async (value: JsonValue): Promise<JsonValue> => {
+    if (typeof value !== 'string') return value;
+    return singleValue(
+      oracle,
+      `INSERT INTO pg_temp.${table} (v) VALUES ($1) RETURNING v::text AS value`,
+      value,
     );
-    const [row] = result.rows;
-    if (row === undefined) throw new Error(`CAST to ${elementType} returned no row`);
-    return row.value;
   };
-  if (!many || !Array.isArray(json)) return printed(json);
+  if (!storageType.endsWith('[]') || !Array.isArray(json)) return stored(json);
   const elements: JsonValue[] = [];
-  for (const element of json) elements.push(await printed(element));
+  for (const element of json) elements.push(await stored(element));
   return elements;
 }
 
-async function parsedInColumnType(
-  client: PgClient,
-  parsed: ColumnDefault | undefined,
-  nativeType: string,
-  storageType: string,
-): Promise<Compared> {
-  if (parsed?.kind !== 'literal') return parsed;
-  const { value } = parsed;
-  if (value instanceof Date) return parsed;
-  try {
-    return await inColumnType(client, literalAsJson(value, nativeType), storageType);
-  } catch (error) {
-    return { rejected: error instanceof Error ? error.message : String(error) };
+function asJsonb(oracle: Oracle, text: string): Promise<string> {
+  return singleValue(oracle, 'SELECT $1::jsonb::text AS value', text);
+}
+
+async function singleValue(oracle: Oracle, sql: string, parameter: string): Promise<string> {
+  const result = await oracle.client.query<{ value: string }>(sql, [parameter]);
+  const [row] = result.rows;
+  if (row === undefined) throw new Error(`no row from ${sql}`);
+  return row.value;
+}
+
+async function createOracle(client: PgClient): Promise<Oracle> {
+  const elementTypes = new Set(
+    rows
+      .filter((row) => row.expect === 'literal')
+      .map((row) => elementTypeOf(row.storageType))
+      .filter((elementType) => !JSON_ELEMENT_TYPES.has(elementType)),
+  );
+  const tables = new Map<string, string>();
+  for (const elementType of elementTypes) {
+    const table = `assign_${tables.size}`;
+    await client.query(`CREATE TEMPORARY TABLE ${table} (v ${elementType})`);
+    tables.set(elementType, table);
   }
+  return { client, tables };
 }
 
 async function observe(): Promise<ReadonlyMap<string, Observation>> {
@@ -151,6 +205,7 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
       );
       const [storedRow] = stored.rows;
       if (storedRow === undefined) throw new Error('INSERT ... DEFAULT VALUES stored no row');
+      const oracle = await createOracle(client);
       const byName = new Map(catalog.rows.map((column) => [column.columnName, column]));
       const observations = new Map<string, Observation>();
       for (const row of rows) {
@@ -168,13 +223,9 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
         const values =
           row.expect === 'literal'
             ? {
-                live: await parsedInColumnType(client, live, nativeType, row.storageType),
-                contract: await parsedInColumnType(client, contract, nativeType, row.storageType),
-                stored: await inColumnType(
-                  client,
-                  await storedAsJson(storedText, nativeType),
-                  row.storageType,
-                ),
+                live: await parsedValue(oracle, live, row.storageType, nativeType),
+                contract: await parsedValue(oracle, contract, row.storageType, nativeType),
+                stored: await storedValue(oracle, storedText, row.storageType, nativeType),
               }
             : undefined;
         observations.set(row.name, {
@@ -202,7 +253,7 @@ describe('default parser against the value Postgres stores', () => {
     return found;
   }
 
-  function check(row: FidelityRow): void {
+  it.each(rows.map((row) => [row.name, row] as const))('%s', (_name, row) => {
     const { columnDefault, live, contract, values } = observation(row);
     if (row.expect === 'raw') {
       expect({ live, contract }).toEqual({
@@ -221,21 +272,5 @@ describe('default parser against the value Postgres stores', () => {
       live: values.stored,
       contract: values.stored,
     });
-  }
-
-  const agreeing = rows.filter((row) => row.knownBug === undefined);
-  const disagreeing = rows.filter((row) => row.knownBug !== undefined);
-
-  it.each(agreeing.map((row) => [row.name, row] as const))('%s', (_name, row) => {
-    check(row);
   });
-
-  if (disagreeing.length > 0) {
-    it.fails.each(disagreeing.map((row) => [`${row.name}: ${row.knownBug}`, row] as const))(
-      '%s',
-      (_name, row) => {
-        check(row);
-      },
-    );
-  }
 });
