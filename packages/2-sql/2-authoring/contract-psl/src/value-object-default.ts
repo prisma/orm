@@ -2,11 +2,12 @@
  * Checking a value-object field's literal default against its composite type. The default is one
  * JSON value of the field's column, holding each member in the stored form its codec writes. It
  * must have the shape of the value object, or of a list of them, and each member's codec must read
- * the member's value.
+ * the member's value. A `null` member value is taken when the member is optional, or when its codec
+ * reads `null`, as a JSON member's does.
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecLookup, DataTypeId } from '@internal/framework-components/codec';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import {
   isValueObjectMember,
   type ScalarMemberNode,
@@ -16,8 +17,6 @@ import {
 import { InternalError } from '@internal/utils/internal-error';
 import {
   checkStoredValue,
-  type DataTypeSupport,
-  type DefaultColumn,
   PSL_DEFAULT_TYPE_INCOMPATIBLE,
   PSL_INVALID_DEFAULT_LITERAL,
 } from './data-type-default';
@@ -42,10 +41,7 @@ export interface ValueObjectDefaultInput {
   readonly nullable: boolean;
   readonly valueObjectName: string;
   readonly types: ValueObjectTypes;
-  /** The descriptor of the one column the value object is stored in. */
-  readonly column: DefaultColumn;
   readonly codecLookup: CodecLookup | undefined;
-  readonly support: DataTypeSupport;
 }
 
 /** Each way the default does not match the composite type. */
@@ -58,17 +54,6 @@ export function valueObjectDefaultMismatches(
       code: PSL_DEFAULT_TYPE_INCOMPATIBLE,
       message: `Field "${path}": ${message}`,
     });
-  const documentType = dataTypeOf(input.column.codecId, input.codecLookup);
-
-  const holdsJsonDocuments = (member: ScalarMemberNode) => {
-    const memberType = dataTypeOf(member.descriptor.codecId, input.codecLookup);
-    return (
-      memberType === documentType ||
-      input.support.lookup.get(memberType)?.casts[documentType] !== undefined ||
-      input.support.lookup.get(documentType)?.casts[memberType] !== undefined
-    );
-  };
-
   const checkObject = (value: JsonValue, valueObjectName: string, path: string) => {
     const valueObject = input.types.nodes.get(valueObjectName);
     const declared = input.types.declaredMembers.get(valueObjectName);
@@ -124,10 +109,6 @@ export function valueObjectDefaultMismatches(
       else checkObject(value, member.valueObjectName, path);
       return;
     }
-    if (value === null && !holdsJsonDocuments(member)) {
-      shape(path, notNull);
-      return;
-    }
     const read = checkStoredValue({
       value,
       column: member.descriptor,
@@ -135,7 +116,8 @@ export function valueObjectDefaultMismatches(
       fieldPath: path,
     });
     if (!read.ok) {
-      mismatches.push({ code: read.code, message: read.message });
+      if (value === null) shape(path, notNull);
+      else mismatches.push({ code: read.code, message: read.message });
       return;
     }
     const enumMismatch = enumValueMismatch(value, member, path, input.codecLookup);
@@ -196,16 +178,6 @@ function enumValueMismatch(
     code: PSL_INVALID_DEFAULT_LITERAL,
     message: `Field "${path}": Expected one of: ${stored.map((storedValue) => JSON.stringify(storedValue)).join(' | ')}`,
   };
-}
-
-function dataTypeOf(codecId: string, codecLookup: CodecLookup | undefined): DataTypeId {
-  const descriptor = codecLookup?.descriptorFor?.(codecId);
-  if (descriptor === undefined) {
-    throw new InternalError(
-      `No codec descriptor is registered for "${codecId}", but a value-object default was read through it.`,
-    );
-  }
-  return descriptor.dataType;
 }
 
 function isJsonObject(value: JsonValue): value is { readonly [key: string]: JsonValue } {

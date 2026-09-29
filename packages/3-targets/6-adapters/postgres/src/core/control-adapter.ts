@@ -1,7 +1,6 @@
 import type {
   ColumnDefault,
   ContractMarkerRecord,
-  JsonValue,
   LedgerEntryRecord,
 } from '@internal/contract/types';
 import {
@@ -11,8 +10,7 @@ import {
 } from '@internal/errors/execution';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
-import { materializeCodec } from '@internal/framework-components/codec';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -32,7 +30,11 @@ import type {
   MarkerReadResult,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import { isDdlNode } from '@internal/sql-relational-core/ast';
+import {
+  isDdlNode,
+  literalDefaultCodec,
+  readLiteralDefault,
+} from '@internal/sql-relational-core/ast';
 import type { ColumnDescriptor, ExcludedProxy } from '@internal/sql-relational-core/contract-free';
 import { namingOfLiveName } from '@internal/sql-schema-ir/naming';
 import type {
@@ -1835,22 +1837,6 @@ const SERIAL_FAMILY_TYPES = new Set([
   'serial2',
 ]);
 
-const SQL_NULL = Symbol('SQL NULL');
-
-/**
- * Reads a literal default back through the column's codec. A JSON codec reads `null` as the JSON
- * value null; every other codec refuses it, because SQL NULL has no stored form of its own, and for
- * those a `null` default is SQL NULL.
- */
-function readDefault(codec: Codec, value: JsonValue): unknown {
-  try {
-    return codec.decodeJson(value);
-  } catch (error) {
-    if (value === null) return SQL_NULL;
-    throw error;
-  }
-}
-
 async function pgRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
   nativeType: string,
@@ -1875,27 +1861,12 @@ async function pgRenderDdlColumnDefault(
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
     return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
   }
-  if (codecRef !== undefined) {
-    // Built with the column's own `typeParams`: a parameterized codec answers for them when it
-    // reads a default back — `pg/vector@1` checks the length its column declares — and the lookup's
-    // representative instance carries none.
-    const descriptor = codecLookup.descriptorFor?.(codecRef.codecId);
-    const codec =
-      descriptor === undefined
-        ? codecLookup.get(codecRef.codecId)
-        : materializeCodec(descriptor, codecRef, { name: codecRef.codecId });
-    if (codec !== undefined) {
-      // A literal default reaches here either as the canonical JSON a
-      // contract stores or as the value an authoring surface built, and only
-      // the first needs reading back: `pg/int8@1` stores decimal text for a
-      // `bigint`, which `encode` does not take. A `Date` is the one authored
-      // value JSON has no notation for, so it is the one that arrives as
-      // itself.
-      const value = def.value instanceof Date ? def.value : readDefault(codec, def.value);
-      if (value === SQL_NULL) return 'DEFAULT NULL';
-      const wire = await codec.encode(value, {});
-      return `DEFAULT ${pgInlineLiteral(wire, nativeType)}`;
-    }
+  const codec = codecRef === undefined ? undefined : literalDefaultCodec(codecLookup, codecRef);
+  if (codec !== undefined) {
+    const reading = readLiteralDefault(codec, def.value);
+    if (reading.kind === 'sql-null') return 'DEFAULT NULL';
+    const wire = await codec.encode(reading.value, {});
+    return `DEFAULT ${pgInlineLiteral(wire, nativeType)}`;
   }
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
   return `DEFAULT ${pgInlineLiteral(def.value, nativeType)}`;
