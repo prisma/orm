@@ -160,10 +160,11 @@ changes:
       `FieldBuilder<ContractFieldType, boolean, boolean, EnumTypeHandle | undefined, ExecutionMutationDefaultPhases | undefined>`.
   - id: mongo-bson-codec-added
     summary: |
-      The Mongo target gains the codec `mongo/bson@1` for any BSON value, typed `BsonInputValue`
-      on write and `BsonValue` on read in `CodecTypes`; `mongo/json@1` now admits only JSON values.
-      Collection validators now read a codec's whole `targetTypes` list, not only its first entry,
-      and an enum's codec must declare exactly one.
+      The Mongo target gains the codecs `mongo/int64@1`, `mongo/decimal128@1`, `mongo/binary@1`,
+      `mongo/json@1` (JSON values only) and `mongo/bson@1` (any BSON value, typed `BsonInputValue`
+      on write and `BsonValue` on read in `CodecTypes`). Collection validators now read a codec's
+      whole `targetTypes` list, not only its first entry, and an enum's codec must declare exactly
+      one.
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
@@ -462,7 +463,7 @@ Code that constrains on a bare `FieldBuilder` (for example `Fields extends Recor
 
 ## `mongo-bson-codec-added`
 
-The Mongo target adds the codec `mongo/bson@1` (data type `mongo/bson`, PSL `Bson`, `field.bson()`), whose `CodecTypes` entry reads `BsonValue` and writes `BsonInputValue` (a `BsonValue`, or a `Uint8Array` at any depth), both exported from `@internal/target-mongo/codec-types` (declared in `@internal/mongo-value`, where the Mongo TypeScript builder reads them). `BsonValue` covers every value the driver returns with its default settings, `Code`, `MinKey`, `MaxKey`, `BSONSymbol` and a native `RegExp` (what a stored regex reads back as) included; `BSONRegExp` appears only with a driver configured with `bsonRegExp: true`. A `DBRef` is never returned, because decode turns it back into its `{ $ref, $id[, $db], ...fields }` document. It declares an empty `targetTypes`, so the validator does not constrain its value: a single field gets `{}`, and a list field still must be an array, `{ bsonType: 'array', items: {} }`. An extension that lists every Mongo codec id, or keys a map by `CodecTypes`, adds `mongo/bson@1`. An extension that stores arbitrary BSON in a field of its own contract types it `mongo/bson@1`, because `mongo/json@1` now refuses non-JSON values on encode and decode.
+The Mongo target adds five codecs, none of which existed in 8.0.0-rc.12: `mongo/int64@1` (PSL `Int64`, `bigint`), `mongo/decimal128@1` (PSL `Decimal128`, a decimal string), `mongo/binary@1` (PSL `Binary`, `Uint8Array`), `mongo/json@1` (PSL `Json`, JSON values only, refused on encode and decode otherwise) and `mongo/bson@1` (PSL `Bson`, `field.bson()`, any BSON value). The `mongo/bson@1` entry of `CodecTypes` reads `BsonValue` and writes `BsonInputValue` (a `BsonValue`, or a `Uint8Array` at any depth), both exported from `@internal/target-mongo/codec-types` (declared in `@internal/mongo-value`, where the Mongo TypeScript builder reads them). `BsonValue` covers every value the driver returns with its default settings, `Code`, `MinKey`, `MaxKey`, `BSONSymbol` and a native `RegExp` (what a stored regex reads back as) included; `BSONRegExp` appears only with a driver configured with `bsonRegExp: true`. A `DBRef` is never returned, because decode turns it back into its `{ $ref, $id[, $db], ...fields }` document. It declares an empty `targetTypes`, so the validator does not constrain its value: a single field gets `{}`, and a list field still must be an array, `{ bsonType: 'array', items: {} }`. An extension that lists every Mongo codec id, or keys a map by `CodecTypes`, adds the five new ones. An extension that stores arbitrary BSON in a field of its own contract types it `mongo/bson@1`, not `mongo/json@1`, which refuses non-JSON values.
 
 The detection pattern finds a descriptor whose `targetTypes` lists two or more entries, quoted strings or named constants, on one line or several. It does not see a list built elsewhere and referenced by name (`targetTypes: TYPES`); check those descriptors by hand.
 
