@@ -23,6 +23,13 @@ changes:
       glob: "**/contract.json"
       matches:
         - '"kind"\s*:\s*"literal"'
+  - id: mongo-codecs-check-json
+    summary: |
+      The built-in Mongo codecs now refuse a JSON value that is not the JSON form of their type, where most passed it through: a PSL enum member whose value its `@@type` codec does not take is now refused. Correct the member.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '@@type\(\s*"mongo/'
   - id: composite-type-attributes-refused
     summary: |
       An attribute on a composite type or on one of its members is now refused, where it used to be ignored. Remove it.
@@ -71,6 +78,21 @@ The float codecs `pg/float8@1`, `pg/float4@1`, `pg/float@1`, `sql/float@1` and `
 
 Only a hand-edited `contract.json`, or a TypeScript `.default()` given a value its column's type does not take, can hold such a default, and it now fails when a migration is planned. Correct the default in the contract source and emit it again. A `null` literal default is written as `DEFAULT NULL`, as before.
 
+## `mongo-codecs-check-json`
+
+A Mongo codec's `decodeJson` reads the JSON form of its type. The Mongo runtime reads documents through `decode` and never calls it; the PSL reader calls it for each member of an enum. `mongo/string@1`, `mongo/objectId@1`, `mongo/int32@1`, `mongo/double@1`, `mongo/bool@1`, `mongo/vector@1` and `mongo/bson@1` used to return any JSON value as it was, so an enum member of the wrong kind was stored in the contract:
+
+```prisma
+enum Priority {
+  @@type("mongo/int32@1")
+  Low = "low"
+}
+```
+
+This is now refused with `PSL_EXTENSION_INVALID_VALUE`, naming the codec's message, `mongo/int32@1 JSON value must be an integer from -2147483648 to 2147483647`. A member written without a value, such as a bare `Low`, under a codec that does not take text is `PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC`. Give each member a value of the codec's type.
+
+Each codec now takes: `mongo/string@1` a string; `mongo/objectId@1` 24 hexadecimal digits; `mongo/int32@1` an integer from -2147483648 to 2147483647; `mongo/double@1` a number, or the text `"NaN"`, `"Infinity"` or `"-Infinity"`, which its `encodeJson` now writes for those values instead of a number JSON cannot hold; `mongo/bool@1` a boolean; `mongo/date@1` the text `Date.toISOString()` writes; `mongo/vector@1` an array of numbers; and `mongo/bson@1` canonical Extended JSON, the form its `encodeJson` writes. Another value throws `RUNTIME.DECODE_FAILED` with the codec id in `meta`. A TypeScript `enumType` member that `mongo/objectId@1` or `mongo/int32@1` does not hold now throws `RUNTIME.ENCODE_FAILED` when the contract is built.
+
 ## `composite-type-attributes-refused`
 
 An attribute inside a `type` block was ignored: `street String @default("x")` stored no default, and `@@map` mapped nothing. Each is now refused, `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` on a member and `PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE` on the type. Remove the attribute. To give a value object a default, write it on the model field as a whole value, such as `` home Address @default(json`{"street": "x"}`) ``.
@@ -82,3 +104,4 @@ An attribute inside a `type` block was ignored: `street String @default("x")` st
 - `EmissionSpi.resolveFieldTypeParams` is removed. A field's type parameters come from its domain type only; a family whose domain fields do not carry them puts them there when it builds the contract.
 - `generateFieldOutputTypesMap` from `@internal/emitter` takes `(models, codecLookup)`: its third parameter, the type-parameter resolver, is removed with the hook.
 - Code that calls a built-in codec's `decodeJson` must pass the stored JSON form of its type; another kind now throws `RUNTIME.DECODE_FAILED` with the codec id in `meta`. A codec an extension contributes should do the same: refuse a JSON value that is not a stored form of its type, and accept every form the database writes for it.
+- A Mongo codec built with `mongoCodec` whose application type is narrower than JSON, such as `string` or `number`, should supply a `decodeJson` that refuses a value of another kind with `RUNTIME.DECODE_FAILED`. Left out, `decodeJson` returns any JSON value unchecked.

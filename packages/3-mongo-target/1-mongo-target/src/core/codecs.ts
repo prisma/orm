@@ -22,15 +22,26 @@ import {
   binaryDecodeJson,
   binaryEncode,
   binaryEncodeJson,
+  booleanDecodeJson,
+  dateDecodeJson,
+  dateEncodeJson,
   decimal128Decode,
   decimal128DecodeJson,
   decimal128Encode,
   decimal128EncodeJson,
   decimalTextBigintLiteral,
+  doubleDecodeJson,
+  doubleEncodeJson,
+  int32DecodeJson,
+  int32EncodeJson,
   int64Decode,
   int64DecodeJson,
   int64Encode,
   int64EncodeJson,
+  objectIdDecodeJson,
+  objectIdEncodeJson,
+  stringDecodeJson,
+  vectorDecodeJson,
 } from './bson-scalar-helpers';
 import {
   MONGO_BINARY_CODEC_ID,
@@ -67,51 +78,53 @@ export const mongoObjectIdCodec = mongoCodec({
   typeId: MONGO_OBJECTID_CODEC_ID,
   decode: (wire: ObjectId) => wire.toHexString(),
   encode: (value: string) => new ObjectId(value),
+  encodeJson: (value: string) => objectIdEncodeJson(MONGO_OBJECTID_CODEC_ID, value),
+  decodeJson: (json) => objectIdDecodeJson(MONGO_OBJECTID_CODEC_ID, json),
 });
 
 export const mongoStringCodec = mongoCodec({
   typeId: MONGO_STRING_CODEC_ID,
   decode: (wire: string) => wire,
   encode: (value: string) => value,
+  decodeJson: (json) => stringDecodeJson(MONGO_STRING_CODEC_ID, json),
 });
 
 export const mongoDoubleCodec = mongoCodec({
   typeId: MONGO_DOUBLE_CODEC_ID,
   decode: (wire: number) => wire,
   encode: (value: number) => value,
+  encodeJson: doubleEncodeJson,
+  decodeJson: (json) => doubleDecodeJson(MONGO_DOUBLE_CODEC_ID, json),
 });
 
 export const mongoInt32Codec = mongoCodec({
   typeId: MONGO_INT32_CODEC_ID,
   decode: (wire: number) => wire,
   encode: (value: number) => value,
+  encodeJson: (value: number) => int32EncodeJson(MONGO_INT32_CODEC_ID, value),
+  decodeJson: (json) => int32DecodeJson(MONGO_INT32_CODEC_ID, json),
 });
 
 export const mongoBooleanCodec = mongoCodec({
   typeId: MONGO_BOOLEAN_CODEC_ID,
   decode: (wire: boolean) => wire,
   encode: (value: boolean) => value,
+  decodeJson: (json) => booleanDecodeJson(MONGO_BOOLEAN_CODEC_ID, json),
 });
 
 export const mongoDateCodec = mongoCodec({
   typeId: MONGO_DATE_CODEC_ID,
   decode: (wire: Date) => wire,
   encode: (value: Date) => value,
-  encodeJson: (value: Date) => value.toISOString(),
-  decodeJson: (json) => {
-    if (typeof json !== 'string') {
-      throw mongoTargetError('RUNTIME.DECODE_FAILED', 'expected ISO date string', {
-        meta: { codecId: MONGO_DATE_CODEC_ID, received: typeof json },
-      });
-    }
-    return new Date(json);
-  },
+  encodeJson: (value: Date) => dateEncodeJson(MONGO_DATE_CODEC_ID, value),
+  decodeJson: (json) => dateDecodeJson(MONGO_DATE_CODEC_ID, json),
 });
 
 export const mongoVectorCodec = mongoCodec({
   typeId: MONGO_VECTOR_CODEC_ID,
   decode: (wire: readonly number[]) => wire,
   encode: (value: readonly number[]) => value,
+  decodeJson: (json) => vectorDecodeJson(MONGO_VECTOR_CODEC_ID, json),
 });
 
 /**
@@ -268,7 +281,7 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
     dataType: mongoDouble.id,
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['double'],
-    renderValueLiteral: renderTsLiteral,
+    renderValueLiteral: (value) => (typeof value === 'number' ? String(value) : undefined),
   }),
   descriptorFor(mongoInt32Codec, {
     dataType: mongoInt32.id,

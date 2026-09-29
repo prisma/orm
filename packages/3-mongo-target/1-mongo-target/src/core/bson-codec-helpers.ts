@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { JsonValue } from '@internal/contract/types';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
@@ -177,8 +178,32 @@ export function encodeBsonJson(value: BsonInputValue): JsonValue {
   );
 }
 
+function decodeRefused(json: JsonValue, reason: string): never {
+  throw mongoTargetError(
+    'RUNTIME.DECODE_FAILED',
+    `${MONGO_BSON_CODEC_ID} JSON value must be canonical Extended JSON: ${reason}`,
+    { meta: { codecId: MONGO_BSON_CODEC_ID, received: typeof json } },
+  );
+}
+
+/**
+ * Reads the canonical Extended JSON `encodeBsonJson` writes. The `bson` reader also takes forms that are not canonical, some of them silently wrong (`{ "$numberInt": "abc" }` reads as 0), so a value that does not write back to the same JSON is refused.
+ */
 export function decodeBsonJson(json: JsonValue): BsonInputValue {
-  return EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
-    relaxed: false,
-  });
+  let value: BsonInputValue;
+  try {
+    value = EJSON.deserialize(
+      blindCast<
+        Document,
+        'EJSON.deserialize reads any JSON value; its parameter type names only a document'
+      >(json),
+      { relaxed: false },
+    );
+  } catch (error) {
+    return decodeRefused(json, error instanceof Error ? error.message : String(error));
+  }
+  if (!isDeepStrictEqual(EJSON.serialize(value, { relaxed: false }), json)) {
+    return decodeRefused(json, 'it does not write back to the same JSON');
+  }
+  return value;
 }

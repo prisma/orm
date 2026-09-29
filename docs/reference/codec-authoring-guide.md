@@ -403,11 +403,16 @@ The PSL name, TS helper, BSON storage types and application type of every Mongo 
 
 | Codec id | JSON form |
 | --- | --- |
-| `mongo/objectId@1`, `mongo/string@1`, `mongo/int32@1`, `mongo/double@1`, `mongo/bool@1`, `mongo/vector@1`, `mongo/decimal128@1`, `mongo/json@1` | the application value itself |
-| `mongo/date@1` | ISO-8601 text |
+| `mongo/string@1`, `mongo/bool@1`, `mongo/vector@1`, `mongo/decimal128@1`, `mongo/json@1` | the application value itself |
+| `mongo/objectId@1` | the application value, 24 hexadecimal digits |
+| `mongo/int32@1` | the application value, an integer from -2147483648 to 2147483647 |
+| `mongo/double@1` | the application value, with NaN and the infinities written as the text `"NaN"`, `"Infinity"` and `"-Infinity"`, as the SQL float codecs write them |
+| `mongo/date@1` | ISO-8601 text in UTC, as `Date.toISOString()` writes it |
 | `mongo/int64@1` | decimal text; a safe-integer `number` is accepted on the way in |
 | `mongo/binary@1` | unwrapped base64 |
 | `mongo/bson@1` | canonical Extended JSON v2 (`EJSON.serialize(value, { relaxed: false })`), after writing each JavaScript number and `Uint8Array` as the BSON type the driver would store: an integer outside the int32 range as `double`, bytes as `binData` |
+
+`decodeJson` reads only these forms: a value of another kind, or text in another format, throws `RUNTIME.DECODE_FAILED` naming the codec. `mongo/bson@1` refuses Extended JSON that is not canonical, such as a bare number or `{ "$numberInt": "abc" }`, which the `bson` reader would read as 0. The Mongo runtime reads documents through `decode` and never calls `decodeJson`; what `decodeJson` reads is the JSON a schema holds, such as a PSL enum member's value under `@@type`.
 
 `Json` (`mongo/json@1`) means a JSON value, no more. Encode accepts exactly a plain JSON value (plain objects, arrays without holes, strings, finite numbers, booleans, `null`) and refuses anything else at any depth with `RUNTIME.ENCODE_FAILED`, naming its path. Decode accepts a stored value whose every part is a BSON `object`, `array`, `string`, `double`, `int`, `bool`, `null`, or a `long` in the safe-integer range (returned as a `number`), and refuses anything else (a `Date`, `ObjectId`, `Decimal128`, `Binary`, regex, timestamp, a larger `long`, a non-finite double) with `RUNTIME.DECODE_FAILED`, naming its BSON type and path. The validator admits the same BSON types at the field's top level.
 

@@ -42,6 +42,107 @@ function encodeFailed(codecId: string, message: string, received: unknown): neve
   });
 }
 
+const OBJECT_ID_TEXT = /^[0-9a-fA-F]{24}$/;
+
+export function objectIdEncodeJson(codecId: string, value: string): string {
+  if (typeof value !== 'string' || !OBJECT_ID_TEXT.test(value)) {
+    encodeFailed(codecId, 'value must be 24 hexadecimal digits', value);
+  }
+  return value;
+}
+
+export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
+  if (typeof json !== 'string' || !OBJECT_ID_TEXT.test(json)) {
+    return decodeFailed(codecId, 'JSON value must be 24 hexadecimal digits', json);
+  }
+  return json;
+}
+
+export function stringDecodeJson(codecId: string, json: JsonValue): string {
+  if (typeof json !== 'string') return decodeFailed(codecId, 'JSON value must be a string', json);
+  return json;
+}
+
+export function booleanDecodeJson(codecId: string, json: JsonValue): boolean {
+  if (typeof json !== 'boolean') return decodeFailed(codecId, 'JSON value must be a boolean', json);
+  return json;
+}
+
+const INT32_MIN = -(2 ** 31);
+const INT32_MAX = 2 ** 31 - 1;
+const INT32_RULE = `must be an integer from ${INT32_MIN} to ${INT32_MAX}`;
+
+function isInt32(value: unknown): value is number {
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value >= INT32_MIN && value <= INT32_MAX
+  );
+}
+
+export function int32EncodeJson(codecId: string, value: number): number {
+  if (!isInt32(value)) encodeFailed(codecId, `value ${INT32_RULE}`, value);
+  return value;
+}
+
+export function int32DecodeJson(codecId: string, json: JsonValue): number {
+  if (!isInt32(json)) return decodeFailed(codecId, `JSON value ${INT32_RULE}`, json);
+  return json;
+}
+
+const NON_FINITE_TEXT: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
+
+/**
+ * JSON has no number for NaN or an infinity, so they are stored as the text `NaN`, `Infinity` and `-Infinity`, as the SQL float codecs store them.
+ */
+export function doubleEncodeJson(value: number): JsonValue {
+  return Number.isFinite(value) ? value : String(value);
+}
+
+export function doubleDecodeJson(codecId: string, json: JsonValue): number {
+  if (typeof json === 'number') return json;
+  if (typeof json === 'string' && NON_FINITE_TEXT.has(json)) return Number(json);
+  return decodeFailed(
+    codecId,
+    'JSON value must be a number or the text NaN, Infinity or -Infinity',
+    json,
+  );
+}
+
+export function dateEncodeJson(codecId: string, value: Date): string {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    encodeFailed(codecId, 'value must be a valid Date', value);
+  }
+  return value.toISOString();
+}
+
+/**
+ * The JSON form is the text `Date.toISOString()` writes, so a string that does not read back to that same text is refused.
+ */
+export function dateDecodeJson(codecId: string, json: JsonValue): Date {
+  const date = typeof json === 'string' ? new Date(json) : undefined;
+  if (date === undefined || Number.isNaN(date.getTime()) || date.toISOString() !== json) {
+    return decodeFailed(
+      codecId,
+      'JSON value must be a date and time in UTC as Date.toISOString writes it',
+      json,
+    );
+  }
+  return date;
+}
+
+export function vectorDecodeJson(codecId: string, json: JsonValue): number[] {
+  if (!Array.isArray(json)) {
+    return decodeFailed(codecId, 'JSON value must be an array of numbers', json);
+  }
+  const numbers: number[] = [];
+  for (const element of json) {
+    if (typeof element !== 'number') {
+      return decodeFailed(codecId, 'JSON value must be an array of numbers', element);
+    }
+    numbers.push(element);
+  }
+  return numbers;
+}
+
 const INT64_MIN = -(2n ** 63n);
 const INT64_MAX = 2n ** 63n - 1n;
 
