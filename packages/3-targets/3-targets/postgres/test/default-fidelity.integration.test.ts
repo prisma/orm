@@ -11,12 +11,19 @@ import { CODEC_ID_BY_INFERRED_TYPE } from '../src/core/psl-infer/infer-default-c
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
+type Compared = JsonValue | ColumnDefault | undefined;
+
+interface ComparedValues {
+  readonly live: Compared;
+  readonly contract: Compared;
+  readonly stored: JsonValue;
+}
+
 interface Observation {
   readonly columnDefault: string;
-  readonly nativeType: string;
   readonly live: ColumnDefault | undefined;
   readonly contract: ColumnDefault;
-  readonly stored: string | null;
+  readonly values: ComparedValues | undefined;
 }
 
 interface CatalogColumn {
@@ -112,11 +119,16 @@ function columnCodec(nativeType: string): Codec {
   return materializeCodec(descriptor, { codecId }, { name: `<fidelity:${codecId}>` });
 }
 
+type PgClient = Parameters<Parameters<typeof withClient>[1]>[0];
+
+const JSON_ELEMENT_TYPES: ReadonlySet<string> = new Set(['json', 'jsonb']);
+
 /*
- * Both sides are compared as the column codec's JSON form. The stored value is read as the text
- * Postgres prints, split into elements by `postgres-array` (not the parser under test), decoded
- * like a query result, and encoded to JSON. The parsed literal goes through `decodeJson` and back,
- * so two spellings of one value agree while a codec that refuses the literal fails the row.
+ * Each parse is compared with the stored value on its own. Both sides go through the column codec's
+ * JSON form, so a value of the wrong JSON type fails. Postgres then reads each string in the
+ * column's element type and prints it back (`CAST(value AS type)::text`), so two spellings of one
+ * value agree; json and jsonb values compare by deep equality. The stored value is split into
+ * elements by `postgres-array`, not by the parser under test.
  */
 async function storedAsJson(stored: string | null, nativeType: string): Promise<JsonValue> {
   if (stored === null) return null;
@@ -138,6 +150,45 @@ function literalAsJson(value: JsonValue, nativeType: string): JsonValue {
   return value.map((element) =>
     element === null ? null : codec.encodeJson(codec.decodeJson(element)),
   );
+}
+
+async function inColumnType(
+  client: PgClient,
+  json: JsonValue,
+  storageType: string,
+): Promise<JsonValue> {
+  const many = storageType.endsWith('[]');
+  const elementType = many ? storageType.slice(0, -2) : storageType;
+  const printed = async (value: JsonValue): Promise<JsonValue> => {
+    if (typeof value !== 'string' || JSON_ELEMENT_TYPES.has(elementType)) return value;
+    const result = await client.query<{ value: string }>(
+      `SELECT CAST($1::text AS ${elementType})::text AS value`,
+      [value],
+    );
+    const [row] = result.rows;
+    if (row === undefined) throw new Error(`CAST to ${elementType} returned no row`);
+    return row.value;
+  };
+  if (!many || !Array.isArray(json)) return printed(json);
+  const elements: JsonValue[] = [];
+  for (const element of json) elements.push(await printed(element));
+  return elements;
+}
+
+async function parsedInColumnType(
+  client: PgClient,
+  parsed: ColumnDefault | undefined,
+  nativeType: string,
+  storageType: string,
+): Promise<Compared> {
+  if (parsed?.kind !== 'literal') return parsed;
+  const { value } = parsed;
+  if (value instanceof Date) return parsed;
+  try {
+    return await inColumnType(client, literalAsJson(value, nativeType), storageType);
+  } catch (error) {
+    return { rejected: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function observe(): Promise<ReadonlyMap<string, Observation>> {
@@ -164,28 +215,42 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
       const stored = await client.query<Record<string, string | null>>(
         `SELECT ${projection} FROM fidelity`,
       );
-      const storedRow = stored.rows[0] ?? {};
+      const [storedRow] = stored.rows;
+      if (storedRow === undefined) throw new Error('INSERT ... DEFAULT VALUES stored no row');
       const byName = new Map(catalog.rows.map((column) => [column.column_name, column]));
-      return new Map(
-        rows.map((row): [string, Observation] => {
-          const column = byName.get(row.name);
-          if (column === undefined) throw new Error(`column ${row.name} missing from catalog`);
-          const nativeType = resolvedNativeType(column);
-          return [
-            row.name,
-            {
-              columnDefault: column.column_default,
-              nativeType,
-              live: parsePostgresDefault(column.column_default, nativeType),
-              contract: postgresResolveDefault(
-                { kind: 'function', expression: row.written },
-                nativeType,
-              ),
-              stored: storedRow[row.name] ?? null,
-            },
-          ];
-        }),
-      );
+      const observations = new Map<string, Observation>();
+      for (const row of rows) {
+        const column = byName.get(row.name);
+        const storedText = storedRow[row.name];
+        if (column === undefined || storedText === undefined) {
+          throw new Error(`column ${row.name} missing from the catalog or the stored row`);
+        }
+        const nativeType = resolvedNativeType(column);
+        const live = parsePostgresDefault(column.column_default, nativeType);
+        const contract = postgresResolveDefault(
+          { kind: 'function', expression: row.written },
+          nativeType,
+        );
+        const values =
+          row.expect === 'literal'
+            ? {
+                live: await parsedInColumnType(client, live, nativeType, row.storageType),
+                contract: await parsedInColumnType(client, contract, nativeType, row.storageType),
+                stored: await inColumnType(
+                  client,
+                  await storedAsJson(storedText, nativeType),
+                  row.storageType,
+                ),
+              }
+            : undefined;
+        observations.set(row.name, {
+          columnDefault: column.column_default,
+          live,
+          contract,
+          values,
+        });
+      }
+      return observations;
     }),
   );
 }
@@ -203,8 +268,8 @@ describe('default parser against the value Postgres stores', () => {
     return found;
   }
 
-  async function check(row: FidelityRow): Promise<void> {
-    const { columnDefault, nativeType, live, contract, stored } = observation(row);
+  function check(row: FidelityRow): void {
+    const { columnDefault, live, contract, values } = observation(row);
     if (row.expect === 'raw') {
       expect({ live, contract }).toEqual({
         live: { kind: 'function', expression: columnDefault },
@@ -217,25 +282,25 @@ describe('default parser against the value Postgres stores', () => {
       expect({ live, contract }).toEqual({ live: expected, contract: expected });
       return;
     }
-    expect(contract).toEqual(live);
-    if (live?.kind !== 'literal' || live.value instanceof Date) {
-      throw new Error(`${columnDefault} did not parse to a JSON literal`);
-    }
-    expect(literalAsJson(live.value, nativeType)).toEqual(await storedAsJson(stored, nativeType));
+    if (values === undefined) throw new Error(`no compared values for ${row.name}`);
+    expect({ live: values.live, contract: values.contract }).toEqual({
+      live: values.stored,
+      contract: values.stored,
+    });
   }
 
   const agreeing = rows.filter((row) => row.knownBug === undefined);
   const disagreeing = rows.filter((row) => row.knownBug !== undefined);
 
-  it.each(agreeing.map((row) => [row.name, row] as const))('%s', async (_name, row) => {
-    await check(row);
+  it.each(agreeing.map((row) => [row.name, row] as const))('%s', (_name, row) => {
+    check(row);
   });
 
   if (disagreeing.length > 0) {
     it.fails.each(disagreeing.map((row) => [`${row.name}: ${row.knownBug}`, row] as const))(
       '%s',
-      async (_name, row) => {
-        await check(row);
+      (_name, row) => {
+        check(row);
       },
     );
   }
