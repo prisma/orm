@@ -120,7 +120,6 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - **The storage hash covers neither the domain nor the default control policy**, so after cutover `db verify` and the signed marker cannot see a difference there. The round-trip tests compare the whole serialized contract; changing what the hash covers is a contract design decision.
 - **The PSL reader drops the enum value set from a list field, and the TypeScript builder keeps it.** This concerns domain `enum` list fields only; native enum list fields are not affected. A TypeScript contract with a domain enum list field is therefore refused by `contract print`. Decide which is right, then align the other.
 - **`contract print` cannot protect a config file named with `--config`**, because the CLI engine does not tell a command which file it loaded. It protects the `prisma.config.ts` in the directory of the config that defines the `orm` section.
-- **Shortlisted: the PSL parser reads a `view` body as model fields in every PSL document.** The rule exists for Prisma 7 and Prisma 6 schemas, and it is not grammar Prisma 8 intends to keep (`genericBlockMemberParser` in `psl-parser/src/parse.ts`). It should apply only when a Prisma 7 or Prisma 6 source reads the file. Open question: `contract format` and the language server parse a source's files themselves, so they need a way to learn that a source's files use this rule.
 
 ### What `contract print` cannot write
 

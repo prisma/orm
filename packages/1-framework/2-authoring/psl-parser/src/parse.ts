@@ -1,3 +1,4 @@
+import type { PslParseOptions } from '@internal/config/config-types';
 import type { PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
 import type { PslDiagnostic } from './diagnostic';
@@ -515,19 +516,23 @@ type MemberParser = (cursor: Cursor) => void;
  * Parses a full PSL document. Never throws — malformed input yields diagnostics
  * and a recovered tree, not an exception.
  */
-export function parse(source: string, filename: string): ParseResult {
+export function parse(
+  source: string,
+  filename: string,
+  options: PslParseOptions = {},
+): ParseResult {
   const cursor = new Cursor(filename, source);
-  const green = parseDocument(cursor);
+  const green = parseDocument(cursor, options);
   const root = createSyntaxTree(green);
   const document = DocumentAst.cast(root) ?? new DocumentAst(root);
   const sources = new PslSources([[document.syntax, cursor.sourceFile]]);
   return { document, diagnostics: cursor.diagnostics, sources };
 }
 
-function parseDocument(cursor: Cursor): GreenNode {
+function parseDocument(cursor: Cursor, options: PslParseOptions): GreenNode {
   cursor.startNode('Document');
   while (cursor.peekKind() !== 'Eof') {
-    parseDeclaration(cursor, false);
+    parseDeclaration(cursor, false, options);
   }
   cursor.flushTrivia(); // attach trailing trivia so the round-trip stays lossless
   return cursor.finishNode();
@@ -550,7 +555,11 @@ function keywordIs(cursor: Cursor, keyword: string): boolean {
  * Recovery runs via the `if (!node)` tail rather than as a `??` arm, because it
  * appends raw tokens to the open parent instead of returning a child node.
  */
-function parseDeclaration(cursor: Cursor, insideNamespace: boolean): void {
+function parseDeclaration(
+  cursor: Cursor,
+  insideNamespace: boolean,
+  options: PslParseOptions,
+): void {
   const name = cursor.peekKind(1) === 'Ident' ? cursor.peekToken(1).text : '';
   if (insideNamespace && keywordIs(cursor, 'namespace')) {
     cursor.diagnostic(
@@ -574,10 +583,10 @@ function parseDeclaration(cursor: Cursor, insideNamespace: boolean): void {
 
   const node =
     parseModel(cursor) ??
-    parseNamespace(cursor) ??
+    parseNamespace(cursor, options) ??
     parseCompositeType(cursor) ??
     parseTypesBlock(cursor) ??
-    parseGenericBlock(cursor);
+    parseGenericBlock(cursor, options);
   if (!node) {
     parseUnsupportedTopLevel(cursor);
   }
@@ -629,7 +638,10 @@ export function parseModel(cursor: Cursor): GreenNode | undefined {
  * open, so a bare identifier with no brace (e.g. `oops`) is read as an unfinished
  * custom declaration rather than unsupported content.
  */
-export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
+export function parseGenericBlock(
+  cursor: Cursor,
+  options: PslParseOptions = {},
+): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
   const keyword = cursor.peekToken().text;
   if (RESERVED_BLOCK_KEYWORDS.has(keyword)) return undefined;
@@ -640,7 +652,7 @@ export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
     parseIdentifier(cursor);
   }
   if (cursor.peekKind() === 'LBrace') {
-    parseBlockBody(cursor, genericBlockMemberParser(keyword));
+    parseBlockBody(cursor, genericBlockMemberParser(keyword, options));
   } else {
     cursor.diagnostic(
       'PSL_INVALID_DECLARATION',
@@ -652,9 +664,12 @@ export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
   return cursor.finishNode();
 }
 
-export function parseNamespace(cursor: Cursor): GreenNode | undefined {
+export function parseNamespace(
+  cursor: Cursor,
+  options: PslParseOptions = {},
+): GreenNode | undefined {
   if (!keywordIs(cursor, 'namespace')) return undefined;
-  return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true));
+  return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true, options));
 }
 
 export function parseCompositeType(cursor: Cursor): GreenNode | undefined {
@@ -727,12 +742,12 @@ function parseNamedTypeMember(cursor: Cursor): void {
 }
 
 /**
- * A `view` body is read like a model body. Every other generic block reads `key = value` entries
- * and bare keys, and in an `enum` block those may carry `@` attributes (`USER @map("user")`). Each
- * interpreter decides whether it accepts the block and its members.
+ * A generic block reads `key = value` entries and bare keys; in an `enum` block those may carry `@`
+ * attributes (`USER @map("user")`). With `viewBodyAsModelFields`, a `view` body is read like a model
+ * body. Each interpreter decides whether it accepts the block and its members.
  */
-function genericBlockMemberParser(keyword: string): MemberParser {
-  if (keyword === 'view') return parseModelMember;
+function genericBlockMemberParser(keyword: string, options: PslParseOptions): MemberParser {
+  if (keyword === 'view' && options.viewBodyAsModelFields === true) return parseModelMember;
   if (keyword === 'enum') return parseEnumMember;
   return parseKeyValueMember;
 }

@@ -9,8 +9,13 @@ function greenText(element: GreenElement): string {
   return element.children.map(greenText).join('');
 }
 
-function onlyGenericBlock(source: string): GenericBlockDeclarationAst {
-  const result = parse(source, 'test.psl');
+const viewBodyAsModelFields = { viewBodyAsModelFields: true } as const;
+
+function onlyGenericBlock(
+  source: string,
+  options: Parameters<typeof parse>[2] = {},
+): GenericBlockDeclarationAst {
+  const result = parse(source, 'test.psl', options);
   expect(result.diagnostics).toEqual([]);
   expect(greenText(result.document.syntax.green)).toBe(source);
   const [declaration] = Array.from(result.document.declarations());
@@ -19,12 +24,12 @@ function onlyGenericBlock(source: string): GenericBlockDeclarationAst {
   return declaration;
 }
 
-describe('a view block body', () => {
+describe('a view block body, with viewBodyAsModelFields', () => {
   const source =
     'view ActiveUsers {\n  id    Int    @unique\n  email String @db.VarChar(255)\n  posts Post[]\n\n  @@map("active_users")\n}';
 
   it('parses as fields and block attributes, keeping the view a generic block', () => {
-    const block = onlyGenericBlock(source);
+    const block = onlyGenericBlock(source, viewBodyAsModelFields);
     expect(block.keyword()?.text).toBe('view');
     expect(block.name()?.token()?.text).toBe('ActiveUsers');
     const fields = Array.from(block.fields());
@@ -38,7 +43,11 @@ describe('a view block body', () => {
   });
 
   it('parses each field line as a FieldDeclaration child', () => {
-    const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl');
+    const result = parse(
+      'view ActiveUsers {\n  id Int @unique\n}',
+      'test.psl',
+      viewBodyAsModelFields,
+    );
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
         GenericBlockDeclaration
@@ -70,7 +79,11 @@ describe('a view block body', () => {
   });
 
   it('reports a malformed member with the model-member diagnostic', () => {
-    const result = parse('view ActiveUsers {\n  123\n  id Int\n}', 'test.psl');
+    const result = parse(
+      'view ActiveUsers {\n  123\n  id Int\n}',
+      'test.psl',
+      viewBodyAsModelFields,
+    );
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_MODEL_MEMBER']);
   });
 
@@ -78,9 +91,25 @@ describe('a view block body', () => {
     const result = parse(
       'namespace app {\n  view ActiveUsers {\n    id Int @unique\n  }\n}',
       'test.psl',
+      viewBodyAsModelFields,
     );
     expect(result.diagnostics).toEqual([]);
     expect(printTree(result.document.syntax.green)).toContain('FieldDeclaration');
+  });
+});
+
+describe('a view block body, by default', () => {
+  it('reads each line as entries, as in any block the parser does not know', () => {
+    const block = onlyGenericBlock('view ActiveUsers {\n  id Int\n}');
+    expect({
+      entries: Array.from(block.entries(), (entry) => entry.key()?.token()?.text),
+      fields: Array.from(block.fields()),
+    }).toEqual({ entries: ['id', 'Int'], fields: [] });
+  });
+
+  it('reports a field attribute as an invalid block member', () => {
+    const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl');
+    expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_EXTENSION_BLOCK_MEMBER']);
   });
 });
 

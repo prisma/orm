@@ -69,6 +69,7 @@ const contractSource = {
   load: 'Function',
   'inputs?': 'path[]',
   format: "'psl' | 'typescript'",
+  'parserOptions?': { 'viewBodyAsModelFields?': 'boolean' },
 } as const;
 
 /** Each subsection's own shape, without the rules that relate subsections to one another. */

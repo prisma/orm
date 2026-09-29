@@ -90,10 +90,12 @@ export function prisma7Contract(
   schemaPath: string,
   options: Prisma7ContractOptions,
 ): ContractConfig {
+  const parserOptions = { viewBodyAsModelFields: true };
   return {
     source: {
       format: 'psl',
       inputs: [schemaPath],
+      parserOptions,
       async load(context) {
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {
@@ -153,7 +155,7 @@ export function prisma7Contract(
               },
             });
           }
-          const { document, sources, diagnostics } = parse(schema, file.sourceId);
+          const { document, sources, diagnostics } = parse(schema, file.sourceId, parserOptions);
           const sourceFile = sources.sourceFileFor(document.syntax);
           seedDiagnostics.push(...mapParseDiagnostics(diagnostics, sourceFile, file.sourceId));
           documents.push({ document, sources, sourceFile, sourceId: file.sourceId });

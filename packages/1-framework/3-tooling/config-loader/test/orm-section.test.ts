@@ -204,6 +204,20 @@ describe('the orm section', () => {
     expect(fields(validRaw({ contract: { source } }))).toEqual(['contract.source.format']);
   });
 
+  it('reports parser options that are not booleans', () => {
+    const source = (parserOptions: unknown) => ({ format: 'psl', load: () => ({}), parserOptions });
+
+    expect(
+      fields(validRaw({ contract: { source: source({ viewBodyAsModelFields: 'yes' }) } })),
+    ).toEqual(['contract.source.parserOptions.viewBodyAsModelFields']);
+    expect(fields(validRaw({ contract: { source: source(true) } }))).toEqual([
+      'contract.source.parserOptions',
+    ]);
+    expect(
+      fields(validRaw({ contract: { source: source({ viewBodyAsModelFields: true }) } })),
+    ).toEqual([]);
+  });
+
   it('reports migrations and formatter problems', () => {
     expect(fields(validRaw({ migrations: { dir: 42 } }))).toEqual(['migrations.dir']);
     expect(fields(validRaw({ formatter: { indent: 0, newline: 'CR' } }))).toEqual([

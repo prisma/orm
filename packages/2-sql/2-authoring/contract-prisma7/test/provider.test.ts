@@ -49,9 +49,13 @@ function scratchDir(name: string): string {
 }
 
 describe('prisma7Contract', () => {
-  it('declares the psl format and the input path', () => {
+  it('declares the psl format, the input path, and view bodies read as model fields', () => {
     expect(prisma7Contract('prisma/schema.prisma', postgres)).toMatchObject({
-      source: { format: 'psl', inputs: ['prisma/schema.prisma'] },
+      source: {
+        format: 'psl',
+        inputs: ['prisma/schema.prisma'],
+        parserOptions: { viewBodyAsModelFields: true },
+      },
     });
   });
 

@@ -35,6 +35,12 @@ function loadEnumSchema(codecLookup: CodecLookup) {
 }
 
 describe('prisma6Contract', () => {
+  it('declares view bodies read as model fields', () => {
+    expect(
+      prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding }).source,
+    ).toMatchObject({ format: 'psl', parserOptions: { viewBodyAsModelFields: true } });
+  });
+
   it('reports a structured error from building the contract as PSL.PRISMA6_MONGO_CONTRACT_INVALID', async () => {
     const failure = structuredError('CONTRACT.TEST_FAILURE', 'Enum value cannot be encoded.');
     const result = await loadEnumSchema(lookupWithFailingEncode('mongo/string@1', failure));
