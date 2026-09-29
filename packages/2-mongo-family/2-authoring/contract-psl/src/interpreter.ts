@@ -111,6 +111,8 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   /** Receives a warning for each field typed with a deprecated scalar name. */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  /** Scalar names an earlier Prisma schema used that this schema does not accept, with the codec each maps to; a field typed with one is refused with the name that stores the same way. */
+  readonly formerScalarCodecIds?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -145,6 +147,46 @@ function deprecatedScalarWarner(input: {
       input.sources,
     );
     if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
+  };
+}
+
+interface ScalarNames {
+  readonly warnDeprecated: (field: FieldSymbol) => void;
+  readonly unknownTypeMessage: (field: FieldSymbol, ownerName: string) => string;
+}
+
+/**
+ * The words for a field type the schema cannot resolve: a name from an earlier Prisma that maps to a codec gets the current name for that codec; any other name gets the list of scalar types.
+ */
+function unknownTypeMessages(input: {
+  readonly types: AuthoringTypeNamespace | undefined;
+  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  readonly formerScalarCodecIds: ReadonlyMap<string, string>;
+}): ScalarNames['unknownTypeMessage'] {
+  const current = [...input.scalarTypeCodecIds].filter(([name]) => {
+    const type = input.types?.[name];
+    return !(
+      type !== undefined &&
+      isAuthoringTypeConstructorDescriptor(type) &&
+      type.deprecated !== undefined
+    );
+  });
+  const names = current.map(([name]) => name);
+  const listed =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names.join('');
+  return (field, ownerName) => {
+    const subject = `Field "${ownerName}.${field.name}" has type "${field.typeName}"`;
+    const codecId = input.formerScalarCodecIds.get(field.typeName);
+    const replacement = current.find(([, id]) => id === codecId)?.[0];
+    if (replacement === undefined) {
+      return `${subject}, which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ${listed}.`;
+    }
+    const type = input.types?.[replacement];
+    const stored =
+      type !== undefined && isAuthoringTypeConstructorDescriptor(type)
+        ? ` (stored as BSON ${type.output.nativeType})`
+        : '';
+    return `${subject}, which is not a Mongo scalar type; use "${replacement}"${stored}.`;
   };
 }
 
@@ -1083,7 +1125,7 @@ function resolveNonRelationField(
   scalarTypeCodecIds: ReadonlyMap<string, string>,
   codecIdByEnumName: ReadonlyMap<string, string>,
   presetContext: FieldPresetContext,
-  warnDeprecatedScalar: (field: FieldSymbol) => void,
+  scalarNames: ScalarNames,
 ): ResolvedNonRelationField | undefined {
   const { sources, diagnostics } = presetContext;
   const ownerName = owner.name;
@@ -1136,15 +1178,19 @@ function resolveNonRelationField(
 
   const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
   if (!codecId) {
+    const typeNode = field.node.typeAnnotation()?.name()?.syntax;
+    const source = diagnosticSource(sources, field.node.syntax);
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-      message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
-      ...diagnosticSource(sources, field.node.syntax).at(field.span),
+      message: scalarNames.unknownTypeMessage(field, ownerName),
+      ...(typeNode === undefined
+        ? source.at(field.span)
+        : diagnosticSource(sources, typeNode).at()),
     });
     return undefined;
   }
 
-  warnDeprecatedScalar(field);
+  scalarNames.warnDeprecated(field);
   const result: ContractField = {
     type: { kind: 'scalar', codecId },
     nullable: field.optional,
@@ -1229,11 +1275,18 @@ export function interpretPslDocumentToMongoContract(
     }),
   };
   const presetExecutionDefaults: PresetExecutionDefault[] = [];
-  const warnDeprecatedScalar = deprecatedScalarWarner({
-    types: input.authoringContributions?.type,
-    sources,
-    reportWarning: input.reportWarning,
-  });
+  const scalarNames: ScalarNames = {
+    warnDeprecated: deprecatedScalarWarner({
+      types: input.authoringContributions?.type,
+      sources,
+      reportWarning: input.reportWarning,
+    }),
+    unknownTypeMessage: unknownTypeMessages({
+      types: input.authoringContributions?.type,
+      scalarTypeCodecIds,
+      formerScalarCodecIds: input.formerScalarCodecIds ?? new Map(),
+    }),
+  };
   const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
     symbolTable,
     sources,
@@ -1425,7 +1478,7 @@ export function interpretPslDocumentToMongoContract(
         scalarTypeCodecIds,
         codecIdByEnumName,
         presetContext,
-        warnDeprecatedScalar,
+        scalarNames,
       );
       if (!resolved) continue;
 
@@ -1524,7 +1577,7 @@ export function interpretPslDocumentToMongoContract(
         scalarTypeCodecIds,
         codecIdByEnumName,
         presetContext,
-        warnDeprecatedScalar,
+        scalarNames,
       );
       if (!resolved) continue;
       fields[field.name] = resolved.field;
