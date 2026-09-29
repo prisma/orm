@@ -21,7 +21,7 @@ describe('sqlite/bigint@1 decodeJson', () => {
     ['a fractional JSON number', 1.5],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sqlite/bigint@1 database JSON value must be a decimal string',
+      'sqlite/bigint@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
     );
   });
 });
@@ -40,7 +40,7 @@ describe('sqlite/bigintnumber@1 digit text', () => {
 
   it('refuses a JSON number', () => {
     expect(() => codec.decodeJson(42)).toThrow(
-      'sqlite/bigintnumber@1 database JSON value must be decimal text',
+      'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
     );
   });
 
@@ -48,14 +48,14 @@ describe('sqlite/bigintnumber@1 digit text', () => {
     'refuses the digit text %s, naming the limit',
     (json) => {
       expect(() => codec.decodeJson(json)).toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     },
   );
 
   it('refuses decimal text', () => {
     expect(() => codec.decodeJson('1.5')).toThrow(
-      'sqlite/bigintnumber@1 database JSON value must be decimal text',
+      'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
     );
   });
 });
@@ -73,7 +73,7 @@ describe('sqlite/integer@1 decodeJson', () => {
     ['a boolean', true],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sqlite/integer@1 database JSON value must be a number',
+      'sqlite/integer@1 JSON value must be an integer from -9007199254740991 to 9007199254740991',
     );
   });
 
@@ -82,7 +82,7 @@ describe('sqlite/integer@1 decodeJson', () => {
     ['a number past the safe integer range', 9007199254740992],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sqlite/integer@1 value must be an integer within the safe integer range',
+      'sqlite/integer@1 JSON value must be an integer from -9007199254740991 to 9007199254740991',
     );
   });
 });
@@ -99,13 +99,13 @@ describe('sqlite/real@1 decodeJson', () => {
     ['decimal text', '1.5'],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sqlite/real@1 database JSON value must be a number or the text NaN, Infinity or -Infinity',
+      'sqlite/real@1 JSON value must be a number or the text NaN, Infinity or -Infinity',
     );
   });
 
   it('refuses the text NaN, which SQLite cannot store', () => {
     expect(() => codec.decodeJson('NaN')).toThrow(
-      'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
+      'sqlite/real@1 JSON value must be a number or the text Infinity or -Infinity; SQLite cannot store NaN',
     );
   });
 });

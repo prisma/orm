@@ -9,6 +9,11 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
+import {
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  SAFE_INTEGER_BIGINT_RANGE,
+} from '@internal/framework-components/codec';
 import { numeralText } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
@@ -154,70 +159,6 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
   decimalIntegerDecode('pg/unboundedint@1', wire);
 
 /**
- * Reads a JSON value a codec stores as a string, refusing any other kind. PostgreSQL writes every
- * text-like type — `text`, an enum, `uuid`, `inet`, `bit`, `tsquery`, a time of day, and a date or
- * time cast to text — as a JSON string.
- */
-export const pgStringDecodeJson = (codecId: string, json: JsonValue): string => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `${codecId} database JSON value must be a string`,
-      {
-        meta: { codecId, received: typeof json },
-      },
-    );
-  }
-  return json;
-};
-
-/** Reads a JSON string that must also match `pattern`, which names the form in `form`. */
-export const pgPatternDecodeJson = (
-  codecId: string,
-  json: JsonValue,
-  pattern: RegExp,
-  form: string,
-): string => {
-  const text = pgStringDecodeJson(codecId, json);
-  if (!pattern.test(text)) {
-    throw postgresError('RUNTIME.DECODE_FAILED', `${codecId} database JSON value must be ${form}`, {
-      meta: { codecId, received: text },
-    });
-  }
-  return text;
-};
-
-/** Reads a JSON integer within the range its type holds; PostgreSQL writes `int2` and `int4` as JSON numbers. */
-export const pgIntegerDecodeJson = (
-  codecId: string,
-  json: JsonValue,
-  min: number,
-  max: number,
-): number => {
-  if (typeof json !== 'number' || !Number.isInteger(json) || json < min || json > max) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `${codecId} database JSON value must be an integer from ${min} to ${max}`,
-      { meta: { codecId, received: typeof json === 'number' ? json : typeof json } },
-    );
-  }
-  return json;
-};
-
-export const pgBoolDecodeJson = (json: JsonValue): boolean => {
-  if (typeof json !== 'boolean') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/bool@1 database JSON value must be a boolean',
-      {
-        meta: { codecId: 'pg/bool@1', received: typeof json },
-      },
-    );
-  }
-  return json;
-};
-
-/**
  * A SQL number literal has no form for `NaN` or the infinities; PostgreSQL reads and writes them as
  * the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire,
  * as `sqlFloatEncodeJson` does in JSON.
@@ -272,16 +213,8 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   return Number(value);
 };
 
-export const pgInt8NumberDecodeJson = (json: JsonValue): number => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/int8number@1 database JSON value must be decimal text',
-      { meta: { codecId: 'pg/int8number@1', received: typeof json } },
-    );
-  }
-  return pgInt8NumberDecode(json);
-};
+export const pgInt8NumberDecodeJson = (json: JsonValue): number =>
+  Number(decodeJsonIntegerText('pg/int8number@1', json, SAFE_INTEGER_BIGINT_RANGE));
 
 /**
  * Renders a decimal-text default as a `bigint` literal, for the codecs whose
@@ -456,16 +389,8 @@ export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(
 
 export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoDuration(value);
 
-export const pgIntervalDecodeJson = (json: JsonValue): PgInterval => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/interval@1 database JSON value must be an ISO-8601 duration string',
-      { meta: { codecId: 'pg/interval@1', received: typeof json } },
-    );
-  }
-  return intervalFieldsOf(json);
-};
+export const pgIntervalDecodeJson = (json: JsonValue): PgInterval =>
+  intervalFieldsOf(decodeJsonMatching('pg/interval@1', json, ISO_DURATION, 'an ISO-8601 duration'));
 
 /**
  * Reads the driver's wire value into the application value. `pg` parses an
@@ -495,16 +420,10 @@ const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3
 export const pgByteaEncodeJson = (value: Uint8Array): JsonValue =>
   Buffer.from(value).toString('base64');
 
-export const pgByteaDecodeJson = (value: JsonValue): Uint8Array => {
-  if (typeof value !== 'string' || !BASE64_TEXT.test(value)) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/bytea@1 database JSON value must be a base64 string',
-      { meta: { codecId: 'pg/bytea@1' } },
-    );
-  }
-  return new Uint8Array(Buffer.from(value, 'base64'));
-};
+export const pgByteaDecodeJson = (json: JsonValue): Uint8Array =>
+  new Uint8Array(
+    Buffer.from(decodeJsonMatching('pg/bytea@1', json, BASE64_TEXT, 'a base64 string'), 'base64'),
+  );
 
 const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
 

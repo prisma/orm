@@ -1,4 +1,12 @@
 import type { JsonValue } from '@internal/contract/types';
+import {
+  decodeJsonInteger,
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  INT64_RANGE,
+  type IntegerRange,
+  refuseJsonValue,
+} from '@internal/framework-components/codec';
 import { Binary, Decimal128, Long } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
 
@@ -52,49 +60,24 @@ export function objectIdEncodeJson(codecId: string, value: string): string {
 }
 
 export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
-  if (typeof json !== 'string' || !OBJECT_ID_TEXT.test(json)) {
-    return decodeFailed(codecId, 'JSON value must be 24 hexadecimal digits', json);
-  }
-  return json;
+  return decodeJsonMatching(codecId, json, OBJECT_ID_TEXT, '24 hexadecimal digits');
 }
 
-const INT32_MIN = -(2 ** 31);
-const INT32_MAX = 2 ** 31 - 1;
-const INT32_RULE = `must be an integer from ${INT32_MIN} to ${INT32_MAX}`;
-
-function isInt32(value: unknown): value is number {
-  return (
-    typeof value === 'number' && Number.isInteger(value) && value >= INT32_MIN && value <= INT32_MAX
-  );
-}
+const INT32_RANGE: IntegerRange = { min: -(2 ** 31), max: 2 ** 31 - 1 };
 
 export function int32EncodeJson(codecId: string, value: number): number {
-  if (!isInt32(value)) encodeFailed(codecId, `value ${INT32_RULE}`, value);
+  if (!Number.isInteger(value) || value < INT32_RANGE.min || value > INT32_RANGE.max) {
+    encodeFailed(
+      codecId,
+      `value must be an integer from ${INT32_RANGE.min} to ${INT32_RANGE.max}`,
+      value,
+    );
+  }
   return value;
 }
 
 export function int32DecodeJson(codecId: string, json: JsonValue): number {
-  if (!isInt32(json)) return decodeFailed(codecId, `JSON value ${INT32_RULE}`, json);
-  return json;
-}
-
-const NON_FINITE_TEXT: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
-
-/**
- * JSON has no number for NaN or an infinity, so they are stored as the text `NaN`, `Infinity` and `-Infinity`, as the SQL float codecs store them.
- */
-export function doubleEncodeJson(value: number): JsonValue {
-  return Number.isFinite(value) ? value : String(value);
-}
-
-export function doubleDecodeJson(codecId: string, json: JsonValue): number {
-  if (typeof json === 'number') return json;
-  if (typeof json === 'string' && NON_FINITE_TEXT.has(json)) return Number(json);
-  return decodeFailed(
-    codecId,
-    'JSON value must be a number or the text NaN, Infinity or -Infinity',
-    json,
-  );
+  return decodeJsonInteger(codecId, json, INT32_RANGE);
 }
 
 export function dateEncodeJson(codecId: string, value: Date): string {
@@ -110,24 +93,17 @@ export function dateEncodeJson(codecId: string, value: Date): string {
 export function dateDecodeJson(codecId: string, json: JsonValue): Date {
   const date = typeof json === 'string' ? new Date(json) : undefined;
   if (date === undefined || Number.isNaN(date.getTime()) || date.toISOString() !== json) {
-    return decodeFailed(
-      codecId,
-      'JSON value must be a date and time in UTC as Date.toISOString writes it',
-      json,
-    );
+    return refuseJsonValue(codecId, 'a date and time in UTC as Date.toISOString writes it', json);
   }
   return date;
 }
 
 export function vectorDecodeJson(codecId: string, json: JsonValue): number[] {
-  if (!Array.isArray(json)) {
-    return decodeFailed(codecId, 'JSON value must be an array of numbers', json);
-  }
+  if (!Array.isArray(json)) return refuseJsonValue(codecId, 'an array of numbers', json);
   const numbers: number[] = [];
   for (const element of json) {
-    if (typeof element !== 'number') {
-      return decodeFailed(codecId, 'JSON value must be an array of numbers', element);
-    }
+    if (typeof element !== 'number')
+      return refuseJsonValue(codecId, 'an array of numbers', element);
     numbers.push(element);
   }
   return numbers;
@@ -173,14 +149,7 @@ export function int64EncodeJson(codecId: string, value: bigint | number): string
 }
 
 export function int64DecodeJson(codecId: string, json: JsonValue): bigint {
-  if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
-    return decodeFailed(codecId, 'JSON value must be decimal integer text', json);
-  }
-  const value = BigInt(json);
-  if (!isInt64(value)) {
-    return decodeFailed(codecId, 'JSON value is outside the signed 64-bit range', json);
-  }
-  return value;
+  return decodeJsonIntegerText(codecId, json, INT64_RANGE);
 }
 
 export function decimalTextBigintLiteral(value: JsonValue): string | undefined {
@@ -255,19 +224,15 @@ export function decimal128EncodeJson(codecId: string, value: string): string {
  * The JSON form is what `encodeJson` writes, so it follows the encode rule: canonical decimal text (no exponent), or `NaN`, `Infinity` or `-Infinity`, that a Decimal128 holds exactly.
  */
 export function decimal128DecodeJson(codecId: string, json: JsonValue): string {
-  if (typeof json !== 'string' || !CANONICAL_DECIMAL_TEXT.test(json)) {
-    return decodeFailed(
-      codecId,
-      'JSON value must be decimal text without an exponent, or NaN, Infinity or -Infinity',
-      json,
-    );
-  }
+  const expected =
+    'decimal text without an exponent that a Decimal128 holds exactly, or NaN, Infinity or -Infinity';
+  const text = decodeJsonMatching(codecId, json, CANONICAL_DECIMAL_TEXT, expected);
   try {
-    Decimal128.fromString(json);
+    Decimal128.fromString(text);
   } catch {
-    return decodeFailed(codecId, 'JSON value cannot be stored as a Decimal128 exactly', json);
+    return refuseJsonValue(codecId, expected, json);
   }
-  return json;
+  return text;
 }
 
 export function binaryEncode(codecId: string, value: Uint8Array): Binary {
@@ -285,8 +250,7 @@ export function binaryEncodeJson(value: Uint8Array): string {
 }
 
 export function binaryDecodeJson(codecId: string, json: JsonValue): Uint8Array {
-  if (typeof json !== 'string' || !BASE64_TEXT.test(json)) {
-    return decodeFailed(codecId, 'JSON value must be base64 text', json);
-  }
-  return new Uint8Array(Buffer.from(json, 'base64'));
+  return new Uint8Array(
+    Buffer.from(decodeJsonMatching(codecId, json, BASE64_TEXT, 'base64 text'), 'base64'),
+  );
 }

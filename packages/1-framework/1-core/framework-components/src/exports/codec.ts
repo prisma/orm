@@ -44,6 +44,21 @@ export {
   dataType,
   dataTypeId,
 } from '../shared/data-type';
+export type { BigIntRange, IntegerRange, JsonKind } from '../shared/decode-json';
+export {
+  decodeJsonBoolean,
+  decodeJsonFloat,
+  decodeJsonInteger,
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  decodeJsonString,
+  encodeJsonFloat,
+  INT64_RANGE,
+  jsonKind,
+  refuseJsonValue,
+  SAFE_INTEGER_BIGINT_RANGE,
+  SAFE_INTEGER_RANGE,
+} from '../shared/decode-json';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

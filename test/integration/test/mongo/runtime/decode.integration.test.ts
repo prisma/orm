@@ -1,6 +1,7 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
-import { decodeJsonString, mongoCodec } from '@internal/mongo-codec';
+import { mongoCodec } from '@internal/mongo-codec';
 import type { MongoResultShape } from '@internal/mongo-query-ast/execution';
 import {
   AggregateCommand,

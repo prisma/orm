@@ -19,6 +19,15 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonBoolean,
+  decodeJsonFloat,
+  decodeJsonInteger,
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  decodeJsonString,
+  encodeJsonFloat,
+  INT64_RANGE,
+  refuseJsonValue,
   renderTsLiteral,
 } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -36,9 +45,7 @@ import {
   SqlIntCodec,
   SqlVarcharCodec,
   sqlCharDescriptor,
-  sqlFloatDecodeJson,
   sqlFloatDescriptor,
-  sqlFloatEncodeJson,
   sqlIntDescriptor,
   sqlTextDescriptor,
   sqlVarcharDescriptor,
@@ -54,7 +61,6 @@ import {
   type PrecisionParams,
   pgBigintEncode,
   pgBigintEncodeJson,
-  pgBoolDecodeJson,
   pgByteaDecodeJson,
   pgByteaDecodeWire,
   pgByteaEncodeJson,
@@ -64,7 +70,6 @@ import {
   pgInt8NumberDecodeJson,
   pgInt8NumberEncode,
   pgInt8NumberEncodeJson,
-  pgIntegerDecodeJson,
   pgIntervalDecode,
   pgIntervalDecodeJson,
   pgIntervalEncodeJson,
@@ -75,8 +80,6 @@ import {
   pgJsonEncode,
   pgNumericDecode,
   pgNumericRenderOutputType,
-  pgPatternDecodeJson,
-  pgStringDecodeJson,
   pgUnboundedIntDecode,
   precisionParamsSchema,
   renderLength,
@@ -374,7 +377,7 @@ export class PgTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_TEXT_CODEC_ID, json);
+    return decodeJsonString(PG_TEXT_CODEC_ID, json);
   }
 }
 
@@ -441,7 +444,7 @@ export class PgEnumCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_ENUM_CODEC_ID, json);
+    return decodeJsonString(PG_ENUM_CODEC_ID, json);
   }
 }
 
@@ -583,16 +586,13 @@ export class PgTextArrayCodec extends CodecImpl<
   }
   /** A `text[]` may hold NULL elements, which PostgreSQL writes as JSON `null`. */
   decodeJson(json: JsonValue): readonly (string | null)[] {
-    const refuse = (received: string) =>
-      postgresError(
-        'RUNTIME.DECODE_FAILED',
-        `${PG_TEXT_ARRAY_CODEC_ID} database JSON value must be an array of strings and nulls`,
-        { meta: { codecId: PG_TEXT_ARRAY_CODEC_ID, received } },
-      );
-    if (!Array.isArray(json)) throw refuse(json === null ? 'null' : typeof json);
+    const expected = 'an array of strings and nulls';
+    if (!Array.isArray(json)) return refuseJsonValue(PG_TEXT_ARRAY_CODEC_ID, expected, json);
     const elements: (string | null)[] = [];
     for (const entry of json) {
-      if (entry !== null && typeof entry !== 'string') throw refuse(typeof entry);
+      if (entry !== null && typeof entry !== 'string') {
+        return refuseJsonValue(PG_TEXT_ARRAY_CODEC_ID, expected, entry);
+      }
       elements.push(entry);
     }
     return elements;
@@ -634,7 +634,7 @@ export class PgInt4Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return pgIntegerDecodeJson(PG_INT4_CODEC_ID, json, -2147483648, 2147483647);
+    return decodeJsonInteger(PG_INT4_CODEC_ID, json, { min: -2147483648, max: 2147483647 });
   }
 }
 
@@ -682,7 +682,7 @@ export class PgInt2Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return pgIntegerDecodeJson(PG_INT2_CODEC_ID, json, -32768, 32767);
+    return decodeJsonInteger(PG_INT2_CODEC_ID, json, { min: -32768, max: 32767 });
   }
 }
 
@@ -736,14 +736,7 @@ export class PgInt8Codec extends CodecImpl<
     return pgBigintEncodeJson(PG_INT8_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string') {
-      throw postgresError(
-        'RUNTIME.DECODE_FAILED',
-        'pg/int8@1 database JSON value must be a decimal string',
-        { meta: { codecId: PG_INT8_CODEC_ID, received: typeof json } },
-      );
-    }
-    return pgInt8Decode(json);
+    return decodeJsonIntegerText(PG_INT8_CODEC_ID, json, INT64_RANGE);
   }
 }
 
@@ -844,10 +837,10 @@ export class PgFloat4Codec extends CodecImpl<
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return sqlFloatEncodeJson(value);
+    return encodeJsonFloat(value);
   }
   decodeJson(json: JsonValue): number {
-    return sqlFloatDecodeJson(PG_FLOAT4_CODEC_ID, json);
+    return decodeJsonFloat(PG_FLOAT4_CODEC_ID, json);
   }
 }
 
@@ -892,10 +885,10 @@ export class PgFloat8Codec extends CodecImpl<
     return decodePostgresNumberWire(wire);
   }
   encodeJson(value: number): JsonValue {
-    return sqlFloatEncodeJson(value);
+    return encodeJsonFloat(value);
   }
   decodeJson(json: JsonValue): number {
-    return sqlFloatDecodeJson(PG_FLOAT8_CODEC_ID, json);
+    return decodeJsonFloat(PG_FLOAT8_CODEC_ID, json);
   }
 }
 
@@ -943,7 +936,7 @@ export class PgBoolCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): boolean {
-    return pgBoolDecodeJson(json);
+    return decodeJsonBoolean(PG_BOOL_CODEC_ID, json);
   }
 }
 
@@ -998,13 +991,8 @@ export class PgNumericCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    if (typeof json !== 'string') {
-      throw postgresError(
-        'RUNTIME.DECODE_FAILED',
-        'pg/numeric@1 database JSON value must be a decimal string',
-        { meta: { codecId: PG_NUMERIC_CODEC_ID, received: typeof json } },
-      );
-    }
+    if (typeof json !== 'string')
+      return refuseJsonValue(PG_NUMERIC_CODEC_ID, 'a decimal string', json);
     return json;
   }
 }
@@ -1059,14 +1047,7 @@ export class PgUnboundedIntCodec extends CodecImpl<
     return pgBigintEncodeJson(PG_UNBOUNDED_INT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string') {
-      throw postgresError(
-        'RUNTIME.DECODE_FAILED',
-        'pg/unboundedint@1 database JSON value must be a decimal string',
-        { meta: { codecId: PG_UNBOUNDED_INT_CODEC_ID, received: typeof json } },
-      );
-    }
-    return pgUnboundedIntDecode(json);
+    return decodeJsonIntegerText(PG_UNBOUNDED_INT_CODEC_ID, json);
   }
 }
 
@@ -1119,7 +1100,7 @@ export class PgTimetzCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_TIMETZ_CODEC_ID, json);
+    return decodeJsonString(PG_TIMETZ_CODEC_ID, json);
   }
 }
 
@@ -1168,7 +1149,7 @@ export class PgBitCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgPatternDecodeJson(PG_BIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
+    return decodeJsonMatching(PG_BIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
   }
 }
 
@@ -1216,7 +1197,7 @@ export class PgVarbitCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgPatternDecodeJson(PG_VARBIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
+    return decodeJsonMatching(PG_VARBIT_CODEC_ID, json, BIT_STRING, 'a string of 0 and 1 digits');
   }
 }
 
@@ -1311,7 +1292,7 @@ export class PgUuidCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgPatternDecodeJson(PG_UUID_CODEC_ID, json, UUID_TEXT, 'a hyphenated UUID');
+    return decodeJsonMatching(PG_UUID_CODEC_ID, json, UUID_TEXT, 'a hyphenated UUID');
   }
 }
 
@@ -1358,7 +1339,7 @@ export class PgInetCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_INET_CODEC_ID, json);
+    return decodeJsonString(PG_INET_CODEC_ID, json);
   }
 }
 
@@ -1414,7 +1395,7 @@ export class PgTsqueryCodec extends CodecImpl<
   }
   decodeJson(json: JsonValue): TsqueryValue {
     return blindCast<TsqueryValue, 'a tsquery value is the text PostgreSQL writes for it'>(
-      pgStringDecodeJson(PG_TSQUERY_CODEC_ID, json),
+      decodeJsonString(PG_TSQUERY_CODEC_ID, json),
     );
   }
 }

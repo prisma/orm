@@ -27,7 +27,7 @@ describe('sql/float@1 decodeJson', () => {
     ['null', null],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'sql/float@1 database JSON value must be a number or the text NaN, Infinity or -Infinity',
+      'sql/float@1 JSON value must be a number or the text NaN, Infinity or -Infinity',
     );
   });
 });

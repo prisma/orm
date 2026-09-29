@@ -1,5 +1,5 @@
-import type { CodecCallContext } from '@internal/framework-components/codec';
-import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
 import { resolveValue } from '../src/resolve-value';

@@ -1,7 +1,6 @@
-import type { CodecCallContext } from '@internal/framework-components/codec';
+import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
 import { expectTypeOf, test } from 'vitest';
 import { mongoCodec } from '../src/codecs';
-import { decodeJsonString } from '../src/decode-json';
 
 test('Mongo uses the framework CodecCallContext directly (signal-only, no `column`)', () => {
   type Keys = keyof CodecCallContext;

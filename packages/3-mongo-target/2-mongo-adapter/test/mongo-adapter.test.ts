@@ -1,4 +1,5 @@
-import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString } from '@internal/framework-components/codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
 import type { AnyMongoCommand } from '@internal/mongo-query-ast/execution';
 import {

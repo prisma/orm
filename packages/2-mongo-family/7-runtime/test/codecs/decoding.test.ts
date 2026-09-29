@@ -1,10 +1,6 @@
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
-import {
-  decodeJsonString,
-  type MongoCodecRegistry,
-  mongoCodec,
-  newMongoCodecRegistry,
-} from '@internal/mongo-codec';
+import { type MongoCodecRegistry, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
 import { structuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'mongodb';

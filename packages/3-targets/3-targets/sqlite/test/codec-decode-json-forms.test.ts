@@ -16,11 +16,16 @@ describe('sqlite/text@1 decodeJson', () => {
     expect(['hello', '', '42'].map((json) => codec.decodeJson(json))).toEqual(['hello', '', '42']);
   });
 
-  it.each([[42], [true], [null], [['a']]])('refuses %j', (json) => {
+  it.each([
+    [42, 'number'],
+    [true, 'boolean'],
+    [null, 'null'],
+    [['a'], 'array'],
+  ])('refuses %j', (json, received) => {
     expect(() => codec.decodeJson(json)).toThrow(
       expect.objectContaining({
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/text@1', received: json === null ? 'object' : typeof json },
+        meta: { codecId: 'sqlite/text@1', received },
       }),
     );
   });

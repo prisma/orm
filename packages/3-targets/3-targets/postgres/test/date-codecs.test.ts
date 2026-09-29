@@ -65,7 +65,14 @@ describe('pg/timestamptz-date@1', () => {
       if (format === 'wire') {
         await expect(codec.decode(wire, {})).rejects.toThrow(RangeError);
       } else {
-        expect(() => codec.decodeJson(wire)).toThrow(RangeError);
+        expect(() => codec.decodeJson(wire)).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.DECODE_FAILED',
+            message:
+              'pg/timestamptz-date@1 JSON value must be a timestamp with time zone as PostgreSQL writes it',
+            meta: { codecId: 'pg/timestamptz-date@1', received: 'string' },
+          }),
+        );
       }
     });
 
@@ -91,8 +98,18 @@ describe('pg/timestamptz-date@1', () => {
     },
   );
 
-  it.each([null, 0, {}, []])('rejects non-string JSON %s', (value) => {
-    expect(() => codec.decodeJson(value)).toThrow('pg/timestamptz-date@1');
+  it.each([
+    [null, 'null'],
+    [0, 'number'],
+    [{}, 'object'],
+    [[], 'array'],
+  ])('rejects non-string JSON %s', (value, received) => {
+    expect(() => codec.decodeJson(value)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        meta: { codecId: 'pg/timestamptz-date@1', received },
+      }),
+    );
   });
 
   it('projects nested timestamps through the same text format as flat reads', () => {

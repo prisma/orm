@@ -6,16 +6,12 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonString,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import {
-  type PrecisionParams,
-  pgStringDecodeJson,
-  precisionParamsSchema,
-  renderPrecision,
-} from './codec-helpers';
+import { type PrecisionParams, precisionParamsSchema, renderPrecision } from './codec-helpers';
 import {
   PG_DATE_STRING_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
@@ -46,7 +42,7 @@ export class PgDateStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_DATE_STRING_CODEC_ID, json);
+    return decodeJsonString(PG_DATE_STRING_CODEC_ID, json);
   }
 }
 
@@ -91,7 +87,7 @@ export class PgTimestampStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_TIMESTAMP_STRING_CODEC_ID, json);
+    return decodeJsonString(PG_TIMESTAMP_STRING_CODEC_ID, json);
   }
 }
 
@@ -147,7 +143,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_TIMESTAMPTZ_STRING_CODEC_ID, json);
+    return decodeJsonString(PG_TIMESTAMPTZ_STRING_CODEC_ID, json);
   }
 }
 
@@ -203,7 +199,7 @@ export class PgTimeStringCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return pgStringDecodeJson(PG_TIME_STRING_CODEC_ID, json);
+    return decodeJsonString(PG_TIME_STRING_CODEC_ID, json);
   }
 }
 

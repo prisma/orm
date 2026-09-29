@@ -151,7 +151,7 @@ describe('pgvector codecs', () => {
     it('rejects the text form, which reads back at the wrong precision', () => {
       const codec = asAsyncCodec(3);
       expect(() => codec.decodeJson('[0.1,0.2,0.3]')).toThrow(
-        'Vector database JSON value must be an array',
+        'pg/vector@1 JSON value must be an array of numbers',
       );
     });
 

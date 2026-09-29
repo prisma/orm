@@ -118,22 +118,22 @@ describe('pg/int8number@1', () => {
 
     it('rejects decimal text past the safe integer range', () => {
       expect(() => codec.decodeJson('9007199254740992')).toThrow(
-        'pg/int8number@1 value must be an integer within the safe integer range',
+        'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
       expect(() => codec.decodeJson('-9007199254740992')).toThrow(
-        'pg/int8number@1 value must be an integer within the safe integer range',
+        'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     });
 
     it('rejects a JSON string that is not a decimal integer', () => {
       expect(() => codec.decodeJson('1.5')).toThrow(
-        'pg/int8number@1 value must be a decimal integer',
+        'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     });
 
     it('rejects a JSON number, whose digits a wide value has already lost', () => {
       expect(() => codec.decodeJson(42)).toThrow(
-        'pg/int8number@1 database JSON value must be decimal text',
+        'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     });
 
@@ -314,13 +314,13 @@ describe('pg/unboundedint@1', () => {
 
     it('rejects a JSON number, which has already lost digits', () => {
       expect(() => codec.decodeJson(42)).toThrow(
-        'pg/unboundedint@1 database JSON value must be a decimal string',
+        'pg/unboundedint@1 JSON value must be a decimal integer string',
       );
     });
 
     it('rejects non-integral JSON text', () => {
       expect(() => codec.decodeJson('1.5')).toThrow(
-        'pg/unboundedint@1 value must be a decimal integer',
+        'pg/unboundedint@1 JSON value must be a decimal integer string',
       );
     });
   });

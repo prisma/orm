@@ -1,9 +1,13 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
-import { renderTsLiteral } from '@internal/framework-components/codec';
 import {
   decodeJsonBoolean,
+  decodeJsonFloat,
   decodeJsonString,
+  encodeJsonFloat,
+  renderTsLiteral,
+} from '@internal/framework-components/codec';
+import {
   type MongoCodec,
   type MongoCodecRegistry,
   mongoCodec,
@@ -31,8 +35,6 @@ import {
   decimal128Encode,
   decimal128EncodeJson,
   decimalTextBigintLiteral,
-  doubleDecodeJson,
-  doubleEncodeJson,
   int32DecodeJson,
   int32EncodeJson,
   int64Decode,
@@ -93,8 +95,8 @@ export const mongoDoubleCodec = mongoCodec({
   typeId: MONGO_DOUBLE_CODEC_ID,
   decode: (wire: number) => wire,
   encode: (value: number) => value,
-  encodeJson: doubleEncodeJson,
-  decodeJson: (json) => doubleDecodeJson(MONGO_DOUBLE_CODEC_ID, json),
+  encodeJson: encodeJsonFloat,
+  decodeJson: (json) => decodeJsonFloat(MONGO_DOUBLE_CODEC_ID, json),
 });
 
 export const mongoInt32Codec = mongoCodec({

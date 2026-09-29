@@ -1,4 +1,5 @@
-import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString } from '@internal/framework-components/codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';

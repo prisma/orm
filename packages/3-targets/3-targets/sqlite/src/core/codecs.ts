@@ -18,6 +18,16 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonFloat,
+  decodeJsonInteger,
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  decodeJsonString,
+  encodeJsonFloat,
+  INT64_RANGE,
+  refuseJsonValue,
+  SAFE_INTEGER_BIGINT_RANGE,
+  SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
 import {
   CaseExpr,
@@ -27,9 +37,7 @@ import {
   NullCheckExpr,
   type ProjectionExpr,
   sqlCharDescriptor,
-  sqlFloatDecodeJson,
   sqlFloatDescriptor,
-  sqlFloatEncodeJson,
   sqlIntDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
@@ -138,10 +146,10 @@ const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
  * SQLite stores an infinity, and writes it in JSON as `9.0e+999`, but it cannot store NaN, which it
  * turns into NULL; so a REAL value may be infinite and never NaN.
  */
-const refuseNaN = (value: number, code: 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED') => {
+const refuseNaN = (value: number) => {
   if (Number.isNaN(value)) {
     throw sqliteError(
-      code,
+      'RUNTIME.ENCODE_FAILED',
       'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
       {
         meta: { codecId: SQLITE_REAL_CODEC_ID, received: String(value) },
@@ -274,16 +282,7 @@ export class SqliteTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    if (typeof json !== 'string') {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/text@1 database JSON value must be a string',
-        {
-          meta: { codecId: SQLITE_TEXT_CODEC_ID, received: typeof json },
-        },
-      );
-    }
-    return json;
+    return decodeJsonString(SQLITE_TEXT_CODEC_ID, json);
   }
 }
 
@@ -325,21 +324,7 @@ export class SqliteIntegerCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    if (typeof json !== 'number') {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/integer@1 database JSON value must be a number',
-        { meta: { codecId: SQLITE_INTEGER_CODEC_ID, received: typeof json } },
-      );
-    }
-    if (!Number.isSafeInteger(json)) {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        `sqlite/integer@1 value must be an integer within the safe integer range, got ${String(json)}`,
-        { meta: { codecId: SQLITE_INTEGER_CODEC_ID, received: String(json) } },
-      );
-    }
-    return json;
+    return decodeJsonInteger(SQLITE_INTEGER_CODEC_ID, json, SAFE_INTEGER_RANGE);
   }
 }
 
@@ -378,10 +363,18 @@ export class SqliteRealCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: number): JsonValue {
-    return sqlFloatEncodeJson(refuseNaN(value, 'RUNTIME.ENCODE_FAILED'));
+    return encodeJsonFloat(refuseNaN(value));
   }
   decodeJson(json: JsonValue): number {
-    return refuseNaN(sqlFloatDecodeJson(SQLITE_REAL_CODEC_ID, json), 'RUNTIME.DECODE_FAILED');
+    const value = decodeJsonFloat(SQLITE_REAL_CODEC_ID, json);
+    if (Number.isNaN(value)) {
+      return refuseJsonValue(
+        SQLITE_REAL_CODEC_ID,
+        'a number or the text Infinity or -Infinity; SQLite cannot store NaN',
+        json,
+      );
+    }
+    return value;
   }
 }
 
@@ -423,14 +416,13 @@ export class SqliteBlobCodec extends CodecImpl<
     return Buffer.from(value).toString('hex').toUpperCase();
   }
   decodeJson(json: JsonValue): Uint8Array {
-    if (typeof json !== 'string' || !UPPERCASE_HEX.test(json)) {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/blob@1 database JSON value must be uppercase hexadecimal text',
-        { meta: { codecId: SQLITE_BLOB_CODEC_ID, received: typeof json } },
-      );
-    }
-    return new Uint8Array(Buffer.from(json, 'hex'));
+    const hex = decodeJsonMatching(
+      SQLITE_BLOB_CODEC_ID,
+      json,
+      UPPERCASE_HEX,
+      'uppercase hexadecimal text',
+    );
+    return new Uint8Array(Buffer.from(hex, 'hex'));
   }
 }
 
@@ -484,14 +476,11 @@ export class SqliteDatetimeCodec extends CodecImpl<
     return value.toISOString();
   }
   decodeJson(json: JsonValue): Date {
-    if (typeof json !== 'string') {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/datetime@1 contract value must be an ISO-8601 string',
-        { meta: { codecId: SQLITE_DATETIME_CODEC_ID, received: typeof json } },
-      );
+    const date = new Date(decodeJsonString(SQLITE_DATETIME_CODEC_ID, json));
+    if (Number.isNaN(date.getTime())) {
+      return refuseJsonValue(SQLITE_DATETIME_CODEC_ID, 'a date and time string', json);
     }
-    return this.parseDate(json);
+    return date;
   }
 }
 
@@ -598,14 +587,7 @@ export class SqliteBigintCodec extends CodecImpl<
     return bigintEncodeJson(SQLITE_BIGINT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/bigint@1 database JSON value must be a decimal string',
-        { meta: { codecId: SQLITE_BIGINT_CODEC_ID, received: typeof json } },
-      );
-    }
-    return BigInt(json);
+    return decodeJsonIntegerText(SQLITE_BIGINT_CODEC_ID, json, INT64_RANGE);
   }
 }
 
@@ -669,14 +651,9 @@ export class SqliteBigintNumberCodec extends CodecImpl<
     return String(encodableSafeInteger(value));
   }
   decodeJson(json: JsonValue): number {
-    if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        'sqlite/bigintnumber@1 database JSON value must be decimal text',
-        { meta: { codecId: SQLITE_BIGINT_NUMBER_CODEC_ID, received: typeof json } },
-      );
-    }
-    return safeIntegerFromBigint(BigInt(json));
+    return Number(
+      decodeJsonIntegerText(SQLITE_BIGINT_NUMBER_CODEC_ID, json, SAFE_INTEGER_BIGINT_RANGE),
+    );
   }
 }
 

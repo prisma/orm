@@ -6,11 +6,12 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonString,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
-import { type PrecisionParams, pgStringDecodeJson, precisionParamsSchema } from './codec-helpers';
+import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
@@ -49,7 +50,7 @@ export class PgDateTemporalCodec extends CodecImpl<
     return pgDateTemporalEncode(value);
   }
   decodeJson(json: JsonValue): Temporal.PlainDate {
-    return pgDateTemporalDecode(pgStringDecodeJson(PG_DATE_TEMPORAL_CODEC_ID, json));
+    return pgDateTemporalDecode(decodeJsonString(PG_DATE_TEMPORAL_CODEC_ID, json));
   }
 }
 
@@ -94,7 +95,7 @@ export class PgTimestampTemporalCodec extends CodecImpl<
     return pgTimestampTemporalEncode(value);
   }
   decodeJson(json: JsonValue): Temporal.PlainDateTime {
-    return pgTimestampTemporalDecode(pgStringDecodeJson(PG_TIMESTAMP_TEMPORAL_CODEC_ID, json));
+    return pgTimestampTemporalDecode(decodeJsonString(PG_TIMESTAMP_TEMPORAL_CODEC_ID, json));
   }
 }
 
@@ -147,7 +148,7 @@ export class PgTimestamptzTemporalCodec extends CodecImpl<
     return pgTimestamptzTemporalEncode(value);
   }
   decodeJson(json: JsonValue): Temporal.Instant {
-    return pgTimestamptzTemporalDecode(pgStringDecodeJson(PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID, json));
+    return pgTimestamptzTemporalDecode(decodeJsonString(PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID, json));
   }
 }
 
@@ -200,7 +201,7 @@ export class PgTimeTemporalCodec extends CodecImpl<
     return pgTimeTemporalEncode(value);
   }
   decodeJson(json: JsonValue): Temporal.PlainTime {
-    return pgTimeTemporalDecode(pgStringDecodeJson(PG_TIME_TEMPORAL_CODEC_ID, json));
+    return pgTimeTemporalDecode(decodeJsonString(PG_TIME_TEMPORAL_CODEC_ID, json));
   }
 }
 

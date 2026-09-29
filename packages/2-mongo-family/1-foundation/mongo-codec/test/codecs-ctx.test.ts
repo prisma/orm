@@ -1,7 +1,6 @@
-import type { CodecCallContext } from '@internal/framework-components/codec';
+import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import { mongoCodec } from '../src/codecs';
-import { decodeJsonString } from '../src/decode-json';
 
 describe('mongoCodec() factory — CodecCallContext arity', () => {
   it('lifts a single-arg `(value)` author unchanged (back-compat)', async () => {

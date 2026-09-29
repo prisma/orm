@@ -50,7 +50,7 @@ class IncludedTextCodec extends CodecImpl<
 
   decodeJson(json: JsonValue): string {
     if (typeof json !== 'string') {
-      throw new TypeError(`expected included text database JSON value, got ${typeof json}`);
+      throw new TypeError(`expected included text JSON value, got ${typeof json}`);
     }
     if (json === SENSITIVE_DATABASE_VALUE) {
       throw new Error('intentional included text decode failure');
@@ -153,7 +153,7 @@ async function setupCodecTables(runtime: PgIntegrationRuntime): Promise<void> {
 
 describe('integration/include codecs', () => {
   it(
-    'delegates database JSON values to codec.decodeJson',
+    'delegates JSON values to codec.decodeJson',
     async () => {
       await withCollectionRuntime(
         async (runtime) => {

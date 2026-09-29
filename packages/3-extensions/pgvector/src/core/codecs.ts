@@ -19,6 +19,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  refuseJsonValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -141,11 +142,7 @@ export class PgVectorCodec extends CodecImpl<
   }
 
   decodeJson(json: JsonValue): number[] {
-    if (!Array.isArray(json)) {
-      throw pgVectorError('RUNTIME.DECODE_FAILED', 'Vector database JSON value must be an array', {
-        meta: { codecId: VECTOR_CODEC_ID },
-      });
-    }
+    if (!Array.isArray(json)) return refuseJsonValue(VECTOR_CODEC_ID, 'an array of numbers', json);
     const value = [...json];
     this.assertVector(value, 'RUNTIME.DECODE_FAILED');
     return value;

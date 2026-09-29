@@ -1,6 +1,7 @@
 import type { ExecutionMutationDefault } from '@internal/contract/types';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
-import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { describe, expect, it } from 'vitest';
 import {
   createMongoExecutionContext,

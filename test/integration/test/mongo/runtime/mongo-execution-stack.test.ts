@@ -1,6 +1,7 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
-import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   createMongoExecutionContext,
   createMongoExecutionStack,

@@ -1,9 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { newMongoCodecRegistry } from '../src/codec-registry';
 import { type MongoCodec, mongoCodec } from '../src/codecs';
-import { decodeJsonString } from '../src/decode-json';
 
 describe('mongoCodec()', () => {
   it('creates a codec with the given config', async () => {

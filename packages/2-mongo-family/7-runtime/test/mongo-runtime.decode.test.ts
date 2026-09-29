@@ -1,5 +1,6 @@
 import type { PlanMeta } from '@internal/contract/types';
-import { decodeJsonString, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
+import { decodeJsonString } from '@internal/framework-components/codec';
+import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoDriver, MongoLoweredDraft } from '@internal/mongo-lowering';
 import type { MongoQueryPlan } from '@internal/mongo-query-ast/execution';
 import type { AnyMongoWireCommand } from '@internal/mongo-wire';

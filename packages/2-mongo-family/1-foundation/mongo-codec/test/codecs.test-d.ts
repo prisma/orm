@@ -1,9 +1,8 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { Codec as BaseCodec } from '@internal/framework-components/codec';
+import { type Codec as BaseCodec, decodeJsonString } from '@internal/framework-components/codec';
 import { expectTypeOf, test } from 'vitest';
 import type { MongoCodec, MongoCodecInput } from '../src/codecs';
 import { mongoCodec } from '../src/codecs';
-import { decodeJsonString } from '../src/decode-json';
 
 // MongoCodec takes BaseCodec's four generics in the same order, plus a fifth, `TOutput`, for what `decode` returns; it defaults to `TInput`, so a four-generic MongoCodec is a BaseCodec. Trait/targetType/renderOutputType metadata lives on the unified `CodecDescriptor` (TML-2357).
 test('MongoCodec with four generics is assignable to BaseCodec', () => {
