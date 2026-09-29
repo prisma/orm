@@ -197,10 +197,7 @@ describe('a default on a value-object field matches its composite type', () => {
       '  a Amounts @default(json`{"price": "1.5", "cents": "1.50", "big": "1", "payload": {}, "role": "Z"}`)',
     );
     expect(diagnostics).toEqual([
-      {
-        ...invalidLiteral('a', 'Field "User.a.role": Expected one of: "a" | "b"'),
-        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      },
+      invalidLiteral('a', 'Field "User.a.role": Expected one of: "a" | "b"'),
     ]);
   });
 

@@ -19,6 +19,7 @@ import {
   type DataTypeSupport,
   type DefaultColumn,
   PSL_DEFAULT_TYPE_INCOMPATIBLE,
+  PSL_INVALID_DEFAULT_LITERAL,
 } from './data-type-default';
 
 /** The value objects of a document, and every member each composite type declares. */
@@ -192,7 +193,7 @@ function enumValueMismatch(
   );
   if (stored.some((storedValue) => storedValue === value)) return undefined;
   return {
-    code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+    code: PSL_INVALID_DEFAULT_LITERAL,
     message: `Field "${path}": Expected one of: ${stored.map((storedValue) => JSON.stringify(storedValue)).join(' | ')}`,
   };
 }
