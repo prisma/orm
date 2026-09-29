@@ -6,8 +6,18 @@ import {
   isAuthoringFieldPresetDescriptor,
 } from './framework-authoring';
 
+function presetSpellingsUnder(members: AuthoringFieldNamespace, prefix: string): readonly string[] {
+  return Object.entries(members).flatMap(([name, member]) =>
+    isAuthoringFieldPresetDescriptor(member)
+      ? [
+          `${prefix}.${name}(${(member.args ?? []).map((arg, index) => arg.name ?? `argument${index + 1}`).join(', ')})`,
+        ]
+      : presetSpellingsUnder(member, `${prefix}.${name}`),
+  );
+}
+
 /**
- * How each field preset registered directly under `namespace` is written, with the names of its arguments: `temporal.timestamp(onCreate, onUpdate)`.
+ * How each field preset registered under `namespace`, at any depth, is written, with the names of its arguments: `temporal.timestamp(onCreate, onUpdate)`.
  */
 export function fieldPresetSpellings(
   contributions: AuthoringContributions | undefined,
@@ -15,13 +25,7 @@ export function fieldPresetSpellings(
 ): readonly string[] {
   const members = contributions?.field?.[namespace];
   if (members === undefined || isAuthoringFieldPresetDescriptor(members)) return [];
-  return Object.entries(members).flatMap(([name, member]) =>
-    isAuthoringFieldPresetDescriptor(member)
-      ? [
-          `${namespace}.${name}(${(member.args ?? []).map((arg, index) => arg.name ?? `argument${index + 1}`).join(', ')})`,
-        ]
-      : [],
-  );
+  return presetSpellingsUnder(members, namespace);
 }
 
 /**

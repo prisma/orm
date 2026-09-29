@@ -60,9 +60,11 @@ export function reportUnknownFieldPreset(input: {
 }): void {
   const presets = fieldPresetSpellings(input.authoringContributions, input.namespace);
   const listed =
-    presets.length > 1
-      ? `${presets.slice(0, -1).join(', ')} and ${presets.at(-1)}`
-      : presets.join('');
+    presets.length === 0
+      ? 'no field presets'
+      : presets.length === 1
+        ? presets.join('')
+        : `${presets.slice(0, -1).join(', ')} and ${presets.at(-1)}`;
   input.diagnostics.push({
     code: 'PSL_UNKNOWN_FIELD_PRESET',
     message: `${input.entityLabel} references unknown field preset "${input.helperPath}". The "${input.namespace}" namespace has ${listed}.`,
