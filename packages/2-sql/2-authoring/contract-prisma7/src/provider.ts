@@ -94,6 +94,10 @@ export function prisma7Contract(
     source: {
       format: 'psl',
       inputs: [schemaPath],
+      schemaOwner: {
+        applySchemaChange:
+          'Apply the schema change with Prisma 7 first: run its migrations with the Prisma 7 CLI (`prisma7 migrate dev`, or `prisma7 migrate deploy` for a deployed database)',
+      },
       async load(context) {
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {
