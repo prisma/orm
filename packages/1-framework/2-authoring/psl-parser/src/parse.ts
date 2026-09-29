@@ -1,4 +1,4 @@
-import type { PslParseOptions } from '@internal/config/config-types';
+import type { PslParserOptions } from '@internal/config/config-types';
 import type { PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
 import type { PslDiagnostic } from './diagnostic';
@@ -519,7 +519,7 @@ type MemberParser = (cursor: Cursor) => void;
 export function parse(
   source: string,
   filename: string,
-  options: PslParseOptions = {},
+  options: PslParserOptions = {},
 ): ParseResult {
   const cursor = new Cursor(filename, source);
   const green = parseDocument(cursor, options);
@@ -529,7 +529,7 @@ export function parse(
   return { document, diagnostics: cursor.diagnostics, sources };
 }
 
-function parseDocument(cursor: Cursor, options: PslParseOptions): GreenNode {
+function parseDocument(cursor: Cursor, options: PslParserOptions): GreenNode {
   cursor.startNode('Document');
   while (cursor.peekKind() !== 'Eof') {
     parseDeclaration(cursor, false, options);
@@ -558,7 +558,7 @@ function keywordIs(cursor: Cursor, keyword: string): boolean {
 function parseDeclaration(
   cursor: Cursor,
   insideNamespace: boolean,
-  options: PslParseOptions,
+  options: PslParserOptions,
 ): void {
   const name = cursor.peekKind(1) === 'Ident' ? cursor.peekToken(1).text : '';
   if (insideNamespace && keywordIs(cursor, 'namespace')) {
@@ -640,7 +640,7 @@ export function parseModel(cursor: Cursor): GreenNode | undefined {
  */
 export function parseGenericBlock(
   cursor: Cursor,
-  options: PslParseOptions = {},
+  options: PslParserOptions,
 ): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
   const keyword = cursor.peekToken().text;
@@ -664,10 +664,7 @@ export function parseGenericBlock(
   return cursor.finishNode();
 }
 
-export function parseNamespace(
-  cursor: Cursor,
-  options: PslParseOptions = {},
-): GreenNode | undefined {
+export function parseNamespace(cursor: Cursor, options: PslParserOptions): GreenNode | undefined {
   if (!keywordIs(cursor, 'namespace')) return undefined;
   return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true, options));
 }
@@ -746,7 +743,7 @@ function parseNamedTypeMember(cursor: Cursor): void {
  * attributes (`USER @map("user")`). With `viewBodyAsModelFields`, a `view` body is read like a model
  * body. Each interpreter decides whether it accepts the block and its members.
  */
-function genericBlockMemberParser(keyword: string, options: PslParseOptions): MemberParser {
+function genericBlockMemberParser(keyword: string, options: PslParserOptions): MemberParser {
   if (keyword === 'view' && options.viewBodyAsModelFields === true) return parseModelMember;
   if (keyword === 'enum') return parseEnumMember;
   return parseKeyValueMember;

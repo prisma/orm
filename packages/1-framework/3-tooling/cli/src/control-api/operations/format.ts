@@ -1,6 +1,6 @@
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { EOL } from 'node:os';
-import type { PrismaNextConfig, PslParseOptions } from '@internal/config/config-types';
+import type { PrismaNextConfig, PslParserOptions } from '@internal/config/config-types';
 import { expandContractInputs } from '@internal/config-loader';
 import { type FormatOptions, format } from '@internal/psl-parser/format';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -33,7 +33,7 @@ export function resolveNewline(
 async function formatOneFile(
   inputPath: string,
   formatOptions: FormatOptions,
-  parseOptions: PslParseOptions | undefined,
+  parserOptions: PslParserOptions | undefined,
 ): Promise<Result<string, CliStructuredError>> {
   let contents: string;
   try {
@@ -50,7 +50,7 @@ async function formatOneFile(
 
   let formatted: string;
   try {
-    formatted = format(contents, formatOptions, parseOptions);
+    formatted = format(contents, formatOptions, parserOptions);
   } catch (error) {
     if (isStructuredError(error) && error.code === 'PSL.PARSE_FAILED') {
       return notOk(

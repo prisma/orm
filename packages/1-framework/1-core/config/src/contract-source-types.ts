@@ -82,14 +82,14 @@ export interface ContractSourceProviderBase {
 }
 
 /** Parser rules a PSL source's files need beyond the Prisma 8 grammar. Every tool that parses the source's files passes them to the parser. */
-export interface PslParseOptions {
+export interface PslParserOptions {
   /** Read the lines of a `view` block as model fields instead of `key = value` entries. */
   readonly viewBodyAsModelFields?: boolean;
 }
 
 export interface PslContractSourceProvider extends ContractSourceProviderBase {
   readonly format: 'psl';
-  readonly parserOptions?: PslParseOptions;
+  readonly parserOptions?: PslParserOptions;
 }
 
 export interface TypeScriptContractSourceProvider extends ContractSourceProviderBase {

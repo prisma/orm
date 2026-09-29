@@ -1,4 +1,5 @@
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import type { PslParserOptions } from '@internal/config/config-types';
 import { findNearestConfigPathForFile } from '@internal/config-loader';
 import { CliStructuredError } from '@internal/errors/control';
 import { isPrismaNextSchema, renameLegacyDirective, type SymbolTable } from '@internal/psl-parser';
@@ -64,6 +65,7 @@ interface ProjectState {
   readonly configPath: string;
   readonly inputs: SchemaInputSet;
   readonly formatter?: FormatOptions;
+  readonly parserOptions?: PslParserOptions;
   /**
    * Resolved once per config and refreshed by the config-watch path — never
    * rebuilt per document.
@@ -340,6 +342,9 @@ function createServerOn(connection: Connection): LanguageServer {
       ...(resolution.interpretation === undefined
         ? {}
         : { interpretation: resolution.interpretation }),
+      ...(resolution.parserOptions === undefined
+        ? {}
+        : { parserOptions: resolution.parserOptions }),
     });
     const project: ProjectState = {
       configPath,
@@ -347,6 +352,9 @@ function createServerOn(connection: Connection): LanguageServer {
       controlStack: resolution.controlStack,
       artifacts,
       ...(resolution.formatter === undefined ? {} : { formatter: resolution.formatter }),
+      ...(resolution.parserOptions === undefined
+        ? {}
+        : { parserOptions: resolution.parserOptions }),
       ...(resolution.interpretation === undefined
         ? {}
         : { interpretation: resolution.interpretation }),
@@ -413,7 +421,7 @@ function createServerOn(connection: Connection): LanguageServer {
 
     let formatted: string;
     try {
-      formatted = renameLegacyDirective(format(source, project.formatter));
+      formatted = renameLegacyDirective(format(source, project.formatter, project.parserOptions));
     } catch {
       return [];
     }

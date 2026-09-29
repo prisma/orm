@@ -1,3 +1,4 @@
+import type { PslParserOptions } from '@internal/config/config-types';
 import { isPrismaNextSchema, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
 import type { LspDiagnostic } from './diagnostic-mapping';
@@ -22,6 +23,7 @@ export function computeDocumentDiagnostics(
   uri: string,
   text: string,
   inputs: SchemaInputSet,
+  parserOptions?: PslParserOptions,
 ): DocumentDiagnostics | null {
   if (!inputs.includes(uri) || !isPrismaNextSchema(text)) {
     return null;
@@ -29,6 +31,7 @@ export function computeDocumentDiagnostics(
   const { document, sourceFile, symbolTable, diagnostics, parseDiagnostics } = runPipeline(
     uri,
     text,
+    parserOptions,
   );
   return { diagnostics, parseDiagnostics, document, sourceFile, symbolTable };
 }

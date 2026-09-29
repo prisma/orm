@@ -52,6 +52,8 @@ const issues = collectConfigIssues(config);
 
 Every source states the language of its inputs in `source.format`: `'psl'` or `'typescript'`. `collectConfigIssues` reports a missing `format` and any other value as an issue on `contract.source.format`. Tooling that reads the inputs itself, such as `contract format` and the language server, reads only a `'psl'` source's inputs.
 
+A `'psl'` source may declare `parserOptions` (`PslParserOptions`): the parser rules its inputs need beyond the Prisma 8 grammar. `viewBodyAsModelFields` reads the lines of a `view` block as model fields; the Prisma 7 and Prisma 6 sources set it. Every tool that parses the source's inputs, the source's own `load` included, passes these options to the parser.
+
 Declare `source.inputs` only for source files that are not already covered by the config module
 graph, such as PSL schema paths or TypeScript contract paths passed as strings. Do not include
 emitted artifact paths derived from `contract.output` (for example `contract.json` or the

@@ -1,4 +1,4 @@
-import type { ContractSourceContext } from '@internal/config/config-types';
+import type { ContractSourceContext, PslParserOptions } from '@internal/config/config-types';
 import { loadConfig, type PrismaNextConfig, requireConfigSections } from '@internal/config-loader';
 import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
@@ -17,6 +17,7 @@ export interface ProjectInterpretation {
 export interface ConfigResolution {
   readonly inputs: SchemaInputSet;
   readonly formatter?: FormatOptions;
+  readonly parserOptions?: PslParserOptions;
   readonly controlStack: PipelineInputs;
   readonly interpretation?: ProjectInterpretation;
 }
@@ -60,10 +61,13 @@ export async function resolveConfigInputs(configPath: string): Promise<ConfigRes
   }
   const stack = createControlStack(config);
   const interpretation = resolveInterpretation(config, stack, inputs);
+  const parserOptions =
+    config.contract?.source.format === 'psl' ? config.contract.source.parserOptions : undefined;
   return {
     inputs,
     controlStack: pipelineInputsFromStack(stack),
     ...(config.formatter === undefined ? {} : { formatter: config.formatter }),
+    ...(parserOptions === undefined ? {} : { parserOptions }),
     ...(interpretation === undefined ? {} : { interpretation }),
   };
 }

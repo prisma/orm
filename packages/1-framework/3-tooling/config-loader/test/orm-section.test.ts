@@ -204,7 +204,7 @@ describe('the orm section', () => {
     expect(fields(validRaw({ contract: { source } }))).toEqual(['contract.source.format']);
   });
 
-  it('reports parser options that are not booleans', () => {
+  it('reports parser options that are not booleans, and parser options it does not know', () => {
     const source = (parserOptions: unknown) => ({ format: 'psl', load: () => ({}), parserOptions });
 
     expect(
@@ -213,6 +213,9 @@ describe('the orm section', () => {
     expect(fields(validRaw({ contract: { source: source(true) } }))).toEqual([
       'contract.source.parserOptions',
     ]);
+    expect(
+      fields(validRaw({ contract: { source: source({ viewBodyAsModelField: true }) } })),
+    ).toEqual(['contract.source.parserOptions.viewBodyAsModelField']);
     expect(
       fields(validRaw({ contract: { source: source({ viewBodyAsModelFields: true }) } })),
     ).toEqual([]);

@@ -1,3 +1,4 @@
+import type { PslParserOptions } from '@internal/config/config-types';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type {
   AssembledAuthoringContributions,
@@ -34,8 +35,12 @@ export interface PipelineResult {
  * of symbol-table diagnostics. Never throws on malformed input — `parse`
  * recovers and `buildSymbolTable` is documented not to throw.
  */
-export function runPipeline(filename: string, text: string): PipelineResult {
-  const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
+export function runPipeline(
+  filename: string,
+  text: string,
+  parserOptions?: PslParserOptions,
+): PipelineResult {
+  const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename, parserOptions);
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     documents: [document],

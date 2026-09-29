@@ -37,6 +37,12 @@ describe('format given a view block, by default', () => {
       expect.objectContaining({ code: 'PSL.PARSE_FAILED' }),
     );
   });
+
+  it('writes each word of a plain field line as its own entry, as in any block the parser does not know', () => {
+    expect(format('view ActiveUsers {\nid Int\nemail   String\n}\n')).toBe(
+      'view ActiveUsers {\n  id\n  Int\n  email\n  String\n}\n',
+    );
+  });
 });
 
 describe('format given enum members', () => {

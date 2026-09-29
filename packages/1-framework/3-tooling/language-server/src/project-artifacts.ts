@@ -1,4 +1,4 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import type { ContractSourceDiagnostic, PslParserOptions } from '@internal/config/config-types';
 import {
   buildSymbolTable,
   type PslDiagnostic,
@@ -33,6 +33,7 @@ export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
   readonly getDocument: (uri: string) => TextDocument | undefined;
   readonly interpretation?: ProjectInterpretation;
+  readonly parserOptions?: PslParserOptions;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
 
@@ -57,7 +58,7 @@ export interface ProjectArtifacts {
 }
 
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const { inputs, getDocument, interpretation } = options;
+  const { inputs, getDocument, interpretation, parserOptions } = options;
   const documents = new Map<string, DocumentArtifacts>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
@@ -149,7 +150,12 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (textDocument === undefined) {
       return undefined;
     }
-    const computed = computeDocumentDiagnostics(textDocument.uri, textDocument.getText(), inputs);
+    const computed = computeDocumentDiagnostics(
+      textDocument.uri,
+      textDocument.getText(),
+      inputs,
+      parserOptions,
+    );
     if (computed === null) {
       return undefined;
     }
