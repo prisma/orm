@@ -18,12 +18,14 @@ changes:
 
 Prisma 6 stores a plain `Int` on MongoDB as a BSON long. A contract read with `prisma6Schema(...)` used to give such a field the 32-bit int codec, so Prisma 8 wrote new values as BSON ints, and a fractional number was accepted and stored as a double. It now uses the 64-bit codec, as it does for `BigInt`.
 
-1. Repair every document in which a plain `Int` field holds a fractional number. The previous contract let Prisma 8 store one as a BSON double, and the 64-bit codec refuses to read it (`RUNTIME.DECODE_FAILED`, "wire value is the fractional double 2.5"), so a query that returns such a document fails as a whole. For each plain `Int` field of each model, in the collection the model is stored in, with the MongoDB shell (`mongosh`) or the driver:
-   - List the affected documents, to decide how to repair them:
+1. Repair every document in which a plain `Int` field holds a fractional number, whether the field is on the model, in an `Int[]` list, or in a composite type the model holds once or in a list. The previous contract let Prisma 8 store such a value as a BSON double, and the 64-bit codec refuses to read it (`RUNTIME.DECODE_FAILED`, "wire value is the fractional double 2.5"), so a query that returns such a document fails as a whole. For each plain `Int` field, in the collection its model is stored in, with the MongoDB shell (`mongosh`) or the driver:
+   - List the affected documents, to decide how to repair them. For a field on the model, this finds the fractional values:
 
      ```js
      db.Post.find({ likes: { $type: 'double' }, $expr: { $ne: ['$likes', { $trunc: '$likes' }] } })
      ```
+
+     For a list or a composite value, this finds every document with a double in the field: `db.Post.find({ scores: { $type: 'double' } })` for an `Int[]` field, and `db.Post.find({ 'addresses.zip': { $type: 'double' } })` for `zip` in a composite type, whether `addresses` holds one value or a list.
 
    - Store every double in the field as a long. Choose `$round` or `$trunc`: `$round` rounds to the nearest whole number and a half to the even one (2.5 becomes 2, 3.5 becomes 4); `$trunc` drops the fraction (2.9 becomes 2). Whole-number doubles become longs either way.
 
@@ -56,9 +58,38 @@ Prisma 6 stores a plain `Int` on MongoDB as a BSON long. A contract read with `p
      ])
      ```
 
-   - For a field of a composite type, write its dotted path (`'address.zip'` and `'$address.zip'`) in the filter and the update.
+   - For a field of a composite type the model holds once (`address Address?`), write its dotted path (`'address.zip'` and `'$address.zip'`) in the filter and the update above.
+   - For a field of a composite type the model holds in a list (`addresses Address[]`), the dotted path fails with "$round only supports numeric types, not array". Rewrite each element of the list instead:
 
-   Here `Post`, `likes` and `scores` stand for the collection and the field names in the database, after `@@map` and `@map`.
+     ```js
+     db.Post.updateMany({ 'addresses.zip': { $type: 'double' } }, [
+       {
+         $set: {
+           addresses: {
+             $map: {
+               input: '$addresses',
+               in: {
+                 $mergeObjects: [
+                   '$$this',
+                   {
+                     zip: {
+                       $cond: [
+                         { $eq: [{ $type: '$$this.zip' }, 'double'] },
+                         { $toLong: { $round: ['$$this.zip', 0] } },
+                         '$$this.zip',
+                       ],
+                     },
+                   },
+                 ],
+               },
+             },
+           },
+         },
+       },
+     ])
+     ```
+
+   Here `Post`, `likes`, `scores`, `address`, `addresses` and `zip` stand for the collection and the field names in the database, after `@@map` and `@map`.
 2. Run `prisma contract emit`. In `contract.d.ts`, each plain `Int` field of the Prisma 6 schema is now typed with `mongo/int64@1` (`bigint`) instead of `mongo/int32@1` (`number`). `db sign` and `db verify` need nothing new: the contract carries no validators.
 3. Run the TypeScript compiler over the application. Fix each error on these fields:
    - Values passed to `create`, `update`, `upsert` and `where` become `bigint`: `5n`, or `BigInt(count)` for a `number` that holds a whole number.

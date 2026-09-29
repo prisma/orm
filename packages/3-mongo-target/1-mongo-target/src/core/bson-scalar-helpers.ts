@@ -72,7 +72,7 @@ export function int64Decode(codecId: string, wire: Long | number | bigint): bigi
   if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
     return decodeFailed(
       codecId,
-      `wire value is the fractional double ${wire}, and a 64-bit integer holds whole numbers only. Store the field as a whole number, rounded or cut off, with an update pipeline: [{ $set: { <field>: { $toLong: { $round: ["$<field>", 0] } } } }], or $trunc in place of $round.`,
+      `wire value is the fractional double ${wire}, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-reads-as-bigint has the queries for a plain field, a list and a list of composite values.`,
       wire,
     );
   }

@@ -14,8 +14,9 @@ model Counter {
 model Tally {
   id      String   @id @default(auto()) @map("_id") @db.ObjectId
   name    String
-  scores  Int[]
-  address Address?
+  scores    Int[]
+  address   Address?
+  addresses Address[]
 }
 
 type Address {

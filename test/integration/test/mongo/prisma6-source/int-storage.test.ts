@@ -67,6 +67,7 @@ describe('an Int in a Prisma 6 MongoDB schema', () => {
           name: 'mixed',
           scores: [Long.fromNumber(1), new Double(3.7)],
           address: { zip: new Double(12.2) },
+          addresses: [{ zip: new Double(4.5) }, { zip: Long.fromNumber(6) }],
         });
 
         await expect(db.Counter.all().toArray()).rejects.toMatchObject({
@@ -112,6 +113,38 @@ describe('an Int in a Prisma 6 MongoDB schema', () => {
         await tallies.updateMany({ 'address.zip': { $type: 'double' } }, [
           { $set: { 'address.zip': { $toLong: { $round: ['$address.zip', 0] } } } },
         ]);
+        const inCompositeLists = await tallies
+          .aggregate([
+            { $match: { 'addresses.zip': { $type: 'double' } } },
+            { $project: { _id: 0, name: 1 } },
+          ])
+          .toArray();
+        expect(inCompositeLists).toEqual([{ name: 'mixed' }]);
+        await tallies.updateMany({ 'addresses.zip': { $type: 'double' } }, [
+          {
+            $set: {
+              addresses: {
+                $map: {
+                  input: '$addresses',
+                  in: {
+                    $mergeObjects: [
+                      '$$this',
+                      {
+                        zip: {
+                          $cond: [
+                            { $eq: [{ $type: '$$this.zip' }, 'double'] },
+                            { $toLong: { $round: ['$$this.zip', 0] } },
+                            '$$this.zip',
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        ]);
 
         const read = await db.Counter.all().toArray();
         expect(Object.fromEntries(read.map(({ name, hits }) => [name, hits]))).toEqual({
@@ -124,10 +157,18 @@ describe('an Int in a Prisma 6 MongoDB schema', () => {
           await tallies
             .aggregate([
               { $match: { name: 'mixed' } },
-              { $project: { _id: 0, zip: '$address.zip', type: { $type: '$address.zip' } } },
+              {
+                $project: {
+                  _id: 0,
+                  zip: '$address.zip',
+                  type: { $type: '$address.zip' },
+                  zips: '$addresses.zip',
+                  types: { $map: { input: '$addresses', in: { $type: '$$this.zip' } } },
+                },
+              },
             ])
             .toArray(),
-        ).toEqual([{ zip: 12, type: 'long' }]);
+        ).toEqual([{ zip: 12, type: 'long', zips: [4, 6], types: ['long', 'long'] }]);
       }),
     timeouts.spinUpMongoMemoryServer,
   );

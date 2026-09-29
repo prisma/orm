@@ -76,6 +76,14 @@
                   "name": "Address"
                 }
               },
+              "addresses": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Address"
+                }
+              },
               "name": {
                 "nullable": false,
                 "type": {

@@ -39,6 +39,7 @@ export type FieldOutputTypes = {
     readonly Tally: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
       readonly address: AddressOutput | null;
+      readonly addresses: ReadonlyArray<AddressOutput>;
       readonly name: CodecTypes['mongo/string@1']['output'];
       readonly scores: ReadonlyArray<CodecTypes['mongo/int64@1']['output']>;
     };
@@ -56,6 +57,7 @@ export type FieldInputTypes = {
     readonly Tally: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
       readonly address: AddressInput | null;
+      readonly addresses: ReadonlyArray<AddressInput>;
       readonly name: CodecTypes['mongo/string@1']['input'];
       readonly scores: ReadonlyArray<CodecTypes['mongo/int64@1']['input']>;
     };
@@ -74,6 +76,7 @@ export namespace Models {
   export type unbound_Tally = {
     _id: CodecTypes['mongo/objectId@1']['output'];
     address: AddressOutput | null;
+    addresses: ReadonlyArray<AddressOutput>;
     name: CodecTypes['mongo/string@1']['output'];
     scores: ReadonlyArray<CodecTypes['mongo/int64@1']['output']>;
     readonly [RelationKeys]?: never;
@@ -155,6 +158,11 @@ type ContractBase = Omit<
               readonly address: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+              };
+              readonly addresses: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
+                readonly many: true;
               };
               readonly name: {
                 readonly nullable: false;
