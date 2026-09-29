@@ -153,6 +153,8 @@ function deprecatedScalarWarner(input: {
 interface ScalarNames {
   readonly warnDeprecated: (field: FieldSymbol) => void;
   readonly unknownTypeMessage: (field: FieldSymbol, ownerName: string) => string;
+  /** Every enum the schema declares, including one whose own declaration failed and was already reported. */
+  readonly declaredEnums: ReadonlySet<string>;
 }
 
 /**
@@ -1177,6 +1179,9 @@ function resolveNonRelationField(
   }
 
   const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
+  if (!codecId && scalarNames.declaredEnums.has(field.typeName)) {
+    return undefined;
+  }
   if (!codecId) {
     const typeNode = field.node.typeAnnotation()?.name()?.syntax;
     const source = diagnosticSource(sources, field.node.syntax);
@@ -1286,6 +1291,11 @@ export function interpretPslDocumentToMongoContract(
       scalarTypeCodecIds,
       formerScalarCodecIds: input.formerScalarCodecIds ?? new Map(),
     }),
+    declaredEnums: new Set(
+      Object.values(symbolTable.topLevel.blocks)
+        .filter((block) => block.keyword === 'enum')
+        .map((block) => block.name),
+    ),
   };
   const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
     symbolTable,
