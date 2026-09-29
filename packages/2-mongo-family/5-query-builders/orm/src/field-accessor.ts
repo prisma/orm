@@ -226,7 +226,7 @@ export type ResolveDotPathType<
   : never;
 
 /**
- * The operand of `inc` and `mul` on a required, single-valued scalar field: the codec's input type when its codec has the `numeric` trait, or, for a codec map without traits, a `number` or `bigint` output.
+ * The operand of `inc` and `mul` on a required, single-valued scalar field: the codec's input type when its codec has the `numeric` trait, or, for a codec map without traits, a `number` or `bigint` output. A codec entry typed `never` gives no operand.
  */
 type ScalarNumericOperand<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
@@ -243,11 +243,13 @@ type ScalarNumericOperand<
           readonly codecId: infer CId extends string & keyof TCodecTypes;
         };
       }
-    ? TCodecTypes[CId] extends { readonly traits: infer Traits; readonly input: infer Input }
-      ? 'numeric' extends Traits
-        ? Input
-        : never
-      : NumericOperandOf<TCodecTypes[CId]['output']>
+    ? [TCodecTypes[CId]] extends [never]
+      ? never
+      : TCodecTypes[CId] extends { readonly traits: infer Traits; readonly input: infer Input }
+        ? 'numeric' extends Traits
+          ? Input
+          : never
+        : NumericOperandOf<TCodecTypes[CId]['output']>
     : never;
 
 export type FieldAccessor<
