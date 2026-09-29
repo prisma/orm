@@ -52,7 +52,7 @@ describe('a float column holding NaN or an infinity, read through a relation inc
           .include('points', (point) =>
             point
               .select('id', 'double', 'single', 'pgFloat', 'sqlFloat')
-              .orderBy((p) => p.id.asc()),
+              .orderBy((p) => p['id']!.asc()),
           )
           .all();
 
