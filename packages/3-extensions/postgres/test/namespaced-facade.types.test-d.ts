@@ -3,7 +3,8 @@ import type { ContractWithTypeMaps, TypeMapsPhantomKey } from '@internal/sql-con
 import type { PreparedStatement } from '@internal/sql-runtime';
 import type { CodecTypes } from '@internal/target-postgres/codec-types';
 import { expectTypeOf, test } from 'vitest';
-import type { PostgresClient, PostgresTransactionContext } from '../src/runtime/postgres';
+import type { PostgresClient } from '../src/runtime/postgres';
+import type { PostgresTransactionContext } from '../src/runtime/postgres-members';
 import type { Contract as FixtureContract } from './fixtures/namespaced-contract';
 
 type Contract = ContractWithTypeMaps<

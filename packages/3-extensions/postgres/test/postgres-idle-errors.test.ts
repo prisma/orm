@@ -63,9 +63,10 @@ describe('postgres() idle connection errors', () => {
 });
 
 describe('postgresServerless() idle connection errors', () => {
-  it('the client created by connect({ url }) survives an emitted connection error', async () => {
-    const db = postgresServerless({ contract });
-    const runtime = await db.connect({ url: 'postgres://localhost:5432/db' });
+  it('the pg.Client that connect({ url }) creates survives an emitted connection error', async () => {
+    const db = await postgresServerless({ contract }).connect({
+      url: 'postgres://localhost:5432/db',
+    });
 
     const client = clientInstances.at(-1);
     expect(client).toBeDefined();
@@ -73,6 +74,6 @@ describe('postgresServerless() idle connection errors', () => {
       client?.emit('error', new Error('connection terminated unexpectedly')),
     ).not.toThrow();
 
-    await runtime.close();
+    await db.close();
   });
 });

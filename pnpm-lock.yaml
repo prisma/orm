@@ -3493,6 +3493,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.3
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5093,6 +5096,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4
+      arktype:
+        specifier: 'catalog:'
+        version: 2.2.3
       pathe:
         specifier: ^2.0.3
         version: 2.0.3

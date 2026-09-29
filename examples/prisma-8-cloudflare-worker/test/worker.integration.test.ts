@@ -1,5 +1,8 @@
-import { SELF } from 'cloudflare:test';
-import { describe, expect, inject, it } from 'vitest';
+import { env, SELF } from 'cloudflare:test';
+import { Client } from 'pg';
+import { describe, expect, inject, it, vi } from 'vitest';
+import { postgres } from '../src/prisma/db';
+import { countPostRowsSent } from './rows-sent';
 
 const ALICE = inject('alice-id');
 const BOB = inject('bob-id');
@@ -9,13 +12,13 @@ async function get(path: string): Promise<Response> {
 }
 
 describe('worker — postgresServerless against Hyperdrive (local)', () => {
-  it('boots and responds to /health (TC-3 — module load under nodejs_compat)', async () => {
+  it('boots and responds to /health without a database connection', async () => {
     const res = await get('/health');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
 
-  it('SQL DSL select returns seeded users (TC-4)', async () => {
+  it('SQL DSL select returns seeded users', async () => {
     const res = await get('/sql/users?limit=5');
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; rows: { id: string; email: string }[] };
@@ -24,7 +27,7 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     expect(body.rows.map((r) => r.email).sort()).toEqual(['alice@example.com', 'bob@example.com']);
   });
 
-  it('ORM client list returns seeded users (TC-5)', async () => {
+  it('ORM client list returns seeded users', async () => {
     const res = await get('/orm/users?limit=10');
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; rows: { id: string; email: string }[] };
@@ -41,7 +44,7 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     expect(body.rows.every((row) => row.userId === ALICE)).toBe(true);
   });
 
-  it('withTransaction commits a multi-statement transaction (TC-6, AC-10)', async () => {
+  it('db.transaction commits a multi-statement transaction', async () => {
     const res = await get(`/tx/commit?userId=${BOB}&displayName=Bob+the+Builder`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; committed?: boolean };
@@ -56,7 +59,7 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     expect(bob?.displayName).toBe('Bob the Builder');
   });
 
-  it('withTransaction rolls back on thrown error (AC-10/AC-11)', async () => {
+  it('db.transaction rolls back on thrown error', async () => {
     const before = (await (await get('/sql/users?limit=10')).json()) as {
       rows: { email: string; displayName: string }[];
     };
@@ -76,7 +79,7 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     expect(aliceAfter?.displayName).not.toBe('rolled-back-write');
   });
 
-  it('cursor early-break consumes only the requested rows (TC-9, AC-6)', async () => {
+  it('cursor early-break consumes only the requested rows', async () => {
     const breakAfter = 7;
     const res = await get(`/cursor/large?break=${breakAfter}`);
     expect(res.status).toBe(200);
@@ -104,8 +107,74 @@ describe('worker — postgresServerless against Hyperdrive (local)', () => {
     expect(body.rowsTransmitted).toBeLessThan(500);
   });
 
+  it('the main serverless client receives the whole result before the first row', async () => {
+    const connectionString = env.HYPERDRIVE.connectionString;
+    await using db = await postgres.connect({ url: connectionString });
+    let consumed = 0;
+
+    const rowsSent = await countPostRowsSent(connectionString, async () => {
+      const iter = db.runtime().query(
+        db.sql.public.post
+          .select('id', 'title')
+          .orderBy((f) => f.createdAt, { direction: 'asc' })
+          .limit(10_000)
+          .build(),
+      );
+      for await (const _row of iter) {
+        consumed += 1;
+        if (consumed >= 7) break;
+      }
+    });
+
+    expect(consumed).toBe(7);
+    expect(rowsSent).toBe(10_000);
+  });
+
   it('returns 404 for unknown routes', async () => {
     const res = await get('/no/such/route');
     expect(res.status).toBe(404);
+  });
+
+  it('connect rejects with DRIVER.CONNECTION_FAILED when the database refuses the connection', async () => {
+    const error = await postgres
+      .connect({ url: 'postgres://postgres:postgres@127.0.0.1:1/prisma_8_cloudflare_worker' })
+      .then(
+        () => undefined,
+        (reason: unknown) => reason,
+      );
+
+    expect(error).toMatchObject({ code: 'DRIVER.CONNECTION_FAILED' });
+    expect(JSON.stringify(error)).not.toContain(':postgres@');
+  }, 10_000);
+
+  it('/health, a 404 and a 400 open no database connection', async () => {
+    const observer = new Client({ connectionString: env.HYPERDRIVE.connectionString });
+    observer.on('error', () => {});
+    await observer.connect();
+    const sessions = async () => {
+      const result = await observer.query<{ sessions: string }>(
+        'SELECT sessions::text AS sessions FROM pg_stat_database WHERE datname = current_database()',
+      );
+      return Number(result.rows[0]?.sessions ?? '0');
+    };
+    try {
+      // The observer's own session is counted once its backend has flushed
+      // its statistics, which happens after its first command completes.
+      await sessions();
+      const before = await sessions();
+
+      expect((await get('/health')).status).toBe(200);
+      expect((await get('/no/such/route')).status).toBe(404);
+      expect((await get('/orm/posts?userId=')).status).toBe(400);
+      expect((await get('/tx/commit')).status).toBe(400);
+      expect((await get('/sql/users?limit=1')).status).toBe(200);
+
+      await vi.waitFor(async () => expect(await sessions()).toBeGreaterThanOrEqual(before + 1), {
+        timeout: 5_000,
+      });
+      expect(await sessions()).toBe(before + 1);
+    } finally {
+      await observer.end();
+    }
   });
 });

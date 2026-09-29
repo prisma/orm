@@ -3,11 +3,6 @@ import postgresServerless from '@prisma/orm-postgres/serverless';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-/**
- * Module-scope client. Constructing once per isolate is correct: only the static
- * authoring surface (`sql`, `context`, `stack`, `contract`) is closure-cached.
- * The per-request runtime is acquired inside `fetch` via `db.connect({ url })`.
- */
 function createMiddleware() {
   return [
     lints(),
@@ -20,7 +15,21 @@ function createMiddleware() {
   ];
 }
 
-export const db = postgresServerless<Contract>({
+/**
+ * Serverless client, built once per isolate. It holds no database connection. Each request opens
+ * its own connection with `postgres.connect({ url })`.
+ */
+export const postgres = postgresServerless<Contract>({
   contractJson,
   middleware: createMiddleware(),
+});
+
+/**
+ * Serverless client with cursors on, used only by the `/cursor/large` route to stream a large
+ * result. Reads through its connections hang behind Cloudflare Hyperdrive.
+ */
+export const streamingPostgres = postgresServerless<Contract>({
+  contractJson,
+  middleware: createMiddleware(),
+  cursor: { batchSize: 100 },
 });

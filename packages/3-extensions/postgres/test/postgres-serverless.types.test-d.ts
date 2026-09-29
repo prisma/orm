@@ -2,83 +2,77 @@ import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Runtime } from '@internal/sql-runtime';
 import { expectTypeOf, test } from 'vitest';
-import type {
-  PostgresOptionsWithContract,
-  PostgresOptionsWithContractJson,
-} from '../src/runtime/postgres';
-import type postgresServerless from '../src/runtime/postgres-serverless';
-import type { PostgresServerlessClient } from '../src/runtime/postgres-serverless';
+import postgres, { type PostgresClient, type PostgresOptions } from '../src/runtime/postgres';
+import postgresServerless, {
+  type PostgresServerlessClient,
+  type PostgresServerlessOptions,
+} from '../src/runtime/postgres-serverless';
+import type { Contract as FixtureContract } from './fixtures/generated/contract';
 
 type TestContract = Contract<SqlStorage>;
-type Db = PostgresServerlessClient<TestContract>;
+type Serverless = PostgresServerlessClient<TestContract>;
+type Connection = Awaited<ReturnType<Serverless['connect']>>;
 
-test('exposes only the static authoring surface plus connect()', () => {
-  type Keys = keyof Db;
-  expectTypeOf<Keys>().toEqualTypeOf<'sql' | 'context' | 'stack' | 'contract' | 'connect'>();
+test('the serverless client has the static members and connect', () => {
+  expectTypeOf<keyof Serverless>().toEqualTypeOf<
+    'sql' | 'raw' | 'enums' | 'nativeEnums' | 'context' | 'contract' | 'stack' | 'connect'
+  >();
 });
 
-test('does not expose orm', () => {
-  type HasOrm = 'orm' extends keyof Db ? true : false;
-  expectTypeOf<HasOrm>().toEqualTypeOf<false>();
-
-  const db = {} as Db;
-  // @ts-expect-error db.orm is intentionally absent on the serverless facade
-  void db.orm;
+test('the connection has the members of a client except connect', () => {
+  expectTypeOf<Connection>().toEqualTypeOf<Omit<PostgresClient<TestContract>, 'connect'>>();
 });
 
-test('does not expose runtime() helper', () => {
-  type HasRuntime = 'runtime' extends keyof Db ? true : false;
-  expectTypeOf<HasRuntime>().toEqualTypeOf<false>();
-
-  const db = {} as Db;
-  // @ts-expect-error db.runtime is intentionally absent on the serverless facade
-  void db.runtime;
+test('the connection is not a Runtime', () => {
+  expectTypeOf<Connection>().not.toMatchTypeOf<Runtime>();
+  expectTypeOf<Extract<keyof Connection, 'query' | 'execute'>>().toBeNever();
 });
 
-test('does not expose transaction()', () => {
-  type HasTransaction = 'transaction' extends keyof Db ? true : false;
-  expectTypeOf<HasTransaction>().toEqualTypeOf<false>();
+test('the connection types orm and the transaction context from the contract', async () => {
+  const db = {} as Awaited<ReturnType<PostgresServerlessClient<FixtureContract>['connect']>>;
 
-  const db = {} as Db;
-  // @ts-expect-error db.transaction is intentionally absent on the serverless facade
-  void db.transaction;
-});
+  expectTypeOf(db.orm.public).not.toBeAny();
+  expectTypeOf(db.orm.public.User).toHaveProperty('all');
 
-test('connect() returns Promise<Runtime & AsyncDisposable>', () => {
-  const db = {} as Db;
-  expectTypeOf(db.connect).parameter(0).toEqualTypeOf<{ readonly url: string }>();
-  expectTypeOf<Awaited<ReturnType<Db['connect']>>>().toMatchTypeOf<Runtime>();
-  expectTypeOf<Awaited<ReturnType<Db['connect']>>>().toMatchTypeOf<AsyncDisposable>();
+  await db.transaction(async (tx) => {
+    expectTypeOf(tx).not.toBeAny();
+    expectTypeOf(tx.orm.public).not.toBeAny();
+    expectTypeOf(tx.orm.public.User).toHaveProperty('all');
+  });
 });
 
 test('connect() rejects bindings other than { url }', () => {
-  const db = {} as Db;
+  const serverless = {} as Serverless;
+  expectTypeOf(serverless.connect).parameter(0).toEqualTypeOf<{ readonly url: string }>();
   // @ts-expect-error binding is restricted to { url }; pg/binding shapes are not accepted
-  void db.connect({ pg: {} as unknown });
+  void serverless.connect({ pg: {} as unknown });
   // @ts-expect-error binding is restricted to { url }; binding shape is not accepted
-  void db.connect({ binding: { kind: 'url', url: 'x' } });
+  void serverless.connect({ binding: { kind: 'url', url: 'x' } });
 });
 
-test('factory accepts the same option keys as the Node postgres() factory', async () => {
-  const { default: postgres } = await import('../src/runtime/postgres');
-  type NodeOptionKeys = keyof Pick<
-    PostgresOptionsWithContract<TestContract>,
-    'contract' | 'extensions' | 'middleware' | 'verifyMarker'
+test('postgres() and postgresServerless() differ only in the binding and pool options', () => {
+  type ClientOnly = Exclude<
+    keyof PostgresOptions<TestContract>,
+    keyof PostgresServerlessOptions<TestContract>
   >;
-  type ServerlessOptionKeys = Parameters<typeof postgresServerless<TestContract>>[0] extends infer O
-    ? Extract<keyof O, 'contract' | 'extensions' | 'middleware' | 'verifyMarker'>
-    : never;
-  expectTypeOf<ServerlessOptionKeys>().toEqualTypeOf<NodeOptionKeys>();
-
-  type NodeJsonKeys = keyof Pick<
-    PostgresOptionsWithContractJson<TestContract>,
-    'contractJson' | 'extensions' | 'middleware' | 'verifyMarker'
+  type ServerlessOnly = Exclude<
+    keyof PostgresServerlessOptions<TestContract>,
+    keyof PostgresOptions<TestContract>
   >;
-  type ServerlessJsonKeys = Parameters<typeof postgresServerless<TestContract>>[0] extends infer O
-    ? Extract<keyof O, 'contractJson' | 'extensions' | 'middleware' | 'verifyMarker'>
-    : never;
-  expectTypeOf<ServerlessJsonKeys>().toEqualTypeOf<NodeJsonKeys>();
+  expectTypeOf<ClientOnly>().toEqualTypeOf<'binding' | 'url' | 'pg' | 'poolOptions'>();
+  expectTypeOf<ServerlessOnly>().toBeNever();
+});
 
-  // postgres() also accepts these but the unrelated `postgres()` ensures the symbol is referenced
-  void postgres;
+test('the cursor option has no disabled flag', () => {
+  type CursorOption = NonNullable<PostgresOptions<TestContract>['cursor']>;
+  expectTypeOf<keyof CursorOption>().toEqualTypeOf<'batchSize'>();
+
+  const contract = {} as TestContract;
+  // @ts-expect-error cursors are off when the option is unset; there is no disabled flag
+  void postgres<TestContract>({ contract, cursor: { disabled: true } });
+  void postgresServerless<TestContract>({
+    contract,
+    // @ts-expect-error cursors are off when the option is unset; there is no disabled flag
+    cursor: { disabled: true },
+  });
 });
