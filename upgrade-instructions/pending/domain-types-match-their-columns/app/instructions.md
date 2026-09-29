@@ -11,7 +11,7 @@ changes:
         - '"valueSet"\s*:'
   - id: value-object-default-matches-composite-type
     summary: |
-      A literal default on a field typed by a composite type must now match the composite type, or the schema is refused with PSL_DEFAULT_TYPE_INCOMPATIBLE. Fix the default the diagnostic names.
+      A literal default on a field typed by a composite type must now match the composite type, with each member value read by the member's codec and each enum member value one of the enum's values, or the schema is refused. Fix the default the diagnostic names.
     detection:
       glob: "**/*.prisma"
       matches:
@@ -46,12 +46,13 @@ Migration snapshots under `migrations/snapshots/<hash>/` need no change. Migrati
 
 ## `value-object-default-matches-composite-type`
 
-A literal default on a field typed by a composite type used to be stored whatever its shape. It is now checked, and a mismatch is `PSL_DEFAULT_TYPE_INCOMPATIBLE`, naming the path that is wrong:
+A literal default on a field typed by a composite type used to be stored whatever its shape. It is now checked, naming the path that is wrong, as in `Field "User.home.street"`:
 
-- a single value object takes a JSON object and a list of them a JSON array: `` homes Address[] @default(json`{"street": "x"}`) `` is refused; write `@default([])` or `` @default(json`[{"street": "x"}]`) ``;
-- a key that is not a member is refused, and so is a missing member that is not optional;
-- each member's value must be a value of the member's type, as its own `@default` would be: `"street": 1` on `street String` is refused;
-- nested value objects are checked the same way.
+- A single value object takes a JSON object, and a list of them a JSON array: `` homes Address[] @default(json`{"street": "x"}`) `` is refused; write `@default([])` or `` @default(json`[{"street": "x"}]`) ``. JSON `null` is taken when the field is optional. `PSL_DEFAULT_TYPE_INCOMPATIBLE`.
+- A key that is not a member is refused, and so is a missing member that is not optional, and `null` for a member that is not optional. `PSL_DEFAULT_TYPE_INCOMPATIBLE`.
+- The default holds each member in the form its codec stores, so the member's codec must read the value. A `Decimal`, `Numeric(p, s)` or `BigInt` member takes a decimal string, `"1.5"`, and a number is refused; a `DateTime` member takes a date and time string; a `Json` member takes any JSON value. `PSL_INVALID_DEFAULT_LITERAL`, with the codec's message.
+- A member typed by an enum takes only the enum's values: `PSL_INVALID_ATTRIBUTE_SYNTAX`, `Expected one of:` the values.
+- Nested value objects are checked the same way.
 
 Correct the value the diagnostic names.
 

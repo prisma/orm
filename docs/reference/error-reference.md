@@ -795,11 +795,22 @@ A written `@default` value has a data type the column's type neither is nor cast
 
 The same code reports a written form this target has no data type for at all: `Field "<Model>.<field>"[ at element <n>]: this target has no data type for a <string|boolean|number> value` — `true` on SQLite, for instance, which registers no boolean entry.
 
+The same code reports a literal default on a field typed by a composite type that does not have the composite type's shape. The path starts at `<Model>.<field>` and names each member with `.<member>` and each list element with `[<index>]`; `<kind>` is `a JSON object`, `a JSON array`, `a JSON string`, `a JSON number`, `a JSON boolean` or `null`:
+
+- `Field "<Model>.<field>": the default of a value object is a JSON object, not <kind>`, and `the default of a list of value objects is a JSON array, not <kind>`. JSON `null` is taken when the field is optional.
+- `Field "<path>": a value of "<Type>" is a JSON object, not <kind>`, for an element of a list or a nested member.
+- `Field "<path>": "<key>" is not a member of "<Type>"`.
+- `Field "<path>": the member is required, and the default has no value for it`.
+- `Field "<path>": the member is not optional, so its value is not null`, and `an element of the member is not null` for a list member. A member typed by the stack's JSON type takes `null` as a value.
+- `Field "<path>": the member is a list, so its value is a JSON array, not <kind>`.
+
+A member value its codec refuses is `PSL_INVALID_DEFAULT_LITERAL`, and a value outside an enum member's enum is `PSL_INVALID_ATTRIBUTE_SYNTAX`: `Field "<path>": Expected one of: <values>`, each value as its codec stores it, JSON-encoded.
+
 Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
 ### PSL_INVALID_DEFAULT_LITERAL
 
-A written `@default` value that whatever read it refused: the authoring entry's parse, a cast, or the column's codec. A `pgvector.Vector(3)` column given two elements, a magnitude no double holds written on a `Float` column, a body a tag's parse cannot read, or a number no data type of the target holds — `no data type of this target holds the number <text>`, which is how SQLite refuses a whole number past 64 bits. The message is `Field "<Model>.<field>": <the message of whatever refused it>`, with ` at element <n>` after the field path when it is one element of a written list. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
+A written `@default` value that whatever read it refused: the authoring entry's parse, a cast, or the column's codec. A `pgvector.Vector(3)` column given two elements, a magnitude no double holds written on a `Float` column, a body a tag's parse cannot read, or a number no data type of the target holds — `no data type of this target holds the number <text>`, which is how SQLite refuses a whole number past 64 bits. The message is `Field "<Model>.<field>": <the message of whatever refused it>`, with ` at element <n>` after the field path when it is one element of a written list. The same code reports a member value of a value-object default that the member's codec does not read, as in `Field "User.home.price": pg/numeric@1 database JSON value must be a decimal string`; the default holds each member in the form its codec stores, so a `Decimal` or `BigInt` member takes a decimal string. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
 ### PSL_INVALID_JSON_LITERAL
 
@@ -824,6 +835,10 @@ A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL 
 ### PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE
 
 An enum member carries an attribute, as in `USER @map("user")`: `enum "<Enum>": member "<member>" carries @<attribute>, but an enum member takes no attributes`. Reported by the SQL and Mongo PSL readers, once per attribute, at the attribute. Remove the attribute. To store a value other than the member's name, write it as the member's value, as in `USER = "user"`.
+
+### PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE
+
+A composite type carries a block attribute, as in `@@map("addresses")` inside a `type` block: `Composite type "<Type>" uses attribute "@@<attribute>", which a composite type does not take`. An attribute on one of its members is `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`: `Member "<member>" of composite type "<Type>" uses attribute "@<attribute>", which a composite type member does not take`. Reported by the SQL PSL reader, once per attribute, at the attribute. Remove the attribute. To give a value object a default, write it on the model field as a whole value, as in `` home Address @default(json`{"street": "x"}`) ``.
 
 ### PSL_PRESET_ON_VARIANT_FIELD
 
