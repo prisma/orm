@@ -38,8 +38,9 @@ changes:
       The Mongo codec subpaths moved from the adapter to the target:
       `adapter/codec-types`, `adapter/codecs`, `adapter/codec-ids` and `adapter/data-types` under
       `@prisma/orm-mongo` and `@prisma/orm-target-mongo` are now `target/...`. Emitted
-      `contract.d.ts` files, including migration snapshots, import `adapter/codec-types` and no
-      longer compile until rewritten or re-emitted.
+      `contract.d.ts` files, including migration snapshots, import `adapter/codec-types` until
+      rewritten or re-emitted. Under `skipLibCheck: true` that import fails silently and the
+      contract's field types turn wrong where they are used, instead of failing to compile.
     detection:
       glob: "**/*.{ts,mts,cts,md}"
       matches:
@@ -221,6 +222,8 @@ The Mongo target package owns the codecs now. Rewrite each specifier, in every f
 | `@prisma/orm-target-mongo/adapter/<same four>` | `@prisma/orm-target-mongo/target/<same four>` |
 
 The exported names are unchanged. For the application's own `contract.d.ts`, running `prisma contract emit` produces the same result as the rewrite. Snapshot `contract.d.ts` files under `migrations/snapshots/` are not re-emitted, so rewrite them. The contract JSON and every hash stay the same.
+
+Do not rely on `tsc` to find the `contract.d.ts` files. They are declaration files, and a project with `skipLibCheck: true` (the `tsconfig.json` that `prisma orm init` writes sets it) gets no error for their stale import. Instead the contract's field types stop resolving to the codec types, so type errors appear where the contract is used, such as a seed script or a query, rather than at the import, and some fields are no longer type-checked. Rewrite or re-emit every file the detection finds, whether or not `tsc` complains.
 
 ## `create-mongo-runner-deps-removed`
 
