@@ -14,6 +14,7 @@ changes:
         - '"ref"\s*:\s*\{(?![^{}]*"kind")[^{}]*"(?:table|column)"\s*:'
         - '\.ref\??\.(?:table|column)\b'
         - '\bref\s*:\s*\{(?![^{}]*\bkind\b)[^{}]*\b(?:table|column)\s*:[^{}]*\b(?:table|column)\s*:'
+    script: ./scripts/execution-ref-entry-field/rename-execution-ref-keys.ts
   - id: mutation-default-generator-types-move-to-framework
     summary: |
       `GeneratorStability` and `RuntimeMutationDefaultGenerator` are no longer exported by the SQL
@@ -185,7 +186,15 @@ A contract with generated defaults (`temporal.createdAt()`, `temporal.updatedAt(
 ```
 
 1. Run `prisma contract emit` so `contract.json` and `contract.d.ts` use the new keys. The runtime rejects a contract whose refs still say `table` and `column` with `Contract structural validation failed: execution.mutations.defaults[0].ref.entry must be a string`.
-2. Contract snapshots under `migrations/snapshots/<hash>/` that carry an `execution` section have the old keys too. In each `execution.mutations.defaults[].ref`, in both `contract.json` and `contract.d.ts`, rename `table` to `entry` and `column` to `field`, and write the keys in the order `entry`, `field`, `namespace`, which is the order `prisma contract emit` writes. Leave the snapshot's existing `executionHash` as it is. It no longer matches the renamed content, but the snapshot loader re-hashes only the storage section, so nothing checks it. `storageHash` and `profileHash` do not move, so snapshot directory names stay the same.
+2. Contracts stored under `migrations/` carry the old keys too: the snapshots in `migrations/snapshots/<hash>/contract.json` and `contract.d.ts`, and any intermediate contract a migration imports from its own directory, such as `migrations/<dir>/intermediate.json` and `intermediate.d.ts`. From the extension package root, run the script that sits next to this guide. `<skill>` is the directory of the synced `prisma-8` skill:
+
+   ```bash
+   pnpm exec tsx <skill>/upgrading/extension/upgrades/8.0.0-rc.12-to-8.0.0-rc.13/scripts/execution-ref-entry-field/rename-execution-ref-keys.ts
+   ```
+
+   The script reads every `.json` and `.d.ts` file under a `migrations/` directory, skipping `node_modules`, `.git` and `dist`, and changes only `execution.mutations.defaults[].ref` entries. In each one it renames `table` to `entry` and `column` to `field`, and writes the keys in the order `entry`, `field`, `namespace`, which is the order `prisma contract emit` writes. The old key order varies between files: older `contract.d.ts` files list `namespace`, `table`, `column`, newer ones `column`, `namespace`, `table`. The script handles any order; a hand edit or a search-and-replace that assumes one order misses some refs. A `contract.json` in canonical form stays canonical, so a snapshot matches a fresh emit apart from `executionHash`; an indented JSON file keeps its indentation. The script leaves every `executionHash` as it is. That hash no longer matches the renamed content, but the snapshot loader re-hashes only the storage section, so nothing checks it. `storageHash` and `profileHash` do not move, so snapshot directory names stay the same. A second run changes nothing. Pass `--check` to list the files it would change without writing them; it exits 1 if any would change. A `.json` file it cannot parse is listed as `NOT JSON` and also makes it exit 1.
+
+   To confirm the rewrite, run the script again with `--check`; it exits 0 when no ref is left to rename. No CLI command reads the package's own `migrations/snapshots/`: run from the package root, the CLI looks for migrations in `migrations/app/`, and a contract-space package keeps them directly under `migrations/`. The CLI reads an extension's contract space in an app that installs the extension, from the app's `migrations/<space-id>/` and `migrations/snapshots/`. There, `prisma migration check --space <space-id>` loads the contract at the space's head and fails with `MIGRATION.CHECK_CONTRACT_UNREADABLE` while its refs still say `table` and `column`. The head is the only snapshot of an extension space the CLI loads; `prisma db migrate --to <hash>` selects a snapshot of the app space, not of an extension.
 3. Code that reads the section directly changes `.ref.table` to `.ref.entry` and `.ref.column` to `.ref.field`.
 
 `executionHash` changes for every contract with generated defaults, because the canonical JSON changes. Nothing compares it against the database, so no migration or re-sign is needed.

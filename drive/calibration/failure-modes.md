@@ -701,7 +701,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Reference incident.** prisma/orm#30291 (2026-09-24): a scripted prompt returned `false` from `consent`, and a test showed that a declined consent printed the command to remove packages init had installed. The engine's `consent` with a token never returns `false`: it returns `true` or throws `CLI.CONSENT_REQUIRED`, a token mismatch, or `CLI.PROMPT_CANCELLED`. Real users never saw the command. An independent review found it; the fix attached the command to whatever error follows the install.
 
-### F35. Stacked PR fails upgrade coverage because the fragment lives on its base branch
+### F36. Stacked PR fails upgrade coverage because the fragment lives on its base branch
 
 **Symptom.** A stacked PR's local `pnpm check:upgrade-coverage --mode pr` passes, but CI's `Lint` job fails it with `[per-pr-declaration] ... requires a new declaration relative to --prev`.
 
@@ -711,7 +711,26 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Reference incident.** 2026-09-24, the Mongo defaults project's slice 5 PR (#30405, stacked on #30403): the facade widening `contract: string | ContractConfig` was additive, the slice 3 fragment sat on the base branch, and CI refused the PR until a `changes: []` extension declaration was added. Same project, slice 3 (#30403): CI `Lint` failed on biome `no-bare-cast` and `noBannedTypes` because the dispatch briefs never listed the always-run per-package `pnpm lint` from `dod.md`; the F14 rule was already on file, the orchestrator did not thread it into the briefs.
 
-### F36. Stacked PRs that ship in one release each write an upgrade entry relative to the previous slice, so the release guide describes states users never had
+### F35. Code that parses database-reported text passes review by reading it; only a comparison with what the database returns finds wrong values
+
+**Symptom.** A dispatch changes code that turns text the database reports back (column defaults, type names, introspection output) into typed values. Every round closes SATISFIED, unit tests and the end-to-end journey pass, and a later review that creates the real column and reads back its value finds the parser returns the wrong value for inputs it now accepts. The wrong value survives every existing check because each check compares the parser with itself: unit tests assert its output against hand-written expectations that share the author's assumption, and `db verify` runs the same parser on the live column and on the contract default, so a consistently wrong value verifies clean.
+
+**Detection signal.**
+
+- The dispatch changes a parser for text the database reports, and the reviewer's budget allows running the package suite but not creating a table and reading back what the database stores.
+- The test fixtures spell the database's output by hand (for example `'{a,b}'::text[]`) instead of capturing what the database actually reports for that column.
+- The end-to-end evidence is infer followed by `db verify`, or any other comparison where the same function produces both sides.
+- The round note says the parser handles a new form without naming a value whose meaning depends on escaping, quoting or the type's delimiter.
+
+**Mitigation.**
+
+- A reviewer of code that parses database-reported text has a non-zero execution budget. The brief names three probes the reviewer must run, not read: (1) create the real column on PGlite and read back the exact text Postgres reports, instead of trusting the test fixture's spelling; (2) for every value the parser now accepts, compare the parsed value with what the database itself says about the same object: for a default, create the column, run `INSERT ... DEFAULT VALUES` and select the stored value; for a type name or other introspection output, query the catalog for that object (for example `format_type`, `pg_type`, `pg_attribute`) and compare with what the parser derived; (3) find each check that compares the code with itself (the same function on both sides of a comparison) and name the independent check that would fail on a wrong value.
+- A self-consistent comparison such as `db verify` after infer is not evidence that a value is correct. It shows only that the parser agrees with itself.
+- Sibling of F34: that entry covers SQL the code writes; this one covers text the database writes and the code reads.
+
+**Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.
+
+### F37. Stacked PRs that ship in one release each write an upgrade entry relative to the previous slice, so the release guide describes states users never had
 
 **Symptom.** A release's upgrade guide tells users to change something that did not exist in the previous release. A user of the previous tag reads "`Json` now refuses non-JSON values" for a type their version refused outright, or a variant-field entry that names scalar types added in the same release.
 
@@ -724,7 +743,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Reference incident.** 2026-09-29, the rc.12 to rc.13 guides: manual QA on a real rc.12 project found `mongo-json-field-semantics` describing a change to Mongo `Json`, which rc.12 did not support, and `mongo-variant-field-codecs` naming `Int64`, `Decimal128`, `Binary` and Prisma 6 contracts, none of which rc.12 had.
 
-### F37. Slice close treats a green review and green CI as manual QA, and the project reaches close-out with no QA run
+### F38. Slice close treats a green review and green CI as manual QA, and the project reaches close-out with no QA run
 
 **Symptom.** Close-out finds no `drive-qa-plan` script and no `drive-qa-run` report for any slice. Manual QA run at close-out against merged `main` then finds user-blocking bugs that every slice's review and CI passed.
 
