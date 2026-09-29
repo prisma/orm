@@ -148,10 +148,14 @@ describe('mongo enum — end-to-end (replica set)', {
     });
 
     it('rejects an insert with a null value on a non-nullable field', async () => {
-      // null is not valid for a non-nullable field — bypass TS to test MongoDB enforcement.
+      // null is not valid for a non-nullable field — bypass TS; the ORM refuses it before the validator sees it.
       await expect(
         db.orm.accounts.create({ role: null as never, mood: null, tags: [] }),
-      ).rejects.toMatchObject({ code: 121 });
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message:
+          "Failed to encode field role in collection 'accounts': the field is required and cannot be null",
+      });
     });
   });
 
