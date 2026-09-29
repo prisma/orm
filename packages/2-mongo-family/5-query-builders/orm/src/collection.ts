@@ -327,6 +327,7 @@ class MongoCollectionImpl<
 
     const includeExpr: MongoIncludeExpr = {
       relationName,
+      targetModel,
       from: resolveCollectionName(targetModel, targetModelName),
       localField,
       foreignField,
@@ -694,6 +695,7 @@ class MongoCollectionImpl<
       this.#state,
       this.#contract.storage.storageHash,
       model,
+      this.#valueObjects(),
     );
   }
 
@@ -766,7 +768,11 @@ class MongoCollectionImpl<
     if (!model) {
       return Object.freeze({ kind: 'unknown' as const });
     }
-    return contractModelToMongoResultShape(model);
+    return contractModelToMongoResultShape(model, { valueObjects: this.#valueObjects() });
+  }
+
+  #valueObjects(): Readonly<Record<string, ContractValueObject>> {
+    return domainValueObjectsAtDefaultNamespace(this.#contract.domain) ?? {};
   }
 
   #compileWhereObject(data: Record<string, unknown>): MongoFilterExpr[] {
