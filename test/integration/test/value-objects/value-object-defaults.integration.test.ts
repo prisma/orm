@@ -29,7 +29,7 @@ async function sqliteUserColumns(pslSchema: string) {
     capabilities: sqliteStack.capabilities,
   });
   if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
-  const storage: SqlStorage = result.value.storage;
+  const storage = result.value.storage as SqlStorage;
   return Object.values(storage.namespaces)[0]?.entries.table?.['User']?.columns;
 }
 
