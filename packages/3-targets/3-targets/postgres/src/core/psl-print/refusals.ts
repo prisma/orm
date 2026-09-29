@@ -21,10 +21,9 @@ import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser
 import {
   type ForeignKey,
   type Index,
+  resolvedTypeParams,
   type SqlStorage,
   StorageColumn,
-  type StorageTypeInstance,
-  storageTypeParams,
 } from '@internal/sql-contract/types';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
@@ -204,8 +203,8 @@ export function refuseFieldColumnMismatch(input: {
   readonly modelName: string;
   readonly singleTableVariant: boolean;
   readonly domainEnumNames: ReadonlySet<string>;
-  /** The named type the column is typed by, whose parameters the column takes. */
-  readonly namedType: StorageTypeInstance | undefined;
+  /** The contract's named types, whose parameters a column typed by one takes. */
+  readonly namedTypes: NonNullable<SqlStorage['types']>;
 }): void {
   const { field, column, coordinate } = input;
   const fix =
@@ -239,8 +238,8 @@ export function refuseFieldColumnMismatch(input: {
     field.type.kind === 'scalar' &&
     (field.type.codecId !== column.codecId ||
       !sameJson(
-        field.type.typeParams,
-        column.typeParams ?? (input.namedType && storageTypeParams(input.namedType)),
+        resolvedTypeParams(field.type, undefined),
+        resolvedTypeParams(column, input.namedTypes),
       ))
   ) {
     throw unsupported(

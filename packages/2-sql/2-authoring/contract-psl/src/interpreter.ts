@@ -76,17 +76,17 @@ import {
   type ResolvedPslModelRefs,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
-import type {
-  SqlModelStorage,
-  SqlNamespaceBase,
-  SqlNamespaceInput,
-  StorageTypeInstance,
+import {
+  resolvedTypeParams,
+  type SqlModelStorage,
+  type SqlNamespaceBase,
+  type SqlNamespaceInput,
+  type StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
   buildSqlContractFromDefinition,
   type CheckNode,
-  domainTypeParams,
   type EnumTypeHandle,
   type FieldNode,
   type ForeignKeyNode,
@@ -1510,8 +1510,8 @@ interface BuildValueObjectNodesInput {
   readonly enumTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly enumHandles: ReadonlyMap<string, EnumTypeHandle>;
   readonly namedTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  /** The storage types the named types declare; a member typed by one takes its parameters inline. */
-  readonly namedStorageTypes: Record<string, StorageTypeInstance>;
+  /** The named types; a member typed by one takes its parameters inline. */
+  readonly namedTypes: Record<string, StorageTypeInstance>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions: ReadonlySet<string>;
   readonly familyId: string;
@@ -1582,7 +1582,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         ...common,
         descriptor: {
           codecId: descriptor.codecId,
-          ...ifDefined('typeParams', domainTypeParams(descriptor, input.namedStorageTypes)),
+          ...ifDefined('typeParams', resolvedTypeParams(descriptor, input.namedTypes)),
         },
         ...ifDefined('enumTypeHandle', enumHandles.get(field.typeName)),
       });
@@ -2603,7 +2603,7 @@ export function interpretPslDocumentToSqlContract(
     enumTypeDescriptors: allEnumTypeDescriptors,
     enumHandles: enumHandlesByName,
     namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
-    namedStorageTypes: namedTypeResult.storageTypes,
+    namedTypes: namedTypeResult.storageTypes,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     composedExtensions,
     familyId: input.target.familyId,

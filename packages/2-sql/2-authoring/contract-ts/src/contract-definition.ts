@@ -8,12 +8,11 @@ import type { AuthoringWarning } from '@internal/framework-components/authoring'
 import type { ColumnTypeDescriptor } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type { AuthoredIndexMethod } from '@internal/sql-contract/index-naming';
-import {
-  type ReferentialAction,
-  type SqlNamespaceBase,
-  type SqlNamespaceInput,
-  type StorageTypeInstance,
-  storageTypeParams,
+import type {
+  ReferentialAction,
+  SqlNamespaceBase,
+  SqlNamespaceInput,
+  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import type { CheckKind } from '@internal/sql-schema-ir/naming';
 import type { EnumTypeHandle } from './enum-type';
@@ -58,18 +57,6 @@ export type AuthoredColumnDefault =
 
 /** The type of a scalar: a codec and its type parameters, the domain's `ScalarFieldType` without its kind. */
 export type ScalarTypeDescriptor = Pick<ColumnTypeDescriptor, 'codecId' | 'typeParams'>;
-
-/**
- * The type parameters of a field's domain type. A field typed by a named storage type takes that type's parameters inline, so it has the domain type of a field that writes the named type out.
- */
-export function domainTypeParams(
-  descriptor: Pick<ColumnTypeDescriptor, 'typeParams' | 'typeRef'>,
-  storageTypes: Record<string, StorageTypeInstance>,
-): Record<string, unknown> | undefined {
-  if (descriptor.typeParams !== undefined) return descriptor.typeParams;
-  const namedType = descriptor.typeRef === undefined ? undefined : storageTypes[descriptor.typeRef];
-  return namedType === undefined ? undefined : storageTypeParams(namedType);
-}
 
 /**
  * The column-free part of a scalar field. A value-object member is exactly this; a model field ({@link FieldNode}) adds its column.

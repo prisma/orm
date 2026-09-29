@@ -52,12 +52,18 @@ export function toStorageTypeInstance(input: StorageTypeInstanceInput): StorageT
 }
 
 /**
- * The type parameters a codec-typed entry gives a field typed by it. The `{}` that {@link toStorageTypeInstance} stores for a codec without parameters reads as none.
+ * The type parameters of a type written with its own parameters or by the name of a named type: its own, or else the named type's. Empty parameters read as none, as a codec reads them; {@link toStorageTypeInstance} stores `{}` for a codec without parameters.
  */
-export function storageTypeParams(
-  instance: Pick<StorageTypeInstanceInput, 'typeParams'>,
+export function resolvedTypeParams(
+  type: {
+    readonly typeParams?: Record<string, unknown> | undefined;
+    readonly typeRef?: string | undefined;
+  },
+  namedTypes: Readonly<Record<string, Pick<StorageTypeInstanceInput, 'typeParams'>>> | undefined,
 ): Record<string, unknown> | undefined {
-  const { typeParams } = instance;
+  const typeParams =
+    type.typeParams ??
+    (type.typeRef === undefined ? undefined : namedTypes?.[type.typeRef]?.typeParams);
   return typeParams !== undefined && Object.keys(typeParams).length > 0 ? typeParams : undefined;
 }
 

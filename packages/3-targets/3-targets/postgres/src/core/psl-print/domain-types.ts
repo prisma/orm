@@ -14,7 +14,7 @@ import type {
   PslTypesBlock,
 } from '@internal/framework-components/psl-ast';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { StorageColumn } from '@internal/sql-contract/types';
+import { resolvedTypeParams, StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { isPostgresCodecDescriptor } from '../codec-descriptor';
@@ -40,10 +40,11 @@ function nativeTypeOfMember(
   if (!isPostgresCodecDescriptor(descriptor)) {
     refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }
-  if (type.typeParams !== undefined) {
+  const typeParams = resolvedTypeParams(type, undefined);
+  if (typeParams !== undefined) {
     return descriptor.nativeTypeFor({
       codecId,
-      typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(type.typeParams),
+      typeParams: blindCast<JsonValue, 'contract type parameters are JSON'>(typeParams),
     });
   }
   try {

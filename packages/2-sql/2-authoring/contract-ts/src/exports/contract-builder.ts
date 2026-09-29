@@ -34,7 +34,6 @@ export type {
   ValueObjectMemberNode,
   ValueObjectNode,
 } from '../contract-definition';
-export { domainTypeParams } from '../contract-definition';
 export type {
   CheckKind,
   ColumnRef,

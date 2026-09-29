@@ -59,6 +59,7 @@ import {
   applyFkDefaults,
   CheckConstraint,
   Index,
+  resolvedTypeParams,
   type SqlNamespaceInput,
   SqlStorage,
   type SqlStorageInput,
@@ -84,7 +85,6 @@ import { isStructuredError, type StructuredError } from '@internal/utils/structu
 import {
   type AuthoredColumnDefault,
   type ContractDefinition,
-  domainTypeParams,
   type FieldNode,
   isValueObjectMember,
   type ModelNode,
@@ -122,15 +122,6 @@ function columnCodec(
     },
     { name: codecId },
   );
-}
-
-function columnTypeParams(
-  descriptor: ColumnTypeDescriptor,
-  storageTypes: Record<string, StorageTypeInstance>,
-): Record<string, unknown> | undefined {
-  if (descriptor.typeParams !== undefined) return descriptor.typeParams;
-  if (descriptor.typeRef === undefined) return undefined;
-  return storageTypes[descriptor.typeRef]?.typeParams;
 }
 
 function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
@@ -831,7 +822,7 @@ function buildStorageColumn(
       ? encodeColumnDefault(
           field.default,
           codecLookup,
-          (lookup) => columnCodec(codecId, columnTypeParams(descriptor, storageTypes), lookup),
+          (lookup) => columnCodec(codecId, resolvedTypeParams(descriptor, storageTypes), lookup),
           { modelName, fieldName: field.fieldName, codecId },
           storedAsList,
         )
@@ -893,7 +884,7 @@ function buildDomainField(
     type: {
       kind: 'scalar',
       codecId: field.descriptor.codecId,
-      ...ifDefined('typeParams', domainTypeParams(field.descriptor, storageTypes)),
+      ...ifDefined('typeParams', resolvedTypeParams(field.descriptor, storageTypes)),
     },
     nullable: field.nullable,
     ...ifDefined('many', field.many ? (true as const) : undefined),
