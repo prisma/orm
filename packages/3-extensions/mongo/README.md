@@ -62,6 +62,7 @@ export default defineConfig({
 
 ```typescript
 // prisma.config.ts
+import 'dotenv/config';
 import { definePrismaConfig } from 'prisma/config';
 import { defineConfig as ormConfig, prisma6Schema } from '@prisma/orm-mongo/config';
 
@@ -73,17 +74,73 @@ export default definePrismaConfig({
 });
 ```
 
-`prisma/config` is the published `prisma` package re-exporting `definePrismaConfig` from `@prisma/cli-engine`. Contributors working inside this repository import it from `@prisma/cli-engine` directly and the facade from `@internal/mongo/config`; the forms are the same functions.
+`prisma/config` is the published `prisma` package re-exporting `definePrismaConfig` from `@prisma/cli-engine`. Contributors working inside this repository import it from `@prisma/cli-engine` directly and the facade from `@internal/mongo/config`; the forms are the same functions. The Prisma 8 CLI does not load `.env` by itself, hence the `dotenv/config` import.
 
 What the project needs around that file:
 
-- A `package.json` that depends on `@prisma/orm-mongo` and `prisma` (the Prisma 8 CLI, which also provides `prisma/config`). `contract emit` reads the nearest manifest to decide which package names `contract.d.ts` imports.
 - `db.connection` is the database URL Prisma 6 reads from its `datasource` block, usually the same `DATABASE_URL` variable. The schema keeps `url` in the `datasource` block as Prisma 6 wants it; this source reads only `provider`, which must be `"mongodb"`.
-- The schema uses only what Prisma 8 supports on MongoDB. A construct it does not support (a composite `@@id`, a list relation, a `@default` other than `now()` on a `DateTime`, a referential action, a `view`, and so on) fails `contract emit` with one `PSL.PRISMA6_MONGO_*` diagnostic per construct and writes nothing. The codes are listed in the [error reference](../../../docs/reference/error-reference.md).
+- The schema uses only what Prisma 8 supports on MongoDB. A construct it does not support (a composite `@@id`, a list relation, a `@default` other than `now()` on a `DateTime`, a referential action, a `view`, and so on) fails `contract emit` with one `PSL.PRISMA6_MONGO_*` diagnostic per construct and writes nothing. Each diagnostic says what its fix does to the running Prisma 6 app. The codes are listed in the [error reference](../../../docs/reference/error-reference.md).
+- Both CLIs installed side by side, as the next section describes. `contract emit` reads the nearest `package.json` to decide which package names `contract.d.ts` imports.
 
 The contract carries no `$jsonSchema` validators, because a Prisma 6 database has none. Indexes are matched by keys and options, not by name, so the names Prisma 6 gives them (`Post_authorId_idx`, `User_email_key`) need no change.
 
-During the transition Prisma 6 keeps owning the database: `prisma db push` on Prisma 6 creates collections and indexes. Prisma 8 reads the schema and verifies it against what Prisma 6 built; it does not migrate. After every schema change on Prisma 6, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match.
+##### Running the Prisma 6 and Prisma 8 CLIs in one project
+
+Both CLIs are published as `prisma`, so one package name cannot resolve to both. Keep Prisma 8 as `prisma` (`prisma.config.ts` imports its `prisma/config`) and install the Prisma 6 CLI under an npm alias, `prisma6`:
+
+```json
+{
+  "scripts": {
+    "prisma6": "node node_modules/prisma6/build/index.js --config prisma6.config.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "@prisma/orm-mongo": "8.0.0-rc.13",
+    "dotenv": "^17.0.0",
+    "mongodb": "^7.0.0"
+  },
+  "devDependencies": {
+    "prisma": "8.0.0-rc.18",
+    "prisma6": "npm:prisma@6.19.3"
+  }
+}
+```
+
+```typescript
+// prisma6.config.ts, read by the Prisma 6 CLI only
+import 'dotenv/config';
+import { defineConfig } from 'prisma6/config';
+
+export default defineConfig({ schema: 'prisma/schema.prisma' });
+```
+
+- The alias installs no `prisma6` binary: the package's binary is still called `prisma`, and `node_modules/.bin/prisma` is the Prisma 8 CLI. Run Prisma 6 through the `prisma6` script instead (`pnpm prisma6 db push`, `npm run prisma6 -- db push`), and change every existing script that runs a Prisma 6 command (`prisma generate`, `prisma db push`) to use it.
+- The Prisma 6 CLI reads `prisma.config.ts` whenever that file exists, and it is now Prisma 8's, so the script passes `--config prisma6.config.ts`. A project that already has a Prisma 6 `prisma.config.ts` renames it to `prisma6.config.ts` and imports `defineConfig` from `prisma6/config` in it.
+- With a config file, neither CLI loads `.env` by itself, so both config files import `dotenv/config`.
+- `@prisma/client` stays at the Prisma 6 CLI's version, and `prisma6 generate` generates it as before.
+- `mongodb` 7 is a peer dependency of `@prisma/orm-mongo`. Declare it: a package manager does not always add it for you (pnpm leaves it out when another package asks for a different major).
+- `prisma orm init` in a Prisma 6 MongoDB project prints these steps instead of scaffolding (`CLI.INIT_PRISMA6_SCHEMA_FOUND`).
+
+This setup was run with pnpm 10.27, Prisma 6.19.3 and Prisma 8.0.0-rc.18 against a MongoDB replica set: `prisma6 db push` and `prisma6 generate`, a write through the generated Prisma 6 client, then `prisma contract emit`, `prisma db sign` and `prisma db verify`.
+
+##### Keeping Prisma 8 in step with Prisma 6
+
+During the transition Prisma 6 keeps owning the database: Prisma 6's `db push` creates collections and indexes. Prisma 8 reads the schema and verifies it against what Prisma 6 built; it does not migrate. After every schema change, run Prisma 6's `db push` (`pnpm prisma6 db push`), then `prisma contract emit` and `prisma db sign`, so the recorded contract matches the database again; `prisma db verify` reports nothing when they match. When the database is behind the contract, `db verify` and `db sign` say the same: run Prisma 6's `db push`, then sign again.
+
+`db sign` also records the signed contract in the project, as it does in every Prisma 8 project: it writes `migrations/app/refs/db.json` (the `db` ref, set to the signed contract's hash) and a snapshot of the contract under `migrations/snapshots/<hash>/` (`contract.json` and `contract.d.ts`). These are what Prisma 8 migrations plan from once the project moves off Prisma 6, so commit them. A project, or a CI or deployment step, that only reads the Prisma 6 schema can pass `--no-advance-ref`, which signs the database without writing either.
+
+##### What changes for Prisma 6 application code
+
+Code that moves from the Prisma 6 client to the Prisma 8 client reads the same documents with these differences:
+
+- **The id is `_id`.** `id String @id @default(auto()) @map("_id") @db.ObjectId` is the field `_id` in Prisma 8 (a hex string, as in Prisma 6), not `id`.
+- **Models are reached by collection name.** `model User { @@map("users") }` is `db.orm.users`, where Prisma 6 has `prisma.user`.
+- **Enum values are the stored values.** A member with `@map` is read and written as its stored value: `ADMIN @map("admin")` is `'admin'` in Prisma 8, where the Prisma 6 client exposes `'ADMIN'`.
+- **Optional fields.** An optional field is typed `T | null`. Prisma 6 leaves an unset optional field out of the document, so a document it wrote can read with the field absent rather than `null`; test for it with `== null`, which covers both.
+- **`Bytes` is a `Uint8Array`**, as in Prisma 6. Write a `Uint8Array`, not a driver `Binary`.
+- **`BigInt` is a `bigint`**, as in Prisma 6, with no precision lost above 2^53.
+- **`Decimal` is a `string`** in Prisma 8, the decimal's text such as `"12.50"`. Prisma 6 refuses `Decimal` on MongoDB, so a schema Prisma 6 accepts has no `Decimal` field.
+- **`Json` holds JSON values only.** A `Json` value that contains a BSON type JSON cannot represent (a date, an ObjectId, a long above 2^53, and so on), written by other code or by an older Prisma, fails to read in Prisma 8 with `RUNTIME.DECODE_FAILED`.
 
 ### `@internal/mongo/contract-builder`
 

@@ -24,3 +24,12 @@ Reads a Prisma 6 MongoDB `schema.prisma` as a Prisma 8 contract source. During t
 | `@@schema`, `view`, unknown attributes and blocks | Hard errors. |
 
 The fixtures in `test/fixtures/` hold one case per rule row and per error code.
+
+## Using the source in a Prisma 6 project
+
+Users reach this source through `prisma6Schema` in `@prisma/orm-mongo/config`; its [README](../../../3-extensions/mongo/README.md#prisma6schemapath-adopt-a-prisma-6-mongodb-schema-during-the-transition) has the full setup. In short:
+
+- **Two CLIs, one package name.** Both are published as `prisma`. Prisma 8 keeps the name (`prisma.config.ts` imports `prisma/config`), and Prisma 6 is installed under an npm alias (`"prisma6": "npm:prisma@6.19.3"`) and run through a `prisma6` script (`node node_modules/prisma6/build/index.js --config prisma6.config.ts`), because the alias installs no binary of its own and the Prisma 6 CLI would otherwise read Prisma 8's `prisma.config.ts`. Both config files import `dotenv/config`, since neither CLI loads `.env` when it has a config file. `prisma orm init` prints these steps when it finds a Prisma 6 MongoDB schema.
+- **Prisma 6 owns the database.** After each schema change: Prisma 6's `db push`, then `prisma contract emit` and `prisma db sign`. The source declares Prisma 6 as the schema owner, so `db verify` and `db sign` give that advice when the database is behind the contract.
+- **`db sign` writes into the project.** It sets the `db` ref in `migrations/app/refs/db.json` and writes a contract snapshot under `migrations/snapshots/<hash>/` (`contract.json`, `contract.d.ts`). `--no-advance-ref` signs without writing either.
+- **What changes for Prisma 6 application code.** The id is `_id`; models are reached by collection name (`db.orm.users`); enum values are the stored `@map` values (`'admin'`, not `'ADMIN'`); optional fields are typed `T | null`, and a document Prisma 6 wrote without the field reads with it absent, so test with `== null`; `Bytes` is a `Uint8Array` and `BigInt` a `bigint`, as in Prisma 6; `Decimal` is a `string` (Prisma 6 refuses `Decimal` on MongoDB); `Json` holds JSON values only.
