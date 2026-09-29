@@ -4,11 +4,10 @@ changes:
     summary: |
       A contract read with `prisma6Schema(...)` now gives a plain Prisma 6 `Int` field the codec for the BSON
       long Prisma 6 stores: in `contract.d.ts` the field changes from `number` to `bigint`, reads return a
-      `bigint`, and writes take a `bigint` and store a long. `Int @db.Int` stays a `number`. Every native
-      type Prisma 6 accepts except `DateTime @db.Timestamp` is now read instead of refused. A document in
-      which such a field holds a fractional number, which the previous contract let Prisma 8 write, now
-      fails to read with `RUNTIME.DECODE_FAILED`: repair those documents, re-emit the contract, then pass
-      and expect `bigint` values for those fields.
+      `bigint`, and writes take a `bigint` and store a long. `Int @db.Int` stays a `number`. A document in
+      which a plain `Int` field holds a fractional number, which the previous contract let Prisma 8 write,
+      now fails to read with `RUNTIME.DECODE_FAILED`: repair those documents, re-emit the contract, then
+      pass and expect `bigint` values for those fields.
     detection:
       glob: "**/prisma.config.{ts,mts,cts,js,mjs}"
       matches:
