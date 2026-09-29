@@ -70,7 +70,7 @@ You do **not** need a `collect()` / `toArray()` helper — `await` is enough. In
 const rows: Promise<User[]> = db.orm.public.User.select('id', 'email').all().toArray();
 
 // Iterate — decode and handle rows one at a time. Whether the raw rows are
-// also fetched incrementally depends on the façade; see *Streaming* below.
+// also fetched incrementally depends on the `cursor` option; see *Streaming* below.
 for await (const user of db.orm.public.User.select('id', 'email').all()) {
   process(user);
 }
@@ -127,12 +127,12 @@ await db.close();
 
 ## Streaming
 
-Every read terminal (`.all()`, and `runtime.query(plan)` for a SQL-builder plan) returns an `AsyncIterableResult`, so `for await` is always available. What it buys you depends on the façade:
+Every read terminal (`.all()`, and `runtime.query(plan)` for a SQL-builder plan) returns an `AsyncIterableResult`, so `for await` is always available. What it buys you depends on the `cursor` option, which `postgres()` and `postgresServerless()` (`@prisma/orm-postgres/serverless`) both accept:
 
-- **Long-lived `postgres()` façade** (the usual `db.ts`): the driver runs with cursors disabled. The full result set is fetched from the server before the first row is yielded; only *decoding* happens per row. `for await` therefore does not bound the memory held by the raw result. For very large sets, paginate (`.limit()` / `.offset()`, or `.orderBy(...).cursor(...)`) instead.
-- **Serverless façade** (`@prisma/orm-postgres/serverless`, one `connect()` per invocation): the driver reads through a server-side cursor in batches of 100 rows by default (`cursor: { batchSize }` on the façade options), so `for await` really does stream.
+- **Default (cursors off), on a client and on a connection:** the full result set is fetched from the server before the first row is yielded; only *decoding* happens per row. `for await` therefore does not bound the memory held by the raw result. For very large sets, paginate (`.limit()` / `.offset()`, or `.orderBy(...).cursor(...)`) instead.
+- **`cursor` set in the options of `postgres()` or `postgresServerless()` (`{ batchSize: 100 }`; `{}` or `{ batchSize: undefined }` for batches of 100; a `batchSize` that is not a positive integer fails the factory call; there is no flag that turns cursors off):** the driver reads through a server-side cursor in batches of that size, so `for await` over `db.orm...all()` or `db.runtime().query(plan)` really does stream, and an early `break` stops reading. In a Worker, put the option only on a second serverless client that the streaming paths open their connections from, and keep the serverless client every other path uses without it. On a connection with cursors on, finish or `break` the `for await` loop before sending another query through `db`: the cursor holds the connection's only database connection until the loop ends, so a query inside the loop waits forever. On a client, the same query takes another database connection from the pool. Behind Cloudflare Hyperdrive, reads with cursors on hang, so the streaming paths hang there and the other paths do not.
 
-There is no `.stream()` method on either façade.
+There is no `.stream()` method on a client or on a connection.
 
 ## Prepared statements (Postgres, SQLite)
 
@@ -216,11 +216,10 @@ Target-specific pitfalls live in the per-target guides.
 - **A raw-SQL lane.** This one exists. Write whole-query raw SQL through the client's raw lane: ``db.raw.sql`SELECT ...`.returnsRow({ ... }).build()`` for rows, or `.affectedCount()` for a mutation's row count. Each declared column names the codec that decodes it, so the row stays typed. For an expression fragment inside a builder query, use `fns.raw` in a `.select(...)` callback instead.
 - **TypedSQL (`.sql` files compiled into typed callables).** Not implemented. For a repeated query, use `db.prepare(...)` (see *Prepared statements* above) or a function that returns the built plan and `db.runtime().query(plan)` at the call site. If you want a `.sql`-file compile path, file a feature request via `references/feedback.md`.
 - **`EXPLAIN` / query-plan inspection.** Prisma 8 does not expose an `.explain()` method. Workaround: connect a `pg.Pool` you control via the runtime's `pg:` binding (see `references/runtime.md`) and issue `EXPLAIN ANALYZE` through it. If you want a first-class plan-inspection surface, file a feature request via `references/feedback.md`.
-- **Cursor-backed streaming on the long-lived façade.** `for await` works everywhere, but on `postgres()` the raw result is fetched in full before iteration (see *Streaming* above); only the serverless façade reads through a cursor. Paginate for very large sets on the long-lived façade. If you want cursor streaming there, file a feature request via `references/feedback.md`.
 - **Multi-statement batching (Prisma-7-style `db.$transaction([call1, call2])`).** Prisma 8 runs each call sequentially. Workaround: wrap atomically-related work in `db.transaction(async (tx) => { ... })` on Postgres. If you want batch-as-array semantics, file a feature request via `references/feedback.md`.
 - **Mongo façade transactions.** `@internal/mongo/runtime` does not expose `db.transaction(...)`. Multi-document atomicity is not yet wrapped in the Prisma 8 Mongo façade. Workaround: use the MongoDB driver's session API directly if you control the client binding (`mongoClient:` option). File a feature request via `references/feedback.md` if you need a first-class façade surface.
 - **Mongo ORM aggregates.** No `.aggregate(...)` / `.groupBy(...)` on `db.orm.<root>`. Workaround: express aggregations through `db.query.from(...).group(...).build()` and `runtime.query(plan)`.
-- **Mongo filter helpers on the façade.** Rich filters (`.in`, ranges, boolean composition) currently import from `@prisma/orm-mongo/query-ast/execution` (`MongoFieldFilter`, etc.) — not re-exported on `@internal/mongo/runtime`. Workaround: use object equality `.where({ field: value })` where possible; import from the internal package only when necessary. Tracked alongside façade-completeness gaps in Linear `TML-2526`.
+- **Mongo filter helpers on the façade.** Rich filters (`.in`, ranges, boolean composition) currently import from `@prisma/orm-mongo/query-ast/execution` (`MongoFieldFilter`, etc.) — not re-exported on `@internal/mongo/runtime`. Workaround: use object equality `.where({ field: value })` where possible; import from the internal package only when necessary. The façade does not re-export them yet.
 - **Automatic N+1 detection.** Prisma 8 does not warn when an `.include(...)` is missing. Workaround: be deliberate about `.include(...)` in code review; the `lints` middleware (see `references/runtime.md`) catches the more common authoring slips (missing `WHERE` on a `DELETE` / `UPDATE`, missing `LIMIT` on a `SELECT`).
 
 ## Reference Files

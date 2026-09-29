@@ -453,7 +453,7 @@ No contract marker (database signature) is found in the database at all. `db ver
 
 ### CONTRACT.MARKER_READ_FAILED
 
-A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker. Payload: `space`.
+A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker, and by the runtime when its first query on a database connection reads the marker (with the default `verifyMarker`) and that read fails; a query returned without `await` from an `await using` scope that held a serverless Postgres connection fails this way, with `DRIVER.NOT_CONNECTED` as its `cause`. Payload: `space`.
 
 ### CONTRACT.MARKER_REQUIRED
 
@@ -983,7 +983,7 @@ A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annota
 
 ### RUNTIME.ARGUMENT_INVALID
 
-A built-in Postgres query operation or full-text helper received an argument it cannot use. One case is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. The other case is a literal part of a `tsquery` template with an invalid JavaScript escape, such as `\u`: JavaScript gives the tag no text for that part, so the tag refuses it rather than drop it. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
+A built-in Postgres query operation or full-text helper received an argument it cannot use, or `postgres()` or `postgresServerless()` received a `cursor` option it cannot use. Three cases: (1) the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused, while the query is being built; (2) a literal part of a `tsquery` template has an invalid JavaScript escape, such as `\u`, so JavaScript gives the tag no text for that part and the tag refuses it rather than drop it, also while the query is being built; (3) the `cursor` option has a key other than `batchSize` (including the driver's own `disabled` setting) or a `batchSize` that is not a positive integer, raised at the factory call; leave `cursor` unset to read without a cursor. Payload: `helper` (the operation, or `postgres` / `postgresServerless` for the factory option), `argument`, `received`, plus `extension: 'postgres'` for the factory option.
 
 ### RUNTIME.AST_INVALID
 
@@ -995,11 +995,11 @@ The authored SQL AST uses a feature this target cannot render, e.g. DEFAULT as a
 
 ### RUNTIME.BINDING_INVALID
 
-A target facade client (`@internal/postgres`, `@internal/sqlite`, `@internal/mongo`) received a connection binding whose shape is wrong for the target: malformed connection string, unsupported binding kind, or missing required fields. Raised at `connect(...)` / client construction. Payload: `received`, `reason`.
+A client (`postgres()`, `sqlite()`, `mongo()`) received a connection binding whose shape is wrong for the target: malformed connection string, unsupported binding kind, or missing required fields. Raised at `connect(...)` / client construction. A serverless Postgres client raises it from `connect({ url })` for an empty URL, a string that is not a URL, or a scheme other than `postgres://` or `postgresql://`, before any `pg.Client` exists. Payload: `received`, `reason`.
 
 ### RUNTIME.BINDING_MISSING
 
-A target facade client was asked to connect with no binding at all (no connection string, no environment fallback). Payload: `expected`.
+A client (`postgres()`, `sqlite()`, `mongo()`) was asked to connect with no binding at all (no connection string, no environment fallback). Payload: `expected`.
 
 ### RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED
 
@@ -1195,15 +1195,15 @@ A parameterized codec's `paramsSchema` rejected the `typeParams` carried by a co
 
 ### DRIVER.ALREADY_CONNECTED
 
-Calling `connect(binding)` on a driver, or `connect()` on a target facade client (Postgres, SQLite, Mongo) or the CLI control client, when it is already connected. Close with `close()` before reconnecting with a new binding. Payload: `bindingKind`.
+Calling `connect(binding)` on a driver, or `connect()` on a client (`postgres()`, `sqlite()`, `mongo()`) or the CLI control client, when it is already connected. Close with `close()` before reconnecting with a new binding. Payload: `bindingKind`.
 
 ### DRIVER.CONNECTION_FAILED
 
-A control-plane driver could not establish a database connection (`driver.create(url)` in the SQLite, Postgres, and Mongo control drivers). The `why` carries the underlying driver message and the original error is attached as `cause`; connection URLs in meta are redacted. Payload: `path` (SQLite); `sqlState` plus redacted URL fields (Postgres); redacted URL fields (Mongo).
+A control-plane driver could not establish a database connection (`driver.create(url)` in the SQLite, Postgres, and Mongo control drivers), or `connect({ url })` on a serverless Postgres client (`@prisma/orm-postgres/serverless`) could not open its `pg.Client`'s database connection: the database refused the connection, rejected the credentials, or did not answer within the 20 second connect timeout. The `why` carries the underlying driver message and the original error is attached as `cause`; connection URLs in meta are redacted. Payload: `path` (SQLite); `sqlState` plus redacted URL fields (Postgres control driver); redacted URL fields (Mongo); `extension: 'postgres'` plus redacted URL fields (serverless `connect`).
 
 ### DRIVER.NOT_CONNECTED
 
-Using a driver, a target facade client, or the CLI control client before `connect(...)` has been called (or after it was closed), surfaces from runtime `query` / `execute`, a prepared statement's `query(target, params, options?)`, `acquireConnection`, or `explain`, including lazily when iterating a query result.
+Using a driver, a client, or the CLI control client before `connect(...)` has been called, or after it was closed. It surfaces from runtime `query` / `execute`, a prepared statement's `query(target, params, options?)`, `acquireConnection`, or `explain`, including lazily when iterating a query result. A closed Postgres client or serverless connection raises it from `runtime()`, `transaction(...)` and `prepare(...)`, which throw it synchronously, and from ORM queries, which reject with it.
 
 ### DRIVER.PREPARE_FAILED
 

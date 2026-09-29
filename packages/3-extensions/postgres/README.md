@@ -2,12 +2,12 @@
 
 One-package Postgres setup for Prisma 8. Install this single package to get config, runtime, and all transitive type dependencies.
 
-Two runtime facades ship under different entrypoints:
+Two runtime entry points create three kinds of object:
 
-- `@internal/postgres/runtime` — long-lived Node process facade with closure-cached `runtime()`, `orm`, and `transaction()`.
-- `@internal/postgres/serverless` — per-request facade for serverless / edge runtimes (Cloudflare Workers + Hyperdrive, AWS Lambda, Vercel, Deno Deploy, Bun edge). Each `connect()` returns a fresh `Runtime & AsyncDisposable`.
+- `@internal/postgres/runtime` — `postgres()` returns a **client** for a long-lived Node process, with closure-cached `runtime()`, `orm`, and `transaction()`.
+- `@internal/postgres/serverless` — for serverless / edge runtimes (Cloudflare Workers + Hyperdrive, AWS Lambda, Vercel, Deno Deploy, Bun edge). `postgresServerless()` returns a **serverless client**, which holds no database connection. Each `connect({ url })` on it opens a fresh database connection and returns a **connection** with the members of a `postgres()` client except `connect`.
 
-Pick the facade that matches your deployment lifecycle. The asymmetry is intentional: closure caching is unsafe across `fetch` invocations (stale connections after isolate idle, concurrent-query races, no clean shutdown), so the serverless facade deliberately omits `orm`, `runtime()`, and `transaction()`. See `docs/architecture docs/subsystems/4. Runtime & Middleware Framework.md` and the deployment guide for the rationale.
+Pick the entry point that matches your deployment lifecycle. A database connection kept at module scope fails across `fetch` invocations in the four ways ADR 207 lists, so on the serverless side everything bound to a database connection lives on the connection. Inside a request, `db` does everything the `db` from `postgres()` does. See [ADR 207](../../../docs/architecture%20docs/adrs/ADR%20207%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md) and the [Serverless Deployment Guide](../../../docs/Serverless%20Deployment%20Guide.md) for the rationale.
 
 ## Package Classification
 
@@ -46,24 +46,24 @@ export const db = postgres<Contract>({ contractJson });
 ### Serverless / per-request runtimes
 
 ```typescript
-// db.ts — module scope: only the static authoring surface is built here.
+// db.ts — module scope: the serverless client holds no database connection.
 import postgresServerless from '@internal/postgres/serverless';
 import type { Contract } from './contract.d';
 import contractJson from './contract.json' with { type: 'json' };
 
-export const db = postgresServerless<Contract>({ contractJson });
+export const postgres = postgresServerless<Contract>({ contractJson });
 
-// worker.ts — per-request: acquire a fresh Runtime, dispose with `await using`.
+// worker.ts — per request: open a connection, close it with `await using`.
 export default {
   async fetch(_req: Request, env: Env): Promise<Response> {
-    await using runtime = await db.connect({ url: env.HYPERDRIVE.connectionString });
-    const rows = await runtime.query(db.sql.from(/* ... */).build());
-    return Response.json(rows);
+    await using db = await postgres.connect({ url: env.HYPERDRIVE.connectionString });
+    const users = await db.orm.public.User.all();
+    return Response.json(users);
   },
 };
 ```
 
-The returned client exposes `sql`, `context`, `stack`, `contract`, and `connect()` — and intentionally nothing else. Construct ORM clients (or invoke `withTransaction` from `@internal/sql-runtime`) against the runtime returned by `connect()` instead of caching one on the closure.
+Inside a request, `db` does everything the `db` from `postgres()` does: `db.orm`, `db.sql`, `db.raw`, `db.transaction(...)`, `db.prepare(...)` and `db.runtime().query(...)` work unchanged. Await every query before the `await using` scope ends: the connection closes when the scope ends, so a query returned from the scope without `await` (`return db.orm...` instead of `return await db.orm...`) fails when its rows are read, with `CONTRACT.MARKER_READ_FAILED` (whose cause is `DRIVER.NOT_CONNECTED`) under the default options, or `DRIVER.NOT_CONNECTED` after an earlier awaited query or with `verifyMarker: false`. `connect` connects to the database before it returns and rejects with `DRIVER.CONNECTION_FAILED` when the database refuses the connection, rejects the credentials, or does not answer within 20 seconds. `db` is not a `Runtime`; anything that takes a runtime gets `db.runtime()`. Never call `connect` at module scope.
 
 ## Exports
 
@@ -186,6 +186,8 @@ When URL binding is used, pool timeouts are configurable via `poolOptions`:
 - `poolOptions.connectionTimeoutMillis` (default `20_000`)
 - `poolOptions.idleTimeoutMillis` (default `30_000`)
 
+Reads are buffered by default. Pass `cursor` (typed `PostgresCursorOptions`, `{ batchSize?: number | undefined }`) to read through a server-side cursor (`pg-cursor`): `{ batchSize: 50 }` streams in batches of 50; `{}` or `{ batchSize: undefined }` in batches of 100; a `batchSize` that is not a positive integer fails the factory call. There is no flag that turns cursors off; leaving the option out does that. A `cursor` value with any other key, or a `batchSize` that is not a positive integer, fails the factory call with `RUNTIME.ARGUMENT_INVALID`. `postgresServerless()` accepts the same option.
+
 ### Prepared SQL and ORM rows
 
 Use `db.prepare(declaration, params => ...)` to prepare SQL queries, ORM row reads or ORM aggregates once and execute them with different parameter values.
@@ -247,33 +249,35 @@ Re-exports the Postgres target pack (the value passed as `target:` to `defineCon
 
 ### `@internal/postgres/serverless`
 
-`@internal/postgres/serverless` exposes `postgresServerless(...)` for per-request runtimes. The returned client exposes only:
+`@internal/postgres/serverless` exposes `postgresServerless(...)` for per-request runtimes. It returns the serverless client, which holds no database connection and exposes:
 
-- `db.sql`
-- `db.context`
-- `db.stack`
-- `db.contract`
-- `db.connect({ url })` — returns `Promise<Runtime & AsyncDisposable>`
+- `postgres.sql`, `postgres.raw`, `postgres.enums`, `postgres.nativeEnums`
+- `postgres.context`, `postgres.contract`, `postgres.stack`
+- `postgres.connect({ url })` — returns `Promise<PostgresServerlessConnection<Contract>>`
 
-Each `connect()` call constructs a fresh `pg.Client` and a fresh `Runtime`. No `pg.Pool` is allocated. `[Symbol.asyncDispose]` calls `runtime.close()`, which closes the underlying client. `pg-cursor` is enabled by default; opt out via `cursor: { disabled: true }`.
+`PostgresServerlessConnection<Contract>` is `PostgresClient<Contract>` without `connect`: `sql`, `raw`, `enums`, `nativeEnums`, `context`, `contract` and `stack` (the same objects as on the serverless client), plus `orm`, `runtime()`, `transaction(fn)`, `prepare(...)`, `close()` and `[Symbol.asyncDispose]`.
+
+Each `connect()` call creates a fresh `pg.Client`, connects it to the database, and wraps it in a fresh runtime. When the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, `connect()` rejects with `DRIVER.CONNECTION_FAILED` and ends the `pg.Client`. No `pg.Pool` is allocated. `close()` and `[Symbol.asyncDispose]` close the runtime once, which ends its `pg.Client`. After that, `db.runtime()`, ORM queries, `db.transaction(...)` and `db.prepare(...)` fail with `DRIVER.NOT_CONNECTED`. A connection has one database connection, a `pg.Client`, so inside `db.transaction(async (tx) => ...)` run every query through `tx`. Reads are buffered by default. To stream on some paths only, create a second serverless client with `cursor: { batchSize }` and open connections from it only on those paths; they read through `pg-cursor` in batches. On such a connection, finish or `break` a `for await` over a read before sending another query through `db`: the cursor holds the only database connection until the loop ends, so a query inside the loop waits forever. Behind Cloudflare Hyperdrive, reads with cursors on hang, so those paths hang there and the paths whose connections come from the serverless client without the option do not.
 
 ## Responsibilities
 
 - Build a static Postgres execution stack from target, adapter, and driver descriptors
-- Build a typed SQL authoring surface from the execution context
-- Build a static ORM root from the execution context
-- Normalize runtime binding input (`binding`, `url`, `pg`)
-- Lazily instantiate runtime resources on first `db.runtime()` or `db.connect(...)` call
-- Connect the internal Postgres driver through `db.connect(...)` or from initial binding options
-- Memoize runtime so repeated `db.runtime()` calls return one instance
+- Build the static members (`sql`, `raw`, `enums`, `nativeEnums`, `context`, `contract`, `stack`) from the execution context, once per client or serverless client
+- Build the runtime-bound members (`orm`, `runtime()`, `transaction()`, `prepare()`) over a runtime, for a client and for each connection
+- Normalize runtime binding input (`binding`, `url`, `pg`) for `postgres()`
+- Lazily instantiate a client's runtime resources on the first `db.runtime()` or `db.connect(...)` call, and memoize the runtime so repeated `db.runtime()` calls return one instance
+- Open one `pg.Client` per `connect({ url })` on a serverless client, and close it with the connection
 
 ## Architecture
+
+The diagram shows `postgres()`. A connection from `postgresServerless()` has the same static and runtime-bound members over one `pg.Client` instead of a lazy pool.
 
 ```mermaid
 flowchart TD
     App[App Code] --> Client[postgres(...)]
-    Client --> Static[Roots: sql orm context stack]
-    Client --> Lazy[runtime()]
+    Client --> Static[Static members: sql raw enums nativeEnums context contract stack]
+    Client --> Bound[Runtime-bound members: orm runtime() transaction prepare]
+    Bound --> Lazy[runtime() on first use]
 
     Lazy --> Instantiate[instantiateExecutionStack]
     Lazy --> Bind[Resolve binding: url or pg]
