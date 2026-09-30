@@ -31,15 +31,17 @@ describe('mongo/int64Number@1', () => {
       await expect(codec().encode(value, {})).rejects.toThrow(encodeFailed);
     }
     await expect(codec().encode(2.5, {})).rejects.toThrow(
-      'mongo/int64Number@1 value must be an integer within the safe integer range, got 2.5',
+      'mongo/int64Number@1 value must be an integer from -9007199254740991 to 9007199254740991; received 2.5',
     );
   });
 
   it('refuses a value that is not a number', async () => {
     await expect(codec().encode(wrongType<number>(9n), {})).rejects.toThrow(
-      'mongo/int64Number@1 value must be a number, got bigint 9',
+      'mongo/int64Number@1 value must be an integer from -9007199254740991 to 9007199254740991; received 9n',
     );
-    await expect(codec().encode(wrongType<number>('9'), {})).rejects.toThrow(encodeFailed);
+    await expect(codec().encode(wrongType<number>('9'), {})).rejects.toThrow(
+      'mongo/int64Number@1 value must be an integer from -9007199254740991 to 9007199254740991; received string "9"',
+    );
   });
 
   it.each([
@@ -60,7 +62,7 @@ describe('mongo/int64Number@1', () => {
       await expect(codec().decode(wire, {})).rejects.toThrow(decodeFailed);
     }
     await expect(codec().decode(Long.fromBigInt(2n ** 53n), {})).rejects.toThrow(
-      'mongo/int64Number@1 value must be an integer within the safe integer range, got 9007199254740992',
+      'mongo/int64Number@1 wire value must be a whole number from -9007199254740991 to 9007199254740991; received 9007199254740992',
     );
   });
 
@@ -69,7 +71,7 @@ describe('mongo/int64Number@1', () => {
       await expect(codec().decode(wire, {})).rejects.toThrow(decodeFailed);
     }
     await expect(codec().decode(2 ** 60, {})).rejects.toThrow(
-      'mongo/int64Number@1 value must be an integer within the safe integer range, got 1152921504606847000',
+      'mongo/int64Number@1 wire value must be a whole number from -9007199254740991 to 9007199254740991; received 1152921504606847000',
     );
   });
 
@@ -85,14 +87,20 @@ describe('mongo/int64Number@1', () => {
   });
 
   it('refuses a wire value of another BSON type', async () => {
-    await expect(codec().decode(wrongType<number>('7'), {})).rejects.toThrow(decodeFailed);
+    await expect(codec().decode(wrongType<number>('7'), {})).rejects.toThrow(
+      'mongo/int64Number@1 wire value must be a whole number from -9007199254740991 to 9007199254740991; received string "7"',
+    );
   });
 
   it('writes and reads its JSON form as decimal text, as mongo/int64@1 does', () => {
     expect(codec().encodeJson(42)).toBe('42');
     expect(codec().decodeJson('-42')).toBe(-42);
-    expect(() => codec().decodeJson(42)).toThrow(decodeFailed);
-    expect(() => codec().decodeJson('9007199254740992')).toThrow(decodeFailed);
+    expect(() => codec().decodeJson(42)).toThrow(
+      'mongo/int64Number@1 JSON value must be decimal integer text',
+    );
+    expect(() => codec().decodeJson('9007199254740992')).toThrow(
+      'mongo/int64Number@1 JSON value must be a whole number from -9007199254740991 to 9007199254740991; received 9007199254740992',
+    );
     expect(() => codec().encodeJson(1.5)).toThrow(encodeFailed);
   });
 
