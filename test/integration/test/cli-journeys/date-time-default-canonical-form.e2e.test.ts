@@ -1,10 +1,10 @@
 /**
- * Journey: a date or time default is stored as its type's standard text.
+ * Journey: a date or time default is stored in its data type's canonical form.
  *
  * A database created from a contract that stored date and time defaults as they were written
- * verifies against the contract emitted from the same schema with the standard text, and the
+ * verifies against the contract emitted from the same schema in canonical form, and the
  * planner finds nothing to change. `contract infer` prints each default back as a literal in the
- * standard text. A default before year 1 is written as PostgreSQL reads it in both DDL paths.
+ * canonical form. A default before year 1 is written as PostgreSQL reads it in both DDL paths.
  */
 import { copyFileSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -33,10 +33,10 @@ import {
 
 /**
  * `emitted-before/contract.json` was emitted from `contract.prisma` by the emitter as it was before a date
- * or time default had one standard text, so it holds each default as it was written. Nothing
+ * or time default had one canonical form, so it holds each default as it was written. Nothing
  * re-emits it.
  */
-const BEFORE = join(import.meta.dirname, '../date-time-defaults/_fixture-before-standard-text');
+const BEFORE = join(import.meta.dirname, '../date-time-defaults/_fixture-before-canonical-form');
 
 const STANDARD_DEFAULTS = {
   a: { kind: 'literal', value: '2024-01-01T00:00:00Z' },
@@ -87,11 +87,11 @@ async function schemaIssues(ctx: JourneyContext): Promise<readonly unknown[]> {
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey: date and time defaults stored before the standard text', () => {
+  describe('Journey: date and time defaults stored before the canonical form', () => {
     const db = useDevDatabase();
 
     it(
-      'a database made from the earlier contract verifies against the re-emitted one, plans no change, and infers the standard text',
+      'a database made from the earlier contract verifies against the re-emitted one, plans no change, and infers the canonical form',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -116,7 +116,7 @@ withTempDir(({ createTempDir }) => {
         expect(await schemaIssues(ctx)).toEqual([]);
 
         const from = ['--from', beforeStorageHash()];
-        const plan = await runMigrationPlan(ctx, ['--name', 'standard-text', ...from, '--json']);
+        const plan = await runMigrationPlan(ctx, ['--name', 'canonical-form', ...from, '--json']);
         expect(parseJsonOutput(plan)).toMatchObject({
           code: 'MIGRATION.PLANNING_FAILED',
           meta: {
@@ -128,7 +128,7 @@ withTempDir(({ createTempDir }) => {
           },
         });
 
-        const empty = await runMigrationNew(ctx, ['--name', 'standard-text', ...from]);
+        const empty = await runMigrationNew(ctx, ['--name', 'canonical-form', ...from]);
         expect(empty.exitCode, `migration new\n${output(empty)}`).toBe(0);
         const migrate = await runMigrate(ctx);
         expect(migrate.exitCode, `db migrate\n${output(migrate)}`).toBe(0);
@@ -193,7 +193,7 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase();
 
     it(
-      'stores the standard text, creates the database, and verifies it',
+      'stores the canonical form, creates the database, and verifies it',
       async () => {
         const ctx = setupJourney({ connectionString: db.connectionString, createTempDir });
         swapContract(ctx, 'contract-date-time-defaults');

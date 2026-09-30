@@ -1,36 +1,8 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
-import sql from '@internal/family-sql/control';
-import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
-import sqlitePackRef from '@internal/target-sqlite/pack';
-import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { authorSqlContractFromPsl, findStorageColumn } from '../scalar-lists/psl-list-authoring';
-
-const sqliteStack = createControlStack({ family: sql, target: sqlite, adapter: sqliteAdapter });
-
-async function authorSqliteContractFromPsl(pslSchema: string) {
-  const schemaPath = join(mkdtempSync(join(tmpdir(), 'psl-date-time-defaults-')), 'schema.prisma');
-  writeFileSync(schemaPath, `// use prisma-8\n\n${pslSchema}`, 'utf-8');
-  return prismaContract(schemaPath, {
-    target: sqlitePackRef,
-    createNamespace: sqliteCreateNamespace,
-  }).source.load({
-    composedExtensions: [],
-    composedExtensionContracts: new Map(),
-    authoringContributions: sqliteStack.authoringContributions,
-    codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
-    controlMutationDefaults: sqliteStack.controlMutationDefaults,
-    resolvedInputs: [schemaPath],
-    capabilities: sqliteStack.capabilities,
-  });
-}
+import { authorSqliteContractFromPsl } from './sqlite-authoring';
 
 async function postgresDefaults(schema: string, columns: readonly string[]) {
   const authored = await authorSqlContractFromPsl(schema);
@@ -44,7 +16,7 @@ async function postgresDefaults(schema: string, columns: readonly string[]) {
 
 const literal = (value: unknown) => ({ kind: 'literal', value });
 
-describe('a PSL date or time default is stored as its type standard text', () => {
+describe('a PSL date or time default is stored in its data type canonical form', () => {
   it('stores one text for three texts of one instant', async () => {
     expect(
       await postgresDefaults(
@@ -63,7 +35,7 @@ describe('a PSL date or time default is stored as its type standard text', () =>
     });
   });
 
-  it('stores the standard text of a default written in another form, for each Postgres date and time type', async () => {
+  it('stores the canonical form of a default written in another form, for each Postgres date and time type', async () => {
     expect(
       await postgresDefaults(
         `model Event {
@@ -93,7 +65,7 @@ describe('a PSL date or time default is stored as its type standard text', () =>
     });
   });
 
-  it('stores the standard text of a SQLite DateTime default', async () => {
+  it('stores the canonical form of a SQLite DateTime default', async () => {
     const result = await authorSqliteContractFromPsl(
       'model Event {\n  id Int @id\n  at DateTime @default("2024-01-01 01:00:00+01:00")\n}',
     );
@@ -131,7 +103,7 @@ describe('a PSL date or time default is stored as its type standard text', () =>
     [
       'DateTime',
       '2024-01-01T00:00:00.1234567Z',
-      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but pg/timestamptz keeps at most 6, which is microseconds. Round it, as in "2024-01-01T12:34:56.123456Z".',
+      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but pg/timestamptz holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456Z".',
     ],
   ])('refuses a %s default written %s', async (type, written, message) => {
     const result = await authorSqlContractFromPsl(

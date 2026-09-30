@@ -332,7 +332,7 @@ withTempDir(({ createTempDir }) => {
       });
 
       it(
-        'prints a timestamp default as a literal in the standard text',
+        'prints a timestamp default as a literal in canonical form',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,

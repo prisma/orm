@@ -282,14 +282,14 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
 ]);
 
 /**
- * Contracts emitted before a date or time default had one standard text, each with the schema it
- * was emitted from. Such a contract prints each default in the standard text, so it reads back as
+ * Contracts emitted before a date or time default had one canonical form, each with the schema it
+ * was emitted from. Such a contract prints each default in canonical form, so it reads back as
  * the contract that schema emits now, not as itself.
  */
-const emittedBeforeStandardText: ReadonlyMap<string, string> = new Map([
+const emittedBeforeCanonicalForm: ReadonlyMap<string, string> = new Map([
   [
-    'test/integration/test/date-time-defaults/_fixture-before-standard-text/emitted-before/contract.json',
-    'test/integration/test/date-time-defaults/_fixture-before-standard-text/contract.prisma',
+    'test/integration/test/date-time-defaults/_fixture-before-canonical-form/emitted-before/contract.json',
+    'test/integration/test/date-time-defaults/_fixture-before-canonical-form/contract.prisma',
   ],
 ]);
 
@@ -317,7 +317,7 @@ describe('every Postgres contract in the repo prints as PSL that reads back as t
     }
     const { text, sourceSettings } = printContract(contract, composition.stack);
     const printed = await readPsl(text, { ...composition, sourceSettings });
-    const source = emittedBeforeStandardText.get(file);
+    const source = emittedBeforeCanonicalForm.get(file);
     if (source === undefined) {
       expect(comparable(printed)).toEqual(comparable(contract));
       return;

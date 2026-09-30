@@ -6,6 +6,7 @@ model T {
   local   Timestamp @default("2024-01-01 12:34:56.500")
   day     Date      @default("0044-03-15 BC")
   clock   Time      @default("12:34")
+  zoned   Timetz    @default("12:34:56+02")
   big     BigInt    @default(9007199254740993)
   bytes   Bytes     @default("AQID")
 

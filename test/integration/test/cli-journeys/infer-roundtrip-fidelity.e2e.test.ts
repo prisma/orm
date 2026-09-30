@@ -334,7 +334,7 @@ withTempDir(({ createTempDir }) => {
 
         // Each default prints as the literal its codec reads back: a jsonb
         // document as a `json` tag, a numeric keeping the trailing zero it was
-        // stored with, and a timestamp in its type's standard text.
+        // stored with, and a timestamp in its type's canonical form.
         const printed = readContractPsl(ctx);
         expect(printed).toContain('@default(json`{}`)');
         expect(printed).toContain('@default(1.50)');

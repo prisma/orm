@@ -63,6 +63,13 @@
                   "codecId": "pg/timestamp-temporal@1",
                   "kind": "scalar"
                 }
+              },
+              "zoned": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timetz@1",
+                  "kind": "scalar"
+                }
               }
             },
             "relations": {},
@@ -88,6 +95,9 @@
                 },
                 "local": {
                   "column": "local"
+                },
+                "zoned": {
+                  "column": "zoned"
                 }
               },
               "namespaceId": "public",
@@ -163,6 +173,15 @@
                   },
                   "nativeType": "timestamp",
                   "nullable": false
+                },
+                "zoned": {
+                  "codecId": "pg/timetz@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34:56+02:00"
+                  },
+                  "nativeType": "timetz",
+                  "nullable": false
                 }
               },
               "foreignKeys": [],
@@ -177,7 +196,7 @@
         "id": "public"
       }
     },
-    "storageHash": "9310c4b8727c059c367c310bda3ce19b47ea6189f37a6e249d2ba78a92d50f46"
+    "storageHash": "8b3b0404439d05850d532cd16ce05ec25cc0074485149159b9eda65223ab033c"
   },
   "capabilities": {
     "postgres": {
