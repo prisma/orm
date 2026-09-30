@@ -70,6 +70,44 @@ function contractModel(
 }
 
 describe('SQL contract validators', () => {
+  describe.each(['domain field', 'storage column'])('%s many metadata', (location) => {
+    it.each([
+      { many: false, valid: true },
+      { many: { elementNullable: false }, valid: true },
+      { many: { elementNullable: true }, valid: true },
+      { many: { elementNullable: false, elementNullabe: true }, valid: false },
+      { many: {}, valid: false },
+      { many: { elementNullable: 'false' }, valid: false },
+    ])('validates $many as $valid', ({ many, valid }) => {
+      const validate = () =>
+        location === 'domain field'
+          ? validateModel({
+              storage: { namespaceId: UNBOUND_NAMESPACE_ID, table: 'Item', fields: {} },
+              fields: {
+                tags: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, many },
+              },
+            })
+          : validateStorage({
+              storageHash: 'test',
+              ...unboundTables({
+                Item: {
+                  columns: {
+                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many },
+                  },
+                  uniques: [],
+                  indexes: [],
+                  foreignKeys: [],
+                },
+              }),
+            });
+      if (valid) {
+        expect(validate).not.toThrow();
+      } else {
+        expect(validate).toThrow();
+      }
+    });
+  });
+
   describe('validateStorage', () => {
     it('validates valid storage', () => {
       const userTable = table({

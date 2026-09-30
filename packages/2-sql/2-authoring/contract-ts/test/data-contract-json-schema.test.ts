@@ -14,6 +14,48 @@ function compileGeneratedSchema() {
 }
 
 describe('data contract JSON schema', () => {
+  describe.each(['domain field', 'storage column'])('%s many metadata', (location) => {
+    it.each([
+      { many: false, valid: true },
+      { many: { elementNullable: false }, valid: true },
+      { many: { elementNullable: true }, valid: true },
+      { many: { elementNullable: false, elementNullabe: true }, valid: false },
+      { many: {}, valid: false },
+      { many: { elementNullable: 'false' }, valid: false },
+    ])('validates $many as $valid', ({ many, valid }) => {
+      const validate = new Ajv2020({ strict: false }).compile(
+        JSON.parse(readFileSync(checkedInSchemaPath, 'utf8')),
+      );
+      const contract = validSqlContractJson(
+        location === 'domain field'
+          ? {
+              models: {
+                User: {
+                  storage: { namespaceId: '__unbound__', table: 'User', fields: {} },
+                  fields: { tags: { type: 'String', nullable: false, many } },
+                },
+              },
+            }
+          : {
+              storage: storageWithNamespacedTables({
+                storageHash: 'test',
+                tables: {
+                  User: {
+                    columns: {
+                      tags: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many },
+                    },
+                    uniques: [],
+                    indexes: [],
+                    foreignKeys: [],
+                  },
+                },
+              }),
+            },
+      );
+      expect(validate(contract)).toBe(valid);
+    });
+  });
+
   it('checked-in schemas/data-contract-sql-v1.json matches the generated output', () => {
     const checkedIn = JSON.parse(readFileSync(checkedInSchemaPath, 'utf8'));
     expect(checkedIn).toEqual(generateDataContractJsonSchema());

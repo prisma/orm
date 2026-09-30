@@ -39,7 +39,7 @@ const StorageColumnSchema = type({
   nativeType: 'string',
   codecId: 'string',
   nullable: 'boolean',
-  'many?': type('false').or({ elementNullable: 'boolean' }),
+  'many?': type('false').or({ '+': 'reject', elementNullable: 'boolean' }),
   'typeParams?': 'Record<string, unknown>',
   'typeRef?': 'string',
   'default?': ColumnDefaultSchema,

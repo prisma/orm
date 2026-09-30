@@ -79,7 +79,8 @@
                                     "type": "boolean"
                                   }
                                 },
-                                "required": ["elementNullable"]
+                                "required": ["elementNullable"],
+                                "additionalProperties": false
                               },
                               {
                                 "const": false
@@ -490,7 +491,8 @@
                                         "type": "boolean"
                                       }
                                     },
-                                    "required": ["elementNullable"]
+                                    "required": ["elementNullable"],
+                                    "additionalProperties": false
                                   },
                                   {
                                     "const": false
