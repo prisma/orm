@@ -1,0 +1,228 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "t": {
+      "model": "T",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "T": {
+            "fields": {
+              "big": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int8@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytes": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bytea@1",
+                  "kind": "scalar"
+                }
+              },
+              "clock": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/time-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "day": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/date-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "instant": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "local": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "kind": "scalar"
+                }
+              },
+              "zoned": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timetz@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "big": {
+                  "column": "big"
+                },
+                "bytes": {
+                  "column": "bytes"
+                },
+                "clock": {
+                  "column": "clock"
+                },
+                "day": {
+                  "column": "day"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "instant": {
+                  "column": "instant"
+                },
+                "local": {
+                  "column": "local"
+                },
+                "zoned": {
+                  "column": "zoned"
+                }
+              },
+              "namespaceId": "public",
+              "table": "t"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "t": {
+              "columns": {
+                "big": {
+                  "codecId": "pg/int8@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "9007199254740993"
+                  },
+                  "nativeType": "int8",
+                  "nullable": false
+                },
+                "bytes": {
+                  "codecId": "pg/bytea@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "AQID"
+                  },
+                  "nativeType": "bytea",
+                  "nullable": false
+                },
+                "clock": {
+                  "codecId": "pg/time-temporal@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34:00"
+                  },
+                  "nativeType": "time",
+                  "nullable": false
+                },
+                "day": {
+                  "codecId": "pg/date-temporal@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "-000043-03-15"
+                  },
+                  "nativeType": "date",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "instant": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T00:00:00.5Z"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "local": {
+                  "codecId": "pg/timestamp-temporal@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "2024-01-01T12:34:56.5"
+                  },
+                  "nativeType": "timestamp",
+                  "nullable": false
+                },
+                "zoned": {
+                  "codecId": "pg/timetz@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "12:34:56+02:00"
+                  },
+                  "nativeType": "timetz",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public"
+      }
+    },
+    "storageHash": "8b3b0404439d05850d532cd16ce05ec25cc0074485149159b9eda65223ab033c"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

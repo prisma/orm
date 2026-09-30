@@ -11,10 +11,10 @@ import {
 } from './codec-ids';
 import {
   errorTemporalNonIsoCalendar,
-  errorTemporalUnavailable,
   errorTemporalUnrepresentable,
   errorTemporalWrongType,
 } from './errors';
+import { requireTemporal, type TemporalImplementation } from './require-temporal';
 
 const POSTGRES_TEMPORAL_SENTINELS: ReadonlySet<string> = new Set(['infinity', '-infinity']);
 
@@ -43,12 +43,6 @@ function adaptPostgresEra(text: string): string {
   return `${sign}${digits}${body.slice(yearEnd)}`;
 }
 
-export function requireTemporal(codecId: string, operation: 'decode' | 'encode'): void {
-  if (typeof Temporal === 'undefined') {
-    throw errorTemporalUnavailable(codecId, operation);
-  }
-}
-
 interface TemporalCodecIdentity {
   readonly codecId: string;
   readonly stringType: string;
@@ -58,10 +52,10 @@ interface TemporalCodecIdentity {
 function decodeTemporalText<T>(
   identity: TemporalCodecIdentity,
   wire: string,
-  parse: (text: string) => T,
+  parse: (temporal: TemporalImplementation, text: string) => T,
   adapt: (text: string) => string,
 ): T {
-  requireTemporal(identity.codecId, 'decode');
+  const temporal = requireTemporal({ codecId: identity.codecId, operation: 'decode' });
   if (POSTGRES_TEMPORAL_SENTINELS.has(wire)) {
     throw errorTemporalUnrepresentable({
       ...identity,
@@ -71,7 +65,7 @@ function decodeTemporalText<T>(
     });
   }
   try {
-    return parse(adapt(wire));
+    return parse(temporal, adapt(wire));
   } catch (cause) {
     throw errorTemporalUnrepresentable({
       ...identity,
@@ -87,7 +81,6 @@ function encodeTemporalValue(
   identity: TemporalCodecIdentity,
   value: { readonly calendarId?: string; toString: () => string },
 ): string {
-  requireTemporal(identity.codecId, 'encode');
   const tag: unknown =
     typeof value === 'object' && value !== null
       ? Reflect.get(value, Symbol.toStringTag)
@@ -143,7 +136,12 @@ const TIME_TEMPORAL: TemporalCodecIdentity = {
 const unadapted = (text: string): string => text;
 
 export const pgDateTemporalDecode = (wire: string): Temporal.PlainDate =>
-  decodeTemporalText(DATE_TEMPORAL, wire, (t) => Temporal.PlainDate.from(t), adaptPostgresEra);
+  decodeTemporalText(
+    DATE_TEMPORAL,
+    wire,
+    (temporal, text) => temporal.PlainDate.from(text),
+    adaptPostgresEra,
+  );
 
 export const pgDateTemporalEncode = (value: Temporal.PlainDate): string =>
   encodeTemporalValue(DATE_TEMPORAL, value);
@@ -152,7 +150,7 @@ export const pgTimestampTemporalDecode = (wire: string): Temporal.PlainDateTime 
   decodeTemporalText(
     TIMESTAMP_TEMPORAL,
     wire,
-    (t) => Temporal.PlainDateTime.from(t),
+    (temporal, text) => temporal.PlainDateTime.from(text),
     adaptPostgresEra,
   );
 
@@ -160,13 +158,23 @@ export const pgTimestampTemporalEncode = (value: Temporal.PlainDateTime): string
   encodeTemporalValue(TIMESTAMP_TEMPORAL, value);
 
 export const pgTimestamptzTemporalDecode = (wire: string): Temporal.Instant =>
-  decodeTemporalText(TIMESTAMPTZ_TEMPORAL, wire, (t) => Temporal.Instant.from(t), adaptPostgresEra);
+  decodeTemporalText(
+    TIMESTAMPTZ_TEMPORAL,
+    wire,
+    (temporal, text) => temporal.Instant.from(text),
+    adaptPostgresEra,
+  );
 
 export const pgTimestamptzTemporalEncode = (value: Temporal.Instant): string =>
   encodeTemporalValue(TIMESTAMPTZ_TEMPORAL, value);
 
 export const pgTimeTemporalDecode = (wire: string): Temporal.PlainTime =>
-  decodeTemporalText(TIME_TEMPORAL, wire, (t) => Temporal.PlainTime.from(t), unadapted);
+  decodeTemporalText(
+    TIME_TEMPORAL,
+    wire,
+    (temporal, text) => temporal.PlainTime.from(text),
+    unadapted,
+  );
 
 export const pgTimeTemporalEncode = (value: Temporal.PlainTime): string =>
   encodeTemporalValue(TIME_TEMPORAL, value);

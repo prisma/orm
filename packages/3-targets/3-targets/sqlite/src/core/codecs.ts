@@ -43,6 +43,7 @@ import {
   sqlIntDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
 import { defineSqliteCodecs, SqliteCodecDescriptor, sqliteCodec } from './codec-descriptor';
 import {
   SQLITE_BIGINT_CODEC_ID,
@@ -58,6 +59,7 @@ import {
   sqliteBigint,
   sqliteBlob,
   sqliteDatetime,
+  sqliteDatetimeCanonical,
   sqliteInteger,
   sqliteJson,
   sqliteReal,
@@ -487,32 +489,41 @@ export const sqliteBlobColumn = () =>
 sqliteBlobColumn satisfies ColumnHelperFor<SqliteBlobDescriptor>;
 sqliteBlobColumn satisfies ColumnHelperForStrict<SqliteBlobDescriptor>;
 
+/**
+ * Reads the text SQLite holds for an instant. Rejects `Invalid Date` (NaN-time) at every decode
+ * ingress so consumers never receive a Date whose downstream operations silently produce NaN.
+ */
+export function decodeSqliteDatetime(value: string): Date {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw sqliteError(
+      'RUNTIME.DECODE_FAILED',
+      `sqlite/datetime@1 value must be a valid ISO-8601 string: ${value}`,
+      { meta: { codecId: SQLITE_DATETIME_CODEC_ID, received: value } },
+    );
+  }
+  return date;
+}
+
+/** The text SQLite holds for an instant: what the codec writes for every row, and for a default. */
+export function encodeSqliteDatetime(value: Date): string {
+  return value.toISOString();
+}
+
 export class SqliteDatetimeCodec extends CodecImpl<
   typeof SQLITE_DATETIME_CODEC_ID,
   readonly ['equality', 'order'],
   string,
   Date
 > {
-  // Reject `Invalid Date` (NaN-time) at every decode ingress so consumers never receive a Date object whose downstream operations silently produce NaN. Mirrors the stricter ISO-8601 validation on the postgres timestamp helpers.
-  private parseDate(value: string): Date {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      throw sqliteError(
-        'RUNTIME.DECODE_FAILED',
-        `sqlite/datetime@1 value must be a valid ISO-8601 string: ${value}`,
-        { meta: { codecId: SQLITE_DATETIME_CODEC_ID, received: value } },
-      );
-    }
-    return date;
-  }
   async encode(value: Date, _ctx: CodecCallContext): Promise<string> {
-    return value.toISOString();
+    return encodeSqliteDatetime(value);
   }
   async decode(wire: string, _ctx: CodecCallContext): Promise<Date> {
-    return this.parseDate(wire);
+    return decodeSqliteDatetime(wire);
   }
   encodeJson(value: Date): JsonValue {
-    return value.toISOString();
+    return sqliteDatetimeCanonical(value.toISOString());
   }
   decodeJson(json: JsonValue): Date {
     const date = new Date(decodeJsonString(SQLITE_DATETIME_CODEC_ID, json));
@@ -555,7 +566,9 @@ export class SqliteJsonCodec extends CodecImpl<
     return JSON.stringify(value);
   }
   async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
-    return typeof wire === 'string' ? (JSON.parse(wire) as JsonValue) : wire;
+    return typeof wire === 'string'
+      ? blindCast<JsonValue, 'JSON.parse of stored JSON text yields a JSON value'>(JSON.parse(wire))
+      : wire;
   }
   encodeJson(value: JsonValue): JsonValue {
     return value;

@@ -4,6 +4,8 @@
 
 > **PSL half: see [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md).** The `PslLiteralCodec` interface sketched below is replaced there: codec descriptors name the literal types they are compatible with, codecs gain no methods, and codecs never receive PSL syntax. The JSON half of this ADR is unaffected.
 
+> **Date and time values: see [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types).** Each date and time data type declares the canonical form `contract.json` stores, and every codec's `encodeJson` writes it. The examples below store `toISOString()` text such as `2024-01-15T00:00:00.000Z`; the canonical form of that instant is `2024-01-15T00:00:00Z`.
+
 ## At a glance
 
 A column with `codecId: "pg/timestamptz@1"` has a default value of `new Date('2024-01-15')` — a JavaScript `Date`. This value has to survive a round-trip through `contract.json`, but `Date` has no JSON representation. The codec handles it:

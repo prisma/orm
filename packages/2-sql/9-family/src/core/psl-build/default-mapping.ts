@@ -22,6 +22,7 @@ import { isDataTypeLoweringEntry } from '@internal/framework-components/authorin
 import type { DataTypeId, DataTypeLookup } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
 import { escapePslString, numeralText } from '@internal/sql-relational-core/ast';
+import { defaultInCanonicalForm } from '@internal/sql-schema-ir/types';
 
 const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
   'autoincrement()': '@default(autoincrement())',
@@ -280,14 +281,20 @@ function writeListCast(
 }
 
 function writeDefaultLiteral(
-  value: ColumnDefaultLiteralInputValue,
+  stored: ColumnDefaultLiteralInputValue,
   options: DefaultMappingOptions | undefined,
 ): string | undefined {
-  if (value instanceof Date) return undefined;
+  if (stored instanceof Date) return undefined;
   const { dataTypeEntries, dataTypes, columnDataType } = options ?? {};
   if (dataTypeEntries === undefined || dataTypes === undefined || columnDataType === undefined) {
     return undefined;
   }
+  const { value } = defaultInCanonicalForm(
+    stored,
+    dataTypes.get(columnDataType)?.toCanonicalForm,
+    options?.list === true,
+  );
+  if (value instanceof Date) return undefined;
   const surface = writingSurface(dataTypeEntries);
   if (options?.list === true) {
     if (!Array.isArray(value)) return undefined;

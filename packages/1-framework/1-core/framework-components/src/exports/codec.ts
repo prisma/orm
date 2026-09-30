@@ -39,6 +39,7 @@ export type {
   DataTypeLookup,
   DataTypeSpec,
   ListCast,
+  ToCanonicalForm,
 } from '../shared/data-type';
 export {
   createDataTypeLookup,

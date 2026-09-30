@@ -140,7 +140,7 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
   );
 }
 
-describe('a printed default reads back as the value the database reported', () => {
+describe('a printed default reads back as the value the database reported, in the text the contract stores', () => {
   it('round-trips every literal form the printer writes', () => {
     expect(
       roundTrippedDefaults([
@@ -172,7 +172,7 @@ two lines é'::text`,
       ratio: { kind: 'literal', value: 'NaN' },
       active: { kind: 'literal', value: true },
       meta: { kind: 'literal', value: { plan: 'free', seats: 1 } },
-      stamp: { kind: 'literal', value: '2024-01-01 00:00:00' },
+      stamp: { kind: 'literal', value: '2024-01-01T00:00:00' },
       scores: { kind: 'literal', value: [1, 2] },
       docs: { kind: 'literal', value: [{}, []] },
     });
@@ -195,10 +195,10 @@ two lines é'::text`,
       code: { kind: 'literal', value: 'abc' },
       hundreds: { kind: 'literal', value: '12300' },
       tiny: { kind: 'literal', value: '0.00012' },
-      stamp: { kind: 'literal', value: '2024-01-01 00:00:00' },
-      at: { kind: 'literal', value: '2024-01-01 00:00:00+00' },
+      stamp: { kind: 'literal', value: '2024-01-01T00:00:00' },
+      at: { kind: 'literal', value: '2024-01-01T00:00:00Z' },
       clock: { kind: 'literal', value: '12:00:00' },
-      zoned: { kind: 'literal', value: '12:00:00+00' },
+      zoned: { kind: 'literal', value: '12:00:00Z' },
     });
   });
 

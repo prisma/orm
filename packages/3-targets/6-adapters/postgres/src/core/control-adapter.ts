@@ -47,12 +47,14 @@ import type {
   SqlUniqueIRInput,
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind } from '@internal/sql-schema-ir/types';
-import type { PostgresCodecRegistry } from '@internal/target-postgres/codecs';
+import {
+  type PostgresCodecRegistry,
+  parsePostgresListText,
+} from '@internal/target-postgres/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-postgres/contract-free';
-import { parsePostgresListText } from '@internal/target-postgres/control';
 import type {
   AddColumnAction,
   AlterTableActionVisitor,
@@ -76,7 +78,11 @@ import type {
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
-import { renderDefaultLiteral } from '@internal/target-postgres/planner-ddl-builders';
+import {
+  isPostgresDateTimeDataType,
+  postgresDateTimeDdlText,
+  renderDefaultLiteral,
+} from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
   PostgresDatabaseSchemaNode,
@@ -1859,8 +1865,13 @@ async function pgRenderDdlColumnDefault(
     }
     return `DEFAULT (${def.expression})`;
   }
+  const dataTypeId =
+    codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
-    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
+    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
+  }
+  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
+    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType, where)}`;
   }
   const encoded =
     codecRef === undefined

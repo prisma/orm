@@ -345,7 +345,11 @@ export function createDbSignCommand(
                   schemaVerdictDiagnostic({
                     result: verified,
                     space: undefined,
-                    nextActions: schemaDriftNextActions({ verb: 'sign', contractRef }),
+                    nextActions: schemaDriftNextActions({
+                      verb: 'sign',
+                      contractRef,
+                      issues: verified.schema.issues,
+                    }),
                   }),
                 ],
               },

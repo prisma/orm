@@ -68,9 +68,9 @@ import {
   lowerDefaultFunctionWithRegistry,
 } from './default-function-registry';
 
+import { getAttribute } from './psl-attribute-parsing';
 import {
   fieldSpecContext,
-  findFieldAttributeNode,
   interpretFieldAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
@@ -129,6 +129,25 @@ export function getAuthoringEntity(
   }
 
   return current !== undefined && isAuthoringEntityTypeDescriptor(current) ? current : undefined;
+}
+
+export function replacesUnresolvedTypeVoice(
+  typeName: string,
+  composedExtensions: ReadonlySet<string>,
+  context: {
+    readonly familyId?: string;
+    readonly targetId?: string;
+    readonly authoringContributions?: AuthoringContributions | undefined;
+  },
+): boolean {
+  if (checkUncomposedNamespace(typeName, composedExtensions, context) !== undefined) {
+    return true;
+  }
+  const dotIndex = typeName.indexOf('.');
+  if (dotIndex <= 0 || dotIndex === typeName.length - 1) {
+    return false;
+  }
+  return hasRegisteredFieldNamespace(context.authoringContributions, typeName.slice(0, dotIndex));
 }
 
 export function instantiatePslTypeConstructor(input: {
@@ -607,7 +626,7 @@ export function lowerDefaultForField(input: {
   readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 } {
-  const node = findFieldAttributeNode(input.field, 'default');
+  const node = getAttribute(input.field.attributes, 'default')?.node;
   if (node === undefined) return {};
   const source = diagnosticSource(input.sources, node.syntax);
   const spec = sqlAttributeSpecs.field.default(

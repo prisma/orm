@@ -62,6 +62,8 @@ These are the current names. The Postgres and SQLite rename project will change 
 | `Bytes` | `field.bytes()` | `pg/bytea@1` | `bytea` | `Uint8Array` |
 | `pg.enum(Name)` | — | `pg/enum@1` | the native enum type | `string` |
 
+A literal default of a date or time type is stored in the type's canonical form, whichever codec the column uses and however the default was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states each form.
+
 ## SQLite
 
 These are the current names; the Postgres and SQLite rename project will update this table. SQLite has no scalar TS helpers; use `field.column(...)`.
@@ -77,6 +79,8 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `DateTime` | — | `sqlite/datetime@1` | `text` | `Date` |
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
+
+A `DateTime` default is stored in the canonical form of `sqlite/datetime`, however it was written; [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types) states the form and the text it takes.
 
 ## Across targets
 

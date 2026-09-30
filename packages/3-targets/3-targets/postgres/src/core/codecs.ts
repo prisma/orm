@@ -138,6 +138,7 @@ import {
   pgText,
   pgTextArray,
   pgTimetz,
+  pgTimetzCanonical,
   pgTsquery,
   pgUuid,
   pgVarbit,
@@ -1163,7 +1164,7 @@ export class PgTimetzCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return pgTimetzCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return decodeJsonString(PG_TIMETZ_CODEC_ID, json);

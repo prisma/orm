@@ -75,10 +75,19 @@ Platform package names are strict and symmetric: `orm-family-sql`, not `orm-sql`
 A facade is thin: real wiring code plus exact-pinned dependencies. It bundles nothing. An application that outgrows the default wiring — say it needs a custom Postgres adapter — installs the facade's own dependencies directly and recomposes them:
 
 ```ts
-import { createTarget } from '@prisma/orm-target-postgres/target'
-import { driver } from '@prisma/orm-target-postgres/driver'
-import { myPooledAdapter } from './my-adapter' // replaces @prisma/orm-target-postgres/adapter
+import { createSqlExecutionStack } from '@prisma/orm-family-sql/runtime'
+import postgresDriver from '@prisma/orm-target-postgres/driver/runtime'
+import postgresTarget from '@prisma/orm-target-postgres/target/runtime'
+import { myPooledAdapter } from './my-adapter' // replaces @prisma/orm-target-postgres/adapter/runtime
+
+const stack = createSqlExecutionStack({
+  target: postgresTarget,
+  adapter: myPooledAdapter,
+  driver: postgresDriver,
+})
 ```
+
+An application imports the runtime entries, as here, and not the `/target`, `/adapter` or `/driver` aggregates, because each aggregate re-exports every entry of its namespace, the control-plane entries included.
 
 Because the facade's dependencies are ordinary published packages pinned to one lockstep version, the decomposed install reproduces exactly the combination the facade would have provided, minus the part being replaced. (Versioning is lockstep repo-wide — one root version, `workspace:` pins, `scripts/set-version-utils` — and this ADR leaves that model untouched.)
 

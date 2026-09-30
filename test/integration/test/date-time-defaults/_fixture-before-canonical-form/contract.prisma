@@ -1,0 +1,15 @@
+// use prisma-8
+
+model Event {
+  id      Int          @id
+  a       DateTime     @default("2024-01-01T00:00:00Z")
+  b       DateTime     @default("2024-01-01T00:00:00.000Z")
+  c       DateTime     @default("2024-01-01T01:00:00+01:00")
+  localAt Timestamp(3) @default("2024-01-01 12:34:56.500")
+  day     Date         @default("2024-01-01")
+  clock   Time         @default("12:34")
+  zoned   Timetz       @default("12:34:56+02")
+  history DateTime[]   @default(["2024-01-01T00:00:00.000Z", "2024-06-30 12:34:56+00"])
+
+  @@map("event")
+}

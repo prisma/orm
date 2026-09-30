@@ -14,11 +14,11 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
-import { pgTimestamptz } from './data-types';
+import { pgTimestamptz, pgTimestamptzCanonical } from './data-types';
 import { PG_TIMESTAMPTZ_NATIVE_TYPE } from './temporal-codec-helpers';
 
 const TIMESTAMPTZ_TEXT =
-  /^(\d{4,6})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|([+-])(\d{2})(?::?(\d{2}))?(?::?(\d{2}))?)( BC)?$/;
+  /^([+-]\d{6}|\d{4,6})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|([+-])(\d{2})(?::?(\d{2}))?(?::?(\d{2}))?)( BC)?$/;
 
 const MIN_TIMESTAMPTZ_MILLISECONDS = new Date('-004713-11-24T00:00:00.000Z').getTime();
 
@@ -53,7 +53,7 @@ function parseDate(text: string): Date | undefined {
   if (!match) return undefined;
   const [
     ,
-    yearText,
+    yearText = '',
     monthText,
     dayText,
     hourText,
@@ -81,7 +81,7 @@ function parseDate(text: string): Date | undefined {
   local.setUTCFullYear(safeYear, month, day);
   local.setUTCHours(hour, minute, second, milliseconds);
   if (
-    Number(yearText) === 0 ||
+    (era !== undefined && (Number(yearText) === 0 || /^[+-]/.test(yearText))) ||
     local.getUTCFullYear() !== safeYear ||
     local.getUTCMonth() !== month ||
     local.getUTCDate() !== day ||
@@ -122,7 +122,7 @@ export class PgTimestamptzDateCodec extends CodecImpl<
     return decodeDate(wire);
   }
   encodeJson(value: Date): JsonValue {
-    return encodeDate(value);
+    return pgTimestamptzCanonical(validateDate(value).toISOString());
   }
   decodeJson(json: JsonValue): Date {
     return (

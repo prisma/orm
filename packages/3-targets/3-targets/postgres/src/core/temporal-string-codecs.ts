@@ -18,7 +18,16 @@ import {
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
 } from './codec-ids';
-import { pgDate, pgTime, pgTimestamp, pgTimestamptz } from './data-types';
+import {
+  pgDate,
+  pgDateCanonical,
+  pgTime,
+  pgTimeCanonical,
+  pgTimestamp,
+  pgTimestampCanonical,
+  pgTimestamptz,
+  pgTimestamptzCanonical,
+} from './data-types';
 import {
   PG_DATE_NATIVE_TYPE,
   PG_TIME_NATIVE_TYPE,
@@ -39,7 +48,7 @@ export class PgDateStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return pgDateCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return decodeJsonString(PG_DATE_STRING_CODEC_ID, json);
@@ -84,7 +93,7 @@ export class PgTimestampStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return pgTimestampCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return decodeJsonString(PG_TIMESTAMP_STRING_CODEC_ID, json);
@@ -140,7 +149,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return pgTimestamptzCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return decodeJsonString(PG_TIMESTAMPTZ_STRING_CODEC_ID, json);
@@ -196,7 +205,7 @@ export class PgTimeStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return pgTimeCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return decodeJsonString(PG_TIME_STRING_CODEC_ID, json);

@@ -242,14 +242,8 @@ describe('a default on a value-object field matches its composite type', () => {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message: 'Cannot find type "Foo"',
         sourceId: 'schema.prisma',
-        data: { name: 'Foo', reference: 'type' },
+        data: { name: 'Foo', reference: 'type', constructorCall: false },
         span: spanAt(schema, memberLine, 4, 7),
-      },
-      {
-        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-        message: 'Field "Broken.b" type "Foo" is not supported',
-        sourceId: 'schema.prisma',
-        span: spanAt(schema, memberLine, 2, 7),
       },
     ]);
   });

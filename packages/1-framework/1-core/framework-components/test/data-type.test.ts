@@ -39,6 +39,17 @@ describe('dataType', () => {
     expect(int8.casts[int2.id]?.(42)).toBe('42');
   });
 
+  it('keeps the function that gives a value its canonical form', () => {
+    const date = dataType('pg/date', {
+      toCanonicalForm: (value) => (value === '2024-1-1' ? '2024-01-01' : value),
+    });
+    expect(date.toCanonicalForm?.('2024-1-1')).toBe('2024-01-01');
+  });
+
+  it('declares no canonical-form function when none is given', () => {
+    expect(dataType('pg/int2', {}).toCanonicalForm).toBeUndefined();
+  });
+
   it('validates the id of every type it casts from', () => {
     expect(() => dataType('pg/int8', { casts: { 'pg/int2@1': (value) => value } })).toThrow();
   });
