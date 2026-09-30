@@ -27,6 +27,7 @@ export function fitsCharacterLength(text: string, length: number, blankPadded: b
   return significant.length <= length || [...significant].length <= length;
 }
 
+/** The uuid input PostgreSQL reads: 32 hex digits in either case, a hyphen allowed after any group of four but the last, and the whole optionally in braces. */
 const UUID_INPUT = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
 
 /** A UUID as PostgreSQL writes it: lower case, hyphenated 8-4-4-4-12. */

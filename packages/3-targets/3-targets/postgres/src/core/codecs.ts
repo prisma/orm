@@ -232,9 +232,7 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 const BIT_STRING = /^[01]*$/;
-/**
- * The uuid input PostgreSQL reads: 32 hex digits in either case, a hyphen allowed after any group of four but the last, and the whole optionally in braces.
- */
+
 const decodePostgresNumberWire = (wire: string | number): number =>
   typeof wire === 'string' ? Number(wire) : wire;
 
