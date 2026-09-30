@@ -168,7 +168,7 @@ describe('ProjectArtifacts snapshots', () => {
     const documents = new DocumentStore();
     const view = `${directive}view ActiveUsers {\n  id Int @unique\n}\n`;
     documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: view });
-    const parserOptions = { viewBodyAsModelFields: true };
+    const parserOptions = { grammar: 'prisma-7' } as const;
     const withOptions = new ProjectArtifacts({
       inputs,
       readSnapshot: documents.readSnapshot,

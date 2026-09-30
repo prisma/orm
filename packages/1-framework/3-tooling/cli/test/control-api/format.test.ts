@@ -147,7 +147,7 @@ describe('executeFormat', () => {
           source: {
             format: 'psl',
             inputs: [inputPath],
-            parserOptions: { viewBodyAsModelFields: true },
+            parserOptions: { grammar: 'prisma-7' },
             load: () => {},
           },
           output: join(tmpDir, 'contract.json'),

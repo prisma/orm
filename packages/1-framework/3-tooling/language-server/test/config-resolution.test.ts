@@ -258,7 +258,7 @@ describe('control-stack input derivation', () => {
   });
 
   it('carries the parser options a psl source declares', async () => {
-    const parserOptions = { viewBodyAsModelFields: true };
+    const parserOptions = { grammar: 'prisma-7' } as const;
     mockLoadedConfig({
       contract: { source: { format: 'psl', inputs: ['/abs/schema.prisma'], parserOptions } },
     } as unknown as PrismaNextConfig);

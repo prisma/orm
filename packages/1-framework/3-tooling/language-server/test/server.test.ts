@@ -3927,7 +3927,7 @@ describe('language server prisma-8 directive gating', {
     'view ActiveUsers {\nid Int @unique\nemail   String @map("user_email")\n}\n';
   const resolveToSchemaReadingViewFields: ResolveInputs = async () => ({
     ...(await resolutionForInputs([schemaPath])),
-    parserOptions: { viewBodyAsModelFields: true },
+    parserOptions: { grammar: 'prisma-7' },
   });
 
   it('parses a marked input with the parser options its source declares', async () => {

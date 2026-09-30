@@ -9,7 +9,7 @@ function greenText(element: GreenElement): string {
   return element.children.map(greenText).join('');
 }
 
-const viewBodyAsModelFields = { viewBodyAsModelFields: true } as const;
+const prisma7 = { grammar: 'prisma-7' } as const;
 
 function onlyGenericBlock(
   source: string,
@@ -24,12 +24,12 @@ function onlyGenericBlock(
   return declaration;
 }
 
-describe('a view block body, with viewBodyAsModelFields', () => {
+describe('a view block body, in the prisma-7 grammar', () => {
   const source =
     'view ActiveUsers {\n  id    Int    @unique\n  email String @db.VarChar(255)\n  posts Post[]\n\n  @@map("active_users")\n}';
 
   it('parses as fields and block attributes, keeping the view a generic block', () => {
-    const block = onlyGenericBlock(source, viewBodyAsModelFields);
+    const block = onlyGenericBlock(source, prisma7);
     expect(block.keyword()?.text).toBe('view');
     expect(block.name()?.token()?.text).toBe('ActiveUsers');
     const fields = Array.from(block.fields());
@@ -43,11 +43,7 @@ describe('a view block body, with viewBodyAsModelFields', () => {
   });
 
   it('parses each field line as a FieldDeclaration child', () => {
-    const result = parse(
-      'view ActiveUsers {\n  id Int @unique\n}',
-      'test.psl',
-      viewBodyAsModelFields,
-    );
+    const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl', prisma7);
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
         GenericBlockDeclaration
@@ -79,11 +75,7 @@ describe('a view block body, with viewBodyAsModelFields', () => {
   });
 
   it('reports a malformed member with the model-member diagnostic', () => {
-    const result = parse(
-      'view ActiveUsers {\n  123\n  id Int\n}',
-      'test.psl',
-      viewBodyAsModelFields,
-    );
+    const result = parse('view ActiveUsers {\n  123\n  id Int\n}', 'test.psl', prisma7);
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_MODEL_MEMBER']);
   });
 
@@ -91,7 +83,7 @@ describe('a view block body, with viewBodyAsModelFields', () => {
     const result = parse(
       'namespace app {\n  view ActiveUsers {\n    id Int @unique\n  }\n}',
       'test.psl',
-      viewBodyAsModelFields,
+      prisma7,
     );
     expect(result.diagnostics).toEqual([]);
     expect(printTree(result.document.syntax.green)).toContain('FieldDeclaration');

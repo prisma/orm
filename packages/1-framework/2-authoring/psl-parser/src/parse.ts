@@ -740,11 +740,11 @@ function parseNamedTypeMember(cursor: Cursor): void {
 
 /**
  * A generic block reads `key = value` entries and bare keys; in an `enum` block those may carry `@`
- * attributes (`USER @map("user")`). With `viewBodyAsModelFields`, a `view` body is read like a model
+ * attributes (`USER @map("user")`). In the `prisma-7` grammar, a `view` body is read like a model
  * body. Each interpreter decides whether it accepts the block and its members.
  */
 function genericBlockMemberParser(keyword: string, options: PslParserOptions): MemberParser {
-  if (keyword === 'view' && options.viewBodyAsModelFields === true) return parseModelMember;
+  if (keyword === 'view' && options.grammar === 'prisma-7') return parseModelMember;
   if (keyword === 'enum') return parseEnumMember;
   return parseKeyValueMember;
 }

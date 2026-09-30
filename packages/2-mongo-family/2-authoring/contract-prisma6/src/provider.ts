@@ -81,7 +81,7 @@ export function prisma6Contract(
   schemaPath: string,
   options: Prisma6ContractOptions,
 ): ContractConfig {
-  const parserOptions = { viewBodyAsModelFields: true };
+  const parserOptions = { grammar: 'prisma-7' } as const;
   return {
     source: {
       format: 'psl',

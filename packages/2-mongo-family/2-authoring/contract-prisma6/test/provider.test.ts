@@ -35,10 +35,10 @@ function loadEnumSchema(codecLookup: CodecLookup) {
 }
 
 describe('prisma6Contract', () => {
-  it('declares view bodies read as model fields', () => {
+  it('declares the prisma-7 grammar', () => {
     expect(
       prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding }).source,
-    ).toMatchObject({ format: 'psl', parserOptions: { viewBodyAsModelFields: true } });
+    ).toMatchObject({ format: 'psl', parserOptions: { grammar: 'prisma-7' } });
   });
 
   it('reports a structured error from building the contract as PSL.PRISMA6_MONGO_CONTRACT_INVALID', async () => {

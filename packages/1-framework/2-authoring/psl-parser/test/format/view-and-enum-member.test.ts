@@ -1,32 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { format } from '../../src/exports/format';
 
-const viewBodyAsModelFields = { viewBodyAsModelFields: true } as const;
+const prisma7 = { grammar: 'prisma-7' } as const;
 
-describe('format given a view block, with viewBodyAsModelFields', () => {
+describe('format given a view block, in the prisma-7 grammar', () => {
   it('aligns field lines and their attributes like a model body', () => {
     expect(
       format(
         'view ActiveUsers {\n  id Int @unique\n  email   String @map("user_email")\n}\n',
         undefined,
-        viewBodyAsModelFields,
+        prisma7,
       ),
     ).toBe('view ActiveUsers {\n  id    Int    @unique\n  email String @map("user_email")\n}\n');
   });
 
   it('aligns field lines that carry no attributes', () => {
-    expect(
-      format('view ActiveUsers {\nid Int\nemail   String\n}\n', undefined, viewBodyAsModelFields),
-    ).toBe('view ActiveUsers {\n  id    Int\n  email String\n}\n');
+    expect(format('view ActiveUsers {\nid Int\nemail   String\n}\n', undefined, prisma7)).toBe(
+      'view ActiveUsers {\n  id    Int\n  email String\n}\n',
+    );
   });
 
   it('separates block attributes from the fields with a blank line', () => {
     expect(
-      format(
-        'view ActiveUsers {\n  id Int\n  @@map("active_users")\n}\n',
-        undefined,
-        viewBodyAsModelFields,
-      ),
+      format('view ActiveUsers {\n  id Int\n  @@map("active_users")\n}\n', undefined, prisma7),
     ).toBe('view ActiveUsers {\n  id Int\n\n  @@map("active_users")\n}\n');
   });
 });

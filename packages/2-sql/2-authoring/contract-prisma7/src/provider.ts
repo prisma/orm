@@ -90,7 +90,7 @@ export function prisma7Contract(
   schemaPath: string,
   options: Prisma7ContractOptions,
 ): ContractConfig {
-  const parserOptions = { viewBodyAsModelFields: true };
+  const parserOptions = { grammar: 'prisma-7' } as const;
   return {
     source: {
       format: 'psl',

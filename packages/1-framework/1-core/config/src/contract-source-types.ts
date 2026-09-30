@@ -81,10 +81,13 @@ export interface ContractSourceProviderBase {
   ) => Promise<Result<Contract, ContractSourceDiagnostics>>;
 }
 
-/** Parser rules a PSL source's files need beyond the Prisma 8 grammar. Every tool that parses the source's files passes them to the parser. */
+/** The PSL grammar versions the parser knows. `prisma-7` reads the lines of a `view` block as model fields; Prisma 6 schemas use the same grammar. */
+export type PslGrammar = 'prisma-7' | 'prisma-8';
+
+/** What a PSL source tells the parser about its files. Every tool that parses the source's files passes these to the parser. */
 export interface PslParserOptions {
-  /** Read the lines of a `view` block as model fields instead of `key = value` entries. */
-  readonly viewBodyAsModelFields?: boolean;
+  /** The grammar the files are written in. Defaults to `prisma-8`. */
+  readonly grammar?: PslGrammar;
 }
 
 export interface PslContractSourceProvider extends ContractSourceProviderBase {
