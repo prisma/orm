@@ -12,6 +12,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
 import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
+import { canonicalUuid } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -105,7 +106,22 @@ const fromText: Readonly<Record<string, Cast>> = { [pgText.id]: unchanged };
 
 export const pgChar: DataType = dataType('pg/char', { casts: fromText });
 export const pgVarchar: DataType = dataType('pg/varchar', { casts: fromText });
-export const pgUuid: DataType = dataType('pg/uuid', { casts: fromText });
+/** Text in any form PostgreSQL reads as a UUID, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
+const asUuid: Cast = (value) => {
+  if (typeof value !== 'string') return wrongShape(value, 'text');
+  const uuid = canonicalUuid(value);
+  if (uuid !== undefined) return uuid;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${JSON.stringify(value)} is not a UUID: PostgreSQL reads 32 hexadecimal digits, with a hyphen after any group of four and optionally in braces.`,
+    {
+      why: 'A uuid column takes only text PostgreSQL reads as a UUID.',
+      fix: 'Write a UUID such as a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11.',
+    },
+  );
+};
+
+export const pgUuid: DataType = dataType('pg/uuid', { casts: { [pgText.id]: asUuid } });
 export const pgInet: DataType = dataType('pg/inet', { casts: fromText });
 export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
 export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });

@@ -204,6 +204,26 @@ describe('PostgresCreateTable DDL lowering', () => {
     expect(lowered.sql).not.toContain('::');
   });
 
+  it('refuses a uuid default not in the form PostgreSQL writes, as a hand-edited contract may hold', async () => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lower = (value: string) =>
+      adapter.lowerToExecuteRequest(
+        new PostgresCreateTable({
+          table: 'tokens',
+          columns: [col('u', 'uuid', { default: lit(value), codecRef: { codecId: 'pg/uuid@1' } })],
+        }),
+        { contract: {} as PostgresContract },
+      );
+
+    await expect(lower('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11')).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      meta: { codecId: 'pg/uuid@1', received: '"A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"' },
+    });
+    expect((await lower('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')).sql).toContain(
+      `"u" uuid DEFAULT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'`,
+    );
+  });
+
   it('renders a null literal default as SQL NULL on a text column and as the JSON null on a jsonb column', async () => {
     const ast = new PostgresCreateTable({
       table: 'defaults',

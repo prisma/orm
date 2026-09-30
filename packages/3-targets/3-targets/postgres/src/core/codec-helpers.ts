@@ -27,6 +27,20 @@ export function fitsCharacterLength(text: string, length: number, blankPadded: b
   return significant.length <= length || [...significant].length <= length;
 }
 
+const UUID_INPUT = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
+
+/** A UUID as PostgreSQL writes it: lower case, hyphenated 8-4-4-4-12. */
+export const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Text in any form PostgreSQL reads as a UUID (either case, a hyphen after any group of four digits, optionally in braces), written the way PostgreSQL writes it; `undefined` for text it does not read as one.
+ */
+export function canonicalUuid(text: string): string | undefined {
+  if (!UUID_INPUT.test(text)) return undefined;
+  const hex = text.replace(/[{}-]/g, '').toLowerCase();
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 /** `1 character`, `3 characters`: a count and its noun, for a refusal. */
 export function counted(count: number, noun: string): string {
   return `${count} ${count === 1 ? noun : `${noun}s`}`;

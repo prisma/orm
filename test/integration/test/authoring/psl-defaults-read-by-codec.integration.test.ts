@@ -28,7 +28,7 @@ async function diagnosticsOf(schema: string) {
 }
 
 describe('PSL defaults read by the Postgres codecs', () => {
-  it('a Uuid default takes every uuid input PostgreSQL reads', async () => {
+  it('a Uuid default in any form PostgreSQL reads is stored in the form PostgreSQL writes', async () => {
     const forms = [
       'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
       '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}',
@@ -49,7 +49,10 @@ ${forms.map((form, index) => `  u${index} Uuid @default("${form}")`).join('\n')}
       ),
     }).toEqual({
       diagnostics: [],
-      defaults: forms.map((value) => ({ kind: 'literal', value })),
+      defaults: forms.map(() => ({
+        kind: 'literal',
+        value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      })),
     });
   });
 
@@ -64,7 +67,8 @@ model Token {
     expect(authored.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
       {
         code: 'PSL_INVALID_DEFAULT_LITERAL',
-        message: 'Field "Token.u": pg/uuid@1 JSON value must be a UUID PostgreSQL reads',
+        message:
+          'Field "Token.u": "nope" is not a UUID: PostgreSQL reads 32 hexadecimal digits, with a hyphen after any group of four and optionally in braces.',
       },
     ]);
   });

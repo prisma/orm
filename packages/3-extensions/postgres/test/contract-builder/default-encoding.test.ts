@@ -101,6 +101,14 @@ describe('postgres defineContract encodes literal defaults through the column co
     );
   });
 
+  it('stores a uuid default in the form PostgreSQL writes', () => {
+    expect(
+      storedDefault((field) =>
+        field.uuidNative().default('{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}'),
+      ),
+    ).toEqual({ kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' });
+  });
+
   it('stores an enum member default in the form the enum codec produces', () => {
     const Level = enumType(
       'Level',

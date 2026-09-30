@@ -126,7 +126,6 @@ describe('what each cast converts', () => {
       '-Infinity',
     ],
     ['pg/json to pg/jsonb, the document unchanged', pgJsonb, pgJson.id, { a: [1] }, { a: [1] }],
-    ['pg/text to pg/uuid, the text unchanged', pgUuid, pgText.id, 'abc', 'abc'],
     [
       'pg/text to pg/timestamp, the text unchanged',
       pgTimestamp,
@@ -136,6 +135,16 @@ describe('what each cast converts', () => {
     ],
   ])('%s', (_name, type, source, value, converted) => {
     expect(type.casts[source]?.(value)).toEqual(converted);
+  });
+
+  it.each([
+    'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
+    '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}',
+    'a0eebc999c0b4ef8bb6d6bb9bd380a11',
+    'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11',
+  ])('pg/text to pg/uuid, %s to the form PostgreSQL writes', (text) => {
+    expect(pgUuid.casts[pgText.id]?.(text)).toBe('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');
   });
 
   it.each([
@@ -158,6 +167,8 @@ describe('what each cast converts', () => {
   });
 
   it.each([
+    ['text that is not a UUID', pgUuid, pgText.id, 'not-a-uuid'],
+    ['a UUID with a stray hyphen', pgUuid, pgText.id, 'a0eebc99--9c0b-4ef8-bb6d-6bb9bd380a11'],
     ['a value in a shape the source type does not store', pgInt8, pgInt2.id, 'not a number'],
     ['a magnitude no double holds', pgFloat8, pgNumeric.id, '1'.padEnd(400, '0')],
     ['a magnitude no float4 holds', pgFloat4, pgNumeric.id, '3.5e38'],
@@ -172,5 +183,15 @@ describe('what each cast converts', () => {
     ['pg/numeric, whose canonical form is text', pgNumeric, pgInt4.id],
   ])('refuses a value %s cannot have been handed', (_name, type, source) => {
     expect(() => type.casts[source]?.('not a number')).toThrow(/Expected a number/);
+  });
+
+  it('pg/uuid names what it reads when it refuses text', () => {
+    expect(() => pgUuid.casts[pgText.id]?.('nope')).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.CAST_REFUSED',
+        message:
+          '"nope" is not a UUID: PostgreSQL reads 32 hexadecimal digits, with a hyphen after any group of four and optionally in braces.',
+      }),
+    );
   });
 });

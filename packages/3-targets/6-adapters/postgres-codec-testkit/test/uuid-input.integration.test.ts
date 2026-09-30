@@ -1,5 +1,6 @@
 import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { pgText, pgUuid } from '@internal/target-postgres/data-types';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -28,7 +29,7 @@ const candidates: readonly (readonly [text: string, isUuid: boolean])[] = [
   ['(a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11)', false],
 ];
 
-describe('pg/uuid@1 decodeJson', { concurrent: false }, () => {
+describe('the text to uuid cast and pg/uuid@1 decodeJson', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
 
@@ -43,34 +44,49 @@ describe('pg/uuid@1 decodeJson', { concurrent: false }, () => {
   }, timeouts.spinUpPpgDev);
 
   it(
-    'takes exactly the uuid input PostgreSQL takes',
+    'the cast writes what PostgreSQL writes for each uuid it reads, and decodeJson reads only that form',
     async () => {
       const codec = postgresCodecDescriptorRegistry.descriptorFor('pg/uuid@1')!.factory(undefined)({
         name: 'uuid-input',
       });
+      const castFromText = pgUuid.casts[pgText.id]!;
       const results = [];
       for (const [text] of candidates) {
-        let postgres: boolean;
+        let postgres: string | null;
         try {
-          await driver!.query('select $1::uuid', [text]);
-          postgres = true;
+          const result = await driver!.query<{ text: string }>('select $1::uuid::text as text', [
+            text,
+          ]);
+          postgres = result.rows[0]!.text;
         } catch {
-          postgres = false;
+          postgres = null;
         }
-        let decodeJson: boolean;
-        try {
-          codec.decodeJson(text);
-          decodeJson = true;
-        } catch {
-          decodeJson = false;
-        }
-        results.push({ text, postgres, decodeJson });
+        results.push({
+          text,
+          postgres,
+          cast: resultOrNull(() => castFromText(text)),
+          decodeJson: resultOrNull(() => codec.decodeJson(text)),
+        });
       }
 
+      const canonical = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
       expect(results).toEqual(
-        candidates.map(([text, isUuid]) => ({ text, postgres: isUuid, decodeJson: isUuid })),
+        candidates.map(([text, isUuid]) => ({
+          text,
+          postgres: isUuid ? canonical : null,
+          cast: isUuid ? canonical : null,
+          decodeJson: text === canonical ? canonical : null,
+        })),
       );
     },
     timeouts.spinUpPpgDev,
   );
 });
+
+function resultOrNull(run: () => unknown): unknown {
+  try {
+    return run();
+  } catch {
+    return null;
+  }
+}

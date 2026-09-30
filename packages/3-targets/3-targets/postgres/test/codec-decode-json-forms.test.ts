@@ -148,14 +148,17 @@ const cases: readonly DecodeJsonCase[] = [
   },
   {
     codec: pgUuidDescriptor.factory()(ctx),
-    accepts: [
-      '123e4567-e89b-12d3-a456-426614174000',
+    accepts: ['123e4567-e89b-12d3-a456-426614174000'],
+    rejects: [
+      1,
+      'not-a-uuid',
+      '123e4567-e89b-12d3-a456-42661417400',
       '123E4567-E89B-12D3-A456-426614174000',
       '123e4567e89b12d3a456426614174000',
       '{123e4567-e89b-12d3-a456-426614174000}',
       '123e-4567-e89b-12d3-a456-4266-1417-4000',
+      null,
     ],
-    rejects: [1, 'not-a-uuid', '123e4567-e89b-12d3-a456-42661417400', null],
   },
   {
     codec: pgInetDescriptor.factory()(ctx),
@@ -251,4 +254,20 @@ describe('decodeJson reads the stored JSON form of its type and refuses any othe
       }
     });
   }
+});
+
+describe('pg/uuid@1 encodeJson', () => {
+  it('writes a UUID in the form PostgreSQL writes, which decodeJson reads', () => {
+    const codec = pgUuidDescriptor.factory()(ctx);
+    const written = [
+      'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
+      '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}',
+      'a0eebc999c0b4ef8bb6d6bb9bd380a11',
+    ].map((value) => codec.encodeJson(value));
+    expect(written.map((json) => codec.decodeJson(json))).toEqual([
+      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+    ]);
+  });
 });

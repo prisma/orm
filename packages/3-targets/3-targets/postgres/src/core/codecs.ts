@@ -54,6 +54,8 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';
 import {
+  CANONICAL_UUID,
+  canonicalUuid,
   counted,
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
@@ -240,8 +242,6 @@ const BIT_STRING = /^[01]*$/;
 /**
  * The uuid input PostgreSQL reads: 32 hex digits in either case, a hyphen allowed after any group of four but the last, and the whole optionally in braces.
  */
-const UUID_TEXT = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
-
 const decodePostgresNumberWire = (wire: string | number): number =>
   typeof wire === 'string' ? Number(wire) : wire;
 
@@ -1384,10 +1384,15 @@ export class PgUuidCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return value;
+    return canonicalUuid(value) ?? value;
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonMatching(PG_UUID_CODEC_ID, json, UUID_TEXT, 'a UUID PostgreSQL reads');
+    return decodeJsonMatching(
+      PG_UUID_CODEC_ID,
+      json,
+      CANONICAL_UUID,
+      'a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12',
+    );
   }
 }
 
