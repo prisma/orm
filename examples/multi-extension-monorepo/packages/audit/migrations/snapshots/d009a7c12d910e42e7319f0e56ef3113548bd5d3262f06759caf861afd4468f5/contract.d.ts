@@ -303,20 +303,23 @@ type ContractBase = Omit<
           readonly table: {
             readonly audit_event: {
               columns: {
-                readonly action: { readonly many: false;
+                readonly action: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
-                readonly actor: { readonly many: false;
+                readonly actor: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
-                readonly id: { readonly many: false;
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -346,17 +349,20 @@ type ContractBase = Omit<
         readonly models: {
           readonly AuditEvent: {
             readonly fields: {
-              readonly action: { readonly many: false;
+              readonly action: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
-              readonly actor: { readonly many: false;
+              readonly actor: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;

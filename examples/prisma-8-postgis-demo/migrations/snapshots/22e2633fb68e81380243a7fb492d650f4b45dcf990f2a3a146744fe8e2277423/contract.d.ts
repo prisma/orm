@@ -364,22 +364,25 @@ type ContractBase = Omit<
           readonly table: {
             readonly cafe: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
-                readonly location: { readonly many: false;
+                readonly location: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -389,22 +392,25 @@ type ContractBase = Omit<
             };
             readonly neighborhood: {
               columns: {
-                readonly boundary: { readonly many: false;
+                readonly boundary: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
-                readonly id: { readonly many: false;
+                readonly id: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -414,22 +420,25 @@ type ContractBase = Omit<
             };
             readonly route: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
-                readonly path: { readonly many: false;
+                readonly path: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -469,25 +478,28 @@ type ContractBase = Omit<
         readonly models: {
           readonly Cafe: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
+                readonly many: false;
               };
-              readonly location: { readonly many: false;
+              readonly location: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/geometry@1';
                   readonly typeParams: { readonly srid: 4326 };
                 };
+                readonly many: false;
               };
-              readonly name: { readonly many: false;
+              readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -503,25 +515,28 @@ type ContractBase = Omit<
           };
           readonly Neighborhood: {
             readonly fields: {
-              readonly boundary: { readonly many: false;
+              readonly boundary: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/geometry@1';
                   readonly typeParams: { readonly srid: 4326 };
                 };
+                readonly many: false;
               };
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
+                readonly many: false;
               };
-              readonly name: { readonly many: false;
+              readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -537,25 +552,28 @@ type ContractBase = Omit<
           };
           readonly Route: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
+                readonly many: false;
               };
-              readonly name: { readonly many: false;
+              readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
-              readonly path: { readonly many: false;
+              readonly path: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/geometry@1';
                   readonly typeParams: { readonly srid: 4326 };
                 };
+                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;

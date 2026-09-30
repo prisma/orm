@@ -298,15 +298,17 @@ type ContractBase = Omit<
           readonly table: {
             readonly feature_flag: {
               columns: {
-                readonly enabled: { readonly many: false;
+                readonly enabled: {
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
-                readonly key: { readonly many: false;
+                readonly key: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['key'] };
@@ -336,13 +338,15 @@ type ContractBase = Omit<
         readonly models: {
           readonly FeatureFlag: {
             readonly fields: {
-              readonly enabled: { readonly many: false;
+              readonly enabled: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+                readonly many: false;
               };
-              readonly key: { readonly many: false;
+              readonly key: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
