@@ -187,31 +187,6 @@ describe('db sign', () => {
       ]);
     });
 
-    it('points at the tool the contract source names as owning the schema, then at signing again', async () => {
-      const dir = await projectDir();
-      mocks.schemaVerify.mockResolvedValue(DRIFTED);
-      const owned = ormConfig({
-        contract: {
-          source: {
-            format: 'psl',
-            inputs: [],
-            load: async () => ({}),
-            schemaOwner: {
-              applySchemaChangeAdvice: 'Apply the schema change with the owning tool',
-            },
-          },
-          output: 'output/contract.json',
-        },
-      });
-
-      const run = await harness(owned).run(['db', 'sign', '--json'], { cwd: dir });
-
-      expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
-        { kind: 'user-choice', label: 'Apply the schema change with the owning tool' },
-        { kind: 'run-command', label: 'Then sign the database again', command: '{bin} db sign' },
-      ]);
-    });
-
     it('reports the schema-verify document as the --json payload', async () => {
       const dir = await projectDir();
       mocks.schemaVerify.mockResolvedValue(DRIFTED);

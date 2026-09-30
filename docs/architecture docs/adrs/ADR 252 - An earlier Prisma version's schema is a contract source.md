@@ -131,7 +131,6 @@ For as long as the Prisma version it reads is supported. The repository's [READM
 ## Consequences
 
 - A project in transition keeps one schema file. After each migration by the earlier version, `contract emit` and `db sign` bring Prisma 8 back in step.
-- The source declares the earlier version as the tool that changes the schema (`schemaOwner`), so when `db verify` or `db sign` finds the database behind the contract, it points at that version's migration or push and then at `db sign`, never at a Prisma 8 migration.
 - Prisma 8 ships no dependency on any earlier Prisma package. The reader is built on the shared parser.
 - The refusals are a list of Prisma 8 features to build, recorded with the project that owns them.
 - A new family or target needs a new binding and a new family package, and nothing else.

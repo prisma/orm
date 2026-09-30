@@ -49,11 +49,12 @@ function scratchDir(name: string): string {
 }
 
 describe('prisma7Contract', () => {
-  it('names Prisma 7 migrations as what applies schema changes to the database', () => {
-    expect(prisma7Contract('prisma/schema.prisma', postgres).source.schemaOwner).toEqual({
-      applySchemaChangeAdvice:
-        'Apply the schema change with Prisma 7 first: run its migrations with the Prisma 7 CLI (`prisma7 migrate dev`, or `prisma7 migrate deploy` for a deployed database)',
-    });
+  it('is a source like any other: its format, its inputs and a loader, nothing that names Prisma 7', () => {
+    expect(Object.keys(prisma7Contract('prisma/schema.prisma', postgres).source).sort()).toEqual([
+      'format',
+      'inputs',
+      'load',
+    ]);
   });
 
   it('declares the psl format and the input path', () => {

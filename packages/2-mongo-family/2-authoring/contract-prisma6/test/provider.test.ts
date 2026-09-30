@@ -42,12 +42,17 @@ function loadFixture(caseName: string) {
 }
 
 describe('prisma6Contract', () => {
-  it('names Prisma 6 `db push` as what applies schema changes to the database', () => {
-    expect(
-      prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding }).source.schemaOwner,
-    ).toEqual({
-      applySchemaChangeAdvice:
-        'Apply the schema change with Prisma 6 first: run `db push` with the Prisma 6 CLI (the `prisma6` script when both CLIs share the project)',
+  it('is a source like any other: its format, its inputs and a loader, nothing that names Prisma 6', () => {
+    const { source } = prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding });
+
+    expect({
+      keys: Object.keys(source).sort(),
+      format: source.format,
+      inputs: source.inputs,
+    }).toEqual({
+      keys: ['format', 'inputs', 'load'],
+      format: 'psl',
+      inputs: ['prisma/schema.prisma'],
     });
   });
 });

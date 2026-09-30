@@ -9,7 +9,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { isInternalError } from '@internal/utils/internal-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
-import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
+import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import type { DbVerifyMode } from '../../control-api/types';
@@ -31,12 +31,10 @@ import { migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
-  ownedExtensionSpaceDriftNextActions,
   readEmittedContract,
   requireVerifyConnection,
   schemaDriftNextActions,
   schemaFindingBlocks,
-  schemaOwnerActions,
   schemaVerdictDiagnostic,
   verificationThrow,
 } from './verification';
@@ -122,13 +120,8 @@ function invocation(mode: DbVerifyMode, strict: boolean): string {
 }
 
 /** The marker verdict as a finding, keeping the code the commander raised. */
-function markerFindingDiagnostic(
-  result: VerifyDatabaseResult,
-  ownerActions: readonly NextAction[] | undefined,
-): Diagnostic {
-  const { ok: _ok, ...diagnostic } = normalizeError(
-    markerFindingError(result, ownerActions),
-  ).toEnvelope();
+function markerFindingDiagnostic(result: VerifyDatabaseResult): Diagnostic {
+  const { ok: _ok, ...diagnostic } = normalizeError(markerFindingError(result)).toEnvelope();
   return diagnostic;
 }
 
@@ -142,10 +135,7 @@ function markerDriftDiagnostic(drift: unknown): Diagnostic {
   return diagnostic;
 }
 
-function markerFindingError(
-  result: VerifyDatabaseResult,
-  ownerActions: readonly NextAction[] | undefined,
-) {
+function markerFindingError(result: VerifyDatabaseResult) {
   if (result.code === VERIFY_CODE_MARKER_MISSING) {
     return errorMarkerMissing();
   }
@@ -156,7 +146,6 @@ function markerFindingError(
         why: 'Contract storageHash does not match database marker',
         expected: result.contract.storageHash,
         ...ifDefined('actual', result.marker?.storageHash),
-        ...ifDefined('nextActions', ownerActions),
       });
     }
     const profileMatch =
@@ -332,22 +321,16 @@ function schemaPresentations(inputs: {
  */
 function driftDiagnostics(inputs: {
   readonly perSpace: ReadonlyMap<string, CombinedVerifyResult['result']>;
-  readonly appSpaceId: string;
   readonly combined: CombinedVerifyResult;
-  readonly ownerActions: readonly NextAction[] | undefined;
 }): readonly Diagnostic[] {
-  const nextActionsFor = (space: string): readonly NextAction[] => {
-    if (inputs.ownerActions === undefined) {
-      return schemaDriftNextActions({ verb: 'verify', contractRef: undefined });
-    }
-    return space === inputs.appSpaceId
-      ? inputs.ownerActions
-      : ownedExtensionSpaceDriftNextActions(space);
-  };
   const perSpace = [...inputs.perSpace]
     .filter(([, result]) => !result.ok)
     .map(([space, result]) =>
-      schemaVerdictDiagnostic({ result, space, nextActions: nextActionsFor(space) }),
+      schemaVerdictDiagnostic({
+        result,
+        space,
+        nextActions: schemaDriftNextActions({ verb: 'verify', contractRef: undefined }),
+      }),
     );
   if (perSpace.length > 0) {
     return perSpace;
@@ -423,7 +406,6 @@ export function createDbVerifyCommand(
       }
       const mode = resolved.value;
       const commandInvocation = invocation(mode, strict);
-      const ownerActions = schemaOwnerActions(ctx.config);
 
       const emitted = await readEmittedContract({
         config: ctx.config,
@@ -492,12 +474,7 @@ export function createDbVerifyCommand(
                 exitCode: combined.result.ok ? 0 : FINDINGS_EXIT_CODE,
                 diagnostics: combined.result.ok
                   ? []
-                  : driftDiagnostics({
-                      perSpace: aggregate.value.schemaResults,
-                      appSpaceId: aggregate.value.appSpaceId,
-                      combined,
-                      ownerActions,
-                    }),
+                  : driftDiagnostics({ perSpace: aggregate.value.schemaResults, combined }),
               },
               schemaPresentations({ document, header, strict }),
             ),
@@ -531,7 +508,7 @@ export function createDbVerifyCommand(
               {
                 data: document,
                 exitCode: FINDINGS_EXIT_CODE,
-                diagnostics: [markerFindingDiagnostic(verified, ownerActions)],
+                diagnostics: [markerFindingDiagnostic(verified)],
               },
               verifyPresentations({ document, header }),
             ),
@@ -589,9 +566,7 @@ export function createDbVerifyCommand(
                   ...(driftCombined !== undefined && !driftCombined.result.ok
                     ? driftDiagnostics({
                         perSpace: aggregate.value.schemaResults,
-                        appSpaceId: aggregate.value.appSpaceId,
                         combined: driftCombined,
-                        ownerActions,
                       })
                     : []),
                 ],
@@ -636,9 +611,7 @@ export function createDbVerifyCommand(
                 exitCode: FINDINGS_EXIT_CODE,
                 diagnostics: driftDiagnostics({
                   perSpace: aggregate.value.schemaResults,
-                  appSpaceId: aggregate.value.appSpaceId,
                   combined,
-                  ownerActions,
                 }),
               },
               schemaPresentations({ document, header, strict }),

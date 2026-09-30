@@ -89,10 +89,6 @@ export function prisma6Contract(
     source: {
       format: 'psl',
       inputs: [schemaPath],
-      schemaOwner: {
-        applySchemaChangeAdvice:
-          'Apply the schema change with Prisma 6 first: run `db push` with the Prisma 6 CLI (the `prisma6` script when both CLIs share the project)',
-      },
       async load(context) {
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {

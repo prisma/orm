@@ -13,7 +13,6 @@ export type {
   ContractSourceFormat,
   ContractSourceProvider,
   ContractSourceProviderBase,
-  ContractSourceSchemaOwner,
   PslContractSourceProvider,
   TypeScriptContractSourceProvider,
 } from '../contract-source-types';

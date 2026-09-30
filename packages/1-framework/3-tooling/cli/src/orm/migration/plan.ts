@@ -18,7 +18,6 @@ import { ERROR_CODE_DESTRUCTIVE_CHANGES } from '../../utils/cli-errors';
 import { previewBlockHeader } from '../../utils/formatters/migrations';
 import { runCommandAction } from '../../utils/next-actions';
 import { destructiveOperationList, errorConsentOperationsMissing } from '../db/consent';
-import { schemaOwnedRefusal } from '../db/verification';
 import { defineOrmCommand } from '../define-command';
 import { consentToken } from '../init-inputs';
 import { normalizeError } from '../normalize-error';
@@ -294,10 +293,6 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
     },
     needs: { config: ormConfigSection },
     handler: async (args, ctx) => {
-      const refusal = schemaOwnedRefusal(ctx.config, 'migration plan');
-      if (refusal !== undefined) {
-        return notOk(normalizeError(refusal));
-      }
       // Dirs the seed phase materialised across this invocation's run(s): the
       // consented re-run finds them already on disk, so its own seed records
       // come back `unchanged` and the accumulated list is threaded back in.

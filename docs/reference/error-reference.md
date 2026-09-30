@@ -449,7 +449,7 @@ The body of a JSON default is not a JSON document, or holds a number outside the
 
 ### CONTRACT.MARKER_MISMATCH
 
-The contract hash does not match the marker (signature) stored in the database. `db verify` reports it as an `error` diagnostic on a completed run that exits `4`; the SQL runtime reports it as a warning during startup marker verification. Fix path: migrate the database or re-sign if the divergence is intentional. When the contract source names another tool as owning the schema (`prisma6Schema`, `prisma7Schema`), a storage-hash mismatch in `db verify` instead points at that tool (Prisma 6 `db push`, Prisma 7 migrations) and then at `db sign`. Payload: `expected`, `actual`.
+The contract hash does not match the marker (signature) stored in the database. `db verify` reports it as an `error` diagnostic on a completed run that exits `4`; the SQL runtime reports it as a warning during startup marker verification. Fix path: migrate the database or re-sign if the divergence is intentional. Payload: `expected`, `actual`.
 
 ### CONTRACT.MARKER_MISSING
 
@@ -553,7 +553,7 @@ A role entity is declared more than once in the entities list, or a role name is
 
 ### CONTRACT.SCHEMA_VERIFICATION_FAILED
 
-Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract; when the contract source names another tool as owning the schema (`prisma6Schema`, `prisma7Schema`), apply the change with that tool and run `db sign` again. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
+Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
 
 ### CONTRACT.SOURCE_IMPORT_DISALLOWED
 
@@ -1543,10 +1543,6 @@ Generic wrapper for a migration runner failure during execution that has no more
 ### MIGRATION.SAME_SOURCE_AND_TARGET
 
 A migration's `from` and `to` hashes are identical and it declares no data-transform operations, a pure no-op self-edge, which is only allowed when the migration runs at least one `dataTransform`. Change the contract, add a dataTransform, or delete the migration. Payload: `dirName`, `hash`.
-
-### MIGRATION.SCHEMA_OWNED_ELSEWHERE
-
-`db init`, `db update`, `db migrate`, `migration plan` or `migration new` ran on a project whose contract source names another tool as the one that applies schema changes to the database, such as `prisma6Schema` (Prisma 6 `db push`) or `prisma7Schema` (Prisma 7 migrations). Prisma 8 only signs and verifies that database, so the command refuses before it connects or writes anything, dry runs included. Apply the schema change with that tool, then run `db sign`; the next actions carry the tool's own advice. Payload: none.
 
 ### MIGRATION.SCHEMA_VERIFY_FAILED
 

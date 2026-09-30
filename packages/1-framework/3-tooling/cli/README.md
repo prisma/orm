@@ -862,8 +862,6 @@ The SQL family provides this via `@internal/family-sql/control`. The `sign()` me
 
 Initialize a database schema from the contract. This command plans and applies **additive-only** operations (create missing tables/columns/constraints/indexes) until the database satisfies the contract, then writes the contract marker.
 
-In a project whose contract source names another tool as the one that applies schema changes (`prisma6Schema`, `prisma7Schema`), this command refuses before connecting with `MIGRATION.SCHEMA_OWNED_ELSEWHERE`, dry runs included, and points at that tool and then at `db sign`.
-
 **Command:**
 ```bash
 prisma db init [--db <url>] [--config <path>] [--dry-run] [--json] [-v] [-q] [--color/--no-color]
@@ -1023,8 +1021,6 @@ Applying migration plan and verifying schema...
 
 Update your database schema to match the currently emitted contract.
 
-In a project whose contract source names another tool as the one that applies schema changes (`prisma6Schema`, `prisma7Schema`), this command refuses before connecting with `MIGRATION.SCHEMA_OWNED_ELSEWHERE`, dry runs included, and points at that tool and then at `db sign`.
-
 `db update` differs from `db init`:
 
 - Works on any database, whether or not it has been initialized with `db init` (creates the signature table if missing)
@@ -1086,8 +1082,6 @@ The `contract.output` field specifies the path to `contract.json`. This is the c
 ### `prisma migration plan`
 
 Plan a migration from contract changes. Compares a starting contract against a destination contract and produces a new migration package with the required operations. No database connection is needed — fully offline.
-
-In a project whose contract source names another tool as the one that applies schema changes (`prisma6Schema`, `prisma7Schema`), this command and `migration new` refuse with `MIGRATION.SCHEMA_OWNED_ELSEWHERE` before writing anything, and point at that tool and then at `db sign`.
 
 ```bash
 prisma migration plan [--config <path>] [--name <slug>] [--from <contract>] [--to <contract>] [--json] [-v] [-q] [--color/--no-color]
@@ -1173,8 +1167,6 @@ prisma migration status [--db <url>] [--ref <name>] [--config <path>] [--json] [
 ### `prisma db migrate`
 
 Apply planned migrations to the database. Executes previously planned migrations (created by `migration plan`). Compares the database marker against the migration graph to determine which migrations are pending, then executes them sequentially. Each migration runs in its own transaction. Does not plan new migrations — run `migration plan` first.
-
-In a project whose contract source names another tool as the one that applies schema changes (`prisma6Schema`, `prisma7Schema`), this command refuses before connecting with `MIGRATION.SCHEMA_OWNED_ELSEWHERE`, dry runs included, and points at that tool and then at `db sign`.
 
 ```bash
 prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]

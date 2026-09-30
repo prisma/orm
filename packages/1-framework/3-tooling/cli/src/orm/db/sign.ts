@@ -29,7 +29,6 @@ import {
   requireVerifyConnection,
   schemaDriftNextActions,
   schemaFindingBlocks,
-  schemaOwnerActions,
   schemaVerdictDiagnostic,
   verificationThrow,
 } from './verification';
@@ -346,9 +345,7 @@ export function createDbSignCommand(
                   schemaVerdictDiagnostic({
                     result: verified,
                     space: undefined,
-                    nextActions:
-                      schemaOwnerActions(ctx.config) ??
-                      schemaDriftNextActions({ verb: 'sign', contractRef }),
+                    nextActions: schemaDriftNextActions({ verb: 'sign', contractRef }),
                   }),
                 ],
               },
