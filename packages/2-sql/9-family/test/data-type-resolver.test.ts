@@ -22,7 +22,17 @@ function component(
     ...(parts.dataTypes === undefined ? {} : { dataTypes: parts.dataTypes }),
     ...(parts.codecs === undefined
       ? {}
-      : { types: { codecTypes: { codecDescriptors: parts.codecs } } }),
+      : {
+          types: {
+            codecTypes: {
+              codecDescriptors: parts.codecs.map((codec) => ({
+                ...codec,
+                isParameterized: false,
+                factory: () => () => ({ id: codec.codecId }),
+              })),
+            },
+          },
+        }),
   } as unknown as TargetBoundComponentDescriptor<'sql', string>;
 }
 
@@ -55,6 +65,22 @@ describe('buildDataTypeResolver', () => {
 
   it('finds nothing for a codec no component contributes', () => {
     expect(resolve?.('demo/unknown@1')).toBeUndefined();
+  });
+
+  it('refuses a codec id that two components contribute', () => {
+    expect(() =>
+      buildDataTypeResolver([
+        component('demo-adapter', {
+          dataTypes: [instant],
+          codecs: [{ codecId: 'demo/instant-text@1', dataType: 'demo/instant' }],
+        }),
+        component('geo', {
+          codecs: [{ codecId: 'demo/instant-text@1', dataType: 'demo/instant' }],
+        }),
+      ]),
+    ).toThrow(
+      'Duplicate codec descriptor for codecId "demo/instant-text@1". Descriptor "geo" conflicts with "demo-adapter".',
+    );
   });
 
   it('is absent when no components are given', () => {
