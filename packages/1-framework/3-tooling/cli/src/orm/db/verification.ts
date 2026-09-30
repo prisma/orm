@@ -323,7 +323,10 @@ export function schemaDriftNextActions(inputs: {
   const contractRefused = inputs.issues.some((issue) => issue.explanation !== undefined);
   return contractRefused
     ? [
-        runCommandAction(`Re-emit the contract first, then ${verb} again`, '{bin} contract emit'),
+        runCommandAction(
+          `Re-emit the contract first, then ${retryAfterEmit}`,
+          '{bin} contract emit',
+        ),
         ...drift,
       ]
     : drift;

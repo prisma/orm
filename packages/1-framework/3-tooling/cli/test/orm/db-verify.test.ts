@@ -521,7 +521,7 @@ describe('db verify', () => {
         expect(diagnosticsOf(run)[0]?.nextActions[0]).toEqual({
           kind: 'run-command',
           label: 'Re-emit the contract first, then verify again',
-          command: '{bin} contract emit',
+          command: 'prisma-test contract emit',
         });
       });
 
