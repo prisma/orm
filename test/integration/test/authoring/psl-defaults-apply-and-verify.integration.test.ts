@@ -7,6 +7,12 @@ import { APP_SPACE_ID, createControlStack } from '@internal/framework-components
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import {
+  sqlCharColumn,
+  sqlFloatColumn,
+  sqlIntColumn,
+  sqlVarcharColumn,
+} from '@internal/sql-relational-core/ast';
 import { pgBitColumn, pgCharColumn } from '@internal/target-postgres/codecs';
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
@@ -252,6 +258,53 @@ model Flag {
         await applyAndVerifyContract(contract, ['sql_char', 'pg_char', 'pg_bit'], { strict: true }),
       ).toEqual({
         defaults: [undefined, { kind: 'literal', value: 'y' }, { kind: 'literal', value: '1' }],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'in TypeScript, the family column helpers, whose native types are PostgreSQL aliases such as char and varchar, apply, verify strictly and plan no change',
+    async () => {
+      const contract = defineContract({
+        models: {
+          AliasRow: model('AliasRow', {
+            fields: {
+              id: field.column(int4Column).id(),
+              bareChar: field.column(sqlCharColumn()).column('bare_char'),
+              shortChar: field
+                .column(sqlCharColumn({ length: 3 }))
+                .column('short_char')
+                .default('ab'),
+              bareVarchar: field.column(sqlVarcharColumn()).column('bare_varchar'),
+              shortVarchar: field
+                .column(sqlVarcharColumn({ length: 10 }))
+                .column('short_varchar')
+                .default('hello'),
+              count: field.column(sqlIntColumn()).column('count').default(7),
+              ratio: field.column(sqlFloatColumn()).column('ratio').default(1.5),
+            },
+          }).sql({ table: 'alias_row' }),
+        },
+      }) as unknown as Contract<SqlStorage>;
+      expect(
+        await applyAndVerifyContract(
+          contract,
+          ['bare_char', 'short_char', 'bare_varchar', 'short_varchar', 'count', 'ratio'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [
+          undefined,
+          { kind: 'literal', value: 'ab' },
+          undefined,
+          { kind: 'literal', value: 'hello' },
+          { kind: 'literal', value: 7 },
+          { kind: 'literal', value: 1.5 },
+        ],
         applied: true,
         issues: [],
         replannedOperations: [],

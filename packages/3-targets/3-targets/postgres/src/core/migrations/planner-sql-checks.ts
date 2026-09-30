@@ -1,5 +1,6 @@
 import type { CodecControlHooks } from '@internal/family-sql/control';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
+import { canonicalPostgresTypeName } from '../native-type-normalizer';
 import { postgresCreateNamespace } from '../postgres-schema';
 import { quoteIdentifier } from '../sql-utils';
 import { resolveColumnTypeMetadata } from './planner-type-resolution';
@@ -155,11 +156,13 @@ export function buildExpectedFormatType(
   if (resolved.typeParams && resolved.codecId) {
     const hooks = codecHooks.get(resolved.codecId);
     if (hooks?.expandNativeType) {
-      return hooks.expandNativeType({
-        nativeType: resolved.nativeType,
-        codecId: resolved.codecId,
-        typeParams: resolved.typeParams,
-      });
+      return canonicalPostgresTypeName(
+        hooks.expandNativeType({
+          nativeType: resolved.nativeType,
+          codecId: resolved.codecId,
+          typeParams: resolved.typeParams,
+        }),
+      );
     }
   }
 
@@ -167,5 +170,6 @@ export function buildExpectedFormatType(
     return formatUserDefinedTypeName(resolved.nativeType);
   }
 
-  return FORMAT_TYPE_DISPLAY.get(resolved.nativeType) ?? resolved.nativeType;
+  const canonical = canonicalPostgresTypeName(resolved.nativeType);
+  return FORMAT_TYPE_DISPLAY.get(canonical) ?? canonical;
 }

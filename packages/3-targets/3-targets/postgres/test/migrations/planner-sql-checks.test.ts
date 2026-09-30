@@ -48,6 +48,17 @@ describe('buildExpectedFormatType', () => {
     ]).toEqual(['character(1)', 'bit(1)']);
   });
 
+  it('names a type written under another PostgreSQL name as format_type does', () => {
+    expect(
+      [
+        { nativeType: 'char', codecId: 'sql/char@1' },
+        { nativeType: 'varchar', codecId: 'sql/varchar@1' },
+        { nativeType: 'int', codecId: 'sql/int@1' },
+        { nativeType: 'float', codecId: 'sql/float@1' },
+      ].map((column) => buildExpectedFormatType({ ...column, nullable: false }, noHooks)),
+    ).toEqual(['character(1)', 'character varying', 'integer', 'double precision']);
+  });
+
   describe('unmapped native types pass through', () => {
     it('returns nativeType as-is for text', () => {
       expect(

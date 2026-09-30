@@ -41,4 +41,43 @@ describe('buildPostgresNativeTypeExpander', () => {
       'character(1)',
     );
   });
+
+  it('names a type written under another PostgreSQL name as introspection reports it', () => {
+    const expand = buildPostgresNativeTypeExpander(undefined);
+    expect(
+      [
+        'char',
+        'char(3)',
+        'bpchar(3)',
+        'varchar',
+        'varchar(10)',
+        'varbit(5)',
+        'int',
+        'integer',
+        'smallint',
+        'bigint',
+        'real',
+        'double precision',
+        'float',
+        'boolean',
+        'decimal(10,2)',
+      ].map((nativeType) => expand({ nativeType })),
+    ).toEqual([
+      'character(1)',
+      'character(3)',
+      'character(3)',
+      'character varying',
+      'character varying(10)',
+      'bit varying(5)',
+      'int4',
+      'int4',
+      'int2',
+      'int8',
+      'float4',
+      'float8',
+      'float8',
+      'bool',
+      'numeric(10,2)',
+    ]);
+  });
 });
