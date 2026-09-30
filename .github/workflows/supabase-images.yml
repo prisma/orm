@@ -51,15 +51,7 @@ jobs:
         if: steps.lookup.outputs.cache-hit != 'true'
         env:
           ARCHIVE: ${{ steps.supabase-cli.outputs.images-archive }}
-        run: |
-          set -euo pipefail
-          mapfile -t images < <(docker image ls --format '{{.Repository}}:{{.Tag}}' | grep '^public\.ecr\.aws/supabase/' || true)
-          if [ "${#images[@]}" -eq 0 ]; then
-            echo "::error::supabase start left no public.ecr.aws/supabase/ images to save"
-            exit 1
-          fi
-          printf '%s\n' "${images[@]}"
-          docker save --output "$ARCHIVE" "${images[@]}"
+        run: .github/workflows/scripts/save-supabase-images.sh "$ARCHIVE"
       - name: Save the archive to the cache
         if: steps.lookup.outputs.cache-hit != 'true'
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5

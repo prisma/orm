@@ -426,7 +426,6 @@ jobs:
         env:
           ARCHIVE: ${{ steps.supabase-cli.outputs.images-archive }}
         run: |
-          set -euo pipefail
           docker load --input "$ARCHIVE"
           rm "$ARCHIVE"
       - name: Install dependencies
