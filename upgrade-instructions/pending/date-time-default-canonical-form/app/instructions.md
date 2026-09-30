@@ -49,9 +49,22 @@ model Event {
 A year outside 0000 to 9999 is a sign and six digits, and year 0000 is 1 BC. `prisma contract infer` and `prisma contract print` print a date or time default in the same form.
 
 1. Search your `.prisma` files for `@default("` on a date or time column.
-2. Run `prisma contract emit` and review the diff of `contract.json`. A default whose text changed changes the storage hash. The database does not change: schema verification compares the old and the new text as the same value.
-3. If you create the database with `prisma db init` or `prisma db update`, `prisma db verify` now reports that the database is signed with the earlier contract. Run `prisma db verify --schema-only` to confirm the schema matches, then `prisma db sign` to sign the database with the re-emitted contract.
-4. If you use migrations, `prisma migration plan` refuses with "Contract changed but planner produced no operations", because nothing in the database changes. Run `prisma migration new --name canonical-date-defaults` to write an empty migration from the earlier contract to the re-emitted one, then `prisma db migrate`. When `migration new` cannot tell where to start, pass `--from` with the storage hash of the earlier contract: the `to` hash of your latest migration, which `prisma migration list` shows.
+2. Run `prisma contract emit` and review the diff of `contract.json`. A default whose text changed changes the storage hash. The database does not change: schema verification compares the old and the new text as the same value. Re-emit before you run `prisma db verify` or `prisma db update`. With the earlier `contract.json`, a default this version refuses shows as a mismatch that names the refusal, and `prisma db update` refuses to write it with `CONTRACT.DEFAULT_INVALID`.
+3. If you create the database with `prisma db init` or `prisma db update`, `prisma db verify` now reports that the database is signed with the earlier contract. Run `prisma db verify --schema-only` to confirm the schema matches, then `prisma db sign` to sign the database with the re-emitted contract. Sign the database before you deploy the re-emitted contract. Until then the application logs `CONTRACT.MARKER_MISMATCH`, because the database marker holds the earlier storage hash.
+4. If you use migrations, `prisma migration plan` refuses with "Contract changed but planner produced no operations", because nothing in the database changes. Run `prisma migration new --name canonical-date-defaults` to write an empty migration from the earlier contract to the re-emitted one, then `prisma db migrate`. When `migration new` cannot tell where to start, pass `--from` with the storage hash of the earlier contract: the `to` hash of your latest migration, which `prisma migration list` shows. Apply the migration before you deploy the re-emitted contract. Until then the application logs `CONTRACT.MARKER_MISMATCH`, because the database marker holds the earlier storage hash.
+
+### SQLite tables created before the upgrade
+
+SQLite compares text byte by byte, so a `DateTime` default must be the same text the application writes for the same instant. Tables and columns created from now on get that text, such as `'2024-01-01T00:00:00.000Z'`. A table created before the upgrade keeps the default text it was created with, such as `'2024-01-01T01:00:00+01:00'` or `'2024-01-01T00:00:00Z'`. Every row that took that default compares and sorts wrongly against rows the application wrote. `prisma db verify` does not report it, because it compares the two texts as the same instant.
+
+Find the rows that hold the old text, and rewrite them to the text the application writes:
+
+```sql
+SELECT count(*) FROM "event" WHERE "at" = '2024-01-01T01:00:00+01:00';
+UPDATE "event" SET "at" = '2024-01-01T00:00:00.000Z' WHERE "at" = '2024-01-01T01:00:00+01:00';
+```
+
+SQLite cannot change a column's default in place, so new rows keep taking the old text until the table is rebuilt. A migration that rebuilds the table, which the planner writes for a change to one of its columns, writes the new default text. Until then, run the `UPDATE` again after inserts that take the default.
 
 ## `date-time-default-refused-text`
 
