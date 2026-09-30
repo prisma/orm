@@ -19,6 +19,7 @@ import {
 import {
   type CanonicalDateTimeOptions,
   canonicalDateTime,
+  integerTextCanonicalForm,
   numeralText,
 } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
@@ -75,6 +76,7 @@ export const pgTsquery: DataType = dataType('pg/tsquery', {});
 export const pgInt4: DataType = dataType('pg/int4', { casts: { [pgInt2.id]: unchanged } });
 
 export const pgInt8: DataType = dataType('pg/int8', {
+  toCanonicalForm: integerTextCanonicalForm,
   casts: { [pgInt2.id]: asNumeralText, [pgInt4.id]: asNumeralText },
 });
 

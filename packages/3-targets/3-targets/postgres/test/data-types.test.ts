@@ -1,4 +1,5 @@
 import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
+import { SqlColumnDefaultIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import {
   pgBit,
@@ -224,5 +225,52 @@ describe('what each cast converts', () => {
           '"nope" is not a UUID: PostgreSQL reads 32 hexadecimal digits, with a hyphen after any group of four and optionally in braces.',
       }),
     );
+  });
+});
+
+describe('the canonical form of pg/int8', () => {
+  it.each([
+    ['digit text', '9007199254740993', '9007199254740993'],
+    ['digit text with leading zeros', '-007', '-7'],
+    ['a safe integer, as PostgreSQL reads back a bigint default', 42, '42'],
+    ['a negative safe integer', -1, '-1'],
+  ])('reads %s as its digit text', (_name, value, canonical) => {
+    expect(pgInt8.toCanonicalForm?.(value)).toBe(canonical);
+  });
+
+  it.each([
+    ['a number past the safe integer range', Number.MAX_SAFE_INTEGER + 2],
+    ['a fraction', 1.5],
+    ['text that is not an integer', '1.5'],
+  ])('refuses %s with a cast-level code', (_name, value) => {
+    expect(() => pgInt8.toCanonicalForm?.(value)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
+    );
+  });
+
+  it('makes a default read back as a number equal its digit text, and not a number that lost digits', () => {
+    const expected = (value: string | readonly string[]) =>
+      new SqlColumnDefaultIR({
+        resolved: { kind: 'literal', value },
+        nativeTypeContext: Array.isArray(value) ? 'int8[]' : 'int8',
+        dataType: pgInt8,
+      });
+    const actual = (value: number | string | readonly number[]) =>
+      new SqlColumnDefaultIR({ resolved: { kind: 'literal', value } });
+    expect({
+      safe: expected('42').isEqualTo(actual(42)),
+      negative: expected('-7').isEqualTo(actual(-7)),
+      past2To53: expected('9007199254740993').isEqualTo(actual('9007199254740993')),
+      lostDigits: expected('9007199254740993').isEqualTo(actual(9007199254740992)),
+      different: expected('1').isEqualTo(actual(2)),
+      list: expected(['1', '-2']).isEqualTo(actual([1, -2])),
+    }).toEqual({
+      safe: true,
+      negative: true,
+      past2To53: true,
+      lostDigits: false,
+      different: false,
+      list: true,
+    });
   });
 });

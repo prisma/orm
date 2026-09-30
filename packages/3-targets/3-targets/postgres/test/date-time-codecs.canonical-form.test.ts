@@ -34,6 +34,7 @@ const everyCodecHolds: Readonly<Record<string, readonly string[]>> = {
   'pg/time': ['12:34:56.123456', '00:00:00'],
   'pg/timetz': ['12:34:56+02:00', '12:34:56Z'],
   'pg/interval': ['P1Y2M3DT4H5M6.5S', 'PT0S'],
+  'pg/int8': ['0', '-1', '9007199254740991'],
 };
 
 /** Values in canonical form that only some codecs of the type hold. */
@@ -78,7 +79,7 @@ function decoded(codec: Codec, json: JsonValue): { readonly value: unknown } | u
   }
 }
 
-describe('every codec of a date or time type writes the canonical form', () => {
+describe('every codec of a type with a canonical form writes it', () => {
   it('finds a codec for every type the tables cover, and a table for every such type', () => {
     expect(new Set(codecsWithCanonicalForm.map(({ dataType }) => dataType))).toEqual(
       new Set(Object.keys(everyCodecHolds)),

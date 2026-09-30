@@ -210,6 +210,38 @@ model Amount {
   );
 });
 
+describe('a BigInt default past 2^53', () => {
+  it(
+    'applies on a single and a list column, then verifies strictly with no issue and plans no change',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Counter {
+  id       Int      @id
+  big      BigInt   @default(9007199254740993)
+  small    BigInt   @default(-7)
+  bigList  BigInt[] @default([9007199254740993, -1]) @map("big_list")
+}
+`,
+          ['big', 'small', 'big_list'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: '9007199254740993' },
+          { kind: 'literal', value: '-7' },
+          { kind: 'literal', value: ['9007199254740993', '-1'] },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
 /** `sql/char@1` as PostgreSQL names its column type, the way the PSL `Char` type writes it. */
 const sqlCharacter = { codecId: 'sql/char@1', nativeType: 'character' } as const;
 
