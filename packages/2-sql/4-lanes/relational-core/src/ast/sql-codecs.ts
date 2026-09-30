@@ -182,7 +182,7 @@ export class SqlCharCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return sqlCharDecode(decodeJsonString(this.id, json));
+    return decodeJsonString(this.id, json);
   }
 }
 

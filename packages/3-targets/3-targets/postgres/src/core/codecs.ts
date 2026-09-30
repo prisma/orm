@@ -231,6 +231,12 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
 
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
+/**
+ * Projects a `character` value as text, which drops the trailing spaces that pad it to its length and nothing else, so an include reads the value a flat read's `decode` returns.
+ */
+const unpaddedCharJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CastExpr.as(expression, 'text');
+
 const BIT_STRING = /^[01]*$/;
 
 const decodePostgresNumberWire = (wire: string | number): number =>
@@ -351,7 +357,7 @@ const isoDurationJsonProjection = (expression: ProjectionExpr): ProjectionExpr =
 export const postgresSqlCharDescriptor = postgresCodec(sqlCharDescriptor, {
   dataType: pgChar.id,
   nativeType: () => 'character',
-  jsonProjection: identityJsonProjection,
+  jsonProjection: unpaddedCharJsonProjection,
   factory: (descriptor, params) => () => new PgCharCodec(descriptor, params.length),
 });
 
@@ -1754,7 +1760,7 @@ export class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams> {
     return PG_CHAR_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return unpaddedCharJsonProjection(expression);
   }
   override readonly dataType = pgChar.id;
   override readonly codecId = PG_CHAR_CODEC_ID;

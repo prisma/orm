@@ -62,62 +62,98 @@ async function applyContract(
   });
 }
 
+/** Applies a PSL schema to a new database, then verifies it and plans again against what was applied. */
+async function applyAndVerify(schema: string, columns: readonly string[]) {
+  const authored = await authorSqlContractFromPsl(schema);
+  const contract = authored.contract!;
+  const database = await createDevDatabase();
+  const driver = await postgresControlDriver.create(database.connectionString);
+  try {
+    const applied = await applyContract(driver, contract);
+    const introspected = await familyInstance.introspect({ driver, contract });
+    const verified = familyInstance.verifySchema({
+      contract,
+      schema: introspected,
+      strict: false,
+      frameworkComponents: postgresFrameworkComponents,
+    });
+    const replanned = planner.plan({
+      contract,
+      schema: introspected,
+      policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
+      fromContract: contract,
+      frameworkComponents: postgresFrameworkComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    return {
+      defaults: columns.map((name) => findStorageColumn(contract, name)?.['default']),
+      applied: applied.ok ? true : applied.failure,
+      issues: verified.schema.issues,
+      replannedOperations:
+        replanned.kind === 'success'
+          ? (await Promise.all(replanned.plan.operations)).map((op) => op.id)
+          : replanned,
+    };
+  } finally {
+    await driver.close();
+    await database.close();
+  }
+}
+
 describe('a Uuid default written in upper case or in braces', () => {
   it(
     'applies, then verifies against the database with no issue and plans no change',
     async () => {
-      const authored = await authorSqlContractFromPsl(`
+      expect(
+        await applyAndVerify(
+          `
 model Token {
   id     Int  @id
   upper  Uuid @default("A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11")
   braced Uuid @default("{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}")
 }
-`);
-      const contract = authored.contract!;
-      const database = await createDevDatabase();
-      const driver = await postgresControlDriver.create(database.connectionString);
-      try {
-        const applied = await applyContract(driver, contract);
-        const schema = await familyInstance.introspect({ driver, contract });
-        const verified = familyInstance.verifySchema({
-          contract,
-          schema,
-          strict: false,
-          frameworkComponents: postgresFrameworkComponents,
-        });
-        const replanned = planner.plan({
-          contract,
-          schema,
-          policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
-          fromContract: contract,
-          frameworkComponents: postgresFrameworkComponents,
-          spaceId: APP_SPACE_ID,
-          snapshotsImportPath: '../../snapshots',
-        });
+`,
+          ['upper', 'braced'],
+        ),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
+          { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
 
-        expect({
-          defaults: ['upper', 'braced'].map(
-            (name) => findStorageColumn(contract, name)?.['default'],
-          ),
-          applied: applied.ok ? true : applied.failure,
-          issues: verified.schema.issues,
-          replannedOperations:
-            replanned.kind === 'success'
-              ? (await Promise.all(replanned.plan.operations)).map((op) => op.id)
-              : replanned,
-        }).toEqual({
-          defaults: [
-            { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
-            { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
-          ],
-          applied: true,
-          issues: [],
-          replannedOperations: [],
-        });
-      } finally {
-        await driver.close();
-        await database.close();
-      }
+describe('a Char default with trailing spaces or a trailing tab', () => {
+  it(
+    'is stored and applied as written, then verifies with no issue and plans no change',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Tag {
+  id     Int     @id
+  spaced Char(3) @default("a  ")
+  tabbed Char(3) @default("a\t")
+}
+`,
+          ['spaced', 'tabbed'],
+        ),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: 'a  ' },
+          { kind: 'literal', value: 'a\t' },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
     },
     timeouts.spinUpPpgDev,
   );

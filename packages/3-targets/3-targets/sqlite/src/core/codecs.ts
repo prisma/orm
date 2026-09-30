@@ -259,9 +259,15 @@ const safeIntegerFromBigint = (value: bigint): number => {
   return Number(value);
 };
 
+/**
+ * Projects a `sql/char@1` value without trailing spaces, as its `decode` reads it on a flat read, so an include reads the same value. SQLite does not pad the value; the rule is the family codec's.
+ */
+const unpaddedCharJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]);
+
 export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
   dataType: sqliteText.id,
-  jsonProjection: identityJsonProjection,
+  jsonProjection: unpaddedCharJsonProjection,
 });
 
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {

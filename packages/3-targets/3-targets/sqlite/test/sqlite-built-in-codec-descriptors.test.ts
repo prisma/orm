@@ -78,18 +78,23 @@ describe('SQLite built-in codec descriptors', () => {
     }
   });
 
-  it('adapts every generic SQL descriptor with identity projection and scalar-only semantics', () => {
+  it('projects sql/char@1 without trailing spaces, as its decode reads a flat value', () => {
+    const expression = ColumnRef.of('records', 'value');
+    expect(
+      sqliteSqlCharDescriptor.projectJson(
+        expression,
+        refFor(sqliteSqlCharDescriptor, { length: 12 }),
+      ),
+    ).toEqual(FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]));
+  });
+
+  it('adapts the other generic SQL descriptors with identity projection and scalar-only semantics', () => {
     const expression = ColumnRef.of('records', 'value');
     const cases: ReadonlyArray<{
       descriptor: AnySqliteCodecDescriptor;
       rawDescriptor: AnyCodecDescriptorTemplate;
       typeParams?: CodecRef['typeParams'];
     }> = [
-      {
-        descriptor: sqliteSqlCharDescriptor,
-        rawDescriptor: sqlCharDescriptor,
-        typeParams: { length: 12 },
-      },
       {
         descriptor: sqliteSqlVarcharDescriptor,
         rawDescriptor: sqlVarcharDescriptor,

@@ -112,14 +112,23 @@ describe('sql-codecs', () => {
       expect(await codec.encode('user_001', callCtx)).toBe('user_001');
     });
 
-    it('trims trailing spaces on decode', async () => {
-      expect(await codec.decode('user_001                            ', callCtx)).toBe('user_001');
-      expect(await codec.decode('user_001', callCtx)).toBe('user_001');
+    it('trims trailing spaces on decode, and only spaces, the padding a character column adds', async () => {
+      expect(
+        await Promise.all(
+          ['user_001                            ', 'user_001', 'a\t  ', 'a\n', ' a'].map((wire) =>
+            codec.decode(wire, callCtx),
+          ),
+        ),
+      ).toEqual(['user_001', 'user_001', 'a\t', 'a\n', ' a']);
     });
 
-    it('round-trips through JSON identity', () => {
+    it('round-trips through JSON identity, keeping trailing spaces, as a default is written', () => {
       expect(codec.encodeJson('user_001')).toBe('user_001');
-      expect(codec.decodeJson('user_001')).toBe('user_001');
+      expect(['user_001', 'a  ', 'a\t'].map((json) => codec.decodeJson(json))).toEqual([
+        'user_001',
+        'a  ',
+        'a\t',
+      ]);
     });
 
     it('renderOutputType returns Char<length>', () => {
