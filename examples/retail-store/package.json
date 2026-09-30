@@ -39,7 +39,7 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.1",
+    "@prisma/cli-engine": "0.6.2",
     "@repo/test-utils": "workspace:8.0.0-rc.13",
     "@repo/tsconfig": "workspace:8.0.0-rc.13",
     "@types/node": "catalog:",

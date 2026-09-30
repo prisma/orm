@@ -4,8 +4,13 @@ import type { ControlStack } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import { hasPslInterpreter, type PslInterpretCapable } from '@internal/psl-parser/interpret';
-import type { PipelineInputs } from './pipeline';
-import { hasPslInputs, resolveSchemaInputs, type SchemaInputSet } from './schema-inputs';
+import type { LspControlStack } from './lsp-control-stack';
+import {
+  hasPslInputs,
+  resolveSchemaInputs,
+  type SchemaInputConfig,
+  type SchemaInputSet,
+} from './schema-inputs';
 
 export const CONFIG_FILENAME = 'prisma.config.ts';
 
@@ -16,17 +21,21 @@ export interface ProjectInterpretation {
 
 export interface ConfigResolution {
   readonly inputs: SchemaInputSet;
+  readonly schemaInputConfig: SchemaInputConfig;
   readonly formatter?: FormatOptions;
-  readonly controlStack: PipelineInputs;
+  readonly controlStack: LspControlStack;
   readonly interpretation?: ProjectInterpretation;
 }
 
-const emptyPipelineInputs: PipelineInputs = {
+const emptyLspControlStack: LspControlStack = {
   scalarTypes: [],
   pslBlockDescriptors: {},
 };
 
-export async function resolveConfigInputs(configPath: string): Promise<ConfigResolution> {
+export async function resolveConfigInputs(
+  configPath: string,
+  readText: (uri: string) => string | undefined,
+): Promise<ConfigResolution> {
   // The language server keeps its established failure channel: a config that
   // cannot serve the project is thrown and published as a document diagnostic.
   const loaded = await loadConfig(configPath);
@@ -38,11 +47,14 @@ export async function resolveConfigInputs(configPath: string): Promise<ConfigRes
     throw projectSections.failure;
   }
   const config = projectSections.value;
-  const inputs = resolveSchemaInputs(config);
+  const inputs = await resolveSchemaInputs(config, readText);
+  const schemaInputConfig: SchemaInputConfig =
+    config.contract === undefined ? {} : { contract: config.contract };
   if (!hasPslInputs(config)) {
     return {
       inputs,
-      controlStack: emptyPipelineInputs,
+      schemaInputConfig,
+      controlStack: emptyLspControlStack,
       ...(config.formatter === undefined ? {} : { formatter: config.formatter }),
     };
   }
@@ -62,13 +74,14 @@ export async function resolveConfigInputs(configPath: string): Promise<ConfigRes
   const interpretation = resolveInterpretation(config, stack, inputs);
   return {
     inputs,
-    controlStack: pipelineInputsFromStack(stack),
+    schemaInputConfig,
+    controlStack: lspControlStackFromStack(stack),
     ...(config.formatter === undefined ? {} : { formatter: config.formatter }),
     ...(interpretation === undefined ? {} : { interpretation }),
   };
 }
 
-function pipelineInputsFromStack(stack: ControlStack): PipelineInputs {
+function lspControlStackFromStack(stack: ControlStack): LspControlStack {
   return {
     scalarTypes: [...stack.scalarTypes],
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,

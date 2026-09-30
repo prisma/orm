@@ -37,7 +37,7 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
-function validatePostgresUrl(url: string): string {
+export function validatePostgresUrl(url: string): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a non-empty string', {

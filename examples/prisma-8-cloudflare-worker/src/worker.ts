@@ -1,13 +1,21 @@
 import 'temporal-polyfill/full/global';
 
-import { withTransaction } from '@prisma/orm-postgres/family-runtime';
 import { Client } from 'pg';
 import { createOrmClient } from './orm-client/client';
-import { db } from './prisma/db';
+import { postgres, streamingPostgres } from './prisma/db';
 
 interface Env {
   HYPERDRIVE: { connectionString: string };
 }
+
+const ROUTES = new Set([
+  '/sql/users',
+  '/orm/users',
+  '/orm/posts',
+  '/tx/commit',
+  '/tx/rollback',
+  '/cursor/large',
+]);
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -17,47 +25,50 @@ export default {
       return Response.json({ ok: true });
     }
 
-    await using runtime = await db.connect({ url: env.HYPERDRIVE.connectionString });
+    if (!ROUTES.has(url.pathname)) {
+      return notFound(url);
+    }
+
+    const userId = url.searchParams.get('userId');
+    if ((url.pathname === '/orm/posts' || url.pathname === '/tx/commit') && !userId) {
+      return Response.json({ ok: false, error: 'userId required' }, { status: 400 });
+    }
+
+    const routePostgres = url.pathname === '/cursor/large' ? streamingPostgres : postgres;
+    await using db = await routePostgres.connect({ url: env.HYPERDRIVE.connectionString });
 
     if (url.pathname === '/sql/users') {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
-      const rows = await runtime.query(
-        db.sql.public.user
-          .select('id', 'email', 'displayName', 'kind', 'createdAt')
-          .limit(limit)
-          .build(),
-      );
+      const rows = await db
+        .runtime()
+        .query(
+          db.sql.public.user
+            .select('id', 'email', 'displayName', 'kind', 'createdAt')
+            .limit(limit)
+            .build(),
+        );
       return Response.json({ ok: true, route: 'sql/users', count: rows.length, rows });
     }
 
     if (url.pathname === '/orm/users') {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
-      const orm = createOrmClient(runtime);
+      const orm = createOrmClient(db);
       const rows = await orm.User.newestFirst().limit(limit).all();
       return Response.json({ ok: true, route: 'orm/users', count: rows.length, rows });
     }
 
-    if (url.pathname === '/orm/posts') {
-      const userId = url.searchParams.get('userId');
-      if (!userId) {
-        return Response.json({ ok: false, error: 'userId required' }, { status: 400 });
-      }
+    if (url.pathname === '/orm/posts' && userId) {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
-      const orm = createOrmClient(runtime);
-      const rows = await orm.Post.where({ userId })
+      const rows = await db.orm.public.Post.where({ userId })
         .orderBy((post) => post.createdAt.desc())
         .limit(limit)
         .all();
       return Response.json({ ok: true, route: 'orm/posts', count: rows.length, rows });
     }
 
-    if (url.pathname === '/tx/commit') {
-      const userId = url.searchParams.get('userId');
+    if (url.pathname === '/tx/commit' && userId) {
       const newDisplayName = url.searchParams.get('displayName') ?? 'Updated';
-      if (!userId) {
-        return Response.json({ ok: false, error: 'userId required' }, { status: 400 });
-      }
-      const result = await withTransaction(runtime, async (tx) => {
+      const result = await db.transaction(async (tx) => {
         await tx.execute(
           db.sql.public.post
             .insert([
@@ -82,7 +93,7 @@ export default {
 
     if (url.pathname === '/tx/rollback') {
       try {
-        await withTransaction(runtime, async (tx) => {
+        await db.transaction(async (tx) => {
           await tx.execute(
             db.sql.public.user
               .update({ displayName: 'rolled-back-write' })
@@ -108,14 +119,14 @@ export default {
 
       // Open a side-channel pg.Client to instrument the cursor query via
       // pg_stat_statements (loaded via shared_preload_libraries in
-      // docker-compose / CI). Two-client pattern: the runtime owns the
-      // primary connection that runs the SELECT; this observer connection
-      // resets stats before and reads them after, so the test can prove
+      // docker-compose / CI). Two database connections: `db` owns the one
+      // that runs the SELECT; this observer pg.Client resets stats before
+      // and reads them after, so the test can prove
       // that with cursor enabled the server transmitted only ~one batch
-      // worth of rows (not the full LIMIT). With cursor disabled the
+      // worth of rows (not the full LIMIT). Without the cursor option the
       // observer would see the full ~10_000 rows row count.
       const observer = new Client({ connectionString: env.HYPERDRIVE.connectionString });
-      // A dropped connection emits 'error' on the client; without a listener
+      // A dropped database connection emits 'error' on the pg.Client; without a listener
       // that is an uncaught exception and kills the isolate mid-response.
       observer.on('error', () => {});
       await observer.connect();
@@ -124,11 +135,12 @@ export default {
 
         const t0 = Date.now();
         // SELECT bounded to the post-table budget cap (10_000 — see
-        // `src/prisma/db.ts`). With cursor enabled the driver opens a
+        // `src/prisma/db.ts`). `db` was opened from `streamingPostgres`, so the
+        // cursor is enabled: the driver opens a
         // server-side cursor and streams in ~100-row batches; an early
-        // `break` only fetches one batch and closes. With cursor disabled
+        // `break` only fetches one batch and closes. Without the cursor option
         // the driver buffers all 10_000 rows before the first yield.
-        const iter = runtime.query(
+        const iter = db.runtime().query(
           db.sql.public.post
             .select('id', 'title')
             .orderBy((f) => f.createdAt, { direction: 'asc' })
@@ -167,18 +179,16 @@ export default {
       }
     }
 
-    // The Task collection (and its Bug/Feature variants) is wired in
-    // `src/orm-client/collections.ts` for parity with the demo schema, but
-    // queries against it currently fail with `column "bug.id" does not exist`
-    // — class-table inheritance with @@map is broken at the ORM layer. Not
-    // exercised here; flagged as pre-existing drift in M3 R2.
-
-    return Response.json(
-      { ok: false, error: 'unknown route', path: url.pathname },
-      { status: 404 },
-    );
+    // The Task collection and its Bug and Feature variants are registered in
+    // `src/orm-client/collections.ts` for parity with the demo schema; no
+    // route queries them.
+    return notFound(url);
   },
 };
+
+function notFound(url: URL): Response {
+  return Response.json({ ok: false, error: 'unknown route', path: url.pathname }, { status: 404 });
+}
 
 function parseLimit(raw: string | null, fallback: number): number {
   if (!raw) return fallback;
