@@ -51,11 +51,6 @@ export function fitsFloat4(value: number): boolean {
   return Number.isFinite(single) && (value === 0 || single !== 0);
 }
 
-/** `1 character`, `3 characters`: a count and its noun, for a refusal. */
-export function counted(count: number, noun: string): string {
-  return `${count} ${count === 1 ? noun : `${noun}s`}`;
-}
-
 export type PrecisionParams = { readonly precision?: number };
 
 export const precisionParamsSchema = arktype({

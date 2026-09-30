@@ -18,6 +18,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  counted,
   decodeJsonBoolean,
   decodeJsonFloat,
   decodeJsonInteger,
@@ -57,7 +58,6 @@ import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './
 import {
   CANONICAL_UUID,
   canonicalUuid,
-  counted,
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
   FLOAT4_MAX,

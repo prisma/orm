@@ -19,6 +19,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  counted,
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -152,8 +153,11 @@ export class PgVectorCodec extends CodecImpl<
   }
 
   private refuseJson(json: JsonValue): never {
-    const noun = this.length === 1 ? 'number' : 'numbers';
-    return refuseJsonValue(VECTOR_CODEC_ID, `an array of ${this.length} finite ${noun}`, json);
+    return refuseJsonValue(
+      VECTOR_CODEC_ID,
+      `an array of ${counted(this.length, 'finite number')}`,
+      json,
+    );
   }
 }
 

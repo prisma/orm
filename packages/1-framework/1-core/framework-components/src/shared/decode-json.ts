@@ -22,6 +22,11 @@ export function refuseJsonValue(codecId: string, expected: string, json: JsonVal
   });
 }
 
+/** `1 character`, `3 characters`: a count and its noun, as a refusal names what a value must hold. */
+export function counted(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}
+
 export function decodeJsonString(codecId: string, json: JsonValue): string {
   if (typeof json !== 'string') return refuseJsonValue(codecId, 'a string', json);
   return json;
