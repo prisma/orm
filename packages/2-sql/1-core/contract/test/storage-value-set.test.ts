@@ -3,7 +3,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { StorageColumn } from '../src/ir/storage-column';
 import { StorageTable } from '../src/ir/storage-table';
-import { StorageValueSet } from '../src/ir/storage-value-set';
+import { isStorageValueSet, StorageValueSet } from '../src/ir/storage-value-set';
 import { createTestSqlNamespace } from './test-support';
 
 const baseColumn = { codecId: 'pg/text@1', nativeType: 'text', nullable: false };
@@ -133,5 +133,37 @@ describe('StorageColumn with valueSet restriction', () => {
     const resolved = ns.entries.valueSet?.[ref.entityName];
     expect(resolved).toBeDefined();
     expect(ref.entityKind).toBe('valueSet');
+  });
+});
+
+describe('isStorageValueSet', () => {
+  it('returns true for a real StorageValueSet instance', () => {
+    const vs = new StorageValueSet({ kind: 'valueSet', values: ['a', 'b'] });
+    expect(isStorageValueSet(vs)).toBe(true);
+  });
+
+  it('returns true for a duck-typed plain object with kind and values', () => {
+    const ducked = { kind: 'valueSet', values: ['a'] };
+    expect(isStorageValueSet(ducked)).toBe(true);
+  });
+
+  it('returns false for null', () => {
+    expect(isStorageValueSet(null)).toBe(false);
+  });
+
+  it('returns false for a non-object primitive', () => {
+    expect(isStorageValueSet('not-a-value-set')).toBe(false);
+  });
+
+  it('returns false when kind is missing', () => {
+    expect(isStorageValueSet({ values: ['a'] })).toBe(false);
+  });
+
+  it('returns false when kind has the wrong value', () => {
+    expect(isStorageValueSet({ kind: 'table', values: ['a'] })).toBe(false);
+  });
+
+  it('returns false when values is missing', () => {
+    expect(isStorageValueSet({ kind: 'valueSet' })).toBe(false);
   });
 });
