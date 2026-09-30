@@ -11,6 +11,7 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 | `String` | `field.string()` | `mongo/string@1` | `string` | `string` |
 | `Int32` | `field.int32()` | `mongo/int32@1` | `int` | `number` |
 | `Int64` | `field.int64()` | `mongo/int64@1` | `long` | `bigint` |
+| `Int64Number` | `field.int64Number()` | `mongo/int64Number@1` | `long` | `number` (safe-integer range) |
 | `Double` | `field.double()` | `mongo/double@1` | `double` | `number` |
 | `Decimal128` | `field.decimal128()` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent) |
 | `Bool` | `field.bool()` | `mongo/bool@1` | `bool` | `boolean` |
@@ -103,7 +104,8 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | Concept | Prisma 6/7 name | PostgreSQL | SQLite | MongoDB |
 | --- | --- | --- | --- | --- |
 | 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
-| 64-bit integer | `BigInt` (on MongoDB, also a plain `Int`, which Prisma 6 stores as a BSON long) | `BigInt` | `BigInt` | `Int64` |
+| 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `Int64` |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigIntNumber` | `BigIntNumber` | `Int64Number` |
 | double | `Float` | `Float` | `Float` | `Double` |
 | decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | `Decimal128` |
 | boolean | `Boolean` | `Boolean` | — | `Bool` |
@@ -114,4 +116,4 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | any value | — | — | — | `Bson` |
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | `ObjectId` |
 
-A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` and `BigInt @db.Long` are `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.
+A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.

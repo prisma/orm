@@ -6,30 +6,50 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 describe('an Int in a Prisma 6 MongoDB schema', () => {
   it(
-    'reads the BSON long Prisma 6 stores as a bigint, and @db.Int as a number',
+    'reads the BSON long Prisma 6 stores as the number the Prisma 6 client presents',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
         await mongoDb.collection('Counter').insertOne({
           name: 'written by Prisma 6',
           hits: Long.fromNumber(5),
           small: new Int32(3),
-          large: Long.fromString('9007199254740993'),
+          large: Long.fromNumber(2 ** 40),
         });
 
         const read = await db.Counter.where({ name: 'written by Prisma 6' }).first();
 
-        expect(read).toMatchObject({ hits: 5n, small: 3, large: 9007199254740993n });
-        expectTypeOf(read?.hits).toEqualTypeOf<bigint | undefined>();
+        expect(read).toMatchObject({ hits: 5, small: 3, large: 2 ** 40 });
+        expectTypeOf(read?.hits).toEqualTypeOf<number | undefined>();
+        expectTypeOf(read?.large).toEqualTypeOf<number | undefined>();
         expectTypeOf(read?.small).toEqualTypeOf<number | undefined>();
       }),
     timeouts.spinUpMongoMemoryServer,
   );
 
   it(
-    'writes an Int back as the BSON long Prisma 6 reads, and @db.Int as an int',
+    'refuses a long past the safe integer range instead of rounding it',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
-        await db.Counter.create({ name: 'written by Prisma 8', hits: 6n, small: 4, large: 7n });
+        await mongoDb.collection('Counter').insertOne({
+          name: 'too large',
+          hits: Long.fromString('9007199254740993'),
+          small: new Int32(3),
+          large: Long.fromNumber(1),
+        });
+
+        await expect(db.Counter.where({ name: 'too large' }).first()).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          message: expect.stringContaining('must be an integer within the safe integer range'),
+        });
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'writes an Int back as the BSON long Prisma 6 writes, and @db.Int as an int',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        await db.Counter.create({ name: 'written by Prisma 8', hits: 6, small: 4, large: 7 });
 
         const stored = await mongoDb
           .collection('Counter')
@@ -148,11 +168,11 @@ describe('an Int in a Prisma 6 MongoDB schema', () => {
 
         const read = await db.Counter.all().toArray();
         expect(Object.fromEntries(read.map(({ name, hits }) => [name, hits]))).toEqual({
-          fractional: 2n,
-          'whole double': 4n,
-          long: 6n,
+          fractional: 2,
+          'whole double': 4,
+          long: 6,
         });
-        expect(await db.Tally.where({ name: 'mixed' }).first()).toMatchObject({ scores: [1n, 4n] });
+        expect(await db.Tally.where({ name: 'mixed' }).first()).toMatchObject({ scores: [1, 4] });
         expect(
           await tallies
             .aggregate([

@@ -25,14 +25,14 @@ export type ProfileHash =
 
 export type CodecTypes = MongoCodecTypes;
 
-export type AddressOutput = { readonly zip: CodecTypes['mongo/int64@1']['output'] };
-export type AddressInput = { readonly zip: CodecTypes['mongo/int64@1']['input'] };
+export type AddressOutput = { readonly zip: CodecTypes['mongo/int64Number@1']['output'] };
+export type AddressInput = { readonly zip: CodecTypes['mongo/int64Number@1']['input'] };
 export type FieldOutputTypes = {
   readonly __unbound__: {
     readonly Counter: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
-      readonly hits: CodecTypes['mongo/int64@1']['output'];
-      readonly large: CodecTypes['mongo/int64@1']['output'];
+      readonly hits: CodecTypes['mongo/int64Number@1']['output'];
+      readonly large: CodecTypes['mongo/int64Number@1']['output'];
       readonly name: CodecTypes['mongo/string@1']['output'];
       readonly small: CodecTypes['mongo/int32@1']['output'];
     };
@@ -41,7 +41,7 @@ export type FieldOutputTypes = {
       readonly address: AddressOutput | null;
       readonly addresses: ReadonlyArray<AddressOutput>;
       readonly name: CodecTypes['mongo/string@1']['output'];
-      readonly scores: ReadonlyArray<CodecTypes['mongo/int64@1']['output']>;
+      readonly scores: ReadonlyArray<CodecTypes['mongo/int64Number@1']['output']>;
     };
   };
 };
@@ -49,8 +49,8 @@ export type FieldInputTypes = {
   readonly __unbound__: {
     readonly Counter: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
-      readonly hits: CodecTypes['mongo/int64@1']['input'];
-      readonly large: CodecTypes['mongo/int64@1']['input'];
+      readonly hits: CodecTypes['mongo/int64Number@1']['input'];
+      readonly large: CodecTypes['mongo/int64Number@1']['input'];
       readonly name: CodecTypes['mongo/string@1']['input'];
       readonly small: CodecTypes['mongo/int32@1']['input'];
     };
@@ -59,7 +59,7 @@ export type FieldInputTypes = {
       readonly address: AddressInput | null;
       readonly addresses: ReadonlyArray<AddressInput>;
       readonly name: CodecTypes['mongo/string@1']['input'];
-      readonly scores: ReadonlyArray<CodecTypes['mongo/int64@1']['input']>;
+      readonly scores: ReadonlyArray<CodecTypes['mongo/int64Number@1']['input']>;
     };
   };
 };
@@ -67,8 +67,8 @@ export type FieldInputTypes = {
 export namespace Models {
   export type unbound_Counter = {
     _id: CodecTypes['mongo/objectId@1']['output'];
-    hits: CodecTypes['mongo/int64@1']['output'];
-    large: CodecTypes['mongo/int64@1']['output'];
+    hits: CodecTypes['mongo/int64Number@1']['output'];
+    large: CodecTypes['mongo/int64Number@1']['output'];
     name: CodecTypes['mongo/string@1']['output'];
     small: CodecTypes['mongo/int32@1']['output'];
     readonly [RelationKeys]?: never;
@@ -78,7 +78,7 @@ export namespace Models {
     address: AddressOutput | null;
     addresses: ReadonlyArray<AddressOutput>;
     name: CodecTypes['mongo/string@1']['output'];
-    scores: ReadonlyArray<CodecTypes['mongo/int64@1']['output']>;
+    scores: ReadonlyArray<CodecTypes['mongo/int64Number@1']['output']>;
     readonly [RelationKeys]?: never;
   };
 }
@@ -131,11 +131,11 @@ type ContractBase = Omit<
               };
               readonly hits: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64Number@1' };
               };
               readonly large: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64Number@1' };
               };
               readonly name: {
                 readonly nullable: false;
@@ -170,7 +170,7 @@ type ContractBase = Omit<
               };
               readonly scores: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64Number@1' };
                 readonly many: true;
               };
             };
@@ -183,7 +183,7 @@ type ContractBase = Omit<
             readonly fields: {
               readonly zip: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64Number@1' };
               };
             };
           };
@@ -199,7 +199,7 @@ type ContractBase = Omit<
       readonly fields: {
         readonly zip: {
           readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
+          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64Number@1' };
         };
       };
     };

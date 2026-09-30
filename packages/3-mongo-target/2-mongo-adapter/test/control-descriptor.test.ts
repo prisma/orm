@@ -12,6 +12,7 @@ const expectedScalars = [
   ['ObjectId', 'mongo/objectId@1'],
   ['Double', 'mongo/double@1'],
   ['Int64', 'mongo/int64@1'],
+  ['Int64Number', 'mongo/int64Number@1'],
   ['Decimal128', 'mongo/decimal128@1'],
   ['Binary', 'mongo/binary@1'],
 ] as const;

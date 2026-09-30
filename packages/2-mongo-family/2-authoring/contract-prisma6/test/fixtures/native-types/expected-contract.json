@@ -23,7 +23,7 @@
               "count": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "mongo/int64@1"
+                  "codecId": "mongo/int64Number@1"
                 },
                 "nullable": false
               },
@@ -37,7 +37,7 @@
               "large": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "mongo/int64@1"
+                  "codecId": "mongo/int64Number@1"
                 },
                 "nullable": false
               },

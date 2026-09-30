@@ -60,6 +60,7 @@ import {
   mongoString,
   mongoVector,
 } from './data-types';
+import { int64NumberLiteral, mongoInt64NumberCodec } from './int64-number';
 import { decodeJsonValue, encodeJsonValue } from './json-codec-helpers';
 import { mongoTargetError } from './mongo-target-errors';
 
@@ -187,6 +188,7 @@ export const mongoStandardCodecs = [
   mongoDateCodec,
   mongoVectorCodec,
   mongoInt64Codec,
+  mongoInt64NumberCodec,
   mongoDecimal128Codec,
   mongoBinaryCodec,
   mongoJsonCodec,
@@ -298,6 +300,12 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['long'],
     renderValueLiteral: decimalTextBigintLiteral,
+  }),
+  descriptorFor(mongoInt64NumberCodec, {
+    dataType: mongoInt64.id,
+    traits: ['equality', 'order', 'numeric'],
+    targetTypes: ['long'],
+    renderValueLiteral: int64NumberLiteral,
   }),
   descriptorFor(mongoDecimal128Codec, {
     dataType: mongoDecimal128.id,

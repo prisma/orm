@@ -157,7 +157,7 @@ withTempDir(({ createTempDir }) => {
         views: postFields?.['views']?.type.codecId,
         likes: postFields?.['likes']?.type.codecId,
         rank: postFields?.['rank']?.type.codecId,
-      }).toEqual({ views: 'mongo/int64@1', likes: 'mongo/int64@1', rank: 'mongo/int32@1' });
+      }).toEqual({ views: 'mongo/int64@1', likes: 'mongo/int64Number@1', rank: 'mongo/int32@1' });
       expect(
         contract.execution.mutations.defaults.map(({ ref, onCreate, onUpdate }) => ({
           field: `${ref.entry}.${ref.field}`,

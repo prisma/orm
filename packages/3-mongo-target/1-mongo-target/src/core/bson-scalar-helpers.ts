@@ -1,5 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import { Binary, Decimal128, Long } from 'bson';
+import { refuseFractionalDouble } from './int64-number';
 import { mongoTargetError } from './mongo-target-errors';
 
 const DECIMAL_INTEGER = /^-?\d+$/;
@@ -70,11 +71,7 @@ export function int64Decode(codecId: string, wire: Long | number | bigint): bigi
   if (isLong(wire)) return wire.toBigInt();
   if (typeof wire === 'number' && Number.isSafeInteger(wire)) return BigInt(wire);
   if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
-    return decodeFailed(
-      codecId,
-      `wire value is the fractional double ${wire}, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-reads-as-bigint has the queries for a plain field, a list and a list of composite values.`,
-      wire,
-    );
+    return refuseFractionalDouble(codecId, wire);
   }
   return decodeFailed(codecId, 'wire value must be a Long or a safe integer', wire);
 }

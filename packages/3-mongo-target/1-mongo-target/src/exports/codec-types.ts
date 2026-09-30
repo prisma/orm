@@ -19,6 +19,7 @@ export type CodecTypes = {
     readonly output: readonly number[];
   };
   readonly 'mongo/int64@1': { readonly input: bigint; readonly output: bigint };
+  readonly 'mongo/int64Number@1': { readonly input: number; readonly output: number };
   readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
   readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
   readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };

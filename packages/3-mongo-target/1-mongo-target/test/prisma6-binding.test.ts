@@ -1,5 +1,10 @@
+import { Long } from 'bson';
 import { describe, expect, it } from 'vitest';
-import { mongoCodecDescriptors, mongoDescriptorById } from '../src/core/codecs';
+import {
+  buildStandardCodecRegistry,
+  mongoCodecDescriptors,
+  mongoDescriptorById,
+} from '../src/core/codecs';
 import { prisma6MongoBinding } from '../src/core/prisma6-binding';
 
 /**
@@ -56,6 +61,40 @@ describe('prisma6MongoBinding', () => {
     'has no codec for $field, whose BSON $bson no Mongo codec reads',
     ({ typeName, nativeType }) => {
       expect(codecFor(typeName, nativeType)).toBeUndefined();
+    },
+  );
+
+  it.each([
+    { field: 'Int', typeName: 'Int', nativeType: '', wire: Long.fromNumber(5), type: 'number' },
+    {
+      field: 'Int @db.Long',
+      typeName: 'Int',
+      nativeType: 'db.Long',
+      wire: Long.fromNumber(5),
+      type: 'number',
+    },
+    { field: 'Int @db.Int', typeName: 'Int', nativeType: 'db.Int', wire: 5, type: 'number' },
+    {
+      field: 'BigInt',
+      typeName: 'BigInt',
+      nativeType: '',
+      wire: Long.fromNumber(5),
+      type: 'bigint',
+    },
+    {
+      field: 'BigInt @db.Long',
+      typeName: 'BigInt',
+      nativeType: 'db.Long',
+      wire: Long.fromNumber(5),
+      type: 'bigint',
+    },
+  ])(
+    'reads $field as the $type the Prisma 6 client presents',
+    async ({ typeName, nativeType, wire, type }) => {
+      const codecId = codecFor(typeName, nativeType);
+      const codec = codecId === undefined ? undefined : buildStandardCodecRegistry().get(codecId);
+
+      expect(typeof (await codec?.decode(wire, {}))).toBe(type);
     },
   );
 

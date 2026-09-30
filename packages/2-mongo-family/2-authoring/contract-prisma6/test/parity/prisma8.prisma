@@ -9,7 +9,7 @@ model Post {
   id        ObjectId               @id @map("_id")
   title     String
   views     Int64
-  likes     Int64
+  likes     Int64Number
   rank      Int32
   note      String
   pinned    Bool

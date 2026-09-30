@@ -29,14 +29,14 @@
               "hits": {
                 "nullable": false,
                 "type": {
-                  "codecId": "mongo/int64@1",
+                  "codecId": "mongo/int64Number@1",
                   "kind": "scalar"
                 }
               },
               "large": {
                 "nullable": false,
                 "type": {
-                  "codecId": "mongo/int64@1",
+                  "codecId": "mongo/int64Number@1",
                   "kind": "scalar"
                 }
               },
@@ -95,7 +95,7 @@
                 "many": true,
                 "nullable": false,
                 "type": {
-                  "codecId": "mongo/int64@1",
+                  "codecId": "mongo/int64Number@1",
                   "kind": "scalar"
                 }
               }
@@ -112,7 +112,7 @@
               "zip": {
                 "nullable": false,
                 "type": {
-                  "codecId": "mongo/int64@1",
+                  "codecId": "mongo/int64Number@1",
                   "kind": "scalar"
                 }
               }
