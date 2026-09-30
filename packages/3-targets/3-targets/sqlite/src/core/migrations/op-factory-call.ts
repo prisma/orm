@@ -78,6 +78,7 @@ function renderDdlColumnAsTsCall(column: DdlColumn): string {
   if (column.notNull) opts.push('notNull: true');
   if (column.primaryKey) opts.push('primaryKey: true');
   if (column.default) opts.push(`default: ${renderDdlColumnDefault(column.default)}`);
+  if (column.codecRef) opts.push(`codecRef: ${jsonToTsSource(column.codecRef)}`);
   const optsStr = opts.length > 0 ? `, { ${opts.join(', ')} }` : '';
   return `col(${jsonToTsSource(column.name)}, ${jsonToTsSource(column.type)}${optsStr})`;
 }

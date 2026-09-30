@@ -1,6 +1,6 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { DdlColumn, LiteralColumnDefault } from '@internal/sql-relational-core/ast';
-import { col, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { col, lit, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { describe, expect, it } from 'vitest';
 import { columnExistsAst } from '../../src/contract-free/checks';
 import {
@@ -85,6 +85,19 @@ describe('CreateTableCall', () => {
     const ts = call.renderTypeScript();
     expect(ts).toMatch(/^this\.createTable\(/);
     expect(ts).toContain('col("id", "INTEGER"');
+  });
+
+  it('renderTypeScript() writes each column codec, so the file reads its defaults with the codec', () => {
+    const call = new CreateTableCall('note', [
+      col('at', 'TEXT', {
+        notNull: true,
+        default: lit('2020-01-01T00:00:00Z'),
+        codecRef: { codecId: 'sqlite/datetime@1' },
+      }),
+    ]);
+    expect(call.renderTypeScript()).toBe(
+      'this.createTable({ table: "note", columns: [col("at", "TEXT", { notNull: true, default: lit("2020-01-01T00:00:00Z"), codecRef: { codecId: "sqlite/datetime@1" } })] })',
+    );
   });
 
   it('importRequirements() includes col from the migration module', () => {
