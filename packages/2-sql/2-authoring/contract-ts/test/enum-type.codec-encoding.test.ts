@@ -11,6 +11,7 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { buildSqlContractFromDefinition } from '../src/build-contract';
 import type { ContractDefinition } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
+import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -35,7 +36,7 @@ function stubCodec(id: string, encodeJson: (value: unknown) => JsonValue): Codec
 }
 
 function codecLookupOf(codecs: Record<string, Codec>): CodecLookupWithDescriptors {
-  return { ...emptyCodecLookup, get: (id: string) => codecs[id] };
+  return withDescriptors({ ...emptyCodecLookup, get: (id: string) => codecs[id] });
 }
 
 function definitionWith(enumHandle: ReturnType<typeof enumType>): ContractDefinition {

@@ -9,6 +9,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withDescriptors } from '../../contract-ts/test/with-descriptors';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
@@ -45,7 +46,7 @@ const targetTypesById: Record<string, readonly string[]> = {
   'pg/int4@1': ['int4'],
 };
 
-const testCodecLookup: CodecLookupWithDescriptors = {
+const testCodecLookup: CodecLookupWithDescriptors = withDescriptors({
   get(id: string): Codec | undefined {
     return codecsById[id];
   },
@@ -53,8 +54,7 @@ const testCodecLookup: CodecLookupWithDescriptors = {
     return targetTypesById[id];
   },
   renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
+});
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,

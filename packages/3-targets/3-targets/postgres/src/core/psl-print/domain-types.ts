@@ -36,7 +36,7 @@ function nativeTypeOfMember(
   context: SqlPslBuildContext,
 ): string {
   const { codecId } = type;
-  const descriptor = context.codecLookup.descriptorFor?.(codecId);
+  const descriptor = context.codecLookup.descriptorFor(codecId);
   if (!isPostgresCodecDescriptor(descriptor)) {
     refuseMemberCodecWithoutNativeType(codecId, coordinate);
   }

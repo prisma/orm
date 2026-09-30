@@ -63,20 +63,13 @@ export interface CodecLookup {
     value: JsonValue,
     side: 'output' | 'input',
   ): string | undefined;
-  /**
-   * Codec-id-keyed descriptor accessor. Returns the full registered
-   * {@link AnyCodecDescriptor} for `id`, or `undefined` if no descriptor is
-   * registered. Optional so existing lookups need not provide it; a consumer
-   * that needs more than the derived per-id readers above — e.g. an
-   * authoring-time hook a target-specific descriptor exposes but this
-   * framework interface does not model generically — fetches the descriptor
-   * itself and narrows it with its own structural predicate.
-   */
-  descriptorFor?(id: string): AnyCodecDescriptor | undefined;
 }
 
 /** A {@link CodecLookup} that resolves codec descriptors, which building a column's codec with its type parameters needs. */
 export interface CodecLookupWithDescriptors extends CodecLookup {
+  /**
+   * The registered {@link AnyCodecDescriptor} for `id`, or `undefined` if none is registered. A consumer that needs more than the per-id readers above, such as a column's codec built with its type parameters or an authoring hook a target's descriptor exposes, fetches the descriptor itself. It answers from the same registrations as `get`.
+   */
   descriptorFor(id: string): AnyCodecDescriptor | undefined;
 }
 
@@ -98,11 +91,11 @@ export interface CodecRegistry extends CodecLookupWithDescriptors {
   forColumn(namespaceId: string, table: string, column: string): Codec | undefined;
 }
 
-export const emptyCodecLookup: CodecLookupWithDescriptors = {
+/** A lookup with no codecs. It has no `descriptorFor`, so a stub that adds codecs to it through `get` cannot pass for a lookup of descriptors that answers nothing. */
+export const emptyCodecLookup: CodecLookup = {
   get: () => undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
 };
 
 /**

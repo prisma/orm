@@ -5,7 +5,9 @@ import type { JsonValue } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
 import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
 import {
+  type AnyCodecDescriptor,
   type Codec,
+  type CodecLookupWithDescriptors,
   createDataTypeLookup,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
@@ -32,6 +34,17 @@ const stringCodec: Codec = {
   encodeJson: (value) => value as JsonValue,
   decodeJson: (json) => json,
 };
+
+function codecLookupOf(codec: Codec): CodecLookupWithDescriptors {
+  return {
+    ...emptyCodecLookup,
+    get: (id) => (id === codec.id ? codec : undefined),
+    descriptorFor: (id) =>
+      id === codec.id
+        ? ({ codecId: id, factory: () => () => codec } as unknown as AnyCodecDescriptor)
+        : undefined,
+  };
+}
 
 const enumEntityType = {
   kind: 'entity',
@@ -72,7 +85,7 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       modelAttributes: {},
       attributeSpecs: { model: {}, field: {} },
     },
-    codecLookup: emptyCodecLookup,
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
@@ -210,10 +223,7 @@ model User {
     const result = await contract.source.load(
       createMongoTestContext({
         resolvedInputs: [schemaPath],
-        codecLookup: {
-          ...emptyCodecLookup,
-          get: (id) => (id === stringCodec.id ? stringCodec : undefined),
-        },
+        codecLookup: codecLookupOf(stringCodec),
         authoringContributions: {
           ...baseContributions,
           entityTypes: { enum: enumEntityType },

@@ -17,7 +17,6 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
@@ -43,6 +42,7 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../../../src/core/codec-registry';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { createPostgresTypeMap } from '../../../src/core/psl-build/postgres-type-map';
@@ -82,23 +82,7 @@ const target = {
   authoring: { type: authoringTypes },
 };
 
-const textCodec: Codec = {
-  id: 'pg/text@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
-};
-
-const codecLookup: CodecLookupWithDescriptors = {
-  get: (id) => (id === 'pg/text@1' ? textCodec : undefined),
-  targetTypesFor: (id) => (id === 'pg/text@1' ? ['text'] : undefined),
-  renderOutputTypeFor: () => undefined,
-  descriptorFor: () => undefined,
-};
+const codecLookup = createPostgresBuiltinCodecLookup();
 
 function print(ast: PslDocumentAst): string {
   return printPsl(ast, { pslBlockDescriptors: assembled.pslBlockDescriptors });

@@ -13,7 +13,6 @@ import {
   type CodecTrait,
   codecForRef,
   dataTypeId,
-  emptyCodecLookup,
   materializeCodec,
 } from '../src/exports/codec';
 
@@ -119,8 +118,7 @@ test('materializeCodec resolves a parameterized codec whose id reads the descrip
   expect(codec.id).toBe('demo/vector@1');
 });
 
-const fixtureLookup: CodecLookupWithDescriptors = {
-  ...emptyCodecLookup,
+const fixtureLookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'> = {
   descriptorFor: (id) =>
     [int4FixtureDescriptor, vectorFixtureDescriptor].find(
       (descriptor) => descriptor.codecId === id,
