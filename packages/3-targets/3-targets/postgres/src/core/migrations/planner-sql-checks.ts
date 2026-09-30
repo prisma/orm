@@ -30,6 +30,8 @@ const FORMAT_TYPE_DISPLAY: ReadonlyMap<string, string> = new Map([
   ['timestamptz', 'timestamp with time zone'],
   ['time', 'time without time zone'],
   ['timetz', 'time with time zone'],
+  ['character', 'character(1)'],
+  ['bit', 'bit(1)'],
 ]);
 
 const UNQUOTED_POSTGRES_IDENTIFIER_PATTERN = /^[a-z_][a-z0-9_$]*$/;

@@ -1,6 +1,5 @@
 import type { ColumnDefault } from '@internal/contract/types';
 import type { SqlControlTargetDescriptor } from '@internal/family-sql/control';
-import { buildNativeTypeExpander } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type {
   ControlTargetInstance,
@@ -8,7 +7,6 @@ import type {
 } from '@internal/framework-components/control';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { postgresResolveDefault } from '../core/default-normalizer';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { contractToPostgresDatabaseSchemaNode } from '../core/migrations/contract-to-postgres-database-schema-node';
@@ -63,14 +61,14 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
         >(createPostgresMigrationRunner(family));
       },
       contractToSchema(contract, frameworkComponents) {
-        const expander = buildNativeTypeExpander(frameworkComponents);
+        const expander = buildPostgresNativeTypeExpander(frameworkComponents);
         const postgresContract = blindCast<
           PostgresContract | null,
           'the family resolver only binds this hook for a Postgres-target contract'
         >(contract);
         return contractToPostgresDatabaseSchemaNode(postgresContract, {
           annotationNamespace: 'pg',
-          ...ifDefined('expandNativeType', expander),
+          expandNativeType: expander,
           renderDefault: postgresRenderDefault,
           resolveDefault: postgresResolveDefault,
         });
@@ -111,5 +109,7 @@ export {
   postgresNativeAuthoringTypes,
   postgresScalarAuthoringTypes,
 } from '../core/type-constructors';
+
+import { buildPostgresNativeTypeExpander } from '../core/migrations/native-type-expander';
 
 export default postgresTargetDescriptor;

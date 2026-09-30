@@ -38,6 +38,16 @@ describe('buildExpectedFormatType', () => {
     });
   });
 
+  it('names a fixed-length type without a length as format_type does, with a length of 1', () => {
+    expect([
+      buildExpectedFormatType(
+        { nativeType: 'character', codecId: 'sql/char@1', nullable: false },
+        noHooks,
+      ),
+      buildExpectedFormatType({ nativeType: 'bit', codecId: 'pg/bit@1', nullable: false }, noHooks),
+    ]).toEqual(['character(1)', 'bit(1)']);
+  });
+
   describe('unmapped native types pass through', () => {
     it('returns nativeType as-is for text', () => {
       expect(

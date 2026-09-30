@@ -1,10 +1,13 @@
+import { int4Column } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { Contract } from '@internal/contract/types';
 import postgresControlDriver from '@internal/driver-postgres/control';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
+import { defineContract, field, model } from '@internal/postgres/contract-builder';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { pgBitColumn, pgCharColumn } from '@internal/target-postgres/codecs';
 import postgres from '@internal/target-postgres/control';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -69,7 +72,15 @@ async function applyAndVerify(
   options: { readonly strict: boolean } = { strict: false },
 ) {
   const authored = await authorSqlContractFromPsl(schema);
-  const contract = authored.contract!;
+  return applyAndVerifyContract(authored.contract!, columns, options);
+}
+
+/** Applies a contract to a new database, then verifies it and plans again against what was applied. */
+async function applyAndVerifyContract(
+  contract: Contract<SqlStorage>,
+  columns: readonly string[],
+  options: { readonly strict: boolean },
+) {
   const database = await createDevDatabase();
   const driver = await postgresControlDriver.create(database.connectionString);
   try {
@@ -184,6 +195,63 @@ model Amount {
           { kind: 'literal', value: '12300' },
           { kind: 'literal', value: ['100', '-9999900'] },
         ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+/** `sql/char@1` as PostgreSQL names its column type, the way the PSL `Char` type writes it. */
+const sqlCharacter = { codecId: 'sql/char@1', nativeType: 'character' } as const;
+
+describe('a fixed-length column written without a length', () => {
+  it(
+    'in PSL, a bare Char with and without a default applies, verifies strictly and plans no change',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Flag {
+  id      Int  @id
+  bare    Char
+  lettered Char @default("x")
+}
+`,
+          ['bare', 'lettered'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [undefined, { kind: 'literal', value: 'x' }],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'in TypeScript, bare sql/char@1, pg/char@1 and pg/bit@1 columns apply, verify strictly and plan no change',
+    async () => {
+      const contract = defineContract({
+        models: {
+          Flag: model('Flag', {
+            fields: {
+              id: field.column(int4Column).id(),
+              sqlChar: field.column(sqlCharacter).column('sql_char'),
+              pgChar: field.column(pgCharColumn()).column('pg_char').default('y'),
+              pgBit: field.column(pgBitColumn()).column('pg_bit').default('1'),
+            },
+          }).sql({ table: 'flag' }),
+        },
+      }) as unknown as Contract<SqlStorage>;
+      expect(
+        await applyAndVerifyContract(contract, ['sql_char', 'pg_char', 'pg_bit'], { strict: true }),
+      ).toEqual({
+        defaults: [undefined, { kind: 'literal', value: 'y' }, { kind: 'literal', value: '1' }],
         applied: true,
         issues: [],
         replannedOperations: [],
