@@ -15,7 +15,10 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { adapterTypeConstructors } from './adapter-type-constructors';
+import {
+  postgresNativeAuthoringTypes,
+  postgresScalarAuthoringTypes,
+} from '../../src/core/type-constructors';
 
 /**
  * Wraps a flat `{ tables, annotations? }` introspection fixture into the
@@ -63,12 +66,16 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
 }
 
 /**
- * The stack `contract emit` reads an inferred schema with: the adapter's type constructors for the
- * type names infer writes, the target's own, and the target's codecs and data types.
+ * The stack `contract emit` reads an inferred schema with: the type constructors the adapter
+ * contributes, the target's own, and the target's codecs and data types.
  */
 export const inferBuildContext: SqlPslBuildContext = {
   authoringContributions: {
-    type: { ...postgresAuthoringTypes, ...adapterTypeConstructors },
+    type: {
+      ...postgresAuthoringTypes,
+      ...postgresScalarAuthoringTypes,
+      ...postgresNativeAuthoringTypes,
+    },
     dataTypes: postgresDataTypeEntries(),
   },
   codecLookup: createPostgresBuiltinCodecLookup(),

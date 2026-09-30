@@ -146,6 +146,7 @@ import {
 import { pgTimestamptzDateDescriptor } from './date-codecs';
 import { postgresError } from './errors';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
+import { NUMERIC_PRECISION_RANGE, NUMERIC_SCALE_RANGE } from './numeric-limits';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import {
   pgDateTemporalDescriptor,
@@ -168,8 +169,12 @@ const lengthParamsSchema = arktype({
 }) satisfies StandardSchemaV1<LengthParams>;
 
 const numericParamsSchema = arktype({
-  'precision?': 'number.integer > 0 & number.integer <= 1000',
-  'scale?': 'number.integer >= -1000 & number.integer <= 1000',
+  'precision?': arktype('number.integer')
+    .atLeast(NUMERIC_PRECISION_RANGE.min)
+    .atMost(NUMERIC_PRECISION_RANGE.max),
+  'scale?': arktype('number.integer')
+    .atLeast(NUMERIC_SCALE_RANGE.min)
+    .atMost(NUMERIC_SCALE_RANGE.max),
 }) satisfies StandardSchemaV1<NumericParams>;
 
 const PG_TEXT_NATIVE_TYPE = 'text';

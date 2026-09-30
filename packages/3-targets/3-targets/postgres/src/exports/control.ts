@@ -107,5 +107,9 @@ export {
   PLAIN_DATE_TIME_NOW_GENERATOR_ID,
   plainDateTimeNowControlDescriptor,
 } from '../core/plain-date-time-now-generator';
+export {
+  postgresNativeAuthoringTypes,
+  postgresScalarAuthoringTypes,
+} from '../core/type-constructors';
 
 export default postgresTargetDescriptor;

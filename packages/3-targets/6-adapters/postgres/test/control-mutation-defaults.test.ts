@@ -7,13 +7,15 @@ import {
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import {
+  postgresNativeAuthoringTypes,
+  postgresScalarAuthoringTypes,
+} from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
 import {
   createPostgresDefaultFunctionRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
   postgresAuthoringTypes,
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
 } from '../src/core/control-mutation-defaults';
 import { createPostgresDataTypeEntries } from '../src/core/data-type-authoring';
 import postgresAdapterDescriptor from '../src/exports/control';
