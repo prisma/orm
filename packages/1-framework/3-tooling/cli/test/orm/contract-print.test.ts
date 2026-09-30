@@ -39,7 +39,11 @@ describe('contract print', () => {
         label:
           'Write the PSL to a file with --output <path>, then point contract in prisma.config.ts at that file',
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
     expect(await readdir(dir)).toEqual([]);
   });
@@ -215,7 +219,11 @@ describe('contract print', () => {
         kind: 'user-choice',
         label: 'Point contract in prisma.config.ts at generated/contract.prisma',
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
     expect(run.presented?.presentation.stdout).toEqual([]);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
@@ -250,7 +258,11 @@ describe('contract print', () => {
         label:
           "Point contract in prisma.config.ts at generated/contract.prisma, through a PSL source that sets defaultControlPolicy: 'external'",
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
   });
 
@@ -315,7 +327,11 @@ describe('contract print', () => {
         label:
           "With contract: './prisma/contract.prisma' and no output in prisma.config.ts, contract emit writes prisma/contract.json and prisma/contract.d.ts, not prisma/schema.json and prisma/schema.d.ts",
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
   });
 
@@ -347,7 +363,11 @@ describe('contract print', () => {
         label:
           "With contract: './src/prisma/contract.prisma' and no output in prisma.config.ts, contract emit writes src/prisma/contract.json and src/prisma/contract.d.ts, not prisma/schema.json and prisma/schema.d.ts",
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
   });
 

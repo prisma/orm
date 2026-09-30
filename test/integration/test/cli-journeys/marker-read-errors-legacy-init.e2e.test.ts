@@ -57,7 +57,7 @@ withTempDir(({ createTempDir }) => {
           expect.objectContaining({
             kind: 'run-command',
             label: 'Reinitialise the marker table from a clean baseline',
-            command: '{bin} db init',
+            command: 'prisma-test db init',
           }),
         );
       },

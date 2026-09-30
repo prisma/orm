@@ -124,7 +124,7 @@ describe('sign a database this toolchain has never seen, then transition to wire
         {
           kind: 'run-command',
           label: 'Change the database to match the contract, then sign again',
-          command: '{bin} db update',
+          command: 'prisma-test db update',
         },
         {
           kind: 'user-choice',
