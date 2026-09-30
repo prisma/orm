@@ -390,13 +390,13 @@ describe('sql-target-family-hook', () => {
     expect(types).toContain('readonly User: {');
     expect(types).toContain('storage: { readonly table: "user"');
     expect(types).toContain(
-      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" }; readonly many: false }',
+      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" } }',
     );
     expect(types).toContain(
-      'readonly email: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: false }',
+      'readonly email: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
     );
     expect(types).toContain(
-      'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: false }',
+      'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
     );
     expect(types).not.toContain('modelToTable');
     expect(types).not.toContain('fieldToColumn');

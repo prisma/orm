@@ -74,18 +74,21 @@ type ContractBase = Omit<
           readonly tables: {
             readonly account: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly email: { readonly many: false;
+                readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
@@ -104,7 +107,7 @@ type ContractBase = Omit<
     {
       readonly account: {
         readonly fields: {
-          readonly id: { readonly many: false;
+          readonly id: {
             readonly nullable: false;
             readonly type: {
               readonly kind: 'scalar';
@@ -112,11 +115,11 @@ type ContractBase = Omit<
               readonly typeParams: { readonly length: 36 };
             };
           };
-          readonly email: { readonly many: false;
+          readonly email: {
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly name: { readonly many: false;
+          readonly name: {
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };

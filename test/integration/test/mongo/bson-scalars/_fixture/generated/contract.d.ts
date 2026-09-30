@@ -524,12 +524,10 @@ type ContractBase = Omit<
               readonly _id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: false;
               };
               readonly kind: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -615,12 +613,10 @@ type ContractBase = Omit<
               readonly exif: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
-                readonly many: false;
               };
               readonly ownerId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: false;
               };
               readonly stamps: {
                 readonly nullable: false;
@@ -640,37 +636,30 @@ type ContractBase = Omit<
               readonly _id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: false;
               };
               readonly meta: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
-                readonly many: false;
               };
               readonly notes: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
-                readonly many: false;
               };
               readonly price: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/decimal128@1' };
-                readonly many: false;
               };
               readonly raw: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bson@1' };
-                readonly many: false;
               };
               readonly thumbnail: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/binary@1' };
-                readonly many: false;
               };
               readonly views: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64@1' };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -786,7 +775,6 @@ type ContractBase = Omit<
               readonly note: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
-                readonly many: false;
               };
             };
           };
@@ -837,7 +825,6 @@ type ContractBase = Omit<
         readonly note: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/json@1' };
-          readonly many: false;
         };
       };
     };

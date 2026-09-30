@@ -351,12 +351,10 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/numeric@1';
                   readonly typeParams: { readonly precision: 65; readonly scale: 30 };
                 };
-                readonly many: false;
               };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;

@@ -333,8 +333,8 @@ describe('value objects', () => {
       withAddress({
         ...TEXT_FIELD,
         valueSet: {
-          plane: 'storage',
-          entityKind: 'valueSet',
+          plane: 'domain',
+          entityKind: 'enum',
           namespaceId: 'public',
           entityName: 'Label',
         },

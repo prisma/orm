@@ -313,7 +313,6 @@ type ContractBase = Omit<
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-                readonly many: false;
               };
               readonly peak: {
                 readonly nullable: false;
@@ -321,7 +320,6 @@ type ContractBase = Omit<
                   readonly kind: 'scalar';
                   readonly codecId: 'sqlite/bigintnumber@1';
                 };
-                readonly many: false;
               };
             };
             readonly relations: {
@@ -351,12 +349,10 @@ type ContractBase = Omit<
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-                readonly many: false;
               };
               readonly meterId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/integer@1' };
-                readonly many: false;
               };
               readonly reading: {
                 readonly nullable: false;
@@ -364,7 +360,6 @@ type ContractBase = Omit<
                   readonly kind: 'scalar';
                   readonly codecId: 'sqlite/bigintnumber@1';
                 };
-                readonly many: false;
               };
             };
             readonly relations: {

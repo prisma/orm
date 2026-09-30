@@ -361,7 +361,6 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly typeParams: { readonly typeName: 'TestEnum' };
                 };
-                readonly many: false;
               };
               readonly enum2: {
                 readonly nullable: false;
@@ -375,7 +374,6 @@ type ContractBase = Omit<
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;

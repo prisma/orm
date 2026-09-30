@@ -331,7 +331,7 @@ function validateFieldModifiers(
       'elementNullable' in many &&
       typeof many.elementNullable === 'boolean';
 
-    if (many !== false && !isList) {
+    if (many !== undefined && many !== false && !isList) {
       errors.push(
         `${location} has invalid "many"; expected false or an elementNullable descriptor`,
       );

@@ -84,43 +84,51 @@ type ContractBase = Omit<
           readonly tables: {
             readonly account: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly email: { readonly many: false;
+                readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly phone: { readonly many: false;
+                readonly phone: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly avatar: { readonly many: false;
+                readonly avatar: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly bio: { readonly many: false;
+                readonly bio: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly locale: { readonly many: false;
+                readonly locale: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly verified: { readonly many: false;
+                readonly verified: {
+                  readonly many: false;
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
@@ -143,7 +151,7 @@ type ContractBase = Omit<
     {
       readonly account: {
         readonly fields: {
-          readonly id: { readonly many: false;
+          readonly id: {
             readonly nullable: false;
             readonly type: {
               readonly kind: 'scalar';
@@ -151,31 +159,31 @@ type ContractBase = Omit<
               readonly typeParams: { readonly length: 36 };
             };
           };
-          readonly email: { readonly many: false;
+          readonly email: {
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly name: { readonly many: false;
+          readonly name: {
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly phone: { readonly many: false;
+          readonly phone: {
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly avatar: { readonly many: false;
+          readonly avatar: {
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly bio: { readonly many: false;
+          readonly bio: {
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly locale: { readonly many: false;
+          readonly locale: {
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly verified: { readonly many: false;
+          readonly verified: {
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
           };

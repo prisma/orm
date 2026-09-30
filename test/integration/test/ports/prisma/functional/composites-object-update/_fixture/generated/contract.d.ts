@@ -210,17 +210,14 @@ type ContractBase = Omit<
               readonly _id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: false;
               };
               readonly content: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContent' };
-                readonly many: false;
               };
               readonly country: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -231,17 +228,14 @@ type ContractBase = Omit<
               readonly _id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
-                readonly many: false;
               };
               readonly content: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContent' };
-                readonly many: false;
               };
               readonly country: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -254,7 +248,6 @@ type ContractBase = Omit<
               readonly text: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: false;
               };
               readonly upvotes: {
                 readonly nullable: false;
@@ -271,12 +264,10 @@ type ContractBase = Omit<
               readonly userId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: false;
               };
               readonly vote: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-                readonly many: false;
               };
             };
           };
@@ -293,7 +284,6 @@ type ContractBase = Omit<
         readonly text: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-          readonly many: false;
         };
         readonly upvotes: {
           readonly nullable: false;
@@ -307,12 +297,10 @@ type ContractBase = Omit<
         readonly userId: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-          readonly many: false;
         };
         readonly vote: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-          readonly many: false;
         };
       };
     };

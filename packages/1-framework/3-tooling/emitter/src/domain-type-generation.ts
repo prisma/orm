@@ -78,10 +78,9 @@ export function generateRootsType(roots: Record<string, CrossReference> | undefi
 }
 
 function contractFieldModifierSuffix(field: ContractField): string {
-  const many =
-    field.many === false
-      ? '; readonly many: false'
-      : `; readonly many: { readonly elementNullable: ${field.many.elementNullable} }`;
+  const many = field.many
+    ? `; readonly many: { readonly elementNullable: ${field.many.elementNullable} }`
+    : '';
   const dict = field.dict === true ? '; readonly dict: true' : '';
   return many + dict;
 }
@@ -299,7 +298,7 @@ export type ResolvedFieldType = { readonly input: string; readonly output: strin
 
 function applyModifiers(base: string, field: ContractField): string {
   let result = base;
-  if (field.many !== false) {
+  if (field.many) {
     if (field.many.elementNullable) result = `${result} | null`;
     result = `ReadonlyArray<${result}>`;
   }

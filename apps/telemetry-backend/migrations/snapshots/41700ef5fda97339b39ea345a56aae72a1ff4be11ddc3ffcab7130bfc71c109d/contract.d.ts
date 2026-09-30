@@ -93,7 +93,8 @@ type ContractBase = ContractType<
         readonly tables: {
           readonly telemetry_event: {
             columns: {
-              readonly id: { readonly many: false;
+              readonly id: {
+                readonly many: false;
                 readonly nativeType: 'int8';
                 readonly codecId: 'pg/int8@1';
                 readonly nullable: false;
@@ -102,73 +103,87 @@ type ContractBase = ContractType<
                   readonly expression: 'autoincrement()';
                 };
               };
-              readonly ingestedAt: { readonly many: false;
+              readonly ingestedAt: {
+                readonly many: false;
                 readonly nativeType: 'timestamptz';
                 readonly codecId: 'pg/timestamptz@1';
                 readonly nullable: false;
                 readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
               };
-              readonly installationId: { readonly many: false;
+              readonly installationId: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly version: { readonly many: false;
+              readonly version: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly command: { readonly many: false;
+              readonly command: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly flags: { readonly many: false;
+              readonly flags: {
+                readonly many: false;
                 readonly nativeType: 'jsonb';
                 readonly codecId: 'pg/jsonb@1';
                 readonly nullable: false;
               };
-              readonly runtimeName: { readonly many: false;
+              readonly runtimeName: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly runtimeVersion: { readonly many: false;
+              readonly runtimeVersion: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly os: { readonly many: false;
+              readonly os: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly arch: { readonly many: false;
+              readonly arch: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };
-              readonly packageManager: { readonly many: false;
+              readonly packageManager: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: true;
               };
-              readonly databaseTarget: { readonly many: false;
+              readonly databaseTarget: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: true;
               };
-              readonly tsVersion: { readonly many: false;
+              readonly tsVersion: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: true;
               };
-              readonly agent: { readonly many: false;
+              readonly agent: {
+                readonly many: false;
                 readonly nativeType: 'text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: true;
               };
-              readonly extensions: { readonly many: false;
+              readonly extensions: {
+                readonly many: false;
                 readonly nativeType: 'jsonb';
                 readonly codecId: 'pg/jsonb@1';
                 readonly nullable: false;
@@ -187,67 +202,67 @@ type ContractBase = ContractType<
   {
     readonly TelemetryEvent: {
       readonly fields: {
-        readonly id: { readonly many: false;
+        readonly id: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
         };
-        readonly ingestedAt: { readonly many: false;
+        readonly ingestedAt: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/timestamptz@1' };
         };
-        readonly installationId: { readonly many: false;
+        readonly installationId: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly version: { readonly many: false;
+        readonly version: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly command: { readonly many: false;
+        readonly command: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
         readonly flags: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-          readonly many: { readonly elementNullable: false; };
+          readonly many: { readonly elementNullable: false };
         };
-        readonly runtimeName: { readonly many: false;
+        readonly runtimeName: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly runtimeVersion: { readonly many: false;
+        readonly runtimeVersion: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly os: { readonly many: false;
+        readonly os: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly arch: { readonly many: false;
+        readonly arch: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly packageManager: { readonly many: false;
+        readonly packageManager: {
           readonly nullable: true;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly databaseTarget: { readonly many: false;
+        readonly databaseTarget: {
           readonly nullable: true;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly tsVersion: { readonly many: false;
+        readonly tsVersion: {
           readonly nullable: true;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly agent: { readonly many: false;
+        readonly agent: {
           readonly nullable: true;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
         readonly extensions: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-          readonly many: { readonly elementNullable: false; };
+          readonly many: { readonly elementNullable: false };
         };
       };
       readonly relations: Record<string, never>;

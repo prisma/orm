@@ -23,22 +23,6 @@ function makeMinimalModel(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function withExplicitFieldCardinality(contract: DomainContractShape): DomainContractShape {
-  for (const namespace of Object.values(contract.domain.namespaces)) {
-    for (const model of Object.values(namespace.models)) {
-      for (const field of Object.values(model.fields) as Record<string, unknown>[]) {
-        if (field['many'] === undefined) field['many'] = false;
-      }
-    }
-    for (const valueObject of Object.values(namespace.valueObjects ?? {})) {
-      for (const field of Object.values(valueObject.fields) as Record<string, unknown>[]) {
-        if (field['many'] === undefined) field['many'] = false;
-      }
-    }
-  }
-  return contract;
-}
-
 function makeValidContract(overrides: Record<string, unknown> = {}): DomainContractShape {
   const defaultModels = {
     Item: makeMinimalModel({
@@ -58,7 +42,7 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
       ? (modelsOverride as Record<string, ReturnType<typeof makeMinimalModel>>)
       : {}),
   };
-  return withExplicitFieldCardinality({
+  return {
     roots: (rootsOverride as DomainContractShape['roots']) ?? { items: crossRef('Item') },
     domain:
       domainOverride !== undefined
@@ -76,7 +60,7 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
             ),
           }),
     ...rest,
-  } as DomainContractShape);
+  } as DomainContractShape;
 }
 
 describe('validateContractDomain()', () => {

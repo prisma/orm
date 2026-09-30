@@ -30,14 +30,14 @@ QualifiedName (argList)? (?)? ([])? (?)?
 
 ### Framework IR
 
-`ContractField.many` becomes required internally as `false | { readonly elementNullable: boolean }`. Non-list fields explicitly carry `many: false`; lists carry a descriptor for strict or nullable elements. Serialized model and value-object fields may omit `many` for scalar cardinality, and deserialization normalizes omission to `many: false`. Validation rejects explicit malformed `many` values, including legacy `many: true` and descriptors without a boolean `elementNullable`, as well as sibling `elementNullable` shapes. Canonicalization omits `many: false` again while preserving list descriptors, including nested `elementNullable: false`.
+`ContractField.many` is optional with type `false | { readonly elementNullable: boolean }`. Non-list fields omit it or carry `many: false`; lists carry a descriptor for strict or nullable elements. Serialized model and value-object fields may omit `many` for scalar cardinality, and deserialization normalizes omission to `many: false`. Validation rejects explicit malformed `many` values, including legacy `many: true` and descriptors without a boolean `elementNullable`, as well as sibling `elementNullable` shapes. Canonicalization omits `many: false` again while preserving list descriptors, including nested `elementNullable: false`.
 
 ## Slice Definition of Done
 
 Beyond the inherited team-DoD floor and the project-DoD:
 
 - [ ] All four spellings (`Foo`, `Foo?`, `Foo[]`, `Foo?[]`, `Foo[]?`, `Foo?[]?`) parse; the AST/`FieldSymbol` expose element vs list optionality distinctly; `Foo??` (and any other malformed `?`/`[]` combo) produces a clear diagnostic. Parser tests cover each.
-- [x] `ContractField.many` carries required internal `false | { elementNullable: boolean }`; deserialization accepts omitted domain `many` as scalar and normalizes it to `false`, while validation rejects malformed explicit values and legacy parallel shapes. Canonicalization omits `many: false` and preserves list descriptors, including nested `elementNullable: false`.
+- [x] `ContractField.many` optionally carries `false | { elementNullable: boolean }`; deserialization accepts omitted domain `many` as scalar and normalizes it to `false`, while validation rejects malformed explicit values and legacy parallel shapes. Canonicalization omits `many: false` and preserves list descriptors, including nested `elementNullable: false`.
 - [x] The parser's token formatter round-trips all six spellings above verbatim, covered by formatter round-trip tests; the semantic printer remains unchanged.
 - [x] The representation work is confined to the framework contract and parser/token-formatter surfaces; family interpreter, storage, typing, and enforcement changes are downstream.
 - [ ] Validation gates green: `pnpm --filter @prisma-next/psl-parser test` + typecheck, `pnpm --filter @prisma-next/psl-printer test` + typecheck, `pnpm --filter @prisma-next/contract test` + typecheck, `pnpm fixtures:check`.
@@ -46,5 +46,5 @@ Beyond the inherited team-DoD floor and the project-DoD:
 
 - **`Foo?` with no brackets** must remain field-nullable (not element) — the leading-`?` interpretation only applies when `[]` follows.
 - **`Foo??`** and **`Foo?[]??`** are malformed → diagnostic, not a silent parse.
-- **Canonicalization shape**: cardinality is explicit internally, but serialized model and value-object fields omit scalar `many: false`, preserving existing scalar field JSON. Lists use `many: { elementNullable: false | true }`, retaining nested `elementNullable: false`; list fixture and hash changes are intentional consequences of the nested representation.
+- **Canonicalization shape**: domain cardinality is optional, and serialized model and value-object fields omit scalar `many: false`, preserving existing scalar field JSON. Lists use `many: { elementNullable: false | true }`, retaining nested `elementNullable: false`; list fixture and hash changes are intentional consequences of the nested representation.
 - **Whitespace/formatting** in the printer: `Foo?[]?` must not gain or lose spaces around `?`/`[]` (the `format/emit.ts` `spaceBetween` rules already handle `Question`/`LBracket`; verify they cover the leading `?`).

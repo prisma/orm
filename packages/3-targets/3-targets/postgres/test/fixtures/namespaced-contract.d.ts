@@ -17,10 +17,7 @@ import type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 
-import type {
-  ContractWithTypeMaps,
-  TypeMaps as TypeMapsType,
-} from '@internal/sql-contract/types';
+import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -133,12 +130,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly users: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly token: { readonly many: false;
+                readonly token: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -159,12 +158,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly profile: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly user_id: { readonly many: false;
+                readonly user_id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -197,12 +198,14 @@ type ContractBase = Omit<
             };
             readonly users: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly email: { readonly many: false;
+                readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -234,11 +237,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly User: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly token: { readonly many: false;
+              readonly token: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -259,11 +262,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly Profile: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly userId: { readonly many: false;
+              readonly userId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -290,11 +293,11 @@ type ContractBase = Omit<
           };
           readonly User: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly email: { readonly many: false;
+              readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };

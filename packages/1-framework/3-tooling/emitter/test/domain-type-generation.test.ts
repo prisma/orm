@@ -155,12 +155,12 @@ describe('generateModelFieldsType', () => {
     expect(generateModelFieldsType({})).toBe('Record<string, never>');
   });
 
-  it('generates field with type descriptor and nullable', () => {
+  it.each([{}, { many: false as const }])('omits scalar cardinality for %j', (cardinality) => {
     const result = generateModelFieldsType({
-      name: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false, many: false },
+      name: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: false, ...cardinality },
     });
     expect(result).toBe(
-      '{ readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/text@1" }; readonly many: false } }',
+      '{ readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/text@1" } } }',
     );
   });
 
@@ -170,10 +170,10 @@ describe('generateModelFieldsType', () => {
       email: { type: { kind: 'scalar', codecId: 'sql/text@1' }, nullable: true, many: false },
     });
     expect(result).toContain(
-      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/int4@1" }; readonly many: false }',
+      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/int4@1" } }',
     );
     expect(result).toContain(
-      'readonly email: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/text@1" }; readonly many: false }',
+      'readonly email: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "sql/text@1" } }',
     );
   });
 
@@ -887,7 +887,7 @@ describe('generateValueObjectType', () => {
 });
 
 describe('generateContractFieldDescriptor', () => {
-  it('generates scalar field descriptor with explicit many: false', () => {
+  it('omits explicit scalar cardinality from field descriptors', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
@@ -895,7 +895,7 @@ describe('generateContractFieldDescriptor', () => {
     };
     const result = generateContractFieldDescriptor('name', field);
     expect(result).toBe(
-      'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: false }',
+      'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
     );
   });
 
@@ -907,7 +907,7 @@ describe('generateContractFieldDescriptor', () => {
     };
     const result = generateContractFieldDescriptor('homeAddress', field);
     expect(result).toBe(
-      'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: false }',
+      'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
     );
   });
 

@@ -38,7 +38,7 @@ This distinction also crosses architectural layers. The domain contract needs el
 
 ### Element nullability is an independent field-shape axis
 
-In memory, `ContractField.many` is required and has type `false | { elementNullable: boolean }`. A non-list field carries `many: false`; a list field carries a descriptor that records whether its elements are nullable. Nesting the element property makes the invalid state “non-list field with nullable elements” unrepresentable.
+`ContractField.many` is optional and has type `false | { elementNullable: boolean }` when present. Omission and `many: false` both mean a non-list field; a list field carries a descriptor that records whether its elements are nullable. Nesting the element property makes the invalid state “non-list field with nullable elements” unrepresentable.
 
 In serialized model and value-object fields, omitted `many` means scalar cardinality. Deserialization normalizes it to `many: false`; canonical emission omits `many: false` again while preserving list descriptors, including nested `elementNullable: false`. This keeps scalar field JSON unchanged. Explicit malformed `many` values, including legacy `many: true` and descriptors without a boolean `elementNullable`, remain invalid, as do sibling `elementNullable` shapes.
 

@@ -419,12 +419,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly _PostToTag: {
               columns: {
-                readonly A: { readonly many: false;
+                readonly A: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly B: { readonly many: false;
+                readonly B: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -468,7 +470,8 @@ type ContractBase = Omit<
             };
             readonly Post: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -477,17 +480,20 @@ type ContractBase = Omit<
                     readonly expression: 'autoincrement()';
                   };
                 };
-                readonly title: { readonly many: false;
+                readonly title: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly content: { readonly many: false;
+                readonly content: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly published: { readonly many: false;
+                readonly published: {
+                  readonly many: false;
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
@@ -496,7 +502,8 @@ type ContractBase = Omit<
                     readonly value: DefaultLiteralValue<'pg/bool@1', false>;
                   };
                 };
-                readonly viewCount: { readonly many: false;
+                readonly viewCount: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -505,7 +512,8 @@ type ContractBase = Omit<
                     readonly value: DefaultLiteralValue<'pg/int4@1', 0>;
                   };
                 };
-                readonly authorId: { readonly many: false;
+                readonly authorId: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -531,7 +539,8 @@ type ContractBase = Omit<
             };
             readonly Tag: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -540,7 +549,8 @@ type ContractBase = Omit<
                     readonly expression: 'autoincrement()';
                   };
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -559,7 +569,8 @@ type ContractBase = Omit<
             };
             readonly User: {
               columns: {
-                readonly id: { readonly many: false;
+                readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -568,17 +579,20 @@ type ContractBase = Omit<
                     readonly expression: 'autoincrement()';
                   };
                 };
-                readonly email: { readonly many: false;
+                readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly name: { readonly many: false;
+                readonly name: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly role: { readonly many: false;
+                readonly role: {
+                  readonly many: false;
                   readonly nativeType: 'Role';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
@@ -588,14 +602,16 @@ type ContractBase = Omit<
                   };
                   readonly typeParams: { readonly typeName: 'Role' };
                 };
-                readonly createdAt: { readonly many: false;
+                readonly createdAt: {
+                  readonly many: false;
                   readonly nativeType: 'timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                   readonly typeParams: { readonly precision: 3 };
                 };
-                readonly updatedAt: { readonly many: false;
+                readonly updatedAt: {
+                  readonly many: false;
                   readonly nativeType: 'timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
@@ -644,27 +660,27 @@ type ContractBase = Omit<
         readonly models: {
           readonly Post: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly title: { readonly many: false;
+              readonly title: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly content: { readonly many: false;
+              readonly content: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly published: { readonly many: false;
+              readonly published: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
-              readonly viewCount: { readonly many: false;
+              readonly viewCount: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly authorId: { readonly many: false;
+              readonly authorId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -710,11 +726,11 @@ type ContractBase = Omit<
           };
           readonly PostToTag: {
             readonly fields: {
-              readonly A: { readonly many: false;
+              readonly A: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly B: { readonly many: false;
+              readonly B: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -750,11 +766,11 @@ type ContractBase = Omit<
           };
           readonly Tag: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly name: { readonly many: false;
+              readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -787,19 +803,19 @@ type ContractBase = Omit<
           };
           readonly User: {
             readonly fields: {
-              readonly id: { readonly many: false;
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly email: { readonly many: false;
+              readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly name: { readonly many: false;
+              readonly name: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly role: { readonly many: false;
+              readonly role: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
@@ -807,7 +823,7 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly typeName: 'Role' };
                 };
               };
-              readonly createdAt: { readonly many: false;
+              readonly createdAt: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
@@ -815,7 +831,7 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly precision: 3 };
                 };
               };
-              readonly updatedAt: { readonly many: false;
+              readonly updatedAt: {
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';

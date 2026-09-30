@@ -617,10 +617,10 @@ describe('sql-target-family-hook', () => {
 
     const types = generateContractDts(ir, sqlEmission, [], testHashes);
     expect(types).toContain(
-      'readonly name: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: false }',
+      'readonly name: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
     );
     expect(types).toContain(
-      'readonly email: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: false }',
+      'readonly email: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
     );
   });
 
@@ -661,7 +661,7 @@ describe('sql-target-family-hook', () => {
 
     const types = generateContractDts(ir, sqlEmission, [], testHashes);
     expect(types).toContain(
-      'readonly email: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" }; readonly many: false }',
+      'readonly email: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/text@1" } }',
     );
   });
 
@@ -699,7 +699,7 @@ describe('sql-target-family-hook', () => {
 
     const types = generateContractDts(ir, sqlEmission, [], testHashes);
     expect(types).toContain(
-      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" }; readonly many: false }',
+      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" } }',
     );
   });
 
@@ -764,10 +764,10 @@ describe('sql-target-family-hook', () => {
 
     const types = generateContractDts(ir, sqlEmission, [], testHashes);
     expect(types).toContain(
-      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" }; readonly many: false }',
+      'readonly id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" } }',
     );
     expect(types).not.toContain(
-      'readonly id: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" }; readonly many: false }',
+      'readonly id: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/int4@1" } }',
     );
   });
 
@@ -814,7 +814,7 @@ describe('sql-target-family-hook', () => {
     const types = generateContractDts(ir, sqlEmission, [], testHashes);
 
     expect(types).toContain(
-      'readonly vector: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/vector@1"; readonly typeParams: { readonly length: 1536 } }; readonly many: false }',
+      'readonly vector: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "pg/vector@1"; readonly typeParams: { readonly length: 1536 } } }',
     );
     expect(types).not.toContain('Vector<1536>');
   });
@@ -1154,7 +1154,7 @@ describe('sql-target-family-hook', () => {
       });
       const types = generateContractDts(ir, sqlEmission, [], testHashes);
       expect(types).toContain(
-        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: false }',
+        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
       );
     });
 

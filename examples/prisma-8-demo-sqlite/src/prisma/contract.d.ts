@@ -515,7 +515,6 @@ type ContractBase = Omit<
               readonly createdAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-                readonly many: false;
               };
               readonly id: {
                 readonly nullable: false;
@@ -524,17 +523,14 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
               readonly impressionCount: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/bigint@1' };
-                readonly many: false;
               };
               readonly title: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-                readonly many: false;
               };
               readonly userId: {
                 readonly nullable: false;
@@ -543,7 +539,6 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
               readonly viewCount: {
                 readonly nullable: true;
@@ -551,7 +546,6 @@ type ContractBase = Omit<
                   readonly kind: 'scalar';
                   readonly codecId: 'sqlite/bigintnumber@1';
                 };
-                readonly many: false;
               };
             };
             readonly relations: {
@@ -608,7 +602,6 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
               readonly tagId: {
                 readonly nullable: false;
@@ -617,7 +610,6 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -639,12 +631,10 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
               readonly label: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-                readonly many: false;
               };
             };
             readonly relations: {
@@ -681,17 +671,14 @@ type ContractBase = Omit<
               readonly createdAt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/datetime@1' };
-                readonly many: false;
               };
               readonly displayName: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-                readonly many: false;
               };
               readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'sqlite/text@1' };
-                readonly many: false;
               };
               readonly id: {
                 readonly nullable: false;
@@ -700,7 +687,6 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
             };
             readonly relations: {

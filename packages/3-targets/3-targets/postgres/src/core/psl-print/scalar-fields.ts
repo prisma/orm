@@ -193,8 +193,8 @@ export function buildScalarFields(input: {
       typeName,
       ...ifDefined('typeConstructor', typeConstructor),
       optional: field.nullable,
-      list: field.many !== false,
-      elementOptional: field.many !== false && field.many.elementNullable,
+      list: !!field.many,
+      elementOptional: !!field.many && field.many.elementNullable,
       attributes: scalarFieldAttributes({
         column,
         fieldName,

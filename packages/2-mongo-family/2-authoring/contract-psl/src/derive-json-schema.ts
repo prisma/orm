@@ -42,7 +42,7 @@ function fieldToBsonSchema(
         ? (valueSets?.[field.valueSet.entityName]?.values ?? null)
         : null;
 
-    if (field.many !== false) {
+    if (field.many) {
       const items: Record<string, unknown> = {
         bsonType: field.many.elementNullable ? ['null', bsonType] : bsonType,
       };
@@ -67,7 +67,7 @@ function fieldToBsonSchema(
     const vo = valueObjects?.[field.type.name];
     if (!vo) return undefined;
     const voSchema = deriveObjectSchema(vo.fields, valueObjects, codecLookup, valueSets);
-    if (field.many !== false) {
+    if (field.many) {
       return {
         bsonType: 'array',
         items: field.many.elementNullable ? { oneOf: [{ bsonType: 'null' }, voSchema] } : voSchema,

@@ -10,6 +10,14 @@ import type { TContract } from './fixtures/test-contract';
 import { testContractJson } from './fixtures/test-contract';
 
 describe('contractModelToMongoResultShape', () => {
+  it('treats omitted cardinality as scalar', () => {
+    expect(
+      contractFieldToMongoFieldShape({
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+        nullable: false,
+      }),
+    ).toEqual({ kind: 'leaf', codecId: 'mongo/string@1', nullable: false });
+  });
   // Hand-authored fixture JSON; cast at the test-fixture seam (allowed by
   // `.cursor/rules/as-contract-cast-smell.mdc`). Production code crosses
   // the family `deserializeContract` seam instead.

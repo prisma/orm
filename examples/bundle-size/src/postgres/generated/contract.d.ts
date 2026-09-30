@@ -313,7 +313,6 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
