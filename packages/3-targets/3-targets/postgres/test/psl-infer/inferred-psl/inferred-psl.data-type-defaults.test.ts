@@ -1,5 +1,6 @@
 import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { INFERRED_PSL_TYPE_NAMES } from '../../../src/core/psl-build/postgres-type-map';
@@ -209,5 +210,38 @@ describe('the data type of each inferred type name, from the stack', () => {
 
   it('names nothing for a type no type constructor has', () => {
     expect(dataTypeOf({ name: 'Unsupported' }, false)).toBeUndefined();
+  });
+});
+
+describe('a failure the default checks do not expect', () => {
+  const codecId = 'pg/text@1';
+  const textDescriptor = inferBuildContext.codecLookup.descriptorFor(codecId);
+  const brokenContext = {
+    ...inferBuildContext,
+    codecLookup: {
+      ...inferBuildContext.codecLookup,
+      descriptorFor: (id: string) =>
+        id === codecId && textDescriptor !== undefined
+          ? {
+              ...textDescriptor,
+              factory: () => () => {
+                throw new InternalError('a codec pack broke an invariant');
+              },
+            }
+          : inferBuildContext.codecLookup.descriptorFor(id),
+    },
+  };
+  const { readsBack } = inferredColumnDefaults(brokenContext);
+
+  it('passes an internal error through instead of printing the default as raw SQL', () => {
+    expect(() => readsBack('abc', { name: 'String' }, false, false)).toThrow(
+      'a codec pack broke an invariant',
+    );
+  });
+
+  it('still reads a structured refusal as a default the codec does not take', () => {
+    expect(
+      inferredColumnDefaults(inferBuildContext).readsBack(1, { name: 'String' }, false, false),
+    ).toBe(false);
   });
 });

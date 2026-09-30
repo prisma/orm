@@ -18,6 +18,7 @@ import { type CodecRef, codecForRef, type DataTypeId } from '@internal/framework
 import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { PG_TEXT_CODEC_ID } from '../codec-ids';
 
 /** The type `contract infer` writes for a column: a PSL type name and the arguments of its type constructor call. */
@@ -72,7 +73,8 @@ function inferredCodecRef(
 /**
  * The default checks for `context`. A default the codec refuses has no PSL literal, so the raw
  * expression prints instead of a schema `contract emit` would reject. A column whose codec cannot be
- * built with its type parameters is treated the same way.
+ * built with its type parameters is treated the same way. An `InternalError` is a bug, not a
+ * refusal, so it passes through.
  *
  * A data type says which values its column takes, not that every codec of it accepts each one: the
  * temporal codecs represent types that cast from text but refuse `infinity`, which PostgreSQL stores
@@ -86,7 +88,8 @@ export function inferredColumnDefaults(context: SqlPslBuildContext): InferredCol
         return ref === undefined
           ? undefined
           : context.codecLookup.descriptorFor(ref.codecId)?.dataType;
-      } catch {
+      } catch (error) {
+        if (isInternalError(error)) throw error;
         return undefined;
       }
     },
@@ -100,7 +103,8 @@ export function inferredColumnDefaults(context: SqlPslBuildContext): InferredCol
           codec.decodeJson(blindCast<JsonValue, 'a stored literal default is JSON'>(element));
         }
         return true;
-      } catch {
+      } catch (error) {
+        if (isInternalError(error)) throw error;
         return false;
       }
     },

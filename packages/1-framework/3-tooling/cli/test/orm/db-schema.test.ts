@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import type { StreamEvent } from '@prisma/cli-engine';
 import stripAnsi from 'strip-ansi';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -256,6 +257,18 @@ describe('db schema', () => {
     expect(mocks.close).toHaveBeenCalled();
     expect(settled).toContain('CLI.UNEXPECTED');
     expect(settled).not.toContain('secret');
+  });
+
+  it('lets an internal error reach the engine as a bug at exit 1', async () => {
+    mocks.introspect.mockRejectedValue(new InternalError('an invariant broke'));
+
+    const run = await harness(ormConfig()).run(['db', 'schema', '--json'], { cwd: '/tmp' });
+
+    expect(run.exitCode).toBe(1);
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: { code: 'CLI.INTERNAL_ERROR' },
+    });
   });
 
   describe('a close that fails on the way out', () => {

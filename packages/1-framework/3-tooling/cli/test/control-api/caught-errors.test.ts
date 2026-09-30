@@ -1,5 +1,6 @@
 import { runtimeError } from '@internal/framework-components/runtime';
 import { errorInvalidRefName } from '@internal/migration-tools/errors';
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { errorFromCaught } from '../../src/control-api/operations/caught-errors';
@@ -44,6 +45,11 @@ describe('errorFromCaught', () => {
       code: 'RUNTIME.TYPE_PARAMS_INVALID',
       summary: "Invalid typeParams for codec 'x'",
     });
+  });
+
+  it('passes an internal error through, so the command boundary reports it as a bug', () => {
+    const error = new InternalError('an invariant broke');
+    expect(() => errorFromCaught(error, why)).toThrow(error);
   });
 
   it('reports anything else as unexpected, with the why the command gives', () => {
