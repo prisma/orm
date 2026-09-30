@@ -16,6 +16,7 @@
           "T": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -23,6 +24,7 @@
                 }
               },
               "instant": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/datetime@1",

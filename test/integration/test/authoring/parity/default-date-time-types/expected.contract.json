@@ -16,6 +16,7 @@
           "T": {
             "fields": {
               "big": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -23,6 +24,7 @@
                 }
               },
               "bytes": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -30,6 +32,7 @@
                 }
               },
               "clock": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/time-temporal@1",
@@ -37,6 +40,7 @@
                 }
               },
               "day": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/date-temporal@1",
@@ -44,6 +48,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -51,6 +56,7 @@
                 }
               },
               "instant": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -58,6 +64,7 @@
                 }
               },
               "local": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -65,6 +72,7 @@
                 }
               },
               "zoned": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timetz@1",
