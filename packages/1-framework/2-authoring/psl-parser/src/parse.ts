@@ -744,6 +744,7 @@ function parseNamedTypeMember(cursor: Cursor): void {
  * body. Each interpreter decides whether it accepts the block and its members.
  */
 function genericBlockMemberParser(keyword: string, options: PslParserOptions): MemberParser {
+  // biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
   if (keyword === 'view' && options.grammar === 'prisma-7') return parseModelMember;
   if (keyword === 'enum') return parseEnumMember;
   return parseKeyValueMember;

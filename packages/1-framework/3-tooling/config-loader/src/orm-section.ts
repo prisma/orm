@@ -69,6 +69,7 @@ const contractSource = {
   load: 'Function',
   'inputs?': 'path[]',
   format: "'psl' | 'typescript'",
+  // biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
   'parserOptions?': { '+': 'reject', 'grammar?': "'prisma-7' | 'prisma-8'" },
 } as const;
 

@@ -82,6 +82,7 @@ export interface ContractSourceProviderBase {
 }
 
 /** The PSL grammar versions the parser knows. `prisma-7` reads the lines of a `view` block as model fields; Prisma 6 schemas use the same grammar. */
+// biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
 export type PslGrammar = 'prisma-7' | 'prisma-8';
 
 /** What a PSL source tells the parser about its files. Every tool that parses the source's files passes these to the parser. */
