@@ -438,7 +438,7 @@ describe('db init', () => {
             kind: 'run-command',
             label:
               'Apply the change with db update, which lists the destructive operations and asks you to confirm them',
-            command: '{bin} db update',
+            command: 'prisma-test db update',
           },
         ],
       },
@@ -473,7 +473,9 @@ describe('db init', () => {
 
     expect(envelopeOf(run.json)).toMatchObject({
       error: {
-        nextActions: [{ label: 'Apply the change with db update', command: '{bin} db update' }],
+        nextActions: [
+          { label: 'Apply the change with db update', command: 'prisma-test db update' },
+        ],
       },
     });
   });
@@ -488,7 +490,7 @@ describe('db init', () => {
         nextActions: [
           {
             label: 'Plan a migration, since db update does not apply data operations',
-            command: '{bin} migration plan',
+            command: 'prisma-test migration plan',
           },
         ],
       },

@@ -163,7 +163,9 @@ describe('Journey: Mongo db update confirms destructive changes', {
     expect(init.exitCode).toBe(2);
     expect(engineError(init)).toMatchObject({
       code: 'MIGRATION.PLANNING_FAILED',
-      nextActions: [expect.objectContaining({ kind: 'run-command', command: '{bin} db update' })],
+      nextActions: [
+        expect.objectContaining({ kind: 'run-command', command: 'prisma-test db update' }),
+      ],
     });
 
     const update = await runDbUpdate(ctx, [
