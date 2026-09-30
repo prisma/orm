@@ -3,7 +3,7 @@ import { blindCast } from '@internal/utils/casts';
 import { structuredError } from '@internal/utils/structured-error';
 
 /**
- * The parameters to bind to a SQLite statement. SQLite cannot store NaN and binds it as NULL, so a NaN parameter is refused here, where every statement's parameters are bound, whichever codec encoded it.
+ * The parameters to bind to a SQLite statement. SQLite cannot store NaN and binds it as NULL. The float codecs refuse NaN when they encode, naming the codec; this refuses a NaN no codec encoded, such as a raw SQL parameter, with the same code and `meta.received`, and `meta.paramIndex` in place of `meta.codecId`.
  */
 export function sqliteParams(params: readonly unknown[] | undefined): SQLInputValue[] {
   const values = params ?? [];

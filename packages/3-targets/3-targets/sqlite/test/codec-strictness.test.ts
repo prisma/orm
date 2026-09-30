@@ -5,6 +5,7 @@ import {
   sqliteBigintNumberDescriptor,
   sqliteIntegerDescriptor,
   sqliteRealDescriptor,
+  sqliteSqlFloatDescriptor,
 } from '../src/core/codecs';
 
 const ctx: CodecInstanceContext = { name: 'codec-strictness' };
@@ -122,8 +123,42 @@ describe('sqlite/real@1 encode', () => {
       ),
     ).toEqual([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]);
   });
+});
 
-  it('passes NaN on, as sql/float@1 does, for the SQLite driver to refuse where it binds parameters', async () => {
-    await expect(codec.encode(Number.NaN, {})).resolves.toBeNaN();
+describe.each([
+  ['sqlite/real@1', sqliteRealDescriptor],
+  ['sql/float@1', sqliteSqlFloatDescriptor],
+] as const)('%s on SQLite, which cannot store NaN', (codecId, descriptor) => {
+  const codec = descriptor.factory()(ctx);
+  const refusal = expect.objectContaining({
+    code: 'RUNTIME.ENCODE_FAILED',
+    message: `${codecId} value must be a number other than NaN, which SQLite cannot store`,
+    meta: { codecId, received: 'NaN' },
+  });
+
+  it('refuses NaN when it encodes a value to write or filter by', async () => {
+    await expect(codec.encode(Number.NaN, {})).rejects.toThrow(refusal);
+  });
+
+  it('refuses NaN when it encodes a value to store in the contract', () => {
+    expect(() => codec.encodeJson(Number.NaN)).toThrow(refusal);
+  });
+
+  it('refuses the text NaN in JSON', () => {
+    expect(() => codec.decodeJson('NaN')).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: `${codecId} JSON value must be a finite number or the text Infinity or -Infinity; SQLite cannot store NaN`,
+        meta: { codecId, received: '"NaN"' },
+      }),
+    );
+  });
+
+  it('writes and reads the infinities, which SQLite stores', async () => {
+    const infinities = [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+    expect({
+      encoded: await Promise.all(infinities.map((value) => codec.encode(value, {}))),
+      json: infinities.map((value) => codec.decodeJson(codec.encodeJson(value))),
+    }).toEqual({ encoded: infinities, json: infinities });
   });
 });

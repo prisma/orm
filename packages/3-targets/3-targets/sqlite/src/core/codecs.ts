@@ -37,6 +37,7 @@ import {
   LiteralExpr,
   NullCheckExpr,
   type ProjectionExpr,
+  SqlFloatCodec,
   sqlCharDescriptor,
   sqlFloatDescriptor,
   sqlIntDescriptor,
@@ -161,19 +162,45 @@ const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
 const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
-/** SQLite stores an infinity but not NaN, which it turns into NULL, so NaN has no stored JSON form. */
-const refuseNaN = (value: number) => {
+/**
+ * SQLite stores an infinity but not NaN, which it turns into NULL, so a float codec on SQLite refuses NaN wherever it writes a value: to a parameter, and to the contract.
+ */
+function refuseNaN(codecId: string, value: number): number {
   if (Number.isNaN(value)) {
     throw sqliteError(
       'RUNTIME.ENCODE_FAILED',
-      'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
-      {
-        meta: { codecId: SQLITE_REAL_CODEC_ID, received: String(value) },
-      },
+      `${codecId} value must be a number other than NaN, which SQLite cannot store`,
+      { meta: { codecId, received: 'NaN' } },
     );
   }
   return value;
-};
+}
+
+/** Reads a float's JSON form, which on SQLite has no NaN. */
+function decodeJsonStorableFloat(codecId: string, json: JsonValue): number {
+  const value = decodeJsonFloat(codecId, json);
+  if (Number.isNaN(value)) {
+    return refuseJsonValue(
+      codecId,
+      'a finite number or the text Infinity or -Infinity; SQLite cannot store NaN',
+      json,
+    );
+  }
+  return value;
+}
+
+/** `sql/float@1` as SQLite stores it: without NaN. */
+export class SqliteFloatCodec extends SqlFloatCodec {
+  override async encode(value: number, ctx: CodecCallContext): Promise<number> {
+    return super.encode(refuseNaN(this.id, value), ctx);
+  }
+  override encodeJson(value: number): JsonValue {
+    return super.encodeJson(refuseNaN(this.id, value));
+  }
+  override decodeJson(json: JsonValue): number {
+    return decodeJsonStorableFloat(this.id, json);
+  }
+}
 
 /**
  * Requires an application value to be of the JS type the codec reads.
@@ -283,6 +310,7 @@ export const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {
 export const sqliteSqlFloatDescriptor = sqliteCodec(sqlFloatDescriptor, {
   dataType: sqliteReal.id,
   jsonProjection: floatJsonProjection,
+  factory: (descriptor) => () => new SqliteFloatCodec(descriptor),
 });
 
 export class SqliteTextCodec extends CodecImpl<
@@ -376,24 +404,16 @@ export class SqliteRealCodec extends CodecImpl<
   number
 > {
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return value;
+    return refuseNaN(SQLITE_REAL_CODEC_ID, value);
   }
   async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
     return wire;
   }
   encodeJson(value: number): JsonValue {
-    return encodeJsonFloat(refuseNaN(value));
+    return encodeJsonFloat(refuseNaN(SQLITE_REAL_CODEC_ID, value));
   }
   decodeJson(json: JsonValue): number {
-    const value = decodeJsonFloat(SQLITE_REAL_CODEC_ID, json);
-    if (Number.isNaN(value)) {
-      return refuseJsonValue(
-        SQLITE_REAL_CODEC_ID,
-        'a finite number or the text Infinity or -Infinity; SQLite cannot store NaN',
-        json,
-      );
-    }
-    return value;
+    return decodeJsonStorableFloat(SQLITE_REAL_CODEC_ID, json);
   }
 }
 

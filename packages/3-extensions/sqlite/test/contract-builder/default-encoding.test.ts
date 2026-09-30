@@ -43,4 +43,25 @@ describe('sqlite defineContract encodes literal defaults through the column code
       }),
     );
   });
+
+  it.each([
+    ['sql/float@1', { codecId: 'sql/float@1', nativeType: 'real' }],
+    ['sqlite/real@1', { codecId: 'sqlite/real@1', nativeType: 'real' }],
+  ] as const)(
+    'refuses a NaN default on a %s column, which SQLite cannot store',
+    (codecId, type) => {
+      expect(() => storedDefault((field) => field.column(type).default(Number.NaN))).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.DEFAULT_INVALID',
+          message: `Field "Event.at" has a default that its codec refuses: ${codecId} value must be a number other than NaN, which SQLite cannot store`,
+          meta: {
+            modelName: 'Event',
+            fieldName: 'at',
+            codecId,
+            reason: 'codec-refused-default',
+          },
+        }),
+      );
+    },
+  );
 });

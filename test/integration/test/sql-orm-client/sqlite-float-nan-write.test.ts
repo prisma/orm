@@ -33,9 +33,9 @@ const stack = createSqlExecutionStack({
 });
 const context = createExecutionContext({ contract, stack });
 
-const nanRefusal = (position: number) => ({
+const nanRefusal = (codecId: string) => ({
   code: 'RUNTIME.ENCODE_FAILED',
-  message: `Parameter ${position} is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.`,
+  message: `${codecId} value must be a number other than NaN, which SQLite cannot store`,
 });
 
 async function outcome(run: () => PromiseLike<unknown>) {
@@ -93,7 +93,7 @@ describe('NaN written to or filtered by a SQLite REAL column', () => {
       await outcome(() => points().create({ id: 2, sqlFloat: Number.NaN })),
     ];
     expect({ inserts, stored: database!.prepare('select * from nan_points').all() }).toEqual({
-      inserts: [nanRefusal(2), nanRefusal(2)],
+      inserts: [nanRefusal('sqlite/real@1'), nanRefusal('sql/float@1')],
       stored: [],
     });
   });
@@ -110,7 +110,7 @@ describe('NaN written to or filtered by a SQLite REAL column', () => {
           .where((p) => p['sqlFloat']!.eq(Number.NaN))
           .all(),
       ),
-    ]).toEqual([nanRefusal(1), nanRefusal(1)]);
+    ]).toEqual([nanRefusal('sqlite/real@1'), nanRefusal('sql/float@1')]);
   });
 
   it('leaves Infinity and -Infinity to be stored and read back through either codec', async () => {

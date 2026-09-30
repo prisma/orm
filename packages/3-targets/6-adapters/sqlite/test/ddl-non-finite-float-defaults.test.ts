@@ -33,18 +33,35 @@ describe('an infinite float default in SQLite DDL', () => {
     },
   );
 
-  it('sql/float@1 refuses a NaN default, which SQLite would store as NULL', async () => {
-    await expect(createTable('sql/float@1', Number.NaN)).rejects.toThrow(
-      expect.objectContaining({ code: 'CONTRACT.DEFAULT_INVALID' }),
-    );
-  });
+  it.each([['sqlite/real@1'], ['sql/float@1']])(
+    '%s refuses a NaN default when the contract is built',
+    (codecId) => {
+      expect(() => lookup.get(codecId)!.encodeJson(Number.NaN)).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.ENCODE_FAILED',
+          message: `${codecId} value must be a number other than NaN, which SQLite cannot store`,
+          meta: { codecId, received: 'NaN' },
+        }),
+      );
+    },
+  );
 
-  it('sqlite/real@1 refuses a NaN default when the contract is built', () => {
-    expect(() => lookup.get('sqlite/real@1')!.encodeJson(Number.NaN)).toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.ENCODE_FAILED',
-        message: 'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
-      }),
-    );
-  });
+  it.each([['sqlite/real@1'], ['sql/float@1']])(
+    '%s refuses a NaN default an earlier contract holds, naming the column',
+    async (codecId) => {
+      const table = new SqliteCreateTable({
+        table: 't',
+        columns: [col('c', 'REAL', { default: lit('NaN'), codecRef: { codecId } })],
+      });
+      await expect(
+        adapter.lowerToExecuteRequest(table, { contract: {} as SqliteContract }),
+      ).rejects.toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.DEFAULT_INVALID',
+          message: `Column "t"."c" has a default its codec ${codecId} refuses: ${codecId} JSON value must be a finite number or the text Infinity or -Infinity; SQLite cannot store NaN`,
+          meta: { table: 't', column: 'c', codecId, value: 'NaN', reason: 'codec-refused-default' },
+        }),
+      );
+    },
+  );
 });
