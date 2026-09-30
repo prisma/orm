@@ -97,15 +97,15 @@ export type NestedDocShape = Record<string, DocField>;
 // ── Contract → NestedDocShape translation ────────────────────────────────
 
 type FieldToLeaf<F> = F extends {
-  readonly type: { readonly kind: 'scalar'; readonly codecId: infer C extends string };
+  readonly many: { readonly elementNullable: boolean };
   readonly nullable: infer N extends boolean;
 }
-  ? { readonly codecId: C; readonly nullable: N }
+  ? { readonly codecId: 'mongo/array@1'; readonly nullable: N }
   : F extends {
-        readonly many: { readonly elementNullable: boolean };
+        readonly type: { readonly kind: 'scalar'; readonly codecId: infer C extends string };
         readonly nullable: infer N extends boolean;
       }
-    ? { readonly codecId: 'mongo/array@1'; readonly nullable: N }
+    ? { readonly codecId: C; readonly nullable: N }
     : DocField;
 
 /**
