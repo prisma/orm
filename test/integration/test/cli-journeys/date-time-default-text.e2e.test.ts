@@ -19,6 +19,7 @@ import {
   runContractEmit,
   runContractInfer,
   runDbInit,
+  runDbSign,
   runDbUpdate,
   runDbVerify,
   runMigrate,
@@ -151,6 +152,39 @@ withTempDir(({ createTempDir }) => {
         expect(defaultsOf(ctx)).toEqual(STANDARD_DEFAULTS);
       },
       timeouts.spinUpPpgDev * 2,
+    );
+  });
+
+  describe('Journey: a database db init made from the earlier contract', () => {
+    const db = useDevDatabase();
+
+    it(
+      'is signed with the re-emitted contract after its marker no longer matches',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        copyFileSync(
+          join(BEFORE, 'emitted-before/contract.json'),
+          join(ctx.testDir, 'contract.json'),
+        );
+        const init = await runDbInit(ctx);
+        expect(init.exitCode, `db init\n${output(init)}`).toBe(0);
+
+        copyFileSync(join(BEFORE, 'contract.prisma'), join(ctx.testDir, 'contract.prisma'));
+        const emit = await runContractEmit(ctx);
+        expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+
+        const stale = await runDbVerify(ctx);
+        expect(stale.exitCode, `db verify\n${output(stale)}`).not.toBe(0);
+        const sign = await runDbSign(ctx);
+        expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
+        const verify = await runDbVerify(ctx, ['--strict']);
+        expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(0);
+      },
+      timeouts.spinUpPpgDev,
     );
   });
 

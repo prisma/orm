@@ -76,6 +76,25 @@ Where a database's storage classes are shared by several logical types, the targ
 
 No type spans targets, and no family registers types. The SQL family exports implementations targets share, such as the digit classifier and the JSON parse and print, and each target declares its own types with them.
 
+### Date and time types
+
+The canonical form of a date or time type is one standard text: the text `Temporal` prints.
+
+| Data type | Standard text |
+|---|---|
+| `pg/timestamptz`, `sqlite/datetime` | the instant in UTC: `2024-01-01T00:00:00Z` |
+| `pg/timestamp` | `2024-01-01T12:34:56` |
+| `pg/date` | `2024-01-01` |
+| `pg/time` | `12:34:56` |
+| `pg/timetz` | `12:34:56+02:00`, and `Z` for a zero offset |
+| `pg/interval` | the ISO 8601 duration `pg/interval@1` writes: `P1Y2M` |
+
+A fraction of a second has no trailing zeros and at most six digits. A year outside 0000 to 9999 is a sign and six digits: `-000043-03-15`. `infinity` and `-infinity` are values of `pg/date`, `pg/timestamp` and `pg/timestamptz`.
+
+Each of these types casts from its target's text type, and the cast produces the standard text. `2024-01-01T00:00:00Z`, `2024-01-01T00:00:00.000Z` and `2024-01-01T01:00:00+01:00` on a `timestamptz` column are one instant, stored once as `2024-01-01T00:00:00Z`. The cast reads ISO 8601 and the forms PostgreSQL prints: a space in place of `T`, an offset of `+HH`, `+HH:MM` or `+HH:MM:SS`, and a ` BC` suffix. It refuses an offset on a type that holds none, a missing offset on a type that needs one, a date on a time type, a time on `pg/date`, more than six fraction digits, and a date or time that does not exist, each with a message that shows text the type takes. It uses no `Temporal` and no JavaScript `Date`, so a default reads the same on every runtime.
+
+The cast is one function per type, declared next to the type, and every reader of a default uses it: `encodeJson` of the codecs whose value is not a `Temporal` value, schema verification and the migration planner when they compare two defaults, DDL rendering, `contract infer` and `contract print`. DDL writes a year outside 1 to 9999 the way PostgreSQL reads it: `0044-03-15 BC`, `10000-01-01`.
+
 ## Codecs
 
 A codec transforms between representations of one data type: the canonical form in the contract, the wire form the driver exchanges, and the in-memory JS value. Its descriptor names the type and nothing about the database type itself:

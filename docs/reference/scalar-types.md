@@ -62,6 +62,8 @@ These are the current names. The Postgres and SQLite rename project will change 
 | `Bytes` | `field.bytes()` | `pg/bytea@1` | `bytea` | `Uint8Array` |
 | `pg.enum(Name)` | — | `pg/enum@1` | the native enum type | `string` |
 
+A literal default of a date or time type is stored as the type's standard text, whichever codec the column uses and however the default was written: `2024-01-01T00:00:00Z` for `timestamptz`, `2024-01-01T12:34:56` for `timestamp`, `2024-01-01` for `date`, `12:34:56` for `time`, `12:34:56+02:00` for `timetz`, and the ISO 8601 duration for `interval`. A year outside 0000 to 9999 is a sign and six digits. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
+
 ## SQLite
 
 These are the current names; the Postgres and SQLite rename project will update this table. SQLite has no scalar TS helpers; use `field.column(...)`.
@@ -77,6 +79,8 @@ These are the current names; the Postgres and SQLite rename project will update 
 | `DateTime` | — | `sqlite/datetime@1` | `text` | `Date` |
 | `Json` | — | `sqlite/json@1` | `text` | `JsonValue` |
 | `Bytes` | — | `sqlite/blob@1` | `blob` | `Uint8Array` |
+
+A `DateTime` default is stored as the instant in UTC, `2024-01-01T00:00:00Z`, however it was written. It must carry `Z` or an offset.
 
 ## Across targets
 

@@ -163,6 +163,7 @@ See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%
 - Inserts: `InsertAst.rows` is row-based and uses `InsertValue` cells (`ColumnRef`, `ParamRef`, or the insert-only `DefaultValueExpr` sentinel for SQL `DEFAULT`) for batched inserts
 - `SelectAst.selectAllIntent` — preserves select-all intent when normalized to explicit columns
 - `DeleteAst.where` and `UpdateAst.where` optional for mutation-without-WHERE lint support
+- Data type support the SQL targets share (ADR 254): the number classifier, the JSON body reader and printer, and `standardDateTimeText`, which turns written date and time text into the standard text of a date or time type of a given shape (`date`, `time`, `timeWithOffset`, `dateTime`, `instant`) without `Temporal` or JavaScript `Date`
 
 ### Type Definitions (`types.ts`)
 - Defines TypeScript types for column builders, operations, projections

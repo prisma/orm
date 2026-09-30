@@ -17,6 +17,7 @@ Provides the SQLite target descriptor for runtime use and pack refs for contract
 - **Runtime Target Descriptor**: Exports `SqlRuntimeTargetDescriptor<'sqlite'>` with codec registry and factory
 - **Pack Ref Export**: Exports `TargetPackRef<'sql', 'sqlite'>` for `defineContract().target(sqlitePack)` contract authoring
 - **Descriptor Metadata**: Defines target identity (`familyId: 'sql'`, `targetId: 'sqlite'`, `id: 'sqlite'`) and version
+- **Datetime standard text**: `sqliteDatetimeText` (in `src/core/data-types.ts`) turns written text into the one text `sqlite/datetime` stores, the instant in UTC as `Temporal` prints it (`2024-01-01T00:00:00Z`), and refuses text with no offset. The cast from `sqlite/text` and `sqlite/datetime@1`'s `encodeJson` use it, and schema verification compares a datetime default through it, choosing it by the contract column's codec because a datetime column is `text` in the database. See [ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
 **Non-goals:**
 - Migration planner/runner (future milestone)
