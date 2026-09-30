@@ -2,6 +2,7 @@ import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { type MongoCodecRegistry, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
@@ -593,6 +594,26 @@ describe('decodeMongoRow', () => {
       expect(e.cause).toBeInstanceOf(Error);
       expect((e.cause as Error).message).toBe('inner');
     }
+  });
+
+  it('rethrows an InternalError from a codec unchanged', async () => {
+    const original = new InternalError('codec invariant broke');
+    const registry = newMongoCodecRegistry();
+    registry.register(
+      mongoCodec({
+        typeId: 'throws@1',
+        encode: (v: string) => v,
+        decode: () => {
+          throw original;
+        },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
+      }),
+    );
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: { f: { kind: 'leaf', codecId: 'throws@1', nullable: false } },
+    };
+    await expect(decodeMongoRow({ f: 'wire' }, shape, registry, 'items')).rejects.toBe(original);
   });
 
   it('adds the collection and field to a structured RUNTIME.DECODE_FAILED from a codec, keeping its details', async () => {

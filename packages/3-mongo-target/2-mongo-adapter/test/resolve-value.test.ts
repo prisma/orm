@@ -2,6 +2,7 @@ import { decodeJsonString } from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef, type MongoValue } from '@internal/mongo-value';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
+import { InternalError } from '@internal/utils/internal-error';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
 import { Binary, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
@@ -347,6 +348,24 @@ describe('resolveValue', () => {
       const rejection = await resolveValue(ref, registry, noCtx).catch((e: unknown) => e);
       expect(rejection).toBe(envelope);
       expect(isStructuredError(rejection)).toBe(true);
+    });
+
+    it('rethrows an InternalError from a codec unchanged', async () => {
+      const original = new InternalError('codec invariant broke');
+      const registry = newMongoCodecRegistry();
+      registry.register(
+        mongoCodec({
+          typeId: 'test/internal-error@1',
+          decode: (w: string) => w,
+          encode: (_v: string) => {
+            throw original;
+          },
+          decodeJson: (json) => decodeJsonString('test/internal-error@1', json),
+        }),
+      );
+
+      const ref = new MongoParamRef('x', { codecId: 'test/internal-error@1' });
+      await expect(resolveValue(ref, registry, noCtx)).rejects.toBe(original);
     });
 
     it('wraps a plain codec failure in RUNTIME.ENCODE_FAILED', async () => {

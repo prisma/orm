@@ -13,6 +13,7 @@ import type {
   SqlCodecCallContext,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
+import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 type ColumnRef = { table: string; column: string };
@@ -181,6 +182,7 @@ function wrapDecodeFailure(
   codec: Codec,
   wireValue: unknown,
 ): never {
+  if (isInternalError(error)) throw error;
   const message = error instanceof Error ? error.message : String(error);
   const target = ref ? `${ref.table}.${ref.column}` : alias;
   const wrapped = runtimeError(
@@ -311,7 +313,7 @@ async function decodeField(
 }
 
 /**
- * Decodes a row by dispatching all per-cell codec calls concurrently via `Promise.all`. Each cell follows the single-armed `decodeField` path. Structured envelopes thrown by codec bodies (anything passing `isStructuredError`) pass through unchanged; all other failures are wrapped in `RUNTIME.DECODE_FAILED` with `{ table, column, codec }` (or `{ alias, codec }` when no column ref is resolvable) and the original error attached on `cause`.
+ * Decodes a row by dispatching all per-cell codec calls concurrently via `Promise.all`. Each cell follows the single-armed `decodeField` path. Structured envelopes thrown by codec bodies (anything passing `isStructuredError`) and an `InternalError` pass through unchanged; all other failures are wrapped in `RUNTIME.DECODE_FAILED` with `{ table, column, codec }` (or `{ alias, codec }` when no column ref is resolvable) and the original error attached on `cause`.
  *
  * When `rowCtx.signal` is provided:
  *
