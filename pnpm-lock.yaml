@@ -4094,9 +4094,6 @@ importers:
       postgres-array:
         specifier: 2.0.0
         version: 2.0.0
-      temporal-polyfill:
-        specifier: ^1.0.4
-        version: 1.0.4
     devDependencies:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.13
@@ -4113,6 +4110,9 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.13
         version: link:../../../0-config/tsdown
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -5099,6 +5099,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tinyglobby:
         specifier: 'catalog:'
         version: 0.2.17

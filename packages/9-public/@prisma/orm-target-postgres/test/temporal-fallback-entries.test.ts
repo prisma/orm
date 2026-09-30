@@ -1,6 +1,6 @@
 /**
- * Which published Postgres entries load `temporal-polyfill`, and what a process with no `Temporal`
- * gets from the date and time codecs.
+ * Which published Postgres entries load `temporal-polyfill`, how the packages that ship them declare
+ * it, and what a process with no `Temporal` gets from the date and time codecs.
  *
  * The target's control entry sets a fallback `Temporal` when it is loaded. The fallback is held
  * once per process, so every Postgres codec in that process uses it, the application's included.
@@ -112,9 +112,9 @@ const APPLICATION_ENTRIES = ALL_ENTRIES.filter(({ controlPlane }) => !controlPla
   ({ entry }) => entry,
 );
 
-const ENTRIES_THAT_LOAD_THE_POLYFILL = ALL_ENTRIES.map(({ entry }) => entry)
-  .filter((entry) => filesLoadedBy([entry]).importsPolyfill)
-  .map((entry) => `${entry.label} ${entry.subpath}`);
+const ENTRIES_THAT_LOAD_THE_POLYFILL = ALL_ENTRIES.map(({ entry }) => entry).filter(
+  (entry) => filesLoadedBy([entry]).importsPolyfill,
+);
 
 describe('which published Postgres entries load temporal-polyfill', () => {
   it('the exports maps yield application entries to check', () => {
@@ -142,7 +142,9 @@ describe('which published Postgres entries load temporal-polyfill', () => {
   });
 
   it('only control-plane entries do, and these are all of them', () => {
-    expect(ENTRIES_THAT_LOAD_THE_POLYFILL).toEqual([
+    expect(
+      ENTRIES_THAT_LOAD_THE_POLYFILL.map((entry) => `${entry.label} ${entry.subpath}`),
+    ).toEqual([
       '@prisma/orm-target-postgres ./target',
       '@prisma/orm-target-postgres ./target/control',
       '@prisma/orm-postgres ./config',
@@ -150,6 +152,42 @@ describe('which published Postgres entries load temporal-polyfill', () => {
       '@prisma/orm-postgres ./target/control',
     ]);
   });
+});
+
+describe('how a published package that ships the control entry declares temporal-polyfill', () => {
+  const PACKAGES_THAT_SHIP_THE_CONTROL_ENTRY = [
+    ...new Set(ENTRIES_THAT_LOAD_THE_POLYFILL.map((entry) => entry.label)),
+  ];
+
+  function declarationOf(packageName: string, field: string): unknown {
+    const manifest: unknown = JSON.parse(
+      readFileSync(join(PUBLIC_PACKAGES_DIR, packageName, 'package.json'), 'utf8'),
+    );
+    const declarations = isRecord(manifest) ? manifest[field] : undefined;
+    return isRecord(declarations) ? declarations[POLYFILL] : undefined;
+  }
+
+  it('the packages are the target package and the facade', () => {
+    expect(PACKAGES_THAT_SHIP_THE_CONTROL_ENTRY).toEqual([
+      '@prisma/orm-target-postgres',
+      '@prisma/orm-postgres',
+    ]);
+  });
+
+  it.each(PACKAGES_THAT_SHIP_THE_CONTROL_ENTRY)(
+    '%s declares it as a required peer dependency, not a dependency',
+    (packageName) => {
+      expect({
+        dependencies: declarationOf(packageName, 'dependencies'),
+        peerDependencies: declarationOf(packageName, 'peerDependencies'),
+        peerDependenciesMeta: declarationOf(packageName, 'peerDependenciesMeta'),
+      }).toEqual({
+        dependencies: undefined,
+        peerDependencies: expect.any(String),
+        peerDependenciesMeta: undefined,
+      });
+    },
+  );
 });
 
 describe('the module that holds the fallback Temporal', () => {
