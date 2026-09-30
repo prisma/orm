@@ -65,11 +65,7 @@ export {
   pgTimestamptzDateColumn,
   pgTimestamptzDateDescriptor,
 } from '../core/date-codecs';
-export {
-  isIntegerIn,
-  NUMERIC_PRECISION_RANGE,
-  NUMERIC_SCALE_RANGE,
-} from '../core/numeric-limits';
+export { NUMERIC_PRECISION_RANGE, NUMERIC_SCALE_RANGE } from '../core/numeric-limits';
 export {
   postgresCodecDescriptorRegistry,
   postgresCodecRegistry,

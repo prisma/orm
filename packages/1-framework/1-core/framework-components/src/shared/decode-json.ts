@@ -48,6 +48,13 @@ export interface IntegerRange {
   readonly max: number;
 }
 
+/** Whether `value` is an integer within `range`, its ends included. */
+export function isIntegerIn(value: unknown, range: IntegerRange): value is number {
+  return (
+    typeof value === 'number' && Number.isInteger(value) && value >= range.min && value <= range.max
+  );
+}
+
 /** The integers a JavaScript `number` holds exactly. */
 export const SAFE_INTEGER_RANGE: IntegerRange = {
   min: Number.MIN_SAFE_INTEGER,
@@ -58,7 +65,7 @@ export const SAFE_INTEGER_RANGE: IntegerRange = {
 export const INT32_RANGE: IntegerRange = { min: -(2 ** 31), max: 2 ** 31 - 1 };
 
 export function decodeJsonInteger(codecId: string, json: JsonValue, range: IntegerRange): number {
-  if (typeof json !== 'number' || !Number.isInteger(json) || json < range.min || json > range.max) {
+  if (!isIntegerIn(json, range)) {
     return refuseJsonValue(codecId, `an integer from ${range.min} to ${range.max}`, json);
   }
   return json;

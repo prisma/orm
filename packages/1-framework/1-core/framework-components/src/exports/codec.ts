@@ -56,6 +56,7 @@ export {
   encodeJsonFloat,
   INT32_RANGE,
   INT64_RANGE,
+  isIntegerIn,
   isNonFiniteText,
   refuseJsonValue,
   SAFE_INTEGER_BIGINT_RANGE,

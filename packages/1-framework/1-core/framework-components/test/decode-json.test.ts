@@ -10,6 +10,7 @@ import {
   encodeJsonFloat,
   INT32_RANGE,
   INT64_RANGE,
+  isIntegerIn,
   isNonFiniteText,
   refuseJsonValue,
 } from '../src/shared/decode-json';
@@ -178,5 +179,14 @@ describe('the integer ranges', () => {
       INT32_RANGE: { min: -2147483648, max: 2147483647 },
       INT64_RANGE: { min: -9223372036854775808n, max: 9223372036854775807n },
     });
+  });
+});
+
+describe('isIntegerIn', () => {
+  it('holds for an integer within the range, its ends included', () => {
+    const range = { min: -2, max: 3 };
+    expect(
+      [-2, 0, 3, -3, 4, 1.5, Number.NaN, '1'].map((value) => isIntegerIn(value, range)),
+    ).toEqual([true, true, true, false, false, false, false, false]);
   });
 });

@@ -1,4 +1,5 @@
 import type { CodecControlHooks, ExpandNativeTypeInput } from '@internal/family-sql/control';
+import { isIntegerIn } from '@internal/framework-components/codec';
 import { postgresAggregateDescriptors } from '@internal/target-postgres/aggregates';
 import {
   PG_BIT_CODEC_ID,
@@ -38,7 +39,6 @@ import {
   SQL_VARCHAR_CODEC_ID,
 } from '@internal/target-postgres/codec-ids';
 import {
-  isIntegerIn,
   NUMERIC_PRECISION_RANGE,
   NUMERIC_SCALE_RANGE,
   postgresCodecRegistry,
