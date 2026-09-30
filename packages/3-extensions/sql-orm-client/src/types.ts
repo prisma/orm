@@ -3,6 +3,7 @@ import type { AnnotationValue, OperationKind } from '@internal/framework-compone
 import type {
   ExtractAggregateTypes,
   ExtractCodecTypes,
+  ExtractFieldInputTypes,
   ExtractFieldOutputTypes,
   ExtractQueryOperationTypes,
   SqlStorage,
@@ -588,6 +589,24 @@ export type DefaultModelRow<
   NsId extends string = never,
 > = {
   [K in keyof FieldsOf<TContract, ModelName, NsId> & string]: FieldJsType<
+    TContract,
+    ModelName,
+    K,
+    NsId
+  >;
+};
+
+/**
+ * The write shape of a single model: like {@link DefaultModelRow}, but each
+ * field carries its codec's `input` type, which is what create and update
+ * inputs accept.
+ */
+export type DefaultModelInputRow<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = {
+  [K in keyof FieldsOf<TContract, ModelName, NsId> & string]: FieldInputJsType<
     TContract,
     ModelName,
     K,
@@ -1213,32 +1232,46 @@ type FieldStorageJsType<
       : never
     : never;
 
-// The refined output type of a field, read directly from the emitter's
-// namespace-nested `FieldOutputTypes[ns][model][field]` map. This carries every
-// field of the model (including value-object fields, which have no single
-// storage column), already typeParam-refined and nullability-applied. Resolves
-// to `never` when the namespace coordinate is absent from the map.
-type NamespaceFieldOutputType<
+// The refined type of a field, read directly from one of the emitter's
+// namespace-nested `FieldOutputTypes` / `FieldInputTypes` maps
+// (`[ns][model][field]`). This carries every field of the model (including
+// value-object fields, which have no single storage column), already
+// typeParam-refined and nullability-applied. Resolves to `never` when the
+// namespace coordinate is absent from the map.
+type NamespaceFieldType<
+  FieldTypes,
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   FieldName extends string,
   NsId extends string = never,
 > =
   ResolvedNsId<TContract, ModelName, NsId> extends infer Ns extends string
-    ? ExtractFieldOutputTypes<TContract> extends infer Outputs
-      ? Ns extends keyof Outputs
-        ? Outputs[Ns] extends infer NamespaceOutputs
-          ? ModelName extends keyof NamespaceOutputs
-            ? NamespaceOutputs[ModelName] extends infer ModelOutputs
-              ? FieldName extends keyof ModelOutputs
-                ? ModelOutputs[FieldName]
-                : never
+    ? Ns extends keyof FieldTypes
+      ? FieldTypes[Ns] extends infer NamespaceTypes
+        ? ModelName extends keyof NamespaceTypes
+          ? NamespaceTypes[ModelName] extends infer ModelTypes
+            ? FieldName extends keyof ModelTypes
+              ? ModelTypes[FieldName]
               : never
             : never
           : never
         : never
       : never
     : never;
+
+type NamespaceFieldOutputType<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> = NamespaceFieldType<ExtractFieldOutputTypes<TContract>, TContract, ModelName, FieldName, NsId>;
+
+type NamespaceFieldInputType<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> = NamespaceFieldType<ExtractFieldInputTypes<TContract>, TContract, ModelName, FieldName, NsId>;
 
 // The emitter's per-namespace `FieldOutputTypes` is the source of truth (refined
 // codecs + value objects + nullability); for a column-mapped field absent from
@@ -1254,6 +1287,17 @@ type FieldJsType<
     ? unknown
     : FieldStorageJsType<TContract, ModelName, FieldName, NsId>
   : NamespaceFieldOutputType<TContract, ModelName, FieldName, NsId>;
+
+// The write-side counterpart of `FieldJsType`: the codec's `input` type from
+// `FieldInputTypes`, falling back to `FieldJsType` for a field absent from it.
+type FieldInputJsType<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> = [NamespaceFieldInputType<TContract, ModelName, FieldName, NsId>] extends [never]
+  ? FieldJsType<TContract, ModelName, FieldName, NsId>
+  : NamespaceFieldInputType<TContract, ModelName, FieldName, NsId>;
 
 type FieldStorageColumn<
   TContract extends Contract<SqlStorage>,
@@ -1408,12 +1452,12 @@ type ScalarCreateInput<
   ModelName extends string,
   NsId extends string = never,
 > = Pick<
-  DefaultModelRow<TContract, ModelName, NsId>,
+  DefaultModelInputRow<TContract, ModelName, NsId>,
   RequiredCreateFieldNames<TContract, ModelName, NsId>
 > &
   Partial<
     Pick<
-      DefaultModelRow<TContract, ModelName, NsId>,
+      DefaultModelInputRow<TContract, ModelName, NsId>,
       OptionalCreateFieldNames<TContract, ModelName, NsId>
     >
   >;
@@ -1844,12 +1888,12 @@ type NestedCreateInput<
   ModelName extends string,
   NsId extends string = never,
 > = Pick<
-  DefaultModelRow<TContract, ModelName, NsId>,
+  DefaultModelInputRow<TContract, ModelName, NsId>,
   NestedRequiredCreateFieldNames<TContract, ModelName, NsId>
 > &
   Partial<
     Pick<
-      DefaultModelRow<TContract, ModelName, NsId>,
+      DefaultModelInputRow<TContract, ModelName, NsId>,
       NestedOptionalCreateFieldNames<TContract, ModelName, NsId>
     >
   >;
@@ -1878,7 +1922,7 @@ export type MutationUpdateInput<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-> = Partial<DefaultModelRow<TContract, ModelName, NsId>> &
+> = Partial<DefaultModelInputRow<TContract, ModelName, NsId>> &
   RelationMutationFields<TContract, ModelName, 'update'>;
 
 type ModelRelations<
