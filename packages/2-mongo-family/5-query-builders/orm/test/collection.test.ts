@@ -30,7 +30,7 @@ import {
 
 const contract = ormContractJson as unknown as Contract;
 
-function contractWithNullableValueObjectList(): Contract {
+function contractWithNullableList(fieldName: string): Contract {
   const json = structuredClone(ormContractJson) as unknown as {
     domain: {
       namespaces: Record<
@@ -39,13 +39,14 @@ function contractWithNullableValueObjectList(): Contract {
       >;
     };
   };
-  const homeAddress = json.domain.namespaces['__unbound__']!.models['User']!.fields['homeAddress']!;
-  homeAddress['nullable'] = false;
-  homeAddress['many'] = { elementNullable: true };
+  const field = json.domain.namespaces['__unbound__']!.models['User']!.fields[fieldName]!;
+  field['nullable'] = false;
+  field['many'] = { elementNullable: true };
   return json as unknown as Contract;
 }
 
-const nullableValueObjectListContract = contractWithNullableValueObjectList();
+const nullableValueObjectListContract = contractWithNullableList('homeAddress');
+const nullableScalarListContract = contractWithNullableList('tags');
 const nullableValueObjectList = [
   { city: 'NYC', country: 'US' },
   null,
@@ -679,7 +680,7 @@ describe('MongoCollection write methods', () => {
 
     it('wraps scalar-list elements independently and leaves null unencoded', async () => {
       const executor = createMockExecutor([{ insertedId: 'id' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor);
       await col.create({ ...defaultUserData, tags: ['a', null as never, 'b'] });
       const command = executor.lastCommand!;
       expect(command.kind).toBe('insertOne');
@@ -922,7 +923,7 @@ describe('MongoCollection write methods', () => {
 
     it('wraps callback scalar-list replacement elements independently', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor);
       await col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .update((u) => [u.tags.set(['admin', null as never, 'editor'])]);
@@ -994,7 +995,7 @@ describe('MongoCollection write methods', () => {
 
     it('leaves null callback $push elements unwrapped', async () => {
       const executor = createMockExecutor([{ _id: 'id-1' }]);
-      const col = createMongoCollection(contract, 'User', executor);
+      const col = createMongoCollection(nullableScalarListContract, 'User', executor);
       await col
         .where(MongoFieldFilter.eq('_id', 'id-1'))
         .update((u) => [u.tags.push(null as never)]);

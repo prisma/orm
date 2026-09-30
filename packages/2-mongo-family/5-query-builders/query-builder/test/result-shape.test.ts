@@ -68,9 +68,9 @@ describe('contractModelToMongoResultShape', () => {
     });
   });
 
-  it('maps a list of value objects to an array of documents', () => {
+  it.each([false, true])('maps value-object lists with elementNullable=%s', (elementNullable) => {
     const shape = contractFieldToMongoFieldShape(
-      { type: { kind: 'valueObject', name: 'Point' }, nullable: false, many: true },
+      { type: { kind: 'valueObject', name: 'Point' }, nullable: false, many: { elementNullable } },
       {
         Point: {
           fields: { x: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false } },
@@ -82,7 +82,7 @@ describe('contractModelToMongoResultShape', () => {
       nullable: false,
       element: {
         kind: 'document',
-        nullable: false,
+        nullable: elementNullable,
         fields: { x: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false } },
       },
     });

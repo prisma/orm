@@ -310,12 +310,12 @@ type ContractBase = Omit<
               readonly scores: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly tags: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly updatedAt: {
                 readonly nullable: false;

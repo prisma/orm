@@ -907,7 +907,7 @@ class MongoCollectionImpl<
 
     if (field.type.kind === 'scalar') {
       if (purpose === 'write') this.#assertEnumValues(field, value, path);
-      return this.#scalarParam(value, field, path);
+      return this.#scalarParam(value, field, path, purpose);
     }
 
     if (field.type.kind === 'valueObject') {
@@ -983,12 +983,20 @@ class MongoCollectionImpl<
   /**
    * A scalar field's value as parameters: a list field's array is encoded element by element through the element codec, so the codec never sees the whole list.
    */
-  #scalarParam(value: unknown, field: ContractField, path: string): MongoValue {
+  #scalarParam(
+    value: unknown,
+    field: ContractField,
+    path: string,
+    purpose: ValuePurpose,
+  ): MongoValue {
     if (field.type.kind !== 'scalar') return new MongoParamRef(value);
     const codecId = field.type.codecId;
     if (field.many && Array.isArray(value)) {
+      const acceptsNull = field.many.elementNullable || purpose === 'filter';
       return value.map((element, index) =>
-        element === null ? null : this.#fieldParam(element, codecId, `${path}.${index}`),
+        element === null && acceptsNull
+          ? null
+          : this.#fieldParam(element, codecId, `${path}.${index}`),
       );
     }
     return this.#fieldParam(value, codecId, path);
@@ -1130,7 +1138,13 @@ class MongoCollectionImpl<
     const field = this.#fieldAtPath(path);
     if (field === undefined) return value;
     if (operator === '$set') return this.#wrapFieldValue(value.value, field, path, 'write');
-    if (value.value === null && field.many) return null;
+    if (
+      value.value === null &&
+      field.many &&
+      (field.many.elementNullable || operator === '$pull')
+    ) {
+      return null;
+    }
     if (operator === '$pull') return this.#wrapFieldValue(value.value, field, path, 'filter');
     if (field.type.kind === 'scalar') {
       this.#assertEnumValues(field, field.many ? [value.value] : value.value, path);
