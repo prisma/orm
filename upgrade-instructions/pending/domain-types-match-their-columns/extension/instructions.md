@@ -149,6 +149,16 @@ changes:
       glob: "**/migration.ts"
       matches:
         - '\bdefaultSql\s*:'
+  - id: adapter-writes-column-defaults
+    summary: |
+      The control adapter writes every column's `DEFAULT …` clause, through a new required method, `renderColumnDefault(column, table)`, on `ExecuteRequestLowerer` and `SqlControlAdapter` (`family/control-adapter`). An adapter, and any fake lowerer in tests, must implement it. `buildColumnDefaultSql` is removed from `target/planner-ddl-builders`: build the column and call `renderColumnDefault`. `SetDefaultCall` (`target/op-factory-call`) takes the column, `new SetDefaultCall(schema, table, column, operationClass)`, instead of its name and `defaultSql`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bbuildColumnDefaultSql\b'
+        - '\bnew\s+SetDefaultCall\s*\('
+        - '(?<![.\w])lowerToExecuteRequest\s*[(:]'
+        - '\bimplements\b[^{]*\b(?:ExecuteRequestLowerer|SqlControlAdapter)\b'
 ---
 
 ## `domain-types-match-their-columns`
@@ -348,3 +358,44 @@ On SQLite, a column in `addColumn` or `recreateTable` carries the default and it
 An applied migration needs nothing: `db migrate` applies `ops.json`, which holds the SQL. Change a `migration.ts` this way only when you run it again to write `ops.json`. `node migration.ts` does not check types, so an earlier file still runs; `setDefault`, `addColumn` and `recreateTable` then refuse a `defaultSql` with `MIGRATION.OPERATION_OPTION_REMOVED`, naming the table and the column, rather than leave the default out. Rewrite the call as shown, or, if the migration is not applied, delete its package and run `migration plan` again.
 
 The `migration.ts` that `migration plan` writes for a new SQLite table now gives each column its `codecRef`, so running it writes the same `ops.json` as the plan.
+
+## `adapter-writes-column-defaults`
+
+The control adapter writes every column default that DDL writes, for a new table, a new column, a changed default and a rebuilt SQLite table, through one method on `ExecuteRequestLowerer`, which `SqlControlAdapter` extends (`family/control-adapter` of `@prisma/orm-postgres`, `@prisma/orm-sqlite` and `@prisma/orm-family-sql`):
+
+```typescript
+renderColumnDefault(column: DdlColumn, table: string): Promise<string>
+```
+
+It returns the `DEFAULT …` clause for the column, or `''` when the column has none or writes it another way, as an autoincrement column does. It reads a literal default, and each element of a list default, with the column's codec first, so a value the codec refuses is `CONTRACT.DEFAULT_INVALID` naming the table and the column.
+
+- **An `ExecuteRequestLowerer` or `SqlControlAdapter` implementation** must add the method, and so must a fake lowerer in tests. An adapter returns the clause its CREATE TABLE writes for the column. To read a literal default with the column's codec, use `encodeLiteralDefault` and `encodeListLiteralDefault` from `relational-core/ast`. A fake that writes no defaults can return `''`:
+
+  ```typescript
+  const lowerer: ExecuteRequestLowerer = {
+    lower: () => ({ sql: '', params: [] }),
+    lowerToExecuteRequest: async () => ({ sql: '', params: [] }),
+    renderColumnDefault: async () => '',
+  };
+  ```
+
+- **`buildColumnDefaultSql`** is removed from `target/planner-ddl-builders` of `@prisma/orm-postgres` and `@prisma/orm-target-postgres`. Build the column with `col`, `lit` and `fn` from `relational-core/contract-free`, and ask the adapter for the clause:
+
+  ```typescript
+  // before
+  const clause = buildColumnDefaultSql({ kind: 'literal', value: 'member' }, { nativeType: 'text' });
+  // after
+  const clause = await adapter.renderColumnDefault(
+    col('role', 'text', { default: lit('member'), codecRef: { codecId: 'pg/text@1' } }),
+    'user',
+  );
+  ```
+
+- **`SetDefaultCall`** (`target/op-factory-call` of `@prisma/orm-postgres` and `@prisma/orm-target-postgres`) takes the column instead of its name and the SQL text:
+
+  ```typescript
+  // before
+  new SetDefaultCall('public', 'user', 'role', "DEFAULT 'member'", 'widening');
+  // after
+  new SetDefaultCall('public', 'user', col('role', 'text', { default: lit('member'), codecRef: { codecId: 'pg/text@1' } }), 'widening');
+  ```
