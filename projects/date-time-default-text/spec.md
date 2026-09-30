@@ -67,5 +67,5 @@ Today `prisma contract emit` fails on this schema in the published CLI, because 
 
 - The function and `Temporal` disagree on an edge case. A test compares them over a table of inputs.
 - The planner writes a default into DDL as quoted text in one path and through the codec in another. A year outside 0000 to 9999 in ISO form is not valid PostgreSQL input, so every DDL path must render through one function.
-- Shipping the polyfill adds a runtime dependency to the Postgres target's control-plane entry. The application runtime entries must not import it; a bundle-size check proves it.
+- Shipping the polyfill adds a required peer dependency to the Postgres target and the Postgres facade. npm, pnpm and bun install it automatically; Yarn users add it. The application runtime entries must not import it; a bundle-size check proves it.
 - A process can hold two `Temporal` implementations, the runtime's and the polyfill's. The function prefers the runtime's, and the codecs recognise a value by its `Symbol.toStringTag`, not by `instanceof`.

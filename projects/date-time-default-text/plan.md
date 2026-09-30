@@ -6,7 +6,7 @@ Three slices, one pull request each, in order. Slice 2 needs slice 1 to be obser
 
 - One function in `@internal/target-postgres` returns the `Temporal` to use: the runtime's when it exists, else the one the control-plane entry registered. The codec helpers and the two `now` generators call it and never read the global.
 - The target's control-plane entry registers `temporal-polyfill`. No runtime entry imports it.
-- `temporal-polyfill` is a runtime dependency of the package that imports it and of the published packages that ship that entry.
+- `temporal-polyfill` is a required peer dependency of the package that imports it and of the published packages that ship that entry, so a project that already installs it has one copy. npm, pnpm and bun install it automatically; Yarn users add it.
 - Tests run the built CLI as a child process that has no `Temporal`: `contract emit` on a PSL schema with a `DateTime` default, `db init` on a contract with date, time and list defaults, and `node migration.ts` with a date default. A test asserts `globalThis.Temporal` is still undefined afterwards.
 - Done when the tests pass, fail without the change, and the runtime bundle sizes are unchanged.
 

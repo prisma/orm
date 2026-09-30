@@ -12,7 +12,9 @@ Applications receive it as an exact-pinned dependency of `@prisma/orm-postgres`;
 | `/adapter` | Postgres adapter: column types, operation types, runtime wiring |
 | `/driver` | `pg`-based driver: control and runtime |
 
-A bare namespace import (e.g. `@prisma/orm-target-postgres/adapter`) aggregates that layer's full surface; deeper paths select individual modules.
+A bare namespace import (e.g. `@prisma/orm-target-postgres/adapter`) aggregates that layer's full surface; deeper paths select individual modules. An application imports the runtime entries (`/target/runtime`, `/adapter/runtime`, `/driver/runtime`), not the bare namespaces, because each aggregate includes the control-plane entries.
+
+`temporal-polyfill` is a required peer dependency. The `/target/control` entry loads it as a fallback `Temporal` when the runtime has none. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
 
 ## Responsibilities
 
