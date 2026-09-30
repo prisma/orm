@@ -1788,7 +1788,7 @@ async function readWithDefaultOutputSettings<T>(
   return result;
 }
 
-function pgInlineLiteral(wire: unknown, nativeType: string): string {
+function pgInlineLiteral(wire: unknown, nativeType: string, where: LiteralDefaultColumn): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? 'true' : 'false';
   if (typeof wire === 'number') {
@@ -1800,8 +1800,8 @@ function pgInlineLiteral(wire: unknown, nativeType: string): string {
     if (Number.isNaN(wire.getTime())) {
       throw adapterError(
         'CONTRACT.DEFAULT_INVALID',
-        `pgRenderDdlExecuteRequest: invalid Date value cannot be emitted as a DEFAULT literal for native type "${nativeType}"`,
-        { meta: { nativeType } },
+        `Column "${where.table}"."${where.column}" has an invalid Date default`,
+        { meta: { table: where.table, column: where.column, reason: 'invalid-date-default' } },
       );
     }
     const quoted = `'${escapeLiteral(wire.toISOString())}'`;
@@ -1867,9 +1867,9 @@ async function pgRenderDdlColumnDefault(
       ? undefined
       : await encodeLiteralDefault(codecLookup, codecRef, def.value, where);
   if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
-  if (encoded !== undefined) return `DEFAULT ${pgInlineLiteral(encoded.wire, nativeType)}`;
+  if (encoded !== undefined) return `DEFAULT ${pgInlineLiteral(encoded.wire, nativeType, where)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
-  return `DEFAULT ${pgInlineLiteral(def.value, nativeType)}`;
+  return `DEFAULT ${pgInlineLiteral(def.value, nativeType, where)}`;
 }
 
 async function pgRenderDdlColumn(

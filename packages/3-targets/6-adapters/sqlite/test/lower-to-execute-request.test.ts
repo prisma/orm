@@ -159,13 +159,17 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — DDL literal defaults', 
 });
 
 describe('SqliteControlAdapter.lowerToExecuteRequest — guards', () => {
-  it('throws when a numeric literal default is NaN, which SQLite stores as NULL', async () => {
+  it('refuses a NaN literal default, which SQLite stores as NULL, naming the column', async () => {
     const ast = new SqliteCreateTable({
       table: 'defaults',
       columns: [col('x', 'REAL', { default: lit(Number.NaN) })],
     });
     await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
-      'sqliteRenderDdlExecuteRequest: a NaN default cannot be emitted, because SQLite stores NaN as NULL',
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: 'Column "defaults"."x" has a NaN default, which SQLite stores as NULL',
+        meta: { table: 'defaults', column: 'x', value: 'NaN', reason: 'nan-default' },
+      }),
     );
   });
 
@@ -186,12 +190,18 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — guards', () => {
     );
   });
 
-  it('throws when a Date literal default is invalid', async () => {
+  it('refuses an invalid Date literal default, naming the column', async () => {
     const ast = new SqliteCreateTable({
       table: 'defaults',
       columns: [col('x', 'TEXT', { default: lit(new Date('not-a-date')) })],
     });
-    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(/invalid Date/);
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: 'Column "defaults"."x" has an invalid Date default',
+        meta: { table: 'defaults', column: 'x', reason: 'invalid-date-default' },
+      }),
+    );
   });
 });
 

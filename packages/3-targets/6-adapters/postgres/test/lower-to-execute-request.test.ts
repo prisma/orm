@@ -177,12 +177,18 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — guards', () => {
     );
   });
 
-  it('throws when a Date literal default is invalid', async () => {
+  it('refuses an invalid Date literal default, naming the column', async () => {
     const ast = new PostgresCreateTable({
       table: 'defaults',
       columns: [col('x', 'timestamptz', { default: lit(new Date('not-a-date')) })],
     });
-    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(/invalid Date/);
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: 'Column "defaults"."x" has an invalid Date default',
+        meta: { table: 'defaults', column: 'x', reason: 'invalid-date-default' },
+      }),
+    );
   });
 
   it('routes a codec-bearing literal default through codec.encode (not raw type-branching)', async () => {

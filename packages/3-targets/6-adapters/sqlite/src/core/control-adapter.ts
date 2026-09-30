@@ -705,14 +705,15 @@ function flatColumnDependsOn(tableName: string, columns: readonly string[]): Sch
 // sqliteRenderDdlExecuteRequest — independent DDL walker for lowerToExecuteRequest
 // ---------------------------------------------------------------------------
 
-function sqliteInlineLiteral(wire: unknown): string {
+function sqliteInlineLiteral(wire: unknown, where: LiteralDefaultColumn): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? '1' : '0';
   if (typeof wire === 'number') {
     if (Number.isNaN(wire)) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',
-        'sqliteRenderDdlExecuteRequest: a NaN default cannot be emitted, because SQLite stores NaN as NULL',
+        `Column "${where.table}"."${where.column}" has a NaN default, which SQLite stores as NULL`,
+        { meta: { table: where.table, column: where.column, value: 'NaN', reason: 'nan-default' } },
       );
     }
     if (!Number.isFinite(wire)) return wire > 0 ? '9e999' : '-9e999';
@@ -723,7 +724,8 @@ function sqliteInlineLiteral(wire: unknown): string {
     if (Number.isNaN(wire.getTime())) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',
-        'sqliteRenderDdlExecuteRequest: invalid Date value cannot be emitted as a DEFAULT literal',
+        `Column "${where.table}"."${where.column}" has an invalid Date default`,
+        { meta: { table: where.table, column: where.column, reason: 'invalid-date-default' } },
       );
     }
     return `'${escapeLiteral(wire.toISOString())}'`;
@@ -762,9 +764,9 @@ async function sqliteRenderDdlColumnDefault(
       ? undefined
       : await encodeLiteralDefault(codecLookup, codecRef, def.value, where);
   if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
-  if (encoded !== undefined) return `DEFAULT ${sqliteInlineLiteral(encoded.wire)}`;
+  if (encoded !== undefined) return `DEFAULT ${sqliteInlineLiteral(encoded.wire, where)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
-  return `DEFAULT ${sqliteInlineLiteral(def.value)}`;
+  return `DEFAULT ${sqliteInlineLiteral(def.value, where)}`;
 }
 
 async function sqliteRenderDdlColumn(
