@@ -4,7 +4,6 @@ import {
   canonicalNumeralText,
   createNumberClassifier,
   escapePslString,
-  isNonFiniteText,
   isNumeralText,
   numeralText,
   parseJsonBody,
@@ -65,18 +64,17 @@ describe('escapePslString', () => {
   });
 });
 
-describe('isNumeralText and isNonFiniteText', () => {
+describe('isNumeralText', () => {
   it.each(['0', '-42', '1.50'])('reads %s as a numeral', (text) => {
-    expect([isNumeralText(text), isNonFiniteText(text)]).toEqual([true, false]);
+    expect(isNumeralText(text)).toBe(true);
   });
 
-  it.each(['NaN', 'Infinity', '-Infinity'])('reads %s as a non-finite word', (text) => {
-    expect([isNumeralText(text), isNonFiniteText(text)]).toEqual([false, true]);
-  });
-
-  it.each(['1e3', '', 'x', '1.'])('reads %o as neither', (text) => {
-    expect([isNumeralText(text), isNonFiniteText(text)]).toEqual([false, false]);
-  });
+  it.each(['NaN', 'Infinity', '-Infinity', '1e3', '', 'x', '1.'])(
+    'does not read %o as a numeral',
+    (text) => {
+      expect(isNumeralText(text)).toBe(false);
+    },
+  );
 });
 
 describe('createNumberClassifier', () => {

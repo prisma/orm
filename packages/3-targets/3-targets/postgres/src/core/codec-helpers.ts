@@ -41,6 +41,15 @@ export function canonicalUuid(text: string): string | undefined {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+/** The largest finite float4. */
+export const FLOAT4_MAX = 3.4028234663852886e38;
+
+/** Whether float4 holds a finite number: it neither overflows to an infinity nor rounds to 0, both of which PostgreSQL refuses. */
+export function fitsFloat4(value: number): boolean {
+  const single = Math.fround(value);
+  return Number.isFinite(single) && (value === 0 || single !== 0);
+}
+
 /** `1 character`, `3 characters`: a count and its noun, for a refusal. */
 export function counted(count: number, noun: string): string {
   return `${count} ${count === 1 ? noun : `${noun}s`}`;
@@ -188,13 +197,10 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
 /**
  * A SQL number literal has no form for `NaN` or the infinities; PostgreSQL reads and writes them as
  * the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire,
- * as `sqlFloatEncodeJson` does in JSON.
+ * as `encodeJsonFloat` does in JSON.
  */
 export const pgFloatEncode = (value: number): string | number =>
   Number.isFinite(value) ? value : String(value);
-
-const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
-const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
 /**
  * Requires an integer within ±(2^53 − 1), the range a JS `number` holds
@@ -230,7 +236,7 @@ export const pgInt8NumberEncodeJson = (value: number): string => pgInt8NumberEnc
 export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   if (typeof wire === 'number') return pgInt8NumberGuard('RUNTIME.DECODE_FAILED', wire);
   const value = decimalIntegerDecode('pg/int8number@1', wire);
-  if (value < MIN_SAFE_INTEGER_BIGINT || value > MAX_SAFE_INTEGER_BIGINT) {
+  if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
     throw postgresError(
       'RUNTIME.DECODE_FAILED',
       `pg/int8number@1 value must be an integer within the safe integer range, got ${value}`,

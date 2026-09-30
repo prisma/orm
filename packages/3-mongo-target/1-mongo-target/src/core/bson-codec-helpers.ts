@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util';
 import type { JsonValue } from '@internal/contract/types';
-import { refuseJsonValue } from '@internal/framework-components/codec';
+import { INT32_RANGE, refuseJsonValue } from '@internal/framework-components/codec';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { Binary, Code, type Document, Double, EJSON, MinKey } from 'bson';
@@ -143,12 +143,9 @@ export function decodeBsonValue(wire: unknown): BsonValue {
   >(decodeValue(wire));
 }
 
-const INT32_MIN = -(2 ** 31);
-const INT32_MAX = 2 ** 31 - 1;
-
 function asDriverWrites(value: unknown): unknown {
   if (typeof value === 'number') {
-    return Number.isInteger(value) && (value < INT32_MIN || value > INT32_MAX)
+    return Number.isInteger(value) && (value < INT32_RANGE.min || value > INT32_RANGE.max)
       ? new Double(value)
       : value;
   }

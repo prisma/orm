@@ -175,9 +175,6 @@ const refuseNaN = (value: number) => {
   return value;
 };
 
-const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
-const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
-
 /**
  * Requires an application value to be of the JS type the codec reads.
  *
@@ -252,7 +249,7 @@ const encodableSafeInteger = (value: number): number => {
  * conversion so an out-of-range value throws rather than rounds.
  */
 const safeIntegerFromBigint = (value: bigint): number => {
-  if (value < MIN_SAFE_INTEGER_BIGINT || value > MAX_SAFE_INTEGER_BIGINT) {
+  if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
     throw sqliteError(
       'RUNTIME.DECODE_FAILED',
       `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${value}`,

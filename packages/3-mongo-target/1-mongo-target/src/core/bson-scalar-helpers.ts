@@ -3,8 +3,8 @@ import {
   decodeJsonInteger,
   decodeJsonIntegerText,
   decodeJsonMatching,
+  INT32_RANGE,
   INT64_RANGE,
-  type IntegerRange,
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import { Binary, Decimal128, Long } from 'bson';
@@ -63,8 +63,6 @@ export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
   return decodeJsonMatching(codecId, json, OBJECT_ID_TEXT, '24 hexadecimal digits');
 }
 
-const INT32_RANGE: IntegerRange = { min: -(2 ** 31), max: 2 ** 31 - 1 };
-
 export function int32EncodeJson(codecId: string, value: number): number {
   if (!Number.isInteger(value) || value < INT32_RANGE.min || value > INT32_RANGE.max) {
     encodeFailed(
@@ -109,14 +107,11 @@ export function vectorDecodeJson(codecId: string, json: JsonValue): number[] {
   return numbers;
 }
 
-const INT64_MIN = -(2n ** 63n);
-const INT64_MAX = 2n ** 63n - 1n;
-
 /**
  * `Long.fromBigInt` keeps the low 64 bits of any bigint, so an out-of-range value would be stored as a different number without error.
  */
 function isInt64(value: bigint): boolean {
-  return value >= INT64_MIN && value <= INT64_MAX;
+  return value >= INT64_RANGE.min && value <= INT64_RANGE.max;
 }
 
 function requireInt64(codecId: string, value: bigint): bigint {

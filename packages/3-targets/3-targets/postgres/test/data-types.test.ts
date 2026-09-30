@@ -172,6 +172,7 @@ describe('what each cast converts', () => {
     ['a value in a shape the source type does not store', pgInt8, pgInt2.id, 'not a number'],
     ['a magnitude no double holds', pgFloat8, pgNumeric.id, '1'.padEnd(400, '0')],
     ['a magnitude no float4 holds', pgFloat4, pgNumeric.id, '3.5e38'],
+    ['a magnitude float4 rounds to 0', pgFloat4, pgNumeric.id, `0.${'0'.repeat(49)}1`],
   ])('refuses %s with a cast-level code', (_name, type, source, value) => {
     expect(() => type.casts[source]?.(value)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),

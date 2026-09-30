@@ -1,10 +1,13 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { AuthoringDataTypeEntry } from '@internal/framework-components/authoring';
 import type { Cast, DataType } from '@internal/framework-components/codec';
-import { createDataTypeLookup, dataType } from '@internal/framework-components/codec';
+import {
+  createDataTypeLookup,
+  dataType,
+  isNonFiniteText,
+} from '@internal/framework-components/codec';
 import {
   createNumberClassifier,
-  isNonFiniteText,
   numeralText,
   parseJsonBody,
   printJsonBody,

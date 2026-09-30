@@ -1,7 +1,8 @@
 /**
  * Reading a `@default(...)` value: a written value is read by the authoring entry for the syntax it
  * is written in, which gives it a data type; the column's type takes it directly or through a cast;
- * and the column's codec validates the canonical form before it is stored.
+ * and the column's codec, built with the column's type parameters, reads the canonical form with
+ * `decodeJson`, which refuses a value the column would not store, before it is stored.
  *
  * No per-type code and no per-codec branch live here. ADR 254.
  */

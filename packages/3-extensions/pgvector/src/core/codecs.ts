@@ -142,10 +142,18 @@ export class PgVectorCodec extends CodecImpl<
   }
 
   decodeJson(json: JsonValue): number[] {
-    if (!Array.isArray(json)) return refuseJsonValue(VECTOR_CODEC_ID, 'an array of numbers', json);
-    const value = [...json];
-    this.assertVector(value, 'RUNTIME.DECODE_FAILED');
-    return value;
+    if (!Array.isArray(json) || json.length !== this.length) return this.refuseJson(json);
+    const numbers: number[] = [];
+    for (const element of json) {
+      if (typeof element !== 'number' || !Number.isFinite(element)) return this.refuseJson(json);
+      numbers.push(element);
+    }
+    return numbers;
+  }
+
+  private refuseJson(json: JsonValue): never {
+    const noun = this.length === 1 ? 'number' : 'numbers';
+    return refuseJsonValue(VECTOR_CODEC_ID, `an array of ${this.length} finite ${noun}`, json);
   }
 }
 

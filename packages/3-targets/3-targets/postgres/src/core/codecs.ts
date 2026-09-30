@@ -25,6 +25,7 @@ import {
   decodeJsonMatching,
   decodeJsonString,
   encodeJsonFloat,
+  INT32_RANGE,
   INT64_RANGE,
   refuseJsonValue,
   renderTsLiteral,
@@ -59,7 +60,9 @@ import {
   counted,
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
+  FLOAT4_MAX,
   fitsCharacterLength,
+  fitsFloat4,
   type PgInterval,
   type PrecisionParams,
   pgBigintEncode,
@@ -225,16 +228,6 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
   if (significantFraction.length > scale) return false;
   return `${whole}${significantFraction.padEnd(scale, '0')}`.replace(/^0+/, '').length <= precision;
 }
-
-const INT4_RANGE = { min: -2147483648, max: 2147483647 } as const;
-
-const FLOAT4_MAX = 3.4028234663852886e38;
-
-/** Whether float4 holds a finite number: it does not overflow to an infinity or underflow to 0, as PostgreSQL refuses both. */
-const fitsFloat4 = (value: number): boolean => {
-  const single = Math.fround(value);
-  return Number.isFinite(single) && (value === 0 || single !== 0);
-};
 
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
@@ -663,7 +656,7 @@ export class PgInt4Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return decodeJsonInteger(PG_INT4_CODEC_ID, json, { min: -2147483648, max: 2147483647 });
+    return decodeJsonInteger(PG_INT4_CODEC_ID, json, INT32_RANGE);
   }
 }
 
@@ -1703,7 +1696,7 @@ export class PgIntCodec extends SqlIntCodec {
     return decodePostgresNumberWire(wire);
   }
   override decodeJson(json: JsonValue): number {
-    return decodeJsonInteger(this.id, json, INT4_RANGE);
+    return decodeJsonInteger(this.id, json, INT32_RANGE);
   }
 }
 

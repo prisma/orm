@@ -45,7 +45,7 @@ type JsonRoundTripConfig<TInput> = [TInput] extends [JsonValue]
  *
  * Author `encode` and `decode` as sync or async functions; the factory produces a {@link MongoCodec} whose query-time methods follow the boundary contract documented on the framework {@link BaseCodec}. Authors receive a second `ctx` options argument carrying the per-call context; ignore it if you don't need it.
  *
- * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` defaults to identity when `TInput` is a JSON type, and `decodeJson` only when `TInput` is exactly `JsonValue`; a codec with a narrower JSON type must supply a `decodeJson` that refuses a value of another kind, and a codec whose type is not JSON must supply both.
+ * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` defaults to identity when `TInput` is a JSON type, and `decodeJson` only when `TInput` is exactly `JsonValue`; any other codec supplies a `decodeJson` that follows {@link BaseCodec.decodeJson}, and a codec whose type is not JSON supplies both.
  *
  * Codec-id-keyed static metadata (`traits`, `targetTypes`, `renderOutputType`) lives on the unified `CodecDescriptor` rather than on the codec instance itself (TML-2357).
  */

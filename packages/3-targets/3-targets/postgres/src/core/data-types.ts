@@ -9,10 +9,15 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
-import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
+import {
+  type Cast,
+  type DataType,
+  dataType,
+  isNonFiniteText,
+} from '@internal/framework-components/codec';
+import { numeralText } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
-import { canonicalUuid } from './codec-helpers';
+import { canonicalUuid, fitsFloat4 } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -76,15 +81,15 @@ export const pgNumeric: DataType = dataType('pg/numeric', {
   },
 });
 
-/** `float4` stores a single-precision float, so a magnitude past about 3.4e38 does not fit. */
+/** `float4` stores a single-precision float, so a magnitude past about 3.4e38, or one it would round to 0, does not fit. */
 const asFloat4: Cast = (value) => {
   const converted = asFloat(value);
-  if (typeof converted !== 'number' || Number.isFinite(Math.fround(converted))) return converted;
+  if (typeof converted !== 'number' || fitsFloat4(converted)) return converted;
   throw structuredError(
     'CONTRACT.CAST_REFUSED',
-    `${converted} is out of range: no float4 holds a number that large.`,
+    `${converted} is out of range: float4 holds a nonzero magnitude from about 1.4e-45 to 3.4e38.`,
     {
-      why: 'float4 stores a single-precision float, which holds magnitudes up to about 3.4e38.',
+      why: 'float4 stores a single-precision float, which overflows past about 3.4e38 and rounds a magnitude below about 1.4e-45 to 0.',
       fix: 'Use a number float4 holds, or a float8 or numeric column.',
     },
   );

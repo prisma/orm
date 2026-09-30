@@ -54,6 +54,9 @@ export const SAFE_INTEGER_RANGE: IntegerRange = {
   max: Number.MAX_SAFE_INTEGER,
 };
 
+/** The integers a signed 32-bit integer holds. */
+export const INT32_RANGE: IntegerRange = { min: -(2 ** 31), max: 2 ** 31 - 1 };
+
 export function decodeJsonInteger(codecId: string, json: JsonValue, range: IntegerRange): number {
   if (typeof json !== 'number' || !Number.isInteger(json) || json < range.min || json > range.max) {
     return refuseJsonValue(codecId, `an integer from ${range.min} to ${range.max}`, json);
@@ -96,15 +99,18 @@ export function decodeJsonIntegerText(
 
 const NON_FINITE_TEXT: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
 
-/**
- * JSON has no number for NaN or an infinity, so a float's JSON form writes them as the text `NaN`, `Infinity` and `-Infinity`, which is also how PostgreSQL writes them in JSON.
- */
+/** Whether `text` is `NaN`, `Infinity` or `-Infinity`, the text a float's JSON form writes for a value JSON has no number for. */
+export function isNonFiniteText(text: string): boolean {
+  return NON_FINITE_TEXT.has(text);
+}
+
+/** JSON has no number for NaN or an infinity, so a float's JSON form writes them as the text `NaN`, `Infinity` and `-Infinity`. */
 export function encodeJsonFloat(value: number): JsonValue {
   return Number.isFinite(value) ? value : String(value);
 }
 
 export function decodeJsonFloat(codecId: string, json: JsonValue): number {
   if (typeof json === 'number' && Number.isFinite(json)) return json;
-  if (typeof json === 'string' && NON_FINITE_TEXT.has(json)) return Number(json);
+  if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
   return refuseJsonValue(codecId, 'a finite number or the text NaN, Infinity or -Infinity', json);
 }

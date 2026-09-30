@@ -6,11 +6,12 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type {
-  AnyCodecDescriptor,
-  CodecLookup,
-  CodecTrait,
-  DataTypeId,
+import {
+  type AnyCodecDescriptor,
+  type CodecLookup,
+  type CodecTrait,
+  type DataTypeId,
+  isNonFiniteText,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
 import {
@@ -57,8 +58,6 @@ const targetTypesByCodecId: Record<string, readonly string[]> = {
   'pg/json@1': ['json'],
   'pg/vector@1': ['vector'],
 };
-
-const NON_FINITE: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
 
 const dataTypeByCodecId: Readonly<Record<string, DataTypeId>> = {
   'pg/text@1': pgText.id,
@@ -110,7 +109,7 @@ const fixtureCodecs: Readonly<
   };
   const asDouble = (json: JsonValue): number => {
     if (typeof json === 'number') return json;
-    if (typeof json === 'string' && NON_FINITE.has(json)) return Number(json);
+    if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
     throw new Error('value must be a number');
   };
   const text = {

@@ -8,6 +8,9 @@ import {
   decodeJsonMatching,
   decodeJsonString,
   encodeJsonFloat,
+  INT32_RANGE,
+  INT64_RANGE,
+  isNonFiniteText,
   refuseJsonValue,
 } from '../src/shared/decode-json';
 
@@ -158,5 +161,22 @@ describe('the float pair', () => {
     expect(() => decodeJsonFloat('demo/float@1', json)).toThrow(
       refusal('demo/float@1', 'a finite number or the text NaN, Infinity or -Infinity', received),
     );
+  });
+});
+
+describe('isNonFiniteText', () => {
+  it('names the three words a float JSON form writes for NaN and the infinities, and nothing else', () => {
+    expect(
+      ['NaN', 'Infinity', '-Infinity', 'nan', 'inf', '+Infinity', '1', ''].filter(isNonFiniteText),
+    ).toEqual(['NaN', 'Infinity', '-Infinity']);
+  });
+});
+
+describe('the integer ranges', () => {
+  it('bound a signed 32-bit and a signed 64-bit integer', () => {
+    expect({ INT32_RANGE, INT64_RANGE }).toEqual({
+      INT32_RANGE: { min: -2147483648, max: 2147483647 },
+      INT64_RANGE: { min: -9223372036854775808n, max: 9223372036854775807n },
+    });
   });
 });
