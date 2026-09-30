@@ -125,9 +125,9 @@ export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });
 const POSTGRES_YEAR = /^(\d{4,6})(-.*?)( BC)?$/;
 
 /**
- * Text PostgreSQL prints, in ISO 8601: a year before 1 carries a ` BC` suffix and a year after 9999
- * has five or six digits, and both become a signed six-digit year. Year 0 BC does not exist, so it
- * stays as written and the reader refuses it.
+ * Text PostgreSQL prints, in ISO 8601. A year with a ` BC` suffix becomes the ISO year, one higher
+ * than its negative, so 1 BC is 0000 and 44 BC is -000043. A year of five or six digits becomes a
+ * signed six-digit year. 0 BC does not exist, so it stays as written and the reader refuses it.
  */
 function isoFromPostgresText(text: string): string {
   const match = POSTGRES_YEAR.exec(text);

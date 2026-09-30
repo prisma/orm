@@ -1,9 +1,6 @@
 /**
- * The canonical form of a date or time value, read from ISO 8601 text. ADR 254 states the canonical
- * form of each date and time type; this is the reader the SQL targets declare those types with. It
- * reads ISO 8601 with a signed six-digit year or a four-digit year, and a space in place of `T`, and
- * uses no `Temporal` and no JavaScript `Date`. A target turns any other text its database prints
- * into ISO 8601 before calling it.
+ * The reader the SQL targets build the canonical form of each date and time type with; ADR 254
+ * states the forms and the text it reads.
  */
 
 import { InternalError } from '@internal/utils/internal-error';

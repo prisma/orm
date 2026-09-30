@@ -65,7 +65,7 @@ const pgNumeric = dataType('pg/numeric', {
 - **Id.** `owner/name`, with no version: `pg/int8`, `sqlite/integer`, `postgis/geometry`. A type's identity does not change; what changes over time is a representation of it, which is a codec, and codecs are versioned (`pg/int8@1`). The two forms differ visibly so that one string never names both.
 - **DDL name and aliases.** The name the migration planner renders and the names introspection may report for the same type: `numeric` and `decimal`, `character varying` and `varchar`. `json` and `jsonb` are two database types and therefore two data types.
 - **Parameters and rendering.** A parameterised type declares its parameter schema and how its DDL name is rendered with them: `numeric(10,2)`, `vector(1536)`, `timestamp(3)`. Parameters do not make a new type; `numeric(10,2)` holds values of `pg/numeric` under a constraint.
-- **Canonical form.** The one JSON shape `contract.json` stores for a value of the type. `pg/int8` stores digit text; `pg/int4` a JSON number; `pg/jsonb` the document. Every codec of the type stores and reads exactly this form.
+- **Canonical form.** The one JSON shape `contract.json` stores for a value of the type. `pg/int8` stores digit text; `pg/int4` a JSON number; `pg/jsonb` the document. Every codec of the type stores and reads exactly this form. A type whose values have several written forms, such as a date, also declares a `canonicalForm` function that turns each of them into the one stored form.
 - **Casts.** For each other type whose values this type takes, a pure function from that type's canonical form to this one's. A cast may convert (`pg/int2` to `pg/int8` turns a number into digit text; `pg/numeric` to `pg/float8` turns decimal text into a number and keeps the words `NaN`, `Infinity`, `-Infinity` as the text the floating-point types store) or may return the value unchanged (`pg/json` to `pg/jsonb`); either way the declaration is the point: this type takes those values. A cast may also refuse: the cast into the floating-point types refuses a magnitude no double holds rather than rounding it to `Infinity`, because the database refuses it too and storing `Infinity` would make a written number indistinguishable from a written `Infinity`.
 
 Casts are declared by the type that receives, never by the source, so there is at most one cast for any pair and the owner of a type is the only one who decides what it takes. That ownership rule is the one PostgreSQL uses for its own cast table, and the rule is all we borrow: these casts are between our data types, applied in the framework before a value is stored or sent, and they model nothing about what the database can convert. Nothing central computes convertibility, because only a type's owner knows what its database or extension can take.
@@ -78,22 +78,29 @@ No type spans targets, and no family registers types. The SQL family exports imp
 
 ### Date and time types
 
-The canonical form of a date or time type is one standard text: the text `Temporal` prints.
+A date or time value can be written many ways, so each date and time type declares a `canonicalForm` function in its `dataType(id, spec)` declaration. The function turns any text the type takes into the one text `contract.json` stores for that value, and refuses text the type does not hold. The type's cast from its target's text type is the same function. `2024-01-01T00:00:00Z`, `2024-01-01T00:00:00.000Z` and `2024-01-01T01:00:00+01:00` on a `timestamptz` column are one instant, stored once as `2024-01-01T00:00:00Z`.
 
-| Data type | Standard text |
-|---|---|
-| `pg/timestamptz`, `sqlite/datetime` | the instant in UTC: `2024-01-01T00:00:00Z` |
-| `pg/timestamp` | `2024-01-01T12:34:56` |
-| `pg/date` | `2024-01-01` |
-| `pg/time` | `12:34:56` |
-| `pg/timetz` | `12:34:56+02:00`, and `Z` for a zero offset |
-| `pg/interval` | the ISO 8601 duration `pg/interval@1` writes: `P1Y2M` |
+| Data type | Canonical form | Earliest | Latest |
+|---|---|---|---|
+| `pg/timestamptz` | the instant in UTC: `2024-01-01T00:00:00Z` | `-004713-11-24T00:00:00Z` | `+275760-09-13T00:00:00Z` |
+| `sqlite/datetime` | the instant in UTC: `2024-01-01T00:00:00Z` | `-271821-04-20T00:00:00Z` | `+275760-09-13T00:00:00Z` |
+| `pg/timestamp` | `2024-01-01T12:34:56` | `-004713-11-24T00:00:00` | `+275760-09-13T23:59:59.999999` |
+| `pg/date` | `2024-01-01` | `-004713-11-24` | `+275760-09-13` |
+| `pg/time` | `12:34:56` | | |
+| `pg/timetz` | the time and its offset, `12:34:56+02:00`; `Z` for a zero offset | | |
+| `pg/interval` | an ISO 8601 duration: `P1Y2M3DT4H5M6.5S` | | |
 
-A fraction of a second has no trailing zeros and at most six digits. A year outside 0000 to 9999 is a sign and six digits: `-000043-03-15`. `infinity` and `-infinity` are values of `pg/date`, `pg/timestamp` and `pg/timestamptz`.
+- Seconds are always written. A fraction of a second has no trailing zeros and at most six digits, because every one of these types holds microseconds.
+- A year from 0000 to 9999 has four digits. Any other year is a sign and six digits: `-000043-03-15`, `+012026-01-02`. Years count as ISO 8601 counts them, with year 0000 as 1 BC.
+- An offset is `+HH:MM`, or `+HH:MM:SS` when it has seconds. `pg/timetz` holds offsets up to 15:59 either way.
+- `infinity` and `-infinity` are values of `pg/date`, `pg/timestamp` and `pg/timestamptz`.
+- An interval balances months into years and minutes and seconds into hours, and keeps days as days: `P14MT90M` is `P1Y2MT1H30M`. It leaves out a part that is zero, and a zero interval is `PT0S`. Years, months and days each carry their own sign; hours, minutes and seconds carry the sign of the time as a whole: `-1 days -04:05:00` is `P-1DT-4H-5M`.
 
-Each of these types casts from its target's text type, and the cast produces the standard text. `2024-01-01T00:00:00Z`, `2024-01-01T00:00:00.000Z` and `2024-01-01T01:00:00+01:00` on a `timestamptz` column are one instant, stored once as `2024-01-01T00:00:00Z`. The cast reads ISO 8601 and the forms PostgreSQL prints: a space in place of `T`, an offset of `+HH`, `+HH:MM` or `+HH:MM:SS`, and a ` BC` suffix. It refuses an offset on a type that holds none, a missing offset on a type that needs one, a date on a time type, a time on `pg/date`, more than six fraction digits, and a date or time that does not exist, each with a message that shows text the type takes. It uses no `Temporal` and no JavaScript `Date`, so a default reads the same on every runtime.
+The earliest value of each Postgres type is the earliest PostgreSQL holds, 4714-11-24 BC. It is year `-004713` because PostgreSQL has no year 0: its 1 BC is ISO year 0000. The latest value of every type, and the earliest of `sqlite/datetime`, is the limit of the `Temporal` and `Date` values its codecs produce. A type refuses a value outside its range rather than storing one that some codec of the type cannot read.
 
-The cast is one function per type, declared next to the type, and every reader of a default uses it: `encodeJson` of the codecs whose value is not a `Temporal` value, schema verification and the migration planner when they compare two defaults, DDL rendering, `contract infer` and `contract print`. DDL writes a year outside 1 to 9999 the way PostgreSQL reads it: `0044-03-15 BC`, `10000-01-01`.
+Each type reads ISO 8601 with a four-digit or signed six-digit year and a `T` or a space between date and time. A Postgres type also reads the text PostgreSQL prints: a ` BC` suffix, a year of five or six digits, `infinity` and `-infinity`, and for `pg/interval` the text PostgreSQL prints under `IntervalStyle = postgres`. The function uses no `Temporal` and no JavaScript `Date`, so a default reads the same on every runtime. It refuses an offset on a type that holds none, a missing offset on a type that needs one, a date on a time type, a time on `pg/date`, more than six fraction digits, a date or time that does not exist, and a value outside the type's range. Each refusal names what is wrong and shows text the type takes.
+
+Whatever stores, compares, writes or prints a date or time value from the contract uses the canonical form of the column's data type. It finds the function through the data type the column's codec names, so a codec from an extension that represents one of these types is treated the same way. Every codec's `encodeJson` produces the canonical form, and a codec whose value holds nanoseconds refuses digits below one microsecond. PostgreSQL reads no signed year, so Postgres DDL writes a year after 9999 without its sign and leading zeros (`10000-01-01`) and a year at or before 0000 with a ` BC` suffix (`0044-03-15 BC`). SQLite compares datetime text byte by byte, so SQLite DDL writes a `sqlite/datetime` default as the text the codec writes for every row, `2024-01-01T00:00:00.000Z`: a default then equals the text an application writes for the same instant.
 
 ## Codecs
 
