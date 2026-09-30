@@ -10,7 +10,10 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import { type CodecLookup, createDataTypeLookup } from '@internal/framework-components/codec';
+import {
+  type CodecLookupWithDescriptors,
+  createDataTypeLookup,
+} from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
@@ -85,7 +88,7 @@ const target = {
   authoring: { type: authoringTypes },
 };
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => postgresCodecRegistry.descriptorFor(id)?.factory({})({ name: id }),
   descriptorFor: (id) => postgresCodecRegistry.descriptorFor(id),
   targetTypesFor: (id) => postgresCodecRegistry.descriptorFor(id)?.targetTypes,

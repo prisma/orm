@@ -21,7 +21,10 @@ import {
   loweringEntryKey,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  CodecLookupWithDescriptors,
+} from '@internal/framework-components/codec';
 import {
   type ControlMutationDefaultRegistry,
   type DefaultFunctionLoweringContext,
@@ -298,7 +301,7 @@ function resolveEntityRefTypeConstructorCall(input: {
   readonly namespaceExtensionEntities:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly codecLookup: CodecLookup | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
@@ -337,7 +340,7 @@ function resolveEntityRefTypeConstructorCall(input: {
   }
 
   const codecId = input.descriptor.output.codecId;
-  const codecDescriptor = input.codecLookup?.descriptorFor?.(codecId);
+  const codecDescriptor = input.codecLookup?.descriptorFor(codecId);
   if (codecDescriptor === undefined || !hasColumnFromEntityHook(codecDescriptor)) {
     throw contractError(
       'CONTRACT.PACK_CONTRIBUTION_INVALID',
@@ -434,7 +437,7 @@ export function resolveFieldTypeDescriptor(input: {
    * constructor's descriptor declares an `entityRefArg`, to reach the
    * registered codec's `columnFromEntity` authoring hook.
    */
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
 }): ResolveFieldTypeResult {
   const source = diagnosticSource(input.sources, input.field.node.syntax);
   // Avoid cascading unsupported-type diagnostics after invalid qualification.
@@ -617,7 +620,7 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
-  readonly codecLookup: CodecLookup | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
   readonly defaultValue?: AuthoredColumnDefault;

@@ -75,6 +75,11 @@ export interface CodecLookup {
   descriptorFor?(id: string): AnyCodecDescriptor | undefined;
 }
 
+/** A {@link CodecLookup} that resolves codec descriptors, which building a column's codec with its type parameters needs. */
+export interface CodecLookupWithDescriptors extends CodecLookup {
+  descriptorFor(id: string): AnyCodecDescriptor | undefined;
+}
+
 /**
  * Full codec registry — the read surface of {@link CodecLookup} plus codec resolution by ref or
  * column coordinate. Built once by `extractCodecLookup` and passed by reference to adapters and
@@ -88,15 +93,16 @@ export interface CodecLookup {
  *   always returns `undefined` — the method exists so the object structurally satisfies the SQL
  *   `ContractCodecRegistry` interface.
  */
-export interface CodecRegistry extends CodecLookup {
+export interface CodecRegistry extends CodecLookupWithDescriptors {
   forCodecRef(ref: CodecRef): Codec;
   forColumn(namespaceId: string, table: string, column: string): Codec | undefined;
 }
 
-export const emptyCodecLookup: CodecLookup = {
+export const emptyCodecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
+  descriptorFor: () => undefined,
 };
 
 /**

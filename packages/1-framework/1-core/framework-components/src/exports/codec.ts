@@ -19,6 +19,7 @@ export type {
   CodecCallContext,
   CodecInstanceContext,
   CodecLookup,
+  CodecLookupWithDescriptors,
   CodecRef,
   CodecRegistry,
   CodecTrait,

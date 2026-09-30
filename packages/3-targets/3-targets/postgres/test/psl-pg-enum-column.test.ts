@@ -12,7 +12,7 @@
  *  3. Nullable variant (`pg.enum(E)?`).
  */
 
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -49,7 +49,7 @@ const pgEnumCodec = {
   decodeJson: (json) => json,
 } as Codec;
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumCodec : undefined),
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,

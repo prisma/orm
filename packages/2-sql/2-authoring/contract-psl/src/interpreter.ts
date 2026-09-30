@@ -25,7 +25,10 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringModelAttributeDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type {
   CapabilityMatrix,
   ExtensionPackRef,
@@ -163,7 +166,7 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   /** Target-supplied factory that materialises a `SqlNamespaceBase` concretion for each namespace coordinate. */
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
@@ -605,7 +608,7 @@ interface BuildModelNodeInput {
     Readonly<Record<string, Readonly<Record<string, unknown>>>>
   >;
   /** Codec-id-keyed descriptor lookup — forwarded to `collectResolvedFields` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   /** Contributed model-attribute descriptors keyed by bare `@@` attribute name (the exact shape `buildModelAttributesByName` produces). */
   readonly modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>;
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
@@ -1526,7 +1529,7 @@ interface BuildValueObjectNodesInput {
   readonly defaultNamespaceExtensionEntities:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly codecLookup: CodecLookup | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
 }
 
 function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNode[] {

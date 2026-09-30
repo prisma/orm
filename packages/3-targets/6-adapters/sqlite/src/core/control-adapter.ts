@@ -2,7 +2,7 @@ import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract
 import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/errors/execution';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import { REFERENTIAL_ACTION_SQL } from '@internal/sql-contract/referential-action-sql';
@@ -741,7 +741,7 @@ function sqliteInlineLiteral(wire: unknown): string {
 
 async function sqliteRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef | undefined,
 ): Promise<string> {
   if (def.kind === 'function') {
@@ -762,7 +762,10 @@ async function sqliteRenderDdlColumnDefault(
   return `DEFAULT ${sqliteInlineLiteral(def.value)}`;
 }
 
-async function sqliteRenderDdlColumn(column: DdlColumn, codecLookup: CodecLookup): Promise<string> {
+async function sqliteRenderDdlColumn(
+  column: DdlColumn,
+  codecLookup: CodecLookupWithDescriptors,
+): Promise<string> {
   if (column.type.includes('AUTOINCREMENT')) {
     return `${quoteIdentifier(column.name)} ${column.type}`;
   }
@@ -816,7 +819,7 @@ function sqliteRenderDdlConstraint(constraint: DdlTableConstraint): string {
 
 async function sqliteRenderDdlExecuteRequest(
   ast: SqliteDdlNode,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const node = blindCast<SqliteCreateTable, 'SQLite DDL only has create-table'>(ast);
   const ifNotExists = node.ifNotExists ? 'IF NOT EXISTS ' : '';

@@ -8,7 +8,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
-  type CodecLookup,
+  type CodecLookupWithDescriptors,
   type CodecTrait,
   type DataTypeId,
   isNonFiniteText,
@@ -221,7 +221,7 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   };
 }
 
-export const postgresCodecLookup: CodecLookup = {
+export const postgresCodecLookup: CodecLookupWithDescriptors = {
   // A representative instance, built with no params — the same shape the control stack builds.
   get: (id: string) => fixtureDescriptor(id)?.factory({})({ name: id }),
   descriptorFor: fixtureDescriptor,

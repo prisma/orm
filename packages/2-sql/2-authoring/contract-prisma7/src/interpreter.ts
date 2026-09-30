@@ -11,7 +11,10 @@ import {
   collectScalarTypeConstructors,
   instantiateAuthoringEntityType,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -81,7 +84,7 @@ export interface InterpretPrisma7DocumentsInput {
   readonly binding: Prisma7TargetBinding;
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypeLookup: DataTypeLookup;
   readonly composedExtensions: readonly string[];
 }

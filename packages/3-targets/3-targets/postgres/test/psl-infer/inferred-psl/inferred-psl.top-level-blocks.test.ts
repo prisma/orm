@@ -18,7 +18,7 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
@@ -90,7 +90,7 @@ const textCodec: Codec = {
   },
 };
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => (id === 'pg/text@1' ? textCodec : undefined),
   targetTypesFor: (id) => (id === 'pg/text@1' ? ['text'] : undefined),
   renderOutputTypeFor: () => undefined,

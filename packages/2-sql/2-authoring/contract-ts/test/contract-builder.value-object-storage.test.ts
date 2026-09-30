@@ -1,4 +1,7 @@
-import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  ColumnTypeDescriptor,
+} from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -91,7 +94,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
       'currency' in value &&
       typeof value.currency === 'string';
 
-    const codecLookup: CodecLookup = withDescriptors({
+    const codecLookup: CodecLookupWithDescriptors = withDescriptors({
       get: (id) => {
         if (id !== 'pg/jsonb@1') {
           return undefined;

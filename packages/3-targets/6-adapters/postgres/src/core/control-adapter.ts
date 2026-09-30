@@ -10,7 +10,7 @@ import {
 } from '@internal/errors/execution';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -1836,7 +1836,7 @@ const SERIAL_FAMILY_TYPES = new Set([
 async function pgRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
   nativeType: string,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef | undefined,
 ): Promise<string> {
   if (def.kind === 'function') {
@@ -1867,7 +1867,10 @@ async function pgRenderDdlColumnDefault(
   return `DEFAULT ${pgInlineLiteral(def.value, nativeType)}`;
 }
 
-async function pgRenderDdlColumn(column: DdlColumn, codecLookup: CodecLookup): Promise<string> {
+async function pgRenderDdlColumn(
+  column: DdlColumn,
+  codecLookup: CodecLookupWithDescriptors,
+): Promise<string> {
   const parts = [quoteIdentifier(column.name), column.type];
   if (column.default) {
     const clause = await pgRenderDdlColumnDefault(
@@ -1919,7 +1922,7 @@ function pgRenderDdlConstraint(constraint: DdlTableConstraint): string {
 
 async function pgRenderCreateTable(
   node: PostgresCreateTable,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const ifNotExists = node.ifNotExists ? 'IF NOT EXISTS ' : '';
   const tableRef = node.schema
@@ -1968,7 +1971,7 @@ function pgRenderDropType(node: PostgresDropType): SqlExecuteRequest {
 
 async function pgRenderAlterTable(
   node: PostgresAlterTable,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const tableRef = node.schema
     ? `${quoteIdentifier(node.schema)}.${quoteIdentifier(node.table)}`
@@ -2111,7 +2114,7 @@ function pgRenderDisableRowLevelSecurity(node: PostgresDisableRowLevelSecurity):
 
 async function pgRenderDdlExecuteRequest(
   ast: PostgresDdlNode,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const visitor = {
     createTable: (node: PostgresCreateTable) => pgRenderCreateTable(node, codecLookup),

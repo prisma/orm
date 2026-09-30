@@ -1,8 +1,7 @@
 import { blindCast } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
-import type { CodecInstanceContext, CodecLookup, CodecRef } from './codec-types';
+import type { CodecInstanceContext, CodecLookupWithDescriptors, CodecRef } from './codec-types';
 import { runtimeError } from './runtime-error';
 
 export const CONTRACT_CODEC_DESCRIPTOR_MISSING = 'CONTRACT.CODEC_DESCRIPTOR_MISSING' as const;
@@ -106,14 +105,12 @@ export function materializeCodec(
 }
 
 /**
- * Builds the codec a codec reference names with the reference's type parameters, so a parameterized codec checks values against them. `undefined` when no descriptor has the id. A lookup that resolves no descriptors throws rather than hand back its representative codec, which carries no type parameters.
+ * Builds the codec a codec reference names with the reference's type parameters, so a parameterized codec checks values against them. `undefined` when no descriptor has the id.
  */
-export function codecForRef(lookup: CodecLookup, ref: CodecRef): Codec | undefined {
-  if (lookup.descriptorFor === undefined) {
-    throw new InternalError(
-      `The codec lookup resolves no codec descriptors, so the codec for "${ref.codecId}" cannot be built with its type parameters.`,
-    );
-  }
+export function codecForRef(
+  lookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
+  ref: CodecRef,
+): Codec | undefined {
   const descriptor = lookup.descriptorFor(ref.codecId);
   return descriptor === undefined
     ? undefined

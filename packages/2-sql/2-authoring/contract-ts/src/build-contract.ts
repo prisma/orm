@@ -35,7 +35,7 @@ import {
 } from '@internal/framework-components/authoring';
 import {
   type Codec,
-  type CodecLookup,
+  type CodecLookupWithDescriptors,
   type ColumnTypeDescriptor,
   codecForRef,
 } from '@internal/framework-components/codec';
@@ -103,7 +103,7 @@ import { toOneNullabilityContradictionMessage } from './to-one-nullability-messa
 function columnCodec(
   codecId: string,
   typeParams: Record<string, unknown> | undefined,
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
 ): Codec | undefined {
   if (codecLookup === undefined) return undefined;
   return codecForRef(codecLookup, {
@@ -175,8 +175,8 @@ function encodeDefaultValue(
 }
 
 function codecForDefault(
-  codecLookup: CodecLookup | undefined,
-  resolveCodec: (codecLookup: CodecLookup) => Codec | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
+  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
   site: ColumnDefaultSite,
 ): Codec | undefined {
   if (codecLookup === undefined) return undefined;
@@ -199,8 +199,8 @@ function codecForDefault(
 }
 
 function buildCodecForDefault(
-  codecLookup: CodecLookup,
-  resolveCodec: (codecLookup: CodecLookup) => Codec | undefined,
+  codecLookup: CodecLookupWithDescriptors,
+  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
   site: ColumnDefaultSite,
 ): Codec | undefined {
   try {
@@ -225,8 +225,8 @@ function buildCodecForDefault(
 
 function encodeColumnDefault(
   defaultInput: AuthoredColumnDefault,
-  codecLookup: CodecLookup | undefined,
-  resolveCodec: (codecLookup: CodecLookup) => Codec | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
+  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
   site: ColumnDefaultSite,
   many = false,
 ): ColumnDefault {
@@ -478,7 +478,7 @@ function resolveCheckExpressionRenderer(
  */
 function checkMemberValues(
   handle: EnumTypeHandle,
-  codecLookup: CodecLookup | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
 ): readonly (string | number)[] {
   const encoded = handle.values.map((value) =>
     encodeViaCodec(value, codecLookup?.get(handle.codecId)),
@@ -807,7 +807,7 @@ function buildStorageColumn(
   enumRefs: EnumValueSetRefs | undefined,
   modelName: string,
   storageTypes: Record<string, StorageTypeInstance>,
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
 ): StorageColumn {
   const { descriptor } = field;
   const codecId = descriptor.codecId;
@@ -1065,7 +1065,7 @@ function columnsProducingCheckPrefix(
 
 export function buildSqlContractFromDefinition(
   definition: ContractDefinition,
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
 ): Contract<SqlStorage> {
   const target = definition.target.targetId;
   const defaultNamespaceId = definition.target.defaultNamespaceId;

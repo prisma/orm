@@ -8,7 +8,7 @@
  */
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
@@ -192,7 +192,7 @@ const pgEnumCodec = {
   decodeJson: (json) => json,
 } as Codec;
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumCodec : undefined),
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,

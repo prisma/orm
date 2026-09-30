@@ -4,7 +4,7 @@ import { expandContractInputs } from '@internal/config-loader';
 import type { JsonValue } from '@internal/contract/types';
 import type {
   CodecInstanceContext,
-  CodecLookup,
+  CodecLookupWithDescriptors,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
 import { dataType, dataTypeId } from '@internal/framework-components/codec';
@@ -25,7 +25,9 @@ const postgres = { binding: prisma7PostgresBinding };
  */
 const BROKEN_TEXT = dataTypeId('demo/broken-text');
 
-function withTextDefaultsCastToNull(lookup: CodecLookup): CodecLookup {
+function withTextDefaultsCastToNull(
+  lookup: CodecLookupWithDescriptors,
+): CodecLookupWithDescriptors {
   const descriptorFor = (id: string) => {
     const descriptor = lookup.descriptorFor?.(id);
     if (id !== 'pg/text@1' || descriptor === undefined) return descriptor;

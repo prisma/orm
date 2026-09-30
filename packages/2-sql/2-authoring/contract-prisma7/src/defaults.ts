@@ -1,6 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
@@ -39,7 +39,7 @@ export interface LowerPrisma7DefaultInput {
   readonly modelName: string;
   readonly codecId: string;
   readonly typeParams: Readonly<Record<string, unknown>> | undefined;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly literalForm: Prisma7LiteralDefaultForm | undefined;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;

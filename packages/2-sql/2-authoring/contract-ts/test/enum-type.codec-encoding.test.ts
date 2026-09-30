@@ -1,7 +1,7 @@
 import type { Contract, JsonValue } from '@internal/contract/types';
 import {
   type Codec,
-  type CodecLookup,
+  type CodecLookupWithDescriptors,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -34,7 +34,7 @@ function stubCodec(id: string, encodeJson: (value: unknown) => JsonValue): Codec
   };
 }
 
-function codecLookupOf(codecs: Record<string, Codec>): CodecLookup {
+function codecLookupOf(codecs: Record<string, Codec>): CodecLookupWithDescriptors {
   return { ...emptyCodecLookup, get: (id: string) => codecs[id] };
 }
 

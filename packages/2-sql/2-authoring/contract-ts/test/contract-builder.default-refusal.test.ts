@@ -1,4 +1,4 @@
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +15,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const refusingJsonb: CodecLookup = withDescriptors({
+const refusingJsonb: CodecLookupWithDescriptors = withDescriptors({
   get: (id) =>
     id === 'pg/jsonb@1'
       ? {
@@ -32,7 +32,7 @@ const refusingJsonb: CodecLookup = withDescriptors({
   renderOutputTypeFor: () => undefined,
 });
 
-function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLookup {
+function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLookupWithDescriptors {
   return withDescriptors({
     get: (id) => {
       const codec = codecs[id];
@@ -53,7 +53,7 @@ function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLooku
 
 function buildWithDefault(
   field: { readonly codecId: string; readonly value: unknown; readonly many?: boolean },
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
 ) {
   return buildSqlContractFromDefinition(
     {

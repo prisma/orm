@@ -7,7 +7,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import {
   isValueObjectMember,
   type ScalarMemberNode,
@@ -41,7 +41,7 @@ export interface ValueObjectDefaultInput {
   readonly nullable: boolean;
   readonly valueObjectName: string;
   readonly types: ValueObjectTypes;
-  readonly codecLookup: CodecLookup | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
 }
 
 /** Each way the default does not match the composite type. */
@@ -165,7 +165,7 @@ function enumValueMismatch(
   value: JsonValue,
   member: ScalarMemberNode,
   path: string,
-  codecLookup: CodecLookup | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
 ): ValueObjectDefaultMismatch | undefined {
   const handle = member.enumTypeHandle;
   if (handle === undefined) return undefined;

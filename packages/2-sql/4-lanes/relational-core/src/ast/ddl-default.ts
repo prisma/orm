@@ -1,5 +1,5 @@
 import type { ColumnDefaultLiteralInputValue } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { codecForRef } from '@internal/framework-components/codec';
 import type { CodecRef } from './codec-types';
 
@@ -33,7 +33,7 @@ export type EncodedLiteralDefault =
  * Reads a column's literal default with the column's codec, built with its type parameters, and encodes it for the DDL renderer to inline. `undefined` when no codec descriptor has the column's codec id, so the renderer inlines the value as written.
  */
 export async function encodeLiteralDefault(
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef,
   value: ColumnDefaultLiteralInputValue,
 ): Promise<EncodedLiteralDefault | undefined> {

@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -77,7 +77,7 @@ const targetTypesById: Record<string, readonly string[]> = {
   'sqlite/integer@1': ['integer'],
 };
 
-const testCodecLookup: CodecLookup = {
+const testCodecLookup: CodecLookupWithDescriptors = {
   get(id: string): Codec | undefined {
     return codecsById[id];
   },

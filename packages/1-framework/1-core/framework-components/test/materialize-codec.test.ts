@@ -8,7 +8,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
-  type CodecLookup,
+  type CodecLookupWithDescriptors,
   type CodecRef,
   type CodecTrait,
   codecForRef,
@@ -119,7 +119,7 @@ test('materializeCodec resolves a parameterized codec whose id reads the descrip
   expect(codec.id).toBe('demo/vector@1');
 });
 
-const fixtureLookup: CodecLookup = {
+const fixtureLookup: CodecLookupWithDescriptors = {
   ...emptyCodecLookup,
   descriptorFor: (id) =>
     [int4FixtureDescriptor, vectorFixtureDescriptor].find(
@@ -135,18 +135,6 @@ test('codecForRef builds the codec with the type parameters of the reference', (
 
 test('codecForRef answers undefined for a codec id no descriptor has', ({ expect }) => {
   expect(codecForRef(fixtureLookup, { codecId: 'demo/unknown@1' })).toBeUndefined();
-});
-
-test('codecForRef refuses a lookup that resolves no descriptors, rather than building a codec without type parameters', ({
-  expect,
-}) => {
-  const lookup: CodecLookup = {
-    ...emptyCodecLookup,
-    get: () => new Int4FixtureCodec(int4FixtureDescriptor),
-  };
-  expect(() => codecForRef(lookup, { codecId: 'demo/int4@1' })).toThrow(
-    'The codec lookup resolves no codec descriptors, so the codec for "demo/int4@1" cannot be built with its type parameters.',
-  );
 });
 
 test('materializeCodec produces a codec whose encode/decode still run through the descriptor-bound factory', async ({
