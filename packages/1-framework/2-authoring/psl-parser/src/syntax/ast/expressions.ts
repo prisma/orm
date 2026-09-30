@@ -244,7 +244,7 @@ export class TaggedLiteralExprAst implements AstNode {
     return findFirstChild(this.syntax, QualifiedNameAst.cast);
   }
 
-  /** The tag without trivia, e.g. `pg.sql`. */
+  /** The tag without trivia, e.g. `postgis.geometry`. */
   tagName(): string {
     const tag = this.tag();
     const space = tag?.space()?.name();

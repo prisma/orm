@@ -257,6 +257,18 @@ describe('control-stack input derivation', () => {
     });
   });
 
+  it('carries the parser options a psl source declares', async () => {
+    const parserOptions = { grammar: 'prisma-7' } as const;
+    mockLoadedConfig({
+      contract: { source: { format: 'psl', inputs: ['/abs/schema.prisma'], parserOptions } },
+    } as unknown as PrismaNextConfig);
+    vi.spyOn(control, 'createControlStack').mockReturnValue(stubStack(['Int'], {}));
+
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
+
+    expect(result.parserOptions).toEqual(parserOptions);
+  });
+
   it('propagates createControlStack failures for a psl source', async () => {
     mockLoadedConfig(loadedConfig('psl', ['/abs/schema.psl']));
     vi.spyOn(control, 'createControlStack').mockImplementation(() => {

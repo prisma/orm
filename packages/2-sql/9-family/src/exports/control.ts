@@ -95,10 +95,6 @@ export type {
   StorageTypePlanResult,
 } from '../core/migrations/types';
 export {
-  PSL_INVALID_DEFAULT_SQL,
-  sqlDefaultLiteralTagEntry,
-} from '../core/sql-default-literal-tag';
-export {
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,
 } from '../core/timestamp-now-generator';

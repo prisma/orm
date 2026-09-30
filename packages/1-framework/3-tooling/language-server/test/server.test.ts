@@ -996,7 +996,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const completions = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(completions.map(({ label }) => label)).toContain('Post');
     expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
-    expect(vi.mocked(parse)).toHaveBeenLastCalledWith(updated, schemaUri);
+    expect(vi.mocked(parse)).toHaveBeenLastCalledWith(updated, schemaUri, {});
     expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
     expect(harness.publishCount(schemaUri)).toBe(0);
     expect(harness.publishCount(alias)).toBe(0);
@@ -1381,7 +1381,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     ]);
     await republished;
     expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(parse)).toHaveBeenCalledWith(updated.source, schemaUri);
+    expect(vi.mocked(parse)).toHaveBeenCalledWith(updated.source, schemaUri, {});
   });
 
   it('returns generic block parameter completions for configured PSL descriptors', async () => {
@@ -3921,6 +3921,45 @@ describe('language server prisma-8 directive gating', {
     await expect(requestFoldingRanges(harness, schemaUri)).resolves.toEqual([]);
     expect(harness.getDocumentAst(schemaUri)).toBeUndefined();
     expect(harness.getProjectSymbolTable(schemaUri)).toBeUndefined();
+  });
+
+  const attributedView =
+    'view ActiveUsers {\nid Int @unique\nemail   String @map("user_email")\n}\n';
+  const resolveToSchemaReadingViewFields: ResolveInputs = async () => ({
+    ...(await resolutionForInputs([schemaPath])),
+    parserOptions: { grammar: 'prisma-7' },
+  });
+
+  it('parses a marked input with the parser options its source declares', async () => {
+    harness = startHarness(resolveToSchemaReadingViewFields);
+    await harness.initialize();
+
+    openDocument(harness, schemaUri, `// use prisma-8\n${attributedView}`);
+
+    expect(await harness.waitForDiagnostics(schemaUri)).toEqual([]);
+  });
+
+  it('formats a marked input with the parser options its source declares', async () => {
+    harness = startHarness(resolveToSchemaReadingViewFields);
+    await harness.initialize();
+
+    openDocument(harness, schemaUri, `// use prisma-8\n${attributedView}`);
+    await harness.waitForDiagnostics(schemaUri);
+
+    const edits = await requestFormatting(harness, schemaUri);
+    expect(edits?.[0]?.newText).toBe(
+      '// use prisma-8\nview ActiveUsers {\n  id    Int    @unique\n  email String @map("user_email")\n}\n',
+    );
+  });
+
+  it('leaves an unmarked input alone even when its source declares parser options', async () => {
+    harness = startHarness(resolveToSchemaReadingViewFields);
+    await harness.initialize();
+
+    openDocument(harness, schemaUri, attributedView);
+    expect(await harness.waitForDiagnostics(schemaUri)).toEqual([]);
+
+    await expect(requestFormatting(harness, schemaUri)).resolves.toEqual([]);
   });
 
   it('returns no formatting edits for an unmarked configured input', async () => {

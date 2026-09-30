@@ -94,7 +94,7 @@ export class Project {
     const data = await this.#resolveMember(uri);
     if (data === undefined) return undefined;
     try {
-      return renameLegacyDirective(format(source, data.formatter));
+      return renameLegacyDirective(format(source, data.formatter, data.parserOptions));
     } catch {
       return undefined;
     }
@@ -339,6 +339,9 @@ export class Project {
       ...(resolution.interpretation === undefined
         ? {}
         : { interpretation: resolution.interpretation }),
+      ...(resolution.parserOptions === undefined
+        ? {}
+        : { parserOptions: resolution.parserOptions }),
     });
     return { ...resolution, artifacts };
   }

@@ -42,17 +42,14 @@ function loadFixture(caseName: string) {
 }
 
 describe('prisma6Contract', () => {
-  it('is a source like any other: its format, its inputs and a loader, nothing that names Prisma 6', () => {
+  it('has only the fields every contract source can declare: format, inputs, parser options and a loader', () => {
     const { source } = prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding });
 
-    expect({
-      keys: Object.keys(source).sort(),
-      format: source.format,
-      inputs: source.inputs,
-    }).toEqual({
-      keys: ['format', 'inputs', 'load'],
+    expect(Object.keys(source).sort()).toEqual(['format', 'inputs', 'load', 'parserOptions']);
+    expect(source).toMatchObject({
       format: 'psl',
       inputs: ['prisma/schema.prisma'],
+      parserOptions: { grammar: 'prisma-7' },
     });
   });
 });
@@ -84,6 +81,12 @@ describe('prisma6Contract diagnostics', () => {
 });
 
 describe('prisma6Contract', () => {
+  it('declares the prisma-7 grammar', () => {
+    expect(
+      prisma6Contract('prisma/schema.prisma', { binding: prisma6MongoBinding }).source,
+    ).toMatchObject({ format: 'psl', parserOptions: { grammar: 'prisma-7' } });
+  });
+
   it('reports a structured error from building the contract as PSL.PRISMA6_MONGO_CONTRACT_INVALID', async () => {
     const failure = structuredError('CONTRACT.TEST_FAILURE', 'Enum value cannot be encoded.');
     const result = await loadEnumSchema(lookupWithFailingEncode('mongo/string@1', failure));

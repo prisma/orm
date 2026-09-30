@@ -1,18 +1,12 @@
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
-import {
-  isDataTypeLoweringEntry,
-  loweringEntryKey,
-} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { createPostgresDataTypeEntries } from '../src/core/data-type-authoring';
+import { postgresDataTypeEntries } from '../src/core/data-type-entries';
 
-const entries = createPostgresDataTypeEntries();
+const entries = postgresDataTypeEntries();
 
 const entry = (key: string): DataTypeAuthoringEntry => {
   const found = entries[key];
-  if (found === undefined || isDataTypeLoweringEntry(found)) {
-    throw new Error(`no value entry under ${key}`);
-  }
+  if (found === undefined) throw new Error(`no entry under ${key}`);
   return found;
 };
 
@@ -25,17 +19,6 @@ const classify = (text: string) => {
 };
 
 describe('the authoring entries this target contributes', () => {
-  it('keys a value entry by data type and a lowering entry by its reserved key', () => {
-    expect(Object.keys(entries).sort()).toEqual([
-      'lowering:pg.sql',
-      'lowering:sql',
-      'pg/bool',
-      'pg/json',
-      'pg/numeric',
-      'pg/text',
-    ]);
-  });
-
   it('writes text plainly, a boolean plainly, a number plainly and a document with the json tag', () => {
     const writtenAs = (key: string): string => {
       const written = entry(key).written;
@@ -54,16 +37,6 @@ describe('the authoring entries this target contributes', () => {
     expect(
       written.kind === 'plain' && written.syntax === 'number' ? [...written.types].sort() : [],
     ).toEqual(['pg/int2', 'pg/int4', 'pg/int8', 'pg/numeric']);
-  });
-
-  it.each(['sql', 'pg.sql'])('lowers the %s tag itself', (tag) => {
-    const lowering = entries[loweringEntryKey(tag)];
-    expect(lowering !== undefined && isDataTypeLoweringEntry(lowering) && lowering.written).toEqual(
-      {
-        kind: 'tag',
-        tag,
-      },
-    );
   });
 });
 

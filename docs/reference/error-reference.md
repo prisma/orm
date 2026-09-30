@@ -263,7 +263,7 @@ The control plane resolves a codec referenced by the contract (a `CodecRef.codec
 
 ### CONTRACT.CAST_REFUSED
 
-A value handed to a data type's cast, or to an authoring entry that reads written text, is not one that type takes: it is not in the shape the source type stores, its magnitude is outside the range the receiving type holds, the text is not a boolean, or the text is not a date or time the receiving type holds. A date or time text is refused when it has an offset its type does not hold or lacks one its type needs, has more fraction digits than its type holds (six, or three for `sqlite/datetime`, which holds milliseconds), names a date or time that does not exist, or is outside the range of years its type holds; the message shows text the type takes. The date and time codecs raise it from `encodeJson` for a value their type does not hold, such as a `Temporal` value with digits below one microsecond. Raised by a target's or extension's casts and authoring entries. A contract source reading a column default reports it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
+A value handed to a data type's cast, or to an authoring entry that reads written text, is not one that type takes: it is not in the shape the source type stores, its magnitude is outside the range the receiving type holds, the text is not a boolean, or the text is not a date or time the receiving type holds. A date or time text is refused when it has an offset its type does not hold or lacks one its type needs, has more fraction digits than its type holds (six, or three for `sqlite/datetime`, which holds milliseconds), names a date or time that does not exist, or is outside the range of years its type holds; the message shows text the type takes. The date and time codecs raise it from `encodeJson` for a value their type does not hold, such as a `Temporal` value with digits below one microsecond. Raised by a target's or extension's casts and authoring entries. A contract source reading a written value reports it to the author as the PSL diagnostic `PSL_INVALID_LITERAL` when a cast or an authoring entry raised it, and as `PSL_INVALID_DEFAULT_LITERAL` when a codec raised it for a column default. Payload: `why`, `fix`.
 
 ### CONTRACT.CHECK_NAME_RESERVED
 
@@ -359,6 +359,10 @@ A model declares an empty unique constraint (a unique with no fields), raised du
   - a name PSL writes as an identifier is not one, or is `__proto__`: a namespace, model, field, value object, enum, enum member, native enum, named type, policy, role or index option key. `NaN` and `Infinity` are number words, not identifiers (meta: `kind`, `name`);
   - a namespace holds a storage entity kind other than tables, value sets, native enums, row-level security settings, policies and roles (meta: `namespaceId`, `kind`, `names`).
 
+### CONTRACT.DATA_TYPE_CASTS_FROM_SQL_EXPRESSION
+
+A data type in the composed stack declares a cast or a list cast from `sql/expression`: `Data type "<id>" from "<contributedBy>" declares a cast from sql/expression. No data type may cast from sql/expression: a sql literal is SQL the database runs, not a value of another type.` Such a cast would turn a `sql` literal into a value of another type with no diagnostic. Raised by the SQL family when it creates its control instance, which the CLI does before it emits, prints, infers, plans or verifies a contract. The language server does not create one and does not report it. Remove the cast from the component the message names. Payload: `dataType`, `contributedBy`.
+
 ### CONTRACT.DATA_TYPE_DUPLICATE
 
 Two components in the composed stack register the same data type id, which has exactly one owner. Raised while assembling the stack's data types. Payload: `dataType`, `contributedBy`, `owner`.
@@ -445,7 +449,7 @@ Introspection read an unrecognized or malformed database shape: an unknown refer
 
 ### CONTRACT.INVALID_JSON_LITERAL
 
-The body of a JSON default is not a JSON document, or holds a number outside the range a JSON number holds (`JSON.parse` reads such a numeral as `Infinity`, which `JSON.stringify` writes back as `null`). Raised while canonicalizing a JSON default body. Contract sources report it to the author as the PSL diagnostic `PSL_INVALID_JSON_LITERAL`. Payload: `why`, `fix`.
+The text of a JSON default is not a JSON document, or holds a number outside the range a JSON number holds (`JSON.parse` reads such a numeral as `Infinity`, which `JSON.stringify` writes back as `null`). Raised while reading the text of a JSON default. Contract sources report it to the author as the PSL diagnostic `PSL_INVALID_LITERAL`. Payload: `why`, `fix`.
 
 ### CONTRACT.MARKER_MISMATCH
 
@@ -785,9 +789,9 @@ A `view` block; Prisma 8 has no views. Remove the view, or replace it with a mod
 
 A backtick string appears somewhere other than after a tag, for example `` @map(`x`) `` or `` provider = `x` ``: `` A backtick string must follow a tag, as in tag`...`. `` Reported at the string. Write a `"` or `'` string there, or put the tag in front of it, as in `` @default(sql`...`) ``.
 
-### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
+### PSL_UNKNOWN_LITERAL_TAG
 
-A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
+A tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` The SQL family registers `sql`, and every SQL target registers `json`. `pg.sql` and `sqlite.sql` are not registered; write `sql`. Reported at the literal.
 
 ### PSL_DEPRECATED_SCALAR_NAME
 
@@ -797,29 +801,33 @@ A warning, not an error: a Mongo schema types a field with a deprecated scalar n
 
 A warning, not an error: a Mongo schema uses a field preset that fills nothing, such as `temporal.timestamp()` with neither phase: `Field "<Model>.<field>" uses temporal.timestamp() without onCreate or onUpdate, so nothing fills it and it is stored exactly like Date. Write Date, or pass onCreate: now or onUpdate: now.` Reported at the preset call through the contract source's `reportWarning`; the contract is written as for `Date`.
 
-### PSL_DEFAULT_TYPE_INCOMPATIBLE
+### PSL_VALUE_TYPE_INCOMPATIBLE
 
-A written `@default` value has a data type the column's type neither is nor casts from: `Field "<Model>.<field>": <column type> has no cast from <value type>; it casts from <types>`, or `; it casts from nothing` when the column's type declares no cast at all. A written value has a data type of its own — a number's comes from its own size and precision, so on Postgres `42` is `pg/int2` and `100000000000000099` is `pg/int8` — and a data type declares which other types' values it takes. Inside a written list the message names the element: `Field "<Model>.<field>" at element 2: ...`.
+A written value has a data type the receiving type neither is nor casts from. For a `@default` the receiving type is the column's: `Field "<Model>.<field>": <column type> has no cast from <value type>; it casts from <types>`, or `; it casts from nothing` when the column's type declares no cast at all. A written value has a data type of its own — a number's comes from its own size and precision, so on Postgres `42` is `pg/int2` and `100000000000000099` is `pg/int8` — and a data type declares which other types' values it takes. Inside a written list the message names the element: `Field "<Model>.<field>" at element 2: ...`. A list written on a column that holds one value, and a `sql` literal inside a list literal, are reported the same way.
 
 The same code reports a written form this target has no data type for at all: `Field "<Model>.<field>"[ at element <n>]: this target has no data type for a <string|boolean|number> value` — `true` on SQLite, for instance, which registers no boolean entry.
 
 Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
+### PSL_INVALID_LITERAL
+
+A written value that the authoring entry's parse or a cast refused: a magnitude no double holds written on a `Float` column, a text a tag's parse cannot read, such as the text of a `json` literal that is not a JSON document, or a number no data type of the target holds — `no data type of this target holds the number <text>`, which is how SQLite refuses a whole number past 64 bits. The message is `Field "<Model>.<field>": <the message of whatever refused it>`, with ` at element <n>` after the field path when it is one element of a written list. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
+
+### PSL_DEFAULT_LIST_EXPECTED
+
+A single value is written as the `@default` of a column that holds a list: `Field "<Model>.<field>": this column holds a list, so its default is a list literal, as in [1, 2]`. Every other mismatch between a written value and a column's type is `PSL_VALUE_TYPE_INCOMPATIBLE`. Reported at the `@default` attribute.
+
 ### PSL_INVALID_DEFAULT_LITERAL
 
-A written `@default` value that whatever read it refused: the authoring entry's parse, a cast, or the column's codec. A `pgvector.Vector(3)` column given two elements, a magnitude no double holds written on a `Float` column, a body a tag's parse cannot read, or a number no data type of the target holds — `no data type of this target holds the number <text>`, which is how SQLite refuses a whole number past 64 bits. The message is `Field "<Model>.<field>": <the message of whatever refused it>`, with ` at element <n>` after the field path when it is one element of a written list. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
-
-### PSL_INVALID_JSON_LITERAL
-
-A `` @default(json`...`) `` body is not a JSON document: `Field "<Model>.<field>": <the JSON parser's message>`, with ` at element <n>` after the field path when it is one element of a written list. It is `PSL_INVALID_DEFAULT_LITERAL` narrowed to the one case of a `json` body, so that a malformed document is distinguishable from a value a cast or a codec refused. Reported at the `@default` attribute.
+A written `@default` value that the column's codec refused, such as a `pgvector.Vector(3)` column given two elements. The message is `Field "<Model>.<field>": <the codec's message>`, with ` at element <n>` after the field path when it is one element of a written list. A value the authoring entry's parse or a cast refused is `PSL_INVALID_LITERAL`. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
 ### PSL_TAGGED_LITERAL_NUL
 
-A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal when the default is lowered.
+A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal, at every place that takes a tagged literal.
 
 ### PSL_TAGGED_LITERAL_TOO_LARGE
 
-A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal when the default is lowered.
+A tagged literal's text, which is its body after canonicalization, is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal, at every place that takes a tagged literal.
 
 ### PSL_LIST_AUTOINCREMENT_UNSUPPORTED
 
@@ -827,7 +835,7 @@ A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is 
 
 ### PSL_INVALID_DEFAULT_SQL
 
-A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The message names the tag as written (`sql`, `pg.sql` or `sqlite.sql`). Reported at the literal.
+A `` @default(sql`...`) `` text fails the check `@default` runs on raw SQL: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The tag is always `sql`. Only `@default` reports this code. Reported at the literal.
 
 ### PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE
 

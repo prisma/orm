@@ -6,7 +6,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { AuthoringDataTypeEntry } from '@internal/framework-components/authoring';
+import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import {
   createNumberClassifier,
   numeralText,
@@ -35,7 +35,7 @@ function printNumber(value: JsonValue): string {
   return typeof value === 'number' ? numeralText(value) : String(value);
 }
 
-export function sqliteDataTypeEntries(): Readonly<Record<string, AuthoringDataTypeEntry>> {
+export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthoringEntry>> {
   return {
     [sqliteText.id]: {
       written: { kind: 'plain', syntax: 'string', parse: (text) => text },
@@ -55,7 +55,7 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, AuthoringDataTy
     [sqliteJson.id]: {
       written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
       print: printJsonBody,
-      documentation: 'Reads the body as a JSON document and stores it as the default value.',
+      documentation: 'Reads the text as a JSON document and stores it as the default value.',
     },
   };
 }

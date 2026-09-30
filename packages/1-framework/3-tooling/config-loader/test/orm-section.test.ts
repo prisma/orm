@@ -204,6 +204,22 @@ describe('the orm section', () => {
     expect(fields(validRaw({ contract: { source } }))).toEqual(['contract.source.format']);
   });
 
+  it('reports a grammar it does not know, and parser options it does not know', () => {
+    const source = (parserOptions: unknown) => ({ format: 'psl', load: () => ({}), parserOptions });
+
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-5' }) } }))).toEqual([
+      'contract.source.parserOptions.grammar',
+    ]);
+    expect(fields(validRaw({ contract: { source: source(true) } }))).toEqual([
+      'contract.source.parserOptions',
+    ]);
+    expect(fields(validRaw({ contract: { source: source({ grammer: 'prisma-7' }) } }))).toEqual([
+      'contract.source.parserOptions.grammer',
+    ]);
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-7' }) } }))).toEqual([]);
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-8' }) } }))).toEqual([]);
+  });
+
   it('reports migrations and formatter problems', () => {
     expect(fields(validRaw({ migrations: { dir: 42 } }))).toEqual(['migrations.dir']);
     expect(fields(validRaw({ formatter: { indent: 0, newline: 'CR' } }))).toEqual([

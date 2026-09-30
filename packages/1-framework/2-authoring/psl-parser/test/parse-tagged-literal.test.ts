@@ -51,17 +51,17 @@ describe('TaggedLiteral parsing', () => {
   });
 
   it('is a qualified name followed by a string literal expression', () => {
-    const { literal } = taggedDefault('pg.sql`now()`');
+    const { literal } = taggedDefault('postgis.geometry`POINT(0 0)`');
     expect(printTree(literal.syntax.green)).toMatchInlineSnapshot(`
       "TaggedLiteral
         QualifiedName
           Identifier
-            Ident "pg"
+            Ident "postgis"
           Dot "."
           Identifier
-            Ident "sql"
+            Ident "geometry"
         StringLiteralExpr
-          StringLiteral "\`now()\`""
+          StringLiteral "\`POINT(0 0)\`""
     `);
   });
 
@@ -84,7 +84,7 @@ describe('TaggedLiteral parsing', () => {
     ['whitespace', 'sql `x`'],
     ['a newline', 'sql\n`x`'],
     ['a comment', 'sql // raw\n`x`'],
-    ['whitespace inside the qualified name', 'pg . sql"x"'],
+    ['whitespace inside the qualified name', 'postgis . geometry"x"'],
   ])('allows %s between the tag and the string', (_name, argument) => {
     const source = `model T {\n  id String @default(${argument})\n}\n`;
     const { result, literal } = taggedDefault(argument);
@@ -161,7 +161,7 @@ describe('TaggedLiteral parsing', () => {
 
   it('round-trips the source through printSyntax', () => {
     const source =
-      'model T {\n  a String @default(sql`\n    x\n  `)\n  b String @default(pg.sql"y")\n}\n';
+      'model T {\n  a String @default(sql`\n    x\n  `)\n  b String @default(postgis.geometry"y")\n}\n';
     const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(printSyntax(result.document.syntax)).toBe(source);

@@ -345,7 +345,7 @@ withTempDir(({ createTempDir }) => {
           expect(clean, server.output()).toEqual({ uri, diagnostics: [] });
           expect(broken, server.output()).toMatchObject({
             uri,
-            diagnostics: [expect.objectContaining({ code: 'PSL_INVALID_DEFAULT_LITERAL' })],
+            diagnostics: [expect.objectContaining({ code: 'PSL_INVALID_LITERAL' })],
           });
         },
         timeouts.spinUpPpgDev,

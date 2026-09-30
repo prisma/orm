@@ -1,18 +1,12 @@
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
-import {
-  isDataTypeLoweringEntry,
-  loweringEntryKey,
-} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { createSqliteDataTypeEntries } from '../src/core/data-type-authoring';
+import { sqliteDataTypeEntries } from '../src/core/data-type-entries';
 
-const entries = createSqliteDataTypeEntries();
+const entries = sqliteDataTypeEntries();
 
 const entry = (key: string): DataTypeAuthoringEntry => {
   const found = entries[key];
-  if (found === undefined || isDataTypeLoweringEntry(found)) {
-    throw new Error(`no value entry under ${key}`);
-  }
+  if (found === undefined) throw new Error(`no entry under ${key}`);
   return found;
 };
 
@@ -25,31 +19,11 @@ const classify = (text: string) => {
 };
 
 describe('the authoring entries this target contributes', () => {
-  it('keys a value entry by data type and a lowering entry by its reserved key', () => {
-    expect(Object.keys(entries).sort()).toEqual([
-      'lowering:sql',
-      'lowering:sqlite.sql',
-      'sqlite/json',
-      'sqlite/real',
-      'sqlite/text',
-    ]);
-  });
-
   it('names every type its classifier returns', () => {
     const written = entry('sqlite/real').written;
     expect(
       written.kind === 'plain' && written.syntax === 'number' ? [...written.types].sort() : [],
     ).toEqual(['sqlite/bigint', 'sqlite/integer', 'sqlite/real']);
-  });
-
-  it.each(['sql', 'sqlite.sql'])('lowers the %s tag itself', (tag) => {
-    const lowering = entries[loweringEntryKey(tag)];
-    expect(lowering !== undefined && isDataTypeLoweringEntry(lowering) && lowering.written).toEqual(
-      {
-        kind: 'tag',
-        tag,
-      },
-    );
   });
 });
 
