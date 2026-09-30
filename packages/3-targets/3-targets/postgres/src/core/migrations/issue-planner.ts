@@ -50,9 +50,9 @@ import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { PostgresSchemaNodeKind } from '../schema-ir/schema-node-kinds';
 import {
+  buildSetDefaultColumn,
   renderColumnAlterType,
   renderColumnDdl,
-  renderColumnDefaultDdl,
 } from './column-ddl-rendering';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
 import {
@@ -67,6 +67,7 @@ import {
   CreateNativeEnumTypeCall,
   CreateSchemaCall,
   CreateTableCall,
+  columnNameOfCall,
   DisableRowLevelSecurityCall,
   DropCheckConstraintCall,
   DropColumnCall,
@@ -246,7 +247,6 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
   const anyCall = blindCast<
     {
       tableName?: string;
-      columnName?: string;
       indexName?: string;
       newIndexName?: string;
       constraintName?: string;
@@ -273,7 +273,8 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
     location.entityKind = 'native_enum';
     location.entityName = anyCall.typeName;
   }
-  if (anyCall.columnName) location.column = anyCall.columnName;
+  const columnName = columnNameOfCall(call);
+  if (columnName) location.column = columnName;
   // A rename call carries old/new index names; the new name is the index's
   // contract-side identity, so it is the conflict location.
   if (anyCall.indexName) location.index = anyCall.indexName;
@@ -713,7 +714,7 @@ function mapColumnDefaultNodeIssue(
     SqlColumnDefaultIR,
     'a not-found/not-equal column-default issue always carries the expected default node'
   >(issue.expected);
-  const column = renderColumnDefaultDdl(columnName, defaultNode, codecHooks);
+  const column = buildSetDefaultColumn(columnName, defaultNode, codecHooks);
   if (column === undefined) return ok([]);
   return ok([
     new SetDefaultCall(

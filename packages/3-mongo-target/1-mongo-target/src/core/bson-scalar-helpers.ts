@@ -5,6 +5,7 @@ import {
   decodeJsonMatching,
   INT32_RANGE,
   INT64_RANGE,
+  isIntegerIn,
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
@@ -147,12 +148,7 @@ export function doubleEncode(codecId: string, value: number): Double {
 }
 
 export function int32Encode(codecId: string, value: number): number {
-  if (
-    typeof value !== 'number' ||
-    !Number.isInteger(value) ||
-    value < INT32_RANGE.min ||
-    value > INT32_RANGE.max
-  ) {
+  if (!isIntegerIn(value, INT32_RANGE)) {
     encodeFailed(
       codecId,
       `value must be an integer from ${INT32_RANGE.min} to ${INT32_RANGE.max}; received ${describeReceived(value)}`,
@@ -174,7 +170,7 @@ export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
 }
 
 export function int32EncodeJson(codecId: string, value: number): number {
-  if (!Number.isInteger(value) || value < INT32_RANGE.min || value > INT32_RANGE.max) {
+  if (!isIntegerIn(value, INT32_RANGE)) {
     encodeFailed(
       codecId,
       `value must be an integer from ${INT32_RANGE.min} to ${INT32_RANGE.max}`,

@@ -19,8 +19,8 @@ import { type SqliteColumnSpec, sqliteDefaultToDdlColumnDefault } from './operat
 import { buildColumnTypeSql } from './planner-ddl-builders';
 
 /**
- * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql` /
- * `buildColumnDefaultSql` expect, from a column node's own stamped codec
+ * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql`
+ * expects, from a column node's own stamped codec
  * identity (`codecRef` / `codecBaseNativeType`, Decision 5) — never the
  * contract. SQLite's type renderer only uppercases the resolved base type
  * (no parameterized expansion, no named-type quoting), so `typeRef` is

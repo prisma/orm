@@ -29,12 +29,12 @@ import type {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
-import type {
-  AnyDdlColumnDefault,
+import type { AnyDdlColumnDefault, DdlTableConstraint } from '@internal/sql-relational-core/ast';
+import {
   DdlColumn,
-  DdlTableConstraint,
+  FunctionColumnDefault,
+  LiteralColumnDefault,
 } from '@internal/sql-relational-core/ast';
-import { FunctionColumnDefault, LiteralColumnDefault } from '@internal/sql-relational-core/ast';
 import { namingOf } from '@internal/sql-schema-ir/naming';
 import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
 import { blindCast } from '@internal/utils/casts';
@@ -630,7 +630,6 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
   readonly tableName: string;
   /** The column with the default to set, its type and its codec; the adapter writes the clause. */
   readonly column: DdlColumn;
-  readonly columnName: string;
   readonly label: string;
 
   constructor(
@@ -643,7 +642,6 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
     this.schemaName = schemaName;
     this.tableName = tableName;
     this.column = column;
-    this.columnName = column.name;
     this.operationClass = operationClass;
     this.label = `Set default on "${tableName}"."${column.name}"`;
     this.freeze();
@@ -653,7 +651,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
     if (lowerer === undefined) {
       throw postgresError(
         'MIGRATION.POSTGRES_CONTROL_STACK_MISSING',
-        `SetDefaultCall.toOp: a lowerer is required on the Postgres planner path (column "${this.columnName}" on table "${this.tableName}"). Pass the control adapter to createPostgresMigrationPlanner.`,
+        `SetDefaultCall.toOp: a lowerer is required on the Postgres planner path (column "${this.column.name}" on table "${this.tableName}"). Pass the control adapter to createPostgresMigrationPlanner.`,
         { meta: { factory: 'SetDefaultCall' } },
       );
     }
@@ -1988,3 +1986,10 @@ export type PostgresOpFactoryCall =
   | DisableRowLevelSecurityCall
   | RenamePostgresRlsPolicyCall
   | DataTransformCall;
+
+/** The name of the column a call acts on: its `columnName`, or the name of the column it carries. */
+export function columnNameOfCall(call: PostgresOpFactoryCall): string | undefined {
+  if ('columnName' in call) return call.columnName;
+  if ('column' in call && call.column instanceof DdlColumn) return call.column.name;
+  return undefined;
+}

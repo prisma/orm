@@ -156,7 +156,7 @@ export function resolveColumnTemporaryDefault(
 /**
  * The column whose `SET DEFAULT` a column-default diff node asks for, carrying its authored default, or its resolved one when nothing was authored, and its type and codec, from which the adapter writes the clause. `undefined` when the node carries no default, or one DDL does not write, as for an autoincrement column.
  */
-export function renderColumnDefaultDdl(
+export function buildSetDefaultColumn(
   columnName: string,
   defaultNode: SqlColumnDefaultIR,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,

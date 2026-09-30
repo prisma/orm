@@ -2,9 +2,9 @@ import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import {
+  buildSetDefaultColumn,
   renderColumnAlterType,
   renderColumnDdl,
-  renderColumnDefaultDdl,
   resolveColumnTemporaryDefault,
 } from '../../src/core/migrations/column-ddl-rendering';
 
@@ -123,13 +123,13 @@ describe('resolveColumnTemporaryDefault', () => {
   });
 });
 
-describe('renderColumnDefaultDdl', () => {
+describe('buildSetDefaultColumn', () => {
   const noHooks = new Map();
 
   it('has no column to set when the diff node carries no resolved default', () => {
     const defaultNode = new SqlColumnDefaultIR({ raw: "'hello'::text" });
 
-    expect(renderColumnDefaultDdl('v', defaultNode, noHooks)).toBeUndefined();
+    expect(buildSetDefaultColumn('v', defaultNode, noHooks)).toBeUndefined();
   });
 
   it('carries a scalar literal default with the column type and codec, for the adapter to write', () => {
@@ -140,7 +140,7 @@ describe('renderColumnDefaultDdl', () => {
       codecBaseNativeType: 'text',
     });
 
-    expect(renderColumnDefaultDdl('v', defaultNode, noHooks)).toEqual(
+    expect(buildSetDefaultColumn('v', defaultNode, noHooks)).toEqual(
       col('v', 'text', { default: lit('hello'), codecRef: { codecId: 'pg/text@1' } }),
     );
   });
@@ -153,7 +153,7 @@ describe('renderColumnDefaultDdl', () => {
       codecBaseNativeType: 'int4',
     });
 
-    expect(renderColumnDefaultDdl('v', defaultNode, noHooks)).toBeUndefined();
+    expect(buildSetDefaultColumn('v', defaultNode, noHooks)).toBeUndefined();
   });
 
   it.each([
@@ -172,7 +172,7 @@ describe('renderColumnDefaultDdl', () => {
         codecBaseNativeType: typeName,
       });
 
-      expect(renderColumnDefaultDdl('v', defaultNode, noHooks)?.type).toBe(cast);
+      expect(buildSetDefaultColumn('v', defaultNode, noHooks)?.type).toBe(cast);
     },
   );
 
@@ -182,7 +182,7 @@ describe('renderColumnDefaultDdl', () => {
       nativeTypeContext: 'int4',
     });
 
-    expect(() => renderColumnDefaultDdl('v', defaultNode, noHooks)).toThrow(
+    expect(() => buildSetDefaultColumn('v', defaultNode, noHooks)).toThrow(
       /carries no codec identity/,
     );
   });

@@ -10,8 +10,8 @@ import {
   pgTimetz,
 } from '../../src/core/data-types';
 import {
+  buildSetDefaultColumn,
   renderColumnDdl,
-  renderColumnDefaultDdl,
 } from '../../src/core/migrations/column-ddl-rendering';
 
 const noHooks = new Map();
@@ -105,7 +105,7 @@ describe('a date or time default written by the planner', () => {
       const node = column(nativeType, codecId, dataType, written);
       expect({
         createTable: renderColumnDdl('v', node, noHooks).default,
-        setDefault: renderColumnDefaultDdl('v', defaultNode(node), noHooks)?.default,
+        setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks)?.default,
       }).toEqual({
         createTable: { kind: 'literal', value: canonical },
         setDefault: { kind: 'literal', value: canonical },
@@ -124,7 +124,7 @@ describe('a date or time default written by the planner', () => {
     };
     expect({
       createTable: renderColumnDdl('v', node, noHooks).default,
-      setDefault: renderColumnDefaultDdl('v', defaultNode(node), noHooks),
+      setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks),
     }).toEqual({
       createTable: canonical,
       setDefault: expect.objectContaining({ type: 'timestamptz[]', default: canonical }),
@@ -144,6 +144,6 @@ describe('a date or time default written by the planner', () => {
         'Column "v": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.',
     });
     expect(() => renderColumnDdl('v', node, noHooks)).toThrow(refusal);
-    expect(() => renderColumnDefaultDdl('v', defaultNode(node), noHooks)).toThrow(refusal);
+    expect(() => buildSetDefaultColumn('v', defaultNode(node), noHooks)).toThrow(refusal);
   });
 });
