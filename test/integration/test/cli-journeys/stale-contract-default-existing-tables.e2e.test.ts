@@ -25,34 +25,14 @@ import {
 const CANONICAL_UUID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
 const TEXT_MARKER = 'stale-default-marker';
 
-const SQLITE_CONFIG = (
-  databasePath: string,
-) => `import sqliteAdapter from '@internal/adapter-sqlite/control';
-import { defineConfig as ormConfig } from '@internal/cli/config-types';
-import sqliteDriver from '@internal/driver-sqlite/control';
-import sql from '@internal/family-sql/control';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
-import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
-import sqlitePackRef from '@internal/target-sqlite/pack';
-import { definePrismaConfig } from '@prisma/cli-engine';
+const SQLITE_CONFIG_TEMPLATE = join(
+  __dirname,
+  '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys/prisma.config.sqlite.psl.ts',
+);
 
-export default definePrismaConfig({
-  orm: ormConfig({
-    family: sql,
-    target: sqlite,
-    adapter: sqliteAdapter,
-    driver: sqliteDriver,
-    extensions: [],
-    contract: prismaContract('./contract.prisma', {
-      output: 'contract.json',
-      target: sqlitePackRef,
-      createNamespace: sqliteCreateNamespace,
-    }),
-    db: { connection: ${JSON.stringify(databasePath)} },
-    migrations: { dir: 'migrations' },
-  }),
-});
-`;
+function sqliteConfig(databasePath: string): string {
+  return readFileSync(SQLITE_CONFIG_TEMPLATE, 'utf-8').replace('{{DB_PATH}}', () => databasePath);
+}
 
 interface Scenario {
   readonly name: string;
@@ -172,7 +152,7 @@ withTempDir(({ createTempDir }) => {
             contractMode: 'psl',
           });
           if (scenario.target === 'sqlite') {
-            writeFileSync(ctx.configPath, SQLITE_CONFIG(join(ctx.testDir, 'test.db')), 'utf-8');
+            writeFileSync(ctx.configPath, sqliteConfig(join(ctx.testDir, 'test.db')), 'utf-8');
           }
 
           writeSchema(ctx, scenario.before);
