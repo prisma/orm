@@ -112,6 +112,13 @@ describe('codecs that check the type of the value they write', () => {
   it.each<[string, { encode(value: never, ctx: object): unknown }, unknown]>([
     ['mongo/string@1 value must be a string; received null', mongoStringCodec, null],
     ['mongo/string@1 value must be a string; received 5', mongoStringCodec, 5],
+    [
+      'mongo/string@1 value must be a string; received a Date',
+      mongoStringCodec,
+      new Date('2020-01-01T00:00:00Z'),
+    ],
+    ['mongo/bool@1 value must be a boolean; received object', mongoBooleanCodec, { on: true }],
+    ['mongo/bool@1 value must be a boolean; received undefined', mongoBooleanCodec, undefined],
     ['mongo/bool@1 value must be a boolean; received string "true"', mongoBooleanCodec, 'true'],
     ['mongo/bool@1 value must be a boolean; received null', mongoBooleanCodec, null],
     [
@@ -140,6 +147,11 @@ describe('codecs that check the type of the value they write', () => {
       'abcdefabcdef',
     ],
     [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received string "zzzzzzzzzzzzzzzzzzzzzzzz"',
+      mongoObjectIdCodec,
+      'zzzzzzzzzzzzzzzzzzzzzzzz',
+    ],
+    [
       'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
       mongoObjectIdCodec,
       { _bsontype: 'ObjectId' },
@@ -159,6 +171,11 @@ describe('codecs that check the type of the value they write', () => {
     await expect(
       Promise.resolve().then(() => codec.encode(value as never, {})),
     ).rejects.toMatchObject({ code: 'RUNTIME.ENCODE_FAILED', message });
+  });
+
+  it('ObjectId takes upper-case hex digits', async () => {
+    const encoded = await mongoObjectIdCodec.encode('65F0000000000000000000A1', {});
+    expect(encoded.toHexString()).toBe('65f0000000000000000000a1');
   });
 
   it('ObjectId takes the driver`s ObjectId as well as a hex string', async () => {

@@ -95,11 +95,17 @@ function hexStringOf(value: object): string | undefined {
 }
 
 /**
- * `new ObjectId(...)` makes a fresh id from `null` or `undefined` and reads a number as a timestamp, so only a 24-digit hex string or an `ObjectId` is accepted. An `ObjectId` is rebuilt from its hex string, so one from any major version of `bson` works.
+ * `new ObjectId(...)` makes a fresh id from `null` or `undefined` and reads a number as a timestamp, so only a string, which the constructor accepts only as 24 hex digits, or an `ObjectId` is passed to it. An `ObjectId` is rebuilt from its hex string, so one from any major version of `bson` works.
  */
 export function objectIdEncode(codecId: string, value: string): ObjectId {
   const expected = 'a 24-digit hex string or an ObjectId';
-  if (typeof value === 'string' && OBJECT_ID_HEX.test(value)) return new ObjectId(value);
+  if (typeof value === 'string') {
+    try {
+      return new ObjectId(value);
+    } catch {
+      return refuseType(codecId, expected, value);
+    }
+  }
   if (typeof value !== 'object' || value === null || !hasBsonTypeTag(value, 'ObjectId')) {
     return refuseType(codecId, expected, value);
   }
