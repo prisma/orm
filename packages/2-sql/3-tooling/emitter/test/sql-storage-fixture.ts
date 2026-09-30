@@ -30,7 +30,7 @@ function normalizeTables(tables: Record<string, unknown>): Record<string, unknow
                 return [columnName, column];
               }
               const columnRecord = column as Record<string, unknown>;
-              return [columnName, { ...columnRecord, many: columnRecord['many'] ?? false }];
+              return [columnName, { many: false, ...columnRecord }];
             }),
           ),
         },
