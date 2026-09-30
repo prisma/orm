@@ -18,13 +18,20 @@ changes:
         - '^\s*type\s+\w+\s*\{'
   - id: codecs-check-stored-json
     summary: |
-      The built-in SQL, PostgreSQL and SQLite codecs now refuse a JSON value that is not a stored form of their type, including one its type parameters rule out, where they used to pass it through. A TypeScript `.default()` value or `enumType` member of that kind is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` or `CONTRACT.ENUM_INVALID`. The elements of a `textArray()` column can now be `null`. Correct the value the error names, and handle `null` elements.
+      A TypeScript `.default()` value or `enumType` member that its column's codec does not take is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` or `CONTRACT.ENUM_INVALID`. A `contract.json` or `migration.ts` that holds such a default stops the commands that apply it with `CONTRACT.DEFAULT_INVALID`. Correct the value the error names.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\.default\(\s*(?!now\(|sql`|autoincrement\()'
         - '\benumType\s*\('
+  - id: text-array-elements-nullable
+    summary: |
+      A `textArray()` column's elements are now typed `string | null`, because a `text[]` holds NULL elements, which it reads as `null`. Handle the `null`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
         - '\btextArray\s*\('
+        - '[''"]pg/text-array@1[''"]'
   - id: char-reads-drop-only-padding
     summary: |
       A `char(n)` column now reads the same through `.include()` as through a flat read: without the trailing spaces that pad it, where an include used to return them, and keeping a trailing tab or newline, which a flat read used to drop. Compare `char` values without their padding.
@@ -39,6 +46,13 @@ changes:
       glob: "**/contract.json"
       matches:
         - '"target"\s*:\s*"sqlite"'
+  - id: sqlite-int-include-refuses-inexact-values
+    summary: |
+      On SQLite, an `.include()` of a row whose `sql/int@1` column holds an INTEGER past 2^53, or a REAL, now throws `RUNTIME.DECODE_FAILED`, where it read the value rounded or with a fraction. Store such values in a `BigInt` or `Float` column.
+    detection:
+      glob: "**/contract.json"
+      matches:
+        - '"codecId"\s*:\s*"sql/int@1"'
   - id: psl-values-checked-by-codecs
     summary: |
       A PSL schema whose SQL enum member its codec does not take, or whose literal default its column's type does not hold, is now refused at `contract emit`, where it used to load. Correct the member or the default.
@@ -47,9 +61,7 @@ changes:
       matches:
         - '@@type\(\s*"(?:pg|sql|sqlite)/'
         - '^\s*\w+\s*=\s*-?\d{10,}\s*$'
-        - '\bUuid\b[^\n]*@default\(\s*"'
-        - '\b(?:VarChar|Char|Bit|VarBit|Numeric)\s*\(\s*\d[^\n]*@default\('
-        - '\bChar\s[^\n]*@default\('
+        - '@default\(\s*(?:"|-?\d|\[)'
   - id: uuid-defaults-stored-as-postgresql-writes
     summary: |
       A uuid default written in upper case, in braces or without hyphens, in PSL or in a TypeScript `.default()`, is now stored as PostgreSQL writes it, so emitting the contract again changes its storage hash. Earlier versions could not apply such a contract: the command that applied it failed and changed nothing. Emit the contract again, then run that command again. With migrations, first delete the migration package that never applied.
@@ -57,14 +69,17 @@ changes:
       glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
         - '\bUuid\b[^\n]*@default\(\s*"(?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")\{?[0-9A-Fa-f]{4}'
-        - '\buuidNative\s*\([^\n]*\.default\(\s*[''"`](?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[''"`])\{?[0-9A-Fa-f]{4}'
+        - '\b(?:uuidNative|pgUuidColumn)\s*\([^\n]*\.default\(\s*[''"`](?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[''"`])\{?[0-9A-Fa-f]{4}'
+        - '^\s*\.default\(\s*[''"`](?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[''"`])(?=[^''"`\n]*[A-F{-])\{?[0-9A-Fa-f]{8}-?[0-9A-Fa-f]{4}-?[0-9A-Fa-f]{4}-?[0-9A-Fa-f]{4}-?[0-9A-Fa-f]{12}\}?[''"`]'
   - id: mongo-codecs-check-json
     summary: |
-      The built-in Mongo codecs now refuse a JSON value that is not the JSON form of their type, where most passed it through: a PSL enum member whose value its `@@type` codec does not take is now refused. Correct the member.
+      The built-in Mongo codecs now refuse a JSON value that is not the JSON form of their type, where most passed it through: a PSL enum member whose value its `@@type` codec does not take is now refused at `contract emit`, and a TypeScript `enumType` member that `mongo/objectId@1` or `mongo/int32@1` does not hold is refused when the contract is built. Correct the member.
     detection:
-      glob: "**/*.prisma"
+      glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
         - '@@type\(\s*"mongo/'
+        - '[''"]mongo/(?:objectId|int32)@1[''"]'
+        - '\bMONGO_(?:OBJECTID|INT32)_CODEC_ID\b'
   - id: composite-type-attributes-refused
     summary: |
       An attribute on a composite type or on one of its members is now refused, where it used to be ignored. Remove it.
@@ -72,6 +87,13 @@ changes:
       glob: "**/*.prisma"
       matches:
         - '^\s*type\s+\w+\s*\{'
+  - id: cli-error-from-caught
+    summary: |
+      `mapCaughtMigrationError` is removed from `@prisma/orm-toolchain/cli/control-api` (`@internal/cli/control-api`). Use `errorFromCaught(error, why)`, which always returns an error: a CLI error as it is, any error with a structured code as itself, and anything else as `CLI.UNEXPECTED` with `why(message)`. It throws an `InternalError` again.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx}"
+      matches:
+        - '\bmapCaughtMigrationError\b'
 ---
 
 ## `domain-types-match-their-columns`
@@ -107,15 +129,13 @@ Correct the value the diagnostic names.
 
 ## `codecs-check-stored-json`
 
-A codec's `decodeJson` reads a value in the stored JSON form of its type: a column's literal default in `contract.json`, a member of a value-object default, and a value inside the JSON the database returns for an included relation. The text codecs (`pg/text@1`, `sql/text@1`, `sql/char@1`, `sql/varchar@1`, `sqlite/text@1`, `pg/enum@1`, `pg/uuid@1`, `pg/inet@1`, `pg/bit@1`, `pg/varbit@1`, `pg/tsquery@1`, `pg/timetz@1`, `pg/text-array@1` and the date and time codecs), the integer codecs `pg/int4@1`, `pg/int2@1` and `sql/int@1`, and `pg/bool@1` used to pass any JSON value through. Each now refuses a value of another kind with `RUNTIME.DECODE_FAILED`, naming the codec: a text codec takes a JSON string, `pg/int4@1` a JSON integer from -2147483648 to 2147483647, `pg/int2@1` one from -32768 to 32767, `sql/int@1` a safe integer, or on PostgreSQL, where its column is an int4, an integer from -2147483648 to 2147483647, `pg/bool@1` `true` or `false`, `pg/uuid@1` a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12, and a bit string only `0` and `1`. `pg/vector@1` refuses JSON that is not an array of the column's number of finite numbers with the same shape, as in `pg/vector@1 JSON value must be an array of 3 finite numbers`, where it said `Vector length mismatch` or `Vector value must contain only numbers`. `pg/int8@1` and `sqlite/bigint@1` take decimal text in the signed 64-bit range. `pg/timestamptz-date@1` refused a bad string with a plain `RangeError`; it now raises `RUNTIME.DECODE_FAILED` like the others. Every form PostgreSQL and SQLite write for a value the application type holds is still read. Two stored values the application type cannot hold now throw instead of reading wrong: a two-dimensional `text[]` value, which `pg/text-array@1` read as the text `"a,b"`, and, on SQLite, an INTEGER past 2^53 or a REAL stored in an INTEGER column, which `sql/int@1` read rounded or with a fraction.
+The built-in SQL, PostgreSQL and SQLite codecs now refuse a value that is not a stored form of their type, including one its type parameters rule out, where most used to pass it through. A TypeScript `.default()` given such a value is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` naming the model and field: a value of another kind, such as a number for a text column, or one the PostgreSQL column rules in `psl-values-checked-by-codecs` refuse, such as `'toolong'` for a `varchar(3)` column. A TypeScript `enumType` member its codec does not take is refused the same way, with `CONTRACT.ENUM_INVALID` naming the enum, the member and the codec: for example a `pg/char@1` or `sql/char@1` member longer than one character on PostgreSQL, since the enum's column is `character`, which holds one. Correct the value the error names.
 
-`pg/text-array@1` reads a `text[]` column's NULL elements as `null`, so its application type is `readonly (string | null)[]` where it was `readonly string[]`. Code typed by a contract-free `textArray()` column, or by `min` or `max` over one, sees `string | null` elements; handle the `null`.
+A `contract.json` with such a default, emitted by an earlier version or edited by hand, still loads. `db init`, `db update` and `migration plan` used to plan the default; they now stop with `CONTRACT.DEFAULT_INVALID`, which names the table, the column, the codec and the value. Emit the contract again with this version, and correct the default in the contract source if emit refuses it. Running a `migration.ts` that an earlier version planned with such a default fails with the same message; correct the default in that file.
 
-The float codecs `pg/float8@1`, `pg/float4@1`, `pg/float@1`, `sql/float@1` and `sqlite/real@1` take a finite JSON number or the text `"NaN"`, `"Infinity"` or `"-Infinity"`, which PostgreSQL writes for those values in JSON, and `encodeJson` writes that text for them. SQLite writes an infinity in JSON as `9.0e+999`, so on SQLite the float codecs' JSON projection writes the text instead. `sql/float@1`, `pg/float@1` and `sqlite/real@1` used to refuse NaN and the infinities, so an `.include()` of a row holding one failed with `RUNTIME.DECODE_FAILED`; it now reads the value. SQLite cannot store NaN, so on SQLite `sqlite/real@1` and `sql/float@1` refuse it; see `sqlite-nan-parameters-refused`. No change is needed.
+## `text-array-elements-nullable`
 
-On PostgreSQL the codecs also check what the column stores. `VarChar(n)` and `Char(n)` (`sql/varchar@1`, `sql/char@1`, `pg/varchar@1`, `pg/char@1`) take at most n characters, counted as PostgreSQL counts them, by code point, and a `Char` value's trailing spaces do not count. A `Char` without a length is `character(1)`, so it takes one character. `Bit(n)` takes exactly n bits and `VarBit(n)` at most n, and a `pg/bit@1` column without a length is `bit(1)`, so it takes exactly one bit. `Numeric(p, s)` takes a value it stores without rounding, and `pg/numeric@1` takes only decimal text without an exponent or a leading `+`. The scale may now be negative or above the precision, from -1000 to 1000, as PostgreSQL 15 and later allow: `Numeric(5, -2)` stores multiples of 100, and `contract infer` writes such a column. `sql/int@1`, and `pg/int@1`, the codec of an enum whose members are integers, store an int4, so each takes an integer from -2147483648 to 2147483647. `pg/float4@1` takes a finite number only if float4 holds it, neither overflowing to an infinity nor becoming 0. A default that breaks one of these, such as `VarChar(3) @default("toolong")`, used to load, and the migration planned and applied; the first insert that used the default then failed. A `Char` or `pg/bit@1` column without a length did not apply on PostgreSQL, whatever its default. Such a default is now refused when the contract is emitted, with `PSL_INVALID_DEFAULT_LITERAL`, or `PSL_EXTENSION_INVALID_VALUE` for an enum member, and a TypeScript `.default()` when the contract is built, with `CONTRACT.DEFAULT_INVALID`. Shorten or correct the value. SQLite does not enforce a declared length, so on SQLite the char and varchar codecs take text of any length.
-
-A TypeScript `.default()` given a value its column's type does not take is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` naming the model and field. A TypeScript `enumType` member its codec does not take is refused the same way, with `CONTRACT.ENUM_INVALID` naming the enum, the member and the codec: for example a `pg/char@1` or `sql/char@1` member longer than one character on PostgreSQL, since the enum's column is `character`, which holds one. A `contract.json` with such a default, emitted by an earlier version or edited by hand, still loads. `db init`, `db update` and `migration plan` used to plan the default, as above; they now stop with `CONTRACT.DEFAULT_INVALID`, which names the table, the column, the codec and the value. Emit the contract again with this version, and correct the default in the contract source if emit refuses it. Running a `migration.ts` that an earlier version planned with such a default fails with the same message; correct the default in that file. A PSL schema is refused earlier, when it is emitted; see `psl-values-checked-by-codecs`. A `null` literal default is written as `DEFAULT NULL`, as before.
+`pg/text-array@1`, the codec of a contract-free `textArray()` column, reads a `text[]` column's NULL elements as `null`, so its application type is `readonly (string | null)[]` where it was `readonly string[]`. Code typed by a `textArray()` column, or by `min` or `max` over one, sees `string | null` elements; handle the `null`. Read through an `.include()`, a two-dimensional `text[]` value now throws `RUNTIME.DECODE_FAILED`, where it read as the text `"a,b"`.
 
 ## `char-reads-drop-only-padding`
 
@@ -125,9 +145,21 @@ PostgreSQL pads a `char(n)` value with spaces to its length: `'a'` in a `char(3)
 
 SQLite cannot store NaN: bound as a parameter, it becomes NULL. So `create({ value: 0 / 0 })` on an optional `Float` column stored NULL, and `where((p) => p.value.eq(Number.NaN))` matched nothing. On SQLite, `sqlite/real@1` and `sql/float@1` now refuse NaN with `RUNTIME.ENCODE_FAILED`, `<codecId> value must be a number other than NaN, which SQLite cannot store`, with `meta.codecId` and `meta.received`: when they encode a value to write or filter by, and when they encode a TypeScript `.default()`, which is still refused when the contract is built with `CONTRACT.DEFAULT_INVALID`, now with this message. Their `decodeJson` refuses the text `"NaN"`. A NaN parameter no codec encoded, such as one in raw SQL, is refused by the SQLite driver with the same code: `Parameter 2 is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.`, with `meta.paramIndex`, counted from 0. On a required column SQLite already refused the NULL, so only the error changes. Where a computed value can be NaN, write `null` for no value, and filter with `isNull()` for rows that have none. Infinity and -Infinity are stored and read back as before.
 
+## `sqlite-int-include-refuses-inexact-values`
+
+`sql/int@1` holds a JavaScript safe integer. On SQLite, an INTEGER column can hold a larger integer or a REAL. An `.include()` read such a value rounded or with a fraction; it now throws `RUNTIME.DECODE_FAILED`, naming the codec. A flat read is unchanged. Store an integer past 2^53 in a `BigInt` column and a fraction in a `Float` column.
+
 ## `psl-values-checked-by-codecs`
 
-The PSL reader reads each literal default, and each member of a SQL `enum`, with the column's codec, so the stricter codecs refuse schemas that loaded before. Each of these is now refused at `contract emit`:
+The PSL reader reads each literal default, and each member of a SQL `enum`, with the column's codec, so the stricter codecs refuse schemas that loaded before. A value of another kind is refused: a text codec takes a string, an integer codec an integer in its range, `Boolean` `true` or `false`, and `Uuid` a UUID. On PostgreSQL the codecs also check what the column stores:
+
+- `VarChar(n)` and `Char(n)` take at most n characters, counted by code point, and a `Char` value's trailing spaces do not count. A `Char` without a length is `character(1)`, so it takes one character.
+- `Bit(n)` takes exactly n bits and `VarBit(n)` at most n, and a bit column without a length is `bit(1)`.
+- `Numeric(p, s)` takes a value it stores without rounding.
+- `Int`, `sql/int@1` and an enum whose members are integers take an integer from -2147483648 to 2147483647, and `SmallInt` one from -32768 to 32767.
+- `Real` takes a finite number only if float4 holds it, neither overflowing to an infinity nor becoming 0.
+
+Such a default used to load, and the migration planned and applied; the first insert that used the default then failed. A `Char` or bit column without a length did not apply on PostgreSQL, whatever its default. SQLite does not enforce a declared length, so on SQLite the char and varchar codecs take text of any length. Each of these is now refused at `contract emit`:
 
 | Schema | Diagnostic |
 | --- | --- |
@@ -172,3 +204,7 @@ Each codec now takes: `mongo/string@1` a string; `mongo/objectId@1` 24 hexadecim
 ## `composite-type-attributes-refused`
 
 An attribute inside a `type` block was ignored: `street String @default("x")` stored no default, and `@@map` mapped nothing. Each is now refused, `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` on a member and `PSL_UNSUPPORTED_COMPOSITE_TYPE_ATTRIBUTE` on the type. Remove the attribute. To give a value object a default, write it on the model field as a whole value, such as `` home Address @default(json`{"street": "x"}`) ``.
+
+## `cli-error-from-caught`
+
+`mapCaughtMigrationError(error)`, exported from `@prisma/orm-toolchain/cli/control-api` (`@internal/cli/control-api`), returned a CLI error unchanged and `null` for anything else, which the caller wrapped as `CLI.UNEXPECTED`. `errorFromCaught(error, why)`, exported from the same place, does the whole job: it returns a CLI error unchanged, reports any other error with a structured `NAMESPACE.SUBCODE` code as itself, reports anything else as `CLI.UNEXPECTED` with `why` given the error's message, and throws an `InternalError` again. Replace `mapCaughtMigrationError(error) ?? errorUnexpected(...)` with `errorFromCaught(error, (message) => ...)`. A caller that holds a database connection string passes it as `errorFromCaught(error, why, { connection })`, which removes it from every field of the reported error.
