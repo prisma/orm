@@ -25,8 +25,8 @@ export interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
    * (the dependency is satisfied by reality).
    */
   readonly dependsOn?: readonly (readonly string[])[];
-  /** Why the actual node is not equal to the expected one, when the expected node can say. */
-  readonly reason?: string;
+  /** Why the actual node is not equal to the expected one, as text for people, when the expected node can say. Not an outcome: read that with `issueOutcome`. */
+  readonly explanation?: string;
 }
 
 /**
@@ -91,7 +91,7 @@ export interface DiffableNode {
    * Why `other` is not equal to this node, when the difference has a cause beyond the two values,
    * such as an expected value the node's type refuses. Called only after `isEqualTo` returned false.
    */
-  mismatchReason?(other: DiffableNode): string | undefined;
+  explainMismatch?(other: DiffableNode): string | undefined;
   children(): readonly DiffableNode[];
 }
 
@@ -212,7 +212,7 @@ function diffPair(
       path,
       expected,
       actual,
-      ...ifDefined('reason', expected.mismatchReason?.(actual)),
+      ...ifDefined('explanation', expected.explainMismatch?.(actual)),
     });
   }
   issues.push(...diffChildren(expected.children(), actual.children(), path));

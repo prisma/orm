@@ -222,7 +222,7 @@ const OUTCOME_LABEL: Record<ExpectationFailureReason, string> = {
 /** What a diff issue says, in the words the commander shell used. */
 export function issueLabel(issue: SchemaDiffIssue): string {
   const label = `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
-  return issue.reason === undefined ? label : `${label}. ${issue.reason}`;
+  return issue.explanation === undefined ? label : `${label}. ${issue.explanation}`;
 }
 
 function issueNodes(issues: readonly SchemaDiffIssue[], status: 'error' | 'warn'): TreeNode[] {

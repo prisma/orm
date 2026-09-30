@@ -16,13 +16,13 @@ describe('issueLabel', () => {
     ).toBe('mismatch: public/event/at/default');
   });
 
-  it('adds the reason a mismatch carries', () => {
+  it('adds the explanation a mismatch carries', () => {
     expect(
       issueLabel({
         path: ['public', 'event', 'at', 'default'],
         expected: node,
         actual: node,
-        reason: 'Re-emit the contract, then try again.',
+        explanation: 'Re-emit the contract, then try again.',
       }),
     ).toBe('mismatch: public/event/at/default. Re-emit the contract, then try again.');
   });

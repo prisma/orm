@@ -100,8 +100,11 @@ describe('a contract default the canonical form of its data type refuses', {
       frameworkComponents,
     });
     expect(
-      result.schema.issues.map((issue) => ({ path: issue.path.join('/'), reason: issue.reason })),
-    ).toEqual([{ path: 'database/public/event/column:at/default', reason: REFUSAL }]);
+      result.schema.issues.map((issue) => ({
+        path: issue.path.join('/'),
+        explanation: issue.explanation,
+      })),
+    ).toEqual([{ path: 'database/public/event/column:at/default', explanation: REFUSAL }]);
   });
 
   it('is not written by the planner', { timeout: testTimeout }, async () => {

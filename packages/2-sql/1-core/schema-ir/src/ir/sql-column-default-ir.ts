@@ -131,7 +131,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
    * The refusal of an expected literal its data type does not hold, which a contract emitted by an
    * earlier version can carry, so the mismatch names its cause.
    */
-  mismatchReason(): string | undefined {
+  explainMismatch(): string | undefined {
     return contractDefaultRefusal(
       this.resolved,
       this.dataType?.toCanonicalForm,

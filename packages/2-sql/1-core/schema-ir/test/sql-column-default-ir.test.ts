@@ -101,7 +101,7 @@ describe('SqlColumnDefaultIR', () => {
     });
   });
 
-  describe('mismatchReason (this = expected)', () => {
+  describe('explainMismatch (this = expected)', () => {
     const timestamptz = dataType('pg/timestamptz', {
       toCanonicalForm: (value) => {
         if (value === '2024-01-01T00:00:00Z') return value;
@@ -116,17 +116,17 @@ describe('SqlColumnDefaultIR', () => {
         resolved: { kind: 'literal', value: '2024-01-01 00:00:00' },
         dataType: timestamptz,
       });
-      expect(expected.mismatchReason()).toBe(
+      expect(expected.explainMismatch()).toBe(
         'The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Re-emit the contract, then try again.',
       );
     });
 
-    it('gives no reason for a default its data type holds', () => {
+    it('gives no explanation for a default its data type holds', () => {
       const expected = new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value: '2024-01-01T00:00:00Z' },
         dataType: timestamptz,
       });
-      expect(expected.mismatchReason()).toBeUndefined();
+      expect(expected.explainMismatch()).toBeUndefined();
     });
   });
 });

@@ -440,31 +440,31 @@ describe('SchemaDiff', () => {
   });
 });
 
-describe('diffSchemas mismatch reasons', () => {
-  function explainedNode(body: string, reason: string | undefined): DiffableNode {
+describe('diffSchemas mismatch explanations', () => {
+  function explainedNode(body: string, explanation: string | undefined): DiffableNode {
     return {
       id: 'default',
       nodeKind: 'widget',
       children: () => [],
       isEqualTo: (other) => other.id === 'default' && body === 'same',
-      mismatchReason: () => reason,
+      explainMismatch: () => explanation,
     };
   }
 
-  it('carries the reason the expected node gives for a mismatch', () => {
+  it('carries the explanation the expected node gives for a mismatch', () => {
     expect(
       diffSchemas(
         rootOf([explainedNode('old', 'the contract text is refused')]),
         rootOf([makeNode('default')]),
       ),
-    ).toMatchObject([{ path: ['root', 'default'], reason: 'the contract text is refused' }]);
+    ).toMatchObject([{ path: ['root', 'default'], explanation: 'the contract text is refused' }]);
   });
 
-  it('carries no reason when the expected node gives none', () => {
+  it('carries no explanation when the expected node gives none', () => {
     const [issue] = diffSchemas(
       rootOf([explainedNode('old', undefined)]),
       rootOf([makeNode('default')]),
     );
-    expect(issue).not.toHaveProperty('reason');
+    expect(issue).not.toHaveProperty('explanation');
   });
 });
