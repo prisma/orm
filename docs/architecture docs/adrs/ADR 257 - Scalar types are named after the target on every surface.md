@@ -8,6 +8,8 @@ A scalar type's name says what the database stores, in the database's own vocabu
 
 Two types are named after an encoding rather than a single stored type: `Json`, the JSON-representable subset of the target's values, and, on MongoDB, `Bson`, any BSON value.
 
+When two types store the same thing but give the application different values, the second token adds the application type as a suffix. `mongo/int64Number@1` (`Int64Number`, `field.int64Number()`) stores a BSON `long` and reads it as a `number` in the safe-integer range, next to `mongo/int64@1`, which reads the same `long` as a `bigint`. PostgreSQL's `pg/int8number@1` and SQLite's `sqlite/bigintnumber@1` follow the same rule. The suffix names the application type because it is the only difference: the stored type is already in the first half of the token.
+
 ## The decision in code
 
 The MongoDB adapter's PSL scalar map names each type after the BSON type it stores, and points it at a codec whose id carries the same token:
