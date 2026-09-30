@@ -12,6 +12,14 @@ model Post {
   @@map("posts")
 }
 
+model Tally {
+  id    ObjectId @id @map("_id")
+  hits  Int32?
+  ratio Double?
+
+  @@map("tallies")
+}
+
 type Stamp {
   note Json
 }

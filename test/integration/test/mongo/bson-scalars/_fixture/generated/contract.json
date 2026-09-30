@@ -11,6 +11,10 @@
     "posts": {
       "model": "Post",
       "namespace": "__unbound__"
+    },
+    "tallies": {
+      "model": "Tally",
+      "namespace": "__unbound__"
     }
   },
   "domain": {
@@ -136,6 +140,35 @@
             "relations": {},
             "storage": {
               "collection": "posts"
+            }
+          },
+          "Tally": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "hits": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              },
+              "ratio": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "tallies"
             }
           }
         },
@@ -300,6 +333,38 @@
                 "validationAction": "error",
                 "validationLevel": "strict"
               }
+            },
+            "tallies": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "hits": {
+                      "bsonType": [
+                        "null",
+                        "int"
+                      ]
+                    },
+                    "ratio": {
+                      "bsonType": [
+                        "null",
+                        "double"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
             }
           }
         },
@@ -307,7 +372,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "8fa3c276a2a132a34acdae3e4d3eb83f932907d74dffc722050e8023ab1e0db4"
+    "storageHash": "6abbc494044aea8f1e14af40f8b71afe60ea964d31b7ccbf5d5ea2e74afe3c47"
   },
   "capabilities": {},
   "extensions": {},

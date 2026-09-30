@@ -483,3 +483,14 @@ test('FieldExpression inc/mul restricted to numeric types', () => {
   void ({} as NumberExpr).inc(1);
   void ({} as NumberExpr).mul(2);
 });
+
+test('FieldExpression inc/mul available on nullable numeric types', () => {
+  type NullableNumberExpr = FieldExpression<number | null>;
+  type NullableStringExpr = FieldExpression<string | null>;
+
+  // @ts-expect-error inc is not available on nullable string fields
+  void ({} as NullableStringExpr).inc(1);
+
+  void ({} as NullableNumberExpr).inc(1);
+  void ({} as NullableNumberExpr).mul(2);
+});

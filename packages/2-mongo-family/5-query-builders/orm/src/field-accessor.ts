@@ -116,7 +116,11 @@ export type FieldExpression<T = unknown> = {
   pull(match: T extends readonly (infer E)[] ? E | Partial<E> : unknown): FieldOperation;
   addToSet(value: T extends readonly (infer E)[] ? E : unknown): FieldOperation;
   pop(end: 1 | -1): FieldOperation;
-} & (T extends number ? NumericOps : unknown);
+} & ([NonNullable<T>] extends [never]
+  ? unknown
+  : NonNullable<T> extends number
+    ? NumericOps
+    : unknown);
 
 type HasValueObjects = MongoContract;
 
