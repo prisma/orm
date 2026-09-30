@@ -23,6 +23,7 @@ const fixtureRoots = [
   'test/sql-builder/fixtures',
   'test/mongo/bson-scalars',
   'test/mongo/temporal-presets',
+  'test/mongo/where-filter',
 ];
 
 function findConfigs(dir) {

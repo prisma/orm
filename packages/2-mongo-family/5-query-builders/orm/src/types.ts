@@ -185,19 +185,30 @@ export type IncludeResultFields<
     : never;
 };
 
+type WhereFieldValue<
+  Field,
+  TCodecTypes extends Record<string, { output: unknown }>,
+> = Field extends {
+  readonly type: {
+    readonly kind: 'scalar';
+    readonly codecId: infer CId extends string & keyof TCodecTypes;
+  };
+}
+  ?
+      | TCodecTypes[CId]['output']
+      | (Field extends { readonly many: true } ? readonly TCodecTypes[CId]['output'][] : never)
+      | (Field extends { readonly nullable: true } ? null : never)
+  : unknown;
+
 export type MongoWhereFilter<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
   TCodecTypes extends Record<string, { output: unknown }> = ExtractMongoCodecTypes<TContract>,
 > = {
-  readonly [K in keyof MongoModelsMap<TContract>[ModelName]['fields']]?: MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
-    readonly type: {
-      readonly kind: 'scalar';
-      readonly codecId: infer CId extends string & keyof TCodecTypes;
-    };
-  }
-    ? TCodecTypes[CId]['output']
-    : unknown;
+  readonly [K in keyof MongoModelsMap<TContract>[ModelName]['fields']]?: WhereFieldValue<
+    MongoModelsMap<TContract>[ModelName]['fields'][K],
+    TCodecTypes
+  >;
 };
 
 export type MongoIncludeSpec<
