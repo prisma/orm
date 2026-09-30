@@ -59,6 +59,9 @@ type SchemaVerifyDocument = VerifyDatabaseSchemaResult;
  */
 const DEFAULT_ADVANCE_REF = 'db';
 
+const CONTRACT_REF_BRIEF =
+  'Contract reference (hash, prefix, ref name, migration dir name, or <dir>^)';
+
 interface AdvancedRef {
   readonly name: string;
   readonly hash: string;
@@ -214,17 +217,13 @@ export function createDbSignCommand(
     args: {
       positionals: {
         contract: positional.optionalString({
-          brief: 'Contract reference (hash, prefix, ref name, or migration dir name)',
+          brief: CONTRACT_REF_BRIEF,
           placeholder: 'contract',
         }),
       },
       flags: {
         db: dbFlag,
-        contract: flag.string({
-          brief:
-            'Contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
-          placeholder: 'contract',
-        }),
+        contract: flag.string({ brief: CONTRACT_REF_BRIEF, placeholder: 'contract' }),
         advanceRef: flag.string({
           brief: 'Advance the named ref to the post-command contract hash',
           placeholder: 'name',

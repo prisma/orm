@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
-import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
+import {
+  contractSnapshotDir,
+  writeContractSnapshot,
+} from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
@@ -94,6 +97,23 @@ async function buildProject(): Promise<string> {
     }),
   );
   return cwd;
+}
+
+/** The snapshot store entry a `--to` target's bundle is materialized from. */
+async function writeSnapshot(cwd: string, storageHash: string): Promise<void> {
+  await writeContractSnapshot(join(cwd, 'migrations'), storageHash, {
+    contractJson: {
+      storage: { storageHash, namespaces: {} },
+      schemaVersion: '1.0.0',
+      target: TARGET,
+      targetFamily: FAMILY,
+    },
+    contractDts: 'export type Contract = unknown;\n',
+  });
+}
+
+function markerAt(storageHash: string): Map<string, { storageHash: string; invariants: string[] }> {
+  return new Map([['app', { storageHash, invariants: [] }]]);
 }
 
 function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -414,6 +434,106 @@ describe('migrate', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       ok: false,
       error: { code: 'MIGRATION.PATH_UNREACHABLE' },
+    });
+  });
+
+  describe('--to', () => {
+    it('resolves @contract to the emitted contract and applies the pending migration', async () => {
+      const cwd = await buildProject();
+      await writeSnapshot(cwd, C2);
+      mocks.readAllMarkers.mockResolvedValue(markerAt(C1));
+      mocks.migrate.mockResolvedValue(
+        ok({
+          ...appliedSuccess(),
+          migrationsApplied: 1,
+          applied: [
+            {
+              spaceId: 'app',
+              dirName: '20260101_100001_222222',
+              migrationHash: 'h2',
+              from: C1,
+              to: C2,
+              operationsExecuted: 1,
+            },
+          ],
+          summary: 'Applied 1 migration(s)',
+        }),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--to', '@contract', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(mocks.migrate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refHash: C2,
+          contract: expect.objectContaining({
+            storage: expect.objectContaining({ storageHash: C2 }),
+          }),
+        }),
+      );
+      expect(run.presented?.data).toMatchObject({
+        ok: true,
+        migrationsApplied: 1,
+        markerHash: C2,
+        summary: 'Applied 1 migration(s)',
+      });
+    });
+
+    it('resolves @db to the live marker so there is nothing to run', async () => {
+      const cwd = await buildProject();
+      await writeSnapshot(cwd, C1);
+      mocks.readAllMarkers.mockResolvedValue(markerAt(C1));
+      mocks.migrate.mockResolvedValue(
+        ok({
+          ...appliedSuccess(),
+          migrationsApplied: 0,
+          markerHash: C1,
+          applied: [],
+          summary: 'Already up to date',
+          perSpace: [],
+        }),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', '@db', '--json'], {
+        cwd,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(mocks.migrate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refHash: C1,
+          refInvariants: [],
+          contract: expect.objectContaining({
+            storage: expect.objectContaining({ storageHash: C1 }),
+          }),
+        }),
+      );
+      expect(run.presented?.data).toMatchObject({
+        ok: true,
+        migrationsApplied: 0,
+        markerHash: C1,
+        summary: 'Already up to date',
+      });
+    });
+
+    it('errors with the connection-required envelope for @db without a connection', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd, { db: undefined })).run(
+        ['db', 'migrate', '--to', '@db', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: false,
+        error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' },
+      });
+      expect(mocks.connect).not.toHaveBeenCalled();
+      expect(mocks.migrate).not.toHaveBeenCalled();
     });
   });
 

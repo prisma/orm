@@ -2,8 +2,7 @@ import { ormConfigSection } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
-import type { MigrationGraph } from '@internal/migration-tools/graph';
-import type { RefEntry, Refs } from '@internal/migration-tools/refs';
+import type { RefEntry } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -29,7 +28,12 @@ import {
   type ContractIR,
   preflightRefAdvancement,
 } from '../control-api/operations/ref-advancement';
-import { resolveContractRef } from '../control-api/operations/ref-resolution';
+import {
+  isLiveMarkerRef,
+  liveMarkerRefHash,
+  type RefResolutionContext,
+  resolveContractRef,
+} from '../control-api/operations/ref-resolution';
 import type {
   CreateControlClient,
   MigratePathDecision,
@@ -181,18 +185,19 @@ interface RequestedTarget {
 
 /**
  * `--to` as a contract the app graph knows. A ref target keeps the invariants
- * the ref declares; a bare hash carries none. Omitting `--to` targets the
- * emitted contract, which needs no resolution at all.
+ * the ref declares; a bare hash, `@contract`, or `@empty` carries none.
+ * Omitting `--to` targets the emitted contract, which needs no resolution at
+ * all. `@db` is not resolved here: it needs the live marker, which is read
+ * only once the connection is open.
  */
 function resolveRequestedTarget(
   to: string | undefined,
-  refs: Refs,
-  graph: MigrationGraph,
+  context: RefResolutionContext,
 ): Result<RequestedTarget, CliStructuredError> {
   if (to === undefined) {
     return ok({ entry: undefined, refName: undefined });
   }
-  const resolved = resolveContractRef(to, { graph, refs });
+  const resolved = resolveContractRef(to, context);
   if (!resolved.ok) {
     return notOk(normalizeError(resolved.failure));
   }
@@ -200,7 +205,11 @@ function resolveRequestedTarget(
     return ok({ entry: { hash: resolved.value.hash, invariants: [] }, refName: undefined });
   }
   const refName = resolved.value.provenance.refName;
-  return ok({ entry: refs[refName], refName });
+  return ok({ entry: context.refs[refName], refName });
+}
+
+function liveMarkerTarget(appMarker: { readonly storageHash: string } | null): RequestedTarget {
+  return { entry: { hash: liveMarkerRefHash(appMarker), invariants: [] }, refName: undefined };
 }
 
 export function createMigrateCommand(createClient: CreateControlClient) {
@@ -226,7 +235,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         db: dbFlag,
         to: flag.string({
           brief:
-            'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
+            'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, @contract, @db, or @empty)',
           placeholder: 'contract',
         }),
         advanceRef: flag.string({
@@ -346,13 +355,15 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(integrityFailure));
       }
 
-      const target = resolveRequestedTarget(
-        args.flags.to,
-        aggregate.app.refs,
-        aggregate.app.graph(),
-      );
-      if (!target.ok) {
-        return notOk(target.failure);
+      const offlineTarget = isLiveMarkerRef(args.flags.to)
+        ? undefined
+        : resolveRequestedTarget(args.flags.to, {
+            graph: aggregate.app.graph(),
+            refs: aggregate.app.refs,
+            contractHash: aggregate.app.contract().storage.storageHash,
+          });
+      if (offlineTarget !== undefined && !offlineTarget.ok) {
+        return notOk(offlineTarget.failure);
       }
 
       let document: MigrateDocument;
@@ -371,7 +382,9 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           }
         }
 
-        const refEntry = target.value.entry;
+        const target: RequestedTarget =
+          offlineTarget === undefined ? liveMarkerTarget(appMarker) : offlineTarget.value;
+        const refEntry = target.entry;
         if (refEntry !== undefined && refEntry.invariants.length > 0) {
           const invariantRefusal = refuseUnknownInvariants({
             graph: appGraph,
@@ -395,7 +408,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             try {
               const at = await aggregate.app.contractAt(
                 refEntry.hash,
-                target.value.refName === undefined ? undefined : { refName: target.value.refName },
+                target.refName === undefined ? undefined : { refName: target.refName },
               );
               applyContract = at.contract;
               snapshotContractJson = blindCast<

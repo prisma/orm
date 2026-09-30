@@ -312,6 +312,57 @@ describe('migrate --show', () => {
     });
   });
 
+  describe('the @db marker', () => {
+    it('resolves --to @db to the live marker', async () => {
+      const cwd = await buildProject();
+      mocks.readAllMarkers.mockResolvedValue(
+        new Map([['app', { storageHash: C1, invariants: [] }]]),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--show', '--from', EMPTY, '--to', '@db', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toEqual({
+        ok: true,
+        migrations: [expect.objectContaining({ from: EMPTY, to: C1 })],
+        summary: '1 migration will run',
+      });
+    });
+
+    it('shows nothing to run for --to @db when the from-state is the live marker too', async () => {
+      const cwd = await buildProject();
+      mocks.readAllMarkers.mockResolvedValue(
+        new Map([['app', { storageHash: C1, invariants: [] }]]),
+      );
+
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--show', '--to', '@db', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ ok: true, migrations: [] });
+    });
+
+    it('errors structurally for --to @db without a connection', async () => {
+      const cwd = await buildProject();
+
+      const run = await harness(ormConfig(cwd, { db: undefined })).run(
+        ['db', 'migrate', '--show', '--from', EMPTY, '--to', '@db', '--json'],
+        { cwd },
+      );
+
+      expect(run.exitCode).not.toBe(0);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: { ok: false, error: { code: 'CONFIG.DB_CONNECTION_REQUIRED' } },
+      });
+    });
+  });
+
   describe('extension spaces', () => {
     it('plans extensions from their own state, never from the app --from hash', async () => {
       const cwd = await buildProject();

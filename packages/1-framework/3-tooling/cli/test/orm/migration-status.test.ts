@@ -105,6 +105,29 @@ async function projectWithOneMigration(): Promise<
   return { ...project, migrationHash: seeded.migrationHash };
 }
 
+const DIR_BASE = '20260101T0000_base';
+const DIR_HEAD = '20260102T0000_head';
+
+/** A project whose app space carries ∅ → HASH_BASE → HASH_HEAD, with the contract at HASH_HEAD. */
+async function projectWithTwoMigrations(): Promise<
+  OfflineProject & { readonly baseMigrationHash: string }
+> {
+  const project = await createOfflineProject({ storageHash: HASH_HEAD });
+  const base = await seedMigrationPackage({
+    appMigrationsDir: project.appMigrationsDir,
+    dirName: DIR_BASE,
+    from: null,
+    to: HASH_BASE,
+  });
+  await seedMigrationPackage({
+    appMigrationsDir: project.appMigrationsDir,
+    dirName: DIR_HEAD,
+    from: HASH_BASE,
+    to: HASH_HEAD,
+  });
+  return { ...project, baseMigrationHash: base.migrationHash };
+}
+
 function markersAt(storageHash: string) {
   return new Map([['app', { storageHash, invariants: [] as readonly string[] }]]);
 }
@@ -178,6 +201,30 @@ describe('migration status', () => {
     expect(run.presented?.diagnostics.at(0)).toMatchObject({ meta: { space: 'app' } });
     expect(run.presented?.data).toMatchObject({
       summary: `Database marker ${HASH_UNKNOWN.slice(0, 12)} is not in the on-disk migration graph`,
+    });
+  });
+
+  it('warns when the marker equals the emitted contract but no migration ends there', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_HEAD });
+    await seedMigrationPackage({
+      appMigrationsDir: project.appMigrationsDir,
+      dirName: DIR_BASE,
+      from: null,
+      to: HASH_BASE,
+    });
+    const db = fakeDatabase({ markers: markersAt(HASH_HEAD) });
+
+    const run = await harness(driverConfig(project, db)).run(['migration', 'status', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(codesAndSeverities(run.presented?.diagnostics ?? [])).toEqual([
+      { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn' },
+    ]);
+    expect(run.presented?.data).toMatchObject({
+      summary: `Database marker ${HASH_HEAD.slice(0, 12)} is not in the on-disk migration graph`,
+      spaces: [{ currentContract: HASH_HEAD, targetContract: HASH_HEAD }],
     });
   });
 
@@ -402,6 +449,140 @@ describe('migration status', () => {
     expect(migrationLine).toContain(`- -> ${HASH_HEAD.slice(0, 7)}`);
     expect(migrationLine).not.toContain('│↑');
     expect(migrationLine).not.toContain('→');
+  });
+
+  describe('reserved contract references', () => {
+    it('resolves --to @contract to the emitted contract, the same as no --to', async () => {
+      const project = await projectWithOneMigration();
+      const db = fakeDatabase({
+        markers: markersAt(HASH_HEAD),
+        ledger: [{ migrationHash: project.migrationHash }],
+      });
+      const config = driverConfig(project, db);
+
+      const implicit = await harness(config).run(['migration', 'status', '--json'], {
+        cwd: project.dir,
+      });
+      const explicit = await harness(config).run(
+        ['migration', 'status', '--to', '@contract', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(explicit.exitCode).toBe(0);
+      expect(explicit.presented?.data).toEqual(implicit.presented?.data);
+      expect(explicit.presented?.data).toMatchObject({
+        summary: 'Up to date',
+        spaces: [{ targetContract: HASH_HEAD }],
+      });
+    });
+
+    it('resolves --from @contract offline', async () => {
+      const project = await projectWithOneMigration();
+      const db = fakeDatabase();
+
+      const run = await harness(driverConfig(project, db)).run(
+        ['migration', 'status', '--from', '@contract', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(db.counters.connections).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        summary: 'Up to date',
+        spaces: [{ currentContract: HASH_HEAD, targetContract: HASH_HEAD }],
+      });
+    });
+
+    it('resolves --to @db to the live marker and reports up to date', async () => {
+      const project = await projectWithTwoMigrations();
+      const db = fakeDatabase({
+        markers: markersAt(HASH_BASE),
+        ledger: [{ migrationHash: project.baseMigrationHash }],
+      });
+
+      const run = await harness(driverConfig(project, db)).run(
+        ['migration', 'status', '--to', '@db', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({
+        summary: 'Up to date',
+        diagnostics: [],
+        spaces: [{ currentContract: HASH_BASE, targetContract: HASH_BASE }],
+      });
+    });
+
+    it('reports the migration pending between the live marker and --to when --from is @db', async () => {
+      const project = await projectWithTwoMigrations();
+      const db = fakeDatabase({
+        markers: markersAt(HASH_BASE),
+        ledger: [{ migrationHash: project.baseMigrationHash }],
+      });
+
+      const run = await harness(driverConfig(project, db)).run(
+        ['migration', 'status', '--from', '@db', '--to', DIR_HEAD, '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(db.counters.connections).toBe(1);
+      expect(run.presented?.data).toMatchObject({
+        summary: `1 pending — run \`{bin} db migrate --to ${HASH_HEAD.slice(0, 12)}\``,
+        spaces: [
+          {
+            currentContract: HASH_BASE,
+            targetContract: HASH_HEAD,
+            migrations: expect.arrayContaining([
+              expect.objectContaining({ name: DIR_BASE, status: 'applied' }),
+              expect.objectContaining({ name: DIR_HEAD, status: 'pending' }),
+            ]),
+          },
+        ],
+      });
+    });
+
+    it('errors with the connection-required envelope for --to @db without a connection', async () => {
+      const project = await projectWithOneMigration();
+      const config = driverConfig(project);
+
+      const run = await harness({ ...config, db: undefined }).run(
+        ['migration', 'status', '--from', HASH_HEAD, '--to', '@db', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'CONFIG.DB_CONNECTION_REQUIRED',
+            why: expect.stringContaining('@db'),
+            meta: { missingFlags: ['--db'] },
+          },
+        },
+      });
+    });
+
+    it('errors with the connection-required envelope for --from @db without a connection', async () => {
+      const project = await projectWithOneMigration();
+      const config = driverConfig(project);
+
+      const run = await harness({ ...config, db: undefined }).run(
+        ['migration', 'status', '--from', '@db', '--json'],
+        { cwd: project.dir },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: { code: 'CONFIG.DB_CONNECTION_REQUIRED', meta: { missingFlags: ['--db'] } },
+        },
+      });
+    });
   });
 
   it('closes the connection and keeps the structured error when the marker read fails', async () => {

@@ -33,7 +33,7 @@ function isEnoent(error: unknown): boolean {
 interface ResolveContractRefToSnapshotBaseOptions {
   readonly config: PrismaNextConfig;
   readonly migrationsDir: string;
-  /** User-supplied contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path). */
+  /** User-supplied contract reference (hash, prefix, ref name, migration dir name, or <dir>^). */
   readonly refInput: string;
   /** Absolute path of the emitted contract.json (fallback source + snapshot-path derivation). */
   readonly contractPathAbsolute: string;

@@ -4,6 +4,8 @@ import type {
   AggregateContractSpace,
   ContractMarkerRecordLike,
 } from '@internal/migration-tools/aggregate';
+import { isGraphNode } from '@internal/migration-tools/migration-graph';
+import type { ContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
@@ -37,7 +39,12 @@ import {
   originHashForStatus,
   statusForMigrationHash,
 } from '../../control-api/operations/migration-status-overlay';
-import { resolveContractRef } from '../../control-api/operations/ref-resolution';
+import {
+  isLiveMarkerRef,
+  liveMarkerRefHash,
+  requireLiveDatabaseForLiveMarkerRef,
+  resolveContractRef,
+} from '../../control-api/operations/ref-resolution';
 import { readMigrationRefs } from '../../control-api/operations/refs';
 import { errorUnexpected, requireLiveDatabase } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
@@ -230,7 +237,7 @@ export const migrationStatusCommand = defineOrmCommand({
       space: flag.string({ brief: 'Narrow output to a single contract space', placeholder: 'id' }),
       to: flag.string({
         brief:
-          'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
+          'Target contract reference (hash, prefix, ref name, migration dir name, <dir>^, @contract, @db, or @empty)',
         placeholder: 'contract',
       }),
       from: flag.string({
@@ -247,15 +254,27 @@ export const migrationStatusCommand = defineOrmCommand({
     const migrationsDir = migrationsDirFor(ctx.config);
     const dbConnection = args.flags.db ?? ctx.config.db?.connection;
     const hasDriver = ctx.config.driver !== undefined;
-    const usingFromOverride = args.flags.from !== undefined;
+    const fromLiveMarker = isLiveMarkerRef(args.flags.from);
+    const toLiveMarker = isLiveMarkerRef(args.flags.to);
+    const liveOrigin = args.flags.from === undefined || fromLiveMarker;
+    const needsDatabase = liveOrigin || toLiveMarker;
 
-    if (!usingFromOverride) {
-      const missingDb = requireLiveDatabase({
-        dbConnection,
-        hasDriver,
-        why: 'migration status needs a database connection to read the marker and ledger (or pass --from for an offline path preview)',
-        retryCommand: '{bin} migration status --from <contract>',
-      });
+    if (needsDatabase) {
+      const missingDb =
+        fromLiveMarker || toLiveMarker
+          ? requireLiveDatabaseForLiveMarkerRef({
+              dbConnection,
+              hasDriver,
+              command: '{bin} migration status',
+              from: args.flags.from,
+              to: args.flags.to,
+            })
+          : requireLiveDatabase({
+              dbConnection,
+              hasDriver,
+              why: 'migration status needs a database connection to read the marker and ledger (or pass --from for an offline path preview)',
+              retryCommand: '{bin} migration status --from <contract>',
+            });
       if (missingDb !== null) {
         return notOk(normalizeError(missingDb));
       }
@@ -294,25 +313,20 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appGraph = aggregate.app.graph();
+    const refContext = { graph: appGraph, refs, contractHash };
 
-    let activeRefHash: string | undefined;
-    let activeRefName: string | undefined;
-    let activeRefEntry: RefEntry | undefined;
-    if (args.flags.to !== undefined) {
-      const resolved = resolveContractRef(args.flags.to, { graph: appGraph, refs });
+    let toRef: ContractRef | undefined;
+    if (args.flags.to !== undefined && !toLiveMarker) {
+      const resolved = resolveContractRef(args.flags.to, refContext);
       if (!resolved.ok) {
         return notOk(normalizeError(resolved.failure));
       }
-      activeRefHash = resolved.value.hash;
-      if (resolved.value.provenance.kind === 'ref') {
-        activeRefName = resolved.value.provenance.refName;
-        activeRefEntry = refs[activeRefName];
-      }
+      toRef = resolved.value;
     }
 
     let fromOverrideHash: string | undefined;
-    if (args.flags.from !== undefined) {
-      const resolved = resolveContractRef(args.flags.from, { graph: appGraph, refs });
+    if (args.flags.from !== undefined && !fromLiveMarker) {
+      const resolved = resolveContractRef(args.flags.from, refContext);
       if (!resolved.ok) {
         return notOk(normalizeError(resolved.failure));
       }
@@ -329,7 +343,7 @@ export const migrationStatusCommand = defineOrmCommand({
     }
     const scopedSpaces = listed.value.spaces;
 
-    const connects = dbConnection !== undefined && hasDriver && !usingFromOverride;
+    const connects = needsDatabase && dbConnection !== undefined && hasDriver;
     let database: DatabaseState = NO_DATABASE_STATE;
     if (connects) {
       const read = await readDatabaseState({
@@ -350,7 +364,11 @@ export const migrationStatusCommand = defineOrmCommand({
     }
 
     const appMarker = database.markersBySpace.get(aggregate.app.spaceId);
-    if (activeRefEntry !== undefined && activeRefEntry.invariants.length > 0 && connects) {
+    const activeRefHash = toLiveMarker ? liveMarkerRefHash(appMarker) : toRef?.hash;
+    const activeRefName = toRef?.provenance.kind === 'ref' ? toRef.provenance.refName : undefined;
+    const activeRefEntry: RefEntry | undefined =
+      activeRefName === undefined ? undefined : refs[activeRefName];
+    if (activeRefEntry !== undefined && activeRefEntry.invariants.length > 0 && liveOrigin) {
       const unknown = refuseUnknownInvariants({
         graph: appGraph,
         markerInvariants: appMarker?.invariants ?? [],
@@ -389,15 +407,14 @@ export const migrationStatusCommand = defineOrmCommand({
         headlineTargetHash = targetHash;
       }
 
-      const markerHash = usingFromOverride
-        ? fromOverrideHash
-        : database.markersBySpace.get(entry.space)?.storageHash;
+      const markerHash = liveOrigin
+        ? database.markersBySpace.get(entry.space)?.storageHash
+        : fromOverrideHash;
       const originHash = originHashForStatus(markerHash);
-      const markerInGraph =
-        markerHash === undefined || graph.nodes.has(markerHash) || markerHash === spaceContractHash;
+      const markerInGraph = markerHash === undefined || isGraphNode(markerHash, graph);
 
       if (
-        connects &&
+        liveOrigin &&
         markerInGraph &&
         originHash !== targetHash &&
         noPath === undefined &&
@@ -405,7 +422,7 @@ export const migrationStatusCommand = defineOrmCommand({
       ) {
         noPath = { markerHash, targetHash };
       }
-      if (connects && markerHash !== undefined && !markerInGraph) {
+      if (liveOrigin && markerHash !== undefined && !markerInGraph) {
         divergedMarker ??= { space: entry.space, markerHash };
         findings.push(markerNotInHistoryFinding(entry.space));
       }
@@ -415,8 +432,8 @@ export const migrationStatusCommand = defineOrmCommand({
         graph,
         targetHash,
         originHash,
-        appliedMigrationHashes: connects ? appliedHashesFromLedger(ledger) : new Set<string>(),
-        showAppliedOverlay: connects,
+        appliedMigrationHashes: liveOrigin ? appliedHashesFromLedger(ledger) : new Set<string>(),
+        showAppliedOverlay: liveOrigin,
       });
       const migrations = entry.migrations.map((migration: MigrationListEntry) => ({
         ...migration,
@@ -447,12 +464,12 @@ export const migrationStatusCommand = defineOrmCommand({
         styler,
         palette: TONE_MIGRATION_GRAPH_PALETTE,
         isAppSpace: entry.space === aggregate.app.spaceId,
-        ...(connects && markerHash !== undefined ? { dbHash: markerHash } : {}),
+        ...(liveOrigin && markerHash !== undefined ? { dbHash: markerHash } : {}),
       });
     }
 
     const requiredInvariants = [...(activeRefEntry?.invariants ?? [])].sort();
-    if (connects && requiredInvariants.length > 0) {
+    if (liveOrigin && requiredInvariants.length > 0) {
       const held = new Set(appMarker?.invariants ?? []);
       const missing = requiredInvariants.filter((id) => !held.has(id));
       if (missing.length > 0) {

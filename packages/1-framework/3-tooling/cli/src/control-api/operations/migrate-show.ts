@@ -28,6 +28,11 @@ import { createControlClient } from '../client';
 import type { CreateControlClient } from '../types';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 import { planSpacePath } from './migrate';
+import {
+  isLiveMarkerRef,
+  liveMarkerRefHash,
+  requireLiveDatabaseForLiveMarkerRef,
+} from './ref-resolution';
 
 /**
  * One migration that will run in a `migrate --show` preview, in execution order.
@@ -95,16 +100,30 @@ export async function executeMigrateShowPlan(
   const dbConnection = options.db ?? config.db?.connection;
   const hasDriver = !!config.driver;
   const hasExplicitFrom = options.from !== undefined;
+  const fromLiveMarker = isLiveMarkerRef(options.from);
+  const toLiveMarker = isLiveMarkerRef(options.to);
+  const liveOrigin = !hasExplicitFrom || fromLiveMarker;
+  const needsLiveMarker = liveOrigin || toLiveMarker;
 
-  // When --from is omitted we read the live DB marker (same as migrate's default).
-  // When --from is given, we're in offline hypothetical mode — no connection needed.
-  if (!hasExplicitFrom) {
-    const missingDb = requireLiveDatabase({
-      dbConnection,
-      hasDriver,
-      why: 'migrate --show needs a database connection to read the live marker (or pass --from <contract> for an offline preview)',
-      retryCommand: '{bin} db migrate --show --from <contract>',
-    });
+  // The live DB marker is the from-state when --from is omitted or @db (same as
+  // migrate's default) and the target when --to is @db. Any other --from is an
+  // offline hypothetical — no connection needed.
+  if (needsLiveMarker) {
+    const missingDb =
+      fromLiveMarker || toLiveMarker
+        ? requireLiveDatabaseForLiveMarkerRef({
+            dbConnection,
+            hasDriver,
+            command: '{bin} db migrate --show',
+            from: options.from,
+            to: options.to,
+          })
+        : requireLiveDatabase({
+            dbConnection,
+            hasDriver,
+            why: 'migrate --show needs a database connection to read the live marker (or pass --from <contract> for an offline preview)',
+            retryCommand: '{bin} db migrate --show --from <contract>',
+          });
     if (missingDb) {
       return notOk(missingDb);
     }
@@ -132,7 +151,7 @@ export async function executeMigrateShowPlan(
   // same target invariants that real migrate would use (refInvariants ?? headRef.invariants).
   let targetHash: string = contractHash;
   let refInvariants: readonly string[] | undefined;
-  if (options.to) {
+  if (options.to && !toLiveMarker) {
     const toResult = parseContractRef(options.to, {
       graph: appGraph,
       refs: allRefs,
@@ -140,14 +159,6 @@ export async function executeMigrateShowPlan(
     });
     if (!toResult.ok) {
       return notOk(mapRefResolutionError(toResult.failure));
-    }
-    if (toResult.value.provenance.kind === 'reserved-db') {
-      return notOk(
-        errorDatabaseConnectionRequired({
-          why: '@db is not valid as a --to target; it names the live database state, not a target contract.',
-          commandName: 'migrate --show',
-        }),
-      );
     }
     targetHash = toResult.value.hash;
     if (toResult.value.provenance.kind === 'ref') {
@@ -164,8 +175,8 @@ export async function executeMigrateShowPlan(
   });
 
   // Resolve the from-state.
-  // - Explicit --from: parse it offline (no connection).
-  // - Omitted: read the live DB marker via readAllMarkers() — the same source migrate uses.
+  // - Explicit --from other than @db: parse it offline (no connection).
+  // - Omitted or @db: read the live DB marker via readAllMarkers() — the same source migrate uses.
   //
   // Full marker records (storageHash + invariants) are preserved so planSpacePath
   // can feed resolveRecordedPath the complete currentMarker — exactly as executeMigrate
@@ -175,53 +186,25 @@ export async function executeMigrateShowPlan(
   const markerBySpace = new Map<string, LiveMarker | null>();
   const allSpaces: ReadonlyArray<AggregateContractSpace> = [aggregate.app, ...aggregate.extensions];
 
-  if (hasExplicitFrom) {
-    // @db with explicit --from requires a connection
-    if (options.from === '@db') {
-      const missingDb = requireLiveDatabase({
-        dbConnection,
-        hasDriver,
-        why: '@db resolves to the live database marker and requires a --db connection',
-        retryCommand: '{bin} db migrate --show --from @db --db $DATABASE_URL',
-      });
-      if (missingDb) {
-        return notOk(missingDb);
-      }
-      // Fall through to the connection path below
-    } else {
-      const fromResult = parseContractRef(options.from, {
-        graph: appGraph,
-        refs: allRefs,
-        contractHash,
-      });
-      if (!fromResult.ok) {
-        return notOk(mapRefResolutionError(fromResult.failure));
-      }
-      if (fromResult.value.provenance.kind === 'reserved-db') {
-        // Unreachable given the @db branch above, but guard for safety
-        const missingDb = requireLiveDatabase({
-          dbConnection,
-          hasDriver,
-          why: '@db resolves to the live database marker and requires a --db connection',
-        });
-        if (missingDb) {
-          return notOk(missingDb);
-        }
-      } else {
-        // Offline hypothetical: the --from ref only carries a hash (no live invariants).
-        // Apply the from-hash marker to the APP space only. Extension spaces are left
-        // absent from markerBySpace (treated as null / greenfield by planSpacePath),
-        // so they plan from their own marker → own head — exactly as executeMigrate does.
-        const fromHash = fromResult.value.hash;
-        const offlineMarker: LiveMarker | null =
-          fromHash === EMPTY_CONTRACT_HASH ? null : { storageHash: fromHash, invariants: [] };
-        markerBySpace.set(aggregate.app.spaceId, offlineMarker);
-      }
+  if (options.from !== undefined && !fromLiveMarker) {
+    const fromResult = parseContractRef(options.from, {
+      graph: appGraph,
+      refs: allRefs,
+      contractHash,
+    });
+    if (!fromResult.ok) {
+      return notOk(mapRefResolutionError(fromResult.failure));
     }
+    // Offline hypothetical: the --from ref only carries a hash (no live invariants).
+    // Apply the from-hash marker to the APP space only. Extension spaces are left
+    // absent from markerBySpace (treated as null / greenfield by planSpacePath),
+    // so they plan from their own marker → own head — exactly as executeMigrate does.
+    const fromHash = fromResult.value.hash;
+    const offlineMarker: LiveMarker | null =
+      fromHash === EMPTY_CONTRACT_HASH ? null : { storageHash: fromHash, invariants: [] };
+    markerBySpace.set(aggregate.app.spaceId, offlineMarker);
   }
 
-  // If we need the live DB marker (no --from, or --from @db), connect and read.
-  const needsLiveMarker = !hasExplicitFrom || options.from === '@db';
   if (needsLiveMarker) {
     if (!dbConnection || !hasDriver) {
       return notOk(
@@ -243,9 +226,14 @@ export async function executeMigrateShowPlan(
       const allMarkers = await client.readAllMarkers();
       // Store the full marker record (storageHash + invariants) per space.
       // This is the same data executeMigrate uses via familyInstance.readAllMarkers().
-      for (const space of allSpaces) {
-        const marker = allMarkers.get(space.spaceId);
-        markerBySpace.set(space.spaceId, marker ?? null);
+      if (liveOrigin) {
+        for (const space of allSpaces) {
+          const marker = allMarkers.get(space.spaceId);
+          markerBySpace.set(space.spaceId, marker ?? null);
+        }
+      }
+      if (toLiveMarker) {
+        targetHash = liveMarkerRefHash(allMarkers.get(aggregate.app.spaceId));
       }
     } catch (error) {
       if (CliStructuredError.is(error)) {
@@ -357,6 +345,6 @@ export async function executeMigrateShowPlan(
     migrations: orderedMigrations,
     summary,
     renderMarkerHashBySpace,
-    usedLiveMarker: needsLiveMarker,
+    usedLiveMarker: liveOrigin,
   });
 }

@@ -139,6 +139,33 @@ function harness(cwd: string) {
 }
 
 describe('db update --to bundle resolution', () => {
+  it.each(['@empty', '@contract', '@db'])(
+    'refuses the reserved reference %s with a structured envelope',
+    async (input) => {
+      const { cwd } = await setupFixture();
+
+      const run = await harness(cwd).run(['db', 'update', '--to', input, '--dry-run', '--json'], {
+        cwd,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: {
+          ok: false,
+          error: {
+            code: 'MIGRATION.REF_WRONG_GRAMMAR',
+            why: expect.stringContaining(
+              '`db update --to` takes a hash, a prefix, a ref name, a migration directory name, or `<dir>^`; without `--to` it updates to the emitted contract',
+            ),
+            meta: { input, expectedGrammar: 'contract' },
+          },
+        },
+      });
+      expect(mocks.dbUpdate).not.toHaveBeenCalled();
+    },
+  );
+
   it('errors on an invalid --advance-ref name with the structured ref envelope', async () => {
     const { cwd, dirNext } = await setupFixture();
     mocks.dbUpdate.mockResolvedValue(

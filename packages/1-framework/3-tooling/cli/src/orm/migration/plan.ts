@@ -281,7 +281,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
         from: flag.string({
           brief:
-            'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, @empty, or ./path)',
+            'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, or @empty)',
           placeholder: 'contract',
         }),
         to: flag.string({
