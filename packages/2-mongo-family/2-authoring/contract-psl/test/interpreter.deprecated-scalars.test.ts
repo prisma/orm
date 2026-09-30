@@ -22,6 +22,8 @@ function scalar(
 
 const type = {
   ObjectId: scalar('mongo/objectId@1', 'objectId'),
+  Int64: scalar('mongo/int64@1', 'long'),
+  Binary: scalar('mongo/binary@1', 'binData'),
   Int32: scalar('mongo/int32@1', 'int'),
   Double: scalar('mongo/double@1', 'double'),
   Bool: scalar('mongo/bool@1', 'bool'),
@@ -38,6 +40,12 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map(
 
 const authoringContributions = { type, field: {} } as unknown as AuthoringContributions;
 
+const formerScalarCodecIds: ReadonlyMap<string, string> = new Map([
+  ['Int', 'mongo/int32@1'],
+  ['BigInt', 'mongo/int64@1'],
+  ['Bytes', 'mongo/binary@1'],
+]);
+
 function interpret(schema: string) {
   const { document, sources } = parse(schema, 'schema.prisma');
   const { symbolTable } = buildSymbolTable({
@@ -52,6 +60,7 @@ function interpret(schema: string) {
     scalarTypeCodecIds,
     authoringContributions,
     controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    formerScalarCodecIds,
     reportWarning: (diagnostic) => {
       warnings.push(diagnostic);
     },
@@ -110,15 +119,62 @@ describe('deprecated Mongo PSL scalar names', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('reports a type that was never a Mongo scalar as unsupported', () => {
+  it('says no scalar types are registered when there are none to list', () => {
+    const { document, sources } = parse('model Post {\n  value Money\n}\n', 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const result = interpretPslDocumentToMongoContract({
+      documents: [document],
+      symbolTable,
+      sources,
+      scalarTypeCodecIds: new Map(),
+      controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. No Mongo scalar types are registered.',
+      }),
+    );
+  });
+
+  it('refuses a type that was never a Mongo scalar at the type, listing the scalar types', () => {
     const { result } = interpret(schemaWith('Money'));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-        message: 'Field "Post.value" type "Money" is not supported in Mongo PSL interpreter',
+        message:
+          'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ObjectId, Int64, Binary, Int32, Double, Bool and Date.',
+        span: expect.objectContaining({
+          start: expect.objectContaining({ line: 3, column: 9 }),
+          end: expect.objectContaining({ line: 3, column: 14 }),
+        }),
       }),
     ]);
   });
+
+  it.each([
+    ['BigInt', 'Int64', 'long'],
+    ['Bytes', 'Binary', 'binData'],
+  ])(
+    'refuses %s, a name from an earlier Prisma, and names %s instead',
+    (oldName, newName, bsonType) => {
+      const { result } = interpret(schemaWith(oldName));
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}" (stored as BSON ${bsonType}).`,
+          span: expect.objectContaining({
+            start: expect.objectContaining({ line: 3, column: 9 }),
+          }),
+        }),
+      ]);
+    },
+  );
 });

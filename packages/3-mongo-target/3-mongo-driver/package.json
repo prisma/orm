@@ -1,7 +1,7 @@
 {
   "name": "@internal/driver-mongo",
   "private": true,
-  "version": "8.0.0-rc.13",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,17 +16,17 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/errors": "workspace:8.0.0-rc.13",
-    "@internal/framework-components": "workspace:8.0.0-rc.13",
-    "@internal/mongo-lowering": "workspace:8.0.0-rc.13",
-    "@internal/mongo-wire": "workspace:8.0.0-rc.13",
-    "@internal/utils": "workspace:8.0.0-rc.13"
+    "@internal/errors": "workspace:8.0.0-rc.14",
+    "@internal/framework-components": "workspace:8.0.0-rc.14",
+    "@internal/mongo-lowering": "workspace:8.0.0-rc.14",
+    "@internal/mongo-wire": "workspace:8.0.0-rc.14",
+    "@internal/utils": "workspace:8.0.0-rc.14"
   },
   "devDependencies": {
     "mongodb": "catalog:",
-    "@repo/test-utils": "workspace:8.0.0-rc.13",
-    "@repo/tsconfig": "workspace:8.0.0-rc.13",
-    "@repo/tsdown": "workspace:8.0.0-rc.13",
+    "@repo/test-utils": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "mongodb-memory-server": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",

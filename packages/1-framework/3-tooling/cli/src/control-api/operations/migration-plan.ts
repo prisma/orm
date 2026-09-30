@@ -48,6 +48,7 @@ import { assertFrameworkComponentsCompatible } from '../../utils/framework-compo
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient, DestructivePlanOperation } from '../types';
+import { mapCaughtContractError } from './caught-errors';
 import {
   buildContractSpaceAggregate,
   loadContractSpaceAggregateForCli,
@@ -876,6 +877,10 @@ async function executeMigrationPlanCommandInner(
     }
     if (MigrationToolsError.is(error)) {
       return notOk(error);
+    }
+    const contractError = mapCaughtContractError(error);
+    if (contractError !== null) {
+      return notOk(contractError);
     }
     const message = error instanceof Error ? error.message : String(error);
     return notOk(

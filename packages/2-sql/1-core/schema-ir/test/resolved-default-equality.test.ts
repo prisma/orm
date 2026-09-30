@@ -1,5 +1,10 @@
-import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type {
+  ColumnDefault,
+  ColumnDefaultLiteralInputValue,
+  JsonValue,
+} from '@internal/contract/types';
+import { structuredError } from '@internal/utils/structured-error';
+import { describe, expect, it } from 'vitest';
 
 import { resolvedDefaultsEqual } from '../src/ir/resolved-default-equality';
 
@@ -72,78 +77,99 @@ describe('resolvedDefaultsEqual', () => {
     });
   });
 
-  describe('temporal literals', () => {
-    const nativeType = 'timestamptz';
+  describe('literals of a type with a canonical form', () => {
+    const canonicalForms = new Map([
+      ['2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'],
+      ['2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00Z'],
+      ['2026-01-01 00:00:00+00', '2026-01-01T00:00:00Z'],
+      ['2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z'],
+    ]);
+    const toCanonicalForm = (value: JsonValue): JsonValue => {
+      const canonical = typeof value === 'string' ? canonicalForms.get(value) : undefined;
+      if (canonical === undefined) {
+        throw structuredError(
+          'CONTRACT.CAST_REFUSED',
+          `${JSON.stringify(value)} is not a date and time`,
+        );
+      }
+      return canonical;
+    };
 
-    it('normalizes a Date against the ISO instant it denotes', () => {
+    it('compares two forms of one value through the canonical form', () => {
+      expect({
+        millisecondText: resolvedDefaultsEqual(
+          literal('2026-01-01T00:00:00Z'),
+          literal('2026-01-01T00:00:00.000Z'),
+          'timestamptz',
+          toCanonicalForm,
+        ),
+        databaseText: resolvedDefaultsEqual(
+          literal('2026-01-01T00:00:00Z'),
+          literal('2026-01-01 00:00:00+00'),
+          'timestamptz',
+          toCanonicalForm,
+        ),
+      }).toEqual({ millisecondText: true, databaseText: true });
+    });
+
+    it('compares a Date through the canonical form of the ISO text it denotes', () => {
       expect(
         resolvedDefaultsEqual(
           literal(new Date('2026-01-01T00:00:00.000Z')),
-          literal('2026-01-01T00:00:00.000Z'),
-          nativeType,
+          literal('2026-01-01 00:00:00+00'),
+          'timestamptz',
+          toCanonicalForm,
         ),
       ).toBe(true);
     });
 
-    it('normalizes two spellings of the same instant under a temporal native type', () => {
+    it('fires on two different values', () => {
       expect(
         resolvedDefaultsEqual(
           literal('2026-01-01T00:00:00Z'),
-          literal('2026-01-01T00:00:00.000Z'),
-          nativeType,
-        ),
-      ).toBe(true);
-    });
-
-    it('leaves the spellings alone without a temporal native type', () => {
-      expect(
-        resolvedDefaultsEqual(
-          literal('2026-01-01T00:00:00Z'),
-          literal('2026-01-01T00:00:00.000Z'),
-          'text',
+          literal('2026-01-02T00:00:00Z'),
+          'timestamptz',
+          toCanonicalForm,
         ),
       ).toBe(false);
     });
 
-    it('leaves an unparseable string alone under a temporal native type', () => {
-      expect(resolvedDefaultsEqual(literal('not a date'), literal('not a date'), nativeType)).toBe(
-        true,
-      );
-    });
-
-    it('reads the year of a timestamp Postgres prints with an offset, below year 100 too', () => {
-      expect({
-        sameInstant: resolvedDefaultsEqual(
-          literal('0001-01-01T00:00:00Z'),
-          literal('0001-01-01 00:00:00+00'),
-          'timestamptz(6)',
-        ),
-        otherCentury: resolvedDefaultsEqual(
-          literal('1950-01-01T00:00:00Z'),
-          literal('0050-01-01 00:00:00+00'),
-          'timestamptz(6)',
-        ),
-        halfHourOffset: resolvedDefaultsEqual(
-          literal('2024-01-01T21:34:05Z'),
-          literal('2024-01-02 03:04:05+05:30'),
-          'timestamptz(6)',
-        ),
-      }).toEqual({ sameInstant: true, otherCentury: false, halfHourOffset: true });
-    });
-
-    it('compares a timestamp before year one by its text', () => {
+    it('compares a value the canonical form refuses as it is', () => {
       expect({
         same: resolvedDefaultsEqual(
-          literal('0001-12-31 23:30:00+00 BC'),
-          literal('0001-12-31 23:30:00+00 BC'),
-          'timestamptz(6)',
+          literal('not a date'),
+          literal('not a date'),
+          'timestamptz',
+          toCanonicalForm,
         ),
-        yearOne: resolvedDefaultsEqual(
-          literal('0001-12-31 23:30:00+00 BC'),
-          literal('0001-12-31 23:30:00+00'),
-          'timestamptz(6)',
+        other: resolvedDefaultsEqual(
+          literal('not a date'),
+          literal('2026-01-01T00:00:00Z'),
+          'timestamptz',
+          toCanonicalForm,
         ),
-      }).toEqual({ same: true, yearOne: false });
+      }).toEqual({ same: true, other: false });
+    });
+
+    it('compares two forms as they are without a canonical form, whatever the native type', () => {
+      expect(
+        resolvedDefaultsEqual(
+          literal('2026-01-01T00:00:00Z'),
+          literal('2026-01-01T00:00:00.000Z'),
+          'timestamptz',
+        ),
+      ).toBe(false);
+    });
+
+    it('compares each element of a list through the canonical form', () => {
+      expect(
+        resolvedDefaultsEqual(
+          literal(['2026-01-01T00:00:00.000Z']),
+          literal(['2026-01-01 00:00:00+00']),
+          'timestamptz[]',
+          toCanonicalForm,
+        ),
+      ).toBe(true);
     });
   });
 
@@ -282,14 +308,9 @@ describe('resolvedDefaultsEqual', () => {
   describe('list literals', () => {
     it('normalizes each element under the element type', () => {
       expect({
-        timestamps: resolvedDefaultsEqual(
-          literal(['2024-01-01T00:00:00.000Z']),
-          literal(['2024-01-01 00:00:00']),
-          'timestamp(3)[]',
-        ),
         int8: resolvedDefaultsEqual(literal([1, -2]), literal(['1', '-2']), 'int8[]'),
         numeric: resolvedDefaultsEqual(literal([12.5]), literal(['12.50']), 'numeric(10,2)[]'),
-      }).toEqual({ timestamps: true, int8: true, numeric: true });
+      }).toEqual({ int8: true, numeric: true });
     });
 
     it('fires when an element or the length differs', () => {
@@ -307,47 +328,5 @@ describe('resolvedDefaultsEqual', () => {
     it('leaves the elements alone without a list native type', () => {
       expect(resolvedDefaultsEqual(literal([1]), literal(['1']), 'jsonb')).toBe(false);
     });
-  });
-});
-
-describe('resolvedDefaultsEqual zoneless timestamp literals', () => {
-  // `timestamp without time zone` defaults introspect without a zone
-  // (`'2024-01-01 00:00:00'`); the contract writes the same wall time as an
-  // ISO instant. Both are the same wall-clock value and must compare equal
-  // whatever the host timezone is, so the test pins one that is not UTC.
-  const previousTz = process.env['TZ'];
-  beforeAll(() => {
-    process.env['TZ'] = 'Etc/GMT-3';
-  });
-  afterAll(() => {
-    if (previousTz === undefined) delete process.env['TZ'];
-    else process.env['TZ'] = previousTz;
-  });
-
-  it('treats a zoneless timestamp literal as UTC under a timestamp native type', () => {
-    expect(
-      resolvedDefaultsEqual(
-        literal('2024-01-01T00:00:00.000Z'),
-        literal('2024-01-01 00:00:00'),
-        'timestamp(3)',
-      ),
-    ).toBe(true);
-  });
-
-  it('keeps a zoned literal on its own zone', () => {
-    expect(
-      resolvedDefaultsEqual(
-        literal('2024-01-01T00:00:00.000Z'),
-        literal('2024-01-01 03:00:00+03'),
-        'timestamptz',
-      ),
-    ).toBe(true);
-    expect(
-      resolvedDefaultsEqual(
-        literal('2024-01-01T00:00:00.000Z'),
-        literal('2024-01-01 00:00:00+03'),
-        'timestamptz',
-      ),
-    ).toBe(false);
   });
 });

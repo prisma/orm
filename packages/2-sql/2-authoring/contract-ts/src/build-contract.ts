@@ -1172,7 +1172,7 @@ export function buildSqlContractFromDefinition(
         if (field.nullable) {
           throw contractError(
             'CONTRACT.DEFAULT_INVALID',
-            `Field "${semanticModel.modelName}.${field.fieldName}" cannot be nullable when executionDefaults are present.`,
+            `Field "${semanticModel.modelName}.${field.fieldName}" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().`,
             {
               meta: {
                 modelName: semanticModel.modelName,

@@ -76,6 +76,24 @@ describe('buildColumnDefaultSql', () => {
     expect(buildColumnDefaultSql({ kind: 'literal', value: null })).toBe('DEFAULT NULL');
   });
 
+  it('writes a datetime default as the text its codec writes for every row', () => {
+    expect([
+      buildColumnDefaultSql(
+        { kind: 'literal', value: '2024-01-01T00:00:00Z' },
+        'sqlite/datetime@1',
+      ),
+      buildColumnDefaultSql(
+        { kind: 'literal', value: '-000043-03-15T00:00:00.5Z' },
+        'sqlite/datetime@1',
+      ),
+      buildColumnDefaultSql({ kind: 'literal', value: '2024-01-01T00:00:00Z' }, 'sqlite/text@1'),
+    ]).toEqual([
+      "DEFAULT '2024-01-01T00:00:00.000Z'",
+      "DEFAULT '-000043-03-15T00:00:00.500Z'",
+      "DEFAULT '2024-01-01T00:00:00Z'",
+    ]);
+  });
+
   it("renders now() as datetime('now')", () => {
     expect(buildColumnDefaultSql({ kind: 'function', expression: 'now()' })).toBe(
       "DEFAULT (datetime('now'))",

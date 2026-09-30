@@ -85,7 +85,8 @@ describe('Mongo runtime mutation default generators', () => {
       expect.objectContaining({
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         message:
-          "Contract requires mutation default generator(s) 'slugify', but no runtime component provides them.",
+          "Contract requires mutation default generator 'slugify' for posts.slug, but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
+        details: { ids: ['slugify'], fields: ['posts.slug'] },
       }),
     );
   });

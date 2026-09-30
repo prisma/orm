@@ -488,7 +488,7 @@ A value is written either with a tag — a qualified name followed by a string i
 [pgJson.id]: {
   written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
   print: printJsonBody,
-  documentation: 'Reads the body as a JSON document and stores it as the default value.',
+  documentation: 'Reads the text as a JSON document and stores it as the default value.',
 },
 ```
 
@@ -507,7 +507,9 @@ A number is the one plain form that yields several types, so its arm carries a c
 },
 ```
 
-Reading a written default is then: the entry parses or classifies the text into a value of a known type; if that type is not the column's, the column's type is looked up for a cast from it, and having none is `PSL_DEFAULT_TYPE_INCOMPATIBLE`; the canonical form, cast or not, is handed to the codec instance built with the column's parameters, and a refusal there is `PSL_INVALID_DEFAULT_LITERAL` with the codec's own message. A column whose data type has no authoring entry and no cast into it takes only a `` sql`...` `` default.
+Reading a written default is then: the entry parses or classifies the text into a value of a known type; if that type is not the column's, the column's type is looked up for a cast from it, and having none is `PSL_VALUE_TYPE_INCOMPATIBLE`; text the entry or a cast refuses is `PSL_INVALID_LITERAL`; the canonical form, cast or not, is handed to the codec instance built with the column's parameters, and a refusal there is `PSL_INVALID_DEFAULT_LITERAL` with the codec's own message. A column whose data type has no authoring entry and no cast into it takes only a `` sql`...` `` default.
+
+A data type need not be a column's type. `sql/expression` has an authoring entry that is a tag, declares no casts, and has no codec, so its values are admitted only where a position asks for that type. The SQL family defines and registers it. A family registers only a type whose definition must not differ between targets and that nothing casts from.
 
 Checks that depend on a column's parameters belong in the codec instance, on the canonical form: `vector(3)` refuses four elements, `numeric(10,2)` refuses a third decimal place, and a limit of the stored representation is the codec's to refuse too — `sqlite/real@1` refuses `NaN`, because SQLite cannot store it.
 

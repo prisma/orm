@@ -268,7 +268,7 @@ namespace auth {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
-      'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+      'PSL_VALUE_TYPE_INCOMPATIBLE',
     );
   });
 

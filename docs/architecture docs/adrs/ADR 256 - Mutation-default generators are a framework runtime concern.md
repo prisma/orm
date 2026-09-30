@@ -78,10 +78,10 @@ export interface RuntimeMutationDefaultGenerator {
 
 ## The availability check
 
-`collectMutationDefaultGenerators(contributors)` registers every generator by id and throws `RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR` with `{ id, existingOwner, incomingOwner }` when two contributors provide one id. `assertMutationDefaultGeneratorsAvailable(execution, registry)` runs when the execution context is created and throws `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING` with `{ ids }`, listing every generator the contract names that no component provides:
+`collectMutationDefaultGenerators(contributors)` registers every generator by id and throws `RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR` with `{ id, existingOwner, incomingOwner }` when two contributors provide one id. `assertMutationDefaultGeneratorsAvailable(execution, registry)` runs when the execution context is created and throws `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING` with `{ ids, fields }`, listing every generator the contract names that no component provides, the fields that need each, and where generators come from:
 
 ```text
-Contract requires mutation default generator(s) 'gen-a', 'gen-b', but no runtime component provides them.
+Contract requires mutation default generators 'gen-a' for user.id and 'gen-b' for user.slug, but no runtime component in the execution stack provides them. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.
 ```
 
 A contract that cannot be served fails when the client is built, not on its first write. `applyMutationDefaults` raises the same code with `{ id }` if it meets an unregistered generator anyway.

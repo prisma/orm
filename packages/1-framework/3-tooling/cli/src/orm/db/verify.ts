@@ -329,7 +329,11 @@ function driftDiagnostics(inputs: {
       schemaVerdictDiagnostic({
         result,
         space,
-        nextActions: schemaDriftNextActions({ verb: 'verify', contractRef: undefined }),
+        nextActions: schemaDriftNextActions({
+          verb: 'verify',
+          contractRef: undefined,
+          issues: result.schema.issues,
+        }),
       }),
     );
   if (perSpace.length > 0) {

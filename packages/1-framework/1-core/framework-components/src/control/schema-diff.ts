@@ -1,3 +1,4 @@
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 
 /**
@@ -24,6 +25,8 @@ export interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
    * (the dependency is satisfied by reality).
    */
   readonly dependsOn?: readonly (readonly string[])[];
+  /** Why the actual node is not equal to the expected one, as text for people, when the expected node can say. Not an outcome: read that with `issueOutcome`. */
+  readonly explanation?: string;
 }
 
 /**
@@ -84,6 +87,12 @@ export interface DiffableNode {
    */
   readonly dependsOn?: readonly SchemaNodeRef[];
   isEqualTo(other: DiffableNode): boolean;
+  /**
+   * Why the actual state does not satisfy this expected node, when the difference has a cause beyond
+   * the two values, such as an expected value the node's type refuses. Called after `isEqualTo`
+   * returned false, and with `undefined` when the actual side has no such node.
+   */
+  explainMismatch?(actual: DiffableNode | undefined): string | undefined;
   children(): readonly DiffableNode[];
 }
 
@@ -107,6 +116,7 @@ function emitMissingSubtree(node: DiffableNode, parentPath: readonly string[]): 
     {
       path,
       expected: node,
+      ...ifDefined('explanation', node.explainMismatch?.(undefined)),
     },
     ...node.children().flatMap((c) => emitMissingSubtree(c, path)),
   ];
@@ -204,6 +214,7 @@ function diffPair(
       path,
       expected,
       actual,
+      ...ifDefined('explanation', expected.explainMismatch?.(actual)),
     });
   }
   issues.push(...diffChildren(expected.children(), actual.children(), path));

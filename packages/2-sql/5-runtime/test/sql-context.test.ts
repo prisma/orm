@@ -342,8 +342,12 @@ describe('contract/stack validation errors', () => {
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         category: 'RUNTIME',
         severity: 'error',
+        message: expect.stringContaining(
+          "Contract requires mutation default generator 'unregistered' for user.id, but no runtime component in the execution stack provides it.",
+        ),
         details: expect.objectContaining({
           ids: ['unregistered'],
+          fields: ['user.id'],
         }),
       }),
     );

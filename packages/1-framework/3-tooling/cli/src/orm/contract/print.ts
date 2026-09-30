@@ -18,7 +18,7 @@ import {
   type ContractPrintResult,
   executeContractPrint,
 } from '../../control-api/operations/contract-print';
-import { formatSourceDiagnostic } from '../../control-api/operations/load-contract-source';
+import { sourceWarningDiagnostic } from '../../control-api/operations/load-contract-source';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
@@ -324,6 +324,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
             config: ctx.config,
             contractConfig,
             description: printDescription(sourcePaths),
+            cwd: ctx.cwd,
             signal: ctx.signal,
           },
           { printPsl },
@@ -333,13 +334,9 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
       }
       ctx.signal.throwIfAborted();
 
-      for (const warning of printed.sourceWarnings) {
-        ctx.report({
-          kind: 'message',
-          severity: 'warn',
-          text: `warning ${formatSourceDiagnostic(warning)}`,
-        });
-      }
+      const diagnostics = printed.sourceWarnings.flatMap(
+        (warning) => sourceWarningDiagnostic(warning, ctx.cwd) ?? [],
+      );
       if (outputPath !== undefined) {
         if (existsSync(outputPath)) {
           ctx.report({
@@ -379,7 +376,7 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
 
       return ok(
         ctx.present(
-          { data: document },
+          { data: document, diagnostics },
           printPresentations(
             document,
             outputPath === undefined

@@ -14,6 +14,7 @@ import type { Result } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
 import type { Diagnostic } from '@internal/utils/structured-error';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
+import { isAbsolute, relative } from 'pathe';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 
 /**
@@ -61,6 +62,17 @@ function diagnosticLocation(diagnostic: Record<string, unknown>): DiagnosticLoca
   return { sourceId, line, character };
 }
 
+/** A file the source names by its absolute path is shown relative to the working directory, as a user would type it. */
+function displayLocation(
+  location: DiagnosticLocation,
+  cwd: string | undefined,
+): DiagnosticLocation {
+  const { sourceId } = location;
+  return cwd !== undefined && sourceId !== undefined && isAbsolute(sourceId)
+    ? { ...location, sourceId: relative(cwd, sourceId) }
+    : location;
+}
+
 function formatLocation({ sourceId, line, character }: DiagnosticLocation): string | undefined {
   if (sourceId === undefined) return undefined;
   return line !== undefined && character !== undefined
@@ -83,16 +95,20 @@ export function formatSourceDiagnostic(raw: unknown): string {
  * `where`, so the summary starts with the location. A source code that is not
  * yet dotted is wrapped as `CONTRACT.SOURCE_DIAGNOSTIC` and named in the summary.
  */
-function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
+function sourceDiagnosticToFinding(
+  raw: unknown,
+  severity: Diagnostic['severity'],
+  cwd: string | undefined,
+): Diagnostic | undefined {
   if (!isRecord(raw)) return undefined;
   const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
   const message = typeof raw['message'] === 'string' ? raw['message'] : '';
-  const location = diagnosticLocation(raw);
+  const location = displayLocation(diagnosticLocation(raw), cwd);
   const formatted = formatLocation(location);
   const locatedSummary = (text: string) =>
     formatted === undefined ? text : `${formatted} ${text}`;
   const finding = {
-    severity: 'error',
+    severity,
     nextActions: [],
     ...ifDefined(
       'where',
@@ -111,13 +127,31 @@ function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
       };
 }
 
-function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnostic[] {
+function sourceDiagnosticsToFindings(
+  diagnostics: readonly unknown[],
+  cwd: string | undefined,
+): Diagnostic[] {
   const findings: Diagnostic[] = [];
   for (const raw of diagnostics) {
-    const finding = sourceDiagnosticToFinding(raw);
+    const finding = sourceDiagnosticToFinding(raw, 'error', cwd);
     if (finding !== undefined) findings.push(finding);
   }
   return findings;
+}
+
+/**
+ * A warning the contract source reported, as a `warn` diagnostic of the command's result: its summary starts with the location, `where` names the file and line, and `meta` keeps the source's own code and its span, which carries the column.
+ */
+export function sourceWarningDiagnostic(
+  raw: ContractSourceDiagnostic,
+  cwd: string,
+): Diagnostic | undefined {
+  const finding = sourceDiagnosticToFinding(raw, 'warn', cwd);
+  if (finding === undefined) return undefined;
+  return {
+    ...finding,
+    meta: { ...finding.meta, ...ifDefined('span', raw.span) },
+  };
 }
 
 function diagnosticLocationSuffix(diagnostic: Record<string, unknown>): string {
@@ -150,6 +184,7 @@ function failedWith(error: CliStructuredError): ContractSourceLoadResult {
  */
 function validateProviderResult(
   providerResult: Result<Contract, ContractSourceDiagnostics>,
+  cwd: string | undefined,
 ): ContractSourceLoadResult {
   const raw: unknown = providerResult;
   if (!isRecord(raw) || typeof raw['ok'] !== 'boolean') {
@@ -209,7 +244,7 @@ function validateProviderResult(
         ...ifDefined('providerMeta', failure['meta']),
       },
       undefined,
-      sourceDiagnosticsToFindings(failure['diagnostics']),
+      sourceDiagnosticsToFindings(failure['diagnostics'], cwd),
     ),
     sourceDiagnostics: providerResult.failure,
   });
@@ -228,6 +263,8 @@ export async function loadContractSourceWithStack(inputs: {
   readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  /** The directory the returned error shows locations relative to; `undefined` shows a source's paths as it gave them. */
+  readonly cwd: string | undefined;
 }): Promise<ContractSourceLoadResult> {
   const { stack, source } = inputs;
   const signal = inputs.signal ?? new AbortController().signal;
@@ -262,7 +299,7 @@ export async function loadContractSourceWithStack(inputs: {
     );
   }
 
-  return validateProviderResult(providerResult);
+  return validateProviderResult(providerResult, inputs.cwd);
 }
 
 type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
@@ -314,6 +351,7 @@ export async function loadContractSource(
   const loaded = await loadContractSourceWithStack({
     stack: createControlStack(config),
     source: contractConfig.source,
+    cwd: undefined,
     ...ifDefined('signal', options.signal),
     ...ifDefined('reportWarning', options.onWarning),
   });

@@ -274,7 +274,7 @@ function writtenLiteral(
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
     return input.literalForm?.kind === 'json'
-      ? { kind: 'tag', tag: 'json', body: text }
+      ? { kind: 'tag', tag: 'json', text }
       : { kind: 'string', text };
   }
   const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
@@ -295,9 +295,9 @@ function jsonDocumentOf(
   if (entry === undefined || entry.entry.written.kind !== 'tag') return undefined;
   const bodies =
     written.kind === 'list'
-      ? written.elements.flatMap((element) => (element.kind === 'tag' ? [element.body] : []))
+      ? written.elements.flatMap((element) => (element.kind === 'tag' ? [element.text] : []))
       : written.kind === 'tag'
-        ? [written.body]
+        ? [written.text]
         : [];
   const parse = entry.entry.written.parse;
   try {

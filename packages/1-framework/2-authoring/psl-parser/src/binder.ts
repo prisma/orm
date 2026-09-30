@@ -224,7 +224,11 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
           message: outcome.message,
-          data: { reference: 'type', name: outcome.name },
+          data: {
+            reference: 'type',
+            name: outcome.name,
+            constructorCall: field.typeConstructor !== undefined,
+          },
           ...diagnosticSource(sources, node).at(),
         });
       }

@@ -9,11 +9,10 @@ import type {
 } from '@internal/psl-parser';
 import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
+import { getAttribute } from '../src/psl-attribute-parsing';
 import {
   createSqlBinder,
   fieldSpecContext,
-  findFieldAttributeNode,
-  findModelAttributeNode,
   interpretFieldAttribute,
   interpretModelAttribute,
   modelSpecContext,
@@ -75,7 +74,7 @@ function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
 function interpretDefault(schema: string, fieldName: string) {
   const { symbolTable, sources, model } = project(schema, 'Post');
   const target = field(model, fieldName);
-  const node = findFieldAttributeNode(target, 'default');
+  const node = getAttribute(target.attributes, 'default')?.node;
   if (node === undefined) throw new Error('no @default on field');
   const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
@@ -108,7 +107,7 @@ namespace scoped {
     const namespace = input.symbolTable.topLevel.namespaces['scoped'];
     const model = namespace?.models['Variant'];
     if (!namespace || !model) throw new Error('missing variant');
-    const node = findModelAttributeNode(model, 'base');
+    const node = getAttribute(model.attributes, 'base')?.node;
     if (!node) throw new Error('missing base attribute');
     const diagnostics = createPslDiagnosticCollector(input.sources);
     const value = interpretModelAttribute({
@@ -314,14 +313,15 @@ describe('sqlAttributeSpecs.field.default', () => {
     ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']);
     expect(value.alternatives.filter((alt) => alt.kind === 'taggedLiteral')).toMatchObject([
       {
-        label: 'json`...`',
-        tags: ['json'],
-        documentation: 'Reads the body as a JSON document and stores it as the default value.',
+        label: 'sql`...`',
+        tags: ['sql'],
+        documentation:
+          "A SQL expression in the target database's language. Prisma passes it to the database unchanged.",
       },
       {
-        label: 'sql`...`',
-        tags: ['sql', 'pg.sql'],
-        documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
+        label: 'json`...`',
+        tags: ['json'],
+        documentation: 'Reads the text as a JSON document and stores it as the default value.',
       },
     ]);
   });

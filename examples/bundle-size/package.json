@@ -2,7 +2,7 @@
   "name": "bundle-size",
   "private": true,
   "type": "module",
-  "version": "8.0.0-rc.13",
+  "version": "8.0.0-rc.14",
   "engines": {
     "node": ">=24"
   },
@@ -22,16 +22,16 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.13",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.13",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.14",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.14",
     "mongodb": "catalog:",
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.6.1",
+    "@prisma/cli-engine": "0.6.2",
     "@prisma/dev": "catalog:",
-    "@repo/test-utils": "workspace:8.0.0-rc.13",
-    "@repo/tsconfig": "workspace:8.0.0-rc.13",
+    "@repo/test-utils": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
     "@size-limit/file": "^12.1.0",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",

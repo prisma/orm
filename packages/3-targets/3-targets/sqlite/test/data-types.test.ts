@@ -1,3 +1,4 @@
+import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
 import { describe, expect, it } from 'vitest';
 import {
   sqliteBigint,
@@ -37,6 +38,16 @@ describe('the data types this target registers', () => {
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
   });
+
+  it('declares no type that takes a sql/expression value through a cast or a list cast', () => {
+    expect(
+      sqliteDataTypes.filter(
+        (type) =>
+          'sql/expression' in type.casts ||
+          type.listCast?.of.includes(SQL_EXPRESSION_DATA_TYPE_ID) === true,
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe('what each cast converts', () => {
@@ -51,11 +62,11 @@ describe('what each cast converts', () => {
     ['sqlite/integer to sqlite/real, a number either way', sqliteReal, sqliteInteger.id, 42, 42],
     ['sqlite/bigint to sqlite/real, digit text to a number', sqliteReal, sqliteBigint.id, '42', 42],
     [
-      'sqlite/text to sqlite/datetime, the text unchanged',
+      'sqlite/text to sqlite/datetime, the instant in UTC',
       sqliteDatetime,
       sqliteText.id,
-      '2020-01-01',
-      '2020-01-01',
+      '2020-01-01T01:00:00.000+01:00',
+      '2020-01-01T00:00:00Z',
     ],
     ['sqlite/text to sqlite/blob, the text unchanged', sqliteBlob, sqliteText.id, 'AA==', 'AA=='],
   ])('%s', (_name, type, source, value, converted) => {

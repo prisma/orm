@@ -4,6 +4,7 @@ import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
 import { notOk } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -234,7 +235,7 @@ describe('migration plan', () => {
 
     expect(run.presented?.presentation.next).toEqual([
       { kind: 'edit-file', label: `Review ${dir}` },
-      { kind: 'run-command', label: 'Apply the migration', command: '{bin} db migrate' },
+      { kind: 'run-command', label: 'Apply the migration', command: 'prisma-test db migrate' },
     ]);
   });
 
@@ -703,6 +704,33 @@ describe('migration plan', () => {
     expect(run.json.at(-1)).toMatchObject({
       kind: 'result',
       envelope: { ok: false, error: { code: 'MIGRATION.PLANNING_FAILED' } },
+    });
+  });
+
+  it('reports a contract default the planner refuses as CONTRACT.DEFAULT_INVALID', async () => {
+    const project = await plannableProject();
+    const refusal =
+      'Column "at": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.';
+
+    const run = await harness(project, {
+      script: {
+        throwOnPlan: structuredError('CONTRACT.DEFAULT_INVALID', refusal, {
+          meta: { reason: 'default-not-canonical', column: 'at' },
+        }),
+      },
+    }).run(['migration', 'plan', '--json'], { cwd: project.dir });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: {
+        ok: false,
+        error: {
+          code: 'CONTRACT.DEFAULT_INVALID',
+          summary: refusal,
+          meta: { reason: 'default-not-canonical', column: 'at' },
+        },
+      },
     });
   });
 

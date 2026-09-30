@@ -55,6 +55,7 @@ function interpret(
   options?: {
     readonly composedExtensions?: readonly string[];
     readonly authoringContributions?: AuthoringContributions;
+    readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
   },
 ) {
   const { document, sources } = parse(schema, 'schema.prisma');
@@ -71,6 +72,7 @@ function interpret(
     codecLookup,
     authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.composedExtensions ? { composedExtensions: options.composedExtensions } : {}),
+    ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),
   });
 }
 
@@ -204,6 +206,8 @@ describe('Mongo PSL temporal preset misuse', () => {
     ).toEqual([
       expect.objectContaining({
         code: 'PSL_UNKNOWN_FIELD_PRESET',
+        message:
+          'Field "Post.createdAt" references unknown field preset "temporal.createdAtt". The "temporal" namespace has temporal.createdAt(), temporal.updatedAt() and temporal.timestamp(onCreate, onUpdate).',
         data: { namespace: 'temporal', helperPath: 'temporal.createdAtt' },
       }),
     ]);
@@ -234,6 +238,27 @@ describe('Mongo PSL temporal preset misuse', () => {
     ).toEqual([expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' })]);
   });
 
+  it('warns that temporal.timestamp() with no phase is the same as Date', () => {
+    const warnings: ContractSourceDiagnostic[] = [];
+    const result = interpret(
+      `model Post {
+  id        ObjectId             @id @map("_id")
+  stampedAt temporal.timestamp()
+}
+`,
+      { reportWarning: (diagnostic) => warnings.push(diagnostic) },
+    );
+    expect(result.ok).toBe(true);
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        code: 'PSL_PRESET_WITHOUT_EFFECT',
+        severity: 'warning',
+        message:
+          'Field "Post.stampedAt" uses temporal.timestamp() without onCreate or onUpdate, so nothing fills it and it is stored exactly like Date. Write Date, or pass onCreate: now or onUpdate: now.',
+      }),
+    ]);
+  });
+
   it('rejects an option value the preset does not list with PSL_INVALID_ATTRIBUTE_ARGUMENT', () => {
     expect(
       diagnosticsOf(`model Post {
@@ -241,7 +266,13 @@ describe('Mongo PSL temporal preset misuse', () => {
   touchedAt temporal.timestamp(onUpdate: later)
 }
 `),
-    ).toEqual([expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' })]);
+    ).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+        message:
+          'Field "Post.touchedAt": Argument "onUpdate" of temporal.timestamp must be "now"; received "later"',
+      }),
+    ]);
   });
 
   it('rejects a preset on a composite-type field with PSL_UNSUPPORTED_FIELD_TYPE', () => {

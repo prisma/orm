@@ -3,14 +3,14 @@
  *
  * One declaration serves both directions: the adapter contributes these to the assembled stack, so
  * the interpreter reads a written default through them, and `contract infer` prints a stored value
- * back through the same ones. The `sql` and `pg.sql` tags lower their own bodies and name no data
- * type, so they sit beside these in the adapter, where the family's lowering entry is reachable.
+ * back through the same ones. The `sql` tag is not here: it writes `sql/expression`, which the SQL
+ * family defines and registers itself.
  *
  * ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { AuthoringDataTypeEntry } from '@internal/framework-components/authoring';
+import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import {
   createNumberClassifier,
   numeralText,
@@ -50,7 +50,7 @@ function printNumber(value: JsonValue): string {
   return typeof value === 'number' ? numeralText(value) : String(value);
 }
 
-export function postgresDataTypeEntries(): Readonly<Record<string, AuthoringDataTypeEntry>> {
+export function postgresDataTypeEntries(): Readonly<Record<string, DataTypeAuthoringEntry>> {
   return {
     [pgText.id]: {
       written: { kind: 'plain', syntax: 'string', parse: (text) => text },
@@ -75,7 +75,7 @@ export function postgresDataTypeEntries(): Readonly<Record<string, AuthoringData
     [pgJson.id]: {
       written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
       print: printJsonBody,
-      documentation: 'Reads the body as a JSON document and stores it as the default value.',
+      documentation: 'Reads the text as a JSON document and stores it as the default value.',
     },
   };
 }

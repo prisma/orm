@@ -116,7 +116,7 @@ describe('jsonValue', () => {
   });
 
   it('rejects a tagged literal', () => {
-    const result = parseJsonValue('pg.sql`now()`');
+    const result = parseJsonValue('postgis.geometry`POINT(0 0)`');
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

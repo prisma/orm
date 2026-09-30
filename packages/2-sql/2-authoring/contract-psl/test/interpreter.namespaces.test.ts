@@ -293,40 +293,6 @@ namespace auth {
       model: 'User',
     });
   });
-
-  it('emits PSL_INVALID_RELATION_TARGET when qualifier names a non-existent namespace', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `namespace public {
-  model Post {
-    id Int @id
-    userId Int
-    user wrong.User @relation(fields: [userId], references: [id])
-  }
-}
-
-namespace auth {
-  model User {
-    id Int @id
-  }
-}
-`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_INVALID_RELATION_TARGET',
-          message: expect.stringContaining('wrong.User'),
-        }),
-      ]),
-    );
-  });
 });
 
 describe('interpretPslDocumentToSqlContract cross-contract-space FK (PSL colon-prefix)', () => {

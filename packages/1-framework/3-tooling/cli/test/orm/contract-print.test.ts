@@ -39,7 +39,11 @@ describe('contract print', () => {
         label:
           'Write the PSL to a file with --output <path>, then point contract in prisma.config.ts at that file',
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
     expect(await readdir(dir)).toEqual([]);
   });
@@ -215,7 +219,11 @@ describe('contract print', () => {
         kind: 'user-choice',
         label: 'Point contract in prisma.config.ts at generated/contract.prisma',
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
     expect(run.presented?.presentation.stdout).toEqual([]);
     expect(stripAnsi(run.stderr)).toContain('Contract written to generated/contract.prisma');
@@ -250,7 +258,11 @@ describe('contract print', () => {
         label:
           "Point contract in prisma.config.ts at generated/contract.prisma, through a PSL source that sets defaultControlPolicy: 'external'",
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
   });
 
@@ -275,10 +287,19 @@ describe('contract print', () => {
     const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(0);
-    expect(run.events).toContainEqual({
-      kind: 'message',
-      severity: 'warn',
-      text: 'warning prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME Scalar type "Int" is deprecated; use "Int32".',
+    const terminal = run.json.at(-1);
+    expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+      ok: true,
+      diagnostics: [
+        expect.objectContaining({
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+          severity: 'warn',
+          summary:
+            'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated; use "Int32".',
+          where: { path: 'prisma/schema.prisma', line: 3 },
+          meta: expect.objectContaining({ code: 'PSL_DEPRECATED_SCALAR_NAME' }),
+        }),
+      ],
     });
   });
 
@@ -315,7 +336,11 @@ describe('contract print', () => {
         label:
           "With contract: './prisma/contract.prisma' and no output in prisma.config.ts, contract emit writes prisma/contract.json and prisma/contract.d.ts, not prisma/schema.json and prisma/schema.d.ts",
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
   });
 
@@ -347,7 +372,11 @@ describe('contract print', () => {
         label:
           "With contract: './src/prisma/contract.prisma' and no output in prisma.config.ts, contract emit writes src/prisma/contract.json and src/prisma/contract.d.ts, not prisma/schema.json and prisma/schema.d.ts",
       },
-      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+      {
+        kind: 'run-command',
+        label: 'Emit the printed contract',
+        command: 'prisma-test contract emit',
+      },
     ]);
   });
 
@@ -391,6 +420,37 @@ describe('contract print', () => {
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.SOURCE_LOAD_FAILED' });
     expect(await readdir(dir)).not.toContain('generated');
+  });
+
+  it('names the source file of a load failure relative to the working directory', async () => {
+    const dir = await projectDir();
+    mocks.load.mockResolvedValue({
+      ok: false,
+      failure: {
+        summary: 'Source interpretation failed',
+        diagnostics: [
+          {
+            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+            message: 'Field "P6.big" has type "BigInt"',
+            sourceId: join(dir, 'prisma', 'schema.prisma'),
+            span: {
+              start: { offset: 4, line: 5, column: 3 },
+              end: { offset: 7, line: 5, column: 6 },
+            },
+          },
+        ],
+      },
+    });
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    expect(erroredEnvelope(run).diagnostics).toEqual([
+      expect.objectContaining({
+        summary:
+          'prisma/schema.prisma:5:3 PSL_UNSUPPORTED_FIELD_TYPE: Field "P6.big" has type "BigInt"',
+        where: { path: 'prisma/schema.prisma', line: 5 },
+      }),
+    ]);
   });
 
   it('errors when the family cannot print the contract as PSL', async () => {

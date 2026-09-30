@@ -1,7 +1,7 @@
 {
   "name": "@internal/migration-tools",
   "private": true,
-  "version": "8.0.0-rc.13",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,18 +16,18 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.13",
-    "@internal/errors": "workspace:8.0.0-rc.13",
-    "@internal/framework-components": "workspace:8.0.0-rc.13",
-    "@internal/utils": "workspace:8.0.0-rc.13",
+    "@internal/contract": "workspace:8.0.0-rc.14",
+    "@internal/errors": "workspace:8.0.0-rc.14",
+    "@internal/framework-components": "workspace:8.0.0-rc.14",
+    "@internal/utils": "workspace:8.0.0-rc.14",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
     "prettier": "^3.9.6"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.13",
-    "@repo/tsconfig": "workspace:8.0.0-rc.13",
-    "@repo/tsdown": "workspace:8.0.0-rc.13",
+    "@repo/test-utils": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

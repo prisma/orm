@@ -198,6 +198,7 @@ export const contractFixtures = {
     'contract-nullable-name-required.ts',
   ),
   'contract-expression-authored': join(JOURNEY_FIXTURES_DIR, 'contract-expression-authored.ts'),
+  'contract-date-time-defaults': join(JOURNEY_FIXTURES_DIR, 'contract-date-time-defaults.ts'),
 } as const;
 
 export type ContractVariant = keyof typeof contractFixtures;

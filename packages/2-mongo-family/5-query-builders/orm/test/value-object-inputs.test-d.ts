@@ -115,7 +115,16 @@ test('DefaultModelRow handles scalar array fields', () => {
 
 test('CreateInput accepts inline value object structure', () => {
   type Input = CreateInput<VOContract, 'User'>;
-  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null>();
+  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null | undefined>();
+});
+
+test('CreateInput lets a nullable field be left out', () => {
+  type Input = CreateInput<VOContract, 'User'>;
+  const input: Input = { name: 'Alice', tags: [] };
+  expectTypeOf(input).toExtend<Input>();
+  // @ts-expect-error a non-nullable field stays required
+  const missingName: Input = { tags: [] };
+  void missingName;
 });
 
 test('CreateInput accepts null for nullable value object field', () => {
@@ -267,7 +276,7 @@ test('DefaultModelRow resolves via InferModelRow from the precomputed field outp
 test('CreateInput resolves via FieldInputTypes when present', () => {
   type Input = CreateInput<VOContractWithFieldTypes, 'User'>;
   expectTypeOf<Input['name']>().toEqualTypeOf<string>();
-  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null>();
+  expectTypeOf<Input['contactInfo']>().toEqualTypeOf<ContactInfoShape | null | undefined>();
 });
 
 // --- Contracts with embedded relations, references, and variants + FieldOutputTypes ---

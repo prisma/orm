@@ -18,9 +18,9 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'f00103a374af650f981aa1c58701ad19ffa4eec3cf0e42c937b561543bb8dcb3'>;
+  StorageHashBase<'c853aa073f634e1d93c3cdd9345fefffc56fc7831408e4a235d4d736f3072556'>;
 export type ExecutionHash =
-  ExecutionHashBase<'fc6b534a4d35b72e0713e30332f0ff28c10df68fcbbeea311c0df1a82cacb080'>;
+  ExecutionHashBase<'e8239036f6cb865ced1dd705357afa61b24163916d13b20573a8063b7f1b624d'>;
 export type ProfileHash =
   ProfileHashBase<'251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3'>;
 
@@ -29,6 +29,16 @@ export type CodecTypes = MongoCodecTypes;
 export type FieldOutputTypes = {
   readonly __unbound__: {
     readonly Click: { readonly url: CodecTypes['mongo/string@1']['output'] };
+    readonly Counter: {
+      readonly _id: CodecTypes['mongo/objectId@1']['output'];
+      readonly factor: CodecTypes['mongo/double@1']['output'];
+      readonly hits: CodecTypes['mongo/int32@1']['output'];
+      readonly key: CodecTypes['mongo/string@1']['output'];
+      readonly label: CodecTypes['mongo/string@1']['output'] | null;
+      readonly scores: ReadonlyArray<CodecTypes['mongo/int32@1']['output']>;
+      readonly tags: ReadonlyArray<CodecTypes['mongo/string@1']['output']>;
+      readonly updatedAt: CodecTypes['mongo/date@1']['output'];
+    };
     readonly Event: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
       readonly createdAt: CodecTypes['mongo/date@1']['output'];
@@ -47,6 +57,16 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly __unbound__: {
     readonly Click: { readonly url: CodecTypes['mongo/string@1']['input'] };
+    readonly Counter: {
+      readonly _id: CodecTypes['mongo/objectId@1']['input'];
+      readonly factor: CodecTypes['mongo/double@1']['input'];
+      readonly hits: CodecTypes['mongo/int32@1']['input'];
+      readonly key: CodecTypes['mongo/string@1']['input'];
+      readonly label: CodecTypes['mongo/string@1']['input'] | null;
+      readonly scores: ReadonlyArray<CodecTypes['mongo/int32@1']['input']>;
+      readonly tags: ReadonlyArray<CodecTypes['mongo/string@1']['input']>;
+      readonly updatedAt: CodecTypes['mongo/date@1']['input'];
+    };
     readonly Event: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
       readonly createdAt: CodecTypes['mongo/date@1']['input'];
@@ -69,6 +89,17 @@ export namespace Models {
     createdAt: CodecTypes['mongo/date@1']['output'];
     kind: 'click';
     url: CodecTypes['mongo/string@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
+  export type unbound_Counter = {
+    _id: CodecTypes['mongo/objectId@1']['output'];
+    factor: CodecTypes['mongo/double@1']['output'];
+    hits: CodecTypes['mongo/int32@1']['output'];
+    key: CodecTypes['mongo/string@1']['output'];
+    label: CodecTypes['mongo/string@1']['output'] | null;
+    scores: ReadonlyArray<CodecTypes['mongo/int32@1']['output']>;
+    tags: ReadonlyArray<CodecTypes['mongo/string@1']['output']>;
+    updatedAt: CodecTypes['mongo/date@1']['output'];
     readonly [RelationKeys]?: never;
   };
   export type unbound_Event = {
@@ -98,6 +129,7 @@ export namespace Models {
 export declare const models: {
   __unbound__: {
     Click: Models.unbound_Click;
+    Counter: Models.unbound_Counter;
     Event: Models.unbound_Event;
     Post: Models.unbound_Post;
     View: Models.unbound_View;
@@ -115,6 +147,43 @@ type ContractBase = Omit<
         readonly kind: 'mongo-database';
         readonly entries: {
           readonly collection: {
+            readonly counters: {
+              readonly kind: 'mongo-collection';
+              readonly validator: {
+                readonly jsonSchema: {
+                  readonly additionalProperties: false;
+                  readonly bsonType: 'object';
+                  readonly properties: {
+                    readonly _id: { readonly bsonType: 'objectId' };
+                    readonly factor: { readonly bsonType: 'double' };
+                    readonly hits: { readonly bsonType: 'int' };
+                    readonly key: { readonly bsonType: 'string' };
+                    readonly label: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly scores: {
+                      readonly bsonType: 'array';
+                      readonly items: { readonly bsonType: 'int' };
+                    };
+                    readonly tags: {
+                      readonly bsonType: 'array';
+                      readonly items: { readonly bsonType: 'string' };
+                    };
+                    readonly updatedAt: { readonly bsonType: 'date' };
+                  };
+                  readonly required: readonly [
+                    '_id',
+                    'factor',
+                    'hits',
+                    'key',
+                    'scores',
+                    'tags',
+                    'updatedAt',
+                  ];
+                };
+                readonly kind: 'mongo-validator';
+                readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
+              };
+            };
             readonly events: {
               readonly kind: 'mongo-collection';
               readonly validator: {
@@ -191,6 +260,10 @@ type ContractBase = Omit<
   readonly target: 'mongo';
   readonly targetFamily: 'mongo';
   readonly roots: {
+    readonly counters: {
+      readonly namespace: '__unbound__' & NamespaceId;
+      readonly model: 'Counter';
+    };
     readonly events: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Event' };
     readonly posts: { readonly namespace: '__unbound__' & NamespaceId; readonly model: 'Post' };
   };
@@ -211,6 +284,46 @@ type ContractBase = Omit<
               readonly namespace: '__unbound__' & NamespaceId;
               readonly model: 'Event';
             };
+          };
+          readonly Counter: {
+            readonly fields: {
+              readonly _id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
+              };
+              readonly factor: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/double@1' };
+              };
+              readonly hits: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
+              };
+              readonly key: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly label: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly scores: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int32@1' };
+                readonly many: true;
+              };
+              readonly tags: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                readonly many: true;
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: { readonly collection: 'counters' };
           };
           readonly Event: {
             readonly fields: {
@@ -285,6 +398,15 @@ type ContractBase = Omit<
     readonly executionHash: ExecutionHash;
     readonly mutations: {
       readonly defaults: readonly [
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'counters';
+            readonly field: 'updatedAt';
+            readonly namespace: '__unbound__';
+          };
+        },
         {
           readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
           readonly ref: {

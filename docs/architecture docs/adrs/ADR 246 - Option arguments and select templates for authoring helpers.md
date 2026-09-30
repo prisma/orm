@@ -139,7 +139,7 @@ The two surfaces are validated by different mechanisms, and deliberately do not 
 
 | Surface | What rejects a bad option value | Message |
 |---|---|---|
-| PSL | `validateAuthoringArgument`, at authoring time | `Authoring helper argument at <path> must be one of: now` |
+| PSL | `validateAuthoringArgument`, at authoring time | `Argument "onCreate" of temporal.timestamp must be "now"; received "later"` (an unnamed argument is `Authoring helper argument at <path>`) |
 | TypeScript | the literal union, at compile time | a type error |
 | TypeScript, type bypassed | the select node's throw | `Authoring template select has no case for value "<value>"` |
 
