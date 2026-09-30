@@ -27,7 +27,6 @@ import {
 } from '@internal/errors/control';
 import type { RefResolutionError } from '@internal/migration-tools/ref-resolution';
 import { ifDefined } from '@internal/utils/defined';
-import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import type { MigrateFailure } from '../control-api/types';
 import { chooseAction, runCommandAction } from './next-actions';
@@ -71,25 +70,6 @@ export {
   errorTargetMigrationNotSupported,
   errorUnexpected,
 };
-
-/**
- * Whether a library raised a structured error about the contract, such as a default its codec refuses. It is the contract to correct, not an unexpected failure of the command.
- */
-export function isContractError(error: unknown): error is StructuredError {
-  return isStructuredError(error) && error.code.startsWith('CONTRACT.');
-}
-
-/** A structured error a library raised about the contract, as a command's failure, with its code, prose and meta unchanged. */
-export function errorFromContractError(error: StructuredError): CliStructuredError {
-  return new CliStructuredError(error.code, error.message, {
-    ...ifDefined('why', error.why),
-    ...ifDefined('fix', error.fix),
-    ...ifDefined('where', error.where),
-    ...ifDefined('meta', error.meta),
-    ...ifDefined('docsUrl', error.docsUrl),
-    cause: error,
-  });
-}
 
 /**
  * A CLI-raised error that carries the typed remediation as well as the prose.

@@ -5,6 +5,7 @@ import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -13,13 +14,7 @@ import {
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorFromContractError,
-  errorUnexpected,
-  isContractError,
-} from '../../utils/cli-errors';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
@@ -208,10 +203,11 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           startedAt,
         });
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+        if (
+          !CliStructuredError.is(error) &&
+          isStructuredError(error) &&
+          error.code === 'CONTRACT.VALIDATION_FAILED'
+        ) {
           return notOk(
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
@@ -220,18 +216,13 @@ export function createDbInitCommand(createClient: CreateControlClient) {
             ),
           );
         }
-        if (isContractError(error)) {
-          return notOk(normalizeError(errorFromContractError(error)));
-        }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db init: ${safeMessage}`,
-            }),
+            errorFromCaught(
+              error,
+              (message) =>
+                `Unexpected error during db init: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
+            ),
           ),
         );
       } finally {

@@ -9,6 +9,7 @@ import {
   ok,
 } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
 import {
   buildRefAdvancementFields,
@@ -18,13 +19,7 @@ import {
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorFromContractError,
-  errorUnexpected,
-  isContractError,
-} from '../../utils/cli-errors';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
@@ -294,10 +289,11 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         if (error instanceof EngineStructuredError) {
           throw error;
         }
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+        if (
+          !CliStructuredError.is(error) &&
+          isStructuredError(error) &&
+          error.code === 'CONTRACT.VALIDATION_FAILED'
+        ) {
           return notOk(
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
@@ -306,18 +302,13 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ),
           );
         }
-        if (isContractError(error)) {
-          return notOk(normalizeError(errorFromContractError(error)));
-        }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db update: ${safeMessage}`,
-            }),
+            errorFromCaught(
+              error,
+              (message) =>
+                `Unexpected error during db update: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
+            ),
           ),
         );
       } finally {

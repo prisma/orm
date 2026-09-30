@@ -13,6 +13,7 @@ import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   errorConfigValidation,
   errorContractValidationFailed,
@@ -72,9 +73,7 @@ export async function readEmittedContract(inputs: {
               why: `Contract file not found at ${path}`,
               fix: `Run \`{bin} contract emit\` to generate ${relativePath}, or update \`contract.output\` in prisma.config.ts`,
             })
-          : errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+          : errorFromCaught(error, (message) => `Failed to read contract file: ${message}`),
       ),
     );
   }

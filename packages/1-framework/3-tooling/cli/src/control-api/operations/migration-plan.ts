@@ -16,7 +16,6 @@ import {
   snapshotsImportPathFrom,
   writeContractSnapshot,
 } from '@internal/migration-tools/contract-snapshot-store';
-import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { deriveProvidedInvariants } from '@internal/migration-tools/invariants';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
@@ -34,11 +33,8 @@ import {
   errorContractValidationFailed,
   errorDestructiveChanges,
   errorFileNotFound,
-  errorFromContractError,
   errorMigrationPlanningFailed,
   errorTargetMigrationNotSupported,
-  errorUnexpected,
-  isContractError,
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
@@ -50,6 +46,7 @@ import { assertFrameworkComponentsCompatible } from '../../utils/framework-compo
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient, DestructivePlanOperation } from '../types';
+import { errorFromCaught } from './caught-errors';
 import {
   buildContractSpaceAggregate,
   loadContractSpaceAggregateForCli,
@@ -348,17 +345,8 @@ export async function executeMigrationPlanCommand(
   try {
     return await executeMigrationPlanCommandInner(options, startTime, callbacks);
   } catch (error) {
-    if (CliStructuredError.is(error)) {
-      return notOk(error);
-    }
-    if (isContractError(error)) {
-      return notOk(errorFromContractError(error));
-    }
-    const message = error instanceof Error ? error.message : String(error);
     return notOk(
-      errorUnexpected(message, {
-        why: `Unexpected error during migration plan: ${message}`,
-      }),
+      errorFromCaught(error, (message) => `Unexpected error during migration plan: ${message}`),
     );
   }
 }
@@ -398,11 +386,7 @@ async function executeMigrationPlanCommandInner(
         }),
       );
     }
-    return notOk(
-      errorUnexpected(error instanceof Error ? error.message : String(error), {
-        why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-    );
+    return notOk(errorFromCaught(error, (message) => `Failed to read contract file: ${message}`));
   }
 
   // Construct the family instance up-front so on-disk contract reads cross the
@@ -876,20 +860,8 @@ async function executeMigrationPlanCommandInner(
     };
     return ok(result);
   } catch (error) {
-    if (CliStructuredError.is(error)) {
-      return notOk(error);
-    }
-    if (MigrationToolsError.is(error)) {
-      return notOk(error);
-    }
-    if (isContractError(error)) {
-      return notOk(errorFromContractError(error));
-    }
-    const message = error instanceof Error ? error.message : String(error);
     return notOk(
-      errorUnexpected(message, {
-        why: `Unexpected error during migration plan: ${message}`,
-      }),
+      errorFromCaught(error, (message) => `Unexpected error during migration plan: ${message}`),
     );
   }
 }

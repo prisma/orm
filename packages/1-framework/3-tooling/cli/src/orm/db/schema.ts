@@ -4,13 +4,9 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Span, TreeNode } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import type { CreateControlClient } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorDatabaseConnectionRequired,
-  errorDriverRequired,
-  errorUnexpected,
-} from '../../utils/cli-errors';
+import { errorDatabaseConnectionRequired, errorDriverRequired } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -193,18 +189,13 @@ export function createDbSchemaCommand(createClient: CreateControlClient) {
         });
         schemaView = client.toSchemaView(schema);
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db schema: ${safeMessage}`,
-            }),
+            errorFromCaught(
+              error,
+              (message) =>
+                `Unexpected error during db schema: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
+            ),
           ),
         );
       } finally {

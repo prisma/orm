@@ -125,6 +125,8 @@ tied to specific failure modes — and document the mapping in `exit-codes.ts` n
 - **`mapErrorToCliEnvelope()`** extracts fields directly from a `CliStructuredError` (code with the
   `PN-CLI-`/`PN-RTM-` prefix, domain, severity, summary, why, fix, where, meta, docsUrl, exitCode) —
   no string matching — with a fallback for the rare non-structured error.
+- **`errorFromCaught(error, why)`** is what a command's catch reports: an error with a structured
+  code as itself, whatever its namespace, and anything else as `CLI.UNEXPECTED`.
 
 ## Testing
 
@@ -145,6 +147,4 @@ it('exits with code 2 for config errors', async () => {
 ## Related Patterns
 
 - `docs/Testing Guide.md`: Testing best practices
-- `packages/framework/tooling/cli/src/utils/cli-errors.ts`: Structured error factories
-- `packages/framework/tooling/cli/src/utils/result.ts`: Result pattern utilities
-- `packages/framework/tooling/cli/src/utils/result-handler.ts`: Result processing
+- `packages/1-framework/3-tooling/cli/src/utils/cli-errors.ts`: Structured error factories

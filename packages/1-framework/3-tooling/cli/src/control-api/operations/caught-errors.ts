@@ -1,13 +1,29 @@
+import { ifDefined } from '@internal/utils/defined';
+import { isStructuredError } from '@internal/utils/structured-error';
+import { CliStructuredError, errorUnexpected } from '../../utils/cli-errors';
+
 /**
- * Classifies errors caught around migration-tools calls so commands never import the MigrationToolsError class directly.
+ * The error a command reports for one it caught. A CLI error is reported as it is, and so is any other error a library raised with a structured code, such as `CONTRACT.DEFAULT_INVALID` for a stale contract's default or `RUNTIME.TYPE_PARAMS_INVALID` for its type parameters: the code says what went wrong better than the command can. Anything else is a bug, reported as `CLI.UNEXPECTED` with the `why` the command gives for the error's message.
  */
-
-import { CliStructuredError } from '../../utils/cli-errors';
-
-/** CliStructuredError (including MigrationToolsError) → identity; anything else → null (caller rethrows/wraps). */
-export function mapCaughtMigrationError(error: unknown): CliStructuredError | null {
+export function errorFromCaught(
+  error: unknown,
+  why: (message: string) => string,
+): CliStructuredError {
   if (CliStructuredError.is(error)) {
     return error;
   }
-  return null;
+  if (isStructuredError(error)) {
+    return new CliStructuredError(error.code, error.message, {
+      ...ifDefined('severity', error.severity),
+      ...ifDefined('why', error.why),
+      ...ifDefined('fix', error.fix),
+      ...ifDefined('nextActions', error.nextActions),
+      ...ifDefined('where', error.where),
+      ...ifDefined('meta', error.meta),
+      ...ifDefined('docsUrl', error.docsUrl),
+      cause: error,
+    });
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return errorUnexpected(message, { why: why(message), cause: error });
 }
