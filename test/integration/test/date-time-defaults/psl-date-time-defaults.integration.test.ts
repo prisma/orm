@@ -129,4 +129,17 @@ describe('a PSL date or time default is stored in its data type canonical form',
       }),
     ]);
   });
+
+  it('refuses a SQLite DateTime default with more digits than milliseconds', async () => {
+    const result = await authorSqliteContractFromPsl(
+      'model Event {\n  id Int @id\n  at DateTime @default("2024-01-01T00:00:00.1234Z")\n}',
+    );
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        message:
+          'Field "Event.at": "2024-01-01T00:00:00.1234Z" has 4 digits after the decimal point, but sqlite/datetime holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z".',
+      }),
+    ]);
+  });
 });

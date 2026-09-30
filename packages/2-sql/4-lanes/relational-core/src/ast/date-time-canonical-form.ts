@@ -15,6 +15,8 @@ export interface CanonicalDateTimeOptions {
   readonly dataTypeId: string;
   /** The largest UTC offset the type holds, in hours. Defaults to 23. */
   readonly maxOffsetHours?: number;
+  /** The most digits after the decimal point the type holds. Defaults to 6, microseconds. */
+  readonly maxFractionDigits?: 3 | 6;
   /** The earliest and latest values the type holds, each in canonical form. */
   readonly range?: { readonly earliest: string; readonly latest: string };
 }
@@ -98,6 +100,7 @@ const DATE_PREFIX = /^([+-]\d{6}|\d{4})-(\d{2})-(\d{2})/;
 const TIME_PREFIX = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?/;
 const OFFSET = /^([+-])(\d{2})(?::(\d{2})(?::(\d{2}))?)?$/;
 const MAX_FRACTION_DIGITS = 6;
+const FRACTION_UNITS = { 3: 'milliseconds', 6: 'microseconds' } as const;
 const SECONDS_PER_DAY = 86_400;
 const MIDNIGHT: TimeFields = { hour: 0, minute: 0, second: 0, fraction: '' };
 
@@ -215,8 +218,8 @@ function readWritten(text: string): WrittenDateTime | undefined {
   return { date, time, offsetSeconds, fractionDigits };
 }
 
-function withFraction(example: string): string {
-  return example.replace(/(\d{2}:\d{2}:\d{2})/, '$1.123456');
+function withFraction(example: string, digits: number): string {
+  return example.replace(/(\d{2}:\d{2}:\d{2})/, `$1.${'123456'.slice(0, digits)}`);
 }
 
 /** A value's position on its type's scale, compared element by element; the date is in UTC for an instant. */
@@ -342,9 +345,10 @@ export function canonicalDateTime(
       `${id} needs a UTC offset, but "${written}" has none. Add Z for UTC or an offset such as +02:00, as in "${shape.example}".`,
     );
   }
-  if (parts.fractionDigits > MAX_FRACTION_DIGITS) {
+  const maxFractionDigits = options.maxFractionDigits ?? MAX_FRACTION_DIGITS;
+  if (parts.fractionDigits > maxFractionDigits) {
     refused(
-      `"${written}" has ${parts.fractionDigits} digits after the decimal point, but ${id} holds microseconds, so at most ${MAX_FRACTION_DIGITS}. Round it, as in "${withFraction(shape.example)}".`,
+      `"${written}" has ${parts.fractionDigits} digits after the decimal point, but ${id} holds ${FRACTION_UNITS[maxFractionDigits]}, so at most ${maxFractionDigits}. Round it, as in "${withFraction(shape.example, maxFractionDigits)}".`,
     );
   }
 

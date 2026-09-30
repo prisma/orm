@@ -9,7 +9,7 @@ changes:
         - '\b(DateTime|Timestamptz|TimestamptzJsDate|TimestamptzString|Timestamp|TimestampString|Date|DateString|Time|TimeString|Timetz)(\([^)]*\))?(\[\])?\??([ \t]+@[\w.]+(\([^)\n]*\))?)*?[ \t]+@default\([\s\[]*"'
   - id: date-time-default-refused-text
     summary: |
-      `prisma contract emit` refuses a date or time default its column's type does not hold, with `PSL_INVALID_DEFAULT_LITERAL`: an offset on `Timestamp`, `Date` or `Time`, no offset on `DateTime`, `Timestamptz` or `Timetz`, a date on a time column, a time on a `Date` column, more than six digits after the decimal point, a date or time that does not exist, a year outside the range the type holds, or a ` BC` suffix on a SQLite `DateTime`. The message shows text the column takes.
+      `prisma contract emit` refuses a date or time default its column's type does not hold, with `PSL_INVALID_DEFAULT_LITERAL`: an offset on `Timestamp`, `Date` or `Time`, no offset on `DateTime`, `Timestamptz` or `Timetz`, a date on a time column, a time on a `Date` column, more than six digits after the decimal point (three on a SQLite `DateTime`), a date or time that does not exist, a year outside the range the type holds, or a ` BC` suffix on a SQLite `DateTime`. The message shows text the column takes.
     detection:
       glob: "**/*.prisma"
       matches:
@@ -66,7 +66,7 @@ Field "Event.localAt": pg/timestamp holds no UTC offset, but "2024-01-01T00:00:0
 | an offset on `Timestamp`, `Date` or `Time` | remove the offset, or make the column `DateTime` if it holds an instant |
 | no offset on `DateTime`, `Timestamptz`, `Timetz` or SQLite `DateTime` | add `Z` for UTC, or the offset, as in `2024-01-01T00:00:00Z` |
 | a time on a `Date` column, or a date on a `Time` or `Timetz` column | remove the part the column does not hold |
-| more than six digits after the decimal point | round to six digits or fewer |
+| more than six digits after the decimal point, or more than three on a SQLite `DateTime`, which holds milliseconds | round to six digits or fewer, or three on SQLite |
 | a date or time that does not exist, such as `2024-02-30`, `25:00:00` or `24:00:00` | write a real date or time; for `24:00:00`, write ``@default(sql`'24:00:00'::time`)`` |
 | a date outside the range the column's type holds, such as a date before 24 November 4714 BC on Postgres | write a date inside the range the message names |
 | a ` BC` suffix on a SQLite `DateTime` | write a signed year, as in `-000043-03-15T00:00:00Z` for 44 BC |

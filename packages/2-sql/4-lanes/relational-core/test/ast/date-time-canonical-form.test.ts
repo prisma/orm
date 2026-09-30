@@ -84,6 +84,25 @@ describe('canonicalDateTime', () => {
     });
   });
 
+  it('holds at most the fraction digits a type declares', () => {
+    const milliseconds: CanonicalDateTimeOptions = {
+      shape: 'instant',
+      dataTypeId: 'demo/millis',
+      maxFractionDigits: 3,
+    };
+    expect({
+      held: canonicalDateTime('2024-01-01T00:00:00.123Z', milliseconds),
+      refused: refusal('2024-01-01T00:00:00.1234Z', milliseconds),
+    }).toMatchObject({
+      held: '2024-01-01T00:00:00.123Z',
+      refused: {
+        code: 'CONTRACT.CAST_REFUSED',
+        message:
+          '"2024-01-01T00:00:00.1234Z" has 4 digits after the decimal point, but demo/millis holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z".',
+      },
+    });
+  });
+
   it('leads a time written for a date to a date', () => {
     expect(refusal('12:00:00', date)).toMatchObject({
       message:

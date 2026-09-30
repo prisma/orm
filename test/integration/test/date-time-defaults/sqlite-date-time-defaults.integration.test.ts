@@ -131,4 +131,39 @@ describe('a SQLite datetime default', () => {
     });
     await database.close();
   });
+
+  it('verifies a millisecond default, and plans nothing more', async () => {
+    const database = memoryDatabase();
+    const contract = await sqliteContractFromPsl(`model Event {
+  id Int      @id
+  at DateTime @default("2024-01-01T00:00:00.123Z")
+
+  @@map("event")
+}`);
+    await migrate(database, null, contract);
+
+    const { rows } = await database.query<{ dflt_value: string }>(
+      "SELECT dflt_value FROM pragma_table_info('event') WHERE name = 'at'",
+    );
+    const result = await verify(database, contract);
+    const replan = planner.plan({
+      contract,
+      schema: await familyInstance.introspect({ driver: database }),
+      policy: INIT_ADDITIVE_POLICY,
+      fromContract: contract,
+      frameworkComponents: sqliteFrameworkComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    expect({
+      databaseDefault: rows[0]?.dflt_value,
+      issues: result.schema.issues,
+      replanned: replan.kind === 'success' ? replan.plan.operations.length : replan,
+    }).toEqual({
+      databaseDefault: "'2024-01-01T00:00:00.123Z'",
+      issues: [],
+      replanned: 0,
+    });
+    await database.close();
+  });
 });

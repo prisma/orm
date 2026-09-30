@@ -60,12 +60,13 @@ export const sqliteInteger: DataType = dataType('sqlite/integer', {});
 
 /**
  * The canonical form of `sqlite/datetime` (ADR 254), from ISO 8601 text with a UTC offset. The range
- * is the one a JavaScript `Date`, the codec's value, holds.
+ * and the millisecond precision are those of a JavaScript `Date`, the codec's value.
  */
 export const sqliteDatetimeCanonical = (text: string): string =>
   canonicalDateTime(text, {
     shape: 'instant',
     dataTypeId: 'sqlite/datetime',
+    maxFractionDigits: 3,
     range: { earliest: '-271821-04-20T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
   });
 

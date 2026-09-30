@@ -10,6 +10,7 @@ describe('sqlite/datetime canonical form', () => {
     ['2024-01-01T01:00:00+01:00', '2024-01-01T00:00:00Z'],
     ['2024-01-01 00:00:00+00', '2024-01-01T00:00:00Z'],
     ['2024-01-01T00:00:00.120Z', '2024-01-01T00:00:00.12Z'],
+    ['2024-01-01T00:00:00.123Z', '2024-01-01T00:00:00.123Z'],
     ['-000043-03-15T00:00:00.000Z', '-000043-03-15T00:00:00Z'],
     ['+012026-01-02T03:04:05Z', '+012026-01-02T03:04:05Z'],
     ['+275760-09-13T00:00:00Z', '+275760-09-13T00:00:00Z'],
@@ -38,8 +39,12 @@ describe('sqlite/datetime canonical form', () => {
       '"2024-02-30T00:00:00Z" is not a date that exists. Write a real date, as in "2024-01-01T12:34:56Z".',
     ],
     [
-      '2024-01-01T00:00:00.1234567Z',
-      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but sqlite/datetime holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456Z".',
+      '2024-01-01T00:00:00.1234Z',
+      '"2024-01-01T00:00:00.1234Z" has 4 digits after the decimal point, but sqlite/datetime holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z".',
+    ],
+    [
+      '2024-01-01T00:00:00.123456Z',
+      '"2024-01-01T00:00:00.123456Z" has 6 digits after the decimal point, but sqlite/datetime holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z".',
     ],
     [
       '0044-03-15 00:00:00+00 BC',
