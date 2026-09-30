@@ -153,7 +153,7 @@ describe('db sign', () => {
         {
           kind: 'run-command',
           label: 'Change the database to match the contract, then sign again',
-          command: '{bin} db update',
+          command: 'prisma-test db update',
         },
         {
           kind: 'user-choice',
@@ -177,7 +177,7 @@ describe('db sign', () => {
         {
           kind: 'run-command',
           label: 'Change the database to match the contract, then sign again',
-          command: '{bin} db update --to "staging"',
+          command: 'prisma-test db update --to "staging"',
         },
         {
           kind: 'user-choice',

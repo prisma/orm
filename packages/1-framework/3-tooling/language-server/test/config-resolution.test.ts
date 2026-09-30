@@ -93,7 +93,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     const root = await mkdtemp(join(tmpdir(), 'pn-lsp-noconfig-'));
     const configPath = join(root, 'prisma.config.ts');
 
-    await expect(resolveConfigInputs(configPath)).rejects.toMatchObject({
+    await expect(resolveConfigInputs(configPath, () => '// use prisma-8\n')).rejects.toMatchObject({
       name: 'CliStructuredError',
       code: 'CONFIG.FILE_NOT_FOUND',
     });
@@ -108,7 +108,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
         'export default { $prismaConfig: 1, orm };\n',
     );
 
-    await expect(resolveConfigInputs(configPath)).rejects.toMatchObject({
+    await expect(resolveConfigInputs(configPath, () => '// use prisma-8\n')).rejects.toMatchObject({
       name: 'CliStructuredError',
       code: 'CONFIG.VALIDATION_FAILED',
     });
@@ -126,7 +126,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
         'export default { $prismaConfig: 1, orm };\n',
     );
 
-    const result = await resolveConfigInputs(configPath);
+    const result = await resolveConfigInputs(configPath, () => '// use prisma-8\n');
 
     expect(result.controlStack).toEqual({ scalarTypes: [], pslBlockDescriptors: {} });
   });
@@ -136,7 +136,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     const configPath = join(root, 'prisma.config.ts');
     await writeFile(configPath, 'export default { family: {} };\n');
 
-    await expect(resolveConfigInputs(configPath)).rejects.toMatchObject({
+    await expect(resolveConfigInputs(configPath, () => '// use prisma-8\n')).rejects.toMatchObject({
       name: 'CliStructuredError',
       code: 'CONFIG.VERSION_MARKER_MISSING',
     });
@@ -147,7 +147,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     const root = await mkdtemp(join(tmpdir(), 'pn-lsp-unexpected-'));
     const configPath = join(root, 'prisma.config.ts');
 
-    await expect(resolveConfigInputs(configPath)).rejects.toMatchObject({
+    await expect(resolveConfigInputs(configPath, () => '// use prisma-8\n')).rejects.toMatchObject({
       name: 'CliStructuredError',
       code: 'CLI.UNEXPECTED',
     });
@@ -161,7 +161,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
       }),
     ]);
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.controlStack).toEqual({ scalarTypes: [], pslBlockDescriptors: {} });
   });
@@ -174,7 +174,9 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
       }),
     ]);
 
-    await expect(resolveConfigInputs('/abs/prisma.config.ts')).rejects.toMatchObject({
+    await expect(
+      resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n'),
+    ).rejects.toMatchObject({
       name: 'CliStructuredError',
       code: 'CONFIG.VALIDATION_FAILED',
     });
@@ -188,7 +190,9 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
       }),
     ]);
 
-    await expect(resolveConfigInputs('/abs/prisma.config.ts')).rejects.toMatchObject({
+    await expect(
+      resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n'),
+    ).rejects.toMatchObject({
       name: 'CliStructuredError',
       code: 'CONFIG.VALIDATION_FAILED',
     });
@@ -198,7 +202,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     mockLoadedConfig(loadedConfig('psl', ['/abs/schema.psl']));
     vi.spyOn(control, 'createControlStack').mockReturnValue(stubStack(['Int'], {}));
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.controlStack).toEqual({
       scalarTypes: ['Int'],
@@ -219,7 +223,7 @@ describe('control-stack input derivation', () => {
     mockLoadedConfig(loadedConfig('typescript', ['/abs/schema.psl']));
     const createControlStack = vi.spyOn(control, 'createControlStack');
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.controlStack).toEqual({ scalarTypes: [], pslBlockDescriptors: {} });
     expect(createControlStack).not.toHaveBeenCalled();
@@ -244,7 +248,7 @@ describe('control-stack input derivation', () => {
       stubStack(['Int', 'String'], pslBlockDescriptors),
     );
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.controlStack).toEqual({
       scalarTypes: ['Int', 'String'],
@@ -259,7 +263,9 @@ describe('control-stack input derivation', () => {
       throw new Error('boom');
     });
 
-    await expect(resolveConfigInputs('/abs/prisma.config.ts')).rejects.toThrow('boom');
+    await expect(
+      resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n'),
+    ).rejects.toThrow('boom');
   });
 });
 
@@ -275,7 +281,7 @@ describe('interpretation resolution', () => {
     mockLoadedConfig(config);
     vi.spyOn(control, 'createControlStack').mockReturnValue(stack);
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.interpretation).toBeDefined();
     expect(result.interpretation?.source).toBe(config.contract?.source);
@@ -296,7 +302,7 @@ describe('interpretation resolution', () => {
       .spyOn(control, 'createControlStack')
       .mockReturnValue(stubStackWithContext());
 
-    await resolveConfigInputs('/abs/prisma.config.ts');
+    await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(createControlStack).toHaveBeenCalledTimes(1);
   });
@@ -304,7 +310,7 @@ describe('interpretation resolution', () => {
   it('carries no interpretation for a typescript source', async () => {
     mockLoadedConfig(loadedConfig('typescript', ['/abs/contract.ts']));
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.interpretation).toBeUndefined();
   });
@@ -313,7 +319,7 @@ describe('interpretation resolution', () => {
     mockLoadedConfig(loadedConfig('psl', ['/abs/schema.prisma']));
     vi.spyOn(control, 'createControlStack').mockReturnValue(stubStack(['Int'], {}));
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.interpretation).toBeUndefined();
   });
@@ -321,7 +327,7 @@ describe('interpretation resolution', () => {
   it('carries no interpretation when the config has no contract', async () => {
     mockLoadedConfig({} as unknown as PrismaNextConfig);
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     expect(result.interpretation).toBeUndefined();
   });

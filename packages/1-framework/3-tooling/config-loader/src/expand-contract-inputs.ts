@@ -1,6 +1,16 @@
 import { matchesGlob, resolve } from 'pathe';
 import { glob, isDynamicPattern } from 'tinyglobby';
 
+const UNC_PREFIX_RE = /^(?:\\\\|\/\/)/;
+
+function isUncLike(entry: string): boolean {
+  return UNC_PREFIX_RE.test(entry);
+}
+
+function resolveLiteral(entry: string): string {
+  return isUncLike(entry) ? entry : resolve(entry);
+}
+
 /**
  * Expands a finalized contract source input list into its member file set:
  * absolute, deduped by canonical path, sorted. `patterns` must already be
@@ -31,7 +41,7 @@ export async function expandContractInputs(
     globPatterns.length === 0
       ? []
       : await glob(globPatterns, { absolute: true, onlyFiles: true, expandDirectories: false });
-  const canonical = new Set([...literals, ...globMatches].map((entry) => resolve(entry)));
+  const canonical = new Set([...literals, ...globMatches].map(resolveLiteral));
   return Array.from(canonical).sort();
 }
 
