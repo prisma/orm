@@ -1,8 +1,10 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import sqliteAdapter from '@internal/adapter-sqlite/control';
+import type { Contract } from '@internal/contract/types';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import sqlitePackRef from '@internal/target-sqlite/pack';
@@ -95,13 +97,9 @@ describe('a PSL date or time default is stored as its type standard text', () =>
     const result = await authorSqliteContractFromPsl(
       'model Event {\n  id Int @id\n  at DateTime @default("2024-01-01 01:00:00+01:00")\n}',
     );
-    expect(result.ok).toBe(true);
-    const table = result.ok
-      ? Object.values(result.value.storage.namespaces).flatMap((namespace) =>
-          Object.values(namespace.entries['table'] ?? {}),
-        )[0]
-      : undefined;
-    expect(table?.['columns']?.['at']?.default).toEqual(literal('2024-01-01T00:00:00Z'));
+    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+    const contract = result.value as Contract<SqlStorage>;
+    expect(findStorageColumn(contract, 'at')?.['default']).toEqual(literal('2024-01-01T00:00:00Z'));
   });
 
   it.each([
