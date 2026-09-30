@@ -470,7 +470,12 @@ function collectIdentifierExpression(
   }
   const resolution = source.binder.symbolForNode(identifier.syntax);
   const bareIdentifierTokenType = context.bareIdentifierTokenType;
-  if (resolution === undefined && bareIdentifierTokenType !== undefined) {
+  if (
+    (resolution === undefined ||
+      resolution.kind === 'unresolved' ||
+      resolution.kind === 'crossSpace') &&
+    bareIdentifierTokenType !== undefined
+  ) {
     tokens.push(rangeForIdentifier(identifier, bareIdentifierTokenType));
     return;
   }

@@ -1,13 +1,18 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
   type Binder,
   buildSymbolTable,
   entityRef,
+  fieldAttribute,
+  fieldRef,
   identifier,
+  list,
+  referencedFieldRef,
   type SymbolTable,
   structBlock,
 } from '@internal/psl-parser';
-import { type DocumentAst, parse, SourceFile } from '@internal/psl-parser/syntax';
+import { type DocumentAst, PslSources, parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
   buildSemanticTokens,
@@ -168,6 +173,45 @@ function sameModifiers(
 }
 
 describe('semantic token substrate', () => {
+  it('retains syntactic property highlighting for unresolved and cross-space field references', () => {
+    const source = parseSemanticTokenSource(
+      'model Owner { id Int @relation(fields: [missing])\n  external elsewhere:Other @relation(references: [remote])\n}',
+    );
+    const binder = testBinder({
+      sources: new PslSources([[source.document.syntax, source.sourceFile]]),
+      symbolTable: source.symbolTable,
+      scalarTypes,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'relations',
+          authoring: {
+            attributeSpecs: {
+              model: {},
+              field: {
+                relation: () =>
+                  fieldAttribute('relation', {
+                    documentation: '',
+                    named: {
+                      fields: { type: list(fieldRef()), documentation: '' },
+                      references: { type: list(referencedFieldRef()), documentation: '' },
+                    },
+                  }),
+              },
+            },
+          },
+        },
+      ]),
+    });
+    expect(
+      collectDetails({ ...source, binder }).filter(({ text }) =>
+        ['missing', 'remote'].includes(text),
+      ),
+    ).toEqual([
+      { text: 'missing', tokenType: 'property', modifiers: [], line: 0, character: 40 },
+      { text: 'remote', tokenType: 'property', modifiers: [], line: 1, character: 50 },
+    ]);
+  });
+
   it('distinguishes descriptor-bound entity references from unrestricted identifiers', () => {
     const source = parseSemanticTokenSource(
       `model Invoice { id Int }
