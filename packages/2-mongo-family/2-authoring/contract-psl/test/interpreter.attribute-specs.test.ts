@@ -194,6 +194,28 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
+  it('points @default(now()) at the temporal.createdAt() preset', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id        ObjectId @id @map("_id")
+          createdAt Int32    @default(now())
+          count     Int32    @default(0)
+        }
+      `),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Field "Item.createdAt" uses unsupported attribute "@default". To fill the timestamp on create, use `temporal.createdAt()` as the field type.',
+      }),
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Item.count" uses unsupported attribute "@default"',
+      }),
+    ]);
+  });
+
   it('reports an unregistered attribute on a composite-type field', () => {
     expect(
       diagnosticsOf(`

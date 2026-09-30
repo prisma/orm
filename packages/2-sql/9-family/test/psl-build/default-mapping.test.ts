@@ -50,6 +50,12 @@ const vector = dataType('pg/vector', {
   },
 });
 const blob = dataType('pg/bytea', {});
+const canonicalDate: Cast = (value) =>
+  typeof value === 'string' ? value.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : value;
+const date = dataType('pg/date', {
+  toCanonicalForm: canonicalDate,
+  casts: { [text.id]: canonicalDate },
+});
 
 const types: readonly DataType[] = [
   text,
@@ -63,6 +69,7 @@ const types: readonly DataType[] = [
   jsonb,
   vector,
   blob,
+  date,
 ];
 
 const classify = createNumberClassifier({
@@ -248,5 +255,20 @@ describe('mapDefault prints a stored value as the literal its column takes', () 
 
   it('writes nothing for a literal when no data types are given at all', () => {
     expect(mapDefault({ kind: 'literal', value: 'hello' })).toBeUndefined();
+  });
+});
+
+describe('mapDefault on a type with a canonical form', () => {
+  it('prints a stored value in its canonical form, element by element for a list', () => {
+    expect({
+      scalar: mapDefault({ kind: 'literal', value: '20240101' }, forColumn(date))?.attribute,
+      list: mapDefault(
+        { kind: 'literal', value: ['20240101', '2024-06-30'] },
+        forColumn(date, { list: true }),
+      )?.attribute,
+    }).toEqual({
+      scalar: '@default("2024-01-01")',
+      list: '@default(["2024-01-01", "2024-06-30"])',
+    });
   });
 });

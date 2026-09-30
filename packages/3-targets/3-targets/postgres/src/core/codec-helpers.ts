@@ -10,6 +10,7 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
+import { structuredError } from '@internal/utils/structured-error';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -392,9 +393,56 @@ const formatIsoDuration = ({ months, days, micros }: PgInterval): string => {
   return rendered === 'P' ? 'PT0S' : rendered;
 };
 
-/** Normalises any accepted ISO-8601 duration to the canonical spelling. */
-export const pgIntervalCanonical = (text: string): string =>
-  formatIsoDuration(intervalFieldsOf(text));
+/**
+ * An interval as PostgreSQL prints it under `IntervalStyle = 'postgres'`: `1 year 2 mons 3 days
+ * 04:05:06.5`, `-1 years -2 mons +3 days -04:00:00`, `00:00:00`.
+ */
+const POSTGRES_INTERVAL =
+  /^(?:([+-]?\d+) years? ?)?(?:([+-]?\d+) mons? ?)?(?:([+-]?\d+) days? ?)?(?:([+-])?(\d+):(\d{2}):(\d{2})(?:\.(\d+))?)?$/;
+
+function postgresIntervalFields(text: string): PgInterval | undefined {
+  const match = POSTGRES_INTERVAL.exec(text);
+  if (match === null || text === '' || text.endsWith(' ')) return undefined;
+  const [, years = '0', months = '0', days = '0', sign, hours = '0', minutes = '0', seconds = '0'] =
+    match;
+  const fraction = match[8] ?? '';
+  const magnitude =
+    (BigInt(hours) * 3_600n + BigInt(minutes) * 60n + BigInt(seconds)) * MICROS_PER_SECOND +
+    BigInt(fraction.padEnd(6, '0') || '0');
+  return {
+    months: Number(years) * 12 + Number(months),
+    days: Number(days),
+    micros: sign === '-' ? -magnitude : magnitude,
+  };
+}
+
+function intervalRefused(message: string): never {
+  throw structuredError('CONTRACT.CAST_REFUSED', message, {
+    why: 'pg/interval stores one canonical form for each interval (ADR 254), and reads ISO 8601 durations and the text PostgreSQL prints.',
+    fix: 'Write an ISO 8601 duration, as the message shows.',
+  });
+}
+
+/**
+ * The canonical form of `pg/interval` (ADR 254), from an ISO 8601 duration or the text PostgreSQL
+ * prints under `IntervalStyle = 'postgres'`.
+ */
+export function pgIntervalCanonical(text: string): string {
+  const fractionDigits = /\.(\d+)/.exec(text)?.[1]?.length ?? 0;
+  if (fractionDigits > 6) {
+    intervalRefused(
+      `"${text}" has ${fractionDigits} digits after the decimal point, but pg/interval holds microseconds, so at most 6. Round it, as in "PT1.123456S".`,
+    );
+  }
+  if (ISO_DURATION.test(text)) return formatIsoDuration(intervalFieldsOf(text));
+  const fields = postgresIntervalFields(text);
+  if (fields === undefined) {
+    intervalRefused(
+      `pg/interval cannot read "${text}". Write an ISO 8601 duration, as in "P1Y2M3DT4H5M6S".`,
+    );
+  }
+  return formatIsoDuration(fields);
+}
 
 /** Parses an ISO-8601 duration into the application value. */
 export const pgIntervalFromIso = (text: string): PgInterval => intervalFieldsOf(text);

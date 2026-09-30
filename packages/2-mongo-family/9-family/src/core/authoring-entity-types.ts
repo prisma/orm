@@ -53,7 +53,7 @@ export const mongoFamilyEnumEntityDescriptor = {
       if (bsonType === undefined || otherBsonTypes.length > 0) {
         diagnostics?.push({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" @@type codec "${codecId}" declares ${bsonTypes.length} BSON types; an enum needs exactly one`,
+          message: `enum "${block.name}" @@type codec "${codecId}" declares ${bsonTypes.length} BSON types; an enum needs exactly one. Use a codec with one BSON type, such as mongo/string@1.`,
           sourceId,
           span: codecSpan,
         });

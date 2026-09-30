@@ -1,7 +1,9 @@
+import type { MongoModelDefinition } from '@internal/mongo-contract';
 import type { MongoFilterExpr } from '@internal/mongo-query-ast/execution';
 
 export interface MongoIncludeExpr {
   readonly relationName: string;
+  readonly targetModel: MongoModelDefinition;
   readonly from: string;
   readonly localField: string;
   readonly foreignField: string;

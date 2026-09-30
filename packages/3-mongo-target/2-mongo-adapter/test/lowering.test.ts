@@ -492,6 +492,12 @@ describe('lowerAggExpr', () => {
     });
   });
 
+  it('wraps a parameter in $literal, since its encoded value is only known once it is resolved', () => {
+    const param = new MongoParamRef('plain', { codecId: 'mongo/string@1' });
+    expect(lowerAggExpr(MongoAggLiteral.of(param))).toEqual({ $literal: param });
+    expect(lowerAggExpr(MongoAggLiteral.of([param]))).toEqual({ $literal: [param] });
+  });
+
   it('wraps object with $-prefixed keys in $literal', () => {
     expect(lowerAggExpr(MongoAggLiteral.of({ $foo: 1 }))).toEqual({
       $literal: { $foo: 1 },

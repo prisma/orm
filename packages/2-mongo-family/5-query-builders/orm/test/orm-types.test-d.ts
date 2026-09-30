@@ -483,3 +483,12 @@ test('FieldExpression inc/mul restricted to numeric types', () => {
   void ({} as NumberExpr).inc(1);
   void ({} as NumberExpr).mul(2);
 });
+
+test('FieldExpression inc/mul on a bigint take a bigint', () => {
+  type BigintExpr = FieldExpression<bigint>;
+
+  expectTypeOf<Parameters<BigintExpr['inc']>>().toEqualTypeOf<[value: bigint]>();
+  expectTypeOf<Parameters<BigintExpr['mul']>>().toEqualTypeOf<[value: bigint]>();
+  // @ts-expect-error a bigint field is not incremented by a number
+  void ({} as BigintExpr).inc(1);
+});

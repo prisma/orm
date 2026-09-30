@@ -5,6 +5,7 @@ export type {
 export { findAuthoringTypeConstructorCall } from '../shared/authoring-type-constructor-call';
 export {
   checkUncomposedNamespace,
+  fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../shared/field-preset-resolution';
 export type {

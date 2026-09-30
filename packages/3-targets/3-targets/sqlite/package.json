@@ -32,10 +32,11 @@
   },
   "devDependencies": {
     "@internal/driver-sqlite": "workspace:8.0.0-rc.13",
-    "@repo/test-utils": "workspace:8.0.0-rc.13",
     "@internal/publish-surface": "workspace:8.0.0-rc.13",
+    "@repo/test-utils": "workspace:8.0.0-rc.13",
     "@repo/tsconfig": "workspace:8.0.0-rc.13",
     "@repo/tsdown": "workspace:8.0.0-rc.13",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

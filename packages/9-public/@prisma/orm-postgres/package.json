@@ -35,6 +35,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

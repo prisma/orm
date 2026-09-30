@@ -316,14 +316,9 @@ model Profile {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          message: expect.stringContaining('User.nonsense'),
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Nonsense"' },
+    ]);
   });
 
   it('matches named backrelations using positional and named relation forms', () => {

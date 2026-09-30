@@ -1,6 +1,7 @@
 export * from '../ast/adapter-types';
 export * from '../ast/codec-types';
 export * from '../ast/data-type-support';
+export * from '../ast/date-time-canonical-form';
 export * from '../ast/ddl-types';
 export * from '../ast/driver-types';
 export * from '../ast/json-value-projection';

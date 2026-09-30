@@ -83,10 +83,11 @@ import {
 import type { ConfigResolution } from '../src/config-resolution';
 import type { DocumentSnapshot } from '../src/document-snapshot';
 import { guardedConnection } from '../src/guarded-connection';
+import { CONFIG_LOAD_FAILED_CODE } from '../src/project';
 import { ProjectArtifacts, type ProjectArtifactsOptions } from '../src/project-artifacts';
 import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
-import { CONFIG_LOAD_FAILED_CODE, createServer } from '../src/server';
+import { createServer } from '../src/server';
 
 type ResolveInputs = (configPath: string) => Promise<ConfigResolution>;
 type FindNearestConfigPathForFile = (filePath: string) => Promise<string | undefined>;

@@ -123,10 +123,72 @@ function isWideningSchemaChange(
   const destProps = isPlainObject(dest['properties']) ? dest['properties'] : {};
   for (const field of Object.keys(originProps)) {
     if (!Object.hasOwn(destProps, field)) return false; // Property removed → destructive.
-    if (canonicalize(originProps[field]) !== canonicalize(destProps[field])) return false; // Property narrowed → destructive.
+    if (!admitsEverything(destProps[field], originProps[field])) return false; // Property narrowed → destructive.
   }
 
   return true;
+}
+
+function bsonTypeList(value: unknown): readonly unknown[] | undefined {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * Whether every value `origin` admits, `dest` admits too, for the property schemas Prisma derives: `{}` admits every value, a `bsonType` list may gain types, and an array's `items` may admit more. Any other difference is treated as narrowing.
+ */
+function admitsEverything(dest: unknown, origin: unknown): boolean {
+  if (canonicalize(dest) === canonicalize(origin)) return true;
+  if (!isPlainObject(dest) || !isPlainObject(origin)) return false;
+  if (Object.keys(dest).length === 0) return true;
+  for (const key of new Set([...Object.keys(origin), ...Object.keys(dest)])) {
+    if (key === 'bsonType') {
+      const destTypes = bsonTypeList(dest['bsonType']);
+      const originTypes = bsonTypeList(origin['bsonType']);
+      if (destTypes === undefined) continue;
+      if (originTypes === undefined || !originTypes.every((type) => destTypes.includes(type))) {
+        return false;
+      }
+      continue;
+    }
+    if (key === 'items') {
+      if (!admitsEverything(dest['items'] ?? {}, origin['items'] ?? {})) return false;
+      continue;
+    }
+    if (canonicalize(origin[key]) !== canonicalize(dest[key])) return false;
+  }
+  return true;
+}
+
+function propertiesOf(schema: Record<string, unknown>): Record<string, unknown> {
+  return isPlainObject(schema['properties']) ? schema['properties'] : {};
+}
+
+/**
+ * A label naming the properties whose schema changed, so a dry run shows what a validator update does: `Update validator on items (changed: meta; added: note)`.
+ */
+function validatorUpdateLabel(
+  collName: string,
+  origin: MongoSchemaValidator,
+  dest: MongoSchemaValidator,
+): string {
+  const originProps = propertiesOf(origin.jsonSchema);
+  const destProps = propertiesOf(dest.jsonSchema);
+  const changed = Object.keys(destProps).filter(
+    (field) =>
+      Object.hasOwn(originProps, field) &&
+      canonicalize(originProps[field]) !== canonicalize(destProps[field]),
+  );
+  const added = Object.keys(destProps).filter((field) => !Object.hasOwn(originProps, field));
+  const removed = Object.keys(originProps).filter((field) => !Object.hasOwn(destProps, field));
+  const parts = [
+    ...(changed.length > 0 ? [`changed: ${changed.join(', ')}`] : []),
+    ...(added.length > 0 ? [`added: ${added.join(', ')}`] : []),
+    ...(removed.length > 0 ? [`removed: ${removed.join(', ')}`] : []),
+  ];
+  return parts.length === 0
+    ? `Update validator on ${collName}`
+    : `Update validator on ${collName} (${parts.join('; ')})`;
 }
 
 function hasImmutableOptionChange(
@@ -278,6 +340,7 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
           kind: 'policy-violation',
           summary: `${call.operationClass} operation disallowed: ${call.label}`,
           why: `Policy does not allow '${call.operationClass}' operations`,
+          refusedOperationClass: call.operationClass,
         });
       }
     }
@@ -367,7 +430,9 @@ function planValidatorDiffCall(
       },
       {
         id: `validator.${collName}.${originValidator ? 'update' : 'add'}`,
-        label: `${originValidator ? 'Update' : 'Add'} validator on ${collName}`,
+        label: originValidator
+          ? validatorUpdateLabel(collName, originValidator, destValidator)
+          : `Add validator on ${collName}`,
         operationClass,
       },
     );

@@ -14,6 +14,8 @@ export interface ContractPrintOptions {
   readonly contractConfig: ContractConfig;
   /** The line under the `// use prisma-8` marker saying where the file came from. */
   readonly description: string;
+  /** The directory a source error shows its locations relative to. */
+  readonly cwd: string;
   readonly signal?: AbortSignal;
 }
 
@@ -44,12 +46,13 @@ export async function executeContractPrint(
   options: ContractPrintOptions,
   dependencies: ContractPrintDependencies = defaultContractPrintDependencies,
 ): Promise<ContractPrintResult> {
-  const { config, contractConfig, description, signal } = options;
+  const { config, contractConfig, description, cwd, signal } = options;
   const stack = createControlStack(config);
   const sourceWarnings: ContractSourceDiagnostic[] = [];
   const loaded = await loadContractSourceWithStack({
     stack,
     source: contractConfig.source,
+    cwd,
     ...ifDefined('signal', signal),
     reportWarning: (diagnostic) => {
       sourceWarnings.push(diagnostic);

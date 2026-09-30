@@ -1,7 +1,8 @@
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
-import { MongoParamRef } from '@internal/mongo-value';
+import { MongoParamRef, type MongoValue } from '@internal/mongo-value';
 import { buildStandardCodecRegistry } from '@internal/target-mongo/codecs';
 import { isStructuredError, structuredError } from '@internal/utils/structured-error';
+import { Binary, BSONRegExp, Decimal128, Double, Long, MinKey, ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { resolveValue } from '../src/resolve-value';
 
@@ -81,6 +82,31 @@ describe('resolveValue', () => {
     const result = (await resolveValue(arr, testRegistry(), noCtx)) as unknown[];
     expect(result[0]).toBe('A');
     expect(result[1]).toBe('b');
+  });
+
+  it('passes the driver`s BSON values, bytes and regular expressions through unchanged, at any depth', async () => {
+    const values = {
+      id: new ObjectId('65f0000000000000000000ab'),
+      long: Long.fromBigInt(2n ** 60n),
+      decimal: Decimal128.fromString('1.5'),
+      double: new Double(2),
+      binary: new Binary(new Uint8Array([1])),
+      bytes: new Uint8Array([2]),
+      pattern: /a+/i,
+      bsonPattern: new BSONRegExp('b', 'm'),
+      nested: [{ min: new MinKey() }],
+    };
+    const resolved = (await resolveValue(
+      values as unknown as MongoValue,
+      emptyRegistry(),
+      noCtx,
+    )) as typeof values;
+    expect(resolved).not.toBe(values);
+    for (const key of Object.keys(values) as (keyof typeof values)[]) {
+      if (key === 'nested') continue;
+      expect(resolved[key]).toBe(values[key]);
+    }
+    expect(resolved.nested[0]?.min).toBe(values.nested[0]?.min);
   });
 
   it('preserves null, primitive, and Date values', async () => {

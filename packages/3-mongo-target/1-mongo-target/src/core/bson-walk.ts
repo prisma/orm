@@ -1,4 +1,5 @@
 import { blindCast } from '@internal/utils/casts';
+import { MinKey } from 'bson';
 
 export function where(path: string): string {
   return path === '' ? 'the root' : path;
@@ -15,6 +16,16 @@ export function isPlainObject(value: object): boolean {
 
 export function isPlainArray(value: object): value is readonly unknown[] {
   return Array.isArray(value) && Object.getPrototypeOf(value) === Array.prototype;
+}
+
+const BSON_VERSION = Symbol.for('@@mdb.bson.version');
+
+/** The major version of the `bson` this package loads, which every `bson` class instance it can serialise carries. */
+export const BSON_MAJOR: unknown = Reflect.get(new MinKey(), BSON_VERSION);
+
+/** Whether a `bson` class instance comes from the same major version of `bson`, rather than being a look-alike or from another version. */
+export function createdByBsonMajor(value: object): boolean {
+  return Reflect.get(value, BSON_VERSION) === BSON_MAJOR;
 }
 
 export function bsonTypeTag(value: object): string | undefined {

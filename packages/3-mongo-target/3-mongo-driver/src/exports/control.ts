@@ -15,6 +15,10 @@ export class MongoControlDriver extends MongoDriverImpl implements MongoControlD
     super(db, mongoClient);
     this.db = db;
   }
+
+  async databaseName(): Promise<string> {
+    return this.db.databaseName;
+  }
 }
 
 const mongoControlDriverDescriptor: ControlDriverDescriptor<'mongo', 'mongo', MongoControlDriver> =

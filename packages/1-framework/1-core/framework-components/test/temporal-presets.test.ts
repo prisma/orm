@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkUncomposedNamespace,
+  fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../src/shared/field-preset-resolution';
 import {
@@ -125,6 +126,21 @@ describe('getAuthoringFieldPreset', () => {
     expect(getAuthoringFieldPreset(contributions, ['temporal'])).toBeUndefined();
     expect(getAuthoringFieldPreset(contributions, ['temporal', 'deletedAt'])).toBeUndefined();
     expect(getAuthoringFieldPreset(undefined, ['temporal', 'createdAt'])).toBeUndefined();
+  });
+});
+
+describe('fieldPresetSpellings', () => {
+  it('lists every preset under the namespace with its arguments, nested namespaces included', () => {
+    const stamp = temporalCodecPreset({ codecId: 'test/date@1', nativeType: 'date' });
+    const nested = { field: { ext: { stamp, clock: { created: temporal.createdAt } } } };
+    expect(fieldPresetSpellings(nested, 'ext')).toEqual([
+      'ext.stamp(onCreate, onUpdate)',
+      'ext.clock.created()',
+    ]);
+  });
+
+  it('lists nothing for a namespace that holds no preset at any depth', () => {
+    expect(fieldPresetSpellings({ field: { ext: { empty: {} } } }, 'ext')).toEqual([]);
   });
 });
 
