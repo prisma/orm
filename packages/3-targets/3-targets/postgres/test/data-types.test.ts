@@ -128,12 +128,29 @@ describe('what each cast converts', () => {
     ['pg/json to pg/jsonb, the document unchanged', pgJsonb, pgJson.id, { a: [1] }, { a: [1] }],
     ['pg/text to pg/uuid, the text unchanged', pgUuid, pgText.id, 'abc', 'abc'],
     [
-      'pg/text to pg/timestamp, the text unchanged',
+      'pg/text to pg/timestamp, the text to its canonical form',
       pgTimestamp,
       pgText.id,
-      '2020-01-01',
-      '2020-01-01',
+      '2020-01-01 12:00:00',
+      '2020-01-01T12:00:00',
     ],
+    [
+      'pg/text to pg/timestamptz, the instant in UTC',
+      pgTimestamptz,
+      pgText.id,
+      '2020-01-01T01:00:00.000+01:00',
+      '2020-01-01T00:00:00Z',
+    ],
+    ['pg/text to pg/date, a BC year signed', pgDate, pgText.id, '0044-03-15 BC', '-000043-03-15'],
+    ['pg/text to pg/time, trailing zeros dropped', pgTime, pgText.id, '12:00:00.50', '12:00:00.5'],
+    [
+      'pg/text to pg/timetz, the offset in full',
+      pgTimetz,
+      pgText.id,
+      '12:00:00+02',
+      '12:00:00+02:00',
+    ],
+    ['pg/text to pg/interval, the ISO duration', pgInterval, pgText.id, '1 day', 'P1D'],
   ])('%s', (_name, type, source, value, converted) => {
     expect(type.casts[source]?.(value)).toEqual(converted);
   });
@@ -161,6 +178,8 @@ describe('what each cast converts', () => {
     ['a value in a shape the source type does not store', pgInt8, pgInt2.id, 'not a number'],
     ['a magnitude no double holds', pgFloat8, pgNumeric.id, '1'.padEnd(400, '0')],
     ['a magnitude no float4 holds', pgFloat4, pgNumeric.id, '3.5e38'],
+    ['a date that does not exist', pgDate, pgText.id, '2024-02-30'],
+    ['a timestamp with an offset', pgTimestamp, pgText.id, '2024-01-01T00:00:00Z'],
   ])('refuses %s with a cast-level code', (_name, type, source, value) => {
     expect(() => type.casts[source]?.(value)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),

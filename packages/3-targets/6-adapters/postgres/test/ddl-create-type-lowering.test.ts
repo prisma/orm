@@ -1,6 +1,6 @@
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresCreateType, PostgresDropType } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 import type { PostgresContract } from '../src/core/types';
 

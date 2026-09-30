@@ -27,7 +27,9 @@ export const geometryColumn = {
  */
 export function geometry<S extends number>(options: {
   readonly srid: S;
-}): ColumnTypeDescriptor & { readonly typeParams: { readonly srid: S } } {
+}): ColumnTypeDescriptor<typeof POSTGIS_GEOMETRY_CODEC_ID> & {
+  readonly typeParams: { readonly srid: S };
+} {
   const { srid } = options;
   if (!Number.isInteger(srid) || srid < 0) {
     throw postgisError(

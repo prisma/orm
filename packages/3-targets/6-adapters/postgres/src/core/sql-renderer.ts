@@ -219,12 +219,7 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     : '';
   const havingClause = ast.having ? `HAVING ${renderWhere(ast.having, contract, pim)}` : '';
   const orderClause = ast.orderBy?.length
-    ? `ORDER BY ${ast.orderBy
-        .map((order) => {
-          const expr = renderExpr(order.expr, contract, pim);
-          return `${expr} ${order.dir.toUpperCase()}`;
-        })
-        .join(', ')}`
+    ? `ORDER BY ${renderOrderByItems(ast.orderBy, contract, pim)}`
     : '';
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
@@ -635,8 +630,25 @@ function renderOrderByItems(
   pim: ParamIndexMap,
 ): string {
   return items
-    .map((item) => `${renderExpr(item.expr, contract, pim)} ${item.dir.toUpperCase()}`)
+    .map(
+      (item) =>
+        `${renderExpr(item.expr, contract, pim)}${ORDER_DIRECTION_SQL[item.dir]}${renderNullsPlacement(item)}`,
+    )
     .join(', ');
+}
+
+const ORDER_DIRECTION_SQL: Readonly<Record<OrderByItem['dir'], string>> = {
+  asc: ' ASC',
+  desc: ' DESC',
+};
+
+const ORDER_NULLS_SQL: Readonly<Record<NonNullable<OrderByItem['nulls']>, string>> = {
+  first: ' NULLS FIRST',
+  last: ' NULLS LAST',
+};
+
+function renderNullsPlacement(item: OrderByItem): string {
+  return item.nulls === undefined ? '' : ORDER_NULLS_SQL[item.nulls];
 }
 
 function renderJsonArrayAggExpr(

@@ -27,6 +27,8 @@ Manual QA reads:
 
 A clean pre-QA tree means `pnpm typecheck && pnpm test:packages && pnpm fixtures:check` all green. QA against an unverified tree wastes the runner's time discovering broken assertions that a 1-minute `pnpm test:packages` would have surfaced.
 
+When the QA project installs published builds made from `main` (for example a package's `dev` dist-tag), merge the current `origin/main` into the branch, rebuild every workspace package the run executes (`pnpm build`, or `pnpm --filter <package> build` for each one), and run the rebuilt binary, not one installed earlier. A branch that is behind `main`, run against packages built from a later `main`, fails in ways neither side fails alone. (Added 2026-09-24: a Prisma 7 schema check on a branch based on a week-old `main` refused `@default(false)`, because the branch's CLI lacked a lookup the `dev` target package expected. The same run on the merged branch passed.)
+
 ## Sample coherence, not just placement, for content-preamble dispatches
 
 Symptom seen during the drive trial (project `orchestrator-role`): a dispatch added a uniform delegated-execution preamble across 19 atomic skills. Manual-QA dry-run sampled preamble placement (right line, right format, cross-link resolves) — found nothing wrong. Reviewer (CodeRabbit) then surfaced three "critical" findings on stop-condition coherence: the preamble's "STOP. Dispatch on Read/Grep/Glob" rule contradicted skill bodies whose Step 2 explicitly required Read/Grep/Glob investigation as the default first step.

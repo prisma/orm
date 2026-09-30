@@ -98,7 +98,7 @@ export function useDevDatabase(options?: {
 
   afterAll(async () => {
     await close();
-  });
+  }, timeouts.spinUpPpgDev);
 
   return {
     get connectionString() {
@@ -198,6 +198,7 @@ export const contractFixtures = {
     'contract-nullable-name-required.ts',
   ),
   'contract-expression-authored': join(JOURNEY_FIXTURES_DIR, 'contract-expression-authored.ts'),
+  'contract-date-time-defaults': join(JOURNEY_FIXTURES_DIR, 'contract-date-time-defaults.ts'),
 } as const;
 
 export type ContractVariant = keyof typeof contractFixtures;
@@ -290,6 +291,14 @@ export async function runContractInfer(
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
   return runOnEngine(ctx, ['contract', 'infer', ...extraArgs], options);
+}
+
+export async function runContractPrint(
+  ctx: JourneyContext,
+  extraArgs: readonly string[] = [],
+  options?: RunCommandOptions,
+): Promise<EngineCommandResult> {
+  return runOnEngine(ctx, ['contract', 'print', ...extraArgs], options);
 }
 
 export async function runDbInit(

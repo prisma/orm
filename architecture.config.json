@@ -691,6 +691,24 @@
       "plane": "migration"
     },
     {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/core/*.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "shared"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/core/migrations/**",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
+      "glob": "packages/3-mongo-target/1-mongo-target/src/exports/control.ts",
+      "domain": "extensions",
+      "layer": "targets",
+      "plane": "migration"
+    },
+    {
       "glob": "packages/3-mongo-target/1-mongo-target/src/exports/pack.ts",
       "domain": "extensions",
       "layer": "targets",
@@ -725,12 +743,6 @@
       "domain": "targets",
       "layer": "adapters",
       "plane": "runtime"
-    },
-    {
-      "glob": "packages/3-mongo-target/2-mongo-adapter/src/exports/codec-types.ts",
-      "domain": "targets",
-      "layer": "adapters",
-      "plane": "shared"
     },
     {
       "glob": "packages/3-mongo-target/3-mongo-driver/**",

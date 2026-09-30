@@ -1,10 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { CliStructuredError } from '@internal/errors/control';
 import { PrimaryKey } from '@internal/sql-schema-ir/types';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { parseSqliteDefault } from '@internal/target-sqlite/default-normalizer';
 import { normalizeSqliteNativeType } from '@internal/target-sqlite/native-type-normalizer';
 import { describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
 
 function createMemoryDriver() {

@@ -18,7 +18,16 @@ import {
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from './codec-ids';
-import { pgDate, pgTime, pgTimestamp, pgTimestamptz } from './data-types';
+import {
+  pgDate,
+  pgDateCanonical,
+  pgTime,
+  pgTimeCanonical,
+  pgTimestamp,
+  pgTimestampCanonical,
+  pgTimestamptz,
+  pgTimestamptzCanonical,
+} from './data-types';
 import {
   PG_DATE_NATIVE_TYPE,
   PG_TIME_NATIVE_TYPE,
@@ -47,7 +56,7 @@ export class PgDateTemporalCodec extends CodecImpl<
     return pgDateTemporalDecode(wire);
   }
   encodeJson(value: Temporal.PlainDate): JsonValue {
-    return pgDateTemporalEncode(value);
+    return pgDateCanonical(pgDateTemporalEncode(value));
   }
   decodeJson(json: JsonValue): Temporal.PlainDate {
     return pgDateTemporalDecode(
@@ -94,7 +103,7 @@ export class PgTimestampTemporalCodec extends CodecImpl<
     return pgTimestampTemporalDecode(wire);
   }
   encodeJson(value: Temporal.PlainDateTime): JsonValue {
-    return pgTimestampTemporalEncode(value);
+    return pgTimestampCanonical(pgTimestampTemporalEncode(value));
   }
   decodeJson(json: JsonValue): Temporal.PlainDateTime {
     return pgTimestampTemporalDecode(
@@ -151,7 +160,7 @@ export class PgTimestamptzTemporalCodec extends CodecImpl<
     return pgTimestamptzTemporalDecode(wire);
   }
   encodeJson(value: Temporal.Instant): JsonValue {
-    return pgTimestamptzTemporalEncode(value);
+    return pgTimestamptzCanonical(pgTimestamptzTemporalEncode(value));
   }
   decodeJson(json: JsonValue): Temporal.Instant {
     return pgTimestamptzTemporalDecode(
@@ -208,7 +217,7 @@ export class PgTimeTemporalCodec extends CodecImpl<
     return pgTimeTemporalDecode(wire);
   }
   encodeJson(value: Temporal.PlainTime): JsonValue {
-    return pgTimeTemporalEncode(value);
+    return pgTimeCanonical(pgTimeTemporalEncode(value));
   }
   decodeJson(json: JsonValue): Temporal.PlainTime {
     return pgTimeTemporalDecode(

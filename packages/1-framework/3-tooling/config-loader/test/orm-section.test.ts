@@ -48,7 +48,7 @@ describe('the orm section', () => {
   });
 
   it('supplies the default contract output next to the default source directory', () => {
-    const raw = validRaw({ contract: { source: { load: () => ({}) } } });
+    const raw = validRaw({ contract: { source: { format: 'typescript', load: () => ({}) } } });
 
     const result = validateOrmSection(raw, provenanceFor(raw));
 
@@ -90,7 +90,11 @@ describe('the orm section', () => {
   it('resolves glob pattern inputs against the config file and keeps the pattern', () => {
     const raw = validRaw({
       contract: {
-        source: { load: () => ({}), inputs: ['./prisma/**/*.prisma', './extra.prisma'] },
+        source: {
+          format: 'psl',
+          load: () => ({}),
+          inputs: ['./prisma/**/*.prisma', './extra.prisma'],
+        },
       },
     });
 
@@ -184,9 +188,20 @@ describe('the orm section', () => {
 
   it('reports contract problems under contract fields', () => {
     expect(
-      fields(validRaw({ contract: { source: { inputs: ['a', 1], load: () => ({}) }, output: 3 } })),
+      fields(
+        validRaw({
+          contract: { source: { format: 'psl', inputs: ['a', 1], load: () => ({}) }, output: 3 },
+        }),
+      ),
     ).toEqual(['contract.source.inputs.1', 'contract.output']);
     expect(fields(validRaw({ contract: {} }))).toEqual(['contract.source']);
+  });
+
+  it.each([
+    ['no format', { load: () => ({}) }],
+    ['a format other than psl or typescript', { format: 'prisma7', load: () => ({}) }],
+  ])('reports a contract source with %s', (_label, source) => {
+    expect(fields(validRaw({ contract: { source } }))).toEqual(['contract.source.format']);
   });
 
   it('reports migrations and formatter problems', () => {
@@ -232,7 +247,7 @@ describe('the orm section', () => {
   it('keeps fields the schema does not name, on descriptors and on the contract source', () => {
     const raw = validRaw({
       family: { ...(validRaw()['family'] as object), manifest: { note: 1 } },
-      contract: { source: { load: () => ({}), dialect: 'sql' } },
+      contract: { source: { format: 'typescript', load: () => ({}), dialect: 'sql' } },
     });
 
     const result = validateOrmSection(raw, provenanceFor(raw));

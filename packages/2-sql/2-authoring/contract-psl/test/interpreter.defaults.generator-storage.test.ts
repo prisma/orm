@@ -68,7 +68,7 @@ id Uuid @id @default(uuid())
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'F', column: 'id' },
+        ref: { namespace: 'public', entry: 'F', field: 'id' },
         onCreate: { kind: 'generator', id: 'uuidv4' },
       },
     ]);
@@ -112,7 +112,7 @@ id Char(30) @id @default(cuid(2))
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'M', column: 'id' },
+        ref: { namespace: 'public', entry: 'M', field: 'id' },
         onCreate: { kind: 'generator', id: 'cuid2' },
       },
     ]);
@@ -134,7 +134,7 @@ id String @id @default(uuid())
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'L', column: 'id' },
+        ref: { namespace: 'public', entry: 'L', field: 'id' },
         onCreate: { kind: 'generator', id: 'uuidv4' },
       },
     ]);
@@ -186,7 +186,7 @@ ref String @default(cuid(2))
     expect(result.value.execution?.mutations.defaults).toEqual(
       expect.arrayContaining([
         {
-          ref: { namespace: 'public', table: 'N', column: 'sized' },
+          ref: { namespace: 'public', entry: 'N', field: 'sized' },
           onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
         },
       ]),

@@ -4,6 +4,7 @@ import type { AnyCommand, RedirectSpec } from '@prisma/cli-engine';
 import { defineCommandFamily } from '@prisma/cli-engine';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
+import { contractPrintCommand } from './contract/print';
 import { dbInitCommand } from './db/init';
 import { dbSchemaCommand } from './db/schema';
 import { dbSignCommand } from './db/sign';
@@ -32,6 +33,7 @@ import { refSetCommand } from './ref/set';
 const DOCS_BASE_URL = `${DOCS_BASE}/`;
 
 const commands: Readonly<Record<string, AnyCommand>> = {
+  'contract print': contractPrintCommand,
   'contract emit': contractEmitCommand,
   'contract format': formatCommand,
   'contract infer': contractInferCommand,

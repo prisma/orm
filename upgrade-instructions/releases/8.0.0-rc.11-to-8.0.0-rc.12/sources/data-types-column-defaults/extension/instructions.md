@@ -265,7 +265,7 @@ Assembly refuses two entries claiming one tag or one plain form with `CONTRACT.D
 
 ## `map-default-takes-data-types`
 
-`mapDefault` (`@internal/family-sql/psl-infer`) classifies the stored value with the same rules a written value uses, confirms the column's type takes it, prints it with the classified type's authoring entry, and reads the text straight back. `DefaultMappingOptions` lost `literalTypes` and gained:
+`mapDefault` (`@internal/family-sql/psl-ast`) classifies the stored value with the same rules a written value uses, confirms the column's type takes it, prints it with the classified type's authoring entry, and reads the text straight back. `DefaultMappingOptions` lost `literalTypes` and gained:
 
 - `dataTypeEntries` — the stack's authoring entries, keyed by data type id;
 - `dataTypes` — a `DataTypeLookup` over the stack's types, whose casts say what each one takes;

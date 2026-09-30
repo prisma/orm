@@ -42,20 +42,6 @@ describe('hasPslInterpreter', () => {
     expect(hasPslInterpreter(source)).toBe(false);
   });
 
-  it('rejects an opaque provider with an unknown format carrying interpret', () => {
-    const provider = { format: 'made-up-format', load, interpret: () => [] };
-    const source: ContractSourceProvider = provider;
-
-    expect(hasPslInterpreter(source)).toBe(false);
-  });
-
-  it('rejects a provider without a format', () => {
-    const provider = { load, interpret: () => [] };
-    const source: ContractSourceProvider = provider;
-
-    expect(hasPslInterpreter(source)).toBe(false);
-  });
-
   it('rejects a psl provider without an interpret method', () => {
     const source: ContractSourceProvider = { format: 'psl', load };
 

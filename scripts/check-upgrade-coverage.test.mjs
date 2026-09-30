@@ -99,6 +99,54 @@ describe('version and format helpers', () => {
   });
 });
 
+function commitEmptyFiles(count, pathOf) {
+  const emptyBlob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
+    cwd: repo,
+    input: '',
+    encoding: 'utf8',
+  }).trim();
+  const entries = Array.from(
+    { length: count },
+    (_, index) => `100644 ${emptyBlob}\t${pathOf(index)}`,
+  );
+  execFileSync('git', ['update-index', '--index-info'], {
+    cwd: repo,
+    input: `${entries.join('\n')}\n`,
+  });
+  git('commit', '-qm', 'bulk');
+}
+function listingBytes(...args) {
+  return execFileSync('git', args, { cwd: repo, maxBuffer: 64 * 1024 * 1024 }).length;
+}
+
+describe('repository size', () => {
+  it('checks a change whose files outside the directories it reads list to more than 1 MiB', () => {
+    const base = commit();
+    commitEmptyFiles(16_000, (index) => `bulk/${'x'.repeat(60)}-${index}.txt`);
+    assert.ok(listingBytes('ls-tree', '-r', '-z', 'HEAD') > 1024 * 1024);
+    assert.ok(listingBytes('diff', '--name-only', '-z', base, 'HEAD') > 1024 * 1024);
+
+    passes(base);
+  });
+  it('checks a change whose files inside a directory it reads list to more than 1 MiB', () => {
+    const base = commit();
+    commitEmptyFiles(16_000, (index) => `examples/demo/test/${'x'.repeat(60)}-${index}.ts`);
+    assert.ok(
+      listingBytes('diff', '--name-only', '-z', base, 'HEAD', '--', 'examples/') > 1024 * 1024,
+    );
+
+    passes(base);
+  });
+  it('still requires a declaration when the change outside the directories it reads is large', () => {
+    const base = commit();
+    write('examples/demo.ts', 'changed');
+    git('add', '-A');
+    commitEmptyFiles(16_000, (index) => `bulk/${'x'.repeat(60)}-${index}.txt`);
+
+    fails(base, /per-pr-declaration/);
+  });
+});
+
 describe('independent PR declarations', () => {
   for (const [audience, changedFile] of [
     ['app', 'examples/demo.ts'],

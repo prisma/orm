@@ -1,8 +1,9 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { describe, expect, it, vi } from 'vitest';
-import { blockAttribute, str } from '../src/exports';
+import { blockAttribute, interpretExtensionBlocks, str, structBlock } from '../src/exports';
 import { parse } from '../src/parse';
 import { type BlockSymbol, buildSymbolTable } from '../src/symbol-table';
+import { supportBinder } from './support';
 
 const locations = [
   { namespace: undefined, name: 'Gear' },
@@ -36,7 +37,7 @@ function fixture(
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      parameters: {},
+      spec: () => structBlock({ parameters: {} }),
       attributes: { map: factory },
     },
   };
@@ -49,13 +50,29 @@ function fixture(
   const result = buildSymbolTable({
     documents: [document],
     sources,
+  });
+  const blocks = interpretExtensionBlocks({
+    symbolTable: result.symbolTable,
+    sources,
     pslBlockDescriptors: descriptors,
+    binder: supportBinder({
+      sources,
+      symbolTable: result.symbolTable,
+      pslBlockDescriptors: descriptors,
+    }),
   });
   const scope =
     namespace === undefined
       ? result.symbolTable.topLevel
       : result.symbolTable.topLevel.namespaces[namespace];
-  return { ...result, scope, block: scope?.blocks[name], factory, interpretedSymbols };
+  return {
+    ...result,
+    diagnostics: [...result.diagnostics, ...blocks.diagnostics],
+    scope,
+    block: scope?.blocks[name],
+    factory,
+    interpretedSymbols,
+  };
 }
 
 describe.each(locations)(
@@ -81,8 +98,8 @@ describe.each(locations)(
           message: `Duplicate attribute "@@map" in "widget" block "${name}"; first occurrence wins`,
         },
       ]);
-      expect(result.block?.block.attributes['map']?.args).toEqual({ name: 'first' });
-      expect(result.factory).toHaveBeenCalledTimes(1);
+      expect(result.factory).toHaveBeenCalledTimes(3);
+      expect(result.interpretedSymbols).toHaveLength(1);
       expect(result.scope && Object.hasOwn(result.scope.blocks, name)).toBe(true);
     });
 
@@ -92,8 +109,7 @@ describe.each(locations)(
         'PSL_INVALID_ATTRIBUTE_SYNTAX',
         'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
       ]);
-      expect(result.block?.block.attributes).toEqual({});
-      expect(result.factory).toHaveBeenCalledTimes(1);
+      expect(result.factory).toHaveBeenCalledTimes(3);
     });
 
     it('interprets only the first accepted block declaration', () => {
@@ -101,8 +117,7 @@ describe.each(locations)(
       expect(result.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
         { code: 'PSL_DUPLICATE_DECLARATION', message: `Duplicate declaration of "${name}"` },
       ]);
-      expect(result.block?.block.attributes['map']?.args).toEqual({ name: 'first' });
-      expect(result.factory).toHaveBeenCalledTimes(1);
+      expect(result.factory).toHaveBeenCalledTimes(2);
       expect(result.interpretedSymbols).toHaveLength(1);
       expect(result.interpretedSymbols[0]).toBe(result.block);
     });

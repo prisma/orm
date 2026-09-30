@@ -129,7 +129,7 @@ describe('SQLite adapter', () => {
     it('renders neither LIMIT nor OFFSET when neither is set', () => {
       const ast = SelectAst.from(TableSource.named('user'))
         .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
-        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc')]);
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc', undefined)]);
 
       const { sql } = adapter.lower(ast, { contract });
       expect(sql).toBe('SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" ASC');
@@ -138,7 +138,7 @@ describe('SQLite adapter', () => {
     it('renders LIMIT alone when only limit is set', () => {
       const ast = SelectAst.from(TableSource.named('user'))
         .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
-        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc')])
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc', undefined)])
         .withLimit(10);
 
       const { sql } = adapter.lower(ast, { contract });
@@ -148,7 +148,7 @@ describe('SQLite adapter', () => {
     it('renders LIMIT -1 OFFSET n when only offset is set, since SQLite has no standalone OFFSET clause', () => {
       const ast = SelectAst.from(TableSource.named('user'))
         .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
-        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc')])
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc', undefined)])
         .withOffset(5);
 
       const { sql } = adapter.lower(ast, { contract });
@@ -160,7 +160,7 @@ describe('SQLite adapter', () => {
     it('renders ORDER BY, LIMIT, OFFSET unchanged when both are set', () => {
       const ast = SelectAst.from(TableSource.named('user'))
         .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
-        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc')])
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc', undefined)])
         .withLimit(10)
         .withOffset(5);
 
@@ -186,7 +186,7 @@ describe('SQLite adapter', () => {
           'rn',
           WindowFuncExpr.rowNumber({
             partitionBy: [ColumnRef.of('post', 'title')],
-            orderBy: [new OrderByItem(ColumnRef.of('post', 'views'), 'desc')],
+            orderBy: [new OrderByItem(ColumnRef.of('post', 'views'), 'desc', undefined)],
           }),
         ),
       ]);
@@ -215,7 +215,7 @@ describe('SQLite adapter', () => {
             '__prisma_distinct_rn',
             WindowFuncExpr.rowNumber({
               partitionBy: [ColumnRef.of('post', 'title')],
-              orderBy: [new OrderByItem(ColumnRef.of('post', 'title'), 'asc')],
+              orderBy: [new OrderByItem(ColumnRef.of('post', 'title'), 'asc', undefined)],
             }),
           ),
         ])

@@ -1,5 +1,5 @@
-import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/family-sql/control';
 import { timestampNowRuntimeGenerator } from '@internal/family-sql/runtime';
+import { TIMESTAMP_NOW_GENERATOR_ID } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringFieldPresets } from '../src/core/authoring';
 import { INSTANT_NOW_GENERATOR_ID, instantNow } from '../src/core/instant-now-generator';

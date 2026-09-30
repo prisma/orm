@@ -13,6 +13,7 @@ import type {
   ModelLike,
 } from '@internal/sql-contract-ts/contract-builder';
 import { buildBoundContract } from '@internal/sql-contract-ts/contract-builder';
+import { assemblePostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import type { RlsEntityHandle } from './rls';
@@ -114,7 +115,13 @@ export function defineContract(
     readonly enums?: EnumsConstraint;
   },
 ): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
-  const bound = { ...definition, createNamespace: postgresCreateNamespace };
+  const bound = {
+    ...definition,
+    createNamespace: postgresCreateNamespace,
+    codecLookup:
+      definition.codecLookup ??
+      assemblePostgresCodecRegistryWithBuiltins(Object.values(definition.extensions ?? {})),
+  };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
   }

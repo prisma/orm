@@ -1,5 +1,4 @@
-import type { ArgType, InspectableArgType, Param, PositionalParam } from '@internal/psl-parser';
-import { blindCast } from '@internal/utils/casts';
+import type { ArgType, Param, PositionalParam } from '@internal/psl-parser';
 import type { AttributeArgumentPathStep } from './attribute-syntax-context';
 
 export interface ArgumentSignature {
@@ -9,13 +8,6 @@ export interface ArgumentSignature {
 }
 
 type Grammar = ArgumentSignature | ArgType<unknown, never>;
-
-export function directArgType(param: ArgType<unknown, never>): InspectableArgType<never> {
-  return blindCast<
-    InspectableArgType<never>,
-    'Editor features inspect registry combinators whose constructors retain kind-specific metadata; public ArgType erases that metadata, and inspection never invokes parse.'
-  >(param);
-}
 
 export function resolveGrammar(
   signature: ArgumentSignature,
@@ -29,7 +21,7 @@ export function resolveGrammar(
 }
 
 function advanceGrammar(grammar: Grammar, step: AttributeArgumentPathStep): readonly Grammar[] {
-  const type = 'kind' in grammar ? directArgType(grammar) : undefined;
+  const type = 'kind' in grammar ? grammar : undefined;
   if (type?.kind === 'oneOf') {
     return type.alternatives.flatMap((alternative) => advanceGrammar(alternative, step));
   }

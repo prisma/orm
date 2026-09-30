@@ -7,6 +7,7 @@ import { createControlClient } from '../control-api/client';
 import type { CreateControlClient } from '../control-api/types';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
+import { contractPrintCommand } from './contract/print';
 import { createDbInitCommand } from './db/init';
 import { createDbSchemaCommand } from './db/schema';
 import { createDbSignCommand } from './db/sign';
@@ -95,6 +96,7 @@ export const BIN_GROUPS = {
  */
 export function createBinCommands(createClient: CreateControlClient): MountedTree {
   return {
+    'contract print': contractPrintCommand,
     'contract emit': contractEmitCommand,
     'contract format': formatCommand,
     'contract infer': contractInferCommand,

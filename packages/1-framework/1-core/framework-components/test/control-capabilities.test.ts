@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   hasOperationPreview,
+  hasPslContractBuild,
   hasPslContractInfer,
   hasSchemaView,
 } from '../src/control/control-capabilities';
@@ -45,6 +46,21 @@ describe('hasPslContractInfer', () => {
     } as unknown as ControlFamilyInstance<'sql', unknown>;
 
     expect(hasPslContractInfer(instance)).toBe(false);
+  });
+});
+
+describe('hasPslContractBuild', () => {
+  it('returns true when instance exposes buildPslContract function', () => {
+    const instance = {
+      ...baseInstance,
+      buildPslContract: () => ({ document: SYNTHETIC_AST, sourceSettings: {} }),
+    } as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasPslContractBuild(instance)).toBe(true);
+  });
+
+  it('returns false when instance does not declare buildPslContract', () => {
+    expect(hasPslContractBuild(baseInstance)).toBe(false);
   });
 });
 

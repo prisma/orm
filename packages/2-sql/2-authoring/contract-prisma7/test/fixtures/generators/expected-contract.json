@@ -122,8 +122,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "cuid1"
+            "entry": "Generated",
+            "field": "cuid1"
           },
           "onCreate": {
             "kind": "generator",
@@ -133,8 +133,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "cuid2"
+            "entry": "Generated",
+            "field": "cuid2"
           },
           "onCreate": {
             "kind": "generator",
@@ -144,8 +144,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "nanoid"
+            "entry": "Generated",
+            "field": "nanoid"
           },
           "onCreate": {
             "kind": "generator",
@@ -155,8 +155,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "nanoidSized"
+            "entry": "Generated",
+            "field": "nanoidSized"
           },
           "onCreate": {
             "kind": "generator",
@@ -169,8 +169,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "ulid"
+            "entry": "Generated",
+            "field": "ulid"
           },
           "onCreate": {
             "kind": "generator",
@@ -180,8 +180,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "uuid4"
+            "entry": "Generated",
+            "field": "uuid4"
           },
           "onCreate": {
             "kind": "generator",
@@ -191,8 +191,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "uuid4Again"
+            "entry": "Generated",
+            "field": "uuid4Again"
           },
           "onCreate": {
             "kind": "generator",
@@ -202,8 +202,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Generated",
-            "column": "uuid7"
+            "entry": "Generated",
+            "field": "uuid7"
           },
           "onCreate": {
             "kind": "generator",
@@ -212,7 +212,7 @@
         }
       ]
     },
-    "executionHash": "2001ed03c4da8fef0b365a21c6cafc98e25b2735cbc3e7acd62df9258434aa5d"
+    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b"
   },
   "extensions": {},
   "capabilities": {},

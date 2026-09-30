@@ -12,7 +12,12 @@ function sectionsWithDiagnostics(raw: Record<string, unknown>): readonly unknown
 describe('buildLoadedConfig', () => {
   it('resolves the contract paths of an orm section against the directory', () => {
     const { config } = buildLoadedConfig(
-      { contract: { source: { load, inputs: ['prisma/schema.prisma'] }, output: 'src/prisma' } },
+      {
+        contract: {
+          source: { format: 'psl', load, inputs: ['prisma/schema.prisma'] },
+          output: 'src/prisma',
+        },
+      },
       '/project',
     );
 
@@ -39,7 +44,9 @@ describe('buildLoadedConfig', () => {
   });
 
   it('tags a diagnostic with the section it concerns', () => {
-    expect(sectionsWithDiagnostics({ contract: { source: { load } } })).not.toContain('contract');
+    expect(
+      sectionsWithDiagnostics({ contract: { source: { format: 'typescript', load } } }),
+    ).not.toContain('contract');
     expect(sectionsWithDiagnostics({ contract: 'prisma/schema.prisma' })).toContain('contract');
     expect(sectionsWithDiagnostics({})).toContain('family');
   });

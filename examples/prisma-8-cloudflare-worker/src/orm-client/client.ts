@@ -1,16 +1,14 @@
-import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { orm } from '@prisma/orm-postgres/orm-client';
-import type { ExecutionContext } from '@prisma/orm-postgres/relational-core/query-lane-context';
+import type { PostgresServerlessConnection } from '@prisma/orm-postgres/serverless';
 import type { Contract } from '../prisma/contract.d';
-import { db } from '../prisma/db';
 import { PostCollection, UserCollection } from './collections';
 
-const context = db.context as ExecutionContext<Contract>;
-
-export function createOrmClient(runtime: Runtime) {
+export function createOrmClient(
+  db: Pick<PostgresServerlessConnection<Contract>, 'runtime' | 'context'>,
+) {
   return orm({
-    runtime,
-    context,
+    runtime: db.runtime(),
+    context: db.context,
     collections: {
       User: UserCollection,
       Post: PostCollection,

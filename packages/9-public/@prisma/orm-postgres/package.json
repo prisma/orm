@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-postgres",
-  "version": "8.0.0-rc.12",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,24 +16,26 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.12",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.12",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.12",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.12",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.14",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.14",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
+    "arktype": "catalog:",
     "pathe": "^2.0.3",
     "pg": "catalog:",
     "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/postgres": "workspace:8.0.0-rc.12",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
-    "@repo/tsdown": "workspace:8.0.0-rc.12",
+    "@internal/postgres": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -87,6 +89,7 @@
     "./family/ir": "./dist/family__ir.mjs",
     "./family/migration": "./dist/family__migration.mjs",
     "./family/pack": "./dist/family__pack.mjs",
+    "./family/psl-build": "./dist/family__psl-build.mjs",
     "./family/psl-infer": "./dist/family__psl-infer.mjs",
     "./family/runtime": "./dist/family__runtime.mjs",
     "./family/verify": "./dist/family__verify.mjs",

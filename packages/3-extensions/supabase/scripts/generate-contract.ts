@@ -184,7 +184,6 @@ function roleExtensionBlock(name: string): PslExtensionBlock {
     name,
     parameters: {},
     blockAttributes: [],
-    attributes: {},
     span: SYNTHETIC_SPAN,
   };
 }
@@ -478,7 +477,11 @@ async function main(): Promise<void> {
       'generate-contract: postgres target descriptor has no authoring.pslBlockDescriptors',
     );
   }
-  const pslContent = printPsl(merged, { pslBlockDescriptors });
+  const pslContent = printPsl(merged, {
+    pslBlockDescriptors,
+    description:
+      'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
+  });
 
   const contractPrismaPath = join(packageRoot, 'src', 'contract', 'contract.prisma');
   writeFileSync(contractPrismaPath, pslContent, 'utf8');

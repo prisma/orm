@@ -563,7 +563,22 @@ describe('MTI variant mutation guards', () => {
     ).toThrow(
       expect.objectContaining({
         code: 'ORM.OPERATION_UNSUPPORTED',
-        message: expect.stringContaining('is not supported for MTI variant'),
+        message:
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.',
+      }),
+    );
+  });
+
+  it('createAndCount() with the skip option keeps the createAndCount() message for MTI variants', async () => {
+    const { collection } = createReturningMixedPolyCollection();
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    await expect(
+      narrowed.createAndCount([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'createAndCount() is not supported for MTI variant "Feature" on model "Task". Use createAll() instead.',
       }),
     );
   });
@@ -626,7 +641,7 @@ describe('MTI variant create (two-INSERT orchestration)', () => {
     await narrowed.createAll(input as never).toArray();
 
     const calls = applyMutationDefaults.mock.calls.map(([options]) => options);
-    expect(calls.map(({ table }) => table)).toEqual(input.flatMap(() => ['tasks', 'features']));
+    expect(calls.map(({ entry }) => entry)).toEqual(input.flatMap(() => ['tasks', 'features']));
     const cache = calls[0]!.defaultValueCache;
     expect(cache).toBeInstanceOf(Map);
     for (const call of calls) {

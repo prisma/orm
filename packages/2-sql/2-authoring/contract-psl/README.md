@@ -116,6 +116,8 @@ Contract-level default (specifier options bag):
 - `@internal/sql-contract-psl/provider`
   - `prismaContract(schemaPath, { output?, target, createNamespace, composedExtensionPackRefs?, defaultControlPolicy?, enumInferenceCodecs? })` — scalar column descriptors are derived from the composed stack's authoring type namespace at load time.
   - Provider input is fully preassembled by composition layers (for example `@internal/family-sql/control` helpers).
+- `@internal/sql-contract-psl/map-names`
+  - `pslModelMapName(modelName, tableName)` and `pslFieldMapName(fieldName, columnName)` — the `@@map` or `@map` name a model or field must carry to read back with that table or column name, or `undefined` when the name this source derives already matches. Code that writes PSL uses them to decide when to write the attribute.
 
 ## Architecture
 

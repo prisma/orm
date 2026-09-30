@@ -14,7 +14,7 @@ import {
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
-import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, jsonValue, mapBlock, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { JsonObject } from '@internal/utils/json';
@@ -23,7 +23,10 @@ import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
-import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
+import {
+  expectInvalidAttributeSyntax,
+  expectUnresolvedReference,
+} from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
@@ -33,18 +36,17 @@ function buildSymbolTableInput(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { documents: [document], symbolTable, sources };
 }
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
-  ['Boolean', 'mongo/bool@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Int32', 'mongo/int32@1'],
+  ['Bool', 'mongo/bool@1'],
+  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
-  ['Float', 'mongo/double@1'],
+  ['Double', 'mongo/double@1'],
 ]);
 
 const mongoTargetTypes: Record<string, readonly string[]> = {
@@ -166,6 +168,21 @@ describe('interpretPslDocumentToMongoContract', () => {
         defaultFunctionRegistry: new Map(),
       },
       codecLookup: mongoCodecLookup,
+      authoringContributions: {
+        pslBlockDescriptors: {
+          enum: {
+            kind: 'pslBlock',
+            keyword: 'enum',
+            discriminator: 'enum',
+            name: { required: true },
+            spec: () =>
+              mapBlock({
+                value: { type: jsonValue(), documentation: 'The member value.' },
+                allowBare: true,
+              }),
+          },
+        },
+      },
     });
 
     expect(result.ok).toBe(false);
@@ -186,9 +203,9 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Item {
           id     ObjectId @id @map("_id")
           name   String
-          count  Int
-          active Boolean
-          at     DateTime
+          count  Int32
+          active Bool
+          at     Date
         }
       `);
 
@@ -716,7 +733,16 @@ describe('interpretPslDocumentToMongoContract', () => {
           author   User @relation(fields: [missing], references: [id])
         }
       `);
-      expectInvalidAttributeSyntax(result, /missing.*does not exist/i);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find field "missing"'),
+          }),
+        ]),
+      );
     });
   });
 
@@ -1002,8 +1028,8 @@ describe('interpretPslDocumentToMongoContract', () => {
       const ir = interpretOk(
         `
         type GeoPoint {
-          lat Float
-          lng Float
+          lat Double
+          lng Double
         }
 
         type Address {
@@ -1067,7 +1093,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           title     String
           content   String
           authorId  ObjectId
-          createdAt DateTime
+          createdAt Date
           author    User @relation(fields: [authorId], references: [id])
           @@map("posts")
         }
@@ -1268,7 +1294,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const ir = interpretOk(`
         model Session {
           id        ObjectId @id @map("_id")
-          expiresAt DateTime
+          expiresAt Date
           @@index([expiresAt], sparse: true, expireAfterSeconds: 3600)
         }
       `);
@@ -1375,7 +1401,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const ir = interpretOk(`
         model Events {
           id        ObjectId @id @map("_id")
-          createdAt DateTime
+          createdAt Date
           @@index([createdAt(sort: Desc)])
         }
       `);
@@ -1388,7 +1414,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id        ObjectId @id @map("_id")
           status    String
-          createdAt DateTime
+          createdAt Date
           @@index([status, createdAt(sort: Desc)])
         }
       `);
@@ -1850,7 +1876,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([nonexistent])
         }
       `);
-      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      const diag = expectUnresolvedReference(result, /Cannot find field "nonexistent"/);
       expect(diag.span?.start.offset).toBeGreaterThan(0);
       expect(diag.span?.end.offset).toBeGreaterThan(diag.span?.start.offset ?? 0);
     });
@@ -1863,7 +1889,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([nonexistent])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expectUnresolvedReference(result, /Cannot find field/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1874,7 +1900,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([nonexistent])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expectUnresolvedReference(result, /Cannot find field "nonexistent"/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {
@@ -1906,9 +1932,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const result = interpret(source);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diags = result.failure.diagnostics.filter(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
+      const diags = result.failure.diagnostics.filter((d) => d.code === 'PSL_UNRESOLVED_REFERENCE');
       expect(diags).toHaveLength(1);
       expect(diags[0]?.span).toMatchObject({
         start: { offset: source.indexOf('nonexistent') },
@@ -2007,7 +2031,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model User {
           id    ObjectId @id @map("_id")
           name  String
-          age   Int
+          age   Int32
         }
       `);
       const validator = getValidator(ir, 'User');

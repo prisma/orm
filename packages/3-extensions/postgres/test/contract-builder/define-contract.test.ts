@@ -68,7 +68,7 @@ describe('postgres defineContract wrap', () => {
       'default',
     );
     expect(result.execution?.mutations?.defaults).toContainEqual({
-      ref: { namespace: 'public', table: 'Event', column: 'created' },
+      ref: { namespace: 'public', entry: 'Event', field: 'created' },
       onCreate: { kind: 'generator', id: 'timestampNow' },
     });
   });

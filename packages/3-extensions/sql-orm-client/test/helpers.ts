@@ -11,6 +11,7 @@ import type {
   ColumnTypeDescriptor,
 } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
+import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec, SelectAst, SqlStatementStats } from '@internal/sql-relational-core/ast';
@@ -19,7 +20,6 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import {
   createExecutionContext,
   createSqlExecutionStack,
-  type RuntimeMutationDefaultGenerator,
   type RuntimeParameterizedCodecDescriptor,
   type SqlRuntimeExtensionDescriptor,
 } from '@internal/sql-runtime';
@@ -731,6 +731,45 @@ export function buildCustomPrimaryKeyContract() {
   }).sql({ table: 'users' });
 
   return defineContract({ models: { User } });
+}
+
+/**
+ * Builds a contract whose `Customer` model (table `customers`) keys on the composite
+ * `(tenant_id, id)`, and whose `Order` model (table `orders`) references it through the
+ * composite foreign key `(tenant_id, customer_id)`: `Order.customer` is N:1 and
+ * `Customer.orders` is 1:N.
+ */
+export function buildCompositeForeignKeyContract() {
+  const CustomerBase = model('Customer', {
+    fields: {
+      tenantId: field.column(int4Column).column('tenant_id'),
+      id: field.column(int4Column),
+      name: field.column(textColumn),
+    },
+  }).attributes(({ fields, constraints }) => ({
+    id: constraints.id([fields.tenantId, fields.id]),
+  }));
+
+  const Order = model('Order', {
+    fields: {
+      id: field.column(int4Column).id(),
+      tenantId: field.column(int4Column).column('tenant_id'),
+      customerId: field.column(int4Column).column('customer_id').optional(),
+      label: field.column(textColumn),
+    },
+    relations: {
+      customer: rel.belongsTo(CustomerBase, {
+        from: ['tenantId', 'customerId'],
+        to: ['tenantId', 'id'],
+      }),
+    },
+  }).sql({ table: 'orders' });
+
+  const Customer = CustomerBase.relations({
+    orders: rel.hasMany(() => Order, { by: ['tenantId', 'customerId'] }),
+  }).sql({ table: 'customers' });
+
+  return defineContract({ models: { Customer, Order } });
 }
 
 export function createMockRuntime(): MockRuntime {

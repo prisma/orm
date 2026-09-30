@@ -1,0 +1,89 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              },
+              "content": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              },
+              "lang": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Post"
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "037f7e60df99c7c0bfa2fc2e8adb36593cebd69c2c086a0157e82afa63d1efec",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "Post": {
+              "kind": "mongo-collection",
+              "indexes": [
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "title",
+                      "direction": "text"
+                    },
+                    {
+                      "field": "content",
+                      "direction": "text"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

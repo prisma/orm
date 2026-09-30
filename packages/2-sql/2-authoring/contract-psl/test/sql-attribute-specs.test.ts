@@ -1,21 +1,18 @@
 import type {
   ArgType,
   AttributeCtx,
-  FieldAttributeCtx,
   FieldAttributeSpecFactory,
   FieldSymbol,
-  FuncCallSig,
-  ModelAttributeCtx,
   ModelAttributeSpecFactory,
   ModelSymbol,
   Param,
 } from '@internal/psl-parser';
 import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
+import { getAttribute } from '../src/psl-attribute-parsing';
 import {
+  createSqlBinder,
   fieldSpecContext,
-  findFieldAttributeNode,
-  findModelAttributeNode,
   interpretFieldAttribute,
   interpretModelAttribute,
   modelSpecContext,
@@ -42,29 +39,6 @@ function field(model: ModelSymbol, name: string): FieldSymbol {
   return found;
 }
 
-interface ListMetadata<T, Ctx extends AttributeCtx> extends ArgType<readonly T[], Ctx> {
-  readonly kind: 'list';
-  readonly of: ArgType<T, Ctx>;
-  readonly allowEmpty: boolean;
-  readonly unique: boolean;
-}
-
-interface RecordMetadata<T, Ctx extends AttributeCtx> extends ArgType<Record<string, T>, Ctx> {
-  readonly kind: 'record';
-  readonly of: ArgType<T, Ctx>;
-}
-
-interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'oneOf';
-  readonly alternatives: readonly ArgType<unknown, Ctx>[];
-}
-
-interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'funcCall';
-  readonly name: string;
-  readonly signature: FuncCallSig;
-}
-
 function positionalType<Ctx extends AttributeCtx>(spec: {
   readonly positional: readonly { readonly type: ArgType<unknown, Ctx> }[];
 }): ArgType<unknown, Ctx> {
@@ -82,40 +56,42 @@ function namedType<Ctx extends AttributeCtx>(
   return type.type;
 }
 
-function listMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): ListMetadata<T, Ctx> {
+function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'list') throw new Error('argument is a list');
-  return type as unknown as ListMetadata<T, Ctx>;
+  return type;
 }
 
-function recordMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): RecordMetadata<T, Ctx> {
+function recordMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'record') throw new Error('argument is a record');
-  return type as unknown as RecordMetadata<T, Ctx>;
+  return type;
 }
 
-function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): OneOfMetadata<Ctx> {
+function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'oneOf') throw new Error('argument is oneOf');
-  return type as unknown as OneOfMetadata<Ctx>;
+  return type;
 }
 
 function interpretDefault(schema: string, fieldName: string) {
   const { symbolTable, sources, model } = project(schema, 'Post');
   const target = field(model, fieldName);
-  const node = findFieldAttributeNode(target, 'default');
+  const node = getAttribute(target.attributes, 'default')?.node;
   if (node === undefined) throw new Error('no @default on field');
   const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
     symbols: symbolTable,
     node,
     spec: sqlAttributeSpecs.field.default(
-      fieldSpecContext({ symbols: symbolTable, model, field: target, controlMutationDefaults }),
+      fieldSpecContext({
+        symbols: symbolTable,
+        model,
+        field: target,
+        controlMutationDefaults,
+      }),
     ),
     model,
     field: target,
     sources,
+    binder: createSqlBinder({ symbolTable, sources }).binder,
     diagnostics,
   });
   return { value, diagnostics: diagnostics.toExternal() };
@@ -131,7 +107,7 @@ namespace scoped {
     const namespace = input.symbolTable.topLevel.namespaces['scoped'];
     const model = namespace?.models['Variant'];
     if (!namespace || !model) throw new Error('missing variant');
-    const node = findModelAttributeNode(model, 'base');
+    const node = getAttribute(model.attributes, 'base')?.node;
     if (!node) throw new Error('missing base attribute');
     const diagnostics = createPslDiagnosticCollector(input.sources);
     const value = interpretModelAttribute({
@@ -140,6 +116,7 @@ namespace scoped {
       spec: sqlAttributeSpecs.model.base(),
       model,
       sources: input.sources,
+      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
       diagnostics,
     });
     expect(diagnostics.toExternal()).toEqual([]);
@@ -154,7 +131,11 @@ describe('sqlAttributeSpecs', () => {
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
     'Post',
   );
-  const modelCtx = modelSpecContext({ symbols: symbolTable, model, controlMutationDefaults });
+  const modelCtx = modelSpecContext({
+    symbols: symbolTable,
+    model,
+    controlMutationDefaults,
+  });
   const fieldCtx = fieldSpecContext({
     symbols: symbolTable,
     model,
@@ -227,8 +208,8 @@ describe('sqlAttributeSpecs', () => {
 
   it('exposes SQL relation field-reference metadata from the actual factory', () => {
     const spec = sqlAttributeSpecs.field.relation();
-    const fields = listMetadata<string, FieldAttributeCtx>(namedType(spec, 'fields'));
-    const references = listMetadata<string, FieldAttributeCtx>(namedType(spec, 'references'));
+    const fields = listMetadata(namedType(spec, 'fields'));
+    const references = listMetadata(namedType(spec, 'references'));
 
     expect(fields).toMatchObject({ kind: 'list', optional: true });
     expect(fields.of).toMatchObject({ kind: 'fieldRef' });
@@ -242,15 +223,11 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes SQL model container metadata from actual factories', () => {
-    const idFields = listMetadata<string, ModelAttributeCtx>(
-      positionalType(sqlAttributeSpecs.model.id()),
-    );
+    const idFields = listMetadata(positionalType(sqlAttributeSpecs.model.id()));
     expect(idFields).toMatchObject({ kind: 'list', allowEmpty: false, unique: true });
     expect(idFields.of).toMatchObject({ kind: 'fieldRef' });
 
-    const options = recordMetadata<string, ModelAttributeCtx>(
-      namedType(sqlAttributeSpecs.model.index(), 'options'),
-    );
+    const options = recordMetadata(namedType(sqlAttributeSpecs.model.index(), 'options'));
     expect(options).toMatchObject({ kind: 'record', optional: true });
     expect(options.of).toMatchObject({ kind: 'str', value: undefined });
   });
@@ -290,10 +267,9 @@ describe('sqlAttributeSpecs.field.default', () => {
       // list literal too; the codec's declaration decides whether one is accepted.
       'list',
     ]);
-    const uuid = value.alternatives.find(
-      (alt): alt is FuncCallMetadata<FieldAttributeCtx> =>
-        alt.kind === 'funcCall' && 'name' in alt && alt.name === 'uuid',
-    );
+    const uuid = value.alternatives
+      .filter((alt) => alt.kind === 'funcCall')
+      .find((alt) => alt.name === 'uuid');
     if (uuid === undefined) throw new Error('uuid default function arm is present');
     const versionType = uuid.signature.positional?.[0]?.type;
     if (versionType === undefined) throw new Error('uuid version argument is present');
@@ -329,13 +305,11 @@ describe('sqlAttributeSpecs.field.default', () => {
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
 
-    const listDefault = listMetadata<unknown, FieldAttributeCtx>(value.alternatives[0] ?? value);
+    const listDefault = listMetadata(value.alternatives[0]);
     expect(listDefault).toMatchObject({ kind: 'list' });
     expect(listDefault.of).toMatchObject({ kind: 'oneOf' });
     expect(
-      value.alternatives
-        .filter((alt) => alt.kind === 'funcCall')
-        .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
+      value.alternatives.filter((alt) => alt.kind === 'funcCall').map((alt) => alt.name),
     ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']);
     expect(value.alternatives.filter((alt) => alt.kind === 'taggedLiteral')).toMatchObject([
       {

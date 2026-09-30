@@ -1,0 +1,89 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "posts": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    },
+    "BlogTag": {
+      "namespace": "__unbound__",
+      "model": "BlogTag"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "post_title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "posts"
+            }
+          },
+          "BlogTag": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "name": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "BlogTag"
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "b7e2fcbbb704ee2420bc53ecca69014ee5c398d9089a3ab0b8901427b882ca67",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "posts": {
+              "kind": "mongo-collection"
+            },
+            "BlogTag": {
+              "kind": "mongo-collection"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -10,13 +10,17 @@ export type {
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
   OperationPreviewCapable,
+  PslContractBuildCapable,
+  PslContractDocument,
   PslContractInferCapable,
+  PslSourceSettings,
   SchemaSubjectClassifierCapable,
   SchemaViewCapable,
 } from '../control/control-capabilities';
 export {
   hasMigrations,
   hasOperationPreview,
+  hasPslContractBuild,
   hasPslContractInfer,
   hasSchemaSubjectClassifier,
   hasSchemaView,
@@ -152,3 +156,4 @@ export {
   resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
 } from '../shared/tagged-literal';
+export { timestampNowControlDescriptor } from '../shared/temporal-presets';

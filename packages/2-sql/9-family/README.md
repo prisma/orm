@@ -103,6 +103,9 @@ Family instances implement domain actions:
 - **`toSchemaView(schema)`**: Projects `SqlSchemaIR` into `CoreSchemaView` for human-readable display. Always displays native database types (e.g., `int4`, `text`) rather than mapped codec IDs (e.g., `pg/int4@1`) to reflect actual database state.
 - **`emitContract({ contract })`**: Emits contract JSON and DTS as strings. Handles stripping mappings and validation internally. Uses preassembled state (operation registry, type imports, extension IDs).
 
+- **`inferPslContract(schemaIR)`**: Infers a PSL contract AST from an introspected schema, for `contract infer`. Delegates to the target descriptor's optional `inferPslContract` hook; throws `CONTRACT.INFER_UNSUPPORTED` when the target has none.
+- **`buildPslContract(contract)`**: Builds the PSL document AST that reads back as the same contract, for `contract print`. Delegates to the target descriptor's optional `buildPslContract` hook, and passes it the stack's authoring contributions, codecs and data types (`SqlPslBuildContext`), the parts the PSL source reads the file back with. Returns the document with `sourceSettings`: the settings the config must set on the new PSL source because a PSL file cannot carry them. Today that is only the contract's `defaultControlPolicy`, present when the contract has one. Throws `CONTRACT.PRINT_UNSUPPORTED` when the target has no hook, or when the contract holds something PSL cannot express. `contract` must be one the target's contract serializer accepted.
+
 The descriptor is "pure data + factory" - it only provides the hook and factory method. All family-specific logic lives on the instance.
 
 ## Package Structure
@@ -113,7 +116,7 @@ The descriptor is "pure data + factory" - it only provides the hook and factory 
 - **`src/core/verify.ts`**: Verification helpers (`parseContractMarkerRow`, `collectSupportedCodecTypeIds`)
 - **`src/core/control-adapter.ts`**: SQL control adapter interface (`SqlControlAdapter`) for control-plane operations
 - **`src/core/migrations/`**: Migration IR helpers plus planner and runner SPI types (`MigrationPlanner`, `MigrationRunner`, `SqlControlTargetDescriptor`). Runners return `MigrationRunnerResult` which is a union of success/failure.
-- **`src/core/migrations/contract-to-schema-ir.ts`**: `contractToSchemaIR(contract, { annotationNamespace, ... })` converts a contract to `SqlSchemaIR` for offline migration planning (used by `migration plan` to synthesize the "from" schema without a database connection). Also exports `detectDestructiveChanges(from, to)` which compares two `SqlStorage` values and returns a list of destructive changes (dropped tables, dropped columns) for migration policy enforcement.
+- **`src/core/migrations/contract-to-schema-ir.ts`**: `contractToSchemaIR(contract, { annotationNamespace, ... })` converts a contract to `SqlSchemaIR` for offline migration planning (used by `migration plan` to synthesize the "from" schema without a database connection). A target may pass `dataTypeOf`, built by `buildDataTypeResolver(frameworkComponents)` in `data-type-resolver.ts`, which returns the data type a codec's descriptor names among the data types every component registers. Each column carries its data type, and a default of a type that declares a canonical form compares through it, so two texts of one date or time value are equal. Also exports `detectDestructiveChanges(from, to)` which compares two `SqlStorage` values and returns a list of destructive changes (dropped tables, dropped columns) for migration policy enforcement.
 
 ### Migration Runner Error Codes
 
@@ -133,6 +136,8 @@ The runner returns structured errors with the following codes:
 
 - **`./control`**: Control plane entry point for CLI/config usage (exports `SqlFamilyDescriptor`)
 - **`./control-adapter`**: SQL control adapter interface (`SqlControlAdapter`, `SqlControlAdapterDescriptor`) for target-specific adapters
+- **`./psl-build`**: PSL building blocks both `contract infer` and `contract print` use, with no dialect knowledge: `mapDefault` (a stored default as the PSL attribute that reads back as it), the `PslTypeMap` types, and `toEnumMemberName`
+- **`./psl-infer`**: Database-to-PSL inference utilities for `contract infer`: name transforms, relation inference, and the printer-config types
 - **`./runtime`**: Runtime plane identity exports only (family ID, types, descriptor identity). Does **not** export runtime creation helpers—use `instantiateExecutionStack` from `@internal/framework-components/execution` and `createExecutionContext`, `createRuntime`, `createSqlExecutionStack` from `@internal/sql-runtime`. See [ADR 152](../../../docs/architecture%20docs/adrs/ADR%20152%20-%20Execution%20Plane%20Descriptors%20and%20Instances.md).
 - **`./verify`**: Marker row parsing helper (`parseContractMarkerRow`). Marker reads are owned by each `SqlControlAdapter` (e.g. `PostgresControlAdapter.readMarker`) so dialect-specific SQL stays target-local.
 

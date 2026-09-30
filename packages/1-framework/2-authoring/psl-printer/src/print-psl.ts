@@ -1,5 +1,4 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { ifDefined } from '@internal/utils/defined';
 import { astDocumentToPrintDocument } from './ast-to-print-document';
@@ -10,11 +9,6 @@ export type PslBlockDescriptorsNamespace = AuthoringPslBlockDescriptorNamespace;
 export interface PrintPslOptions {
   /**
    * Extension-contributed PSL block descriptors, indexed by user-facing path.
-   * Typically an `AssembledAuthoringContributions.pslBlockDescriptors` namespace
-   * produced by `assembleAuthoringContributions`. Phase 2 of the printer indexes
-   * into this namespace by each extension-contributed AST node's `kind`
-   * discriminator and renders the block generically from the descriptor's
-   * `parameters` map.
    *
    * When absent, an AST that contains extension-contributed blocks throws —
    * silently dropping blocks would lose user-authored content without a
@@ -23,19 +17,15 @@ export interface PrintPslOptions {
    */
   readonly pslBlockDescriptors?: PslBlockDescriptorsNamespace;
   /**
-   * Codec lookup used to print `value`-kind block parameters. The codec's JSON
-   * medium (`encodeJson`/`decodeJson`) validates and normalizes each value param.
-   * Required alongside `pslBlockDescriptors` when the AST contains `value`-kind
-   * parameters. When absent, the raw PSL literal stored in the AST node is
-   * emitted as-is.
+   * One line saying where the file came from. The printed file opens with the
+   * `// use prisma-8` marker, then this line as a comment.
    */
-  readonly codecLookup?: CodecLookup;
+  readonly description?: string;
 }
 
 export function printPslFromAst(ast: PslDocumentAst, options: PrintPslOptions = {}): string {
-  const doc = astDocumentToPrintDocument(ast);
+  const doc = astDocumentToPrintDocument(ast, options.description);
   return serializePrintDocument(doc, {
     ...ifDefined('pslBlockDescriptors', options.pslBlockDescriptors),
-    ...ifDefined('codecLookup', options.codecLookup),
   });
 }

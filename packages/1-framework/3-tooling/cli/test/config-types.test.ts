@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('defineConfig', () => {
   const createSourceProvider = (inputs: readonly string[] | undefined = undefined) => ({
+    format: 'typescript' as const,
     ...(!inputs ? {} : { inputs }),
     load: async () => ok({ targetFamily: 'sql' } as Contract),
   });

@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_VIEW_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "View \"PostSummary\" is not supported; Prisma 8 has no views on MongoDB. Remove the view from the schema this contract source reads."
+  }
+]

@@ -12,10 +12,10 @@ import {
 } from '@internal/framework-components/control';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresNativeEnum, postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import {
   controlAdapter,
   createDriver,

@@ -1,3 +1,4 @@
+import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { ControlTargetDescriptor } from './control-descriptors';
 import type { ControlFamilyInstance } from './control-instances';
 import type { MigrationPlanOperation, TargetMigrationsCapability } from './control-migration-types';
@@ -50,6 +51,37 @@ export function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(
   return (
     'inferPslContract' in instance &&
     typeof (instance as Record<string, unknown>)['inferPslContract'] === 'function'
+  );
+}
+
+/**
+ * Settings a PSL contract source takes from the config, because a PSL file
+ * cannot carry them. Emitting the PSL file produces the same contract only
+ * when the config sets each of them on the new source.
+ */
+export interface PslSourceSettings {
+  readonly defaultControlPolicy?: ControlPolicy;
+}
+
+/** The PSL document built from a contract, and the settings its PSL source must carry. */
+export interface PslContractDocument {
+  readonly document: PslDocumentAst;
+  readonly sourceSettings: PslSourceSettings;
+}
+
+/**
+ * Capability declaring that a family can build the PSL document AST of a contract. `contract` must be one the family's contract serializer accepted. `prisma contract print` renders the document as text.
+ */
+export interface PslContractBuildCapable<TContract = Contract> {
+  buildPslContract(contract: TContract): PslContractDocument;
+}
+
+export function hasPslContractBuild<TFamilyId extends string, TSchemaIR>(
+  instance: ControlFamilyInstance<TFamilyId, TSchemaIR>,
+): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractBuildCapable {
+  return (
+    'buildPslContract' in instance &&
+    typeof Reflect.get(instance, 'buildPslContract') === 'function'
   );
 }
 

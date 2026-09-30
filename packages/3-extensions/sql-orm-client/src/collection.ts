@@ -43,7 +43,7 @@ import {
   resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
@@ -86,12 +86,13 @@ import {
 } from './include-descriptors';
 import { createModelAccessor } from './model-accessor';
 import {
-  buildPrimaryKeyFilterFromRow,
+  buildRowIdentityFilterFromRow,
   executeNestedCreateMutation,
   executeNestedUpdateMutation,
   hasNestedMutationCallbacks,
   withMutationScope,
 } from './mutation-executor';
+import { assertCursorCompatibleOrder, assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import type { PreparedCollection } from './prepared-collection';
 import {
@@ -155,13 +156,13 @@ function applyCreateDefaults(
   for (const row of rows) {
     const applied = ctx.context.applyMutationDefaults({
       op: 'create',
-      table: tableName,
+      entry: tableName,
       namespace: namespaceId,
       values: row,
       defaultValueCache,
     });
     for (const def of applied) {
-      row[def.column] = def.value;
+      row[def.field] = def.value;
     }
   }
 }
@@ -174,12 +175,12 @@ function applyUpdateDefaults(
 ): void {
   const applied = ctx.context.applyMutationDefaults({
     op: 'update',
-    table: tableName,
+    entry: tableName,
     namespace: namespaceId,
     values,
   });
   for (const def of applied) {
-    values[def.column] = def.value;
+    values[def.field] = def.value;
   }
 }
 
@@ -248,7 +249,7 @@ interface MtiCreateContext {
   variant: MtiVariantInfo;
   baseFieldToColumn: Record<string, string>;
   variantFieldToColumn: Record<string, string>;
-  pkColumn: string;
+  pkColumns: readonly string[];
 }
 
 class CollectionImpl<
@@ -764,8 +765,8 @@ class CollectionImpl<
       relatedNamespaceId: relation.relatedNamespaceId,
       relatedTableName: relation.relatedTableName,
       localTableName: relation.localTableName,
-      targetColumn: relation.targetColumn,
-      localColumn: relation.localColumn,
+      targetColumns: relation.targetColumns,
+      localColumns: relation.localColumns,
       cardinality: relation.cardinality,
       ...ifDefined('through', relation.through),
       nested: nestedState,
@@ -1023,6 +1024,7 @@ class CollectionImpl<
       ? Partial<Record<keyof DefaultModelRow<TContract, ModelName> & string, unknown>>
       : never,
   ): Collection<TContract, ModelName, Row, State> {
+    assertCursorCompatibleOrder(this.state.orderBy);
     const mappedCursor = mapCursorValuesToColumns(
       this.contract,
       this.namespaceId,
@@ -1098,6 +1100,7 @@ class CollectionImpl<
       : never
   ): Collection<TContract, ModelName, Row, State> {
     assertDistinctOnCapability(this.contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(this.state.orderBy, fields.length);
     const distinctOnFields = mapFieldsToColumns(
       this.contract,
       this.namespaceId,
@@ -1456,13 +1459,13 @@ class CollectionImpl<
         >(data),
       });
 
-      const pkCriterion = buildPrimaryKeyFilterFromRow(
+      const identityCriterion = buildRowIdentityFilterFromRow(
         this.contract,
         this.namespaceId,
         this.modelName,
         createdRow,
       );
-      const reloaded = await this.#reloadMutationRowByPrimaryKey(pkCriterion);
+      const reloaded = await this.#reloadMutationRowByIdentity(identityCriterion);
       if (!reloaded) {
         throw ormError(
           'ORM.MUTATION_ROW_MISSING',
@@ -1643,7 +1646,11 @@ class CollectionImpl<
       );
     }
 
-    this.#assertNotMtiVariant(method);
+    if (method === 'createAll()') {
+      this.#assertConflictSkipNotOnMtiVariant(method);
+    } else {
+      this.#assertNotMtiVariant(method);
+    }
 
     const conflictOn = options.conflictOn ?? [];
     assertInsertConflictSkipCapability(this.contract, method, conflictOn.length > 0);
@@ -1660,21 +1667,29 @@ class CollectionImpl<
   }
 
   #assertNotMtiVariant(method: string): void {
-    const mtiCtx = this.#resolveMtiCreateContext();
-    if (mtiCtx) {
-      throw ormError(
-        'ORM.OPERATION_UNSUPPORTED',
-        `${method} is not supported for MTI variant "${this.state.variantName}" on model "${this.modelName}". Use createAll() instead.`,
-        {
-          meta: {
-            method,
-            model: this.modelName,
-            variant: this.state.variantName,
-            reason: 'mti-variant',
-          },
-        },
-      );
-    }
+    this.#refuseOnMtiVariant(
+      method,
+      `${method} is not supported for MTI variant "${this.state.variantName}" on model "${this.modelName}". Use createAll() instead.`,
+    );
+  }
+
+  #assertConflictSkipNotOnMtiVariant(method: string): void {
+    this.#refuseOnMtiVariant(
+      method,
+      `The onConflict option is not supported on variant "${this.state.variantName}" of model "${this.modelName}" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.`,
+    );
+  }
+
+  #refuseOnMtiVariant(method: string, message: string): void {
+    if (!this.#resolveMtiCreateContext()) return;
+    throw ormError('ORM.OPERATION_UNSUPPORTED', message, {
+      meta: {
+        method,
+        model: this.modelName,
+        variant: this.state.variantName,
+        reason: 'mti-variant',
+      },
+    });
   }
 
   #resolveMtiCreateContext(): MtiCreateContext | null {
@@ -1693,14 +1708,14 @@ class CollectionImpl<
       this.namespaceId,
       variant.modelName,
     );
-    const pkColumn = resolvePrimaryKeyColumn(this.contract, this.namespaceId, this.tableName);
+    const pkColumns = resolvePrimaryKeyColumns(this.contract, this.namespaceId, this.tableName);
 
     return {
       polyInfo,
       variant,
       baseFieldToColumn,
       variantFieldToColumn,
-      pkColumn,
+      pkColumns,
     };
   }
 
@@ -1708,7 +1723,7 @@ class CollectionImpl<
     data: readonly Record<string, unknown>[],
     mtiCtx: MtiCreateContext,
   ): AsyncIterableResult<Row> {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumn } = mtiCtx;
+    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumns } = mtiCtx;
     const contract = this.contract;
     const collectionCtx = this.ctx;
     const runtime = collectionCtx.runtime;
@@ -1771,8 +1786,9 @@ class CollectionImpl<
             );
           }
 
-          const pkValue = baseCreated[pkColumn];
-          variantRow[pkColumn] = pkValue;
+          for (const pkColumn of pkColumns) {
+            variantRow[pkColumn] = baseCreated[pkColumn];
+          }
           applyCreateDefaults(
             collectionCtx,
             namespaceId,
@@ -1809,7 +1825,7 @@ class CollectionImpl<
 
           const prefixedVariant: Record<string, unknown> = {};
           for (const [col, val] of Object.entries(variantCreated)) {
-            if (col === pkColumn) continue;
+            if (pkColumns.includes(col)) continue;
             prefixedVariant[`${variant.table}__${col}`] = val;
           }
 
@@ -2155,13 +2171,13 @@ class CollectionImpl<
         return null;
       }
 
-      const pkCriterion = buildPrimaryKeyFilterFromRow(
+      const identityCriterion = buildRowIdentityFilterFromRow(
         this.contract,
         this.namespaceId,
         this.modelName,
         updatedRow,
       );
-      return this.#reloadMutationRowByPrimaryKey(pkCriterion);
+      return this.#reloadMutationRowByIdentity(identityCriterion);
     }
 
     return withMutationScope(this.ctx.runtime, async (scope) => {
@@ -2612,8 +2628,8 @@ class CollectionImpl<
     );
   }
 
-  async #reloadMutationRowByPrimaryKey(criterion: Record<string, unknown>): Promise<Row | null> {
-    return this.#reloadMutationRowByCriterion(criterion, 'primary key');
+  async #reloadMutationRowByIdentity(criterion: Record<string, unknown>): Promise<Row | null> {
+    return this.#reloadMutationRowByCriterion(criterion, 'row identity');
   }
 
   async #reloadMutationRowByCriterion(

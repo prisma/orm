@@ -189,8 +189,8 @@ test('R5: scalar enum input narrows to the value union', () => {
   expectTypeOf<R5CreateInput['role']>().toEqualTypeOf<'user' | 'admin'>();
 });
 
-test('R5: nullable enum input accepts the value union or null', () => {
-  expectTypeOf<R5CreateInput['mood']>().toEqualTypeOf<'user' | 'admin' | null>();
+test('R5: nullable enum input accepts the value union or null, or may be left out', () => {
+  expectTypeOf<R5CreateInput['mood']>().toEqualTypeOf<'user' | 'admin' | null | undefined>();
 });
 
 test('R5: many enum input accepts an array of the value union', () => {
@@ -198,7 +198,9 @@ test('R5: many enum input accepts an array of the value union', () => {
 });
 
 test('R5: nullable+many enum input resolves to Base[] | null (precedence)', () => {
-  expectTypeOf<R5CreateInput['moodTags']>().toEqualTypeOf<('user' | 'admin')[] | null>();
+  expectTypeOf<R5CreateInput['moodTags']>().toEqualTypeOf<
+    ('user' | 'admin')[] | null | undefined
+  >();
   expectTypeOf<R5CreateInput['moodTags']>().not.toEqualTypeOf<('user' | 'admin' | null)[]>();
 });
 

@@ -1,4 +1,5 @@
-export { MongoParamRef } from '../param-ref';
+export type { BsonInputValue, BsonScalar, BsonValue } from '../bson-value';
+export { MongoParamRef, type MongoParamRefOptions } from '../param-ref';
 export type {
   Document,
   LiteralValue,

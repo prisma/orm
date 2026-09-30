@@ -351,18 +351,21 @@ model User {
       if (result.ok) return;
 
       expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: schemaPath,
-            message: expect.stringContaining('Unknown'),
-            span: expect.objectContaining({
-              start: expect.objectContaining({ line: 4 }),
-            }),
-          }),
-        ]),
-      );
+      expect(
+        result.failure.diagnostics.map(({ code, message, sourceId, span }) => ({
+          code,
+          message,
+          sourceId,
+          line: span?.start.line,
+        })),
+      ).toEqual([
+        {
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "Unknown"',
+          sourceId: schemaPath,
+          line: 4,
+        },
+      ]);
     });
 
     it('returns diagnostics when navigation list fields declare unsupported attributes', async () => {
@@ -510,9 +513,10 @@ model Other {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const codes = result.failure.diagnostics.map((d) => d.code);
-      expect(codes).toContain('PSL_DUPLICATE_DECLARATION');
-      expect(codes).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+      expect(result.failure.diagnostics.map((d) => d.code)).toEqual([
+        'PSL_DUPLICATE_DECLARATION',
+        'PSL_UNRESOLVED_REFERENCE',
+      ]);
     });
   });
 
@@ -686,15 +690,15 @@ model User {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'User', column: 'cuid2' },
+              ref: { namespace: 'public', entry: 'User', field: 'cuid2' },
               onCreate: { kind: 'generator', id: 'cuid2' },
             },
             {
-              ref: { namespace: 'public', table: 'User', column: 'nanoid16' },
+              ref: { namespace: 'public', entry: 'User', field: 'nanoid16' },
               onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
             },
             {
-              ref: { namespace: 'public', table: 'User', column: 'uuidV7' },
+              ref: { namespace: 'public', entry: 'User', field: 'uuidV7' },
               onCreate: { kind: 'generator', id: 'uuidv7' },
             },
           ],
@@ -839,13 +843,9 @@ model User {
       );
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          }),
-        ]),
-      );
+      expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+        { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Bytes"' },
+      ]);
     });
   });
 

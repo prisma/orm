@@ -8,7 +8,7 @@ const testHashes = { storageHash: 'blog-test', profileHash: 'blog-profile' };
 
 const mongoCodecImports: TypesImportSpec[] = [
   {
-    package: '@internal/adapter-mongo/codec-types',
+    package: '@internal/target-mongo/codec-types',
     named: 'CodecTypes',
     alias: 'MongoCodecTypes',
   },

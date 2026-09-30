@@ -17,6 +17,7 @@ import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { col, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import {
   AddColumnCall,
   CreateIndexCall,
@@ -30,7 +31,6 @@ import { renderOps } from '@internal/target-sqlite/render-ops';
 import { timeouts } from '@repo/test-utils';
 import { join, resolve } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../../src/exports/control';
 
 const execFileAsync = promisify(execFile);

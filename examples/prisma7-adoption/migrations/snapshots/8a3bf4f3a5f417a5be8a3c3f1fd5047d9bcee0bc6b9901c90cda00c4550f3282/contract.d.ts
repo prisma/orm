@@ -876,9 +876,9 @@ type ContractBase = Omit<
       readonly defaults: readonly [
         {
           readonly ref: {
+            readonly entry: 'User';
+            readonly field: 'updatedAt';
             readonly namespace: 'public';
-            readonly table: 'User';
-            readonly column: 'updatedAt';
           };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'plainDateTimeNow' };
           readonly onUpdate: { readonly kind: 'generator'; readonly id: 'plainDateTimeNow' };

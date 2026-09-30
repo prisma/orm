@@ -36,7 +36,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'da937682533d5f8748879ad9ea09469efd89334987d6221bf4ef55422ce56020'>;
 export type ExecutionHash =
-  ExecutionHashBase<'410575bbcd5e8bbc13adc2214b75b8b4df13747b6f1dec7407484f77b1112482'>;
+  ExecutionHashBase<'e0abca3d0e4fa16ac9a94ea3031853b52f2b808f700fdf97d18bb253bcbc1ae8'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -646,25 +646,25 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'user';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'user';
           };
         },
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'wallet';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'wallet';
           };
         },
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'walletLink';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'walletLink';
           };
         },
       ];

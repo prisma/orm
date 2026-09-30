@@ -8,6 +8,15 @@ import { type CodecRef, frozenCodecRef } from './codec-types';
 import type { AnyJsonValueProjection } from './json-value-projection';
 
 export type Direction = 'asc' | 'desc';
+export type OrderByNulls = 'first' | 'last';
+
+export function isOrderByDirection(value: unknown): value is Direction {
+  return value === 'asc' || value === 'desc';
+}
+
+export function isOrderByNulls(value: unknown): value is OrderByNulls {
+  return value === 'first' || value === 'last';
+}
 
 export type BinaryOp =
   | 'eq'
@@ -1094,33 +1103,54 @@ export class OrderByItem extends AstNode {
   readonly kind = 'order-by-item' as const;
   readonly expr: AnyExpression;
   readonly dir: Direction;
+  readonly nulls: OrderByNulls | undefined;
 
-  constructor(expr: AnyExpression, dir: Direction) {
+  constructor(expr: AnyExpression, dir: Direction, nulls: OrderByNulls | undefined) {
     super();
+    if (!isOrderByDirection(dir)) {
+      throw structuredError('RUNTIME.AST_INVALID', 'OrderByItem direction must be asc or desc', {
+        meta: { kind: 'order-by-item', field: 'dir' },
+      });
+    }
+    if (nulls !== undefined && !isOrderByNulls(nulls)) {
+      throw structuredError(
+        'RUNTIME.AST_INVALID',
+        'OrderByItem null placement must be first, last or undefined',
+        { meta: { kind: 'order-by-item', field: 'nulls' } },
+      );
+    }
     this.expr = expr;
     this.dir = dir;
+    this.nulls = nulls;
     this.freeze();
   }
 
-  static asc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'asc');
+  static asc(expr: AnyExpression, options?: { readonly nulls?: OrderByNulls }): OrderByItem {
+    return new OrderByItem(expr, 'asc', options?.nulls);
   }
 
-  static desc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'desc');
+  static desc(expr: AnyExpression, options?: { readonly nulls?: OrderByNulls }): OrderByItem {
+    return new OrderByItem(expr, 'desc', options?.nulls);
   }
 
   rewrite(rewriter: ExpressionRewriter): OrderByItem {
-    return new OrderByItem(this.expr.rewrite(rewriter), this.dir);
+    return this.withExpr(this.expr.rewrite(rewriter));
+  }
+
+  /** A new frozen item ordering by `expr` with the same direction and null placement. */
+  withExpr(expr: AnyExpression): OrderByItem {
+    return new OrderByItem(expr, this.dir, this.nulls);
   }
 
   /**
-   * A new frozen item with the sort direction flipped and `expr` unchanged.
-   * Integrations that own pagination (e.g. backward cursor pagination) use
-   * this to reverse a user's sort order without reaching into the AST.
+   * A new frozen item with the sort direction and null placement flipped and `expr` unchanged. Integrations that own pagination (e.g. backward cursor pagination) use this to reverse a user's sort order without reaching into the AST.
    */
   reverse(): OrderByItem {
-    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc');
+    return new OrderByItem(
+      this.expr,
+      this.dir === 'asc' ? 'desc' : 'asc',
+      this.nulls === undefined ? undefined : this.nulls === 'first' ? 'last' : 'first',
+    );
   }
 }
 
@@ -1540,6 +1570,16 @@ export class ProjectionItem extends AstNode {
 
 export type LimitOffsetValue = number | AnyExpression;
 
+function checkLimitOffset(argument: 'limit' | 'offset', value: LimitOffsetValue | undefined): void {
+  if (typeof value === 'number' && !(Number.isSafeInteger(value) && value >= 0)) {
+    throw structuredError(
+      'ORM.ARGUMENT_INVALID',
+      `${argument} must be an integer from 0 to ${Number.MAX_SAFE_INTEGER}, got ${String(value)}`,
+      { meta: { argument } },
+    );
+  }
+}
+
 export interface SelectAstOptions {
   readonly from?: AnyFromSource;
   readonly joins: ReadonlyArray<JoinAst> | undefined;
@@ -1572,6 +1612,8 @@ export class SelectAst extends QueryAst {
 
   constructor(options: SelectAstOptions) {
     super();
+    checkLimitOffset('limit', options.limit);
+    checkLimitOffset('offset', options.offset);
     this.from = options.from;
     this.joins =
       options.joins && options.joins.length > 0 ? frozenArrayCopy(options.joins) : undefined;

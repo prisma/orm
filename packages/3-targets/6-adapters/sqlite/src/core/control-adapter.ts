@@ -31,6 +31,7 @@ import type {
   SqlUniqueIRInput,
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind, SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
@@ -55,7 +56,7 @@ import {
   NOW,
   sqliteCatalog,
 } from './marker-ledger';
-import type { SqliteCodecRegistry, SqliteContract } from './types';
+import type { SqliteContract } from './types';
 
 const SQLITE_MARKER_TABLE = '_prisma_marker';
 const SQLITE_LEDGER_TABLE = '_prisma_ledger';

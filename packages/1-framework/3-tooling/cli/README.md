@@ -93,11 +93,20 @@ Before any consent question or file change, init checks that Prisma 8 can read t
 
 The second question is the consent token; `--confirm <dir>` answers it non-interactively. Under it init:
 
-- renames the Prisma 7 config to `prisma7.config.<same extension>` and points its `prisma/config` import at `@prisma/prisma7/config`;
+- renames the Prisma 7 config to `prisma7.config.<same extension>` and points its `prisma/config` import at `@prisma/prisma7/config`; a config that does not import `prisma/config` is renamed with its imports unchanged, and init warns that any other import of the Prisma 7 config helper must be pointed at `@prisma/prisma7/config` by hand;
 - rewrites every `package.json` script that invokes `prisma` to invoke `prisma7` (scripts init adds keep `prisma`);
 - installs `@prisma/prisma7@7` as a development dependency alongside `prisma@latest`, and `@prisma/client@7` when the project declares a client below the 7 line.
 
 It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")` and `output: "src/prisma"`, `src/prisma/db.ts`, and a `prisma-8.md` that describes the transition loop; no starter schema is written and `prisma/` stays byte-identical. The next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, and re-run `prisma contract emit` then `prisma db sign` after each `prisma7 migrate dev`.
+
+**Design constraints on the Prisma 7 path:**
+
+- There is no separate upgrade command. Init already installs, scaffolds, and emits. A command that automated the whole upgrade guide could not find its inputs reliably in arbitrary projects (computed config values, multi-file schemas, monorepos, CI files that call `prisma migrate`), and the Prisma 7 contract source removes the need for a schema converter.
+- From a Prisma 7 config init reads only `schema`. The new config connects with `process.env['DATABASE_URL']!`: copying the Prisma 7 `datasource.url` expression would need a TypeScript rewrite of user code, and matching its resolved value back to an environment variable assumes the URL came from one.
+- Init's files go under `src/prisma/`, where a fresh init puts them, so an upgraded project is shaped like a new one. `prisma/` belongs to Prisma 7.
+- The Prisma 7-specific edits (renaming the config, changing its import, rewriting scripts that call `prisma`, moving the Prisma 7 packages) all happen under one consent; the file merges a fresh init makes happen as usual. Renaming the config alone would leave scripts calling a `prisma` binary that is now Prisma 8, and `@prisma/client` moves with the Prisma 7 CLI because Prisma 7 requires both at the same version.
+- `package.json#type` and `tsconfig.json` are handled as on a fresh init; see [TypeScript module settings for Prisma 8 projects](../../../../docs/reference/typescript-module-settings.md).
+- There is no cutover step. The next steps list only what the user runs right after init.
 
 **Exit codes:**
 - `0`: set up (and, unless skipped, installed and emitted)
@@ -409,6 +418,81 @@ prisma db schema --json
 
 # Verbose output
 prisma db schema -v
+```
+
+### `prisma contract print`
+
+Load the contract from the source the config names and print the Prisma 8 PSL that reads back as the same contract, or write it to a file with `--output`. The source can be a Prisma 7 schema (`prisma7Schema(...)`), a TypeScript contract, or a PSL contract. The common use is cutover: a project on `prisma7Schema(...)` is ready to stop reading the Prisma 7 file and author in Prisma 8 PSL instead.
+
+**Command:**
+```bash
+prisma contract print [--config <path>] [--output <path>] [--json] [-v] [-q] [--color/--no-color]
+```
+
+Options:
+- `--config <path>`: Optional. Path to `prisma.config.ts` (defaults to `./prisma.config.ts` if present)
+- `--output <path>`: Write the PSL to this file instead of printing it
+- `--json`: Output a JSON result envelope (includes the PSL as `psl.text`, or `psl.path` with `--output`, the `source` files it read, and `sourceSettings`)
+- `-q, --quiet`: Quiet mode (errors only)
+- `-v, --verbose`: Verbose output (debug info, timings)
+- `-vv, --trace`: Trace output (deep internals, stack traces)
+- `--color/--no-color`: Force/disable color output
+
+The command needs no database connection: it reads the source files, not the server. Without `--output`, it prints the PSL and writes no file. In a terminal the PSL is shown on screen. A pipe receives the JSON result, as with every command, unless you pass `--format human`, which sends the PSL alone to standard output:
+
+```bash
+prisma contract print --format human > printed.prisma
+```
+
+With `--output`, an existing file at that path is overwritten with a warning.
+
+The printed PSL opens with two comment lines: the `// use prisma-8` marker, and a line naming the source files it was printed from:
+
+```prisma
+// use prisma-8
+// Printed from prisma/schema.prisma by `prisma contract print`.
+```
+
+The printed PSL reads back as the identical contract. Where PSL has no form for part of the contract, the command refuses, names that part, and prints and writes nothing. It exits `2` in these cases:
+- `CONTRACT.PRINT_UNSUPPORTED`: part of the contract cannot be written as PSL that reads back the same. The full list of cases is under that code in `docs/reference/error-reference.md`. A column type an extension contributes, such as pgvector's `Vector`, prints only when that extension is in the config.
+- `CONTRACT.SOURCE_LOAD_FAILED`: the source cannot be read, reported exactly as `contract emit` reports it.
+- The loaded contract fails the structure check `contract emit` applies, as a hand-written TypeScript contract can. The command runs the same check before it prints, so it reports the same error as `contract emit`.
+- `CONTRACT.PRINT_OUTPUT_IS_SOURCE`: the `--output` path is a source file the config reads, sits inside a directory of source files, or names a new file that a glob input of the source would match once written. Pick another path.
+- `CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE`: the `--output` path is the `prisma.config.ts` in the directory of the config that defines the `orm` section, or one of the files `contract emit` writes (`contract.json` and `contract.d.ts`, or whatever `contract.output` names). Pick another path.
+
+These checks compare the files the paths name, not the text of the paths: a path through a symbolic link, or one that differs only in case on a volume that ignores case (the macOS default), counts as the same file.
+
+A PSL file cannot carry the contract's default control policy. When the contract has one, the command prints a warning, names it in the JSON result (`sourceSettings.defaultControlPolicy`) and in the next step, and the config must set it on the new PSL source. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed. The facade `defineConfig` has no option for it, so build the PSL source with `prismaContract`, which comes from `@prisma/orm-family-sql` (add that package to the project's dependencies). For Postgres, with the PSL written to `prisma/contract.prisma`:
+
+```typescript
+// prisma.config.ts
+import { definePrismaConfig } from 'prisma/config';
+import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
+import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@prisma/orm-postgres/target/codec-ids';
+import postgresPack from '@prisma/orm-postgres/target/pack';
+import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
+
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: prismaContract('./prisma/contract.prisma', {
+      target: postgresPack,
+      createNamespace: postgresCreateNamespace,
+      enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      defaultControlPolicy: 'external',
+    }),
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
+});
+```
+
+To switch to the written file, point `contract` in `prisma.config.ts` at it and run `prisma contract emit`. Without an explicit `output`, the facade names the emitted files after the contract path it is given, so switching `contract: './prisma/schema.prisma'` to `contract: './prisma/contract.prisma'` moves `schema.json` and `schema.d.ts` to `contract.json` and `contract.d.ts` and leaves the old files on disk; when the printed file would move them, the next step names both pairs of files. The next step writes every path relative to the directory of `prisma.config.ts`, because the config resolves its paths against that directory, not against the directory the command ran in. For a project leaving a Prisma 7 schema, the switch is the first step of the cutover; the rest takes migration ownership of the database Prisma 7 built:
+
+```bash
+prisma contract emit
+prisma migration plan --name baseline
+prisma db sign
+prisma migration ref set db <timestamp>_baseline
 ```
 
 ### `prisma contract infer`
@@ -1204,11 +1288,13 @@ How it composes:
 - Long-lived hosts (Vite dev server, watch CLIs) must call `disposeEmitQueue`
   on shutdown to drop the per-output queue state, otherwise the module-global
   queue map leaks one entry per unique output path.
-- `loadContractSource(config, { signal })` runs only the resolve-source step: it builds the control stack, runs `contract.source.load`, and returns the contract or the source's `{ summary, diagnostics }` without writing anything. `prisma orm init` uses it to check a Prisma 7 schema before it changes the project; `executeContractEmit` calls it and turns a refusal into the same error as before.
+- `loadContractSource(config, { signal, onWarning })` runs only the resolve-source step: it builds the control stack, runs `contract.source.load`, and returns the contract or the source's `{ summary, diagnostics }` without writing anything. `onWarning` receives each warning the source reports. `prisma orm init` uses it to check a Prisma 7 schema before it changes the project. `executeContractEmit`, `contract print` and `ControlClient.emit` load the source through the same step, so each reports a bad source with the same error.
 
 The `validateContractDeps` warning is returned in `ContractEmitResult.validationWarning`
 rather than written to stderr by the operation — callers (CLI, Vite plugin) decide
 how to render it (`ui.warn`, plugin logger, etc.).
+
+A contract source can report warnings while it still produces a contract, through the optional `reportWarning` on its `ContractSourceContext` (each a `ContractSourceDiagnostic` with `severity: 'warning'`). `executeContractEmit` collects them into `ContractEmitResult.sourceWarnings`, and `prisma contract emit` prints each as `warning <file>:<line>:<column> <code> <message>`; the language server shows them with warning severity.
 
 ## Config Validation and Normalization
 
@@ -1227,6 +1313,7 @@ See `.cursor/rules/config-validation-and-normalization.mdc` for detailed pattern
 - `src/bin.ts` is the thin process entry: it adapts the host process into the engine's `Runtime` (`runtimeFromProcess`) and exits with the settled code
 - Exit codes, help output, `--json`, and shared flags (`--config`, `-q`, `-v`, `--color`) are engine policy, not implemented here
 - The unified `prisma-cli` bin mounts the same family from `@prisma/orm-toolchain/cli`
+- The CLI sets no global `Temporal` and has no dependency on a polyfill. The Postgres target's control entry sets a fallback `Temporal` for the target's own code when it is loaded, which happens when the CLI loads `prisma.config.ts`
 
 ### Contract Emit Command (`src/orm/contract/emit.ts`)
 - Engine command definition; the handler returns a settled envelope and the engine renders it

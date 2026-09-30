@@ -39,11 +39,11 @@ The `contract` section is missing (or incomplete) in `prisma.config.ts` when a c
 
 ### CONFIG.DB_CONNECTION_REQUIRED
 
-A DB-connected command (`migrate`, `db init`, `db sign`, `db verify`, `db update`, `inspect-live-schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
+A DB-connected command (`db migrate`, `db init`, `db sign`, `db verify`, `db update`, `db schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
 
 ### CONFIG.DRIVER_REQUIRED
 
-A DB-connected command was run but `prisma.config.ts` has no control-plane `driver` entry (e.g. `driver: postgresDriver`). Raised by the migration command scaffold, `migrate`, `db sign`, `db verify`, and `inspect-live-schema`. Payload: none.
+A DB-connected command was run but `prisma.config.ts` has no control-plane `driver` entry (e.g. `driver: postgresDriver`). Raised by the migration command scaffold, `db migrate`, `db sign`, `db verify`, and `db schema`. Payload: none.
 
 ### CONFIG.EVALUATION_FAILED
 
@@ -97,11 +97,11 @@ The migration-file CLI (`prisma migration`) received `--config` without a path a
 
 ### CLI.FILE_NOT_FOUND
 
-A file the command needs does not exist at the given path. Produced by several commands: the migration command scaffold, `migrate`, `migration plan`, `migration show`, `db sign`, `db update`, `db verify`, and `ref` all raise it when the emitted `contract.json` (or another required file) is missing from the expected location. Most sites carry the path in `where.path`; the `migration new` contract-file site carries it in the summary text only. Payload: none.
+A file the command needs does not exist at the given path. Produced by several commands: the migration command scaffold, `db migrate`, `migration plan`, `migration show`, `db sign`, `db update`, `db verify`, and `migration ref` all raise it when the emitted `contract.json` (or another required file) is missing from the expected location. Most sites carry the path in `where.path`; the `migration new` contract-file site carries it in the summary text only. Payload: none.
 
 ### CLI.FILE_WRITE_FAILED
 
-Writing a file failed: currently raised when `format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
+Writing a file failed: currently raised when `contract format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
 
 ### CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH
 
@@ -109,7 +109,7 @@ During `prisma orm init`, `--authoring` and `--schema-path` disagree on file ext
 
 ### CLI.INIT_EMIT_FAILED
 
-During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
+During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `orm init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
 
 ### CLI.INIT_FLAG_CONFLICT
 
@@ -117,7 +117,7 @@ During `prisma orm init`, the `prisma contract emit` step failed after a success
 
 ### CLI.INIT_INSTALL_FAILED
 
-During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `init` again once the dependencies install. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
+During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
@@ -129,7 +129,7 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 ### CLI.INIT_INVALID_OUTPUT_DOCUMENT
 
-`prisma orm init` completed but its own success output document failed schema validation. This indicates a bug in Prisma 8 itself, not user error. The engine-hosted `init` settles it as an errored envelope at exit 2 (the commander `init`, deleted in the S5 cutover, mapped it to exit 1), because the ORM's error boundary converts every failure into a structured settlement and the engine reserves exit 1 for a throw that reaches it uncaught. Payload: none.
+`prisma orm init` completed but its own success output document failed schema validation. This indicates a bug in Prisma 8 itself, not user error. The engine-hosted `orm init` settles it as an errored envelope at exit 2 (the commander `orm init`, deleted in the S5 cutover, mapped it to exit 1), because the ORM's error boundary converts every failure into a structured settlement and the engine reserves exit 1 for a throw that reaches it uncaught. Payload: none.
 
 ### CLI.INIT_INVALID_TSCONFIG
 
@@ -173,9 +173,9 @@ On the Prisma 7 path of `prisma orm init`, `--target` names a different database
 
 ### CLI.INIT_REINIT_NEEDS_FORCE
 
-`prisma orm init` ran non-interactively in a directory that already has a `prisma.config.ts`, and consent to overwrite the existing scaffold was not given. Re-scaffolding is destructive, so it needs explicit consent: interactively, `init` asks the user to type the working directory's name back; non-interactively, the same consent is granted by `--confirm <directory name>`. Neither `--yes` nor any flag skips it. Maps to init exit code 2 (PRECONDITION). Payload: none.
+`prisma orm init` ran non-interactively in a directory that already has a `prisma.config.ts`, and consent to overwrite the existing scaffold was not given. Re-scaffolding is destructive, so it needs explicit consent: interactively, `orm init` asks the user to type the working directory's name back; non-interactively, the same consent is granted by `--confirm <directory name>`. Neither `--yes` nor any flag skips it. Maps to init exit code 2 (PRECONDITION). Payload: none.
 
-The code was raised by the commander `init` (deleted in the S5 cutover), whose consent flag was `--force`. The engine-hosted `init` reaches the same outcome through the engine's own `CLI.CONSENT_REQUIRED`, which names the exact `--confirm` value to pass.
+The code was raised by the commander `orm init` (deleted in the S5 cutover), whose consent flag was `--force`. The engine-hosted `orm init` reaches the same outcome through the engine's own `CLI.CONSENT_REQUIRED`, which names the exact `--confirm` value to pass.
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
@@ -189,7 +189,7 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 
 The user cancelled an interactive `prisma orm init` prompt (Ctrl-C, escape, or declining a selection) before all required inputs were supplied. No files were modified. Severity is `info`, not `error`; maps to init exit code 3 (USER_ABORTED). Payload: none.
 
-Raised by the commander `init` (deleted in the S5 cutover). On the engine-hosted `init` a cancelled prompt is the engine's own `CLI.PROMPT_CANCELLED`, which exits 3 for every command rather than only this one; the engine-hosted `init` keeps this code for a consent the user declines, which settles as an errored envelope at exit 2 like every other structured failure there. Because that command's consent declares a token, the engine answers a wrong or absent answer with `CLI.PROMPT_INVALID` or `CLI.CONSENT_REQUIRED` before a decline can be expressed, so the code is the refusal that runs if a future consent drops its token.
+Raised by the commander `orm init` (deleted in the S5 cutover). On the engine-hosted `orm init` a cancelled prompt is the engine's own `CLI.PROMPT_CANCELLED`, which exits 3 for every command rather than only this one; the engine-hosted `orm init` keeps this code for a consent the user declines, which settles as an errored envelope at exit 2 like every other structured failure there. Because that command's consent declares a token, the engine answers a wrong or absent answer with `CLI.PROMPT_INVALID` or `CLI.CONSENT_REQUIRED` before a decline can be expressed, so the code is the refusal that runs if a future consent drops its token.
 
 ### CLI.INIT_WRITE_FAILED
 
@@ -235,7 +235,7 @@ The migration-file CLI (`prisma migration`) received a flag it does not recognis
 
 ### CONTRACT.ARGUMENT_INVALID
 
-A builder or helper on the contract-authoring surface is called with a bad argument: a composed authoring helper receives too many arguments or a malformed trailing options object, `field.sql({ id })` / `field.sql({ unique })` is used without a matching inline `.id(...)` / `.unique(...)` declaration, `model("Name", ...)` is called without a model definition, a nanoid ID generator is given a size outside 2–255, or an authored index combines its cross-field parameters invalidly (fields and an expression together or neither, an expression without `name:`/`map:`, or `map:` combined with `name:`). Also raised when a contract targets SQLite and declares an expression or partial index: SQLite's namespace construction rejects `expression:`/`where:` because the target does not support them. Raised while authoring/building the contract, before emit. Payload: varies per site.
+A builder or helper on the contract-authoring surface is called with a bad argument: a composed authoring helper receives too many arguments or a malformed trailing options object, `field.sql({ id })` / `field.sql({ unique })` is used without a matching inline `.id(...)` / `.unique(...)` declaration, `model("Name", ...)` is called without a model definition, a nanoid ID generator is given a size outside 2–255, or an authored index combines its cross-field parameters invalidly (fields and an expression together or neither, an expression without `name:`/`map:`, or `map:` combined with `name:`). Also raised when a contract targets SQLite and declares an expression or partial index: SQLite's namespace construction rejects `expression:`/`where:` because the target does not support them. Also raised when a column with a literal default has type parameters that its codec does not accept (meta: `modelName`, `fieldName`, `codecId`, `reason: 'type-params-invalid'`; the codec's error is the `cause`). Raised while authoring/building the contract, before emit. Payload: varies per site.
 
 ### CONTRACT.AGGREGATE_DESCRIPTOR_AMBIGUOUS
 
@@ -259,7 +259,7 @@ The control plane resolves a codec referenced by the contract (a `CodecRef.codec
 
 ### CONTRACT.CAST_REFUSED
 
-A value handed to a data type's cast, or to an authoring entry that reads written text, is not one that type takes: it is not in the shape the source type stores, its magnitude is outside the range the receiving type holds, or the text is not a boolean. Raised by a target's or extension's casts and authoring entries. A contract source reading a column default reports it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
+A value handed to a data type's cast, or to an authoring entry that reads written text, is not one that type takes: it is not in the shape the source type stores, its magnitude is outside the range the receiving type holds, the text is not a boolean, or the text is not a date or time the receiving type holds. A date or time text is refused when it has an offset its type does not hold or lacks one its type needs, has more fraction digits than its type holds (six, or three for `sqlite/datetime`, which holds milliseconds), names a date or time that does not exist, or is outside the range of years its type holds; the message shows text the type takes. The date and time codecs raise it from `encodeJson` for a value their type does not hold, such as a `Temporal` value with digits below one microsecond. Raised by a target's or extension's casts and authoring entries. A contract source reading a column default reports it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
 
 ### CONTRACT.CHECK_NAME_RESERVED
 
@@ -280,6 +280,80 @@ A Mongo model's collection attachment is wrong: the model declares `indexes`, `c
 ### CONTRACT.CONSTRAINT_INVALID
 
 A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering: the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
+
+### CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE
+
+`prisma contract print --output` was asked to write over a file the project needs: the `prisma.config.ts` in the directory of the config that defines the `orm` section, or one of the files `contract emit` writes (the JSON `contract.output` names, and the `.d.ts` beside it). Writing there would put PSL where the CLI reads its config when `--config` names no other file, or the next `contract emit` would write over the printed PSL. The check compares the files the paths name: a path through a symbolic link, or one that differs only in case on a volume that ignores case, counts as the same file. Raised before the source is read, so nothing is written. Pick another `--output` path. Payload: `output` and `file`, both relative to the invocation directory.
+
+### CONTRACT.PRINT_OUTPUT_IS_SOURCE
+
+`prisma contract print --output` was asked to write over a file it reads: the resolved `--output` path is one of the contract source's inputs, or sits inside a directory of source files. Writing there would destroy the source the printed contract is made from. The same code is raised when the path names a new file that a glob input of the source would match once written, because the next `contract emit` would read the printed file together with the source files; `source` is then the glob. Pick another `--output` path, outside the files the config names. Raised before the source is read, so nothing is written and the source file is untouched. Payload: `output` and `source`, both relative to the invocation directory.
+
+### CONTRACT.PRINT_UNSUPPORTED
+
+`contract print` cannot write the loaded contract as Prisma 8 PSL that reads back as the same contract, so it writes nothing. The message names what it stopped on. Raised when the configured family cannot print a contract (no meta), or when the target's descriptor has no `buildPslContract` hook (meta: `targetId`). The Postgres printer raises it in each case below; each case is one function in its `psl-print/refusals.ts`, in this order. Every case is a contract that passes validation. The printer takes a validated contract and does not check its structure again.
+
+- Column types and defaults:
+  - no PSL type in the configured stack produces a column's codec, native type and type parameters, including a column that has no value for an argument its type constructor requires. Add the extension that contributes the type to the config (meta: `coordinate`, `nativeType`, `codecId`);
+  - a string type argument holds a quote, backslash or line break, which the PSL source reads back differently (meta: `coordinate`, `argument`);
+  - a domain enum column defaults to a value that is not a member of the enum (meta: `coordinate`, `pslTypeName`);
+  - a column's literal default has no PSL literal that reads back as the stored value, including when the column's codec has no data type in the stack (meta: `coordinate`, `pslTypeName`).
+- Generated values:
+  - a column pairs the wall-clock-now generator with a different generator (meta: `coordinate`, `onCreate`, `onUpdate`);
+  - a column generates a value on update other than through a temporal preset (meta: `coordinate`, `onCreate`, `onUpdate`);
+  - a column is generated by a generator no PSL default function of the Postgres adapter produces (meta: `coordinate`, `onCreate`, `onUpdate`);
+  - a column has both an id generator and a database default (meta: `coordinate`, `onCreate`);
+  - a generated value names a column no field is stored in (meta: `coordinate`).
+- Fields and columns:
+  - a field and its column disagree where PSL writes them once: the field is optional and the column is not nullable or the reverse, a column of a single-table variant is not nullable, one of them is a list and the other is not, a scalar field's codec or type parameters differ from its column's, or they do not name the enum and value set the PSL source derives for a field typed by an enum (meta: `coordinate`);
+  - a model or value-object field's type is a union of types (meta: `coordinate`, `kind`), or a field is a dictionary (meta: `coordinate`);
+  - a value-object field carries type parameters or a value set, which the PSL source does not keep on a value-object field (meta: `coordinate`);
+  - a value-object field uses a codec that no Postgres codec in the configured stack names a native type for (meta: `coordinate`, `codecId`);
+  - a value-object field uses a codec that names a native type only from type parameters (meta: `coordinate`, `codecId`);
+  - a field is stored in no column (meta: `namespaceId`, `modelName`, `field`);
+  - a model stores a column under a field name the model does not declare (meta: `namespaceId`, `modelName`, `field`);
+  - a column is typed by a named type the contract does not declare, or its native type or codec is not the named type's (meta: `coordinate`, `typeRef`);
+  - a column has its own control policy (meta: `coordinate`, `control`);
+  - a table has no model stored in it (meta: `namespaceId`, `table`), or a column is stored by no field, other than the primary key columns that link a multi-table variant to its base (meta: `namespaceId`, `table`, `column`).
+- Models:
+  - a model has an owner (meta: `namespaceId`, `modelName`, `owner`);
+  - a multi-table variant is linked to its base other than through the base's primary key columns as its unnamed primary key and an unnamed foreign key that cascades on delete (meta: `namespaceId`, `modelName`);
+  - one model name is declared in more than one namespace (meta: `modelName`, `namespaces`);
+  - a domain enum is declared outside the default namespace (meta: `namespaceId`, `names`);
+  - a value object is declared outside the default namespace (meta: `namespaceId`, `names`).
+- Keys, checks and indexes:
+  - a check or index has a prefix, but its name is not that prefix followed by the hash of its content (meta: `namespaceId`, `table`, `name`, `prefix`);
+  - a managed table lacks a check the PSL source derives for an enum or list column, or has a check with that check's name but not its prefix and expression (meta: `namespaceId`, `table`, `name`);
+  - an index has options but no type (meta: `namespaceId`, `table`, `index`), or an option whose value is not a string (meta: `namespaceId`, `table`, `index`, `key`).
+- Relations:
+  - a to-one relation has no foreign key behind it (meta: `model`, `field`);
+  - a foreign key has no relation that travels it (meta: `namespaceId`, `table`, `columns`);
+  - a relation targets a model in another contract space, which the printer does not write yet (meta: `model`, `field`, `space`);
+  - a many-to-many relation goes through a table whose model has no relation back to the relation's model (meta: `model`, `field`);
+  - a one-to-many or one-to-one relation has no foreign key of its own, and the model it targets has no relation back that holds the foreign key (meta: `model`, `field`);
+  - a relation names no fields to join on (meta: `model`, `field`).
+- Enums and value sets:
+  - a value set is not the value set of an enum or native enum of that name holding exactly its values, or an enum has no value set holding its members (meta: `namespaceId`, `name`);
+  - an enum and a native enum would derive the same value set (meta: `namespaceId`, `name`);
+  - a native enum has no value set holding its members (meta: `namespaceId`, `typeName`);
+  - a native enum has its own control policy (meta: `namespaceId`, `typeName`, `control`).
+- Namespaces, meta and roots:
+  - a storage or domain namespace holds nothing PSL writes, or the contract lacks a namespace the PSL source would create, such as the default namespace (meta: `plane`, `namespaceId`);
+  - a namespace is named `unbound` and is not the late-binding namespace, which PSL writes as `namespace unbound` (meta: `namespaceId`);
+  - the contract has top-level `meta` entries (meta: `keys`);
+  - the contract has roots other than one per model that is not a variant, keyed by its table name (meta: `root`).
+- Row-level security:
+  - a table has row-level security enabled but no model (meta: `namespaceId`, `table`);
+  - a policy is on a table with no model (meta: `namespaceId`, `table`, `name`);
+  - a policy is on a table without row-level security (meta: `namespaceId`, `table`, `name`);
+  - a wire-named policy's name is not its block name followed by the hash of its content (meta: `namespaceId`, `table`, `name`);
+  - a role is declared outside the unbound namespace (meta: `namespaceId`, `name`);
+  - a row-level security setting or role is filed under a key the PSL source would not file it under (meta: `namespaceId`, `kind`, `name`);
+  - a row-level security setting, role or policy records a namespace other than the one it is stored in (meta: `namespaceId`, `kind`, `name`).
+- Names and storage entries:
+  - a table or column is named `__proto__`, which the PSL source loses when it reads the name from `@@map` or `@map` (meta: `kind`, `name`);
+  - a name PSL writes as an identifier is not one, or is `__proto__`: a namespace, model, field, value object, enum, enum member, native enum, named type, policy, role or index option key. `NaN` and `Infinity` are number words, not identifiers (meta: `kind`, `name`);
+  - a namespace holds a storage entity kind other than tables, value sets, native enums, row-level security settings, policies and roles (meta: `namespaceId`, `kind`, `names`).
 
 ### CONTRACT.DATA_TYPE_DUPLICATE
 
@@ -307,7 +381,7 @@ Two authoring entries claim the same written form — the same literal tag, or t
 
 ### CONTRACT.DEFAULT_INVALID
 
-A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or is exactly `now()` or `autoincrement()` (`` Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. ``; meta: `reason: 'reserved-function'`, `expression`), or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
+A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults` (`Field "<Model>.<field>" is filled on write by a generated default …, so it cannot be optional; remove .optional().`; the Mongo TypeScript builder words it around a preset such as `temporal.createdAt()`, refuses `.optional()` and `.many()` on such a field in the type, and says `remove .many()` for a list). Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. The SQL TypeScript builder also raises it when the column's codec refuses the value passed to `.default(value)`, because the value is not the codec's input type (for example a string on `field.dateTime()`, whose codec takes a `Temporal.Instant`); TypeScript reports the same mistake as a type error when the field comes from the `defineContract` factory; the message carries the codec's own message, the original error is the `cause`, and the meta is `modelName`, `fieldName`, `codecId`, `reason: 'codec-refused-default'` and, for a list column, the 1-based `elementPosition`. It raises it too when the build has a codec lookup and no pack in the contract declares the column's codec, so the default cannot be checked (`reason: 'codec-not-found'`; list the pack that owns the codec in `extensions`), and when a list field has a default that is not an array (`reason: 'list-default-not-array'`). The Mongo TypeScript builder raises it for execution defaults it cannot key to one collection field: on a variant model's field (`reason: 'executionDefaults-on-variant'`; declare the field on the base model, whose defaults apply to every variant), or with different phases on two models stored in the same collection (`reason: 'executionDefaults-conflict'`; identical ones are merged). The PSL interpreter reports the same cases as `PSL_PRESET_ON_VARIANT_FIELD` and `PSL_PRESET_CONFLICT`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or is exactly `now()` or `autoincrement()` (`` Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. ``; meta: `reason: 'reserved-function'`, `expression`), or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`). Both migration planners also raise it for a literal default in the contract that its column's data type refuses, such as a date without an offset on a `timestamptz` column, which a contract emitted by an earlier version can hold; the message carries the type's refusal and says to re-emit the contract (meta: `reason: 'default-not-canonical'`, `column`). `db update`, `db init` and `migration plan` report the planner's error under this code. Schema verification reports the same refusal as the explanation of the default's mismatch, or of its absence when the database has no default.
 
 ### CONTRACT.DEFAULT_SQL_INTERPOLATION
 
@@ -379,7 +453,7 @@ No contract marker (database signature) is found in the database at all. `db ver
 
 ### CONTRACT.MARKER_READ_FAILED
 
-A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker. Payload: `space`.
+A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker, and by the runtime when its first query on a database connection reads the marker (with the default `verifyMarker`) and that read fails; a query returned without `await` from an `await using` scope that held a serverless Postgres connection fails this way, with `DRIVER.NOT_CONNECTED` as its `cause`. Payload: `space`.
 
 ### CONTRACT.MARKER_REQUIRED
 
@@ -443,7 +517,7 @@ A native type name in the contract fails the identifier-safety pattern required 
 
 ### CONTRACT.PACK_CONTRIBUTION_INVALID
 
-A composed pack's contribution is malformed or collides with another contribution; this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, a model attribute that lowers to a malformed index, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (missing/mismatched PSL block descriptor, param descriptor kind disagreeing with the AST node, unregistered codec id, raw literal that is not valid JSON). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
+A composed pack's contribution is malformed or collides with another contribution; this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, a model attribute that lowers to a malformed index, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (a block keyword with no PSL block descriptor, or a descriptor whose discriminator disagrees with the block's kind). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
 
 ### CONTRACT.PACK_FAMILY_MISMATCH
 
@@ -483,11 +557,11 @@ The TypeScript contract module imports something outside the contract-source imp
 
 ### CONTRACT.SOURCE_DIAGNOSTIC
 
-One finding a contract source reported with a code that is not yet dotted, such as the Prisma 8 PSL interpreter's `PSL_UNSUPPORTED_FIELD_TYPE` or a parser's `PSL_PARSE_ERROR`. This is its only producer case: it exists until those codes convert to dotted ones, and a source code that is already dotted, such as `PSL.PRISMA7_VIEW_UNSUPPORTED`, is reported under its own code instead. Never raised on its own; carried, one per such source diagnostic, in the `diagnostics` list of a `CONTRACT.SOURCE_LOAD_FAILED` error during `contract emit`, printed under it in the terminal and serialized as the envelope's `diagnostics` in JSON. `summary` is `<file>:<line>:<column> <source code>: <message>` (the location is omitted when the source gave none). `where` carries `path` and `line`. Payload: `code` (the source's own diagnostic code). Fix: edit the schema at each location the findings name, then run `prisma contract emit` again. One such source code is `PSL_UNKNOWN_DEFAULT_FUNCTION`, reported by the Prisma 8 PSL interpreter for a `@default` function the composed stack does not register; its message lists the supported functions, and for the removed `dbgenerated(...)` it is `` Default function "dbgenerated" was removed. Write the SQL as a tagged literal: @default(sql`<expression>`). Supported functions: <list>. ``
+One finding a contract source reported with a code that is not yet dotted, such as the Prisma 8 PSL interpreter's `PSL_UNSUPPORTED_FIELD_TYPE` or a parser's `PSL_PARSE_ERROR`. This is its only producer case: it exists until those codes convert to dotted ones, and a source code that is already dotted, such as `PSL.PRISMA7_VIEW_UNSUPPORTED`, is reported under its own code instead. Never raised on its own; carried, one per such source diagnostic, in the `diagnostics` list of a `CONTRACT.SOURCE_LOAD_FAILED` error during `contract emit` or `contract print`, printed under it in the terminal and serialized as the envelope's `diagnostics` in JSON. `summary` is `<file>:<line>:<column> <source code>: <message>` (the location is omitted when the source gave none; a file the source names by its absolute path is shown relative to the working directory). `where` carries `path` and `line`. Payload: `code` (the source's own diagnostic code). A contract source's warnings, such as `PSL_DEPRECATED_SCALAR_NAME`, are reported the same way with severity `warn`, in the `diagnostics` of a successful `contract emit` or `contract print`; their `meta` also carries the source's `span`, whose `start` gives the line and column. Fix: edit the schema at each location the findings name, then run the command again. One such source code is `PSL_UNKNOWN_DEFAULT_FUNCTION`, reported by the Prisma 8 PSL interpreter for a `@default` function the composed stack does not register; its message lists the supported functions, and for the removed `dbgenerated(...)` it is `` Default function "dbgenerated" was removed. Write the SQL as a tagged literal: @default(sql`<expression>`). Supported functions: <list>. ``
 
 ### CONTRACT.SOURCE_LOAD_FAILED
 
-Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit`, or `format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
+Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit` or `contract print`, or `contract format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
 
 ### CONTRACT.TABLE_AMBIGUOUS
 
@@ -511,7 +585,7 @@ The emitted contract file could not be read or parsed while computing `migration
 
 ### CONTRACT.TYPES_RENDER_FAILED
 
-A command advancing a ref (`db sign`, `db init`, `db update`, `migrate --advance-ref`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
+A command advancing a ref (`db sign`, `db init`, `db update`, `db migrate --advance-ref`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
 
 ### CONTRACT.VALIDATION_FAILED
 
@@ -533,7 +607,87 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 
 ### PSL.PARSE_FAILED
 
-`format()` was asked to format PSL source that has parse errors; formatting refuses to run on an unparseable document. The message carries the first diagnostic and a count of the rest; the CLI `format` command wraps this into a structured failure telling the user to fix the parse errors, attaching the parser error as `cause`. Payload: `diagnostics`.
+`format()` was asked to format PSL source that has parse errors; formatting refuses to run on an unparseable document. The message carries the first diagnostic and a count of the rest; the CLI `contract format` command wraps this into a structured failure telling the user to fix the parse errors, attaching the parser error as `cause`. Payload: `diagnostics`.
+
+### PSL.PRISMA6_MONGO_COMPOSITE_ID_UNSUPPORTED
+
+`@@id` on a model; a MongoDB document is identified by its `_id` field alone. Declare the id as `id String @id @default(auto()) @map("_id") @db.ObjectId`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED
+
+An `@@index`, `@@unique`, or `@@fulltext` path that reaches into a composite type, such as `address.city(sort: Asc)`, which the Mongo contract cannot express yet. Index a top-level field or remove the index. A dotted path without a call, such as `address.city`, fails at parse time instead. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED
+
+`@map` on a field of a composite `type`, which the Mongo contract cannot express yet. Removing `@map` renames the stored field, so keep the schema until Prisma 8 supports it. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_CONTRACT_INVALID
+
+The Prisma 6 MongoDB schema gives a contract that Prisma 8 rejects, for a cause the source has no specific diagnostic for: a structured error was thrown while the contract was built, or the contract failed the domain or storage check. This is a bug in Prisma ORM; the message names the cause, and the user should report it with the schema. Reported at the schema path by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file> <message>` (the terminal prints the code before it), and `where` carries `path`. Payload: none; the error's `providerMeta` carries `schemaPath` and the thrown error's `code`.
+
+### PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED
+
+A `@default` other than `now()` on a `DateTime` field and `auto()` on the id: a literal, `uuid()`, `cuid()`, `dbgenerated(...)`, `now()` on another type, or `auto()` on another field. MongoDB has no stored defaults, and Prisma 8 fills only `now()`. Remove the default and set the value when documents are created. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_ID_NOT_OBJECTID
+
+The model's `@id` is not a required `String @db.ObjectId` stored as `_id`. Declare it as `id String @id @default(auto()) @map("_id") @db.ObjectId`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED
+
+An `@ignore`d field is used by `@unique`, `@@unique`, `@@index`, `@@fulltext`, or a relation's `fields:` or `references:`, and Prisma 6 still creates that index or reads that key. Remove `@ignore` from the field, or remove what uses it. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED
+
+An index argument a Mongo contract index cannot carry, such as `length`, or an unknown argument. `sort` is read, and `map` and `name` are accepted and dropped, since Mongo verify matches indexes by keys and options. Remove the argument. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_LIST_RELATION_UNSUPPORTED
+
+A list relation whose keys live in a list field (a many-to-many relation on MongoDB), which Prisma 8 does not support yet. Remove the relation fields and keep the key list as a plain field. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_NATIVE_TYPE_UNSUPPORTED
+
+A `@db.*` attribute other than `@db.ObjectId`, or `@db.ObjectId` on a field that is not a `String`. Remove it; the stored BSON type then follows the field type. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_OPTIONAL_GENERATED_FIELD_UNSUPPORTED
+
+`@default(now())` or `@updatedAt` on an optional field. Make the field required, or remove the attribute and set the value when documents are written. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_PROVIDER_MISMATCH
+
+The Prisma 6 schema has no `datasource` block, or its `provider` is not `mongodb`. Use the source only with a MongoDB schema. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED
+
+`onDelete`, `onUpdate`, or `map` on `@relation`. Prisma 8 enforces no referential actions on MongoDB, and MongoDB has no foreign key constraint for `map` to name. Remove the argument and handle related documents in application code. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_SCHEMA_READ_FAILED
+
+The schema path could not be read, or the schema directory holds no `.prisma` file. Fix the path. Reported at the schema path by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file> <message>` (the terminal prints the code before it), and `where` carries `path`. Payload: none; the error's `providerMeta` carries the schema path.
+
+### PSL.PRISMA6_MONGO_SCHEMA_UNSUPPORTED
+
+`@@schema` on a model or enum; a MongoDB contract has one database, bound by the connection string. Remove `@@schema`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_TEXT_INDEX_LIMIT
+
+A model with more than one `@@fulltext`; MongoDB allows one text index per collection. Merge the fields into one `@@fulltext`. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_UNKNOWN_ATTRIBUTE
+
+An attribute the source does not read. Remove it. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_UNSUPPORTED_TYPE
+
+A field of type `Unsupported("...")`, which has no Prisma 8 codec, or of a type name that is not a scalar type, enum, composite type, or model. For `Unsupported`, Prisma 6 rejects `@ignore` on the field; remove the field, or add `@@ignore` to the model, which also needs `@ignore` on every relation field that points to it. For an unknown name, correct the type name. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED
+
+`@updatedAt` on a field that is not a `DateTime`. Remove `@updatedAt` and set the value when documents are written. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA6_MONGO_VIEW_UNSUPPORTED
+
+A `view` block; Prisma 8 has no views on MongoDB. Remove the view from the schema the source reads. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_CONTRACT_INVALID
 
@@ -541,55 +695,55 @@ The Prisma 7 schema gives a contract that Prisma 8 rejects, for a cause the sour
 
 ### PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH
 
-A field uses an enum declared under a different `@@schema`; a Postgres enum lives in one schema and a Prisma 8 column references the enum of its own namespace. Declare the enum in the model's schema, or move the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A field uses an enum declared under a different `@@schema`; a Postgres enum lives in one schema and a Prisma 8 column references the enum of its own namespace. Declare the enum in the model's schema, or move the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_IGNORED_FIELD_REFERENCED
 
-An `@ignore`d field is used by `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:`, and Prisma 7 still creates that key, index, or foreign key over its column. Remove `@ignore` from the field. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An `@ignore`d field is used by `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:`, and Prisma 7 still creates that key, index, or foreign key over its column. Remove `@ignore` from the field. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED
 
-An index argument Prisma 8 indexes cannot carry (`sort`, `length`, `ops`, an unknown index type), or an indexed field that is not a column. Remove the argument. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An index argument Prisma 8 indexes cannot carry (`sort`, `length`, `ops`, an unknown index type), or an indexed field that is not a column. Remove the argument. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED
 
-A `Json` default of `"null"`, or a `Json[]` default holding it: the contract cannot tell the JSON value null apart from SQL `NULL`. Remove the `@default` or give it another JSON value. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `Json` default of `"null"`, or a `Json[]` default holding it: the contract cannot tell the JSON value null apart from SQL `NULL`. Remove the `@default` or give it another JSON value. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_JUNCTION_ID_UNSUPPORTED
 
-An implicit many-to-many relation on a model without a single-field `@id`. Give the model a single-field `@id`, or write the junction model out. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An implicit many-to-many relation on a model without a single-field `@id`. Give the model a single-field `@id`, or write the junction model out. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_JUNCTION_NAME_COLLISION
 
-A model in the same schema as an implicit many-to-many junction has the junction model's name (`PostToTag`, or the relation name). Rename the model and keep its table with `@@map`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A model in the same schema as an implicit many-to-many junction has the junction model's name (`PostToTag`, or the relation name). Rename the model and keep its table with `@@map`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED
 
-A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or an unknown spelling). Add `@ignore` to the field when no key, index, or relation uses it, or `@@ignore` to the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or an unknown spelling). Add `@ignore` to the field when no key, index, or relation uses it, or `@@ignore` to the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED
 
-An ORM-side generator such as `@default(uuid())`, or `@updatedAt`, on an optional field. Remove the generator or `@updatedAt` and keep the `?`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An ORM-side generator such as `@default(uuid())`, or `@updatedAt`, on an optional field. Remove the generator or `@updatedAt` and keep the `?`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_PROVIDER_MISMATCH
 
-The Prisma 7 schema has no `datasource` block, or its `provider` is not one the target accepts (`postgresql` or `postgres` for Postgres). Use the source only with a schema for the configured target. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+The Prisma 7 schema has no `datasource` block, or its `provider` is not one the target accepts (`postgresql` or `postgres` for Postgres). Use the source only with a schema for the configured target. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED
 
-`SetNull` on a relation over a required foreign key field, or `SetDefault` over a required field with no column default. Make the fields optional, give them a column default, or choose another action. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`SetNull` on a relation over a required foreign key field, or `SetDefault` over a required field with no column default. Make the fields optional, give them a column default, or choose another action. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_RELATION_MODE_UNSUPPORTED
 
-`relationMode = "prisma"`, or the older `referentialIntegrity = "prisma"`. Remove it or set `relationMode = "foreignKeys"`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`relationMode = "prisma"`, or the older `referentialIntegrity = "prisma"`. Remove it or set `relationMode = "foreignKeys"`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_RELATION_NAME_SHARED
 
-Two or more implicit many-to-many relations in the same schema use the same relation name; Prisma 7 creates one table for all of them, wired to only one. Give each relation its own name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+Two or more implicit many-to-many relations in the same schema use the same relation name; Prisma 7 creates one table for all of them, wired to only one. Give each relation its own name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_RELATION_UNRESOLVED
 
-A relation field that cannot be paired: no matching side, an ambiguous unnamed pair, a singular back-relation over a non-unique foreign key, a `fields`/`references` mismatch, or a required relation field over an optional foreign key field. Name both sides with `@relation("name")`, add the missing `fields`/`references`, or make the relation field optional. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A relation field that cannot be paired: no matching side, an ambiguous unnamed pair, a singular back-relation over a non-unique foreign key, a `fields`/`references` mismatch, or a required relation field over an optional foreign key field. Name both sides with `@relation("name")`, add the missing `fields`/`references`, or make the relation field optional. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_SCHEMA_READ_FAILED
 
@@ -597,31 +751,31 @@ The schema path could not be read, or the schema directory holds no `.prisma` fi
 
 ### PSL.PRISMA7_TABLE_COLLISION
 
-Two models map to the same table in one schema, or a model maps to the table of an implicit many-to-many relation. Give each model its own table with `@@map`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+Two models map to the same table in one schema, or a model maps to the table of an implicit many-to-many relation. Give each model its own table with `@@map`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UNKNOWN_ATTRIBUTE
 
-An attribute Prisma 7 for the target does not have, or one the source does not read (`@@fulltext`, `@shardKey`). Remove it. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+An attribute Prisma 7 for the target does not have, or one the source does not read (`@@fulltext`, `@shardKey`). Remove it. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UNKNOWN_DEFAULT
 
-A `@default` value the source cannot read, or one the column's data type or codec refuses. The message is `Field "<Model>.<field>": @default <reason>`. Every reason below carries ` at element <n>` after the value it is about when that value is one element of a list. The reasons that come from reading the value are: `holds text that this contract source does not read: <the reading entry's message>`; `holds a <tag> literal, which this stack does not register.`; `holds a <string|boolean|number> value, which this target has no data type for.`; `holds a <value type> value, which <column type> has no cast from; it casts from <types>.` (or `it casts from nothing`); and `holds a value that <codecId> does not read: <the codec's message>`. The rest do not involve the value's type — an unknown function, an enum member on a non-enum field or a non-member, and a `dbgenerated(...)` argument list that is not a single positional string with text in it. Write a value of a type the column's type is or casts from, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@default` value the source cannot read, or one the column's data type or codec refuses. The message is `Field "<Model>.<field>": @default <reason>`. Every reason below carries ` at element <n>` after the value it is about when that value is one element of a list. The reasons that come from reading the value are: `holds text that this contract source does not read: <the reading entry's message>`; `holds a <tag> literal, which this stack does not register.`; `holds a <string|boolean|number> value, which this target has no data type for.`; `holds a <value type> value, which <column type> has no cast from; it casts from <types>.` (or `it casts from nothing`); and `holds a value that <codecId> does not read: <the codec's message>`. The rest do not involve the value's type — an unknown function, an enum member on a non-enum field or a non-member, and a `dbgenerated(...)` argument list that is not a single positional string with text in it. Write a value of a type the column's type is or casts from, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UNSUPPORTED_TYPE
 
-`Unsupported("...")` or an unknown field type. Add `@@ignore` to the model, or correct the type name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`Unsupported("...")` or an unknown field type. Add `@@ignore` to the model, or correct the type name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED
 
-`@updatedAt` on a column whose codec has no "now" generator in the target, such as `@db.Date`. Remove `@updatedAt`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`@updatedAt` on a column whose codec has no "now" generator in the target, such as `@db.Date`. Remove `@updatedAt`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED
 
-`@updatedAt` combined with `@default`. Remove the `@default`; `@updatedAt` still sets the value on create and update. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+`@updatedAt` combined with `@default`. Remove the `@default`; `@updatedAt` still sets the value on create and update. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_VIEW_UNSUPPORTED
 
-A `view` block; Prisma 8 has no views. Remove the view, or replace it with a model over the underlying table. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `view` block; Prisma 8 has no views. Remove the view, or replace it with a model over the underlying table. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit` or `contract print`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL_BACKTICK_STRING_REQUIRES_TAG
 
@@ -630,6 +784,14 @@ A backtick string appears somewhere other than after a tag, for example `` @map(
 ### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
 
 A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
+
+### PSL_DEPRECATED_SCALAR_NAME
+
+A warning, not an error: a Mongo schema types a field with a deprecated scalar name, `Int`, `Float`, `Boolean` or `DateTime`: `Scalar type "<old>" is deprecated and will be removed; use "<new>" (stored as BSON <bsonType>).` Reported at the type through the contract source's `reportWarning`; `prisma contract emit` prints it and still writes the contract, which is the same as the new name gives, and the language server shows it with warning severity. Rename the type to `Int32`, `Double`, `Bool` or `Date`.
+
+### PSL_PRESET_WITHOUT_EFFECT
+
+A warning, not an error: a Mongo schema uses a field preset that fills nothing, such as `temporal.timestamp()` with neither phase: `Field "<Model>.<field>" uses temporal.timestamp() without onCreate or onUpdate, so nothing fills it and it is stored exactly like Date. Write Date, or pass onCreate: now or onUpdate: now.` Reported at the preset call through the contract source's `reportWarning`; the contract is written as for `Date`.
 
 ### PSL_DEFAULT_TYPE_INCOMPATIBLE
 
@@ -663,6 +825,18 @@ A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is 
 
 A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The message names the tag as written (`sql`, `pg.sql` or `sqlite.sql`). Reported at the literal.
 
+### PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE
+
+An enum member carries an attribute, as in `USER @map("user")`: `enum "<Enum>": member "<member>" carries @<attribute>, but an enum member takes no attributes`. Reported by the SQL and Mongo PSL readers, once per attribute, at the attribute. Remove the attribute. To store a value other than the member's name, write it as the member's value, as in `USER = "user"`.
+
+### PSL_PRESET_ON_VARIANT_FIELD
+
+A Mongo field preset that sets execution defaults, such as `temporal.createdAt()`, is declared on a field of a polymorphic variant model (one with `@@base`): `Preset "<preset>" on variant "<Model>" field "<field>": execution defaults apply to every document in collection "<collection>", so declare them on the base model.` Execution defaults are keyed by collection and field, so a default on one variant would also fill that field on the base model and every sibling variant. Declare the field on the base model; variants inherit it. Reported at the preset.
+
+### PSL_PRESET_CONFLICT
+
+Two Mongo models stored in the same collection declare field presets with different execution defaults for the same stored field, for example `temporal.createdAt()` on one and `temporal.updatedAt()` on the other. Execution defaults are keyed by collection and field, so the collection can have only one. Identical presets are merged. Use the same preset on both models. Reported at the second preset.
+
 ## ORM
 
 ### ORM.AGGREGATE_OPERATION_RESERVED
@@ -687,7 +861,7 @@ An aggregate was invoked for an operation/input pair the composed target declare
 
 ### ORM.ARGUMENT_INVALID
 
-A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection registered as an instance / against a nonexistent model in `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, non-integer limit/skip, or malformed lookup/group/update specs. Payload: `method`, `argument`, `model`, `column`, `key`.
+A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSLs, is malformed or missing a required part: a `null` where-arg, `upsert()` without conflict columns or without a create value for a conflict column, a custom collection registered as an instance / against a nonexistent model in `orm({ collections })`, invalid builder argument shapes, `$and`/`$or` with no expressions, a limit, offset or skip that is negative or not an integer, or malformed lookup/group/update specs. For SQL, the limit/offset check runs in relational-core when the `SelectAst` is constructed, so every SQL lane and target raises it before any SQL is rendered. That check also refuses integers above `Number.MAX_SAFE_INTEGER`, and does not check a limit or offset bound as a parameter. Payload: `method`, `argument` (`limit` or `offset` for the SQL limit/offset check), `model`, `column`, `key`.
 
 ### ORM.CAPABILITY_MISSING
 
@@ -737,13 +911,17 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 `create()` or `createAndCount()` was called with zero rows; at least one row of data is required. Payload: `method`, `namespaceId`, `tableName`.
 
+### ORM.MUTATION_DEFAULTS_MISSING
+
+`mongoOrm()` was built over a contract with execution defaults (fields such as `temporal.createdAt()` that the ORM fills on write) without `mutationDefaults`, so those fields would never be written. Pass the execution context, `mongoOrm({ contract, executor, mutationDefaults: context })`, or create the client with `mongo()`. Payload: `fields` (`<collection>.<field>` for each default).
+
 ### ORM.MUTATION_ROW_MISSING
 
 A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
 
 ### ORM.OPERATION_UNSUPPORTED
 
-A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, Mongo `upsert()` with dot-path field operations, or a Mongo mutation carrying windowing (`orderBy`/`offset`/`limit`) or includes. Payload: `method`, `model`, `reason`, `field`.
+A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, passing `onConflict: 'skip'` to `createAll()` on an MTI variant collection, Mongo `upsert()` with dot-path field operations, a Mongo `upsert()` whose `create` sets a field that has an update default and whose update pulls by a match document (that upsert runs as one update pipeline, which can pull only a single value), or a Mongo mutation carrying windowing (`orderBy`/`offset`/`limit`) or includes. Payload: `method`, `model`, `reason`, `field`.
 
 ### ORM.RELATION_LINK_DUPLICATE
 
@@ -767,7 +945,7 @@ A referenced relation name does not exist on the model, in `include()` (SQL and 
 
 ### ORM.ROW_IDENTITY_MISSING
 
-The operation needs a primary key or unique constraint the table does not have: `update()`/`delete()` targeting a single row, or keying the include read-back after a mutation. Payload: `model`, `table`.
+The operation needs a primary key or unique constraint the table does not have: `update()`/`delete()` targeting a single row, a `create()` or `update()` with nested relation mutations (which updates and reloads the row by that key), or keying the include read-back after a mutation. Payload: `model`, `table`.
 
 ### ORM.TABLE_UNKNOWN
 
@@ -805,7 +983,7 @@ A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annota
 
 ### RUNTIME.ARGUMENT_INVALID
 
-A built-in Postgres query operation or full-text helper received an argument it cannot use. One case is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. The other case is a literal part of a `tsquery` template with an invalid JavaScript escape, such as `\u`: JavaScript gives the tag no text for that part, so the tag refuses it rather than drop it. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
+A built-in Postgres query operation or full-text helper received an argument it cannot use, or `postgres()` or `postgresServerless()` received a `cursor` option it cannot use. Three cases: (1) the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused, while the query is being built; (2) a literal part of a `tsquery` template has an invalid JavaScript escape, such as `\u`, so JavaScript gives the tag no text for that part and the tag refuses it rather than drop it, also while the query is being built; (3) the `cursor` option has a key other than `batchSize` (including the driver's own `disabled` setting) or a `batchSize` that is not a positive integer, raised at the factory call; leave `cursor` unset to read without a cursor. Payload: `helper` (the operation, or `postgres` / `postgresServerless` for the factory option), `argument`, `received`, plus `extension: 'postgres'` for the factory option.
 
 ### RUNTIME.AST_INVALID
 
@@ -817,11 +995,11 @@ The authored SQL AST uses a feature this target cannot render, e.g. DEFAULT as a
 
 ### RUNTIME.BINDING_INVALID
 
-A target facade client (`@internal/postgres`, `@internal/sqlite`, `@internal/mongo`) received a connection binding whose shape is wrong for the target: malformed connection string, unsupported binding kind, or missing required fields. Raised at `connect(...)` / client construction. Payload: `received`, `reason`.
+A client (`postgres()`, `sqlite()`, `mongo()`) received a connection binding whose shape is wrong for the target: malformed connection string, unsupported binding kind, or missing required fields. Raised at `connect(...)` / client construction. A serverless Postgres client raises it from `connect({ url })` for an empty URL, a string that is not a URL, or a scheme other than `postgres://` or `postgresql://`, before any `pg.Client` exists. Payload: `received`, `reason`.
 
 ### RUNTIME.BINDING_MISSING
 
-A target facade client was asked to connect with no binding at all (no connection string, no environment fallback). Payload: `expected`.
+A client (`postgres()`, `sqlite()`, `mongo()`) was asked to connect with no binding at all (no connection string, no environment fallback). Payload: `expected`.
 
 ### RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED
 
@@ -861,9 +1039,11 @@ At SQL context construction, the contract's target (e.g. `sqlite`) does not matc
 
 ### RUNTIME.DECODE_FAILED
 
-A codec's `decode` threw while converting a wire value into its output type during result decoding, surfaces per column (SQL), per document field (Mongo), or per included-relation column (ORM client), with the original error attached as `cause`. Also thrown when a returned row is missing an expected projection alias, or when the JSON array for an include alias fails to parse. Payload: `table`, `column` (or `alias` / `collection` + `path`), `codec`, `wirePreview`.
+A codec's `decode` threw while converting a wire value into its output type during result decoding, surfaces per column (SQL), per document field (Mongo), or per included-relation column (ORM client), with the original error attached as `cause`. Also thrown when a returned row is missing an expected projection alias, or when the JSON array for an include alias fails to parse. Payload: `table`, `column` (or `alias` / `collection` + `path`), `codec`, `wirePreview`. When a Mongo codec raised the code itself, its own details (for the target's codecs, `codecId` and `received`) are kept alongside. On Mongo the message also names the document it read, `Failed to decode field <path> of the document with _id <id> in collection '<collection>' …`, with the id (an `ObjectId` as hex, a string quoted) in `documentId`; for a document an insert returns, `<path>` starts at that document and the id is its `_id`; `wirePreview` is the JSON text of the stored value, each BSON class in its own JSON form, cut at 100 characters.
 
 Codecs also raise this code directly, as a structured envelope with `meta.codecId` and `meta.received`. The integer guards: `pg/int8number@1` and `sqlite/bigintnumber@1` (the `BigIntNumber` type) refuse a stored value outside the safe integer range ±(2^53 − 1) and any non-integral value rather than rounding it; `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` refuse a wire or JSON value that is not a decimal integer. On a flat read the codec's envelope surfaces unchanged; on an `.include()` read the ORM client wraps it in a fresh `RUNTIME.DECODE_FAILED` carrying `table`, `column`, and `codec`, with the codec's envelope on `cause`. One SQLite caveat: on a flat read, `node:sqlite` itself refuses an INTEGER outside the safe range before any codec runs, so for an out-of-band stored value the structured envelope is guaranteed on the include/JSON path, not the flat path.
+
+On Mongo, `mongo/json@1` (a `Json` field) raises this code when the stored value is not JSON at some depth: `mongo/json@1 wire value contains a non-JSON BSON <type> at <path>`, where `<type>` is the BSON `$type` alias (`date`, `objectId`, `decimal`, `binData`, `regex`, `timestamp`, `long` for one outside the safe-integer range, `undefined`, `symbol`, `javascript`, `minKey`, `maxKey`, or the constructor name of an object the driver does not produce) and `<path>` is the dot-notation path inside the field, with array indices as segments, or `the root`. A stored `NaN`, `Infinity` or `-Infinity` is named as such: `mongo/json@1 wire value contains NaN at <path>; a JSON number cannot be NaN or Infinity`, with `meta.received` set to that value. A subdocument with `$ref` and `$id`, which the driver reads as a `DBRef`, decodes back to the document it was stored as, each member checked at its own path (`link.$id`). A stored subdocument that merely has a `_bsontype` key is read as that document, not as the type it names. The codec's envelope carries `meta.codecId`, `meta.received` (the BSON type) and `meta.valuePath` (the path inside the field); the runtime's wrapper copies them into its `details` beside `collection` and `path`, the field's own path in the document. A `long` in the safe-integer range and the driver's `Int32` and `Double` wrappers decode as numbers. Such a field should be `Bson`, which admits any BSON value.
 
 **Aggregates reach the same guards.** `count()` and `sum()` over integers declare a number-flavoured result codec, so a tally or total past ±(2^53 − 1) raises this code: `pg/int8number@1 value must be an integer within the safe integer range, got 9007199254740992`, instead of returning a rounded value. It fires on the wire path and on the `.include()` path alike: the include projection is a JSON number, but the guard runs after `JSON.parse`, and rounding is monotone, so a value that was outside the range is still outside it. Where the magnitude is real rather than a bug, switch that call to the lossless variant beside it: `countBigInt()`, `sumBigInt()`, or `avgDecimal()`.
 
@@ -881,13 +1061,22 @@ Two runtime stack contributors (target pack, extension packs) register a codec w
 
 ### RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR
 
-Two runtime stack contributors register a mutation default generator with the same id while the SQL context collects them. Payload: `id`, `existingOwner`, `incomingOwner`.
+Two runtime stack contributors register a mutation default generator with the same id while the SQL context or the Mongo execution context collects them. Payload: `id`, `existingOwner`, `incomingOwner`.
 
 ### RUNTIME.ENCODE_FAILED
 
-A codec's `encode` threw while converting a user-supplied parameter value to driver wire format during query execution (SQL param encoding, or Mongo param-ref resolution), with the original error attached as `cause`. Payload: `label`, `codec`; SQL path also `paramIndex`.
+A codec's `encode` threw while converting a user-supplied parameter value to driver wire format during query execution (SQL param encoding, or Mongo param-ref resolution), with the original error attached as `cause`. Payload: `label`, `codec`; SQL path also `paramIndex`. On Mongo, a value written through the ORM is labelled with its field path, the payload adds `collection`, and the message reads `Failed to encode field <path> in collection '<collection>' with codec '<id>': …`. When a Mongo codec raised the code itself, its own details (for the target's codecs, `codecId` and `received`) are kept alongside.
 
 Codecs also raise this code directly, as a structured envelope with `meta.codecId` and `meta.received`, which surfaces unchanged: writing a value outside ±(2^53 − 1), or a non-integral number, through `pg/int8number@1` or `sqlite/bigintnumber@1` (the `BigIntNumber` type) raises it before any SQL executes.
+
+On Mongo, `mongo/json@1` (a `Json` field) raises this code for any value that is not a plain JSON value at some depth: `mongo/json@1 value must be a JSON value; received <kind> at <path>`. `<kind>` is the `_bsontype` tag of a BSON value (`ObjectId`, `Long`, `Decimal128`, `Binary`, …), `Date`, `bigint`, `symbol`, `function`, `undefined`, `NaN`, `Infinity`, `-Infinity`, `sparse array hole`, `circular reference`, or the constructor name of any other non-plain object (`Map`, `Uint8Array`, a class name); `<path>` is the dot-notation path inside the value, or `the root`. The message ends with how to store the value instead, worded for its kind: a `Date` as an ISO 8601 string, a `bigint` or `Long` as a safe-integer number or decimal text, an `ObjectId` as its hex string, bytes as base64 text, or, for any BSON value, by declaring the field `Bson`. The codec's envelope carries `meta.codecId`, `meta.received` (the kind) and `meta.valuePath` (the path inside the value); the runtime's wrapper copies them into its `details` beside `label`, `collection` and `codec`. `mongo/bson@1` (a `Bson` field) raises the same shape, `mongo/bson@1 value must be a BSON value; received <kind> at <path>`, for `undefined`, `bigint`, `symbol`, a function, a `DBRef` instance (the message ends `Write it as a { $ref, $id } document instead.`), a sparse-array hole, a circular reference, an object carrying a `_bsontype` the driver's `bson` did not create (`<tag> not created by bson 7`: a literal look-alike such as `{ _bsontype: 'MinKey' }`, or a value from another major version of `bson`), or a non-plain object other than a `Date`, native `RegExp` or `Uint8Array` (`Map`, `Set`, a class instance, another typed array).
+
+The Mongo codecs refuse a value of the wrong type with this code, a list element included, so it is not stored: `mongo/string@1 value must be a string; received <value>`, and the same for `mongo/bool@1` (a boolean), `mongo/date@1` (a valid Date; an invalid `Date` would be stored as the epoch), `mongo/objectId@1` (a 24-digit hex string or an ObjectId; `null` would otherwise become a new id and a number a timestamp), `mongo/vector@1` (an array of numbers), `mongo/int32@1` and `mongo/double@1`. `<value>` is a number, a quoted string, `null`, `an array`, `a Date`, `an invalid Date`, or the value's JavaScript type; for an object tagged as an `ObjectId` whose `toHexString()` is missing or does not return 24 hex digits, it is `an object tagged ObjectId whose toHexString() does not return 24 hex digits`. An `ObjectId` from any major version of `bson` is accepted and rebuilt from its hex string.
+
+The Mongo ORM also raises this code, before anything reaches the driver, for two values that a contract without a collection validator (built with the TypeScript builder, or read from a Prisma 6 schema) would store. Both apply to values written by `create`, `update` and `upsert`; a filter may compare a field with either, to find documents that already hold one.
+
+- A value outside a field's enum: `Failed to encode field <path> in collection '<collection>': "<value>" is not a value of enum <Enum>; the values are "<a>" and "<b>"`, with `label`, `collection`, `received` and `allowed` in `details`.
+- `null` for a field that is not nullable: `Failed to encode field <path> in collection '<collection>': the field is required and cannot be null`, with `label` and `collection` in `details`. `null` for a nullable field is written as `null` without calling the field's codec.
 
 The integer codecs also check the JS type of the value they are given, and report that separately from the range: `pg/int8number@1` and `sqlite/bigintnumber@1` read a `number`, while `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` read a `bigint`. A value of the other type raises `<codec> value must be a <number|bigint>, got <type> <value>` with `meta.received` naming the type that arrived: the message you get from passing `9n` where a `number` is read, rather than a range complaint about a value plainly inside the range.
 
@@ -935,7 +1124,7 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 
-The contract declares column defaults produced by a mutation default generator (e.g. a nanoid/uuid generator) that no runtime component provides, detected up front when the SQL context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. Payload: `ids` (validation pass) or `id` (resolution).
+The contract declares column or field defaults produced by a mutation default generator (e.g. a nanoid/uuid generator, or `timestampNow` behind `temporal.createdAt()`) that no runtime component provides, detected up front when the SQL context or the Mongo execution context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. The message names each missing generator with the `<collection or table>.<field>` entries that need it, and says where generators come from: the built-in ones, `timestampNow` among them, from the database adapter's runtime descriptor, others from the extension pack that defines them. Payload: `ids` and `fields` (validation pass) or `id` (resolution).
 
 ### RUNTIME.NAMESPACE_UNKNOWN
 
@@ -975,16 +1164,18 @@ A raw-SQL tagged template interpolated a JS value whose type cannot be auto-infe
 
 ### RUNTIME.TEMPORAL_UNAVAILABLE
 
-A value that only a global `Temporal` implementation can produce or read was needed in a runtime that has none. Two paths raise it, and they carry different metadata:
+A value that only a `Temporal` implementation can produce or read was needed in a process that has neither a global `Temporal` nor the fallback `Temporal` of the Postgres target. Two paths raise it, and they carry different metadata:
 
-- A Temporal-backed codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) encoding or decoding a value. Payload: `codecId`, `operation` (`'encode'` or `'decode'`).
-- The `instantNow` mutation-default generator producing a value, for `temporal.createdAt()`, `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`.
+- A Temporal-backed codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) decoding a value. Payload: `codecId`, `operation` (`'decode'`). Encoding a `Temporal` value needs no implementation and does not raise this error.
+- The `instantNow` or `plainDateTimeNow` mutation-default generator producing a value, for `temporal.createdAt()`, `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`.
 
 The check is lazy: registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails.
 
-That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode: selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
+It is raised on **reads**, because the check is the first thing a Temporal codec does on decode: selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
 
-Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type (`DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`) to read and write PostgreSQL's own text, which needs no Temporal at all.
+This error never occurs in the control plane. The CLI commands, `node migration.ts`, the Vite plugin, the language server and the programmatic control client all load `prisma.config.ts` or the control descriptors, and so load the target's control entry. The target's control entry (`@internal/target-postgres/control`) sets the fallback `Temporal`, from `temporal-polyfill`, when it is loaded. It does not set `globalThis.Temporal`. `temporal-polyfill` is a required peer dependency of `@prisma/orm-postgres` and `@prisma/orm-target-postgres`. npm, pnpm and bun install it automatically; a project that uses Yarn adds it to its own dependencies. When it is not installed, loading the control entry fails because Node.js cannot find the package `temporal-polyfill`, not with this error. The fallback is held once per process, and every Postgres codec in the process uses it. An application process that loads no control-plane code and has no global `Temporal` gets `RUNTIME.TEMPORAL_UNAVAILABLE`. An application that loads control-plane code in its own process, such as server code under `vite dev` with the Prisma Vite plugin or a script that calls the control client, decodes dates without its own `Temporal`, and then fails in production. An application that uses the Temporal codecs must load its own `Temporal`.
+
+In the application, install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type (`DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`) to read and write PostgreSQL's own text, which needs no Temporal at all.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
@@ -1006,15 +1197,15 @@ A parameterized codec's `paramsSchema` rejected the `typeParams` carried by a co
 
 ### DRIVER.ALREADY_CONNECTED
 
-Calling `connect(binding)` on a driver, or `connect()` on a target facade client (Postgres, SQLite, Mongo) or the CLI control client, when it is already connected. Close with `close()` before reconnecting with a new binding. Payload: `bindingKind`.
+Calling `connect(binding)` on a driver, or `connect()` on a client (`postgres()`, `sqlite()`, `mongo()`) or the CLI control client, when it is already connected. Close with `close()` before reconnecting with a new binding. Payload: `bindingKind`.
 
 ### DRIVER.CONNECTION_FAILED
 
-A control-plane driver could not establish a database connection (`driver.create(url)` in the SQLite, Postgres, and Mongo control drivers). The `why` carries the underlying driver message and the original error is attached as `cause`; connection URLs in meta are redacted. Payload: `path` (SQLite); `sqlState` plus redacted URL fields (Postgres); redacted URL fields (Mongo).
+A control-plane driver could not establish a database connection (`driver.create(url)` in the SQLite, Postgres, and Mongo control drivers), or `connect({ url })` on a serverless Postgres client (`@prisma/orm-postgres/serverless`) could not open its `pg.Client`'s database connection: the database refused the connection, rejected the credentials, or did not answer within the 20 second connect timeout. The `why` carries the underlying driver message and the original error is attached as `cause`; connection URLs in meta are redacted. Payload: `path` (SQLite); `sqlState` plus redacted URL fields (Postgres control driver); redacted URL fields (Mongo); `extension: 'postgres'` plus redacted URL fields (serverless `connect`).
 
 ### DRIVER.NOT_CONNECTED
 
-Using a driver, a target facade client, or the CLI control client before `connect(...)` has been called (or after it was closed), surfaces from runtime `query` / `execute`, a prepared statement's `query(target, params, options?)`, `acquireConnection`, or `explain`, including lazily when iterating a query result.
+Using a driver, a client, or the CLI control client before `connect(...)` has been called, or after it was closed. It surfaces from runtime `query` / `execute`, a prepared statement's `query(target, params, options?)`, `acquireConnection`, or `explain`, including lazily when iterating a query result. A closed Postgres client or serverless connection raises it from `runtime()`, `transaction(...)` and `prepare(...)`, which throw it synchronously, and from ORM queries, which reject with it.
 
 ### DRIVER.PREPARE_FAILED
 
@@ -1036,7 +1227,7 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 ### MIGRATION.CHECK_DANGLING_REF
 
-A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file points at a contract hash that does not exist in the space's migration graph. Update the ref with `prisma ref set <name> <valid-hash>` or delete it.
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file points at a contract hash that does not exist in the space's migration graph. Update the ref with `prisma migration ref set <name> <valid-hash>` or delete it.
 
 ### MIGRATION.CHECK_DECLARED_BUT_UNMIGRATED
 
@@ -1116,7 +1307,7 @@ A contract JSON on disk failed to deserialize into a valid contract: either a sn
 
 ### MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH
 
-A contract snapshot loaded from `migrations/snapshots/<hash>/contract.json` does not reproduce the storage hash it is addressed by: the store is content-addressed, and the file has been edited (or corrupted) since it was written. Raised at the snapshot-store load seam, so every command that resolves a contract from the store (`migration plan`, `ref set`, `db sign` / `db update --to`, aggregate contract resolution) refuses instead of treating the edited content as the recorded contract. The envelope names the file and both hashes (meta: `storageHash`, `computedHash`, `jsonPath`). Restore `migrations/snapshots/` from version control, or re-run the command that authored the referencing migration to regenerate the snapshot.
+A contract snapshot loaded from `migrations/snapshots/<hash>/contract.json` does not reproduce the storage hash it is addressed by: the store is content-addressed, and the file has been edited (or corrupted) since it was written. Raised at the snapshot-store load seam, so every command that resolves a contract from the store (`migration plan`, `migration ref set`, `db sign` / `db update --to`, aggregate contract resolution) refuses instead of treating the edited content as the recorded contract. The envelope names the file and both hashes (meta: `storageHash`, `computedHash`, `jsonPath`). Restore `migrations/snapshots/` from version control, or re-run the command that authored the referencing migration to regenerate the snapshot.
 
 ### MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH
 
@@ -1132,7 +1323,7 @@ The on-disk `migrations/` directory and the `extensions` declaration in config d
 
 ### MIGRATION.CONTRACT_SPACE_VIOLATION
 
-A contract-space check raised under one code, in two lanes with different exits. As an error at exit `2` when the check could not run: a space's target mismatches the project target, two spaces claim the same storage element, a space contract is unreadable, or aggregate introspection failed (`db verify`, `db run`). As an `error`-severity diagnostic on a completed `db verify` run that exits `4`, including under `--marker-only`, when the check ran and found per-space marker drift: a marker hash mismatch, missing invariants, or an orphan marker row, reported next to the single-contract marker findings that already settle there. The envelope's `why` lists the specific violations. Payload: `violations`.
+A contract-space check raised under one code, in two lanes with different exits. As an error at exit `2` when the check could not run: a space's target mismatches the project target, two spaces claim the same storage element, a space contract is unreadable, or aggregate introspection failed (`db verify`, `db init`, `db update`). As an `error`-severity diagnostic on a completed `db verify` run that exits `4`, including under `--marker-only`, when the check ran and found per-space marker drift: a marker hash mismatch, missing invariants, or an orphan marker row, reported next to the single-contract marker findings that already settle there. The envelope's `why` lists the specific violations. Payload: `violations`.
 
 ### MIGRATION.CONTRACT_VIEW_MISSING
 
@@ -1152,7 +1343,7 @@ An extension descriptor publishes a `contractSpace` whose `headRef.hash` does no
 
 ### MIGRATION.DESTINATION_CONTRACT_MISMATCH
 
-Runner-level failure during apply (`db init`, `db update`, `migrate`): the plan's destination storage hash (or profile hash) does not match the destination contract handed to the runner alongside it. Indicates the plan and contract came from different emits. Payload: `planStorageHash`/`contractStorageHash` (or `planProfileHash`/`contractProfileHash`).
+Runner-level failure during apply (`db init`, `db update`, `db migrate`): the plan's destination storage hash (or profile hash) does not match the destination contract handed to the runner alongside it. Indicates the plan and contract came from different emits. Payload: `planStorageHash`/`contractStorageHash` (or `planProfileHash`/`contractProfileHash`).
 
 ### MIGRATION.DESTRUCTIVE_CHANGES
 
@@ -1176,7 +1367,7 @@ The per-space migration planner received the same contract-space id more than on
 
 ### MIGRATION.EXECUTION_FAILED
 
-A migration operation's SQL step failed while being executed against the database during apply (`db init`, `db update`, `migrate`). The envelope carries the database error detail so you can see which statement failed and why. Payload: `operationId`, `stepDescription`, `sql`, `sqlState`, `constraint`, `table`, `column`, `detail`.
+A migration operation's SQL step failed while being executed against the database during apply (`db init`, `db update`, `db migrate`). The envelope carries the database error detail so you can see which statement failed and why. Payload: `operationId`, `stepDescription`, `sql`, `sqlState`, `constraint`, `table`, `column`, `detail`.
 
 ### MIGRATION.FILE_MISSING
 
@@ -1192,7 +1383,7 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 ### MIGRATION.HASH_NOT_IN_GRAPH
 
-A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
+A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `migration ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -1228,11 +1419,11 @@ A ref file under `migrations/<space>/refs/` is not valid JSON or does not match 
 
 ### MIGRATION.INVALID_REF_NAME
 
-A ref name is syntactically invalid: names must be lowercase alphanumeric with hyphens or forward slashes, with no `.` or `..` segments. Raised by `ref` commands and any ref-consuming tooling. Payload: `refName`.
+A ref name is syntactically invalid: names must be lowercase alphanumeric with hyphens or forward slashes, with no `.` or `..` segments. Raised by `migration ref` commands and any ref-consuming tooling. Payload: `refName`.
 
 ### MIGRATION.INVALID_REF_VALUE
 
-The value given for a ref (e.g. to `ref set`) is not a valid contract hash: it must be 64 lowercase hex chars or `empty`. Payload: `value`.
+The value given for a ref (e.g. to `migration ref set`) is not a valid contract hash: it must be 64 lowercase hex chars or `empty`. Payload: `value`.
 
 ### MIGRATION.INVALID_REFS
 
@@ -1256,7 +1447,7 @@ While finalizing an apply, the compare-and-swap update of the database's contrac
 
 ### MIGRATION.MARKER_MISMATCH
 
-The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`.
+The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan` (catch the graph up), `migration ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`.
 
 ### MIGRATION.MARKER_NOT_IN_HISTORY
 
@@ -1276,7 +1467,7 @@ A diagnostic in `migration status`: the active ref requires data invariants that
 
 ### MIGRATION.NO_INVARIANT_PATH
 
-The target (or named ref) requires data invariants, and no path through the migration graph from the current state covers all of them. Add a migration on the path that runs a `dataTransform` with each missing `invariantId`, or retarget the ref. Payload: `required`, `missing`, `structuralPath` (edges: `dirName`, `migrationHash`, `from`, `to`, `invariants`), `refName` (when applicable). Also raised per space by `migrate` in show/plan mode when a space's path requires invariants not available on disk; that site's meta is `spaceId`, `missing`.
+The target (or named ref) requires data invariants, and no path through the migration graph from the current state covers all of them. Add a migration on the path that runs a `dataTransform` with each missing `invariantId`, or retarget the ref. Payload: `required`, `missing`, `structuralPath` (edges: `dirName`, `migrationHash`, `from`, `to`, `invariants`), `refName` (when applicable). Also raised per space by `db migrate` in show/plan mode when a space's path requires invariants not available on disk; that site's meta is `spaceId`, `missing`.
 
 ### MIGRATION.NO_MIGRATIONS
 
@@ -1292,11 +1483,11 @@ A Mongo migration check uses a filter feature the check evaluator does not suppo
 
 ### MIGRATION.PATH_UNREACHABLE
 
-An apply command (`migrate`/`db update`) cannot find a path through the on-disk migration graph from the database's current marker to the requested target: the connecting edge was never planned. The fix walks you through `migration plan` (with the right `--from`/`--to`) then `migrate`. Payload: carries the underlying failure's meta (`fromHash`, `targetHash`, `deadEnds`, `kind`).
+An apply command (`db migrate`/`db update`) cannot find a path through the on-disk migration graph from the database's current marker to the requested target: the connecting edge was never planned. The fix walks you through `migration plan` (with the right `--from`/`--to`) then `db migrate`. Payload: carries the underlying failure's meta (`fromHash`, `targetHash`, `deadEnds`, `kind`).
 
 ### MIGRATION.PLANNING_FAILED
 
-Migration planning (typically during `db init`/`db update`) failed because of conflicts, e.g. the live database already contains objects that clash with the plan. The envelope aggregates each conflict's summary and suggested fix. Payload: `conflicts`.
+Migration planning (typically during `db init`/`db update`) failed because of conflicts, e.g. the live database already contains objects that clash with the plan. The envelope aggregates each conflict's summary and suggested fix. Payload: `conflicts`. `db init` applies only additive operations, so when a conflict is an operation its policy refused (the conflict carries `refusedOperationClass`), such as adding a validator to a Mongo collection that already holds documents, the error's next action depends on the refused classes. When `db update` allows all of them (`widening` and `destructive`), the next action is `db update`, which applies them, asking you to confirm destructive ones. When one is `data`, which `db update` does not apply, the next action is `migration plan`, to plan a migration that `db migrate` then applies.
 
 ### MIGRATION.PLAN_NOT_ARRAY
 
@@ -1340,15 +1531,15 @@ A contract or migration reference does not resolve: no matching hash, ref name, 
 
 ### MIGRATION.REF_NOT_RESOLVABLE
 
-A ref name resolves to nothing: no pointer file with that name exists, and the fallback hash is not a node in the migration graph either, so there is no contract to materialize. Create the ref with `ref set`, advance it via `db update --advance-ref`, or pass a graph-node hash. Payload: `refName`, `identifier`.
+A ref name resolves to nothing: no pointer file with that name exists, and the fallback hash is not a node in the migration graph either, so there is no contract to materialize. Create the ref with `migration ref set`, advance it via `db update --advance-ref`, or pass a graph-node hash. Payload: `refName`, `identifier`.
 
 ### MIGRATION.REF_SET_BUNDLE_NOT_FOUND
 
-`ref set` resolved the given hash to a graph node, but no on-disk migration bundle has that hash as its destination, so the ref would point at a node with no backing package. Re-emit the migration that produces this hash. Payload: `hash`.
+`migration ref set` resolved the given hash to a graph node, but no on-disk migration bundle has that hash as its destination, so the ref would point at a node with no backing package. Re-emit the migration that produces this hash. Payload: `hash`.
 
 ### MIGRATION.REF_SET_EMPTY_SENTINEL
 
-`ref set` was asked to point a ref at the empty-database sentinel hash, which is a planner internal and not a valid ref target. Use a real contract hash from the migration graph. Payload: `hash`.
+`migration ref set` was asked to point a ref at the empty-database sentinel hash, which is a planner internal and not a valid ref target. Use a real contract hash from the migration graph. Payload: `hash`.
 
 ### MIGRATION.REF_WRONG_GRAMMAR
 
@@ -1356,7 +1547,7 @@ A reference parsed, but as the wrong kind for the argument position, e.g. a migr
 
 ### MIGRATION.RUNNER_FAILED
 
-Generic wrapper for a migration runner failure during execution that has no more specific code; the summary/why carry the underlying detail (also used to surface the legacy-marker-shape condition from marker reads, with `meta.runnerErrorCode`). `migrate` and `db init` map unrecognized apply failures through it, passing the failure's own meta through unchanged. Inspect the reported summary/why detail and address the underlying failure before re-running the command. Payload: the wrapped failure's meta, when it has any; `runnerErrorCode` at the legacy-marker-shape site.
+Generic wrapper for a migration runner failure during execution that has no more specific code; the summary/why carry the underlying detail (also used to surface the legacy-marker-shape condition from marker reads, with `meta.runnerErrorCode`). `db migrate` and `db init` map unrecognized apply failures through it, passing the failure's own meta through unchanged. Inspect the reported summary/why detail and address the underlying failure before re-running the command. Payload: the wrapped failure's meta, when it has any; `runnerErrorCode` at the legacy-marker-shape site.
 
 ### MIGRATION.SAME_SOURCE_AND_TARGET
 
@@ -1364,7 +1555,7 @@ A migration's `from` and `to` hashes are identical and it declares no data-trans
 
 ### MIGRATION.SCHEMA_VERIFY_FAILED
 
-After applying migrations, the runner introspected the database and the resulting schema does not satisfy the destination contract; the apply is rolled back. Runner-level failure during `db init`/`db update`/`migrate`. Payload: `issues` (schema diff issues).
+After applying migrations, the runner introspected the database and the resulting schema does not satisfy the destination contract; the apply is rolled back. Runner-level failure during `db init`/`db update`/`db migrate`. Payload: `issues` (schema diff issues).
 
 ### MIGRATION.SNAPSHOT_MISSING
 
@@ -1404,7 +1595,7 @@ A ref declares required invariants that no migration anywhere in the graph provi
 
 ### MIGRATION.UNKNOWN_REF
 
-A ref name was used (read, resolved, or deleted via `ref` commands) but no ref file with that name exists. Create it with `prisma ref set <name> <hash>`, or run `ref list` to see what exists. Payload: `refName`, `filePath` or `availableRefs` depending on the site.
+A ref name was used (read, resolved, or deleted via `migration ref` commands) but no ref file with that name exists. Create it with `prisma migration ref set <name> <hash>`, or run `migration ref list` to see what exists. Payload: `refName`, `filePath` or `availableRefs` depending on the site.
 
 ## PLAN
 

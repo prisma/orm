@@ -1,3 +1,4 @@
+import { structBlock } from '@internal/psl-parser';
 import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -59,6 +60,37 @@ function expectDiagnosticForSchema(
 }
 
 describe('interpretPslDocumentToSqlContract diagnostics', () => {
+  it.each(['42', '"ignored", extra: true', 'name: "ignored"', '', '""'])(
+    'reports malformed storage names (%s) once despite multiple incoming references',
+    (argument) => {
+      const schema = `model User {
+  id Int @id @map(${argument})
+  @@map(${argument})
+}
+${['First', 'Second', 'Third']
+  .map(
+    (name) => `model ${name} {
+  id Int @id
+  userId Int
+  user User @relation(fields: [userId], references: [id])
+}`,
+  )
+  .join('\n')}`;
+      const result = interpretPslDocumentToSqlContract({
+        ...baseInput,
+        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics.map(({ code }) => code)).toEqual(
+        Array.from(
+          { length: argument.startsWith('name:') ? 4 : 2 },
+          () => 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        ),
+      );
+    },
+  );
+
   it.each([
     { declaration: 'name String @map("")', attribute: '@map("")', column: 15 },
     { declaration: '@@map("")', attribute: '@@map("")', column: 3 },
@@ -110,15 +142,10 @@ describe('interpretPslDocumentToSqlContract diagnostics', () => {
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: 'Mapped name must not be empty',
-        }),
-        expect.objectContaining({ code: 'PSL_UNSUPPORTED_FIELD_TYPE' }),
-      ]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "MissingType"' },
+      { code: 'PSL_INVALID_ATTRIBUTE_SYNTAX', message: 'Mapped name must not be empty' },
+    ]);
   });
 
   it('throws when target context is missing', () => {
@@ -164,7 +191,7 @@ describe('interpretPslDocumentToSqlContract diagnostics', () => {
     );
   });
 
-  it('returns diagnostics for unsupported named types, field lists, missing keys, and invalid relation targets', () => {
+  it('returns diagnostics for unsupported named types, field lists, missing keys, and an unresolved relation target', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `types {
   DisplayName = VarChar(191)
@@ -194,13 +221,11 @@ model User {
     expect(result.ok).toBe(false);
     if (result.ok) return;
 
-    expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
-      expect.arrayContaining([
-        'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
-        'PSL_UNSUPPORTED_FIELD_TYPE',
-        'PSL_INVALID_RELATION_TARGET',
-      ]),
-    );
+    expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'PSL_UNRESOLVED_REFERENCE',
+      'PSL_UNRESOLVED_REFERENCE',
+      'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
+    ]);
   });
 
   it('returns diagnostics when @map and @@map arguments are not quoted string literals', () => {
@@ -304,8 +329,8 @@ model User {
 }
 `,
       {
-        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-        message: 'Field "missingId" does not exist on model "Membership"',
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find field "missingId" on "Membership"',
       },
     );
   });
@@ -388,14 +413,9 @@ model User {
     if (result.ok) return;
 
     expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          message: expect.stringContaining('Unknown'),
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Unknown"' },
+    ]);
   });
 
   it('returns diagnostics for invalid Postgres native type constructor usage', () => {
@@ -426,7 +446,7 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Named type "BadChar" constructor "Char" Authoring helper argument at Char[0] must be >= 1, received 0',
+            'Named type "BadChar" constructor "Char" Argument "length" of Char must be >= 1, received 0',
           ),
         }),
         expect.objectContaining({
@@ -438,7 +458,7 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Named type "BadTimestamp" constructor "Timestamp" Authoring helper argument at Timestamp[0] must be >= 0, received -1',
+            'Named type "BadTimestamp" constructor "Timestamp" Argument "precision" of Timestamp must be >= 0, received -1',
           ),
         }),
       ]),
@@ -693,14 +713,19 @@ model User {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          sourceId: 'schema.prisma',
-        }),
-      ]),
-    );
+    expect(
+      result.failure.diagnostics.map(({ code, message, sourceId }) => ({
+        code,
+        message,
+        sourceId,
+      })),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message: 'Cannot find type "Missing"',
+        sourceId: 'schema.prisma',
+      },
+    ]);
   });
 
   it('emits distinct diagnostic codes for malformed versus uncomposed constructor calls', () => {
@@ -805,6 +830,24 @@ model User {
     );
   });
 
+  it('leaves an uncomposed namespace to the composition diagnostic alone', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: 'model Document {\n  id Int @id\n  embedding pgvector.Vector(1536)\n}',
+      sourceId: 'schema.prisma',
+    });
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
+      'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+    ]);
+  });
+
   it('rejects @@id referencing an unknown field', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Thing {
@@ -824,8 +867,8 @@ model User {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: expect.stringContaining('Field "nope" does not exist on model "Thing"'),
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining('Cannot find field "nope" on "Thing"'),
         }),
       ]),
     );
@@ -1275,7 +1318,7 @@ namespace auth {
           keyword: 'role',
           discriminator: 'role-like',
           name: { required: true },
-          parameters: {},
+          spec: () => structBlock({ parameters: {} }),
         },
       };
       const roleAuthoringContributions = {
@@ -1308,7 +1351,6 @@ namespace auth {
 }
 `,
         sourceId: 'schema.prisma',
-        pslBlockDescriptors: rolePslBlockDescriptors,
       });
 
       const result = interpretPslDocumentToSqlContract({

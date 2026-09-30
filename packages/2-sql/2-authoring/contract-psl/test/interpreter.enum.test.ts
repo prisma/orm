@@ -99,11 +99,9 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSqlContractInput>) {
   const contributions = overrides?.authoringContributions ?? authoringContributions;
-  const descriptors = contributions.pslBlockDescriptors;
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    ...(descriptors !== undefined ? { pslBlockDescriptors: descriptors } : {}),
   });
   return interpretPslDocumentToSqlContract({
     ...document,
@@ -126,6 +124,33 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
     ...overrides,
   });
 }
+
+describe('enum member attributes', () => {
+  it('reports an attribute on an enum member, naming the attribute, because a Prisma 8 enum member carries none', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low" @map("LOW")
+  High = "high"
+}
+
+model Post {
+  id       Int      @id
+  priority Priority
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
+        message:
+          'enum "Priority": member "Low" carries @map, but an enum member takes no attributes',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 4 }) }),
+      }),
+    ]);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PSL ↔ TS parity: enum emits contract equal to TS enumType authoring
@@ -354,7 +379,7 @@ model Post {
     );
   });
 
-  it('non-JSON member rawValue emits diagnostic', () => {
+  it('a non-JSON member value is rejected by the shared grammar, not by lowering', () => {
     const result = interpret(`
 enum Priority {
   @@type("pg/text@1")
@@ -367,7 +392,15 @@ model Post {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            'Expected one of: string | number | boolean | null | JSON value[] | { [key]: JSON value }',
+        }),
+      ]),
+    );
+    expect(result.failure.diagnostics.some((d) => d.code === 'PSL_EXTENSION_INVALID_VALUE')).toBe(
+      false,
     );
   });
 
@@ -407,7 +440,7 @@ model Post {
     );
   });
 
-  it('duplicate member names emits PSL_EXTENSION_DUPLICATE_PARAMETER from the parser', () => {
+  it('duplicate member names emit PSL_EXTENSION_DUPLICATE_PARAMETER from the interpreter that resolves the blocks', () => {
     const result = interpret(`
 enum Priority {
   @@type("pg/text@1")

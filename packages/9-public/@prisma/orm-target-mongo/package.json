@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-target-mongo",
-  "version": "8.0.0-rc.12",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,18 +14,18 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.12",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.12",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.12",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.14",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
     "arktype": "catalog:",
-    "bson": "^7.3.1"
+    "bson": "catalog:"
   },
   "devDependencies": {
-    "@internal/adapter-mongo": "workspace:8.0.0-rc.12",
-    "@internal/driver-mongo": "workspace:8.0.0-rc.12",
-    "@internal/target-mongo": "workspace:8.0.0-rc.12",
-    "@repo/tsconfig": "workspace:8.0.0-rc.12",
-    "@repo/tsdown": "workspace:8.0.0-rc.12",
+    "@internal/adapter-mongo": "workspace:8.0.0-rc.14",
+    "@internal/driver-mongo": "workspace:8.0.0-rc.14",
+    "@internal/target-mongo": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -40,19 +40,19 @@
   },
   "exports": {
     "./adapter": "./dist/adapter.mjs",
-    "./adapter/codec-ids": "./dist/adapter__codec-ids.mjs",
-    "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
-    "./adapter/codecs": "./dist/adapter__codecs.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
-    "./adapter/data-types": "./dist/adapter__data-types.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./driver": "./dist/driver.mjs",
     "./driver/control": "./dist/driver__control.mjs",
     "./target": "./dist/target.mjs",
+    "./target/codec-ids": "./dist/target__codec-ids.mjs",
     "./target/codec-types": "./dist/target__codec-types.mjs",
+    "./target/codecs": "./dist/target__codecs.mjs",
     "./target/control": "./dist/target__control.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/pack": "./dist/target__pack.mjs",
+    "./target/prisma6-binding": "./dist/target__prisma6-binding.mjs",
     "./target/runtime": "./dist/target__runtime.mjs",
     "./package.json": "./package.json"
   },

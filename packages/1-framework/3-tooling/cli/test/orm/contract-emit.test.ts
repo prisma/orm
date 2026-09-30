@@ -339,6 +339,61 @@ describe('contract emit', () => {
     });
   });
 
+  describe('contract source warnings', () => {
+    const span = {
+      start: { offset: 30, line: 3, column: 9 },
+      end: { offset: 33, line: 3, column: 12 },
+    };
+    const warning = (sourceId: string) => ({
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message:
+        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      sourceId,
+      span,
+      severity: 'warning',
+    });
+    const diagnostic = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+      severity: 'warn',
+      summary:
+        'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      nextActions: [],
+      where: { path: 'prisma/schema.prisma', line: 3 },
+      meta: { code: 'PSL_DEPRECATED_SCALAR_NAME', span },
+    };
+
+    it('are diagnostics of the result, with code, file, line and column', async () => {
+      executeContractEmit.mockResolvedValue(
+        emitResult({ sourceWarnings: [warning('prisma/schema.prisma')] }),
+      );
+
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      expect(run.exitCode).toBe(0);
+      const terminal = run.json.at(-1);
+      expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+        ok: true,
+        diagnostics: [expect.objectContaining(diagnostic)],
+      });
+      expect(
+        run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      ).toEqual([]);
+    });
+
+    it('name a file under the working directory by its relative path', async () => {
+      executeContractEmit.mockResolvedValue(
+        emitResult({ sourceWarnings: [warning(`${PROJECT_DIR}/prisma/schema.prisma`)] }),
+      );
+
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      const terminal = run.json.at(-1);
+      expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+        diagnostics: [expect.objectContaining(diagnostic)],
+      });
+    });
+  });
+
   it('keeps the dotted code of an error the operation raised', async () => {
     const { errorRuntime } = await import('@internal/errors/execution');
     executeContractEmit.mockRejectedValue(

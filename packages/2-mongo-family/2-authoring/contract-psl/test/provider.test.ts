@@ -3,12 +3,13 @@ import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { JsonValue } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
-import type { PslExtensionBlock } from '@internal/framework-components/authoring';
+import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
 import {
   type Codec,
   createDataTypeLookup,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
+import { jsonValue, mapBlock } from '@internal/psl-parser';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
@@ -36,11 +37,11 @@ const enumEntityType = {
   kind: 'entity',
   discriminator: 'enum',
   output: {
-    factory: (block: PslExtensionBlock) =>
+    factory: (block: ParsedPslExtensionBlock) =>
       enumType(
         block.name,
         { codecId: stringCodec.id, nativeType: 'string' },
-        ...Object.keys(block.parameters).map((name) => member(name)),
+        ...Object.keys(block.values).map((name) => member(name)),
       ),
   },
 } as const;
@@ -50,8 +51,11 @@ const enumBlockDescriptor = {
   keyword: 'enum',
   discriminator: 'enum',
   name: { required: true },
-  parameters: {},
-  variadicParameters: true,
+  spec: () =>
+    mapBlock({
+      value: { type: jsonValue(), documentation: 'The member value.' },
+      allowBare: true,
+    }),
 } as const;
 
 function createMongoTestContext(overrides?: Partial<ContractSourceContext>): ContractSourceContext {
@@ -181,7 +185,7 @@ model User {
     });
   });
 
-  it('fails with an invalid block entry diagnostic at an enum member attribute and produces no contract', async () => {
+  it('reports the attribute on the enum member and produces no contract', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-'));
     tempDirs.push(tempDir);
     const schemaPath = join(tempDir, 'schema.prisma');
@@ -221,15 +225,16 @@ model User {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure).toEqual({
-      summary: 'Schema has 1 error',
+      summary: 'PSL to Mongo contract interpretation failed',
       diagnostics: [
         {
-          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          message: 'Invalid block entry',
+          code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
+          message:
+            'enum "Role": member "USER" carries @map, but an enum member takes no attributes',
           sourceId: schemaPath,
           span: {
             start: { offset: 36, line: 3, column: 9 },
-            end: { offset: 37, line: 3, column: 10 },
+            end: { offset: 48, line: 3, column: 21 },
           },
         },
       ],

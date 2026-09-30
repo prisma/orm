@@ -1,5 +1,6 @@
 import type {
   AnnotationValue,
+  MutationDefaultsOp,
   OperationKind,
   ValidAnnotations,
 } from '@internal/framework-components/runtime';
@@ -16,7 +17,6 @@ import {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import type { MutationDefaultsOp } from '@internal/sql-relational-core/query-lane-context';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import type { Expression, ExpressionBuilder } from '../expression';
@@ -84,12 +84,12 @@ export function buildParamValues(
   for (const def of ctx.applyMutationDefaults({
     op,
     namespace: namespaceId,
-    table: tableName,
+    entry: tableName,
     values,
   })) {
-    const column = table.columns[def.column];
-    const codec = column ? codecRefFor(ctx, namespaceId, tableName, def.column) : undefined;
-    params[def.column] = ParamRef.of(def.value, codec ? { codec } : undefined);
+    const column = table.columns[def.field];
+    const codec = column ? codecRefFor(ctx, namespaceId, tableName, def.field) : undefined;
+    params[def.field] = ParamRef.of(def.value, codec ? { codec } : undefined);
   }
   return params;
 }
@@ -146,13 +146,13 @@ export function buildSetExpressions(
   for (const def of ctx.applyMutationDefaults({
     op,
     namespace: namespaceId,
-    table: tableName,
+    entry: tableName,
     values: exprs,
   })) {
-    if (!(def.column in set)) {
-      const column = table.columns[def.column];
-      const codec = column ? codecRefFor(ctx, namespaceId, tableName, def.column) : undefined;
-      set[def.column] = ParamRef.of(def.value, ifDefined('codec', codec));
+    if (!(def.field in set)) {
+      const column = table.columns[def.field];
+      const codec = column ? codecRefFor(ctx, namespaceId, tableName, def.field) : undefined;
+      set[def.field] = ParamRef.of(def.value, ifDefined('codec', codec));
     }
   }
   return set;

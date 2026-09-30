@@ -153,6 +153,8 @@ export function createContractInferCommand({
         }
         pslContent = printPsl(pslContractAst, {
           pslBlockDescriptors: client.getPslBlockDescriptors(),
+          description:
+            'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
         });
       } catch (error) {
         if (CliStructuredError.is(error)) {

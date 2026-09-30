@@ -12,10 +12,10 @@
 
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { addColumnAction, alterTable } from '@internal/target-postgres/contract-free';
 import { PostgresAlterTable } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 
 const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());

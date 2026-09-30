@@ -1,5 +1,8 @@
-import { temporalAuthoringPresets, temporalCodecPreset } from '@internal/family-sql/control';
-import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import {
+  collectScalarTypeConstructors,
+  temporalAuthoringPresets,
+  temporalCodecPreset,
+} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import { sqliteAuthoringFieldPresets, sqliteAuthoringTypes } from '../src/core/authoring';
 

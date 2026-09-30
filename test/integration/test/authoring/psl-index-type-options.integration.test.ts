@@ -20,7 +20,6 @@ function interpret(schema: string) {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
     documents: [document],

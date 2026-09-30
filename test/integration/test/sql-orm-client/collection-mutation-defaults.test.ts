@@ -66,7 +66,7 @@ function buildTagWithUpdatedAtContract(
     throw new Error('Test contract is missing the execution block');
   }
   execution.mutations.defaults.push({
-    ref: { namespace: 'public', table: 'tags', column: 'updated_at' },
+    ref: { namespace: 'public', entry: 'tags', field: 'updated_at' },
     onCreate: { kind: 'generator', id: 'timestampNow' },
     onUpdate: { kind: 'generator', id: 'timestampNow' },
   });

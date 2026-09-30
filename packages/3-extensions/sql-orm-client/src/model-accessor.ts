@@ -11,6 +11,7 @@ import {
   JoinAst,
   ProjectionItem,
   SelectAst,
+  SubqueryExpr,
   type TableSource,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
@@ -18,8 +19,10 @@ import type { Expression, ScopeField } from '@internal/sql-relational-core/expre
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
+import { plainAggregateExpr } from './aggregate-codecs';
 import {
   getFieldToColumnMap,
+  isToOneCardinality,
   resolveFieldToColumn,
   resolveModelRelations,
   resolveModelTableName,
@@ -28,12 +31,15 @@ import {
   type VariantColumnRef,
 } from './collection-contract';
 import { and, not } from './filters';
+import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { storageTableForContract, tableSourceForContract } from './storage-resolution';
 import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
   type ModelAccessor,
+  type Orderable,
+  type OrderOptions,
   type RelationFilterAccessor,
   type VariantAwareModelAccessor,
 } from './types';
@@ -337,7 +343,7 @@ function createModelAccessorInScope<
     },
   );
   return blindCast<
-    VariantAwareModelAccessor<TContract, ModelName, VariantName>,
+    VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId>,
     'model accessor proxy resolves declared model fields and the selected variant fields dynamically'
   >(accessor);
 }
@@ -430,6 +436,19 @@ function createExtensionMethodFactory(
   };
 }
 
+type RelationAccessor<TContract extends Contract<SqlStorage>> = RelationFilterAccessor<
+  TContract,
+  string,
+  string
+> & { readonly [member: string]: unknown };
+
+const RELATION_ACCESSOR_METHOD_NAMES: ReadonlySet<string> = new Set([
+  'some',
+  'every',
+  'none',
+  'count',
+]);
+
 function createRelationFilterAccessor<
   TContract extends Contract<SqlStorage>,
   ParentModelName extends string,
@@ -439,159 +458,191 @@ function createRelationFilterAccessor<
   parentModelName: ParentModelName,
   parentScope: ModelAccessorScope,
   relation: ResolvedModelRelation,
-): RelationFilterAccessor<TContract, string, string> {
+): RelationAccessor<TContract> {
   const relatedTableName = resolveModelTableName(
     context.contract,
     relation.toNamespace,
     relation.to,
   );
-
-  const relationAccessor: RelationFilterAccessor<TContract, string, string> = {
-    some: (predicate) =>
-      buildExistsExpr(
-        context,
-        parentNamespaceId,
-        parentModelName,
-        parentScope,
-        relatedTableName,
-        relation,
-        { mode: 'some', predicate },
-      ),
-    every: (predicate) =>
-      buildExistsExpr(
-        context,
-        parentNamespaceId,
-        parentModelName,
-        parentScope,
-        relatedTableName,
-        relation,
-        { mode: 'every', predicate },
-      ),
-    none: (predicate) =>
-      buildExistsExpr(
-        context,
-        parentNamespaceId,
-        parentModelName,
-        parentScope,
-        relatedTableName,
-        relation,
-        { mode: 'none', predicate },
-      ),
-  };
-
-  return relationAccessor;
-}
-
-function buildExistsExpr<TContract extends Contract<SqlStorage>>(
-  context: ExecutionContext<TContract>,
-  parentNamespaceId: string,
-  parentModelName: string,
-  parentScope: ModelAccessorScope,
-  relatedTableName: string,
-  relation: ResolvedModelRelation,
-  options: {
-    readonly mode: RelationFilterMode;
-    readonly predicate: RelationPredicateInput<TContract, string, string> | undefined;
-  },
-): AnyExpression {
-  if (hasThrough(relation)) {
-    return buildManyToManyExistsExpr(
+  const correlate = () =>
+    correlateRelatedRows(
       context,
       parentNamespaceId,
       parentModelName,
       parentScope,
       relatedTableName,
       relation,
-      options,
     );
+
+  const filters: RelationFilterAccessor<TContract, string, string> = {
+    some: (predicate) => buildExistsExpr(context, relation, correlate(), 'some', predicate),
+    every: (predicate) => buildExistsExpr(context, relation, correlate(), 'every', predicate),
+    none: (predicate) => buildExistsExpr(context, relation, correlate(), 'none', predicate),
+  };
+
+  if (isToOneCardinality(relation.cardinality)) {
+    return new Proxy(filters, {
+      get(target, prop) {
+        if (typeof prop !== 'string') return undefined;
+        if (Object.hasOwn(target, prop)) return Reflect.get(target, prop);
+        if (RELATION_ACCESSOR_METHOD_NAMES.has(prop)) return undefined;
+        return relatedOrderableField(context, relation, relatedTableName, correlate, prop);
+      },
+    });
   }
 
-  const childScope = parentScope.forRelation(relation.toNamespace, relatedTableName);
-  const joinWhere = buildJoinWhere(
+  return {
+    ...filters,
+    count: (predicate: RelationPredicateInput<TContract, string, string> | undefined) =>
+      createOrderable(() => buildRelationCountExpr(context, relation, correlate(), predicate)),
+  };
+}
+
+function createOrderable(buildExpr: () => AnyExpression): Orderable {
+  return {
+    asc: (options?: OrderOptions) => checkedOrderByItem('asc', buildExpr(), options),
+    desc: (options?: OrderOptions) => checkedOrderByItem('desc', buildExpr(), options),
+  };
+}
+
+function relatedOrderableField<TContract extends Contract<SqlStorage>>(
+  context: ExecutionContext<TContract>,
+  relation: ResolvedModelRelation,
+  relatedTableName: string,
+  correlate: () => CorrelatedRelatedRows,
+  fieldName: string,
+): Orderable | undefined {
+  const fieldToColumn = getFieldToColumnMap(context.contract, relation.toNamespace, relation.to);
+  if (!Object.hasOwn(fieldToColumn, fieldName)) return undefined;
+  const columnName = fieldToColumn[fieldName];
+  if (columnName === undefined) return undefined;
+  const column = resolveColumn(
     context.contract,
-    parentNamespaceId,
-    parentModelName,
-    parentScope.current,
-    childScope.current,
-    relation,
+    relation.toNamespace,
+    relatedTableName,
+    columnName,
   );
+  if (!column || !hasTrait(context, column.codecId, 'order')) return undefined;
+  return createOrderable(() => {
+    const rows = correlate();
+    return SubqueryExpr.of(
+      rows.source
+        .withProjection([ProjectionItem.of(columnName, rows.childScope.current.column(columnName))])
+        .withWhere(rows.correlation),
+    );
+  });
+}
+
+function hasTrait(context: ExecutionContext, codecId: string, trait: string): boolean {
+  const traits: readonly string[] = context.codecDescriptors.descriptorFor(codecId)?.traits ?? [];
+  return traits.includes(trait);
+}
+
+function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(
+  context: ExecutionContext<TContract>,
+  relation: ResolvedModelRelation,
+  rows: CorrelatedRelatedRows,
+  predicate: RelationPredicateInput<TContract, string, string> | undefined,
+): AnyExpression {
   const childWhere = toRelationWhereExpr(
     context,
     relation.toNamespace,
     relation.to,
-    options.predicate,
-    childScope,
+    predicate,
+    rows.childScope,
   );
-
-  const filterPlan = planRelationFilterMode(joinWhere, childWhere, options.mode);
-  if (filterPlan.kind === 'constantTrue') {
-    return AndExpr.true();
-  }
-
-  const selectProjectionColumn = firstTargetColumn(context.contract, relation) ?? 'id';
-  const subquery = SelectAst.from(childScope.current.tableSource(context.contract))
-    .withProjection([
-      ProjectionItem.of('_exists', childScope.current.column(selectProjectionColumn)),
-    ])
-    .withWhere(filterPlan.where);
-
-  return filterPlan.notExists ? ExistsExpr.notExists(subquery) : ExistsExpr.exists(subquery);
+  return SubqueryExpr.of(
+    rows.source
+      .withProjection([ProjectionItem.of('count', plainAggregateExpr('count', undefined))])
+      .withWhere(childWhere ? and(rows.correlation, childWhere) : rows.correlation),
+  );
 }
 
-function buildManyToManyExistsExpr<TContract extends Contract<SqlStorage>>(
+interface CorrelatedRelatedRows {
+  readonly childScope: ModelAccessorScope;
+  readonly source: SelectAst;
+  readonly correlation: AnyExpression;
+  readonly keyColumn: string;
+}
+
+function correlateRelatedRows<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
   parentNamespaceId: string,
   parentModelName: string,
   parentScope: ModelAccessorScope,
   relatedTableName: string,
-  relation: ResolvedModelRelationWithThrough,
-  options: {
-    readonly mode: RelationFilterMode;
-    readonly predicate: RelationPredicateInput<TContract, string, string> | undefined;
-  },
+  relation: ResolvedModelRelation,
+): CorrelatedRelatedRows {
+  if (hasThrough(relation)) {
+    const { through } = relation;
+    const { childScope, junctionBinding } = parentScope.forManyToManyRelation(
+      relation.toNamespace,
+      relatedTableName,
+      through.namespaceId,
+      through.table,
+    );
+    const junctionJoinOn = buildPairedColumnExprs(
+      junctionBinding,
+      through.childColumns,
+      childScope.current,
+      through.targetColumns,
+    );
+    const parentLocalColumns = relation.on.localFields.map((field) =>
+      resolveFieldToColumn(context.contract, parentNamespaceId, parentModelName, field),
+    );
+    return {
+      childScope,
+      source: SelectAst.from(childScope.current.tableSource(context.contract)).withJoins([
+        JoinAst.inner(junctionBinding.tableSource(context.contract), junctionJoinOn),
+      ]),
+      correlation: buildPairedColumnExprs(
+        junctionBinding,
+        through.parentColumns,
+        parentScope.current,
+        parentLocalColumns,
+      ),
+      keyColumn: firstJoinColumn(through.targetColumns, 'targetColumns'),
+    };
+  }
+
+  const childScope = parentScope.forRelation(relation.toNamespace, relatedTableName);
+  return {
+    childScope,
+    source: SelectAst.from(childScope.current.tableSource(context.contract)),
+    correlation: buildJoinWhere(
+      context.contract,
+      parentNamespaceId,
+      parentModelName,
+      parentScope.current,
+      childScope.current,
+      relation,
+    ),
+    keyColumn: firstTargetColumn(context.contract, relation) ?? 'id',
+  };
+}
+
+function buildExistsExpr<TContract extends Contract<SqlStorage>>(
+  context: ExecutionContext<TContract>,
+  relation: ResolvedModelRelation,
+  rows: CorrelatedRelatedRows,
+  mode: RelationFilterMode,
+  predicate: RelationPredicateInput<TContract, string, string> | undefined,
 ): AnyExpression {
-  const { through } = relation;
-  const { childScope, junctionBinding } = parentScope.forManyToManyRelation(
-    relation.toNamespace,
-    relatedTableName,
-    through.namespaceId,
-    through.table,
-  );
-
-  const junctionJoinOn = buildPairedColumnExprs(
-    junctionBinding,
-    through.childColumns,
-    childScope.current,
-    through.targetColumns,
-  );
-
-  const parentLocalColumns = relation.on.localFields.map((field) =>
-    resolveFieldToColumn(context.contract, parentNamespaceId, parentModelName, field),
-  );
-  const junctionCorrelation = buildPairedColumnExprs(
-    junctionBinding,
-    through.parentColumns,
-    parentScope.current,
-    parentLocalColumns,
-  );
-
   const childWhere = toRelationWhereExpr(
     context,
     relation.toNamespace,
     relation.to,
-    options.predicate,
-    childScope,
+    predicate,
+    rows.childScope,
   );
 
-  const filterPlan = planRelationFilterMode(junctionCorrelation, childWhere, options.mode);
+  const filterPlan = planRelationFilterMode(rows.correlation, childWhere, mode);
   if (filterPlan.kind === 'constantTrue') {
     return AndExpr.true();
   }
 
-  const firstTargetCol = firstJoinColumn(through.targetColumns, 'targetColumns');
-  const subquery = SelectAst.from(childScope.current.tableSource(context.contract))
-    .withJoins([JoinAst.inner(junctionBinding.tableSource(context.contract), junctionJoinOn)])
-    .withProjection([ProjectionItem.of('_exists', childScope.current.column(firstTargetCol))])
+  const subquery = rows.source
+    .withProjection([ProjectionItem.of('_exists', rows.childScope.current.column(rows.keyColumn))])
     .withWhere(filterPlan.where);
 
   return filterPlan.notExists ? ExistsExpr.notExists(subquery) : ExistsExpr.exists(subquery);

@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs';
 import {
-  createMongoRunnerDeps,
   extractDb,
   introspectSchema,
+  MongoControlAdapterImpl,
 } from '@prisma/orm-mongo/adapter/control';
-import { MongoDriverImpl } from '@prisma/orm-mongo/driver';
 import mongoControlDriver from '@prisma/orm-mongo/driver/control';
-import { createMongoFamilyInstance } from '@prisma/orm-mongo/family/control';
 import { verifyMongoSchema } from '@prisma/orm-mongo/family/schema-verify';
 import type { MongoContract } from '@prisma/orm-mongo/family-contract';
 import { MongoMigrationRunner } from '@prisma/orm-mongo/target/control';
@@ -82,13 +80,6 @@ function loadMigration(dirName: string): {
   return { ops, endContract };
 }
 
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
-
 describe('full retail-store migration chain (m1 → m2 → m3)', {
   timeout: timeouts.spinUpMongoMemoryServer,
 }, () => {
@@ -130,11 +121,7 @@ describe('full retail-store migration chain (m1 → m2 → m3)', {
     const controlDriver = await mongoControlDriver.create(replSet.getUri(dbName));
     try {
       const runner = new MongoMigrationRunner(
-        createMongoRunnerDeps(
-          controlDriver,
-          MongoDriverImpl.fromDb(extractDb(controlDriver)),
-          makeFamily(),
-        ),
+        new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
       );
 
       // Migration 1 — bootstrap. No origin (greenfield); strict verify on.

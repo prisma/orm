@@ -1,0 +1,53 @@
+# Slice 4: the mutation-default generator runtime lives once, in the framework
+
+_Parent: `projects/mongo-defaults-codecs-prisma6-source/`. Branch `mongo-generator-runtime-hoist`, stacked on slice 5. Outcome: one implementation of the generator registry, the availability check, and the apply loop serves both families; the Mongo-local copy from slice 3 and the SQL-local original are deleted._
+
+## At a glance
+
+Both runtimes end up calling the same framework functions:
+
+```ts
+import { collectMutationDefaultGenerators, assertMutationDefaultGeneratorsAvailable, applyMutationDefaults } from '@internal/framework-components/runtime';
+
+const generators = collectMutationDefaultGenerators([target, adapter, ...extensions]);
+assertMutationDefaultGeneratorsAvailable(contract.execution, generators);
+// later, per ORM operation:
+applyMutationDefaults(contract.execution, generators, { op: 'create', namespace, entry, values, defaultValueCache });
+```
+
+A generator is `{ id, generate(params?), stability: 'field' | 'row' | 'query' }` from the framework; the SQL and Mongo `timestampNow` generators and the Postgres `instantNow` / `plainDateTimeNow` objects are typed by it.
+
+## Chosen design
+
+- **Module** `packages/1-framework/1-core/framework-components/src/execution/mutation-defaults.ts` (runtime plane), exported through `exports/runtime.ts`: `GeneratorStability`, `RuntimeMutationDefaultGenerator`, `MutationDefaultsOp`, `MutationDefaultsOptions { op; namespace; entry; values: Readonly<Record<string, unknown>>; defaultValueCache?: Map<string, unknown> }`, `AppliedMutationDefault { field; value }`, `MutationDefaults { applyMutationDefaults(options) }`, `MutationDefaultGeneratorContributor { id; mutationDefaultGenerators?: () => ReadonlyArray<RuntimeMutationDefaultGenerator> }`, `collectMutationDefaultGenerators(contributors)`, `assertMutationDefaultGeneratorsAvailable(execution: ContractExecutionSection | undefined, registry)`, `applyMutationDefaults(execution, registry, options)`. Names carry no family vocabulary; the vocabulary ratchet stays at or below its threshold.
+- **Semantics are the SQL runtime's, verbatim.** Duplicate id → `RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR` with `{ id, existingOwner, incomingOwner }`; missing at creation → `RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING` with `{ ids }` and the existing message; missing at apply time → the same code with the SQL message (replacing Mongo's `assertDefined`); a key present in `values` is explicit (`Object.hasOwn`), whatever its value; an update with no keys applies nothing; `'row'` uses a fresh cache per call, `'query'` the caller's cache, `'field'` none; a ref applied once per call. Callers own `undefined` filtering: the SQL ORM already drops `undefined` before calling; the Mongo ORM drops it on create paths and passes `{ field: true }` maps on update paths, so its runtime-level `undefined` tests move to the ORM level.
+- **SQL migrates onto it.** `packages/2-sql/5-runtime/src/sql-context.ts` deletes its registry, check, apply loop, and the generator types; `SqlStaticContributions.mutationDefaultGenerators` is typed by the framework generator; `packages/2-sql/4-lanes/relational-core/src/query-lane-context.ts` drops its own `MutationDefaultsOptions`/`AppliedMutationDefault` in favour of the framework types, which means the SQL option key `table` becomes `entry` and the result key `column` becomes `field` (finishing what slice 2 left open); every caller (`sql-orm-client/src/collection.ts`, `mutation-executor.ts`, the `sql-builder` lane, test stubs) follows. `ExecutionContext.applyMutationDefaults` keeps its position in the SQL context; the check keeps running after codec collection as today.
+- **Mongo migrates onto it.** `mongo-execution-stack.ts` deletes its copy; `MongoStaticContributions.mutationDefaultGenerators` is typed by the framework generator; `MongoExecutionContext extends MutationDefaults`; `@internal/mongo-contract`'s `mutation-defaults.ts` is deleted and the Mongo ORM depends on the framework `MutationDefaults` interface (if the ORM's plane may not import the framework runtime plane, the implementer reports the layering fact and we decide; do not re-declare the interface silently). The check keeps running before codec collection as today.
+- **Generators.** `RuntimeMutationDefaultGenerator` is imported from the framework by `packages/2-sql/9-family` and `packages/2-mongo-family/9-family` generator files, the Postgres and SQLite adapter registrations, and tests. No family package re-exports the type.
+- **Execution section builder.** `buildMongoExecutionSection` moves to `@internal/contract` as `buildExecutionSection({ target, targetFamily, defaults })`, sorting by namespace, then entry, then field, and computing `executionHash`; SQL's `build-contract.ts` uses it. Two multi-namespace SQL fixtures re-hash (`test/integration/test/ports/prisma/functional/multi-schema/_fixture/{different-names,no-map}/generated/`), regenerated by `fixtures:check`. This closes the plan's sort-order open item.
+- **ADR.** A new ADR records the framework-owned mutation-default runtime: the generator contract, the three stabilities, the availability check at context creation, the explicit-key rule, and the neutral ref. Subsystem 4 (Runtime & Middleware Framework) gains a section; subsystem 10 and `packages/2-sql/5-runtime/README.md` (whose stale `RUNTIME.MISSING_MUTATION_DEFAULT_GENERATOR` line goes) point at it.
+- **Upgrade fragments** for the removed and renamed published surface: `GeneratorStability` and `RuntimeMutationDefaultGenerator` leaving `@internal/sql-runtime` / `@prisma/orm-family-sql` runtime subpaths for `@prisma/orm-framework/components/runtime`; `MutationDefaultsOptions.table` → `entry` and `AppliedMutationDefault.column` → `field` in the SQL lanes types; `MongoGeneratorStability`, `MongoRuntimeMutationDefaultGenerator`, `MongoMutationDefaults*` removed.
+
+## Coherence rationale
+
+One deletion of two copies plus the callers that follow. A reviewer verifies the framework module against the SQL original line by line, then reads every other hunk as a caller migration or a regeneration.
+
+## Scope
+
+In: everything above. Out: changing the check order inside either family's context creation; the Mongo ORM's update-document explicitness rule (already correct at the caller); any authoring change.
+
+## Pre-investigated edge cases
+
+- `sql-builder` lane update callers do not pre-filter `undefined` and have no emptiness guard; with the framework's `Object.hasOwn` rule that is unchanged from today. Add a test pinning it so the rule is explicit.
+- SQL tests assert `table:` options and `column:` results in `sql-context.test.ts` and several stubs (`relational-core/test/utils.ts`, `sql-builder/test/runtime/same-bare-table-name.test.ts`, `sql-orm-client/test/collection-variant.test.ts`); they follow the rename, nothing else in them changes.
+- The Mongo integration test asserts the exact missing-generator message; it stays true because the framework keeps the SQL message.
+
+## Slice Definition of Done
+
+Inherits `drive/calibration/dod.md`. Slice-specific: `grep -rn "mutationDefaultGenerators\|applyMutationDefaults" packages/2-sql/5-runtime/src packages/2-mongo-family/7-runtime/src` shows only wiring, no registry or apply-loop bodies; every SQL and Mongo generator test still passes with only import-path and key-name changes; `fixtures:check` clean with exactly the two multi-namespace fixtures re-hashed; the ADR exists and is linked from both subsystem docs.
+
+## References
+
+- Grounding facts: `sql-context.ts:77-99, 590-760, 762-845`; `query-lane-context.ts:73-97, 126`; `mongo-execution-stack.ts:30-49, 138-297`; `mongo-contract/src/mutation-defaults.ts`; `build-contract.ts:1602-1654`; `mongo-contract/src/build-execution-section.ts`; consumers in `sql-orm-client/src/collection.ts:148-184, 1578, 1724-1782, 1929, 2006-2016, 2243, 2303`, `mutation-executor.ts:333-343, 1032-1040, 1159-1167`, `sql-builder/src/runtime/mutation-impl.ts:84-93, 146-157`, Mongo `orm/src/collection.ts:852-889`.
+- Tests: `packages/2-sql/5-runtime/test/{mutation-default-generators,sql-context}.test.ts`, `packages/2-mongo-family/7-runtime/test/execution-context.test.ts`, `test/integration/test/mongo/runtime/mutation-default-generators.test.ts`.
+- ADR 239 (generator id merge), ADR 252.

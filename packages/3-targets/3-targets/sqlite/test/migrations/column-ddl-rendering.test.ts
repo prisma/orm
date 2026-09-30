@@ -1,6 +1,17 @@
-import { PrimaryKey, SqlForeignKeyIR, SqlUniqueIR } from '@internal/sql-schema-ir/types';
+import {
+  PrimaryKey,
+  SqlColumnIR,
+  SqlForeignKeyIR,
+  SqlUniqueIR,
+} from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
-import { tableConstraintsFromNode } from '../../src/core/migrations/column-ddl-rendering';
+import { SQLITE_DATETIME_CODEC_ID } from '../../src/core/codec-ids';
+import { sqliteDatetime } from '../../src/core/data-types';
+import {
+  columnSpecFromNode,
+  ddlColumnFromNode,
+  tableConstraintsFromNode,
+} from '../../src/core/migrations/column-ddl-rendering';
 import { checkConstraint, expectedColumn, table } from './node-issue-helpers';
 
 describe('tableConstraintsFromNode — checks', () => {
@@ -66,5 +77,27 @@ describe('tableConstraintsFromNode — checks', () => {
       'UniqueConstraint',
       'ForeignKeyConstraint',
     ]);
+  });
+});
+
+describe('a contract default its data type does not hold', () => {
+  const column = new SqlColumnIR({
+    name: 'at',
+    nativeType: 'text',
+    nullable: false,
+    resolvedDefault: { kind: 'literal', value: '2024-01-01T00:00:00.123456Z' },
+    codecRef: { codecId: SQLITE_DATETIME_CODEC_ID },
+    codecBaseNativeType: 'text',
+    dataType: sqliteDatetime,
+  });
+  const refusal = expect.objectContaining({
+    code: 'CONTRACT.DEFAULT_INVALID',
+    message:
+      'Column "at": The contract holds this default in a form its data type does not store: "2024-01-01T00:00:00.123456Z" has 6 digits after the decimal point, but sqlite/datetime holds milliseconds, so at most 3. Round it, as in "2024-01-01T12:34:56.123Z". Re-emit the contract, then try again.',
+  });
+
+  it('is refused rather than written, by both DDL paths', () => {
+    expect(() => ddlColumnFromNode(column, false)).toThrow(refusal);
+    expect(() => columnSpecFromNode(column, false)).toThrow(refusal);
   });
 });

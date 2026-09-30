@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Model \"Post\": @@index argument \"length\" is not supported: a MongoDB index has no prefix length. Remove it; Prisma 6 ignores it on MongoDB."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Model \"Post\": @@index argument \"type\" is not supported."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_INDEX_ARGUMENT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.title\": @unique argument \"length\" is not supported: a MongoDB index has no prefix length. Remove it; Prisma 6 ignores it on MongoDB."
+  }
+]

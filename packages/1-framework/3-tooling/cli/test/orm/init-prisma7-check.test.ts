@@ -102,6 +102,7 @@ async function targetConfigWith(
 function refusingSource(schemaPath: string) {
   return {
     source: {
+      format: 'psl',
       inputs: [schemaPath],
       load: async () => ({
         ok: false,
@@ -308,6 +309,7 @@ describe('the Prisma 7 check before init changes the project', () => {
       () =>
         targetConfigWith((schemaPath) => ({
           source: {
+            format: 'psl',
             inputs: [schemaPath],
             load: async () => {
               throw new Error('source exploded');

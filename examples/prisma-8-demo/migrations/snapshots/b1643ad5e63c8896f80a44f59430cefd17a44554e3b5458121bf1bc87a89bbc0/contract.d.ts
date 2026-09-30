@@ -1370,33 +1370,33 @@ type ContractBase = Omit<
       readonly defaults: readonly [
         {
           readonly ref: {
+            readonly entry: 'post';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'post';
-            readonly column: 'id';
           };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv4' };
         },
         {
           readonly ref: {
+            readonly entry: 'tag';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'tag';
-            readonly column: 'id';
           };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv4' };
         },
         {
           readonly ref: {
+            readonly entry: 'task';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'task';
-            readonly column: 'id';
           };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv4' };
         },
         {
           readonly ref: {
+            readonly entry: 'user';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'user';
-            readonly column: 'id';
           };
           readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv4' };
         },

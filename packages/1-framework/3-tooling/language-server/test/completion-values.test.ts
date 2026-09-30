@@ -22,6 +22,7 @@ import {
   type RejectingArgType,
   record,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
@@ -195,7 +196,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'completion-policy',
     name: { required: true },
-    parameters: {},
+    spec: () => structBlock({ parameters: {} }),
     attributes: { probe: () => blockSpec },
   },
 };
@@ -206,7 +207,7 @@ function complete(markedSource: string, snippets = false, parameterHints = false
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
       document,

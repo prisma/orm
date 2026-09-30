@@ -62,7 +62,7 @@ Four rules make that possible.
 1. **Registry entries are uniformly spec factories.** A family registers `AuthoringContributions.attributeSpecs` — one namespace with a `model` and a `field` subkey, each a record of factories keyed by bare attribute name. A target registers model attributes as before, through `AuthoringContributions.modelAttributes`, whose descriptors carry a spec factory alongside their `lower` function ([ADR 236](ADR%20236%20-%20Target-contributed%20model%20attributes.md)). No entry is a bare spec value, so no consumer branches on entry kind.
 2. **The factory argument is a framework-owned context.** `AttributeSpecContext` at model level, `FieldAttributeSpecContext` at field level. Both consumers can construct it.
 3. **`assembleAttributeSpecs` is the one assembly point.** It merges the family's built-ins with the target-contributed model-attribute descriptors into frozen plain records, and it is the point where the types erased through framework core are restored.
-4. **Registry keys drive unknown-attribute diagnostics.** An attribute name absent from the registry is a diagnostic in both families, at field and at model level; a block attribute absent from its block descriptor's `attributes` is a diagnostic at parse time.
+4. **Registry keys drive unknown-attribute diagnostics.** An attribute name absent from the registry is a diagnostic in both families, at field and at model level; a block attribute absent from its block descriptor's `attributes` is a diagnostic during consumer-owned block interpretation.
 
 Block attributes are keyed on their block descriptor rather than in the flat keyspace, because a block attribute is legal only on some block kinds.
 
@@ -108,8 +108,9 @@ The context is framework-owned, and a family that needs a new fact widens it for
 
 ```ts
 export interface AttributeCtx {
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
+  readonly symbols: SymbolTable;
+  readonly binder: Binder;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
@@ -118,13 +119,12 @@ export interface ModelAttributeCtx extends AttributeCtx {
 
 export interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 ```
 
-The two serve different moments and carry different facts. The construction-time context answers "what grammar does this attribute accept here" and is consumed once, when the spec is built. The parse-time context answers "what can a combinator resolve against while reading this node" and is passed to `interpretAttribute` for every attribute occurrence; it carries the source coordinates that diagnostics anchor to, which a spec-construction context has no use for.
+The two serve different moments and carry different facts. The construction-time context answers "what grammar does this attribute accept here" and is consumed once, when the spec is built. The parse-time context answers "what can a combinator resolve against while reading this node" and is passed to `interpretAttribute` for every attribute occurrence; it carries `sources` for diagnostic locations, `symbols`, and the snapshot's `binder`. Reference combinators read committed binder resolutions rather than resolving names again. The binder owns unresolved-reference diagnostics; combinators own shape and entity-selector diagnostics.
 
-They are three separate types rather than one type with optional fields, so that a spec cannot demand a fact its level never carries. `fieldRef()` needs a model to validate a field name against, and is therefore usable at model and field level but not on a block; `referencedFieldRef()` needs a relation target, which only a field can resolve. A block attribute is parsed with only `AttributeCtx`, because a block has no model — `@@type` on an `enum` block has nothing to resolve names against. Optional fields would push that to a runtime check in every combinator instead of the type system.
+They are three separate types rather than one type with optional fields, so that a spec cannot demand a fact its level never carries. `fieldRef()` needs a model to validate a field name against, and is therefore usable at model and field level but not on a block; `referencedFieldRef()` needs a relation target, which only a field can resolve. A block attribute is parsed with only `AttributeCtx`, because a block has no model; it can still read entity references through the binder. Optional fields would push that to a runtime check in every combinator instead of the type system.
 
 None of the three carries a `level` discriminant. Level belongs to the spec, not to the site: `AttributeSpec.level` is set by the constructor that built it (`fieldAttribute`, `modelAttribute`, `blockAttribute` write `'field'`, `'model'`, `'block'` respectively), and that is the field consumers read. A discriminant on the context would duplicate it with no reader.
 
@@ -143,7 +143,7 @@ export interface AuthoringAttributeSpecContributions {
 
 `AuthoringModelAttributeDescriptor.spec` and `AuthoringPslBlockDescriptor.attributes` are erased the same way. Core still validates what it cannot name: `mergeAuthoringAttributeSpecs` rejects a level that is not a record, an entry that is not a function, an entry keyed `__proto__` / `constructor` / `prototype`, and a second descriptor claiming an already-claimed `level.attribute` pair, all as `CONTRACT.PACK_CONTRIBUTION_INVALID`.
 
-Each erased channel is restored at exactly one point in the authoring layer, with a `blindCast` carrying its reason. `assembleAttributeSpecs` restores the flat registry; `parseBlockAttribute` in `packages/1-framework/2-authoring/psl-parser/src/block-reconstruction.ts` restores a block descriptor's declared factories. Nothing downstream casts again.
+The authoring layer restores erased types with a `blindCast` carrying its reason. `assembleAttributeSpecs` restores the flat registry. Block-attribute factories are restored both by `bindBlock` in `packages/1-framework/2-authoring/psl-parser/src/binder.ts`, for reference binding, and by `interpretExtensionBlockAttributes` in `packages/1-framework/2-authoring/psl-parser/src/block-spec/interpret.ts`, for attribute interpretation. The block-value spec factory is restored through `blockSpecFactoryOf`.
 
 Both factory types return `AttributeSpec<never, …>`, and the bottom type is deliberate. `AttributeSpec.refine` takes the parsed output as a parameter:
 
@@ -162,7 +162,7 @@ An attribute name the registry does not carry is reported, in both families and 
 - SQL model level: `buildModelNodeFromPsl` in `packages/2-sql/2-authoring/contract-psl/src/interpreter.ts` reports a name absent from both `sqlAttributeSpecs.model` and the target-contributed model attributes as `PSL_UNSUPPORTED_MODEL_ATTRIBUTE`.
 - SQL field level: `validateFieldAttributes` in `packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts` reports a name absent from `sqlAttributeSpecs.field` as `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`, after the `db.` prefix and removed-attribute paths have had their say. A module-level check refuses to load if a removed-attribute rule and a registered field attribute claim the same name, so the two name sets cannot overlap.
 - Mongo, both levels: `reportUnknownAttributes` in `packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts` walks every model and composite type and reports names absent from `mongoAttributeSpecs.model` / `.field` with the same two codes.
-- Block level: `parseBlockAttribute` reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
+- Block level: the block-spec interpreter (`interpretExtensionBlock` in `packages/1-framework/2-authoring/psl-parser/src/block-spec/interpret.ts`) reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
 
 This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — argument-less `fieldAttribute` specs with required documentation for the primary-key and uniqueness markers — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.
 
@@ -170,25 +170,26 @@ This makes coverage a correctness requirement, not a nicety: a diagnostic driven
 
 ## Block attributes are declared on their block descriptor
 
-Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to `parameters`:
+Block attributes are scoped by block kind. `@@type` is legal on an `enum` block and meaningless on `policy_select`; `@@map` is legal on both a policy block and a native-enum block. Placing them in the flat keyspace would invert that ownership and force every consumer to join two structures to answer what is legal here. They are declared on the descriptor instead, as `AuthoringPslBlockDescriptor.attributes` — a record of factories, sibling to the block's value `spec` ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)):
 
 ```ts
 export const sqlFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
     keyword: 'enum',
+    documentation:
+      'Defines an enum with named values and an inferred or explicitly selected storage codec.',
     discriminator: 'enum',
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: sqlFamilyEnumSpec,
     attributes: { type: () => enumTypeBlockAttribute },
-  },
+  } satisfies PslBlockSpecDescriptor,
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 ```
 
 A block's legal attributes are its descriptor's keys, so scoping is structural, and the language server needs no new plumbing: it already receives `pslBlockDescriptors` from the composed stack.
 
-`reconstructExtensionBlock` interprets those attributes while it reconstructs the block, and attaches the typed results to the node as plain data:
+Symbol-table construction collects declarations without interpreting blocks. After collection, the consumer creates the snapshot's binder with the block descriptors, then calls `interpretExtensionBlocks` to interpret those attributes together with the block's values and attach the typed results to the block's envelope as plain data. The consumer reports binder diagnostics once alongside interpretation diagnostics:
 
 ```ts
 export interface PslExtensionBlockParsedAttribute {
@@ -197,7 +198,7 @@ export interface PslExtensionBlockParsedAttribute {
 }
 ```
 
-`PslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The block's untyped `blockAttributes` array, whose argument values are flattened source text, remains for consumers that want the raw form.
+`ParsedPslExtensionBlock.attributes` is a record of those, keyed by attribute name. Consumers in core and in target packs read the parsed values and never invoke the kit, which keeps the layering intact: `resolveEnumCodecId` reads `block.attributes['type']` and its `args['codecId']`, and the Postgres target reads `block.attributes['map']` and its `args['name']` for both the policy block and the native-enum block. The producer-only print shape's `blockAttributes` array, whose argument values are print text supplied by a generator, exists for the printer only ([ADR 255](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md)).
 
 ---
 
@@ -227,11 +228,11 @@ Two boundaries stay open by design. Field-level entries are the family's own bui
 
 **Closing stack facts over the factories at registration time.** Rejected: it hides each factory's dependencies and forces family namespaces to be constructed per composed stack instead of being module-level constants.
 
-**Reusing the parse-time context as the construction-time context.** Rejected: wrong moment and wrong facts. Parse-time contexts carry source coordinates for diagnostics and are built per attribute occurrence; they carry neither the symbol table nor the mutation-default registry a spec needs while being built.
+**Reusing the parse-time context as the construction-time context.** Rejected: wrong moment and wrong facts. Parse-time contexts carry sources for diagnostics and the snapshot's binder and symbol table, with model and field facts added per attribute occurrence; they do not carry the mutation-default registry used to construct dynamic specs.
 
 **A registry interface with accessor methods.** A `createAttributeRegistry` returning `get(level, name)` and `entries(level)` was rejected: the level is statically known at every call site, so a string parameter only creates overloads, and a `get(): F | undefined` accessor imposes an undefined check on the interpreters, whose access to their own known attributes is total. Frozen plain records let partiality appear only where it is real — enumeration and unknown-name checks.
 
-**Making framework core generic over the spec type.** Rejected: the type machinery needed to thread an authoring-layer type through core is disproportionate to two documented narrows in the authoring layer.
+**Making framework core generic over the spec type.** Rejected: the type machinery needed to thread an authoring-layer type through core is disproportionate to the documented type restorations in the authoring layer.
 
 **A second, authoring-layer-only contribution channel that bypasses core.** Rejected: it duplicates plumbing the control stack already provides to both consumers, and target packs contribute through core, so they could not reach it.
 

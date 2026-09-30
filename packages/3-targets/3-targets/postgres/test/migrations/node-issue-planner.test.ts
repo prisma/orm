@@ -575,6 +575,7 @@ describe('operation-class gating of a RenameIndexCall', () => {
       kind: 'indexIncompatible',
       summary:
         'Operation "Rename index "old_email_idx" to "user_email_idx_46df9cad" on "user"" requires class "widening", but policy allows only: additive',
+      refusedOperationClass: 'widening',
       location: {
         entityKind: 'table',
         entityName: 'user',

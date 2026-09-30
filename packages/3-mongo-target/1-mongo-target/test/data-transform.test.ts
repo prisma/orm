@@ -14,8 +14,11 @@ import {
   RawUpdateManyCommand,
 } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
-import { dataTransform } from '../src/core/migration-factories';
-import { deserializeMongoOps, serializeMongoOps } from '../src/core/mongo-ops-serializer';
+import { dataTransform } from '../src/core/migrations/migration-factories';
+import {
+  deserializeMongoOps,
+  serializeMongoOps,
+} from '../src/core/migrations/mongo-ops-serializer';
 
 function asDataTransformOp(op: AnyMongoMigrationOperation): MongoDataTransformOperation {
   if (op.operationClass !== 'data') {

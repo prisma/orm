@@ -6,9 +6,9 @@ import {
   buildFabricatedMigrationEdge,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
 import {
   contract,

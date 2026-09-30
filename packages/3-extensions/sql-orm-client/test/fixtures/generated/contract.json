@@ -1284,7 +1284,7 @@
     "storageHash": "707429801bd7d6f3636f064492563b743c80e12fe44636f5519554b5fb9b3b59"
   },
   "execution": {
-    "executionHash": "8fc1f2214ea8abb8d650648f7b286159ba8e7ff3daf808591e38ed139ac3dcf9",
+    "executionHash": "829773c079904c23ddf101be0289f11ed0567791abfb43e4a322833c60ba7aef",
     "mutations": {
       "defaults": [
         {
@@ -1293,9 +1293,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "roles"
+            "entry": "roles",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1304,9 +1304,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "tags"
+            "entry": "tags",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

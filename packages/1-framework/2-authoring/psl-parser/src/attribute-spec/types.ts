@@ -1,7 +1,9 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
+import type { Binder } from '../binder';
 import type { PslDiagnostic } from '../diagnostic';
 import type {
   EntityDeclaration,
@@ -18,6 +20,7 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 export interface AttributeCtx {
   readonly sources: PslSources;
   readonly symbols: SymbolTable;
+  readonly binder: Binder;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
@@ -26,7 +29,6 @@ export interface ModelAttributeCtx extends AttributeCtx {
 
 export interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 
 export type ArgTypeKind =
@@ -37,6 +39,7 @@ export type ArgTypeKind =
   | 'identifier'
   | 'int'
   | 'json'
+  | 'null'
   | 'list'
   | 'num'
   | 'oneOf'
@@ -131,6 +134,24 @@ export interface JsonArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly kind: 'json';
 }
 
+export interface JsonValueArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<JsonValue, Ctx> {
+  readonly kind: 'oneOf';
+  readonly alternatives: readonly [
+    UnrestrictedStrArgType<Ctx>,
+    UnrestrictedNumArgType<Ctx>,
+    BoolArgType<Ctx>,
+    NullArgType<Ctx>,
+    ListArgType<JsonValue, Ctx>,
+    RecordArgType<JsonValue, Ctx>,
+  ];
+}
+
+export interface NullArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<null, Ctx> {
+  readonly kind: 'null';
+}
+
 export interface ListArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<T[], Ctx> {
   readonly kind: 'list';
@@ -169,9 +190,14 @@ export type NumArgType<
 export interface OneOfArgType<
   Alts extends readonly [AnyArgType, ...AnyArgType[]],
   Ctx extends AttributeCtx = ContextForRequirement<RequiredContextFor<CtxOf<Alts[number]>>>,
-> extends ArgTypeOutput<OutOf<Alts[number]>, Ctx> {
-  readonly kind: 'oneOf';
+> extends ArgTypeOutput<OutOf<Alts[number]>, Ctx>,
+    OneOfMetadata {
   readonly alternatives: Alts;
+}
+
+interface OneOfMetadata {
+  readonly kind: 'oneOf';
+  readonly alternatives: readonly [AnyArgType, ...AnyArgType[]];
 }
 
 export interface RecordArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
@@ -220,9 +246,12 @@ export interface TaggedLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
   readonly documentation: string;
 }
 
-export interface ArgType<T, Ctx extends AttributeCtx> extends ArgTypeOutput<T, Ctx> {
-  readonly kind: ArgTypeKind;
-}
+type ArgTypeMetadata<Type> = Type extends object
+  ? Omit<Type, keyof ArgTypeOutput<unknown, never>>
+  : never;
+
+export type ArgType<T, Ctx extends AttributeCtx> = ArgTypeOutput<T, Ctx> &
+  ArgTypeMetadata<ArgTypeVariant<Ctx>>;
 
 export type AnyArgType =
   | ArgType<unknown, AttributeCtx>
@@ -245,7 +274,9 @@ export type ContextForRequirement<Req extends ArgTypeContext> = Req extends 'fie
     ? ModelAttributeCtx
     : AttributeCtx;
 
-export type InspectableArgType<Ctx extends AttributeCtx> =
+export type InspectableArgType<Ctx extends AttributeCtx> = ArgType<unknown, Ctx>;
+
+type ArgTypeVariant<Ctx extends AttributeCtx> =
   | BoolArgType<Ctx>
   | EntityRefArgType<EntityDeclaration, Ctx>
   | FieldRefArgType<ModelAttributeCtx & Ctx>
@@ -253,11 +284,12 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | IdentifierArgType<string, Ctx>
   | IntArgType<Ctx>
   | JsonArgType<Ctx>
+  | NullArgType<Ctx>
   | ListArgType<unknown, Ctx>
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
   | NumLiteralArgType<Ctx>
-  | OneOfArgType<readonly [AnyArgType, ...AnyArgType[]], Ctx>
+  | OneOfMetadata
   | RecordArgType<unknown, Ctx>
   | ReferencedFieldRefArgType<FieldAttributeCtx & Ctx>
   | RejectingArgType<never, Ctx>

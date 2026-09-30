@@ -93,12 +93,18 @@ export function providesEntityHandleLowering(
   return typeof lowerEntityHandles === 'function';
 }
 
-/**
- * PSL-side twin of {@link ResolvedEntityHandleRef}: the family interpreter
- * resolves an extension block's descriptor-declared model ref parameters
- * (`{ kind: 'ref', refKind: 'model' }`) to storage table names and annotates
- * the block with this map (keyed by parameter name) before invoking the
- * entity factory. An unresolved required ref is the interpreter's
- * diagnostic; a factory never sees one.
- */
-export type ResolvedPslModelRefs = Readonly<Record<string, { readonly tableName: string }>>;
+export type ResolvedPslModelRefs = Readonly<
+  Record<string, { readonly namespaceId: string; readonly tableName: string }>
+>;
+
+export interface SqlPslEntityPlacementOutput {
+  pslPlacement(entity: unknown): Pick<LoweredPackEntity, 'namespaceId'>;
+}
+
+export function providesPslEntityPlacement(output: unknown): output is SqlPslEntityPlacementOutput {
+  if (typeof output !== 'object' || output === null || !('pslPlacement' in output)) {
+    return false;
+  }
+  const { pslPlacement } = output;
+  return typeof pslPlacement === 'function';
+}

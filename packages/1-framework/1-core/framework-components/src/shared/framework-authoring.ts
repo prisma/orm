@@ -21,7 +21,7 @@ import type {
   TaggedLiteralValue,
 } from './mutation-default-types';
 import type { AuthoringOption } from './option-descriptor';
-import type { PslBlockParam, PslExtensionBlock, PslSpan } from './psl-extension-block';
+import type { ParsedPslExtensionBlock, PslSpan } from './psl-extension-block';
 import { runtimeError } from './runtime-error';
 
 export type EnumInferredMemberType = 'text' | 'int';
@@ -130,6 +130,8 @@ export interface AuthoringTypeConstructorDescriptor {
   readonly output: AuthoringStorageTypeTemplate;
   /** Present when one of this constructor's positional arguments names another document-local entity instead of carrying a literal value. Absent for ordinary literal-argument constructors. */
   readonly entityRefArg?: AuthoringTypeConstructorEntityRef;
+  /** Present when this name is kept only as an alias of `replacement` and will be removed; it resolves as before, and a source may warn. */
+  readonly deprecated?: { readonly replacement: string };
 }
 
 export interface AuthoringColumnDefaultTemplateLiteral {
@@ -283,37 +285,17 @@ export interface AuthoringEntityContext {
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
 }
 
-/**
- * Classifies an `enum` block's members (before codec decoding, which needs
- * the codec chosen first) into which default codec an omitted `@@type`
- * should resolve to:
- *
- * - every member is `bare`, or a `value` whose raw JSON is a string → `'text'`
- * - every member is a `value` whose raw JSON is an integer → `'int'`
- * - anything else (float, bigint, boolean, mixed, or a `ref`/`option`/`list`
- *   parameter) → `null`, meaning the caller must require an explicit `@@type`.
- */
-export function classifyEnumMemberType(block: PslExtensionBlock): 'text' | 'int' | null {
+export function classifyEnumMemberType(
+  values: Readonly<Record<string, unknown>>,
+): 'text' | 'int' | null {
   let sawText = false;
   let sawInt = false;
 
-  for (const paramValue of Object.values(block.parameters)) {
-    if (paramValue.kind === 'bare') {
+  for (const key of Object.keys(values)) {
+    const value = values[key];
+    if (value === undefined || typeof value === 'string') {
       sawText = true;
-      continue;
-    }
-    if (paramValue.kind !== 'value') {
-      return null;
-    }
-    let jsonValue: unknown;
-    try {
-      jsonValue = JSON.parse(paramValue.raw);
-    } catch {
-      return null;
-    }
-    if (typeof jsonValue === 'string') {
-      sawText = true;
-    } else if (typeof jsonValue === 'number' && Number.isInteger(jsonValue)) {
+    } else if (typeof value === 'number' && Number.isInteger(value)) {
       sawInt = true;
     } else {
       return null;
@@ -335,14 +317,14 @@ export function classifyEnumMemberType(block: PslExtensionBlock): 'text' | 'int'
  * every family's enum factory so inference and the explicit path stay identical.
  */
 export function resolveEnumCodecId(
-  block: PslExtensionBlock,
+  block: ParsedPslExtensionBlock,
   ctx: AuthoringEntityContext,
 ): { readonly codecId: string; readonly codecSpan: PslSpan } | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
   const typeAttr = block.attributes['type'];
 
   if (typeAttr === undefined) {
-    const inferredKind = classifyEnumMemberType(block);
+    const inferredKind = classifyEnumMemberType(block.values);
     if (inferredKind === null || ctx.enumInferenceCodecs === undefined) {
       ctx.diagnostics?.push({
         code: 'PSL_ENUM_CANNOT_INFER_TYPE',
@@ -357,7 +339,7 @@ export function resolveEnumCodecId(
 
   const codecId = typeAttr.args['codecId'];
   invariant(typeof codecId === 'string', '@@type on an enum block parses one string argument');
-  return { codecId, codecSpan: typeAttr.span };
+  return { codecId, codecSpan: typeAttr.argSpans?.['codecId'] ?? typeAttr.span };
 }
 
 export interface AuthoringEntityTypeTemplateOutput {
@@ -421,10 +403,6 @@ export type AuthoringEntityTypeNamespace = {
  *   after the keyword. Currently always `true` — anonymous blocks are
  *   not part of the closed-grammar premise — but the field is explicit
  *   so the type can evolve without a breaking change.
- * - `parameters` maps parameter names to their value-kind descriptors
- *   (`ref` / `value` / `option` / `list`). The generic parser and
- *   validator interpret these; the extension supplies no parser or
- *   printer function.
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';
@@ -432,22 +410,7 @@ export interface AuthoringPslBlockDescriptor {
   readonly keyword: string;
   readonly discriminator: string;
   readonly name: { readonly required: boolean };
-  readonly parameters: Record<string, PslBlockParam>;
-  /**
-   * When `true`, the block body accepts a variadic tail of parameters beyond
-   * the declared set. The block body may contain: fields (model-style),
-   * `key = value` parameters, and `@@` attributes. With `variadicParameters`,
-   * bare identifiers (keys without a `= value`) and undeclared `key = value`
-   * pairs flow into the variadic tail — their semantics belong to the
-   * lowering, not the parser.
-   *
-   * A key that IS declared in `parameters` must still be supplied as
-   * `key = value`; a bare occurrence of a declared key is a diagnostic.
-   *
-   * When `false` (default), the validator emits `PSL_EXTENSION_UNKNOWN_PARAMETER`
-   * for keys absent from `parameters`.
-   */
-  readonly variadicParameters?: boolean;
+  readonly spec: unknown;
   /**
    * Declares that the model named by the block's ref parameter `parameter`
    * must carry the bare `@@` model attribute `attribute`. The family
@@ -854,11 +817,7 @@ function isWellFormedDescriptor(value: unknown, descriptorKind: string): boolean
       const name = value.name;
       if (typeof name !== 'object' || name === null) return false;
       if (!('required' in name) || typeof name.required !== 'boolean') return false;
-      if (!('parameters' in value)) return false;
-      const parameters = value.parameters;
-      if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
-        return false;
-      }
+      if (!('spec' in value) || typeof value.spec !== 'function') return false;
       if (!('attributes' in value) || value.attributes === undefined) return true;
       const attributes = value.attributes;
       if (typeof attributes !== 'object' || attributes === null || Array.isArray(attributes)) {
@@ -1663,45 +1622,30 @@ function validateAuthoringArgument(
     if (descriptor.optional) {
       return;
     }
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Missing required authoring helper argument at ${path}`,
-    );
+    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} is missing`);
   }
 
   if (descriptor.kind === 'string') {
     if (typeof value !== 'string') {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be a string`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a string`);
     }
     return;
   }
 
   if (descriptor.kind === 'boolean') {
     if (typeof value !== 'boolean') {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be a boolean`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a boolean`);
     }
     return;
   }
 
   if (descriptor.kind === 'stringArray') {
     if (!Array.isArray(value)) {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be an array of strings`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an array of strings`);
     }
     for (const entry of value) {
       if (typeof entry !== 'string') {
-        throw runtimeError(
-          'CONTRACT.ARGUMENT_INVALID',
-          `Authoring helper argument at ${path} must be an array of strings`,
-        );
+        throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an array of strings`);
       }
     }
     return;
@@ -1709,10 +1653,7 @@ function validateAuthoringArgument(
 
   if (descriptor.kind === 'object') {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be an object`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an object`);
     }
 
     const input = value as Record<string, unknown>;
@@ -1722,7 +1663,7 @@ function validateAuthoringArgument(
       if (!expectedKeys.has(key)) {
         throw runtimeError(
           'CONTRACT.ARGUMENT_INVALID',
-          `Authoring helper argument at ${path} contains unknown property "${key}"`,
+          `${path} contains unknown property "${key}"`,
         );
       }
     }
@@ -1736,37 +1677,36 @@ function validateAuthoringArgument(
 
   if (descriptor.kind === 'option') {
     if (typeof value !== 'string' || !descriptor.values.includes(value)) {
+      const quoted = descriptor.values.map((option) => JSON.stringify(option));
+      const rule =
+        quoted.length === 0
+          ? 'takes no value'
+          : `must be ${quoted.length === 1 ? quoted.join('') : `one of ${quoted.join(', ')}`}`;
       throw runtimeError(
         'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be one of: ${descriptor.values.join(', ')}`,
+        `${path} ${rule}; received ${describeReceivedArgument(value)}`,
       );
     }
     return;
   }
 
   if (typeof value !== 'number' || Number.isNaN(value)) {
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be a number`,
-    );
+    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a number`);
   }
 
   if (descriptor.integer && !Number.isInteger(value)) {
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be an integer`,
-    );
+    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an integer`);
   }
   if (descriptor.minimum !== undefined && value < descriptor.minimum) {
     throw runtimeError(
       'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be >= ${descriptor.minimum}, received ${value}`,
+      `${path} must be >= ${descriptor.minimum}, received ${value}`,
     );
   }
   if (descriptor.maximum !== undefined && value > descriptor.maximum) {
     throw runtimeError(
       'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be <= ${descriptor.maximum}, received ${value}`,
+      `${path} must be <= ${descriptor.maximum}, received ${value}`,
     );
   }
 }
@@ -1789,8 +1729,26 @@ export function validateAuthoringHelperArguments(
   }
 
   expected.forEach((descriptor, index) => {
-    validateAuthoringArgument(descriptor, args[index], `${helperPath}[${index}]`);
+    validateAuthoringArgument(
+      descriptor,
+      args[index],
+      argumentLabel(helperPath, descriptor, index),
+    );
   });
+}
+
+function argumentLabel(
+  helperPath: string,
+  descriptor: AuthoringArgumentDescriptor,
+  index: number,
+): string {
+  return descriptor.name === undefined
+    ? `Authoring helper argument at ${helperPath}[${index}]`
+    : `Argument "${descriptor.name}" of ${helperPath}`;
+}
+
+function describeReceivedArgument(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
 function resolveAuthoringStorageTypeTemplate(

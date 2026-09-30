@@ -36,7 +36,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'5eba83ca89146f79e95e703b59d4401bc8b1b764fe3f02d229f3067fbf19fadf'>;
 export type ExecutionHash =
-  ExecutionHashBase<'825a03304d5822bc78cb404d7b7c546dac3bbe074261c78e6ab2ed24c4f20331'>;
+  ExecutionHashBase<'2d20c3b2109ef33f2819ccf7705ad489183b74358ff3ebf82239b9e6bde16fe2'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -616,26 +616,26 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'post';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'post';
           };
         },
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'updatedAt';
+            readonly entry: 'post';
+            readonly field: 'updatedAt';
             readonly namespace: 'public';
-            readonly table: 'post';
           };
         },
         {
           readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'user';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'user';
           };
         },
       ];

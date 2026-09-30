@@ -16,13 +16,13 @@ import {
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresAdapter, postgresRawCodecInferer } from '../src/core/adapter';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { PostgresControlAdapter, parsePgReloptions } from '../src/core/control-adapter';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import { renderLoweredSql } from '../src/core/sql-renderer';

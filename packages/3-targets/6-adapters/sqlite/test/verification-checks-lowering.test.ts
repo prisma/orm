@@ -1,5 +1,6 @@
 import { SQL_CHAR_CODEC_ID } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import {
   columnExistsAst,
   indexExistsAst,
@@ -7,7 +8,6 @@ import {
 } from '@internal/target-sqlite/contract-free';
 import { SqliteCreateTable } from '@internal/target-sqlite/ddl';
 import { describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
 import type { SqliteContract } from '../src/core/types';
 

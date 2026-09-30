@@ -80,7 +80,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
           placeholder: 'slug',
         }),
         from: flag.string({
-          brief: 'Starting contract hash (default: latest migration target)',
+          brief: 'Starting contract hash (default: the db ref)',
           placeholder: 'hash',
         }),
       },

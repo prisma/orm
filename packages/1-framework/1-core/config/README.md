@@ -12,7 +12,7 @@ This package owns the shared config contract used by tooling and authoring packa
 - contract source provider + diagnostics protocol
 - provider-declared input metadata for tooling integrations
 - `defineConfig()` normalization/defaulting
-- `validateConfig()` structural/runtime-shape validation
+- `collectConfigIssues()` structural/runtime-shape validation
 
 ## Responsibilities
 
@@ -31,7 +31,7 @@ This package owns the shared config contract used by tooling and authoring packa
 
 ```ts
 import { defineConfig } from '@internal/config/config-types';
-import { validateConfig } from '@internal/config/config-validation';
+import { collectConfigIssues } from '@internal/config/config-validation';
 
 const config = defineConfig({
   family: sqlFamilyDescriptor,
@@ -39,6 +39,7 @@ const config = defineConfig({
   adapter: postgresAdapterDescriptor,
   contract: {
     source: {
+      format: 'psl',
       inputs: ['./prisma/schema.prisma'],
       load: async (_context) =>
         /* Result<Contract, ContractSourceDiagnostics> */ null as never,
@@ -46,8 +47,10 @@ const config = defineConfig({
   },
 });
 
-validateConfig(config);
+const issues = collectConfigIssues(config);
 ```
+
+Every source states the language of its inputs in `source.format`: `'psl'` or `'typescript'`. `collectConfigIssues` reports a missing `format` and any other value as an issue on `contract.source.format`. Tooling that reads the inputs itself, such as `contract format` and the language server, reads only a `'psl'` source's inputs.
 
 Declare `source.inputs` only for source files that are not already covered by the config module
 graph, such as PSL schema paths or TypeScript contract paths passed as strings. Do not include

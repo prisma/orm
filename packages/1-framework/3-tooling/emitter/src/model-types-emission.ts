@@ -6,6 +6,7 @@ import type {
   CrossReference,
 } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { UNBOUND_PSL_NAMESPACE_NAME } from '@internal/framework-components/psl-ast';
 import {
   type ModelFieldTypeResolvers,
   resolveModelFieldType,
@@ -45,7 +46,7 @@ type ModelIndex = {
 };
 
 function namespacedMemberName(namespaceId: string, modelName: string): string {
-  const segment = namespaceId === UNBOUND_NAMESPACE_ID ? 'unbound' : namespaceId;
+  const segment = namespaceId === UNBOUND_NAMESPACE_ID ? UNBOUND_PSL_NAMESPACE_NAME : namespaceId;
   return `${segment}_${modelName}`;
 }
 

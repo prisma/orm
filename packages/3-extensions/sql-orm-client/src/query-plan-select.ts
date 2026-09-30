@@ -16,7 +16,7 @@ import {
   JsonObjectExpr,
   LiteralExpr,
   NativeJsonValueProjection,
-  OrderByItem,
+  type OrderByItem,
   type ProjectionExpr,
   ProjectionItem,
   SelectAst,
@@ -38,6 +38,7 @@ import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
 } from './collection-contract';
+import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
 import {
@@ -244,7 +245,7 @@ function buildIncludeOrderArtifacts(
     if (!orderItem) {
       throw new InternalError(`Missing include order metadata at index ${index}`);
     }
-    return new OrderByItem(ColumnRef.of(rowAlias, projection.alias), orderItem.dir);
+    return orderItem.withExpr(ColumnRef.of(rowAlias, projection.alias));
   });
 
   return {
@@ -261,7 +262,26 @@ interface IncludeParentSource {
 }
 
 function localColumnsForRowInclude(include: IncludeExpr): readonly string[] {
-  return include.through?.parentLocalColumns ?? [include.localColumn];
+  return include.through?.parentLocalColumns ?? include.localColumns;
+}
+
+function buildIncludeJoinExpr(
+  include: IncludeExpr,
+  childTableRef: string,
+  parentLocalRefs: readonly ColumnRef[],
+): AnyExpression {
+  invariant(
+    parentLocalRefs.length === include.targetColumns.length,
+    `Include '${include.relationName}' has mismatched join column counts: ${parentLocalRefs.length} local, ${include.targetColumns.length} target`,
+  );
+  const joinExprs = include.targetColumns.map((targetColumn, i) => {
+    const parentLocalRef = parentLocalRefs[i];
+    assertDefined(parentLocalRef, `Include '${include.relationName}': no local column at ${i}`);
+    return BinaryExpr.eq(ColumnRef.of(childTableRef, targetColumn), parentLocalRef);
+  });
+  const [firstExpr] = joinExprs;
+  assertDefined(firstExpr, `Include '${include.relationName}' has no join columns`);
+  return joinExprs.length === 1 ? firstExpr : AndExpr.of(joinExprs);
 }
 
 function resolveParentLocalRefs(
@@ -534,6 +554,7 @@ function buildIncludeChildRowsSelect(
   const childState = include.nested;
   if (childState.distinctOn !== undefined && childState.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(childState.orderBy, childState.distinctOn.length);
   }
   const parentLocalRefs = resolveParentLocalRefs(
     parentSource,
@@ -578,15 +599,7 @@ function buildIncludeChildRowsSelect(
     whereExpr = childWhere ? AndExpr.of([artifacts.whereExpr, childWhere]) : artifacts.whereExpr;
     junctionJoins = [artifacts.junctionJoin];
   } else {
-    const parentLocalRef = parentLocalRefs[0];
-    assertDefined(
-      parentLocalRef,
-      `Include '${include.relationName}' has no parent-local column ref`,
-    );
-    const joinExpr = BinaryExpr.eq(
-      ColumnRef.of(childTableRef, include.targetColumn),
-      parentLocalRef,
-    );
+    const joinExpr = buildIncludeJoinExpr(include, childTableRef, parentLocalRefs);
     whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
   }
 
@@ -704,12 +717,8 @@ function buildIncludeChildRowsSelect(
     });
     if (childOrderBy) {
       childRows = childRows.withOrderBy(
-        childOrderBy.map(
-          (item, index) =>
-            new OrderByItem(
-              ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-              item.dir,
-            ),
+        childOrderBy.map((item, index) =>
+          item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
         ),
       );
     }
@@ -864,12 +873,8 @@ function buildDistinctNonLeafChildRowsSelect(options: {
     // deterministic. Reference the hidden-order alias columns the
     // wrapper forwarded under their original names from `rankedAlias`.
     innerSelect = innerSelect.withOrderBy(
-      childOrderBy.map(
-        (item, index) =>
-          new OrderByItem(
-            ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-            item.dir,
-          ),
+      childOrderBy.map((item, index) =>
+        item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
       ),
     );
   }
@@ -1001,6 +1006,7 @@ function buildIncludeChildScalarSelect(
   const state = scalar.state;
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
   const childWhere = buildStateWhere(contract, childTableRef, state, {
     filterTableName: include.relatedTableName,
@@ -1019,15 +1025,7 @@ function buildIncludeChildScalarSelect(
     whereExpr = childWhere ? AndExpr.of([artifacts.whereExpr, childWhere]) : artifacts.whereExpr;
     junctionJoins = [artifacts.junctionJoin];
   } else {
-    const parentLocalRef = parentLocalRefs[0];
-    assertDefined(
-      parentLocalRef,
-      `Include '${include.relationName}' has no parent-local column ref`,
-    );
-    const joinExpr = BinaryExpr.eq(
-      ColumnRef.of(childTableRef, include.targetColumn),
-      parentLocalRef,
-    );
+    const joinExpr = buildIncludeJoinExpr(include, childTableRef, parentLocalRefs);
     whereExpr = childWhere ? AndExpr.of([joinExpr, childWhere]) : joinExpr;
   }
 
@@ -1142,12 +1140,8 @@ function buildIncludeChildScalarSelect(
     });
     if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {
       inner = inner.withOrderBy(
-        remappedOrderBy.map(
-          (item, index) =>
-            new OrderByItem(
-              ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-              item.dir,
-            ),
+        remappedOrderBy.map((item, index) =>
+          item.withExpr(ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`)),
         ),
       );
     }
@@ -1396,6 +1390,7 @@ function buildSelectAst(
   const namespaceId = options.namespaceId;
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
   const scalarProjection = buildProjection(
     contract,

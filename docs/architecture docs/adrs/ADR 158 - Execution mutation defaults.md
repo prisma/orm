@@ -48,11 +48,11 @@ Mutation defaults live at:
 
 - `execution.mutations.defaults`
 
-Each default is keyed by a reference to a storage column:
+Each default is keyed by a reference to a stored field:
 
-- `ref: { table, column }`
+- `ref: { namespace, entry, field }`
 
-This makes the feature usable from SQL lanes and other table-centric consumers.
+`entry` names the storage entry that holds the field and `field` the stored field in it. For SQL these are the table and column names; for Mongo they are the collection and the stored document field. The names are family-neutral so every family uses the same framework type.
 
 This ADR defines defaults for create mutations (`onCreate`). Additional scopes (for example, update/upsert behavior) are future work.
 
@@ -62,11 +62,11 @@ Mutation defaults are applied in the execution plane, not in adapters.
 
 Conceptually, the execution context provides:
 
-- a pre-indexed lookup keyed by `(table, column)` derived from `execution.mutations.defaults`
+- a lookup of `execution.mutations.defaults` by `(namespace, entry)`
 - a single helper:
-  - `applyMutationDefaults({ op, table, values }) → valuesWithDefaults`
+  - `applyMutationDefaults({ op, namespace, entry, values }) → appliedDefaults`, where each applied default is `{ field, value }`
 
-Lanes call this once per mutation and then build a Plan normally.
+Lanes call this once per mutation and then build a Plan normally. The helper, the generator registry, and the availability check are framework runtime code shared by every family; see [ADR 255](ADR%20255%20-%20Mutation-default%20generators%20are%20a%20framework%20runtime%20concern.md).
 
 ### 3) Generator registry + compatibility validation
 
@@ -155,7 +155,7 @@ The database marker verifies only what the database must satisfy:
     "mutations": {
       "defaults": [
         {
-          "ref": { "table": "user", "column": "id" },
+          "ref": { "namespace": "public", "entry": "user", "field": "id" },
           "onCreate": { "kind": "generator", "id": "cuid" }
         }
       ]
@@ -164,7 +164,7 @@ The database marker verifies only what the database must satisfy:
 }
 ```
 
-Note: the exact JSON layout for defaults can be an array (as shown) or a map keyed by table/column. The requirement is that defaults are addressable by `(table, column)`.
+Note: the exact JSON layout for defaults can be an array (as shown) or a map keyed by entry and field. The requirement is that defaults are addressable by `(namespace, entry, field)`.
 
 ## Diagram (contract branches and verification)
 

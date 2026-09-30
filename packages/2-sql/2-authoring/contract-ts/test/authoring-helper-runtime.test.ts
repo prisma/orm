@@ -9,7 +9,6 @@ import type {
 } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import {
-  createFieldHelpersFromNamespace,
   createFieldPresetHelper,
   createTypeHelpersFromNamespace,
   isNamedConstraintOptionsLike,
@@ -20,15 +19,6 @@ import { nanoidIdPresetMirror } from './nanoid-preset-mirror';
 const textPreset = {
   kind: 'fieldPreset',
   output: { codecId: 'sql/text@1', nativeType: 'text' },
-} as const;
-
-const createdAtPreset = {
-  kind: 'fieldPreset',
-  output: {
-    codecId: 'test/timestamp@1',
-    nativeType: 'timestamp',
-    default: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
-  },
 } as const;
 
 const bareFamilyPack = {
@@ -62,12 +52,6 @@ const nestedTypeNamespace = {
     },
   },
 } as const satisfies AuthoringTypeNamespace;
-
-const nestedFieldNamespace = {
-  audit: {
-    createdAt: createdAtPreset,
-  },
-} as const satisfies AuthoringFieldNamespace;
 
 const uniqueTextFieldNamespace = {
   slug: {
@@ -135,40 +119,6 @@ describe('authoring helper runtime', () => {
     );
     expect(() => createTypeHelpersFromNamespace(unsafeNamespace)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }),
-    );
-  });
-
-  it('creates nested field helpers and passes the resolved helper path to leaf factories', () => {
-    const helpers = createFieldHelpersFromNamespace(
-      nestedFieldNamespace,
-      ({ helperPath }) =>
-        () =>
-          helperPath,
-    ) as {
-      readonly audit: {
-        readonly createdAt: () => string;
-      };
-    };
-
-    expect(helpers.audit.createdAt()).toBe('audit.createdAt');
-  });
-
-  it('rejects blocked path segments when building field helpers', () => {
-    const unsafeNamespace = {
-      nested: withBlockedKey({
-        createdAt: createdAtPreset,
-      }),
-    } as unknown as AuthoringFieldNamespace;
-
-    expect(() =>
-      createFieldHelpersFromNamespace(
-        unsafeNamespace,
-        ({ helperPath }) =>
-          () =>
-            helperPath,
-      ),
-    ).toThrow(
-      'Invalid authoring helper "nested.__proto__". Helper path segments must not use "__proto__".',
     );
   });
 

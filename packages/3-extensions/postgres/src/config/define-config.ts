@@ -1,6 +1,9 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
-import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
+import {
+  defineConfig as coreDefineConfig,
+  defaultContractOutputPath,
+} from '@internal/config/config-types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -12,7 +15,6 @@ import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
-import { isDynamicPattern } from 'tinyglobby';
 
 export interface PostgresConfigOptions {
   /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma7Schema(...)`. */
@@ -25,27 +27,6 @@ export interface PostgresConfigOptions {
   readonly migrations?: {
     readonly dir?: string;
   };
-}
-
-function staticPrefixDirectory(pattern: string): string {
-  const staticSegments: string[] = [];
-  for (const segment of pattern.replaceAll('\\', '/').split('/')) {
-    if (isDynamicPattern(segment)) break;
-    staticSegments.push(segment);
-  }
-  return staticSegments.join('/');
-}
-
-function deriveOutputPath(contractPath: string): string {
-  if (isDynamicPattern(contractPath)) {
-    const prefix = staticPrefixDirectory(contractPath);
-    return prefix.length === 0 ? 'contract.json' : `${prefix}/contract.json`;
-  }
-  const ext = extname(contractPath);
-  if (ext.length === 0) {
-    return `${contractPath}.json`;
-  }
-  return `${contractPath.slice(0, -ext.length)}.json`;
 }
 
 function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
@@ -65,14 +46,14 @@ function resolveContractConfig(options: PostgresConfigOptions): ContractConfig {
   if (typeof options.contract === 'string') {
     return contractConfigFromPath(
       options.contract,
-      explicitOutput ?? deriveOutputPath(options.contract),
+      explicitOutput ?? defaultContractOutputPath(options.contract),
     );
   }
   const firstInput = options.contract.source.inputs?.[0];
   const output =
     explicitOutput ??
     options.contract.output ??
-    (firstInput !== undefined ? deriveOutputPath(firstInput) : undefined);
+    (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
   return { ...options.contract, ...ifDefined('output', output) };
 }
 

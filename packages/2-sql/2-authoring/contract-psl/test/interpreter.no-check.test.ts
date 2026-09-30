@@ -69,7 +69,6 @@ function interpret(schema: string) {
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    pslBlockDescriptors: authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
     ...document,

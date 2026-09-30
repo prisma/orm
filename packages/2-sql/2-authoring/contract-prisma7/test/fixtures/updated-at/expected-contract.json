@@ -68,8 +68,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Timestamps",
-            "column": "updatedAt"
+            "entry": "Timestamps",
+            "field": "updatedAt"
           },
           "onCreate": {
             "kind": "generator",
@@ -83,8 +83,8 @@
         {
           "ref": {
             "namespace": "public",
-            "table": "Timestamps",
-            "column": "updatedAtTz"
+            "entry": "Timestamps",
+            "field": "updatedAtTz"
           },
           "onCreate": {
             "kind": "generator",
@@ -97,7 +97,7 @@
         }
       ]
     },
-    "executionHash": "b252358adc4d61bfe2500d33ccdbe3c463160a2bf200f34d96bd831f28fe042f"
+    "executionHash": "7ea47c826991cbe057b6cff26e955215ef09285af0c134b7f255f0f697291abb"
   },
   "extensions": {},
   "capabilities": {},

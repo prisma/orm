@@ -341,7 +341,7 @@ describe('shared contract definition lowering', () => {
 
     expect(contract.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'app_user', column: 'updated_at' },
+        ref: { namespace: 'public', entry: 'app_user', field: 'updated_at' },
         onCreate: { kind: 'generator', id: 'timestampNow' },
         onUpdate: { kind: 'generator', id: 'timestampNow' },
       },
@@ -519,7 +519,9 @@ describe('shared contract definition lowering', () => {
           },
         ],
       }),
-    ).toThrow('Field "User.id" cannot be nullable when executionDefaults are present.');
+    ).toThrow(
+      'Field "User.id" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().',
+    );
   });
 
   it('rejects nullable identity fields', () => {

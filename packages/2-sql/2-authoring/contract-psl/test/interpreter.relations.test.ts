@@ -316,14 +316,9 @@ model Profile {
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          message: expect.stringContaining('User.nonsense'),
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Nonsense"' },
+    ]);
   });
 
   it('matches named backrelations using positional and named relation forms', () => {
@@ -690,8 +685,8 @@ model Post {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: expect.stringContaining('Field "missingUserId" does not exist on model "Post"'),
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining('Cannot find field "missingUserId" on "Post"'),
         }),
       ]),
     );
@@ -724,8 +719,10 @@ model Post {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: expect.stringContaining('Field "missingId" does not exist on model "User"'),
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining(
+            'Cannot find field "missingId" on the type of "Post.user"',
+          ),
         }),
       ]),
     );

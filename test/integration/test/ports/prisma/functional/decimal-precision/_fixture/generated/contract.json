@@ -146,7 +146,7 @@
     }
   },
   "execution": {
-    "executionHash": "02281733c000380f7ab5ee43f5d4c14fcf47fa86822157687df881ea8271bedb",
+    "executionHash": "1d956b68d7bc7f9dffef3e648e3ba465e3f17a0c8bde1877dbd3f9b742ebfe64",
     "mutations": {
       "defaults": [
         {
@@ -155,9 +155,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "testModel"
+            "entry": "testModel",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]

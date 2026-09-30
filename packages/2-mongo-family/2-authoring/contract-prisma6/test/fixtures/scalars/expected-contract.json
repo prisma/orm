@@ -1,0 +1,130 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "Post": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              },
+              "count": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int32@1"
+                },
+                "nullable": false
+              },
+              "ratio": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/double@1"
+                },
+                "nullable": false
+              },
+              "published": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/bool@1"
+                },
+                "nullable": false
+              },
+              "postedAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/date@1"
+                },
+                "nullable": false
+              },
+              "views": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/int64@1"
+                },
+                "nullable": false
+              },
+              "price": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/decimal128@1"
+                },
+                "nullable": false
+              },
+              "thumbnail": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/binary@1"
+                },
+                "nullable": false
+              },
+              "meta": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/json@1"
+                },
+                "nullable": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "note": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": true
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "Post"
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "dd22a5221b155cd435b52d49dd4a066c207d083079a291c2340674f70d8e067a",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "Post": {
+              "kind": "mongo-collection"
+            }
+          }
+        }
+      }
+    }
+  }
+}

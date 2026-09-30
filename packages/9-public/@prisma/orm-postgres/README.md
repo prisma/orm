@@ -15,6 +15,8 @@ The one package a PostgreSQL application installs. It wires the framework, the S
 └── @prisma/orm-toolchain       ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
+`temporal-polyfill` is a required peer dependency. The control plane, such as the `prisma` commands and the Vite plugin, loads it as a fallback `Temporal` when the runtime has none, and a project that already installs it for its own code has one copy. npm, pnpm and bun install it automatically; with Yarn, add `temporal-polyfill` to your dependencies.
+
 ## Entrypoints
 
 | Namespace | Surface |

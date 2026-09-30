@@ -567,7 +567,7 @@
     }
   },
   "execution": {
-    "executionHash": "5b8ea41bd78c098dbe7227970a920650aa10992f11357c2664703742248ffc95",
+    "executionHash": "a6bd95c41e717d2a7dd3d556af8befa35950b61ccf39569e36ab3a357b40457e",
     "mutations": {
       "defaults": [
         {
@@ -576,9 +576,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "__unbound__",
-            "table": "post"
+            "entry": "post",
+            "field": "id",
+            "namespace": "__unbound__"
           }
         },
         {
@@ -587,9 +587,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "__unbound__",
-            "table": "tag"
+            "entry": "tag",
+            "field": "id",
+            "namespace": "__unbound__"
           }
         },
         {
@@ -598,9 +598,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "__unbound__",
-            "table": "user"
+            "entry": "user",
+            "field": "id",
+            "namespace": "__unbound__"
           }
         }
       ]

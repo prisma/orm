@@ -5,14 +5,29 @@ import {
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
 import type { AttributeSpecContext, AttributeSpecNamespace } from '@internal/psl-parser';
-import { assembleAttributeSpecs, fieldAttribute, modelAttribute } from '@internal/psl-parser';
+import {
+  assembleAttributeSpecs,
+  buildSymbolTable,
+  fieldAttribute,
+  modelAttribute,
+} from '@internal/psl-parser';
 import { ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
-import { runPipeline } from '../src/pipeline';
+import { DocumentSnapshot } from '../src/document-snapshot';
 import { providePslSignatureHelp } from '../src/signature-help';
 
 vi.mock('@internal/config-loader', { spy: true });
+
+function pipelineWithSymbolTable(filename: string, text: string) {
+  const snapshot = new DocumentSnapshot(filename, text);
+  const pipeline = snapshot.parse();
+  const { symbolTable } = buildSymbolTable({
+    documents: [pipeline.document],
+    sources: pipeline.sources,
+  });
+  return { ...pipeline, sourceFile: snapshot.sourceFile, symbolTable };
+}
 
 const rlsSpec = modelAttribute('rls', {
   documentation: 'Enables row-level security on the model.',
@@ -89,12 +104,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     ]);
     const controlMutationDefaults = assembleControlMutationDefaults([]);
     const source = 'model Variant {\n @@base(Missing, "v")\n}\nmodel Base { id Int }';
-    const pipeline = runPipeline('schema.prisma', source, {
-      scalarTypes: ['Int'],
-      pslBlockDescriptors: {},
-      authoringContributions,
-      controlMutationDefaults,
-    });
+    const pipeline = pipelineWithSymbolTable('schema.prisma', source);
     const model = pipeline.symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
     const spec = assembleAttributeSpecs(authoringContributions).model['base']?.({
@@ -154,7 +164,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       ok({ config: pslProjectConfig(), diagnostics: [] }),
     );
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
 
     const contributions = result.interpretation?.context.authoringContributions;
     expect(contributions).toBeDefined();
@@ -171,15 +181,14 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       ok({ config: pslProjectConfig(), diagnostics: [] }),
     );
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
     const interpretation = result.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline(
+    const pipeline = pipelineWithSymbolTable(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
-      result.controlStack,
     );
     const model = pipeline.symbolTable.topLevel.models['Widget'];
     const field = model?.fields['id'];
@@ -210,15 +219,14 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       ok({ config: pslProjectConfig(), diagnostics: [] }),
     );
 
-    const result = await resolveConfigInputs('/abs/prisma.config.ts');
+    const result = await resolveConfigInputs('/abs/prisma.config.ts', () => '// use prisma-8\n');
     const interpretation = result.interpretation;
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline(
+    const pipeline = pipelineWithSymbolTable(
       'attribute-spec-consumability.psl',
       'model Widget {\n  id Int @id\n}\n',
-      result.controlStack,
     );
     const model = pipeline.symbolTable.topLevel.models['Widget'];
     expect(model).toBeDefined();

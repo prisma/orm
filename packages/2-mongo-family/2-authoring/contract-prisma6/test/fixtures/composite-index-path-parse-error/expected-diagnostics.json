@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL_INVALID_MODEL_MEMBER",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Invalid model member declaration \".\""
+  },
+  {
+    "code": "PSL_INVALID_MODEL_MEMBER",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Invalid model member declaration \".\""
+  },
+  {
+    "code": "PSL_INVALID_MODEL_MEMBER",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Invalid model member declaration \".\""
+  }
+]

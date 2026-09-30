@@ -8,7 +8,11 @@ import {
   PrimaryKeyConstraint,
   UniqueConstraint,
 } from '@internal/sql-relational-core/ast';
-import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import {
+  contractDefaultRefusal,
+  type SqlColumnIR,
+  type SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
@@ -54,8 +58,27 @@ function columnLike(
         }
       : {}),
     // DDL writes the default as authored; `resolvedDefault` exists for the diff comparison only.
-    ...ifDefined('default', column.authoredDefault ?? column.resolvedDefault),
+    ...ifDefined('default', plannableDefault(column)),
   };
+}
+
+/**
+ * The default DDL writes. A contract default the column's data type refuses, which a contract
+ * emitted by an earlier version can hold, is refused rather than written.
+ */
+function plannableDefault(column: SqlColumnIR): StorageColumn['default'] {
+  const columnDefault = column.authoredDefault ?? column.resolvedDefault;
+  const refusal = contractDefaultRefusal(
+    columnDefault,
+    column.dataType?.toCanonicalForm,
+    (column.many ?? column.codecRef?.many) === true,
+  );
+  if (refusal !== undefined) {
+    throw sqliteError('CONTRACT.DEFAULT_INVALID', `Column "${column.name}": ${refusal}`, {
+      meta: { reason: 'default-not-canonical', column: column.name },
+    });
+  }
+  return columnDefault;
 }
 
 function sqliteDefaultToDdlColumnDefault(
@@ -109,7 +132,7 @@ export function isInlineAutoincrementPrimaryKeyNode(
 export function columnSpecFromNode(column: SqlColumnIR, inline: boolean): SqliteColumnSpec {
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, {});
-  const defaultSql = buildColumnDefaultSql(like.default);
+  const defaultSql = buildColumnDefaultSql(like.default, like.codecId);
   return {
     name: column.name,
     typeSql,

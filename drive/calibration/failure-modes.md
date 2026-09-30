@@ -565,6 +565,26 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 
 **Reference incident.** 2026-08, public-npm-surface switchover: the operator cancelled the switchover-slice dispatch; the privatization flip it carried (64 manifests → `private: true`) was silently dropped from the consolidated delivery PR, which merged with every internal package still publishable. Caught by the operator post-merge; fixed in an emergency PR plus a two-direction publishability lint so the class cannot recur.
 
+### F34. The in-loop reviewer passes SQL lowering by reading it; a review that runs the code finds injection and invalid SQL
+
+**Symptom.** Every dispatch in a slice closes SATISFIED, and a separate review after PR-open finds defects that any execution would have shown: a string interpolated into SQL text with no runtime check, a query shape that the database rejects outright, a guard stricter than the database's own rule. The in-loop reviewer read the diff and the tests and reasoned that they were right. The second review typed a hostile value into the public API and looked at the rendered SQL, compiled the suspect query shape and ran it on PGlite, and read the database documentation for the rule the guard claimed to enforce.
+
+**Detection signal.**
+
+- The reviewer brief says the implementer's gate run is trusted and the reviewer's `pnpm` budget is zero, and the dispatch produces code that renders or rewrites SQL, builds a query plan from user input, or validates user input.
+- The reviewer's round note says "would fail if removed" about a test without saying which input was tried.
+- A renderer or builder takes a string from the public API and interpolates it (`toUpperCase()`, template literal) with the type system as the only check.
+- A guard names a database rule ("DISTINCT ON requires ...") and the round note does not cite where that rule comes from.
+- A new expression kind is accepted on a path (ORDER BY, WHERE, projection) and no test compiles it through every wrapper that path has (dedup wrappers, include remaps, aggregate inputs, cursor keysets).
+
+**Mitigation.**
+
+- A reviewer of code that renders SQL, lowers an AST, or validates user input has a non-zero execution budget by default. The brief names three probes the reviewer must run, not read: (1) push a hostile value through every public entry point that reaches SQL text and show the rendered SQL rejects or escapes it; (2) compile the new construct through every wrapper on its path and run the result on PGlite or SQLite; (3) for any guard that cites a database rule, quote the rule from the database documentation and test both the allowed and the refused side.
+- "Trust the implementer's gates" means the reviewer does not re-run typecheck, lint and the package suite. It never means the reviewer does not execute anything. Reading is for design judgment; correctness of lowering is empirical (sibling of F13 and F15).
+- Run the two-pass local review (`drive-code-review`, architect and principal-engineer lenses, with execution allowed) before opening the PR, not after. Its findings then land as dispatches in the same build loop instead of a fix round on a public PR.
+
+**Reference incident.** prisma/orm#30402 (2026-09-25, relation ordering in the SQL ORM client). Six dispatches and eight review rounds closed SATISFIED. The reviewer brief said the implementer's gates were green and the reviewer's `pnpm` budget was zero. A `drive-code-review` pass after PR-open, with execution allowed, found: `nulls: 'last, (SELECT 1/0)'` rendered as `NULLS LAST, (SELECT 1/0)` on both adapters, and the sql-builder's `direction` had lost its normalisation on the same path; `aggregate()` over `distinct()` rows with a relation order emitted `ORDER BY (SELECT ... WHERE ... = "posts"."user_id")` over a derived table that no longer had `user_id`, which PGlite rejected; and the `distinctOn` guard refused trailing expression orders that Postgres accepts and that worked before the PR. All three were fixed in a second round (`57e5c01b81`, `e9c626fede`, `459774dfd1`).
+
 ## Slice-shape scope traps
 
 Patterns that have produced scope creep in the past — catch these at triage or slice-spec time, not at execution time.
@@ -644,3 +664,66 @@ Per-repo stop conditions beyond the canonical ones:
 - An implementer's claim "predates this dispatch" about a journey is verified by the reviewer with `git log -1 origin/main -- <file>` and by asking whether `dist` was rebuilt after the last source change.
 
 **Reference incident.** remove-dbgenerated slice C dispatch 1 (2026-09-22): `infer-roundtrip-fidelity.prisma7-defaults` failed on a stale `family-sql` dist; the reviewer accepted the "red on main" claim in round 1 and corrected it in dispatch 3 after the implementer rebuilt the package.
+
+### F32. A brief restates an operator ruling in its own words, and the restatement is stricter than the ruling
+
+**Symptom.** An implementer builds work, or asks the operator a round of questions, on a premise the operator never held. The operator's answer to the first question is "this is wrong", and every question built on the premise has to be asked again.
+
+**Detection signal.**
+
+- The brief or design notes state a ruling as a rule ("init must be target-agnostic") without the operator's words, date, or context.
+- Several open questions in the brief depend on that one rule.
+- The rule forbids something the codebase already does in many places, and the brief treats those places as debt to remove.
+
+**Mitigation.**
+
+- Record a ruling as a quote, with speaker and date, and write the interpretation separately under it.
+- In the first question round, restate the interpretation in one sentence and ask the operator to confirm it before asking any question that depends on it.
+
+**Reference incident.** orm-init-prisma7-detection (2026-09-23): the ruling "Our init command cannot be target specific" was recorded as "init must be target-agnostic". The brief planned to stop choosing the target from the Prisma 7 schema's provider and asked whether to remove 17 existing target branches. Will's intent was narrower: init must not be coupled to one database, and choosing among known targets is fine.
+
+### F33. A test double returns what the real dependency never returns, so the test covers a path production cannot reach
+
+**Symptom.** A test passes, and the behaviour it names never happens for a user. The fake that drives the test answers with a value or outcome the real implementation cannot produce.
+
+**Detection signal.**
+
+- A fake implements an interface whose real implementation lives in another package (for example `PromptSurface` from `@prisma/cli-engine`).
+- The fake's return values were chosen for the test's convenience, not read from the real implementation.
+- A reviewer asks "can the real surface return this?" and nobody has checked.
+
+**Mitigation.**
+
+- When writing a fake for another package's surface, read the real implementation and make the fake return and throw exactly what it does. When the behaviour depends on the real surface's outcomes, drive it through that package's own test harness (for the CLI engine, `createTestCli` with scripted `answers`).
+- The reviewer checks each fake's possible outcomes against the real implementation, not only the code under test.
+
+**Reference incident.** prisma/orm#30291 (2026-09-24): a scripted prompt returned `false` from `consent`, and a test showed that a declined consent printed the command to remove packages init had installed. The engine's `consent` with a token never returns `false`: it returns `true` or throws `CLI.CONSENT_REQUIRED`, a token mismatch, or `CLI.PROMPT_CANCELLED`. Real users never saw the command. An independent review found it; the fix attached the command to whatever error follows the install.
+
+### F34. Stacked PR fails upgrade coverage because the fragment lives on its base branch
+
+**Symptom.** A stacked PR's local `pnpm check:upgrade-coverage --mode pr` passes, but CI's `Lint` job fails it with `[per-pr-declaration] ... requires a new declaration relative to --prev`.
+
+**Root cause.** CI passes `--prev <PR base sha>`; for a stacked PR that is the previous slice's head, which already carries the earlier fragment. Fragments inherited from the base do not count, so the stacked PR needs its own declaration even for an additive change. Locally the default base is `origin/main`, where the inherited fragment masks the gap.
+
+**Fix.** Run the check with `--prev $(git rev-parse <base-branch>)` in every dispatch gate on a stacked branch, and add a `changes: []` declaration for additive changes under `packages/3-extensions/**` or `examples/**`.
+
+**Reference incident.** 2026-09-24, the Mongo defaults project's slice 5 PR (#30405, stacked on #30403): the facade widening `contract: string | ContractConfig` was additive, the slice 3 fragment sat on the base branch, and CI refused the PR until a `changes: []` extension declaration was added. Same project, slice 3 (#30403): CI `Lint` failed on biome `no-bare-cast` and `noBannedTypes` because the dispatch briefs never listed the always-run per-package `pnpm lint` from `dod.md`; the F14 rule was already on file, the orchestrator did not thread it into the briefs.
+
+### F35. Code that parses database-reported text passes review by reading it; only a comparison with what the database returns finds wrong values
+
+**Symptom.** A dispatch changes code that turns text the database reports back (column defaults, type names, introspection output) into typed values. Every round closes SATISFIED, unit tests and the end-to-end journey pass, and a later review that creates the real column and reads back its value finds the parser returns the wrong value for inputs it now accepts. The wrong value survives every existing check because each check compares the parser with itself: unit tests assert its output against hand-written expectations that share the author's assumption, and `db verify` runs the same parser on the live column and on the contract default, so a consistently wrong value verifies clean.
+
+**Detection signal.**
+
+- The dispatch changes a parser for text the database reports, and the reviewer's budget allows running the package suite but not creating a table and reading back what the database stores.
+- The test fixtures spell the database's output by hand (for example `'{a,b}'::text[]`) instead of capturing what the database actually reports for that column.
+- The end-to-end evidence is infer followed by `db verify`, or any other comparison where the same function produces both sides.
+- The round note says the parser handles a new form without naming a value whose meaning depends on escaping, quoting or the type's delimiter.
+
+**Mitigation.**
+
+- A reviewer of code that parses database-reported text has a non-zero execution budget. The brief names three probes the reviewer must run, not read: (1) create the real column on PGlite and read back the exact text Postgres reports, instead of trusting the test fixture's spelling; (2) for every value the parser now accepts, compare the parsed value with what the database itself says about the same object: for a default, create the column, run `INSERT ... DEFAULT VALUES` and select the stored value; for a type name or other introspection output, query the catalog for that object (for example `format_type`, `pg_type`, `pg_attribute`) and compare with what the parser derived; (3) find each check that compares the code with itself (the same function on both sides of a comparison) and name the independent check that would fail on a wrong value.
+- A self-consistent comparison such as `db verify` after infer is not evidence that a value is correct. It shows only that the parser agrees with itself.
+- Sibling of F34: that entry covers SQL the code writes; this one covers text the database writes and the code reads.
+
+**Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.

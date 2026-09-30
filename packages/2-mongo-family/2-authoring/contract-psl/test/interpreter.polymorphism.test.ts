@@ -12,15 +12,18 @@ import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
-import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
+import {
+  expectInvalidAttributeSyntax,
+  expectUnresolvedReference,
+} from './interpreter-test-helpers';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
-  ['Boolean', 'mongo/bool@1'],
-  ['DateTime', 'mongo/date@1'],
+  ['Int32', 'mongo/int32@1'],
+  ['Bool', 'mongo/bool@1'],
+  ['Date', 'mongo/date@1'],
   ['ObjectId', 'mongo/objectId@1'],
-  ['Float', 'mongo/double@1'],
+  ['Double', 'mongo/double@1'],
 ]);
 
 const mongoTargetTypes: Record<string, readonly string[]> = {
@@ -64,7 +67,6 @@ function buildSymbolTableInput(schema: string): {
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {},
   });
   return { documents: [document], symbolTable, sources };
 }
@@ -239,7 +241,7 @@ namespace scoped {
 
         model Feature {
           id       ObjectId @id @map("_id")
-          priority Int
+          priority Int32
 
           @@base(Task, "feature")
         }
@@ -368,8 +370,8 @@ namespace scoped {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: expect.stringContaining('does not exist'),
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find field'),
           }),
         ]),
       );
@@ -380,7 +382,7 @@ namespace scoped {
         model Task {
           id    ObjectId @id @map("_id")
           title String
-          type  Int
+          type  Int32
 
           @@discriminator(type)
         }
@@ -447,8 +449,8 @@ namespace scoped {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: 'Unknown model reference "NonExistent"',
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find entity'),
           }),
         ]),
       );
@@ -505,7 +507,7 @@ namespace scoped {
     });
   });
 
-  describe('FL-09: variant collection suppression', () => {
+  describe('variant collection suppression', () => {
     it('does not create separate storage collection entries for variant models', () => {
       const ir = interpretOk(`
         model Task {
@@ -526,7 +528,7 @@ namespace scoped {
 
         model Feature {
           id       ObjectId @id @map("_id")
-          priority Int
+          priority Int32
 
           @@base(Task, "feature")
         }
@@ -619,7 +621,7 @@ namespace scoped {
     });
   });
 
-  describe('FL-09: polymorphic index scoping', () => {
+  describe('polymorphic index scoping', () => {
     it('AND-merges a user-supplied filter on other keys with the discriminator scope', () => {
       const ir = interpretOk(`
         model Task {
@@ -745,12 +747,12 @@ namespace scoped {
         }
       `);
 
-      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      const diag = expectUnresolvedReference(result, /Cannot find field "title"/);
       expect(diag.span?.start.offset).toBeGreaterThan(0);
     });
   });
 
-  describe('FL-10: polymorphic validators', () => {
+  describe('polymorphic validators', () => {
     it('generates validator with oneOf for variant-specific fields', () => {
       const ir = interpretOk(`
         model Task {
@@ -771,7 +773,7 @@ namespace scoped {
 
         model Feature {
           id       ObjectId @id @map("_id")
-          priority Int
+          priority Int32
 
           @@base(Task, "feature")
         }

@@ -123,7 +123,7 @@ export const contract = defineContract(
             score: field.column(int4Column).default(0),
             rating: field.column(float8Column).default(3.14),
             active: field.column(boolColumn).default(true),
-            bigCount: field.column(int8Column).default(9007199254740991).column('big_count'),
+            bigCount: field.column(int8Column).default(9007199254740991n).column('big_count'),
             metadata: field.column(jsonbColumn).default({ key: 'default' }),
             tags: field.column(jsonbColumn).default(['alpha', 'beta']),
           },

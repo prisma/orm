@@ -64,7 +64,6 @@ function interpret(source: string) {
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   expect(diagnostics).toEqual([]);
 

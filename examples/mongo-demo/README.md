@@ -4,9 +4,9 @@ End-to-end example of Prisma 8 with MongoDB, demonstrating the full **authoring 
 
 ## What it shows
 
-- PSL schema (`prisma/contract.prisma`) as the authoring surface for MongoDB
+- PSL schema (`src/contract.prisma`) as the authoring surface for MongoDB
 - Contract emission via `prisma.config.ts` and the CLI (`prisma contract emit`)
-- Runtime query execution using `mongoOrm()` with the emitted contract
+- Runtime query execution through the `mongo()` client with the emitted contract
 - Reference relation resolution via `$lookup` (Post → User)
 - Integration tests against an in-memory MongoDB replica set
 
@@ -18,7 +18,7 @@ The demo uses a blog schema with two models and a reference relation:
 User (id, name, email, bio?) ←1:N→ Post (id, title, content, authorId, createdAt)
 ```
 
-See [`prisma/contract.prisma`](prisma/contract.prisma).
+See [`src/contract.prisma`](src/contract.prisma).
 
 ## Quick start
 
@@ -93,31 +93,32 @@ The Mongo query builder doesn't yet expose a chainable `.annotate(...)` surface 
 
 ## How emission works
 
-`prisma.config.ts` wires the Mongo family, target, and adapter descriptors together with a `mongoContract()` provider. Running `pnpm emit` invokes the CLI's `contract emit` command, which:
+`prisma.config.ts` calls `defineConfig()` from `@prisma/orm-mongo/config` with the schema path and the connection string; it wires the Mongo family, target, adapter and driver and picks the PSL contract source from the `.prisma` extension. Running `pnpm emit` invokes the CLI's `contract emit` command, which:
 
 1. Loads `prisma.config.ts` and creates a control stack
-2. Reads and parses `prisma/contract.prisma` via the `mongoContract()` provider
+2. Reads and parses `src/contract.prisma` through the PSL contract source
 3. Interprets the parsed document into a `Contract`
 4. Emits `src/contract.json` and `src/contract.d.ts`
 
 ## How the runtime works
 
-`src/db.ts` composes the Mongo runtime stack:
+`src/db.ts` creates the client with `mongo<Contract>({ contractJson, url, dbName, middleware })` from `@prisma/orm-mongo/runtime`, which:
 
-1. Validates the emitted contract with `validateMongoContract()`
-2. Creates a `MongoAdapter` and `MongoDriver`
-3. Creates a `MongoRuntime` for query execution
-4. Creates an ORM surface via `mongoOrm()` with typed collection accessors (`orm.users`, `orm.posts`)
+1. Validates the emitted `contract.json` and types it with `Contract` from `src/contract.d.ts`
+2. Builds the execution stack from the Mongo target, adapter and driver, and the runtime that executes queries (with the cache middleware)
+3. Exposes the ORM with typed collection accessors (`db.orm.users`, `db.orm.posts`), the query builder (`db.query`) and the enums (`db.enums`)
+
+`mongo()` also fills generated fields such as `temporal.createdAt()` on write. If you build the ORM yourself with `mongoOrm()` rather than through `mongo()`, pass the execution context as `mutationDefaults`: `mongoOrm({ contract, executor, mutationDefaults: context })`. It fills generated fields such as `temporal.createdAt()`, and `mongoOrm()` refuses a contract that has them when the option is missing (`ORM.MUTATION_DEFAULTS_MISSING`).
 
 ## Key files
 
 | File                            | Purpose                                            |
 | ------------------------------- | -------------------------------------------------- |
-| `prisma/contract.prisma`       | PSL schema (authoring surface)                     |
-| `prisma.config.ts`        | CLI config (family + target + adapter + driver + contract provider) |
+| `src/contract.prisma`          | PSL schema (authoring surface)                     |
+| `prisma.config.ts`             | CLI config (`defineConfig()` with the schema path and connection string) |
 | `src/contract.json`            | Emitted contract with hand-added indexes (see note above) |
 | `src/contract.d.ts`            | Emitted type definitions (generated, do not edit)   |
-| `src/db.ts`                    | Runtime composition (adapter → driver → runtime → ORM) |
+| `src/db.ts`                    | Client creation with `mongo()` and the cache middleware |
 | `.env.example`                 | Environment variable template (`MONGODB_URL`)       |
 | `test/blog.test.ts`            | Integration tests using `mongodb-memory-server`    |
 

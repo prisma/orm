@@ -20,6 +20,7 @@ export default definePrismaConfig({
     extensions: [testContractSpaceExtension],
     contract: {
       source: {
+        format: 'typescript',
         load: async () => ({ ok: true, value: contract }),
       },
       output: 'src/prisma/contract.json',

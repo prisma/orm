@@ -1,4 +1,5 @@
 import type {
+  ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
   PrismaNextConfig,
@@ -572,6 +573,8 @@ export interface EmitSuccess {
   readonly contractJson: string;
   /** The emitted contract TypeScript declarations */
   readonly contractDts: string;
+  /** Warnings the contract source reported while producing the contract. Undefined when there were none. */
+  readonly sourceWarnings?: readonly ContractSourceDiagnostic[];
 }
 
 /**
@@ -835,6 +838,8 @@ export interface ContractEmitResult {
    * not write to stderr itself. Undefined when no warning was raised.
    */
   readonly validationWarning?: string;
+  /** Warnings the contract source reported while producing the contract. Undefined when there were none. */
+  readonly sourceWarnings?: readonly ContractSourceDiagnostic[];
 }
 
 // ============================================================================

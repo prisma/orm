@@ -126,7 +126,7 @@ describe('emitScaffoldedContract', () => {
 
       expect(error.message).toContain('line-39');
       expect(error.message).not.toContain('line-00');
-      expect(error.message).toContain('***@registry.example.com');
+      expect(error.message).toContain('https://****:****@registry.example.com/');
       expect(error.message).not.toContain('hunter2');
       expect(error.message).toContain('3');
     },

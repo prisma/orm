@@ -45,10 +45,13 @@ import type {
 } from '@internal/sql-schema-ir/types';
 import { RelationalSchemaNodeKind } from '@internal/sql-schema-ir/types';
 import {
+  type PostgresCodecRegistry,
+  parsePostgresListText,
+} from '@internal/target-postgres/codecs';
+import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-postgres/contract-free';
-import { parsePostgresListText } from '@internal/target-postgres/control';
 import type {
   AddColumnAction,
   AlterTableActionVisitor,
@@ -72,7 +75,11 @@ import type {
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
-import { renderDefaultLiteral } from '@internal/target-postgres/planner-ddl-builders';
+import {
+  isPostgresDateTimeDataType,
+  postgresDateTimeDdlText,
+  renderDefaultLiteral,
+} from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
   PostgresDatabaseSchemaNode,
@@ -98,7 +105,7 @@ import {
   NOW,
 } from './marker-ledger';
 import { renderLoweredSql } from './sql-renderer';
-import type { PostgresCodecRegistry, PostgresContract } from './types';
+import type { PostgresContract } from './types';
 
 const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
 const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';
@@ -1860,8 +1867,13 @@ async function pgRenderDdlColumnDefault(
     }
     return `DEFAULT (${def.expression})`;
   }
+  const dataTypeId =
+    codecRef === undefined ? undefined : codecLookup.descriptorFor?.(codecRef.codecId)?.dataType;
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
-    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
+    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
+  }
+  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
+    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType)}`;
   }
   if (codecRef !== undefined) {
     // Built with the column's own `typeParams`: a parameterized codec answers for them when it

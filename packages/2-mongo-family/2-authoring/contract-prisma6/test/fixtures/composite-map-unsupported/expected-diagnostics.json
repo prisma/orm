@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_COMPOSITE_MAP_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Address.street\": @map on a field of a composite type is not supported yet. The stored field keeps the name \"street_name\", so removing @map renames it in storage; keep the schema as it is until Prisma 8 supports it."
+  }
+]

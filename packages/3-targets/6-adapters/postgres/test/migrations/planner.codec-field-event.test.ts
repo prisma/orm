@@ -5,6 +5,7 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import { APP_SPACE_ID, type OpFactoryCall } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumn, type StorageTable } from '@internal/sql-contract/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import {
   PostgresDatabaseSchemaNode,
@@ -14,7 +15,6 @@ import {
 import { applicationDomainOf } from '@repo/test-utils';
 import { expectNarrowedType } from '@repo/test-utils/typed-expectations';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 const emptySchema = new PostgresDatabaseSchemaNode({

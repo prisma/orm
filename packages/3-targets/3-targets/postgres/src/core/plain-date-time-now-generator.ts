@@ -1,5 +1,5 @@
 import type { MutationDefaultGeneratorDescriptor } from '@internal/framework-components/control';
-import { errorTemporalUnavailableForDefault } from './errors';
+import { requireTemporal } from './require-temporal';
 
 /**
  * The "now" generator for `timestamp` (without time zone) columns: the current
@@ -19,8 +19,7 @@ export function plainDateTimeNowControlDescriptor(): MutationDefaultGeneratorDes
 }
 
 export function plainDateTimeNow(): Temporal.PlainDateTime {
-  if (typeof Temporal === 'undefined') {
-    throw errorTemporalUnavailableForDefault(PLAIN_DATE_TIME_NOW_GENERATOR_ID);
-  }
-  return Temporal.Now.plainDateTimeISO('UTC');
+  return requireTemporal({
+    generatorId: PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  }).Now.plainDateTimeISO('UTC');
 }

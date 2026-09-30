@@ -4,7 +4,62 @@ import type {
   ControlAdapterInstance,
   ControlDriverInstance,
 } from '@internal/framework-components/control';
+import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
+import type {
+  AnyMongoDdlCommand,
+  MongoInspectionCommandVisitor,
+} from '@internal/mongo-query-ast/control';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
+
+/**
+ * Marker / ledger operations the Mongo runner depends on. Every method
+ * takes a `space` parameter so each loaded contract space addresses its
+ * own marker row independently — see ADR 212 for the per-space
+ * mechanism.
+ */
+export interface MarkerOperations {
+  readMarker(space: string): Promise<ContractMarkerRecord | null>;
+  initMarker(
+    space: string,
+    destination: {
+      readonly storageHash: string;
+      readonly profileHash: string;
+      readonly invariants?: readonly string[];
+    },
+  ): Promise<void>;
+  updateMarker(
+    space: string,
+    expectedFrom: string,
+    destination: {
+      readonly storageHash: string;
+      readonly profileHash: string;
+      readonly invariants?: readonly string[];
+    },
+  ): Promise<boolean>;
+  writeLedgerEntry(
+    space: string,
+    entry: {
+      readonly edgeId: string;
+      readonly from: string;
+      readonly to: string;
+      readonly migrationName: string;
+      readonly migrationHash: string;
+      readonly operations: readonly unknown[];
+    },
+  ): Promise<void>;
+}
+
+/**
+ * Everything the Mongo migration runner needs to talk to one database, bound to a single control driver. See ADR 198.
+ */
+export interface MongoRunnerDependencies {
+  readonly inspectionExecutor: MongoInspectionCommandVisitor<Promise<Record<string, unknown>[]>>;
+  readonly adapter: MongoAdapter;
+  readonly driver: MongoDriver;
+  readonly executeDdl: (command: AnyMongoDdlCommand) => Promise<void>;
+  readonly markerOps: MarkerOperations;
+  readonly introspectSchema: () => Promise<MongoSchemaIR>;
+}
 
 /**
  * Mongo control adapter interface for control-plane operations.
@@ -102,6 +157,13 @@ export interface MongoControlAdapter<TTarget extends string = string>
    * Introspects the live database and returns a `MongoSchemaIR`.
    */
   introspectSchema(driver: ControlDriverInstance<'mongo', TTarget>): Promise<MongoSchemaIR>;
+
+  /**
+   * Builds the migration runner's dependencies bound to `driver`.
+   */
+  createRunnerDependencies(
+    driver: ControlDriverInstance<'mongo', TTarget>,
+  ): MongoRunnerDependencies;
 }
 
 /**

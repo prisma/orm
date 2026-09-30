@@ -40,7 +40,7 @@ export type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = Un
   }[keyof Packs]
 >;
 
-type MergeExtensionCodecTypesSafe<Packs> =
+export type MergeExtensionCodecTypesSafe<Packs> =
   Packs extends Record<string, unknown>
     ? keyof Packs extends never
       ? Record<string, never>

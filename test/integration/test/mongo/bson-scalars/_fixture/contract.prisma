@@ -1,0 +1,94 @@
+// use prisma-8
+
+model Post {
+  id        ObjectId   @id @map("_id")
+  views     Int64
+  price     Decimal128
+  thumbnail Binary
+  meta      Json
+  notes     Json?
+  raw       Bson?
+
+  @@map("posts")
+}
+
+model Reading {
+  id    ObjectId @id @map("_id")
+  ratio Double
+  count Int32
+
+  @@map("readings")
+}
+
+enum Role {
+  @@type("mongo/string@1")
+  User  = "USER"
+  Admin = "admin"
+}
+
+type Address {
+  zip  Int64
+  city String?
+}
+
+model Author {
+  id      ObjectId   @id @map("_id")
+  karma   Int64
+  balance Decimal128
+  avatar  Binary?
+  role    Role
+  address Address?
+  books   Book[]
+
+  @@map("authors")
+}
+
+model Book {
+  id       ObjectId @id @map("_id")
+  title    String
+  authorId ObjectId
+  author   Author   @relation(fields: [authorId], references: [id])
+
+  @@map("books")
+}
+
+type Point {
+  x    Int32
+  tags Int64[]
+}
+
+model Series {
+  id       ObjectId     @id @map("_id")
+  ints     Int32[]
+  doubles  Double[]
+  longs    Int64[]
+  ids      ObjectId[]
+  decimals Decimal128[]
+  bytes    Binary[]
+  words    String[]
+  flags    Bool[]
+  dates    Date[]
+  points   Point[]
+
+  @@map("series")
+}
+
+type Stamp {
+  note Json
+}
+
+model Asset {
+  id   ObjectId @id @map("_id")
+  kind String
+
+  @@discriminator(kind)
+  @@map("assets")
+}
+
+model Photo {
+  ownerId ObjectId
+  exif    Json
+  stamps  Stamp[]
+
+  @@base(Asset, "photo")
+}

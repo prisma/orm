@@ -1,25 +1,18 @@
-export { mongoTargetDescriptor } from '../core/control-target';
-export { FilterEvaluator } from '../core/filter-evaluator';
+export { mongoTargetDescriptor } from '../core/migrations/control-target';
+export { FilterEvaluator } from '../core/migrations/filter-evaluator';
 export {
   deserializeMongoOp,
   deserializeMongoOps,
   serializeMongoOps,
-} from '../core/mongo-ops-serializer';
-export type { PlanCallsResult } from '../core/mongo-planner';
-export { MongoMigrationPlanner } from '../core/mongo-planner';
-export type { MarkerOperations, MongoRunnerDependencies } from '../core/mongo-runner';
+} from '../core/migrations/mongo-ops-serializer';
+export type { PlanCallsResult } from '../core/migrations/mongo-planner';
+export { MongoMigrationPlanner } from '../core/migrations/mongo-planner';
 export {
   MongoMigrationRunner,
   type MongoMigrationRunnerExecuteOptions,
-} from '../core/mongo-runner';
-export type { MongoTargetContract } from '../core/mongo-target-contract';
-export { MongoTargetContractSerializer } from '../core/mongo-target-contract-serializer';
-export {
-  MongoTargetDatabase,
-  MongoTargetUnboundDatabase,
-} from '../core/mongo-target-database';
-export { MongoTargetSchemaVerifier } from '../core/mongo-target-schema-verifier';
-export type { CollModMeta, OpFactoryCall } from '../core/op-factory-call';
+} from '../core/migrations/mongo-runner';
+export { MongoTargetSchemaVerifier } from '../core/migrations/mongo-target-schema-verifier';
+export type { CollModMeta, OpFactoryCall } from '../core/migrations/op-factory-call';
 export {
   CollModCall,
   CreateCollectionCall,
@@ -28,8 +21,14 @@ export {
   DropIndexCall,
   schemaCollectionToCreateCollectionOptions,
   schemaIndexToCreateIndexOptions,
-} from '../core/op-factory-call';
-export { PlannerProducedMongoMigration } from '../core/planner-produced-migration';
-export { renderOps } from '../core/render-ops';
-export type { RenderMigrationMeta } from '../core/render-typescript';
-export { renderCallsToTypeScript } from '../core/render-typescript';
+} from '../core/migrations/op-factory-call';
+export { PlannerProducedMongoMigration } from '../core/migrations/planner-produced-migration';
+export { renderOps } from '../core/migrations/render-ops';
+export type { RenderMigrationMeta } from '../core/migrations/render-typescript';
+export { renderCallsToTypeScript } from '../core/migrations/render-typescript';
+export type { MongoTargetContract } from '../core/mongo-target-contract';
+export { MongoTargetContractSerializer } from '../core/mongo-target-contract-serializer';
+export {
+  MongoTargetDatabase,
+  MongoTargetUnboundDatabase,
+} from '../core/mongo-target-database';

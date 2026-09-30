@@ -396,7 +396,7 @@ describe('TS and PSL authoring parity', () => {
 model Post {
   id Int @id
   authorId Int
-  author User @relation(fields: [authorId], references: [id])
+  author auth.User @relation(fields: [authorId], references: [id])
   @@map("post")
 }
 `,

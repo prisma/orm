@@ -14,7 +14,7 @@ model Post {
   id          ObjectId @id @map("_id")
   authorId    ObjectId
   title       String
-  publishedAt DateTime?
+  publishedAt Date?
   author      User     @relation(fields: [authorId], references: [id])
 
   @@map("posts")

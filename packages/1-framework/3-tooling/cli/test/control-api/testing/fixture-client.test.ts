@@ -74,7 +74,10 @@ describe('createFixtureControlClient', () => {
 
     const emit = await client.emit({
       contractConfig: {
-        source: { load: async () => notOk({ summary: '', diagnostics: [] }) },
+        source: {
+          format: 'typescript',
+          load: async () => notOk({ summary: '', diagnostics: [] }),
+        },
         output: 'contract.json',
       },
     });
@@ -216,7 +219,10 @@ describe('createFixtureControlClient', () => {
     expect(client.toOperationPreview([])).toBeUndefined();
     const emit = await client.emit({
       contractConfig: {
-        source: { load: async () => notOk({ summary: '', diagnostics: [] }) },
+        source: {
+          format: 'typescript',
+          load: async () => notOk({ summary: '', diagnostics: [] }),
+        },
         output: 'contract.json',
       },
     });

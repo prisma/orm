@@ -41,7 +41,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'8abaa3b97115767c5fee67bcd90de0cec3ac1f14a59875c2f5d22887ba435f89'>;
 export type ExecutionHash =
-  ExecutionHashBase<'e592be8e097b3e2b4958da0b3ed54265d1bfa0523295fa03e03af2364cccbd08'>;
+  ExecutionHashBase<'eb9bffd4c01945792e83de10d571b20df42f5bf40405ec8c642c6592f7dc4655'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -1423,33 +1423,33 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'post';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'post';
           };
         },
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'tag';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'tag';
           };
         },
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'task';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'task';
           };
         },
         {
           readonly onCreate: { readonly id: 'uuidv4'; readonly kind: 'generator' };
           readonly ref: {
-            readonly column: 'id';
+            readonly entry: 'user';
+            readonly field: 'id';
             readonly namespace: 'public';
-            readonly table: 'user';
           };
         },
       ];

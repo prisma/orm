@@ -1,3 +1,12 @@
+import type {
+  AuthoringContributions,
+  AuthoringFieldNamespace,
+  AuthoringModelAttributeDescriptor,
+  AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeConstructorDescriptor,
+  AuthoringTypeNamespace,
+} from '@internal/framework-components/authoring';
+import { isAuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
@@ -6,12 +15,15 @@ import type {
   AttributeSpec,
   AttributeSpecContext,
   AttributeSpecNamespace,
+  Binder,
+  DescribeUnsupportedAttribute,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
   FuncCallSig,
   InferAttr,
   ModelAttributeCtx,
+  ModelAttributeSpecFactory,
   ModelSymbol,
   NumLiteral,
   ParsedTaggedLiteral,
@@ -23,6 +35,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  createBinder,
   diagnosticSource,
   entityRef,
   fieldAttribute,
@@ -53,35 +66,18 @@ import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
-
-export function findModelAttributeNode(
-  model: ModelSymbol,
-  name: string,
-): ModelAttributeAst | undefined {
-  for (const attribute of model.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
-export function findFieldAttributeNode(
-  field: FieldSymbol,
-  name: string,
-): FieldAttributeAst | undefined {
-  for (const attribute of field.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
+import { getAttribute } from './psl-attribute-parsing';
 
 function buildModelAttributeCtx(input: {
   readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
 }): ModelAttributeCtx {
   return {
     sources: input.sources,
     selfModel: input.selfModel,
+    binder: input.binder,
     symbols: input.symbols,
   };
 }
@@ -91,15 +87,84 @@ function buildFieldAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
-  readonly resolveReferencedModel?: (() => ModelSymbol | undefined) | undefined;
+  readonly binder: Binder;
 }): FieldAttributeCtx {
   return {
     sources: input.sources,
     selfModel: input.selfModel,
-    resolveReferencedModel: input.resolveReferencedModel ?? (() => undefined),
     field: input.field,
+    binder: input.binder,
     symbols: input.symbols,
   };
+}
+
+function fieldPresetsAsTypeNames(
+  namespace: AuthoringFieldNamespace | undefined,
+): AuthoringTypeNamespace {
+  if (namespace === undefined) return {};
+  const result: Record<string, AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace> = {};
+  for (const [name, value] of Object.entries(namespace)) {
+    result[name] = isAuthoringFieldPresetDescriptor(value)
+      ? { kind: 'typeConstructor', output: { codecId: value.output.codecId } }
+      : fieldPresetsAsTypeNames(value);
+  }
+  return result;
+}
+
+export function modelAttributeSpecsFrom(
+  modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>,
+): Readonly<Record<string, ModelAttributeSpecFactory>> {
+  const result: Record<string, ModelAttributeSpecFactory> = Object.create(null);
+  for (const [name, descriptor] of modelAttributesByName) {
+    result[name] = blindCast<
+      ModelAttributeSpecFactory,
+      'contributed model-attribute descriptors carry an ADR-231 attribute-spec factory by construction'
+    >(descriptor.spec);
+  }
+  return result;
+}
+
+export function createSqlBinder(input: {
+  readonly symbolTable: SymbolTable;
+  readonly sources: PslSources;
+  readonly authoringContributions?: AuthoringContributions | undefined;
+  readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
+  readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
+  readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
+  readonly contributedModelAttributeSpecs?:
+    | Readonly<Record<string, ModelAttributeSpecFactory>>
+    | undefined;
+}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
+  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
+  for (const [name, descriptor] of input.scalarColumnDescriptors ?? []) {
+    scalars[name] = { kind: 'typeConstructor', output: { codecId: descriptor.codecId } };
+  }
+  return createBinder({
+    sources: input.sources,
+    symbolTable: input.symbolTable,
+    ...(input.pslBlockDescriptors === undefined
+      ? {}
+      : { pslBlockDescriptors: input.pslBlockDescriptors }),
+    typeConstructors: {
+      ...scalars,
+      ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
+      ...(input.authoringContributions?.type ?? {}),
+    },
+    attributeSpecs: {
+      model: Object.assign(
+        Object.create(null),
+        sqlAttributeSpecs.model,
+        input.contributedModelAttributeSpecs,
+      ),
+      field: sqlAttributeSpecs.field,
+    },
+    controlMutationDefaults: input.controlMutationDefaults ?? {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+    describeUnsupportedAttribute: input.describeUnsupportedAttribute,
+  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse
@@ -111,6 +176,7 @@ export function interpretModelAttribute<Out>(input: {
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
@@ -120,6 +186,7 @@ export function interpretModelAttribute<Out>(input: {
       symbols: input.symbols,
       selfModel: input.model,
       sources: input.sources,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {
@@ -139,8 +206,8 @@ export function interpretFieldAttribute<Out>(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
-  readonly resolveReferencedModel?: () => ModelSymbol | undefined;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
@@ -150,7 +217,7 @@ export function interpretFieldAttribute<Out>(input: {
       selfModel: input.model,
       field: input.field,
       sources: input.sources,
-      resolveReferencedModel: input.resolveReferencedModel,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {
@@ -263,7 +330,15 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  return Object.keys(block.block.parameters);
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of block.node.entries()) {
+    const key = entry.key()?.name();
+    if (key === undefined || seen.has(key)) continue;
+    seen.add(key);
+    names.push(key);
+  }
+  return names;
 }
 
 function enumDefaultArms(
@@ -576,7 +651,7 @@ function baseModelSpec() {
 }
 
 function relationAttributeSpan(ctx: FieldAttributeCtx): PslSpan {
-  const node = findFieldAttributeNode(ctx.field, 'relation');
+  const node = getAttribute(ctx.field.attributes, 'relation')?.node;
   if (node !== undefined) {
     return nodePslSpan(node.syntax, ctx.sources);
   }

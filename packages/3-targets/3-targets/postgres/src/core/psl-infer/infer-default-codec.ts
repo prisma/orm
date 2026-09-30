@@ -1,11 +1,13 @@
 /**
- * The codec `contract emit` binds to a printed column, and the data type that codec represents.
+ * The codec `contract emit` binds to a column `contract infer` writes, and the data type that codec
+ * represents.
  *
- * `contract emit` binds a codec to each PSL type constructor the printer names, so a default has to
- * be written in the form that codec reads back. The binding itself lives in the adapter's authoring
- * type namespaces, which sit above this package; the table below restates it for the type names the
- * printer emits, and `adapter-postgres/test/printed-type-codecs.test.ts` fails if the two disagree
- * or if the printer gains a type name this table does not cover.
+ * `contract emit` binds a codec to each PSL type constructor `contract infer` names, so a default has
+ * to be written in the form that codec reads back. The binding itself lives in the adapter's
+ * authoring type namespaces, which sit above this package, and `contract infer` has no stack to ask;
+ * the table below restates it for the type names `contract infer` writes, and
+ * `adapter-postgres/test/inferred-type-codecs.test.ts` fails if the two disagree or if the type map
+ * gains a type name this table does not cover.
  */
 
 import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
@@ -18,8 +20,8 @@ import { blindCast } from '@internal/utils/casts';
 import { PG_TEXT_CODEC_ID } from '../codec-ids';
 import { postgresCodecDescriptorRegistry } from '../registry';
 
-/** The codec `contract emit` binds to each PSL type name the type map prints. */
-export const CODEC_ID_BY_PRINTED_TYPE: ReadonlyMap<string, string> = new Map([
+/** The codec `contract emit` binds to each PSL type name the type map writes. */
+export const CODEC_ID_BY_INFERRED_TYPE: ReadonlyMap<string, string> = new Map([
   ['String', 'pg/text@1'],
   ['Boolean', 'pg/bool@1'],
   ['Int', 'pg/int4@1'],
@@ -47,11 +49,11 @@ export const CODEC_ID_BY_PRINTED_TYPE: ReadonlyMap<string, string> = new Map([
  * An enum column's default is a member name, which is text either way, so it reads through the text
  * codec.
  */
-export function dataTypeForPrintedType(
+export function dataTypeForInferredType(
   pslTypeName: string,
   isEnum: boolean,
 ): DataTypeId | undefined {
-  const codecId = isEnum ? PG_TEXT_CODEC_ID : CODEC_ID_BY_PRINTED_TYPE.get(pslTypeName);
+  const codecId = isEnum ? PG_TEXT_CODEC_ID : CODEC_ID_BY_INFERRED_TYPE.get(pslTypeName);
   if (codecId === undefined) return undefined;
   return postgresCodecDescriptorRegistry.descriptorFor(codecId)?.dataType;
 }
@@ -59,8 +61,8 @@ export function dataTypeForPrintedType(
 const codecs = new Map<string, Codec>();
 
 /** One instance per codec id: every codec in the table above decodes JSON the same way for any params. */
-function printedTypeCodec(pslTypeName: string, isEnum: boolean): Codec | undefined {
-  const codecId = isEnum ? PG_TEXT_CODEC_ID : CODEC_ID_BY_PRINTED_TYPE.get(pslTypeName);
+function inferredTypeCodec(pslTypeName: string, isEnum: boolean): Codec | undefined {
+  const codecId = isEnum ? PG_TEXT_CODEC_ID : CODEC_ID_BY_INFERRED_TYPE.get(pslTypeName);
   if (codecId === undefined) return undefined;
   const cached = codecs.get(codecId);
   if (cached !== undefined) return cached;
@@ -79,13 +81,13 @@ function printedTypeCodec(pslTypeName: string, isEnum: boolean): Codec | undefin
  * stores and reports verbatim. A default the codec refuses has no PSL literal, so the raw
  * expression prints instead of a schema `contract emit` would reject.
  */
-export function printedDefaultReadsBack(
+export function inferredDefaultReadsBack(
   value: ColumnDefaultLiteralInputValue,
   pslTypeName: string,
   isEnum: boolean,
   isList: boolean,
 ): boolean {
-  const codec = printedTypeCodec(pslTypeName, isEnum);
+  const codec = inferredTypeCodec(pslTypeName, isEnum);
   if (codec === undefined) return false;
   const values = isList && Array.isArray(value) ? value : [value];
   return values.every((element) => {

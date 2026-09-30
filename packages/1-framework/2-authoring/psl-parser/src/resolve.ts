@@ -19,10 +19,13 @@ export interface ResolvedAttributeArg {
   readonly span: PslSpan;
 }
 
-export interface ResolvedAttribute {
+export interface ResolvedAttribute<
+  TNode extends FieldAttributeAst | ModelAttributeAst = FieldAttributeAst | ModelAttributeAst,
+> {
   readonly name: string;
   readonly args: readonly ResolvedAttributeArg[];
   readonly span: PslSpan;
+  readonly node: TNode;
 }
 
 export interface ResolvedTypeConstructorCall {
@@ -31,21 +34,22 @@ export interface ResolvedTypeConstructorCall {
   readonly span: PslSpan;
 }
 
-export function readResolvedAttribute(
-  attribute: FieldAttributeAst | ModelAttributeAst,
+export function readResolvedAttribute<TNode extends FieldAttributeAst | ModelAttributeAst>(
+  attribute: TNode,
   sources: PslSources,
-): ResolvedAttribute {
+): ResolvedAttribute<TNode> {
   return {
     name: attributeName(attribute.name()),
     args: readResolvedArgList(attribute.argList(), sources),
     span: nodePslSpan(attribute.syntax, sources),
+    node: attribute,
   };
 }
 
-export function readResolvedAttributes(
-  attributes: Iterable<FieldAttributeAst | ModelAttributeAst>,
+export function readResolvedAttributes<TNode extends FieldAttributeAst | ModelAttributeAst>(
+  attributes: Iterable<TNode>,
   sources: PslSources,
-): readonly ResolvedAttribute[] {
+): readonly ResolvedAttribute<TNode>[] {
   return Array.from(attributes, (attribute) => readResolvedAttribute(attribute, sources));
 }
 

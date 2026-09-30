@@ -347,9 +347,9 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
     );
 
     // Upstream: `update: { content: { unset: true } }` removes the optional composite and
-    // returns `{ content: null, ... }`. Prisma 8's `$unset` removes the field entirely
-    // rather than writing `null`, so the document lacks the `content` key — it.fails.
-    it.fails(
+    // returns `{ content: null, ... }`. Prisma 8's `$unset` removes the field from the
+    // document, and a nullable field the document leaves out reads as `null`.
+    it(
       'unset',
       () =>
         withComposites(async ({ db }) => {
