@@ -196,13 +196,21 @@ type PredicateOperand<T, CodecId extends string> =
   | T
   | Expression<{ codecId: CodecId; nullable: false; many?: never }>;
 
+// Column handles carry comparison methods; prepared parameters do not, so they stay non-nullable.
+type ColumnOperand<CodecId extends string> = Expression<{
+  codecId: CodecId;
+  nullable: boolean;
+  many?: never;
+}> &
+  Pick<ComparisonMethodFns<never>, 'isNull'>;
+
 export type ComparisonMethodFns<T, CodecId extends string = never> = {
   eq(value: T | Expression<{ codecId: CodecId; nullable: boolean; many?: never }>): AnyExpression;
   neq(value: T | Expression<{ codecId: CodecId; nullable: boolean; many?: never }>): AnyExpression;
-  gt(value: T): AnyExpression;
-  lt(value: T): AnyExpression;
-  gte(value: T): AnyExpression;
-  lte(value: T): AnyExpression;
+  gt(value: T | ColumnOperand<CodecId>): AnyExpression;
+  lt(value: T | ColumnOperand<CodecId>): AnyExpression;
+  gte(value: T | ColumnOperand<CodecId>): AnyExpression;
+  lte(value: T | ColumnOperand<CodecId>): AnyExpression;
   // LIKE takes a non-null string pattern, even when the field type T is nullable.
   like(pattern: PredicateOperand<string, CodecId>): AnyExpression;
   in(values: readonly T[]): AnyExpression;
