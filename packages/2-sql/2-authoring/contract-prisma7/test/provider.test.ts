@@ -29,7 +29,7 @@ function withTextDefaultsCastToNull(
   lookup: CodecLookupWithDescriptors,
 ): CodecLookupWithDescriptors {
   const descriptorFor = (id: string) => {
-    const descriptor = lookup.descriptorFor?.(id);
+    const descriptor = lookup.descriptorFor(id);
     if (id !== 'pg/text@1' || descriptor === undefined) return descriptor;
     return Object.assign(Object.create(Object.getPrototypeOf(descriptor)), descriptor, {
       dataType: BROKEN_TEXT,
