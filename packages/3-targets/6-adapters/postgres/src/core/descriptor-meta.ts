@@ -93,6 +93,11 @@ function expandPrecision({ nativeType, typeParams }: ExpandNativeTypeInput): str
   return `${nativeType}(${precision})`;
 }
 
+/** PostgreSQL 15 and later take a numeric scale from -1000 to 1000, including one above the precision. */
+function isNumericScale(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= -1000 && value <= 1000;
+}
+
 function expandNumeric({ nativeType, typeParams }: ExpandNativeTypeInput): string {
   const hasPrecision = typeParams && 'precision' in typeParams;
   const hasScale = typeParams && 'scale' in typeParams;
@@ -120,10 +125,10 @@ function expandNumeric({ nativeType, typeParams }: ExpandNativeTypeInput): strin
     }
     if (hasScale) {
       const scale = typeParams['scale'];
-      if (!isNonNegativeInteger(scale)) {
+      if (!isNumericScale(scale)) {
         throw adapterError(
           'RUNTIME.TYPE_PARAMS_INVALID',
-          `Invalid "scale" type parameter for "${nativeType}": expected a non-negative integer, got ${JSON.stringify(scale)}`,
+          `Invalid "scale" type parameter for "${nativeType}": expected an integer from -1000 to 1000, got ${JSON.stringify(scale)}`,
           { meta: { nativeType, param: 'scale', received: scale } },
         );
       }

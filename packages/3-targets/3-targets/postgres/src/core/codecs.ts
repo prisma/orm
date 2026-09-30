@@ -170,7 +170,7 @@ const lengthParamsSchema = arktype({
 
 const numericParamsSchema = arktype({
   'precision?': 'number.integer > 0 & number.integer <= 1000',
-  'scale?': 'number.integer >= 0',
+  'scale?': 'number.integer >= -1000 & number.integer <= 1000',
 }) satisfies StandardSchemaV1<NumericParams>;
 
 const PG_TEXT_NATIVE_TYPE = 'text';
@@ -219,15 +219,22 @@ const CANONICAL_NUMERIC_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
 const isCanonicalNumericText = (value: string): boolean => CANONICAL_NUMERIC_TEXT.test(value);
 
 /**
- * Whether canonical numeric text is a value `numeric(precision, scale)` stores without rounding: at most `scale` digits after the point, not counting trailing zeros, and at most `precision` significant digits once written to `scale` places. NaN fits; an infinity does not.
+ * Whether canonical numeric text is a value `numeric(precision, scale)` stores without rounding: a whole number of units of 10^-scale, and at most `precision` digits once counted in those units. A negative scale rounds to tens, hundreds and so on, and a scale above the precision allows only values below 1. NaN fits; an infinity does not.
  */
 function fitsNumeric(text: string, precision: number, scale: number): boolean {
   if (text === 'NaN') return true;
   if (text.endsWith('Infinity')) return false;
   const [whole = '', fraction = ''] = text.replace(/^-/, '').split('.');
   const significantFraction = withoutTrailing(fraction, '0');
-  if (significantFraction.length > scale) return false;
-  return `${whole}${significantFraction.padEnd(scale, '0')}`.replace(/^0+/, '').length <= precision;
+  const digits = `${whole}${significantFraction}`.replace(/^0+/, '');
+  if (digits === '') return true;
+  // The value is `digits` × 10^exponent; in units of 10^-scale it is `digits` × 10^shift.
+  const shift = scale - significantFraction.length;
+  if (shift >= 0) return digits.length + shift <= precision;
+  const units = withoutTrailing(digits, '0');
+  const droppedZeros = digits.length - units.length;
+  if (droppedZeros < -shift) return false;
+  return digits.length + shift <= precision;
 }
 
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;

@@ -127,7 +127,8 @@ function inferredTypeCodec(pslType: InferredPslType, isEnum: boolean): Codec | u
  * A data type says which values its column takes, not that every codec of it accepts each one: the
  * temporal codecs represent types that cast from text but refuse `infinity`, which PostgreSQL
  * stores and reports verbatim. A default the codec refuses has no PSL literal, so the raw
- * expression prints instead of a schema `contract emit` would reject.
+ * expression prints instead of a schema `contract emit` would reject. A codec that cannot be built
+ * with the column's type parameters is treated the same way.
  */
 export function inferredDefaultReadsBack(
   value: ColumnDefaultLiteralInputValue,
@@ -135,15 +136,15 @@ export function inferredDefaultReadsBack(
   isEnum: boolean,
   isList: boolean,
 ): boolean {
-  const codec = inferredTypeCodec(pslType, isEnum);
-  if (codec === undefined) return false;
   const values = isList && Array.isArray(value) ? value : [value];
-  return values.every((element) => {
-    try {
+  try {
+    const codec = inferredTypeCodec(pslType, isEnum);
+    if (codec === undefined) return false;
+    for (const element of values) {
       codec.decodeJson(blindCast<JsonValue, 'a stored literal default is JSON'>(element));
-      return true;
-    } catch {
-      return false;
     }
-  });
+    return true;
+  } catch {
+    return false;
+  }
 }
