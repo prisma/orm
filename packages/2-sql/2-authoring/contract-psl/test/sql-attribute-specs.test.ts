@@ -254,6 +254,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       'str',
       'num',
       'bool',
+      'null',
       'funcCall',
       'funcCall',
       'funcCall',

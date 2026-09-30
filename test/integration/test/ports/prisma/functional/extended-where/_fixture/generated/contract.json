@@ -28,6 +28,7 @@
           "Payment": {
             "fields": {
               "ccn": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -35,6 +36,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -76,6 +78,7 @@
           "Post": {
             "fields": {
               "authorId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -83,6 +86,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -90,6 +94,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -134,6 +139,7 @@
           "Profile": {
             "fields": {
               "alias": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -141,6 +147,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -148,6 +155,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -155,6 +163,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -162,6 +171,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -212,6 +222,7 @@
           "User": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -219,6 +230,7 @@
                 }
               },
               "paymentId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -226,6 +238,7 @@
                 }
               },
               "referralId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

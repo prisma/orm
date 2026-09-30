@@ -52,11 +52,20 @@ export function enumField(codecId: string, enumName: string, nullable = false): 
   };
 }
 
-export function arrayField(codecId: string, nullable = false, elementNullable = false): ContractField {
+export function arrayField(
+  codecId: string,
+  nullable = false,
+  elementNullable = false,
+): ContractField {
   return { type: { kind: 'scalar', codecId }, nullable, many: { elementNullable } };
 }
 
-export function arrayEnumField(codecId: string, enumName: string, nullable = false, elementNullable = false): ContractField {
+export function arrayEnumField(
+  codecId: string,
+  enumName: string,
+  nullable = false,
+  elementNullable = false,
+): ContractField {
   return {
     type: { kind: 'scalar', codecId },
     nullable,
@@ -74,6 +83,10 @@ export function voField(name: string, nullable = false): ContractField {
   return { type: { kind: 'valueObject', name }, nullable, many: false };
 }
 
-export function voArrayField(name: string, nullable = false, elementNullable = false): ContractField {
+export function voArrayField(
+  name: string,
+  nullable = false,
+  elementNullable = false,
+): ContractField {
   return { type: { kind: 'valueObject', name }, nullable, many: { elementNullable } };
 }

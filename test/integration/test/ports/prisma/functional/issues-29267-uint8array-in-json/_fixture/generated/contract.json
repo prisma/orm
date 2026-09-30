@@ -16,6 +16,7 @@
           "TestRecord": {
             "fields": {
               "data": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/json@1",
@@ -23,6 +24,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

@@ -28,6 +28,7 @@
           "Post": {
             "fields": {
               "authorId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -35,6 +36,7 @@
                 }
               },
               "content": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -42,6 +44,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -49,6 +52,7 @@
                 }
               },
               "published": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -56,6 +60,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -63,6 +68,7 @@
                 }
               },
               "viewCount": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -144,6 +150,7 @@
           "PostToTag": {
             "fields": {
               "A": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -151,6 +158,7 @@
                 }
               },
               "B": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -208,6 +216,7 @@
           "Tag": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -215,6 +224,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -268,6 +278,7 @@
           "User": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -278,6 +289,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -285,6 +297,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -292,6 +305,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -299,6 +313,7 @@
                 }
               },
               "role": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -309,6 +324,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",

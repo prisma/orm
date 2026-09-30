@@ -31,6 +31,7 @@
           "User": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -38,6 +39,7 @@
                 }
               },
               "role": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

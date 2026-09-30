@@ -16,6 +16,7 @@
           "SuggestionModel": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -23,6 +24,7 @@
                 }
               },
               "status": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -33,6 +35,7 @@
                 }
               },
               "suggestedContent": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

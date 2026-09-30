@@ -20,6 +20,7 @@
           "CommentOptional": {
             "fields": {
               "_id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -27,6 +28,7 @@
                 }
               },
               "content": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "kind": "valueObject",
@@ -34,6 +36,7 @@
                 }
               },
               "country": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -49,6 +52,7 @@
           "CommentRequired": {
             "fields": {
               "_id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -56,6 +60,7 @@
                 }
               },
               "content": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -63,6 +68,7 @@
                 }
               },
               "country": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -80,6 +86,7 @@
           "CommentContent": {
             "fields": {
               "text": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -87,7 +94,9 @@
                 }
               },
               "upvotes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -99,6 +108,7 @@
           "CommentContentUpvotes": {
             "fields": {
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -106,6 +116,7 @@
                 }
               },
               "vote": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/bool@1",

@@ -59,7 +59,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -68,8 +68,8 @@ describe('sql-target-family-hook', () => {
           },
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              userId: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -94,7 +94,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -138,7 +138,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -162,7 +162,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -258,8 +258,12 @@ describe('sql-target-family-hook', () => {
             },
           },
           fields: {
-            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-            authorId: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            authorId: {
+              many: false,
+              nullable: false,
+              type: { kind: 'scalar', codecId: 'pg/int4@1' },
+            },
           },
           relations: {},
         },
@@ -268,7 +272,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -277,8 +281,8 @@ describe('sql-target-family-hook', () => {
           },
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              userId: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -287,8 +291,8 @@ describe('sql-target-family-hook', () => {
           },
           comment: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              authorId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              authorId: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -329,7 +333,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -368,9 +372,9 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-              name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              email: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+              name: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -436,7 +440,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -445,8 +449,8 @@ describe('sql-target-family-hook', () => {
           },
           post: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-              userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              userId: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -474,7 +478,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -552,7 +556,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -692,7 +696,7 @@ describe('sql-target-family-hook', () => {
         tables: {
           user: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+              id: { many: false, codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],

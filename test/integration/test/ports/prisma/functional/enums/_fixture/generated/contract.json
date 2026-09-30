@@ -35,6 +35,7 @@
           "User": {
             "fields": {
               "_id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -42,6 +43,7 @@
                 }
               },
               "plan": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

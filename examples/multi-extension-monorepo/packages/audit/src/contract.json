@@ -16,6 +16,7 @@
           "AuditEvent": {
             "fields": {
               "action": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -23,6 +24,7 @@
                 }
               },
               "actor": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -30,6 +32,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

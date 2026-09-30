@@ -24,6 +24,7 @@
           "Post": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -61,6 +62,7 @@
           "Tag": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -98,6 +100,7 @@
           "TagsOnPosts": {
             "fields": {
               "postId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -105,6 +108,7 @@
                 }
               },
               "tagId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

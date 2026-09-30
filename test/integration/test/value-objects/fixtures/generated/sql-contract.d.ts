@@ -110,22 +110,22 @@ type ContractBase = Omit<
           readonly table: {
             readonly shop: {
               columns: {
-                readonly id: {
+                readonly id: { readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly name: {
+                readonly name: { readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly location: {
+                readonly location: { readonly many: false;
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                 };
-                readonly notes: {
+                readonly notes: { readonly many: false;
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: true;
@@ -155,19 +155,19 @@ type ContractBase = Omit<
         readonly models: {
           readonly Shop: {
             readonly fields: {
-              readonly id: {
+              readonly id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly name: {
+              readonly name: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly location: {
+              readonly location: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
               };
-              readonly notes: {
+              readonly notes: { readonly many: false;
                 readonly nullable: true;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
               };
@@ -188,15 +188,15 @@ type ContractBase = Omit<
         readonly valueObjects: {
           readonly Address: {
             readonly fields: {
-              readonly street: {
+              readonly street: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly city: {
+              readonly city: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly zip: {
+              readonly zip: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -228,15 +228,15 @@ type ContractBase = Omit<
   readonly valueObjects: {
     readonly Address: {
       readonly fields: {
-        readonly street: {
+        readonly street: { readonly many: false;
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly city: {
+        readonly city: { readonly many: false;
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };
-        readonly zip: {
+        readonly zip: { readonly many: false;
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         };

@@ -16,6 +16,7 @@
           "TestModel": {
             "fields": {
               "enum": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -26,7 +27,9 @@
                 }
               },
               "enum2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -37,6 +40,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -106,7 +110,9 @@
                 },
                 "enum2": {
                   "codecId": "pg/enum@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "TestEnum",
                   "nullable": false,
                   "typeParams": {
@@ -150,7 +156,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "a58ac14bf968332c1d2a26237f9e3e91535eb4a8c4998f2ae5951a447a1ee386"
+    "storageHash": "5ee7fe8a76320fa89310e105cea51c40365325429a1b57d3524df5feacac156f"
   },
   "capabilities": {
     "postgres": {

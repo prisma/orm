@@ -84,7 +84,8 @@
                   "kind": "scalar",
                   "codecId": "pg/text@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "varChar": {
                 "type": {
@@ -94,7 +95,8 @@
                     "length": 255
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "char": {
                 "type": {
@@ -104,63 +106,72 @@
                     "length": 10
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "uuid": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/uuid@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "inet": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/inet@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "boolean": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bool@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "integer": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "smallInt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int2@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "bigInt": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "real": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "doublePrecision": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/float8@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "decimal": {
                 "type": {
@@ -171,7 +182,8 @@
                     "scale": 2
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "timestamp": {
                 "type": {
@@ -181,7 +193,8 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "timestamptz": {
                 "type": {
@@ -191,14 +204,16 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "date": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/date-temporal@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "time": {
                 "type": {
@@ -208,7 +223,8 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "timetz": {
                 "type": {
@@ -218,28 +234,32 @@
                     "precision": 6
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "json": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/json@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "jsonB": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/jsonb@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "byteA": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/bytea@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "varCharList": {
                 "type": {
@@ -250,7 +270,9 @@
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "timestamptzOpt": {
                 "type": {
@@ -260,7 +282,8 @@
                     "precision": 3
                   }
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               }
             },
             "relations": {}
@@ -280,7 +303,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "660448ec6bbb66c7c4b052a9ab102116209b56d940f030e3afed15b620e48c6a",
+    "storageHash": "519efefd7ea513a5d01f53e41300247d4b8f2246e0d7d1880cb848f713a8866f",
     "namespaces": {
       "public": {
         "id": "public",
@@ -292,12 +315,14 @@
                 "text": {
                   "nativeType": "text",
                   "codecId": "pg/text@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "varChar": {
                   "nativeType": "character varying",
                   "codecId": "sql/varchar@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "length": 255
                   }
@@ -306,6 +331,7 @@
                   "nativeType": "character",
                   "codecId": "sql/char@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "length": 10
                   }
@@ -313,47 +339,56 @@
                 "uuid": {
                   "nativeType": "uuid",
                   "codecId": "pg/uuid@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "inet": {
                   "nativeType": "inet",
                   "codecId": "pg/inet@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "boolean": {
                   "nativeType": "bool",
                   "codecId": "pg/bool@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "integer": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "smallInt": {
                   "nativeType": "int2",
                   "codecId": "pg/int2@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "bigInt": {
                   "nativeType": "int8",
                   "codecId": "pg/int8@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "real": {
                   "nativeType": "float4",
                   "codecId": "pg/float4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "doublePrecision": {
                   "nativeType": "float8",
                   "codecId": "pg/float8@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "decimal": {
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 10,
                     "scale": 2
@@ -363,6 +398,7 @@
                   "nativeType": "timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   }
@@ -371,6 +407,7 @@
                   "nativeType": "timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   }
@@ -378,12 +415,14 @@
                 "date": {
                   "nativeType": "date",
                   "codecId": "pg/date-temporal@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "time": {
                   "nativeType": "time",
                   "codecId": "pg/time-temporal@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   }
@@ -392,6 +431,7 @@
                   "nativeType": "timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 6
                   }
@@ -399,23 +439,28 @@
                 "json": {
                   "nativeType": "json",
                   "codecId": "pg/json@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "jsonB": {
                   "nativeType": "jsonb",
                   "codecId": "pg/jsonb@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "byteA": {
                   "nativeType": "bytea",
                   "codecId": "pg/bytea@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "varCharList": {
                   "nativeType": "character varying",
                   "codecId": "sql/varchar@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "length": 32
@@ -425,6 +470,7 @@
                   "nativeType": "timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": true,
+                  "many": false,
                   "typeParams": {
                     "precision": 3
                   }

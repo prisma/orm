@@ -16,6 +16,7 @@
           "User": {
             "fields": {
               "_id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -23,7 +24,9 @@
                 }
               },
               "ids": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -31,6 +34,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",

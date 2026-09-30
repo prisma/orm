@@ -28,6 +28,7 @@
           "Audience": {
             "fields": {
               "deletedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -35,6 +36,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -75,6 +77,7 @@
           "Contact": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -112,6 +115,7 @@
           "Identity": {
             "fields": {
               "contactId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -119,6 +123,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -175,6 +180,7 @@
           "Subscription": {
             "fields": {
               "audienceId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -182,6 +188,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -189,6 +196,7 @@
                 }
               },
               "identityId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -196,6 +204,7 @@
                 }
               },
               "optedOutAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",

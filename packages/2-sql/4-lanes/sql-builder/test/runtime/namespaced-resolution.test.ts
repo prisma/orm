@@ -10,8 +10,8 @@ const emptyAggregateRegistry = {
   values: function* () {},
 };
 
-const int4 = { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } as const;
-const text = { codecId: 'pg/text@1', nativeType: 'text', nullable: false } as const;
+const int4 = { many: false, codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } as const;
+const text = { many: false, codecId: 'pg/text@1', nativeType: 'text', nullable: false } as const;
 
 function table(columns: Record<string, typeof int4 | typeof text>) {
   return {

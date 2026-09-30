@@ -16,6 +16,7 @@
           "Reading": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -23,6 +24,7 @@
                 }
               },
               "createdAtText": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-string@1",
@@ -30,6 +32,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -37,6 +40,7 @@
                 }
               },
               "label": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -44,6 +48,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -51,6 +56,7 @@
                 }
               },
               "updatedAtText": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-string@1",

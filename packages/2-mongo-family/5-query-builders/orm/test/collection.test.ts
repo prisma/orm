@@ -53,13 +53,29 @@ const nullableValueObjectList = [
 ] as const;
 const wrappedNullableValueObjectList = [
   {
-    city: new MongoParamRef('NYC', { codecId: 'mongo/string@1' }),
-    country: new MongoParamRef('US', { codecId: 'mongo/string@1' }),
+    city: new MongoParamRef('NYC', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.0.city',
+      collection: 'users',
+    }),
+    country: new MongoParamRef('US', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.0.country',
+      collection: 'users',
+    }),
   },
   null,
   {
-    city: new MongoParamRef('Paris', { codecId: 'mongo/string@1' }),
-    country: new MongoParamRef('FR', { codecId: 'mongo/string@1' }),
+    city: new MongoParamRef('Paris', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.2.city',
+      collection: 'users',
+    }),
+    country: new MongoParamRef('FR', {
+      codecId: 'mongo/string@1',
+      name: 'homeAddress.2.country',
+      collection: 'users',
+    }),
   },
 ];
 
@@ -258,9 +274,17 @@ describe('MongoCollection object-based where()', () => {
     const match = executor.lastStages![0] as MongoMatchStage;
     expect(match.filter).toEqual(
       MongoFieldFilter.eq('tags', [
-        new MongoParamRef('admin', { codecId: 'mongo/string@1' }),
+        new MongoParamRef('admin', {
+          codecId: 'mongo/string@1',
+          name: 'tags.0',
+          collection: 'users',
+        }),
         null,
-        new MongoParamRef('editor', { codecId: 'mongo/string@1' }),
+        new MongoParamRef('editor', {
+          codecId: 'mongo/string@1',
+          name: 'tags.2',
+          collection: 'users',
+        }),
       ]),
     );
   });
@@ -661,9 +685,17 @@ describe('MongoCollection write methods', () => {
       expect(command.kind).toBe('insertOne');
       if (command.kind === 'insertOne') {
         expect(command.document['tags']).toEqual([
-          new MongoParamRef('a', { codecId: 'mongo/string@1' }),
+          new MongoParamRef('a', {
+            codecId: 'mongo/string@1',
+            name: 'tags.0',
+            collection: 'users',
+          }),
           null,
-          new MongoParamRef('b', { codecId: 'mongo/string@1' }),
+          new MongoParamRef('b', {
+            codecId: 'mongo/string@1',
+            name: 'tags.2',
+            collection: 'users',
+          }),
         ]);
       }
     });
@@ -899,9 +931,17 @@ describe('MongoCollection write methods', () => {
         expect(command.update).toEqual({
           $set: {
             tags: [
-              new MongoParamRef('admin', { codecId: 'mongo/string@1' }),
+              new MongoParamRef('admin', {
+                codecId: 'mongo/string@1',
+                name: 'tags.0',
+                collection: 'users',
+              }),
               null,
-              new MongoParamRef('editor', { codecId: 'mongo/string@1' }),
+              new MongoParamRef('editor', {
+                codecId: 'mongo/string@1',
+                name: 'tags.2',
+                collection: 'users',
+              }),
             ],
           },
         });
@@ -943,7 +983,11 @@ describe('MongoCollection write methods', () => {
         const update = command.update as Record<string, Record<string, MongoParamRef>>;
         expect(update['$push']).toBeDefined();
         expect(update['$push']!['tags']).toEqual(
-          new MongoParamRef('admin', { codecId: 'mongo/string@1' }),
+          new MongoParamRef('admin', {
+            codecId: 'mongo/string@1',
+            name: 'tags',
+            collection: 'users',
+          }),
         );
       }
     });

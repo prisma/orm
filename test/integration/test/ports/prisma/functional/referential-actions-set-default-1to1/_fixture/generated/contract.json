@@ -28,6 +28,7 @@
           "PostOneToMany": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -35,6 +36,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -76,6 +78,7 @@
           "ProfileOneToOne": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -83,6 +86,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -124,6 +128,7 @@
           "UserOneToMany": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -161,6 +166,7 @@
           "UserOneToOne": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

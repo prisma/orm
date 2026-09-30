@@ -1046,7 +1046,7 @@ model Post {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
-    expect(ns?.entries.table?.['post']?.columns?.['priorities']).toEqual({
+    expect(ns?.entries.table?.['Post']?.columns?.['priorities']).toEqual({
       nativeType: 'text',
       codecId: 'pg/text@1',
       nullable: false,

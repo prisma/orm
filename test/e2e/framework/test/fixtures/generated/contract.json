@@ -40,6 +40,7 @@
           "Comment": {
             "fields": {
               "content": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -47,6 +48,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -54,6 +56,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -61,6 +64,7 @@
                 }
               },
               "postId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -68,6 +72,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -118,6 +123,7 @@
           "Embedding": {
             "fields": {
               "embedding": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/vector@1",
@@ -128,6 +134,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -135,6 +142,7 @@
                 }
               },
               "profile": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "arktype/json@1",
@@ -178,6 +186,7 @@
           "Event": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -185,6 +194,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -195,6 +205,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -202,6 +213,7 @@
                 }
               },
               "scheduledAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-string@1",
@@ -232,6 +244,7 @@
           "LiteralDefaults": {
             "fields": {
               "active": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -239,6 +252,7 @@
                 }
               },
               "bigCount": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -246,6 +260,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -253,6 +268,7 @@
                 }
               },
               "label": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -260,6 +276,7 @@
                 }
               },
               "metadata": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -267,6 +284,7 @@
                 }
               },
               "rating": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -274,6 +292,7 @@
                 }
               },
               "score": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -281,6 +300,7 @@
                 }
               },
               "tags": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -323,6 +343,7 @@
           "ParamTypes": {
             "fields": {
               "bits": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/varbit@1",
@@ -333,6 +354,7 @@
                 }
               },
               "code": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/char@1",
@@ -343,6 +365,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -353,6 +376,7 @@
                 }
               },
               "duration": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/interval@1",
@@ -363,6 +387,7 @@
                 }
               },
               "flags": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bit@1",
@@ -373,6 +398,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -380,6 +406,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -390,6 +417,7 @@
                 }
               },
               "price": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -401,6 +429,7 @@
                 }
               },
               "startsAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/time-temporal@1",
@@ -411,6 +440,7 @@
                 }
               },
               "startsAtTz": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timetz@1",
@@ -462,6 +492,7 @@
           "Post": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -469,6 +500,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -476,6 +508,7 @@
                 }
               },
               "meta": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/json@1",
@@ -483,6 +516,7 @@
                 }
               },
               "published": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -490,6 +524,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -497,6 +532,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -504,6 +540,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -575,6 +612,7 @@
           "User": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -582,6 +620,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -592,6 +631,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -599,6 +639,7 @@
                 }
               },
               "profile": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -606,6 +647,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",

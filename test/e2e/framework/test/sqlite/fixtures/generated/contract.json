@@ -36,6 +36,7 @@
           "Comment": {
             "fields": {
               "body": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -43,6 +44,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -50,6 +52,7 @@
                 }
               },
               "postId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -77,6 +80,7 @@
           "Item": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -84,6 +88,7 @@
                 }
               },
               "label": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -91,6 +96,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -118,6 +124,7 @@
           "Post": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -125,6 +132,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -132,6 +140,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -139,6 +148,7 @@
                 }
               },
               "views": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -201,6 +211,7 @@
           "Profile": {
             "fields": {
               "bio": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -208,6 +219,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -215,6 +227,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -242,6 +255,7 @@
           "TypedRow": {
             "fields": {
               "active": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -249,6 +263,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/datetime@1",
@@ -256,6 +271,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -263,6 +279,7 @@
                 }
               },
               "label": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -270,6 +287,7 @@
                 }
               },
               "metadata": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/json@1",
@@ -303,6 +321,7 @@
           "User": {
             "fields": {
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -310,6 +329,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -317,6 +337,7 @@
                 }
               },
               "invitedById": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -324,6 +345,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",

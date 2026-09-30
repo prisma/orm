@@ -28,6 +28,7 @@
           "Comment": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -106,6 +107,7 @@
           "DownVote": {
             "fields": {
               "commentId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -113,6 +115,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -170,6 +173,7 @@
           "UpVote": {
             "fields": {
               "commentId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -177,6 +181,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -234,6 +239,7 @@
           "User": {
             "fields": {
               "uid": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

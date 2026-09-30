@@ -817,7 +817,7 @@ describe('providePslCompletionItems', () => {
         ['model Post {', '  id Int @default(|)', '}'].join('\n'),
         stack,
       ).items.map((item) => item.label),
-    ).toEqual(['true', 'false']);
+    ).toEqual(['true', 'false', 'null']);
 
     const mapCompletion = completeWithActualStack(
       ['model Post {', '  id Int @ma| // keep', '}'].join('\n'),
@@ -1325,6 +1325,7 @@ describe('providePslCompletionItems', () => {
     expect(candidates.map((item) => item.label)).toEqual([
       'true',
       'false',
+      'null',
       'autoincrement',
       'now',
       'uuid',
@@ -1412,6 +1413,7 @@ describe('providePslCompletionItems', () => {
     expect(complete(postgresEntries, true)).toEqual([
       value('true'),
       value('false'),
+      value('null'),
       tag(postgresEntries, 'sql', true),
       tag(postgresEntries, 'json', true),
     ]);
@@ -1419,12 +1421,14 @@ describe('providePslCompletionItems', () => {
     expect(complete(sqliteEntries, true)).toEqual([
       value('true'),
       value('false'),
+      value('null'),
       tag(sqliteEntries, 'sql', true),
       tag(sqliteEntries, 'json', true),
     ]);
     expect(complete(postgresEntries, false)).toEqual([
       value('true'),
       value('false'),
+      value('null'),
       tag(postgresEntries, 'sql', false),
       tag(postgresEntries, 'json', false),
     ]);

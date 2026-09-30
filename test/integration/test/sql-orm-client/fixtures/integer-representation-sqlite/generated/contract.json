@@ -20,6 +20,7 @@
           "Meter": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -27,6 +28,7 @@
                 }
               },
               "peak": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/bigintnumber@1",
@@ -67,6 +69,7 @@
           "Sample": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -74,6 +77,7 @@
                 }
               },
               "meterId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/integer@1",
@@ -81,6 +85,7 @@
                 }
               },
               "reading": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/bigintnumber@1",

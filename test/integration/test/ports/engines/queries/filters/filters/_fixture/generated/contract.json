@@ -24,6 +24,7 @@
           "ParkingLot": {
             "fields": {
               "area": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -31,6 +32,7 @@
                 }
               },
               "capacity": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -38,6 +40,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -45,6 +48,7 @@
                 }
               },
               "size": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -52,6 +56,7 @@
                 }
               },
               "unique": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -85,6 +90,7 @@
           "User": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -92,6 +98,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -99,6 +106,7 @@
                 }
               },
               "optional": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -106,6 +114,7 @@
                 }
               },
               "unique": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -113,6 +122,7 @@
                 }
               },
               "vehicle_id": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -163,6 +173,7 @@
           "Vehicle": {
             "fields": {
               "brand": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -170,6 +181,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -177,6 +189,7 @@
                 }
               },
               "parked": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -184,6 +197,7 @@
                 }
               },
               "unique": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

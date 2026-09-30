@@ -297,6 +297,7 @@ describe('shared contract definition lowering', () => {
             tableName: 'document',
             fields: [
               {
+                many: false,
                 fieldName: 'embedding',
                 columnName: 'embedding',
                 descriptor: {

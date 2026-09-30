@@ -16,6 +16,7 @@
           "User": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",

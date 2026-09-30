@@ -28,6 +28,7 @@
           "Group": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -35,6 +36,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -88,6 +90,7 @@
           "Post": {
             "fields": {
               "authorId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -95,6 +98,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -102,6 +106,7 @@
                 }
               },
               "published": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -109,6 +114,7 @@
                 }
               },
               "upvotes": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -156,6 +162,7 @@
           "User": {
             "fields": {
               "balance": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -163,6 +170,7 @@
                 }
               },
               "blocked": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -170,6 +178,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -177,6 +186,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -251,6 +261,7 @@
           "UserGroup": {
             "fields": {
               "groupId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -258,6 +269,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

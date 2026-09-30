@@ -32,23 +32,34 @@ interface DefaultCase {
   readonly differentLiteral: ColumnDefaultLiteralInputValue;
 }
 
-const int2 = { nativeType: 'int2', codecId: 'pg/int2@1', nullable: false } as const;
-const int4 = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
-const int8 = { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false } as const;
-const float8 = { nativeType: 'float8', codecId: 'pg/float8@1', nullable: false } as const;
-const text = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+const int2 = { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false } as const;
+const int4 = { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
+const int8 = { many: false, nativeType: 'int8', codecId: 'pg/int8@1', nullable: false } as const;
+const float8 = {
+  many: false,
+  nativeType: 'float8',
+  codecId: 'pg/float8@1',
+  nullable: false,
+} as const;
+const text = { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
 const decimal = {
+  many: false,
   nativeType: 'numeric',
   codecId: 'pg/numeric@1',
   nullable: false,
   typeParams: { precision: 65, scale: 30 },
 } as const;
 const unscaledDecimal = {
+  many: false,
   nativeType: 'numeric',
   codecId: 'pg/numeric@1',
   nullable: false,
 } as const;
-const list = { nullable: true, many: true, noCheck: ['elementNotNull'] } as const;
+const list = {
+  nullable: true,
+  many: { elementNullable: false },
+  noCheck: ['elementNotNull'],
+} as const;
 
 const cases: readonly DefaultCase[] = [
   {
@@ -125,6 +136,7 @@ const cases: readonly DefaultCase[] = [
     column: 'negVarchar',
     ddl: '"negVarchar" VARCHAR(10) NOT NULL DEFAULT -1.5',
     type: {
+      many: false,
       nativeType: 'character varying',
       codecId: 'sql/varchar@1',
       nullable: false,

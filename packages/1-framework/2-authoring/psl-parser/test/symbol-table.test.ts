@@ -479,7 +479,7 @@ describe('buildSymbolTable() — resolved field shape', () => {
         '}',
       ].join('\n'),
     );
-    const fields = result.table.topLevel.models['User']?.fields ?? {};
+    const fields = result.symbolTable.topLevel.models['User']?.fields ?? {};
 
     expect(result.diagnostics).toHaveLength(0);
     const axes = (name: string) => ({

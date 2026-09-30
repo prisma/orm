@@ -20,6 +20,7 @@
           "Child": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -27,6 +28,7 @@
                 }
               },
               "string1": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -34,7 +36,9 @@
                 }
               },
               "string2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -79,6 +83,7 @@
           "TestModel": {
             "fields": {
               "childId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -86,6 +91,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -154,7 +160,9 @@
                 },
                 "string2": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -219,7 +227,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "df41a25fa870182090d937b911717f70c3d0ae7efda54b47a718b3727726b641"
+    "storageHash": "e79d2aa00eb274edfc2cffa57465630875a837f40441c5678a639a5c1c9b6500"
   },
   "capabilities": {
     "postgres": {

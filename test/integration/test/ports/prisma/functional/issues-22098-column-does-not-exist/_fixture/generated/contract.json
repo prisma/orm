@@ -16,6 +16,7 @@
           "test": {
             "fields": {
               "TESTE_N_MERICO": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -23,6 +24,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

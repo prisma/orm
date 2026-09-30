@@ -16,6 +16,7 @@
           "T": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -23,6 +24,7 @@
                 }
               },
               "digest": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -30,6 +32,7 @@
                 }
               },
               "escaped": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -37,6 +40,7 @@
                 }
               },
               "expires": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -44,6 +48,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -51,7 +56,9 @@
                 }
               },
               "tags": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -154,7 +161,9 @@
                     "expression": "'{}'::text[]",
                     "kind": "function"
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -171,7 +180,7 @@
         "id": "public"
       }
     },
-    "storageHash": "77dae0dd66764eacc0bca2461727922fbce9c8cb6c39428560033a88e78dcf6f"
+    "storageHash": "a5033988ed83823f67e96704dd9a180788a49efc78a7fe89bbe31fac626c85ba"
   },
   "capabilities": {
     "postgres": {

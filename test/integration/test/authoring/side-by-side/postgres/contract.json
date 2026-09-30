@@ -20,6 +20,7 @@
           "Post": {
             "fields": {
               "authorId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -27,6 +28,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -34,6 +36,7 @@
                 }
               },
               "publishedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -41,6 +44,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -88,6 +92,7 @@
           "User": {
             "fields": {
               "bio": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -95,6 +100,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -102,6 +108,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -109,6 +116,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

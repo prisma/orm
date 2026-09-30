@@ -24,6 +24,7 @@
           "ProfileOneToOne": {
             "fields": {
               "enabled": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -31,6 +32,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -38,6 +40,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -82,6 +85,7 @@
           "ProfileOptionalOneToOne": {
             "fields": {
               "enabled": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -89,6 +93,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -96,6 +101,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -140,6 +146,7 @@
           "UserOneToOne": {
             "fields": {
               "enabled": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -147,6 +154,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

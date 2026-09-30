@@ -22,6 +22,7 @@ const identityDeserialize = (json: Record<string, unknown>): Contract =>
 const sqlPreserveEmptyPatterns = [
   ['storage', 'namespaces', '*', 'entries', 'table'],
   ['storage', 'namespaces', '*', 'entries', 'table', '*'],
+  ['storage', 'namespaces', '*', 'entries', 'table', '*', 'columns', '*', 'many'],
   ['storage', 'namespaces', '*', 'entries', 'table', '*', ['uniques', 'indexes', 'foreignKeys']],
   ['storage', 'namespaces', '*', 'entries', 'table', '*', 'foreignKeys', ['constraint', 'index']],
 ] as const satisfies readonly PathPattern[];

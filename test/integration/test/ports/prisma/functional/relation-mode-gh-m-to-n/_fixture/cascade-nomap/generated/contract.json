@@ -24,6 +24,7 @@
           "CategoriesOnPostsManyToMany": {
             "fields": {
               "categoryId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -31,6 +32,7 @@
                 }
               },
               "postId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -88,6 +90,7 @@
           "CategoryManyToMany": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -95,6 +98,7 @@
                 }
               },
               "published": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -135,6 +139,7 @@
           "PostManyToMany": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -142,6 +147,7 @@
                 }
               },
               "published": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",

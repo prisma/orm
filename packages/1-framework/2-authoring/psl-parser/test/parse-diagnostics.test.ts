@@ -311,7 +311,9 @@ describe('parse() syntactic diagnostics', () => {
     expect(message).toBe(
       'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
     );
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       types {
         Foo = Bar??
@@ -328,7 +330,9 @@ describe('parse() syntactic diagnostics', () => {
     expect(message).toBe(
       'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
     );
-    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic.range),
+    ).toMatchInlineSnapshot(`
       "
       model M {
         x Bar??

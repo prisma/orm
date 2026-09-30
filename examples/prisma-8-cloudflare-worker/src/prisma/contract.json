@@ -43,6 +43,7 @@
             },
             "fields": {
               "severity": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -50,6 +51,7 @@
                 }
               },
               "stepsToRepro": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -78,6 +80,7 @@
             },
             "fields": {
               "priority": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -85,6 +88,7 @@
                 }
               },
               "targetRelease": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -109,6 +113,7 @@
           "Post": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -116,6 +121,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -123,6 +129,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -130,6 +137,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -180,6 +188,7 @@
             },
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -187,6 +196,7 @@
                 }
               },
               "description": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -194,6 +204,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -201,6 +212,7 @@
                 }
               },
               "status": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -208,6 +220,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -215,6 +228,7 @@
                 }
               },
               "type": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -222,6 +236,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -286,6 +301,7 @@
           "User": {
             "fields": {
               "address": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "kind": "valueObject",
@@ -293,6 +309,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -300,6 +317,7 @@
                 }
               },
               "displayName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -307,6 +325,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -314,6 +333,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -321,6 +341,7 @@
                 }
               },
               "kind": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -396,6 +417,7 @@
           "Address": {
             "fields": {
               "city": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -403,6 +425,7 @@
                 }
               },
               "country": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -410,6 +433,7 @@
                 }
               },
               "street": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -417,6 +441,7 @@
                 }
               },
               "zip": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",

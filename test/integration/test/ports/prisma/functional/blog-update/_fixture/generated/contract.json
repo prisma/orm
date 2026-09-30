@@ -24,6 +24,7 @@
           "Post": {
             "fields": {
               "authorId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -31,6 +32,7 @@
                 }
               },
               "content": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -38,6 +40,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -45,6 +48,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -52,6 +56,7 @@
                 }
               },
               "lastPublishedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -59,6 +64,7 @@
                 }
               },
               "lastReviewedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -66,6 +72,7 @@
                 }
               },
               "optional": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -73,6 +80,7 @@
                 }
               },
               "published": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -80,6 +88,7 @@
                 }
               },
               "title": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -87,6 +96,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -152,6 +162,7 @@
           "Profile": {
             "fields": {
               "bio": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -159,6 +170,7 @@
                 }
               },
               "goesToBedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -166,6 +178,7 @@
                 }
               },
               "goesToOfficeAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -173,6 +186,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -180,6 +194,7 @@
                 }
               },
               "notrequired": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -187,6 +202,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -240,6 +256,7 @@
           "User": {
             "fields": {
               "email": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -247,6 +264,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -254,6 +272,7 @@
                 }
               },
               "lastLoginAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -261,6 +280,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -268,6 +288,7 @@
                 }
               },
               "wakesUpAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",

@@ -678,7 +678,7 @@ function resolveFieldType(
     );
     return undefined;
   };
-  const many = field.list ? { many: true as const } : {};
+  const many = { many: field.list ? { elementNullable: false } : (false as const) };
   if (ctx.compositeTypeNames.has(field.typeName)) {
     if (nativeType !== undefined) return nativeTypeUnsupported(nativeType);
     return {

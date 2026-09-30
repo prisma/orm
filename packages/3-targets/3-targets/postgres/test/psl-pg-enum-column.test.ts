@@ -218,7 +218,7 @@ namespace auth {
         entityName: 'AalLevel',
       },
     });
-    expect(aalsColumn?.many).toBe(true);
+    expect(aalsColumn?.many).toEqual({ elementNullable: false });
   });
 
   it('keeps typeParams.typeName on a pg.enum(E)[] domain field, like the single field', () => {

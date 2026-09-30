@@ -7,7 +7,6 @@ import {
   type StorageHashBase,
 } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
-import { enumType } from '@internal/mongo-contract-ts/contract-builder';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -17,6 +16,7 @@ import {
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
+import { enumType } from '@internal/mongo-contract-ts/contract-builder';
 import { buildSymbolTable, jsonValue, mapBlock, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
@@ -39,16 +39,6 @@ function buildSymbolTableInput(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
-    pslBlockDescriptors: {
-      enum: {
-        kind: 'pslBlock',
-        keyword: 'enum',
-        discriminator: 'enum',
-        name: { required: true },
-        parameters: {},
-        variadicParameters: true,
-      },
-    },
   });
   return { documents: [document], symbolTable, sources };
 }
@@ -2281,13 +2271,28 @@ model Item {
               enum: {
                 kind: 'entity',
                 discriminator: 'enum',
-                output: { factory: () => enumType('Role', { codecId: 'mongo/string@1', nativeType: 'string' }, { name: 'User', value: 'user' }, { name: 'Admin', value: 'admin' }) },
+                output: {
+                  factory: () =>
+                    enumType(
+                      'Role',
+                      { codecId: 'mongo/string@1', nativeType: 'string' },
+                      { name: 'User', value: 'user' },
+                      { name: 'Admin', value: 'admin' },
+                    ),
+                },
               },
             },
             pslBlockDescriptors: {
               enum: {
-                kind: 'pslBlock', keyword: 'enum', discriminator: 'enum', name: { required: true },
-                spec: () => mapBlock({ value: { type: jsonValue(), documentation: 'The member value.' }, allowBare: true }),
+                kind: 'pslBlock',
+                keyword: 'enum',
+                discriminator: 'enum',
+                name: { required: true },
+                spec: () =>
+                  mapBlock({
+                    value: { type: jsonValue(), documentation: 'The member value.' },
+                    allowBare: true,
+                  }),
               },
             },
             modelAttributes: {},
@@ -2318,7 +2323,7 @@ model Item {
           },
         },
       });
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       expect(validator!['jsonSchema']).toEqual({
         bsonType: 'object',
         required: ['_id', 'roles'],

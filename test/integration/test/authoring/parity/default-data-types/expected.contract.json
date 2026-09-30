@@ -16,6 +16,7 @@
           "T": {
             "fields": {
               "active": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -23,6 +24,7 @@
                 }
               },
               "count": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -30,7 +32,9 @@
                 }
               },
               "docs": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -38,6 +42,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -45,6 +50,7 @@
                 }
               },
               "meta": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -52,6 +58,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -59,6 +66,7 @@
                 }
               },
               "price": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/numeric@1",
@@ -70,6 +78,7 @@
                 }
               },
               "ratio": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -77,7 +86,9 @@
                 }
               },
               "scores": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -85,6 +96,7 @@
                 }
               },
               "small": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int2@1",
@@ -177,7 +189,9 @@
                     "kind": "literal",
                     "value": [{}, []]
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "jsonb",
                   "nullable": false
                 },
@@ -239,7 +253,9 @@
                     "kind": "literal",
                     "value": [1, 2]
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int4",
                   "nullable": false
                 },
@@ -265,7 +281,7 @@
         "id": "public"
       }
     },
-    "storageHash": "c91c217ab456dda315f745cf463fbb656b2af3bc48d42ea9ee3aba401f74c34e"
+    "storageHash": "c300acb75b1babdede2e14075f92d8e912e571f8f68acd581330e98cf155640d"
   },
   "capabilities": {
     "postgres": {

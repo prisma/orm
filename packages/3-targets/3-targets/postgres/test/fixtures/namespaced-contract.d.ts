@@ -133,12 +133,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly users: {
               columns: {
-                readonly id: {
+                readonly id: { readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly token: {
+                readonly token: { readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -159,12 +159,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly profile: {
               columns: {
-                readonly id: {
+                readonly id: { readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly user_id: {
+                readonly user_id: { readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -197,12 +197,12 @@ type ContractBase = Omit<
             };
             readonly users: {
               columns: {
-                readonly id: {
+                readonly id: { readonly many: false;
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly email: {
+                readonly email: { readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -234,11 +234,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly User: {
             readonly fields: {
-              readonly id: {
+              readonly id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly token: {
+              readonly token: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -259,11 +259,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly Profile: {
             readonly fields: {
-              readonly id: {
+              readonly id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly userId: {
+              readonly userId: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -290,11 +290,11 @@ type ContractBase = Omit<
           };
           readonly User: {
             readonly fields: {
-              readonly id: {
+              readonly id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly email: {
+              readonly email: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };

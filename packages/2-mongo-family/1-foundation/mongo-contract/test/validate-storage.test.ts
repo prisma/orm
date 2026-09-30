@@ -237,7 +237,10 @@ describe('validateMongoStorage()', () => {
   });
 
   describe('to-one relation nullability against fields', () => {
-    const objectId = { type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' } };
+    const objectId = {
+      many: false as const,
+      type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
+    };
     function toOneContract(input: {
       readonly nullable: boolean | undefined;
       readonly authorIdNullable: boolean;

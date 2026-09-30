@@ -20,6 +20,7 @@
           "A": {
             "fields": {
               "b_id": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -27,6 +28,7 @@
                 }
               },
               "float": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -34,6 +36,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -41,6 +44,7 @@
                 }
               },
               "int": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -48,6 +52,7 @@
                 }
               },
               "string": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -98,6 +103,7 @@
           "B": {
             "fields": {
               "field": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -105,6 +111,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

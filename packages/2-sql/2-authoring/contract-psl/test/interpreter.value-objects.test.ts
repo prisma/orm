@@ -212,7 +212,7 @@ model User {
     const table = entityAt<StorageTable>(result.value.storage, {
       namespaceId: 'public',
       entityKind: 'table',
-      entityName: 'user',
+      entityName: 'User',
     });
 
     expect({
@@ -306,7 +306,7 @@ model User {
     const table = entityAt<StorageTable>(result.value.storage, {
       namespaceId: 'public',
       entityKind: 'table',
-      entityName: 'user',
+      entityName: 'User',
     });
     const addressesColumn = table?.columns['addresses'];
 

@@ -23,12 +23,16 @@ describe('postgresRenderCheckExpressions', () => {
 
   it('compares numeric arrays with both operands cast to numeric[]', () => {
     expect(
-      postgresRenderCheckExpressions({ ...base, many: true, memberValues: [1, 2.5, -3] }),
+      postgresRenderCheckExpressions({
+        ...base,
+        many: { elementNullable: false },
+        memberValues: [1, 2.5, -3],
+      }),
     ).toEqual([
       {
         kind: 'membership',
         columnName: 'role',
-        expression: '"role"::numeric[] <@ ARRAY[1, 2.5, -3]::numeric[]',
+        expression: 'array_remove("role"::numeric[], NULL) <@ ARRAY[1, 2.5, -3]::numeric[]',
       },
       {
         kind: 'elementNotNull',
@@ -41,7 +45,7 @@ describe('postgresRenderCheckExpressions', () => {
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'rejects non-finite numeric member %s',
     (value) => {
-      for (const many of [false, true]) {
+      for (const many of [false, { elementNullable: false }] as const) {
         expect(() =>
           postgresRenderCheckExpressions({ ...base, many, memberValues: [1, value] }),
         ).toThrow(/non-finite numeric member/);

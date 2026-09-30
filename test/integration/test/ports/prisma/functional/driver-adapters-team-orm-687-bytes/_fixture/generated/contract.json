@@ -16,6 +16,7 @@
           "A": {
             "fields": {
               "bytes": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -23,6 +24,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

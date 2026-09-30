@@ -16,6 +16,7 @@
           "FeatureFlag": {
             "fields": {
               "enabled": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -23,6 +24,7 @@
                 }
               },
               "key": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

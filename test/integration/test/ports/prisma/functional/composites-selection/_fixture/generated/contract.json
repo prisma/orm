@@ -16,6 +16,7 @@
           "User": {
             "fields": {
               "_id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -23,6 +24,7 @@
                 }
               },
               "profile": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -40,6 +42,7 @@
           "Name": {
             "fields": {
               "firstName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -47,6 +50,7 @@
                 }
               },
               "lastName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -58,6 +62,7 @@
           "Profile": {
             "fields": {
               "alternateName": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "kind": "valueObject",
@@ -65,7 +70,9 @@
                 }
               },
               "favoriteThings": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -73,6 +80,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -80,6 +88,7 @@
                 }
               },
               "url": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -91,6 +100,7 @@
           "Thing": {
             "fields": {
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

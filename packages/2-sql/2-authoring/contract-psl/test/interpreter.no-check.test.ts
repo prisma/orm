@@ -182,7 +182,7 @@ model Post {
     expect(pslResult.ok).toBe(true);
     if (!pslResult.ok) return;
     const ns = (pslResult.value.storage as unknown as SqlStorage).namespaces['public'];
-    const postTable = ns !== undefined ? ns.entries.table?.['post'] : undefined;
+    const postTable = ns !== undefined ? ns.entries.table?.['Post'] : undefined;
     expect(postTable?.columns['roles']).toMatchObject({
       many: { elementNullable: true },
       noCheck: ['membership'],

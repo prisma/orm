@@ -16,6 +16,7 @@
           "Item": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -23,7 +24,9 @@
                 }
               },
               "scores": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -31,7 +34,9 @@
                 }
               },
               "tags": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -86,13 +91,17 @@
                 },
                 "scores": {
                   "codecId": "pg/int4@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int4",
                   "nullable": false
                 },
                 "tags": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -112,7 +121,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "563f9e0b2a9d656e14bd2909f2f5864b160744a27b6922a2a3f10bf6df7abec8"
+    "storageHash": "1c21dc0d98410f6cfab112c38a036650da24f5cdf476216e3347966e68ee848b"
   },
   "capabilities": {
     "postgres": {

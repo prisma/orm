@@ -659,12 +659,8 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames()).toEqual([...declaredCheckNames(contract)]);
     await driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('a', ARRAY['user',NULL])`);
     expect(
-      (
-        await driver!.query<{ roles: Array<string | null> }>(
-          `SELECT roles FROM "Item" WHERE id = 'a'`,
-        )
-      ).rows,
-    ).toEqual([{ roles: ['user', null] }]);
+      (await driver!.query<{ roles: string }>(`SELECT roles FROM "Item" WHERE id = 'a'`)).rows,
+    ).toEqual([{ roles: '{user,NULL}' }]);
 
     const membershipName = checks[0]?.name;
     assertDefined(membershipName, 'membership check must be named');
@@ -893,11 +889,11 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(
       (
         await driver!.query<{
-          nullableTags: Array<string | null>;
-          transitioningTags: Array<string | null>;
+          nullableTags: string;
+          transitioningTags: string;
         }>(`SELECT "nullableTags", "transitioningTags" FROM "Item" WHERE id = 'a'`)
       ).rows,
-    ).toEqual([{ nullableTags: ['nullable', null], transitioningTags: ['transitioning', null] }]);
+    ).toEqual([{ nullableTags: '{nullable,NULL}', transitioningTags: '{transitioning,NULL}' }]);
     await expect(
       driver!.query(
         `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('b', ARRAY['strict',NULL], ARRAY['nullable'], ARRAY['transitioning'])`,

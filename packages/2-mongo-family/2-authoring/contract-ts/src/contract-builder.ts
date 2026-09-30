@@ -1240,7 +1240,13 @@ function createFieldBuilder<
   enumHandle?: Handle,
   executionDefaults?: ExecutionDefaults,
 ): FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults> {
-  function many(): FieldBuilder<Type, Nullable, { readonly elementNullable: false }, Handle, ExecutionDefaults>;
+  function many(): FieldBuilder<
+    Type,
+    Nullable,
+    { readonly elementNullable: false },
+    Handle,
+    ExecutionDefaults
+  >;
   function many(options: {
     readonly elementsNullable: false;
   }): FieldBuilder<Type, Nullable, { readonly elementNullable: false }, Handle, ExecutionDefaults>;

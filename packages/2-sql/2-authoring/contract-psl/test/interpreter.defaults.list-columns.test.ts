@@ -4,6 +4,7 @@ import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresTarget,
@@ -12,6 +13,7 @@ import {
 
 const baseInput = {
   target: postgresTarget,
+  codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: {
     type: postgresScalarAuthoringTypes,
@@ -56,16 +58,36 @@ describe('interpretPslDocumentToSqlContract list-column defaults', () => {
   ])('lowers %s defaults %s through the typed literal pipeline', (type, literal, value) => {
     const result = interpretPslDocumentToSqlContract({
       ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema: `model Post {\n id Int @id\n tags ${type} @default(${literal})\n}`, sourceId: 'schema.prisma' }),
+      ...symbolTableInputFromParseArgs({
+        schema: `model Post {\n id Int @id\n tags ${type} @default(${literal})\n}`,
+        sourceId: 'schema.prisma',
+      }),
       controlMutationDefaults: builtinControlMutationDefaults,
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.storage).toMatchObject({ namespaces: { public: { entries: { table: { Post: { columns: { tags: { many: { elementNullable: true }, default: { kind: 'literal', value } } } } } } } } });
+    expect(result.value.storage).toMatchObject({
+      namespaces: {
+        public: {
+          entries: {
+            table: {
+              Post: {
+                columns: {
+                  tags: { many: { elementNullable: true }, default: { kind: 'literal', value } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
   });
 
   it('rejects null elements on strict lists despite a nullable container', () => {
-    expectDiagnosticForSchema('model Post {\n id Int @id\n tags String[]? @default(["alpha", null])\n}', { code: 'PSL_INVALID_DEFAULT_APPLICABILITY' });
+    expectDiagnosticForSchema(
+      'model Post {\n id Int @id\n tags String[]? @default(["alpha", null])\n}',
+      { code: 'PSL_INVALID_DEFAULT_APPLICABILITY' },
+    );
   });
 
   it('refuses autoincrement() on a list field, and only that storage function', () => {

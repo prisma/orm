@@ -16,6 +16,7 @@
           "Post": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -23,7 +24,9 @@
                 }
               },
               "words": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -70,7 +73,9 @@
                 },
                 "words": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -90,7 +95,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "db84b109afa8ccab6e32a70f2053101f12a232891c52d445f5f023a3d237e195"
+    "storageHash": "5c0baa131866139cb38390f049f646699217645d3248a1d38fb50144a8348aee"
   },
   "execution": {
     "executionHash": "d37d6cdcd69355911c95feb313e24897fe99136ac9e816c500b26e18f71a8d57",

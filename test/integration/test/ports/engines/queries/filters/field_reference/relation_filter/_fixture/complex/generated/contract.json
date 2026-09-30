@@ -24,6 +24,7 @@
           "OneToMany": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -31,6 +32,7 @@
                 }
               },
               "testId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -38,6 +40,7 @@
                 }
               },
               "toOneId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -98,6 +101,7 @@
           "TestModel": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -135,6 +139,7 @@
           "ToOne": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -142,6 +147,7 @@
                 }
               },
               "string1": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -149,6 +155,7 @@
                 }
               },
               "string2": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

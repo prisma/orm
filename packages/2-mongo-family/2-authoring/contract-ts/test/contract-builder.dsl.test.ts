@@ -422,12 +422,20 @@ describe('mongo contract builder', () => {
       meta: fields?.['meta'],
       raw: fields?.['raw'],
     }).toEqual({
-      views: { type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
+      views: { many: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
       hits: { type: { kind: 'scalar', codecId: 'mongo/int64Number@1' }, nullable: false },
-      price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' }, nullable: false },
-      thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' }, nullable: false },
-      meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
-      raw: { type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
+      price: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },
+        nullable: false,
+      },
+      thumbnail: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/binary@1' },
+        nullable: false,
+      },
+      meta: { many: false, type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
+      raw: { many: false, type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
     });
   });
 

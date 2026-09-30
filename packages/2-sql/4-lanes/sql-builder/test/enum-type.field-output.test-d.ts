@@ -72,8 +72,18 @@ type EnumStorage = {
         readonly table: {
           readonly User: {
             columns: {
-              readonly role: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              readonly status: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: true };
+              readonly role: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              readonly status: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: true;
+              };
             };
             primaryKey: { columns: ['role'] };
             uniques: readonly [];
@@ -97,10 +107,12 @@ type EnumModels = {
     };
     fields: {
       role: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: false;
       };
       status: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
         readonly nullable: true;
       };

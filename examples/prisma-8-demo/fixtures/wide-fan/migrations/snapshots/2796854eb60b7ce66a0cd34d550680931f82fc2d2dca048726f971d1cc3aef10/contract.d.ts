@@ -75,18 +75,18 @@ type ContractBase = Omit<
           readonly tables: {
             readonly user: {
               columns: {
-                readonly id: {
+                readonly id: { readonly many: false;
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly email: {
+                readonly email: { readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly category: {
+                readonly category: { readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
@@ -105,7 +105,7 @@ type ContractBase = Omit<
     {
       readonly user: {
         readonly fields: {
-          readonly id: {
+          readonly id: { readonly many: false;
             readonly nullable: false;
             readonly type: {
               readonly kind: 'scalar';
@@ -113,11 +113,11 @@ type ContractBase = Omit<
               readonly typeParams: { readonly length: 36 };
             };
           };
-          readonly email: {
+          readonly email: { readonly many: false;
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
-          readonly category: {
+          readonly category: { readonly many: false;
             readonly nullable: true;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
@@ -147,7 +147,7 @@ type ContractBase = Omit<
         readonly models: {
           readonly user: {
             readonly fields: {
-              readonly id: {
+              readonly id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: {
                   readonly kind: 'scalar';
@@ -155,11 +155,11 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly length: 36 };
                 };
               };
-              readonly email: {
+              readonly email: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly category: {
+              readonly category: { readonly many: false;
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };

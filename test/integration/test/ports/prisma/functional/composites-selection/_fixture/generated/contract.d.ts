@@ -166,10 +166,12 @@ type ContractBase = Omit<
               readonly _id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
+                readonly many: false;
               };
               readonly profile: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Profile' };
+                readonly many: false;
               };
             };
             readonly relations: Record<string, never>;
@@ -182,10 +184,12 @@ type ContractBase = Omit<
               readonly firstName: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                readonly many: false;
               };
               readonly lastName: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                readonly many: false;
               };
             };
           };
@@ -194,19 +198,22 @@ type ContractBase = Omit<
               readonly alternateName: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
+                readonly many: false;
               };
               readonly favoriteThings: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
+                readonly many: false;
               };
               readonly url: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                readonly many: false;
               };
             };
           };
@@ -215,6 +222,7 @@ type ContractBase = Omit<
               readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+                readonly many: false;
               };
             };
           };
@@ -231,10 +239,12 @@ type ContractBase = Omit<
         readonly firstName: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+          readonly many: false;
         };
         readonly lastName: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+          readonly many: false;
         };
       };
     };
@@ -243,19 +253,22 @@ type ContractBase = Omit<
         readonly alternateName: {
           readonly nullable: true;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
+          readonly many: false;
         };
         readonly favoriteThings: {
           readonly nullable: false;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
-          readonly many: true;
+          readonly many: { readonly elementNullable: false };
         };
         readonly name: {
           readonly nullable: false;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
+          readonly many: false;
         };
         readonly url: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+          readonly many: false;
         };
       };
     };
@@ -264,6 +277,7 @@ type ContractBase = Omit<
         readonly name: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+          readonly many: false;
         };
       };
     };

@@ -13,6 +13,7 @@ type CreateInputStorage = {
           user: {
             columns: {
               id: {
+                readonly many: false;
                 nativeType: 'int4';
                 codecId: 'pg/int4@1';
                 nullable: false;
@@ -21,10 +22,26 @@ type CreateInputStorage = {
                   expression: "nextval('user_id_seq'::regclass)";
                 };
               };
-              email: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: true };
-              slug: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
+              email: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
+              name: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: true;
+              };
+              slug: {
+                readonly many: false;
+                nativeType: 'text';
+                codecId: 'pg/text@1';
+                nullable: false;
+              };
               created_at: {
+                readonly many: false;
                 nativeType: 'timestamptz';
                 codecId: 'pg/text@1';
                 nullable: false;
@@ -58,11 +75,27 @@ type CreateInputModels = {
       };
     };
     fields: {
-      id: { type: { kind: 'scalar'; codecId: 'pg/int4@1' }; nullable: false };
-      email: { type: { kind: 'scalar'; codecId: 'pg/text@1' }; nullable: false };
-      name: { type: { kind: 'scalar'; codecId: 'pg/text@1' }; nullable: true };
-      slug: { type: { kind: 'scalar'; codecId: 'pg/text@1' }; nullable: false };
-      createdAt: { type: { kind: 'scalar'; codecId: 'pg/text@1' }; nullable: false };
+      id: { readonly many: false; type: { kind: 'scalar'; codecId: 'pg/int4@1' }; nullable: false };
+      email: {
+        readonly many: false;
+        type: { kind: 'scalar'; codecId: 'pg/text@1' };
+        nullable: false;
+      };
+      name: {
+        readonly many: false;
+        type: { kind: 'scalar'; codecId: 'pg/text@1' };
+        nullable: true;
+      };
+      slug: {
+        readonly many: false;
+        type: { kind: 'scalar'; codecId: 'pg/text@1' };
+        nullable: false;
+      };
+      createdAt: {
+        readonly many: false;
+        type: { kind: 'scalar'; codecId: 'pg/text@1' };
+        nullable: false;
+      };
     };
     relations: Record<string, never>;
   };

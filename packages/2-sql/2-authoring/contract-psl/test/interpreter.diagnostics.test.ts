@@ -1545,7 +1545,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['title']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['title']).toMatchObject({
       nullable: true,
       default: { kind: 'literal', value: null },
     });
@@ -1584,7 +1584,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       many: { elementNullable: true },
       default: { kind: 'literal', value: ['a', null] },
     });
@@ -1610,7 +1610,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toEqual({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toEqual({
       nativeType: 'text',
       codecId: 'pg/text@1',
       nullable: false,

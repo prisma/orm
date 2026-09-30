@@ -251,7 +251,9 @@ const mapFieldSpec = fieldAttribute('map', {
 type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral | null;
 
 function nullLiteral(): ArgType<null, AttributeCtx> {
-  const nullIdentifier = identifier('null');
+  const nullIdentifier = identifier('null', {
+    documentation: 'A null list element or nullable scalar default.',
+  });
   return {
     kind: 'null',
     label: 'null',
@@ -307,7 +309,7 @@ function defaultValueArm(
   ],
   registry: ControlDefaultRegistries['defaultFunctionRegistry'],
 ) {
-  const value = oneOf(...arms);
+  const value = arms.length === 1 && arms[0].kind === 'list' ? arms[0] : oneOf(...arms);
   return {
     ...value,
     parse: (arg: Parameters<typeof value.parse>[0], ctx: AttributeCtx) =>

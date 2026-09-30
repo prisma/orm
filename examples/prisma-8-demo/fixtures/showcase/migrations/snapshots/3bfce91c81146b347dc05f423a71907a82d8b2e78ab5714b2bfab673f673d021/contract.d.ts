@@ -69,13 +69,13 @@ type ContractBase = Omit<
           readonly tables: {
             readonly account: {
               columns: {
-                readonly id: {
+                readonly id: { readonly many: false;
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
-                readonly email: {
+                readonly email: { readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -94,7 +94,7 @@ type ContractBase = Omit<
     {
       readonly account: {
         readonly fields: {
-          readonly id: {
+          readonly id: { readonly many: false;
             readonly nullable: false;
             readonly type: {
               readonly kind: 'scalar';
@@ -102,7 +102,7 @@ type ContractBase = Omit<
               readonly typeParams: { readonly length: 36 };
             };
           };
-          readonly email: {
+          readonly email: { readonly many: false;
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
           };
@@ -134,15 +134,15 @@ type ContractBase = Omit<
         readonly models: {
           readonly EqlV2Configuration: {
             readonly fields: {
-              readonly id: {
+              readonly id: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly state: {
+              readonly state: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly data: {
+              readonly data: { readonly many: false;
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
               };

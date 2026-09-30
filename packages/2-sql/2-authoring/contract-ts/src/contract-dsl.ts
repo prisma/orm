@@ -178,17 +178,19 @@ type DefaultInputOf<State> = State extends { readonly descriptor?: infer Descrip
     : unknown
   : unknown;
 
-type IsList<State> = State extends { readonly many?: infer Many }
-  ? true extends Many
-    ? true
-    : false
+type IsList<State> = State extends { readonly many: { readonly elementNullable: boolean } }
+  ? true
   : false;
+
+type NullElementOf<State> = State extends { readonly many: { readonly elementNullable: true } }
+  ? null
+  : never;
 
 type DefaultLiteralOf<State> =
   unknown extends DefaultInputOf<State>
     ? unknown
     : IsList<State> extends true
-      ? readonly DefaultInputOf<State>[]
+      ? readonly (DefaultInputOf<State> | NullElementOf<State>)[]
       : DefaultInputOf<State>;
 
 type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
@@ -197,11 +199,13 @@ type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
     : Extract<TypeRef, EnumTypeHandle>
   : never;
 
-type DefaultArgumentOf<State> = [EnumHandleOf<State>] extends [never]
-  ? DefaultLiteralOf<State> | ColumnDefault
-  : IsList<State> extends true
-    ? readonly EnumHandleOf<State>['values'][number][]
-    : EnumHandleOf<State>['values'][number];
+type DefaultArgumentOf<State> =
+  | ([EnumHandleOf<State>] extends [never]
+      ? DefaultLiteralOf<State> | ColumnDefault
+      : IsList<State> extends true
+        ? readonly (EnumHandleOf<State>['values'][number] | NullElementOf<State>)[]
+        : EnumHandleOf<State>['values'][number])
+  | (State extends { readonly nullable: true } ? null : never);
 
 function toColumnDefault(value: unknown): AuthoredColumnDefault {
   if (isColumnDefault(value)) {

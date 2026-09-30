@@ -65,7 +65,7 @@ describe('emitter', () => {
   );
 
   it('refuses a same-space to-one relation that does not state whether it is nullable', async () => {
-    const int = { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false };
+    const int = { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false };
     const column = { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false };
     const ir = createTestContract({
       models: {
@@ -191,7 +191,9 @@ describe('emitter', () => {
       models: {
         User: {
           storage: { namespaceId: '__unbound__', table: 'user', fields: { id: { column: 'id' } } },
-          fields: { id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false } },
+          fields: {
+            id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+          },
           relations: {},
         },
       },

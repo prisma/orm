@@ -16,6 +16,7 @@
           "User": {
             "fields": {
               "firstName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -23,6 +24,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -30,6 +32,7 @@
                 }
               },
               "lastName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

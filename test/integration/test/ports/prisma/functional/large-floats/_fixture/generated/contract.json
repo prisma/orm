@@ -16,6 +16,7 @@
           "Floats": {
             "fields": {
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -23,6 +24,7 @@
                 }
               },
               "value": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",

@@ -144,6 +144,7 @@
           "AuditLogEntries": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -151,6 +152,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -158,6 +160,7 @@
                 }
               },
               "instanceId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -165,6 +168,7 @@
                 }
               },
               "ipAddress": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -175,6 +179,7 @@
                 }
               },
               "payload": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/json@1",
@@ -208,6 +213,7 @@
           "AuthIdentity": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -215,6 +221,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -222,6 +229,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -229,6 +237,7 @@
                 }
               },
               "identityData": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -236,6 +245,7 @@
                 }
               },
               "lastSignInAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -243,6 +253,7 @@
                 }
               },
               "provider": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -250,6 +261,7 @@
                 }
               },
               "providerId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -257,6 +269,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -264,6 +277,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -326,6 +340,7 @@
           "AuthSession": {
             "fields": {
               "aal": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -336,6 +351,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -343,6 +359,7 @@
                 }
               },
               "factorId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -350,6 +367,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -357,6 +375,7 @@
                 }
               },
               "ip": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/inet@1",
@@ -364,6 +383,7 @@
                 }
               },
               "notAfter": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -371,6 +391,7 @@
                 }
               },
               "oauthClientId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -378,6 +399,7 @@
                 }
               },
               "refreshTokenCounter": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -385,6 +407,7 @@
                 }
               },
               "refreshTokenHmacKey": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -392,6 +415,7 @@
                 }
               },
               "refreshedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -399,6 +423,7 @@
                 }
               },
               "scopes": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -406,6 +431,7 @@
                 }
               },
               "tag": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -413,6 +439,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -420,6 +447,7 @@
                 }
               },
               "userAgent": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -427,6 +455,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -553,6 +582,7 @@
           "AuthUser": {
             "fields": {
               "aud": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -563,6 +593,7 @@
                 }
               },
               "bannedUntil": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -570,6 +601,7 @@
                 }
               },
               "confirmationSentAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -577,6 +609,7 @@
                 }
               },
               "confirmationToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -587,6 +620,7 @@
                 }
               },
               "confirmedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -594,6 +628,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -601,6 +636,7 @@
                 }
               },
               "deletedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -608,6 +644,7 @@
                 }
               },
               "email": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -618,6 +655,7 @@
                 }
               },
               "emailChange": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -628,6 +666,7 @@
                 }
               },
               "emailChangeConfirmStatus": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int2@1",
@@ -635,6 +674,7 @@
                 }
               },
               "emailChangeSentAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -642,6 +682,7 @@
                 }
               },
               "emailChangeTokenCurrent": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -652,6 +693,7 @@
                 }
               },
               "emailChangeTokenNew": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -662,6 +704,7 @@
                 }
               },
               "emailConfirmedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -669,6 +712,7 @@
                 }
               },
               "encryptedPassword": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -679,6 +723,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -686,6 +731,7 @@
                 }
               },
               "instanceId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -693,6 +739,7 @@
                 }
               },
               "invitedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -700,6 +747,7 @@
                 }
               },
               "isAnonymous": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -707,6 +755,7 @@
                 }
               },
               "isSsoUser": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -714,6 +763,7 @@
                 }
               },
               "isSuperAdmin": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -721,6 +771,7 @@
                 }
               },
               "lastSignInAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -728,6 +779,7 @@
                 }
               },
               "phone": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -735,6 +787,7 @@
                 }
               },
               "phoneChange": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -742,6 +795,7 @@
                 }
               },
               "phoneChangeSentAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -749,6 +803,7 @@
                 }
               },
               "phoneChangeToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -759,6 +814,7 @@
                 }
               },
               "phoneConfirmedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -766,6 +822,7 @@
                 }
               },
               "rawAppMetaData": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -773,6 +830,7 @@
                 }
               },
               "rawUserMetaData": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -780,6 +838,7 @@
                 }
               },
               "reauthenticationSentAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -787,6 +846,7 @@
                 }
               },
               "reauthenticationToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -797,6 +857,7 @@
                 }
               },
               "recoverySentAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -804,6 +865,7 @@
                 }
               },
               "recoveryToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -814,6 +876,7 @@
                 }
               },
               "role": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -824,6 +887,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1068,7 +1132,9 @@
           "CustomOauthProviders": {
             "fields": {
               "acceptableClientIds": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1076,6 +1142,7 @@
                 }
               },
               "attributeMapping": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -1083,6 +1150,7 @@
                 }
               },
               "authorizationParams": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -1090,6 +1158,7 @@
                 }
               },
               "authorizationUrl": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1097,6 +1166,7 @@
                 }
               },
               "cachedDiscovery": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -1104,6 +1174,7 @@
                 }
               },
               "clientId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1111,6 +1182,7 @@
                 }
               },
               "clientSecret": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1118,6 +1190,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1125,6 +1198,7 @@
                 }
               },
               "discoveryCachedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1132,6 +1206,7 @@
                 }
               },
               "discoveryUrl": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1139,6 +1214,7 @@
                 }
               },
               "emailOptional": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -1146,6 +1222,7 @@
                 }
               },
               "enabled": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -1153,6 +1230,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1160,6 +1238,7 @@
                 }
               },
               "identifier": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1167,6 +1246,7 @@
                 }
               },
               "issuer": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1174,6 +1254,7 @@
                 }
               },
               "jwksUri": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1181,6 +1262,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1188,6 +1270,7 @@
                 }
               },
               "pkceEnabled": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -1195,6 +1278,7 @@
                 }
               },
               "providerType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1202,7 +1286,9 @@
                 }
               },
               "scopes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1210,6 +1296,7 @@
                 }
               },
               "skipNonceCheck": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -1217,6 +1304,7 @@
                 }
               },
               "tokenUrl": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1224,6 +1312,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1231,6 +1320,7 @@
                 }
               },
               "userinfoUrl": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1321,6 +1411,7 @@
           "FlowState": {
             "fields": {
               "authCode": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1328,6 +1419,7 @@
                 }
               },
               "authCodeIssuedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1335,6 +1427,7 @@
                 }
               },
               "authenticationMethod": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1342,6 +1435,7 @@
                 }
               },
               "codeChallenge": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1349,6 +1443,7 @@
                 }
               },
               "codeChallengeMethod": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -1359,6 +1454,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1366,6 +1462,7 @@
                 }
               },
               "emailOptional": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -1373,6 +1470,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1380,6 +1478,7 @@
                 }
               },
               "inviteToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1387,6 +1486,7 @@
                 }
               },
               "linkingTargetId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1394,6 +1494,7 @@
                 }
               },
               "oauthClientStateId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1401,6 +1502,7 @@
                 }
               },
               "providerAccessToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1408,6 +1510,7 @@
                 }
               },
               "providerRefreshToken": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1415,6 +1518,7 @@
                 }
               },
               "providerType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1422,6 +1526,7 @@
                 }
               },
               "referrer": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1429,6 +1534,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1436,6 +1542,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1521,6 +1628,7 @@
           "Instances": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1528,6 +1636,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1535,6 +1644,7 @@
                 }
               },
               "rawBaseConfig": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1542,6 +1652,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1549,6 +1660,7 @@
                 }
               },
               "uuid": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1582,6 +1694,7 @@
           "MfaAmrClaims": {
             "fields": {
               "authenticationMethod": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1589,6 +1702,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1596,6 +1710,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1603,6 +1718,7 @@
                 }
               },
               "sessionId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1610,6 +1726,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1660,6 +1777,7 @@
           "MfaChallenges": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1667,6 +1785,7 @@
                 }
               },
               "factorId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1674,6 +1793,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1681,6 +1801,7 @@
                 }
               },
               "ipAddress": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/inet@1",
@@ -1688,6 +1809,7 @@
                 }
               },
               "otpCode": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1695,6 +1817,7 @@
                 }
               },
               "verifiedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1702,6 +1825,7 @@
                 }
               },
               "webAuthnSessionData": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -1758,6 +1882,7 @@
           "MfaFactors": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1765,6 +1890,7 @@
                 }
               },
               "factorType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -1775,6 +1901,7 @@
                 }
               },
               "friendlyName": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1782,6 +1909,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1789,6 +1917,7 @@
                 }
               },
               "lastChallengedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1796,6 +1925,7 @@
                 }
               },
               "lastWebauthnChallengeData": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -1803,6 +1933,7 @@
                 }
               },
               "phone": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1810,6 +1941,7 @@
                 }
               },
               "secret": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1817,6 +1949,7 @@
                 }
               },
               "status": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -1827,6 +1960,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1834,6 +1968,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1841,6 +1976,7 @@
                 }
               },
               "webAuthnAaguid": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1848,6 +1984,7 @@
                 }
               },
               "webAuthnCredential": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -1937,6 +2074,7 @@
           "OauthAuthorizations": {
             "fields": {
               "approvedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1944,6 +2082,7 @@
                 }
               },
               "authorizationCode": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1951,6 +2090,7 @@
                 }
               },
               "authorizationId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1958,6 +2098,7 @@
                 }
               },
               "clientId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -1965,6 +2106,7 @@
                 }
               },
               "codeChallenge": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -1972,6 +2114,7 @@
                 }
               },
               "codeChallengeMethod": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -1982,6 +2125,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1989,6 +2133,7 @@
                 }
               },
               "expiresAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -1996,6 +2141,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2003,6 +2149,7 @@
                 }
               },
               "nonce": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2010,6 +2157,7 @@
                 }
               },
               "redirectUri": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2017,6 +2165,7 @@
                 }
               },
               "resource": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2024,6 +2173,7 @@
                 }
               },
               "responseType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -2034,6 +2184,7 @@
                 }
               },
               "scope": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2041,6 +2192,7 @@
                 }
               },
               "state": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2048,6 +2200,7 @@
                 }
               },
               "status": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -2058,6 +2211,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2160,6 +2314,7 @@
           "OauthClientStates": {
             "fields": {
               "codeVerifier": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2167,6 +2322,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2174,6 +2330,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2181,6 +2338,7 @@
                 }
               },
               "providerType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2211,6 +2369,7 @@
           "OauthClients": {
             "fields": {
               "clientName": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2218,6 +2377,7 @@
                 }
               },
               "clientSecretHash": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2225,6 +2385,7 @@
                 }
               },
               "clientType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -2235,6 +2396,7 @@
                 }
               },
               "clientUri": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2242,6 +2404,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2249,6 +2412,7 @@
                 }
               },
               "deletedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2256,6 +2420,7 @@
                 }
               },
               "grantTypes": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2263,6 +2428,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2270,6 +2436,7 @@
                 }
               },
               "logoUri": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2277,6 +2444,7 @@
                 }
               },
               "redirectUris": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2284,6 +2452,7 @@
                 }
               },
               "registrationType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -2294,6 +2463,7 @@
                 }
               },
               "tokenEndpointAuthMethod": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2301,6 +2471,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2404,6 +2575,7 @@
           "OauthConsents": {
             "fields": {
               "clientId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2411,6 +2583,7 @@
                 }
               },
               "grantedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2418,6 +2591,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2425,6 +2599,7 @@
                 }
               },
               "revokedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2432,6 +2607,7 @@
                 }
               },
               "scopes": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2439,6 +2615,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2508,6 +2685,7 @@
           "OneTimeTokens": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -2515,6 +2693,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2522,6 +2701,7 @@
                 }
               },
               "relatesTo": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2529,6 +2709,7 @@
                 }
               },
               "tokenHash": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2536,6 +2717,7 @@
                 }
               },
               "tokenType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -2546,6 +2728,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -2553,6 +2736,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2609,6 +2793,7 @@
           "RefreshTokens": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2616,6 +2801,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -2623,6 +2809,7 @@
                 }
               },
               "instanceId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2630,6 +2817,7 @@
                 }
               },
               "parent": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -2640,6 +2828,7 @@
                 }
               },
               "revoked": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -2647,6 +2836,7 @@
                 }
               },
               "sessionId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2654,6 +2844,7 @@
                 }
               },
               "token": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -2664,6 +2855,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2671,6 +2863,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -2736,6 +2929,7 @@
           "SamlProviders": {
             "fields": {
               "attributeMapping": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -2743,6 +2937,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2750,6 +2945,7 @@
                 }
               },
               "entityId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2757,6 +2953,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2764,6 +2961,7 @@
                 }
               },
               "metadataUrl": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2771,6 +2969,7 @@
                 }
               },
               "metadataXml": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2778,6 +2977,7 @@
                 }
               },
               "nameIdFormat": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2785,6 +2985,7 @@
                 }
               },
               "ssoProviderId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2792,6 +2993,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2854,6 +3056,7 @@
           "SamlRelayStates": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2861,6 +3064,7 @@
                 }
               },
               "flowStateId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2868,6 +3072,7 @@
                 }
               },
               "forEmail": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2875,6 +3080,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2882,6 +3088,7 @@
                 }
               },
               "redirectTo": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2889,6 +3096,7 @@
                 }
               },
               "requestId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -2896,6 +3104,7 @@
                 }
               },
               "ssoProviderId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -2903,6 +3112,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -2978,6 +3188,7 @@
           "SchemaMigrations": {
             "fields": {
               "version": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -3002,6 +3213,7 @@
           "SsoDomains": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3009,6 +3221,7 @@
                 }
               },
               "domain": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3016,6 +3229,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3023,6 +3237,7 @@
                 }
               },
               "ssoProviderId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3030,6 +3245,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3080,6 +3296,7 @@
           "SsoProviders": {
             "fields": {
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3087,6 +3304,7 @@
                 }
               },
               "disabled": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -3094,6 +3312,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3101,6 +3320,7 @@
                 }
               },
               "resourceId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3108,6 +3328,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3187,6 +3408,7 @@
           "WebauthnChallenges": {
             "fields": {
               "challengeType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3194,6 +3416,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3201,6 +3424,7 @@
                 }
               },
               "expiresAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3208,6 +3432,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3215,6 +3440,7 @@
                 }
               },
               "sessionData": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -3222,6 +3448,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3275,6 +3502,7 @@
           "WebauthnCredentials": {
             "fields": {
               "aaguid": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3282,6 +3510,7 @@
                 }
               },
               "attestationType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3289,6 +3518,7 @@
                 }
               },
               "backedUp": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -3296,6 +3526,7 @@
                 }
               },
               "backupEligible": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -3303,6 +3534,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3310,6 +3542,7 @@
                 }
               },
               "credentialId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -3317,6 +3550,7 @@
                 }
               },
               "friendlyName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3324,6 +3558,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3331,6 +3566,7 @@
                 }
               },
               "lastUsedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3338,6 +3574,7 @@
                 }
               },
               "publicKey": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -3345,6 +3582,7 @@
                 }
               },
               "signCount": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -3352,6 +3590,7 @@
                 }
               },
               "transports": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -3359,6 +3598,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3366,6 +3606,7 @@
                 }
               },
               "userId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3447,6 +3688,7 @@
           "BucketsAnalytics": {
             "fields": {
               "_type": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -3457,6 +3699,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3464,6 +3707,7 @@
                 }
               },
               "deletedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3471,6 +3715,7 @@
                 }
               },
               "format": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3478,6 +3723,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3485,6 +3731,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3492,6 +3739,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3562,6 +3810,7 @@
           "BucketsVectors": {
             "fields": {
               "_type": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -3572,6 +3821,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3579,6 +3829,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3586,6 +3837,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3632,6 +3884,7 @@
           "IcebergNamespaces": {
             "fields": {
               "bucketName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3639,6 +3892,7 @@
                 }
               },
               "catalogId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3646,6 +3900,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3653,6 +3908,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3660,6 +3916,7 @@
                 }
               },
               "metadata": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -3667,6 +3924,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3674,6 +3932,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3745,6 +4004,7 @@
           "IcebergTables": {
             "fields": {
               "bucketName": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3752,6 +4012,7 @@
                 }
               },
               "catalogId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3759,6 +4020,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3766,6 +4028,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3773,6 +4036,7 @@
                 }
               },
               "location": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3780,6 +4044,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3787,6 +4052,7 @@
                 }
               },
               "namespaceId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -3794,6 +4060,7 @@
                 }
               },
               "remoteTableId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3801,6 +4068,7 @@
                 }
               },
               "shardId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3808,6 +4076,7 @@
                 }
               },
               "shardKey": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3815,6 +4084,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3899,6 +4169,7 @@
           "Migrations": {
             "fields": {
               "executedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -3906,6 +4177,7 @@
                 }
               },
               "hash": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -3916,6 +4188,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -3923,6 +4196,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -3956,6 +4230,7 @@
           "S3MultipartUploads": {
             "fields": {
               "bucketId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3963,6 +4238,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -3970,6 +4246,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3977,6 +4254,7 @@
                 }
               },
               "inProgressSize": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -3984,6 +4262,7 @@
                 }
               },
               "key": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -3991,6 +4270,7 @@
                 }
               },
               "metadata": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -3998,6 +4278,7 @@
                 }
               },
               "ownerId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4005,6 +4286,7 @@
                 }
               },
               "uploadSignature": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4012,6 +4294,7 @@
                 }
               },
               "userMetadata": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -4019,6 +4302,7 @@
                 }
               },
               "version": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4099,6 +4383,7 @@
           "S3MultipartUploadsParts": {
             "fields": {
               "bucketId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4106,6 +4391,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4113,6 +4399,7 @@
                 }
               },
               "etag": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4120,6 +4407,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -4127,6 +4415,7 @@
                 }
               },
               "key": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4134,6 +4423,7 @@
                 }
               },
               "ownerId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4141,6 +4431,7 @@
                 }
               },
               "partNumber": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -4148,6 +4439,7 @@
                 }
               },
               "size": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -4155,6 +4447,7 @@
                 }
               },
               "uploadId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4162,6 +4455,7 @@
                 }
               },
               "version": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4243,6 +4537,7 @@
           "StorageBucket": {
             "fields": {
               "_type": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -4253,7 +4548,9 @@
                 }
               },
               "allowedMimeTypes": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4261,6 +4558,7 @@
                 }
               },
               "avifAutodetection": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -4268,6 +4566,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4275,6 +4574,7 @@
                 }
               },
               "fileSizeLimit": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -4282,6 +4582,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4289,6 +4590,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4296,6 +4598,7 @@
                 }
               },
               "owner": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -4303,6 +4606,7 @@
                 }
               },
               "ownerId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4310,6 +4614,7 @@
                 }
               },
               "public": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -4317,6 +4622,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4414,6 +4720,7 @@
           "StorageObject": {
             "fields": {
               "bucketId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4421,6 +4728,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4428,6 +4736,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -4435,6 +4744,7 @@
                 }
               },
               "lastAccessedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4442,6 +4752,7 @@
                 }
               },
               "metadata": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -4449,6 +4760,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4456,6 +4768,7 @@
                 }
               },
               "owner": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -4463,6 +4776,7 @@
                 }
               },
               "ownerId": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4470,7 +4784,9 @@
                 }
               },
               "pathTokens": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4478,6 +4794,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4485,6 +4802,7 @@
                 }
               },
               "userMetadata": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -4492,6 +4810,7 @@
                 }
               },
               "version": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4563,6 +4882,7 @@
           "VectorIndexes": {
             "fields": {
               "bucketId": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4570,6 +4890,7 @@
                 }
               },
               "createdAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -4577,6 +4898,7 @@
                 }
               },
               "dataType": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4584,6 +4906,7 @@
                 }
               },
               "dimension": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -4591,6 +4914,7 @@
                 }
               },
               "distanceMetric": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4598,6 +4922,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4605,6 +4930,7 @@
                 }
               },
               "metadataConfiguration": {
+                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -4612,6 +4938,7 @@
                 }
               },
               "name": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -4619,6 +4946,7 @@
                 }
               },
               "updatedAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -5013,7 +5341,9 @@
                     "kind": "literal",
                     "value": []
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": [
                     "elementNotNull"
@@ -5145,7 +5475,9 @@
                     "kind": "literal",
                     "value": []
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": [
                     "elementNotNull"
@@ -7887,7 +8219,9 @@
               "columns": {
                 "allowed_mime_types": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": [
                     "elementNotNull"
@@ -8470,7 +8804,9 @@
                 },
                 "path_tokens": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "noCheck": [
                     "elementNotNull"
@@ -8878,7 +9214,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "734893bc990ae5ec14dc7ad50a7d8b5873a864f056085a7ffd2f69c866989067",
+    "storageHash": "80b12ea24e634ceb443b2c40d7adb9a6072b16c623f8723aae93fd4cd042f2d4",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",
