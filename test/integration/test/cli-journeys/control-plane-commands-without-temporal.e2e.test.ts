@@ -79,6 +79,8 @@ function runBin(ctx: JourneyContext, argv: readonly string[]): Promise<ChildRun>
 
 interface LanguageServerResponse {
   readonly id?: number;
+  readonly method?: string;
+  readonly params?: unknown;
   readonly result?: unknown;
   readonly error?: unknown;
 }
@@ -87,6 +89,7 @@ interface LanguageServerResponse {
 function languageServerWithoutTemporal(ctx: JourneyContext) {
   const child = spawnNodeWithoutTemporal([BIN_PATH, 'lsp', '--stdio'], { cwd: ctx.testDir });
   const responses = new Map<number, (response: LanguageServerResponse) => void>();
+  const notifications: LanguageServerResponse[] = [];
   let received = Buffer.alloc(0);
   let stderr = '';
   let lastId = 0;
@@ -107,7 +110,9 @@ function languageServerWithoutTemporal(ctx: JourneyContext) {
         received.subarray(headerEnd + 4, end).toString(),
       );
       received = received.subarray(end);
-      if (message.id !== undefined) {
+      if (message.id === undefined) {
+        notifications.push(message);
+      } else {
         responses.get(message.id)?.(message);
         responses.delete(message.id);
       }
@@ -118,6 +123,7 @@ function languageServerWithoutTemporal(ctx: JourneyContext) {
     child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
   }
   return {
+    output: () => JSON.stringify({ notifications, stderr }, null, 2),
     notify: (method: string, params: object) => send({ method, params }),
     request(method: string, params: object): Promise<LanguageServerResponse> {
       lastId += 1;
@@ -285,8 +291,8 @@ withTempDir(({ createTempDir }) => {
 
           expect(await server.exited).toEqual({ exitCode: 0, ...NO_GLOBAL_TEMPORAL });
           expect(initialized.error).toBeUndefined();
-          expect(clean).toMatchObject({ result: { kind: 'full', items: [] } });
-          expect(broken).toMatchObject({
+          expect(clean, server.output()).toMatchObject({ result: { kind: 'full', items: [] } });
+          expect(broken, server.output()).toMatchObject({
             result: {
               kind: 'full',
               items: [expect.objectContaining({ code: 'PSL_INVALID_DEFAULT_LITERAL' })],
