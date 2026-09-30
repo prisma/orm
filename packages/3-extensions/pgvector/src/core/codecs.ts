@@ -19,7 +19,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  counted,
   refuseJsonValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -28,6 +27,7 @@ import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
+import { counted } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from './constants';

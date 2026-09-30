@@ -177,7 +177,7 @@ function refuseNaN(codecId: string, value: number): number {
 }
 
 /** Reads a float's JSON form, which on SQLite has no NaN. */
-function decodeJsonStorableFloat(codecId: string, json: JsonValue): number {
+function decodeJsonFloatWithoutNaN(codecId: string, json: JsonValue): number {
   const value = decodeJsonFloat(codecId, json);
   if (Number.isNaN(value)) {
     return refuseJsonValue(
@@ -198,7 +198,7 @@ export class SqliteFloatCodec extends SqlFloatCodec {
     return super.encodeJson(refuseNaN(this.id, value));
   }
   override decodeJson(json: JsonValue): number {
-    return decodeJsonStorableFloat(this.id, json);
+    return decodeJsonFloatWithoutNaN(this.id, json);
   }
 }
 
@@ -413,7 +413,7 @@ export class SqliteRealCodec extends CodecImpl<
     return encodeJsonFloat(refuseNaN(SQLITE_REAL_CODEC_ID, value));
   }
   decodeJson(json: JsonValue): number {
-    return decodeJsonStorableFloat(SQLITE_REAL_CODEC_ID, json);
+    return decodeJsonFloatWithoutNaN(SQLITE_REAL_CODEC_ID, json);
   }
 }
 

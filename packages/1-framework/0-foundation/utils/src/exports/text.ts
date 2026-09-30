@@ -1,1 +1,1 @@
-export { withoutTrailing } from '../text';
+export { counted, withoutTrailing } from '../text';

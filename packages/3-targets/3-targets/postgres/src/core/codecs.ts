@@ -18,7 +18,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  counted,
   decodeJsonBoolean,
   decodeJsonFloat,
   decodeJsonInteger,
@@ -52,7 +51,7 @@ import {
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
-import { withoutTrailing } from '@internal/utils/text';
+import { counted, withoutTrailing } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';

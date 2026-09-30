@@ -6,3 +6,8 @@ export function withoutTrailing(text: string, character: string): string {
   while (end > 0 && text[end - 1] === character) end -= 1;
   return end === text.length ? text : text.slice(0, end);
 }
+
+/** `1 character`, `3 characters`: a count and its noun, as a refusal names what a value must hold. */
+export function counted(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}

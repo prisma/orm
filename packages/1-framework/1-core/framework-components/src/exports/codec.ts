@@ -47,7 +47,6 @@ export {
 } from '../shared/data-type';
 export type { BigIntRange, IntegerRange } from '../shared/decode-json';
 export {
-  counted,
   decodeJsonBoolean,
   decodeJsonFloat,
   decodeJsonInteger,
