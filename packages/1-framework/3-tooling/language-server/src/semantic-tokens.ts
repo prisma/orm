@@ -554,9 +554,9 @@ function classifyTypeReference(
 
 function identifierSegments(name: QualifiedNameAst): readonly IdentifierSegment[] {
   const segments: IdentifierSegment[] = [];
-  for (const identifier of [name.space(), name.namespace(), name.identifier()]) {
-    const text = identifier?.name();
-    if (identifier !== undefined && text !== undefined) {
+  for (const identifier of name.segments()) {
+    const text = identifier.name();
+    if (text !== undefined) {
       segments.push({ identifier, text });
     }
   }

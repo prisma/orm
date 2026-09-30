@@ -1270,6 +1270,13 @@ describe('QualifiedNameAst', () => {
     ident(b, 'c');
     const qn = QualifiedNameAst.cast(createSyntaxTree(b.finishNode()))!;
     expect(qn.isOverQualified()).toBe(true);
+    expect(Array.from(qn.segments(), (segment) => [segment.name(), segment.syntax.offset])).toEqual(
+      [
+        ['a', 0],
+        ['b', 2],
+        ['c', 4],
+      ],
+    );
   });
 
   it('matches a bare name with isSimpleName', () => {

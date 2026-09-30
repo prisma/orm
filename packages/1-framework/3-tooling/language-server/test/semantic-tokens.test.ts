@@ -173,6 +173,15 @@ function sameModifiers(
 }
 
 describe('semantic token substrate', () => {
+  it('highlights every parsed segment of an overqualified decorator', () => {
+    const source = parseSemanticTokenSource('model User { id Int @foo.bar.baz }');
+    expect(collectDetails(source).filter(({ tokenType }) => tokenType === 'decorator')).toEqual([
+      { text: '@foo', tokenType: 'decorator', modifiers: [], line: 0, character: 20 },
+      { text: 'bar', tokenType: 'decorator', modifiers: [], line: 0, character: 25 },
+      { text: 'baz', tokenType: 'decorator', modifiers: [], line: 0, character: 29 },
+    ]);
+  });
+
   it('retains syntactic property highlighting for unresolved and cross-space field references', () => {
     const source = parseSemanticTokenSource(
       'model Owner { id Int @relation(fields: [missing])\n  external elsewhere:Other @relation(references: [remote])\n}',
