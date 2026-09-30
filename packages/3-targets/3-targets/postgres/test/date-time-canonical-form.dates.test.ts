@@ -1,6 +1,12 @@
 import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
-import { pgDateText, pgTimestampText, pgTimestamptzText } from '../src/core/data-types';
+import {
+  pgDate,
+  pgDateCanonical,
+  pgText,
+  pgTimestampCanonical,
+  pgTimestamptzCanonical,
+} from '../src/core/data-types';
 
 /**
  * PostgreSQL writes a year before 1 with a ` BC` suffix and a year past 9999 with five or six
@@ -17,7 +23,7 @@ function temporalInput(text: string): string {
   return `${astronomical < 0 ? '-' : '+'}${String(Math.abs(astronomical)).padStart(6, '0')}${rest}`;
 }
 
-describe('pg/timestamptz standard text', () => {
+describe('pg/timestamptz canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
     ['2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
     ['2024-01-01T00:00:00.000Z', '2024-01-01T00:00:00Z'],
@@ -41,20 +47,22 @@ describe('pg/timestamptz standard text', () => {
     ['12026-01-02 03:04:05+00', '+012026-01-02T03:04:05Z'],
     ['+012026-01-02T03:04:05Z', '+012026-01-02T03:04:05Z'],
     ['9999-12-31T23:59:59-01:00', '+010000-01-01T00:59:59Z'],
+    ['4714-11-24 00:00:00+00 BC', '-004713-11-24T00:00:00Z'],
+    ['+275760-09-13T00:00:00Z', '+275760-09-13T00:00:00Z'],
   ];
 
-  it.each(accepted)('turns %s into %s', (written, standard) => {
-    expect(pgTimestamptzText(written)).toBe(standard);
+  it.each(accepted)('turns %s into its canonical form %s', (written, canonical) => {
+    expect(pgTimestamptzCanonical(written)).toBe(canonical);
   });
 
   it.each(accepted)('agrees with Temporal.Instant on %s', (written) => {
-    expect(pgTimestamptzText(written)).toBe(
+    expect(pgTimestamptzCanonical(written)).toBe(
       Temporal.Instant.from(temporalInput(written)).toString(),
     );
   });
 
   it.each(['infinity', '-infinity'])('keeps %s, which PostgreSQL stores', (word) => {
-    expect(pgTimestamptzText(word)).toBe(word);
+    expect(pgTimestamptzCanonical(word)).toBe(word);
   });
 
   it.each([
@@ -72,7 +80,7 @@ describe('pg/timestamptz standard text', () => {
     ],
     [
       '2024-01-01T00:00:00.1234567Z',
-      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but pg/timestamptz keeps at most 6, which is microseconds. Round it, as in "2024-01-01T12:34:56.123456Z".',
+      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but pg/timestamptz holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456Z".',
     ],
     [
       '2024-02-30T00:00:00Z',
@@ -110,14 +118,24 @@ describe('pg/timestamptz standard text', () => {
       '-000000-01-01T00:00:00Z',
       'pg/timestamptz cannot read "-000000-01-01T00:00:00Z". Write a date and time with a UTC offset, as in "2024-01-01T12:34:56Z".',
     ],
+    ...[
+      '+275760-09-13T00:00:00.000001Z',
+      '+999999-01-01T00:00:00Z',
+      '-271821-04-19T23:59:59Z',
+      '-004713-11-23T23:59:59Z',
+      '4714-11-23 23:59:59+00 BC',
+    ].map((written) => [
+      written,
+      `pg/timestamptz holds instants from -004713-11-24T00:00:00Z to +275760-09-13T00:00:00Z, and "${written}" is outside them.`,
+    ]),
   ])('refuses %s', (written, message) => {
-    expect(() => pgTimestamptzText(written)).toThrow(
+    expect(() => pgTimestamptzCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });
 });
 
-describe('pg/timestamp standard text', () => {
+describe('pg/timestamp canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
     ['2024-01-01T12:34:56', '2024-01-01T12:34:56'],
     ['2024-01-01 12:34:56', '2024-01-01T12:34:56'],
@@ -127,20 +145,22 @@ describe('pg/timestamp standard text', () => {
     ['2024-01-01 12:34:56.123456', '2024-01-01T12:34:56.123456'],
     ['0044-03-15 00:00:00 BC', '-000043-03-15T00:00:00'],
     ['12026-01-02 03:04:05', '+012026-01-02T03:04:05'],
+    ['4714-11-24 00:00:00 BC', '-004713-11-24T00:00:00'],
+    ['+275760-09-13T23:59:59.999999', '+275760-09-13T23:59:59.999999'],
   ];
 
-  it.each(accepted)('turns %s into %s', (written, standard) => {
-    expect(pgTimestampText(written)).toBe(standard);
+  it.each(accepted)('turns %s into its canonical form %s', (written, canonical) => {
+    expect(pgTimestampCanonical(written)).toBe(canonical);
   });
 
   it.each(accepted)('agrees with Temporal.PlainDateTime on %s', (written) => {
-    expect(pgTimestampText(written)).toBe(
+    expect(pgTimestampCanonical(written)).toBe(
       Temporal.PlainDateTime.from(temporalInput(written)).toString(),
     );
   });
 
   it.each(['infinity', '-infinity'])('keeps %s, which PostgreSQL stores', (word) => {
-    expect(pgTimestampText(word)).toBe(word);
+    expect(pgTimestampCanonical(word)).toBe(word);
   });
 
   it.each([
@@ -158,20 +178,30 @@ describe('pg/timestamp standard text', () => {
     ],
     [
       '2024-01-01T12:34:56.1234567',
-      '"2024-01-01T12:34:56.1234567" has 7 digits after the decimal point, but pg/timestamp keeps at most 6, which is microseconds. Round it, as in "2024-01-01T12:34:56.123456".',
+      '"2024-01-01T12:34:56.1234567" has 7 digits after the decimal point, but pg/timestamp holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456".',
     ],
     [
       '2024-02-30T00:00:00',
       '"2024-02-30T00:00:00" is not a date that exists. Write a real date, as in "2024-01-01T12:34:56".',
     ],
+    ...[
+      '+275760-09-14T00:00:00',
+      '-271821-04-19T00:00:00',
+      '294276-12-31 23:59:59',
+      '294277-01-01 00:00:00',
+      '4714-11-23 23:59:59 BC',
+    ].map((written) => [
+      written,
+      `pg/timestamp holds dates and times from -004713-11-24T00:00:00 to +275760-09-13T23:59:59.999999, and "${written}" is outside them.`,
+    ]),
   ])('refuses %s', (written, message) => {
-    expect(() => pgTimestampText(written)).toThrow(
+    expect(() => pgTimestampCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });
 });
 
-describe('pg/date standard text', () => {
+describe('pg/date canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
     ['2024-01-01', '2024-01-01'],
     ['2024-02-29', '2024-02-29'],
@@ -180,18 +210,22 @@ describe('pg/date standard text', () => {
     ['0001-01-01 BC', '0000-01-01'],
     ['-000043-03-15', '-000043-03-15'],
     ['12026-01-02', '+012026-01-02'],
+    ['4714-11-24 BC', '-004713-11-24'],
+    ['+275760-09-13', '+275760-09-13'],
   ];
 
-  it.each(accepted)('turns %s into %s', (written, standard) => {
-    expect(pgDateText(written)).toBe(standard);
+  it.each(accepted)('turns %s into its canonical form %s', (written, canonical) => {
+    expect(pgDateCanonical(written)).toBe(canonical);
   });
 
   it.each(accepted)('agrees with Temporal.PlainDate on %s', (written) => {
-    expect(pgDateText(written)).toBe(Temporal.PlainDate.from(temporalInput(written)).toString());
+    expect(pgDateCanonical(written)).toBe(
+      Temporal.PlainDate.from(temporalInput(written)).toString(),
+    );
   });
 
   it.each(['infinity', '-infinity'])('keeps %s, which PostgreSQL stores', (word) => {
-    expect(pgDateText(word)).toBe(word);
+    expect(pgDateCanonical(word)).toBe(word);
   });
 
   it.each([
@@ -213,12 +247,31 @@ describe('pg/date standard text', () => {
     ],
     [
       '12:00:00',
-      'pg/date holds a date, but "12:00:00" has no date. Write the date too, as in "2024-01-01".',
+      'pg/date holds a date, and "12:00:00" is a time of day. Write a date, as in "2024-01-01".',
     ],
     ['Jan 1 2024', 'pg/date cannot read "Jan 1 2024". Write a date, as in "2024-01-01".'],
+    ...['+275761-01-01', '-271822-01-01', '+999999-01-01', '4714-11-23 BC'].map((written) => [
+      written,
+      `pg/date holds dates from -004713-11-24 to +275760-09-13, and "${written}" is outside them.`,
+    ]),
   ])('refuses %s', (written, message) => {
-    expect(() => pgDateText(written)).toThrow(
+    expect(() => pgDateCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
+    );
+  });
+});
+
+describe('the date and time types declare their canonical form', () => {
+  it('gives pg/date its canonical-form function, which its cast from text shares', () => {
+    expect({
+      canonical: pgDate.canonicalForm?.('0044-03-15 BC'),
+      cast: pgDate.casts[pgText.id]?.('0044-03-15 BC'),
+    }).toEqual({ canonical: '-000043-03-15', cast: '-000043-03-15' });
+  });
+
+  it('refuses a value that is not text', () => {
+    expect(() => pgDate.canonicalForm?.(20240101)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
     );
   });
 });

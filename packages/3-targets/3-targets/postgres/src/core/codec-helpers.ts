@@ -393,10 +393,6 @@ const formatIsoDuration = ({ months, days, micros }: PgInterval): string => {
   return rendered === 'P' ? 'PT0S' : rendered;
 };
 
-/** Normalises any accepted ISO-8601 duration to the canonical spelling. */
-export const pgIntervalCanonical = (text: string): string =>
-  formatIsoDuration(intervalFieldsOf(text));
-
 /**
  * An interval as PostgreSQL prints it under `IntervalStyle = 'postgres'`: `1 year 2 mons 3 days
  * 04:05:06.5`, `-1 years -2 mons +3 days -04:00:00`, `00:00:00`.
@@ -422,20 +418,20 @@ function postgresIntervalFields(text: string): PgInterval | undefined {
 
 function intervalRefused(message: string): never {
   throw structuredError('CONTRACT.CAST_REFUSED', message, {
-    why: 'pg/interval stores an interval as the ISO 8601 duration pg/interval@1 writes, and reads ISO 8601 durations and the text PostgreSQL prints.',
+    why: 'pg/interval stores one canonical form for each interval (ADR 254), and reads ISO 8601 durations and the text PostgreSQL prints.',
     fix: 'Write an ISO 8601 duration, as the message shows.',
   });
 }
 
 /**
- * The standard text of `pg/interval`: the ISO 8601 duration `pg/interval@1` writes, from an ISO
- * 8601 duration or the text PostgreSQL prints.
+ * The canonical form of `pg/interval` (ADR 254), from an ISO 8601 duration or the text PostgreSQL
+ * prints under `IntervalStyle = 'postgres'`.
  */
-export function pgIntervalText(text: string): string {
+export function pgIntervalCanonical(text: string): string {
   const fractionDigits = /\.(\d+)/.exec(text)?.[1]?.length ?? 0;
   if (fractionDigits > 6) {
     intervalRefused(
-      `"${text}" has ${fractionDigits} digits after the decimal point, but pg/interval keeps at most 6, which is microseconds. Round it, as in "PT1.123456S".`,
+      `"${text}" has ${fractionDigits} digits after the decimal point, but pg/interval holds microseconds, so at most 6. Round it, as in "PT1.123456S".`,
     );
   }
   if (ISO_DURATION.test(text)) return formatIsoDuration(intervalFieldsOf(text));

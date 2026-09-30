@@ -1,29 +1,25 @@
 /**
- * Reading written date and time text into the standard text of a date or time data type.
- *
- * The standard text is the text `Temporal` prints: `2024-01-01`, `12:34:56`, `2024-01-01T12:34:56`,
- * and an instant in UTC as `2024-01-01T12:34:56Z`. A fraction of a second has no trailing zeros and
- * at most six digits. A year outside 0000 to 9999 is a sign and six digits.
- *
- * The reader takes ISO 8601 text and the forms databases print it in: a space in place of `T`, an
- * offset of `+HH`, `+HH:MM` or `+HH:MM:SS`, a year of five or six digits, and a ` BC` suffix. It
- * uses no `Temporal` and no JavaScript `Date`, so a default reads the same on every runtime. Each
- * target declares its own date and time types with these shapes. ADR 254.
+ * The canonical form of a date or time value, read from ISO 8601 text. ADR 254 states the canonical
+ * form of each date and time type; this is the reader the SQL targets declare those types with. It
+ * reads ISO 8601 with a signed six-digit year or a four-digit year, and a space in place of `T`, and
+ * uses no `Temporal` and no JavaScript `Date`. A target turns any other text its database prints
+ * into ISO 8601 before calling it.
  */
 
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 
-/** What a date or time type holds, which decides the text it reads and prints. */
+/** What a date or time type holds, which decides the text it reads and writes. */
 export type DateTimeShape = 'date' | 'time' | 'timeWithOffset' | 'dateTime' | 'instant';
 
-export interface DateTimeTextOptions {
+export interface CanonicalDateTimeOptions {
   readonly shape: DateTimeShape;
   /** The data type id, which messages name. */
-  readonly typeName: string;
-  /** Whether `infinity` and `-infinity` are values of the type. */
-  readonly infinity: boolean;
+  readonly dataTypeId: string;
   /** The largest UTC offset the type holds, in hours. Defaults to 23. */
   readonly maxOffsetHours?: number;
+  /** The earliest and latest values the type holds, each in canonical form. */
+  readonly range?: { readonly earliest: string; readonly latest: string };
 }
 
 interface DateFields {
@@ -51,6 +47,7 @@ const SHAPES: Readonly<
     DateTimeShape,
     {
       readonly description: string;
+      readonly plural: string;
       readonly example: string;
       readonly date: boolean;
       readonly time: boolean;
@@ -58,9 +55,17 @@ const SHAPES: Readonly<
     }
   >
 > = {
-  date: { description: 'a date', example: '2024-01-01', date: true, time: false, offset: false },
+  date: {
+    description: 'a date',
+    plural: 'dates',
+    example: '2024-01-01',
+    date: true,
+    time: false,
+    offset: false,
+  },
   time: {
     description: 'a time of day',
+    plural: 'times of day',
     example: '12:34:56',
     date: false,
     time: true,
@@ -68,6 +73,7 @@ const SHAPES: Readonly<
   },
   timeWithOffset: {
     description: 'a time of day with a UTC offset',
+    plural: 'times of day with a UTC offset',
     example: '12:34:56+02:00',
     date: false,
     time: true,
@@ -75,6 +81,7 @@ const SHAPES: Readonly<
   },
   dateTime: {
     description: 'a date and time',
+    plural: 'dates and times',
     example: '2024-01-01T12:34:56',
     date: true,
     time: true,
@@ -82,6 +89,7 @@ const SHAPES: Readonly<
   },
   instant: {
     description: 'a date and time with a UTC offset',
+    plural: 'instants',
     example: '2024-01-01T12:34:56Z',
     date: true,
     time: true,
@@ -89,18 +97,17 @@ const SHAPES: Readonly<
   },
 };
 
-const INFINITIES: ReadonlySet<string> = new Set(['infinity', '-infinity']);
-const BC_SUFFIX = ' BC';
-const DATE_PREFIX = /^([+-]\d{6}|\d{4,6})-(\d{2})-(\d{2})/;
+const DATE_PREFIX = /^([+-]\d{6}|\d{4})-(\d{2})-(\d{2})/;
 const TIME_PREFIX = /^(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?/;
 const OFFSET = /^([+-])(\d{2})(?::(\d{2})(?::(\d{2}))?)?$/;
 const MAX_FRACTION_DIGITS = 6;
 const SECONDS_PER_DAY = 86_400;
+const MIDNIGHT: TimeFields = { hour: 0, minute: 0, second: 0, fraction: '' };
 
 function refused(message: string): never {
   throw structuredError('CONTRACT.CAST_REFUSED', message, {
-    why: 'A date or time type stores one standard text, the text Temporal prints, and reads ISO 8601 text and the forms databases print it in.',
-    fix: 'Write the value in ISO 8601 form, as the message shows.',
+    why: 'A date or time type stores one canonical form for each value (ADR 254).',
+    fix: 'Write text the type holds, as the message shows.',
   });
 }
 
@@ -169,27 +176,21 @@ function offsetText(seconds: number): string {
 }
 
 /**
- * The fields of a written value, or `undefined` when the text is not a date, a time, or a date and
- * time in a form this reader takes. Ranges are checked by the caller, which words the refusal.
+ * The fields of an ISO 8601 date, time, or date and time, or `undefined` when the text is not one.
+ * Ranges are checked by the caller, which words the refusal.
  */
 function readWritten(text: string): WrittenDateTime | undefined {
-  const isBc = text.endsWith(BC_SUFFIX);
-  let rest = isBc ? text.slice(0, -BC_SUFFIX.length) : text;
-
+  let rest = text;
   let date: DateFields | undefined;
   let timeFollows = true;
   const dateMatch = DATE_PREFIX.exec(rest);
   if (dateMatch !== null) {
     const [whole, yearDigits = '', month = '', day = ''] = dateMatch;
-    const signed = yearDigits.startsWith('+') || yearDigits.startsWith('-');
-    const written = Number(yearDigits);
-    if (yearDigits === '-000000' || (isBc && (signed || written === 0))) return undefined;
-    date = { year: isBc ? 1 - written : written, month: Number(month), day: Number(day) };
+    if (yearDigits === '-000000') return undefined;
+    date = { year: Number(yearDigits), month: Number(month), day: Number(day) };
     rest = rest.slice(whole.length);
     timeFollows = /^[Tt ]/.test(rest);
     if (timeFollows) rest = rest.slice(1);
-  } else if (isBc) {
-    return undefined;
   }
 
   let time: TimeFields | undefined;
@@ -221,58 +222,136 @@ function withFraction(example: string): string {
   return example.replace(/(\d{2}:\d{2}:\d{2})/, '$1.123456');
 }
 
-/**
- * Turn written text into the standard text of a date or time type, or refuse it with a message
- * that says what is wrong and shows text the type takes.
- */
-export function standardDateTimeText(text: string, options: DateTimeTextOptions): string {
-  const shape = SHAPES[options.shape];
-  const { typeName } = options;
-  if (options.infinity && INFINITIES.has(text)) return text;
+/** A value's position on its type's scale, compared element by element; the date is in UTC for an instant. */
+type Position = readonly [days: number, seconds: number, fraction: string];
 
+interface Normalized {
+  readonly date: DateFields | undefined;
+  readonly time: TimeFields;
+  readonly offsetSeconds: number;
+}
+
+/** The value with an instant moved to UTC. */
+function normalized(written: WrittenDateTime, shape: DateTimeShape): Normalized {
+  const clock = written.time ?? MIDNIGHT;
+  const offsetSeconds = written.offsetSeconds ?? 0;
+  if (written.date === undefined || shape !== 'instant') {
+    return { date: written.date, time: clock, offsetSeconds };
+  }
+  const utc =
+    daysFromCivil(written.date) * SECONDS_PER_DAY +
+    clock.hour * 3600 +
+    clock.minute * 60 +
+    clock.second -
+    offsetSeconds;
+  const days = Math.floor(utc / SECONDS_PER_DAY);
+  const secondOfDay = utc - days * SECONDS_PER_DAY;
+  return {
+    date: civilFromDays(days),
+    time: {
+      hour: Math.floor(secondOfDay / 3600),
+      minute: Math.floor(secondOfDay / 60) % 60,
+      second: secondOfDay % 60,
+      fraction: clock.fraction,
+    },
+    offsetSeconds: 0,
+  };
+}
+
+function position(value: Normalized): Position {
+  const { time } = value;
+  return [
+    value.date === undefined ? 0 : daysFromCivil(value.date),
+    time.hour * 3600 + time.minute * 60 + time.second,
+    time.fraction.padEnd(MAX_FRACTION_DIGITS, '0'),
+  ];
+}
+
+function isBefore(left: Position, right: Position): boolean {
+  if (left[0] !== right[0]) return left[0] < right[0];
+  if (left[1] !== right[1]) return left[1] < right[1];
+  return left[2] < right[2];
+}
+
+function printed(value: Normalized, shape: DateTimeShape): string {
+  const { date, time, offsetSeconds } = value;
+  if (date === undefined) {
+    return shape === 'timeWithOffset'
+      ? `${timeText(time)}${offsetText(offsetSeconds)}`
+      : timeText(time);
+  }
+  if (shape === 'date') return dateText(date);
+  if (shape === 'dateTime') return `${dateText(date)}T${timeText(time)}`;
+  return `${dateText(date)}T${timeText(time)}Z`;
+}
+
+/** The position of a range bound, which the data type declares in canonical form. */
+function boundPosition(text: string, shape: DateTimeShape): Position {
   const written = readWritten(text);
   if (written === undefined) {
+    throw new InternalError(`The range bound "${text}" is not in canonical form.`);
+  }
+  return position(normalized(written, shape));
+}
+
+/**
+ * The canonical form of written date or time text, or a refusal with a message that says what is
+ * wrong and shows text the type holds. `written` is the text as its author wrote it, which the
+ * message shows, when a target rewrote it into ISO 8601 before calling this.
+ */
+export function canonicalDateTime(
+  text: string,
+  options: CanonicalDateTimeOptions,
+  written: string = text,
+): string {
+  const shape = SHAPES[options.shape];
+  const { dataTypeId: id } = options;
+
+  const parts = readWritten(text);
+  if (parts === undefined) {
     refused(
-      `${typeName} cannot read "${text}". Write ${shape.description}, as in "${shape.example}".`,
+      `${id} cannot read "${written}". Write ${shape.description}, as in "${shape.example}".`,
     );
   }
-  if (written.date !== undefined && !shape.date) {
+  if (parts.date !== undefined && !shape.date) {
     refused(
-      `${typeName} holds a time of day without a date, but "${text}" has a date. Write the time alone, as in "${shape.example}".`,
+      `${id} holds a time of day without a date, but "${written}" has a date. Write the time alone, as in "${shape.example}".`,
     );
   }
-  if (written.date === undefined && shape.date) {
+  if (parts.date === undefined && shape.date) {
     refused(
-      `${typeName} holds ${shape.description}, but "${text}" has no date. Write the date too, as in "${shape.example}".`,
+      shape.time
+        ? `${id} holds ${shape.description}, but "${written}" has no date. Write the date too, as in "${shape.example}".`
+        : `${id} holds a date, and "${written}" is a time of day. Write a date, as in "${shape.example}".`,
     );
   }
-  if (written.time !== undefined && !shape.time) {
+  if (parts.time !== undefined && !shape.time) {
     refused(
-      `${typeName} holds a date without a time of day, but "${text}" has a time. Write the date alone, as in "${shape.example}".`,
+      `${id} holds a date without a time of day, but "${written}" has a time. Write the date alone, as in "${shape.example}".`,
     );
   }
-  if (written.time === undefined && shape.offset) {
+  if (parts.time === undefined && shape.offset) {
     refused(
-      `${typeName} holds ${shape.description}, but "${text}" has no time of day. Write the time too, as in "${shape.example}".`,
+      `${id} holds ${shape.description}, but "${written}" has no time of day. Write the time too, as in "${shape.example}".`,
     );
   }
-  if (written.offsetSeconds !== undefined && !shape.offset) {
+  if (parts.offsetSeconds !== undefined && !shape.offset) {
     refused(
-      `${typeName} holds no UTC offset, but "${text}" has one. Leave it out, as in "${shape.example}".`,
+      `${id} holds no UTC offset, but "${written}" has one. Leave it out, as in "${shape.example}".`,
     );
   }
-  if (written.offsetSeconds === undefined && shape.offset) {
+  if (parts.offsetSeconds === undefined && shape.offset) {
     refused(
-      `${typeName} needs a UTC offset, but "${text}" has none. Add Z for UTC or an offset such as +02:00, as in "${shape.example}".`,
+      `${id} needs a UTC offset, but "${written}" has none. Add Z for UTC or an offset such as +02:00, as in "${shape.example}".`,
     );
   }
-  if (written.fractionDigits > MAX_FRACTION_DIGITS) {
+  if (parts.fractionDigits > MAX_FRACTION_DIGITS) {
     refused(
-      `"${text}" has ${written.fractionDigits} digits after the decimal point, but ${typeName} keeps at most ${MAX_FRACTION_DIGITS}, which is microseconds. Round it, as in "${withFraction(shape.example)}".`,
+      `"${written}" has ${parts.fractionDigits} digits after the decimal point, but ${id} holds microseconds, so at most ${MAX_FRACTION_DIGITS}. Round it, as in "${withFraction(shape.example)}".`,
     );
   }
 
-  const { date, time } = written;
+  const { date, time } = parts;
   if (
     date !== undefined &&
     (date.month < 1 ||
@@ -280,52 +359,35 @@ export function standardDateTimeText(text: string, options: DateTimeTextOptions)
       date.day < 1 ||
       date.day > daysInMonth(date.year, date.month))
   ) {
-    refused(`"${text}" is not a date that exists. Write a real date, as in "${shape.example}".`);
+    refused(`"${written}" is not a date that exists. Write a real date, as in "${shape.example}".`);
   }
   if (time !== undefined && (time.hour > 23 || time.minute > 59 || time.second > 59)) {
     refused(
-      `"${text}" is not a time of day that exists: hours run from 00 to 23, and minutes and seconds from 00 to 59. Write one, as in "${shape.example}".`,
+      `"${written}" is not a time of day that exists: hours run from 00 to 23, and minutes and seconds from 00 to 59. Write one, as in "${shape.example}".`,
     );
   }
   const offsetLimit = options.maxOffsetHours ?? 23;
   if (
-    written.offsetSeconds !== undefined &&
-    Math.abs(written.offsetSeconds) >= (offsetLimit + 1) * 3600
+    parts.offsetSeconds !== undefined &&
+    Math.abs(parts.offsetSeconds) >= (offsetLimit + 1) * 3600
   ) {
     refused(
-      `"${text}" has a UTC offset outside -${pad(offsetLimit)}:59 to +${pad(offsetLimit)}:59, which ${typeName} does not hold. Write a smaller offset, as in "${shape.example}".`,
+      `"${written}" has a UTC offset outside -${pad(offsetLimit)}:59 to +${pad(offsetLimit)}:59, which ${id} does not hold. Write a smaller offset, as in "${shape.example}".`,
     );
   }
 
-  return printed(written, options.shape);
-}
-
-const MIDNIGHT: TimeFields = { hour: 0, minute: 0, second: 0, fraction: '' };
-
-/** The standard text of a written value whose parts the shape's checks have already admitted. */
-function printed(written: WrittenDateTime, shape: DateTimeShape): string {
-  const { date, offsetSeconds = 0 } = written;
-  const clock = written.time ?? MIDNIGHT;
-  if (date === undefined) {
-    return shape === 'timeWithOffset'
-      ? `${timeText(clock)}${offsetText(offsetSeconds)}`
-      : timeText(clock);
+  const value = normalized(parts, options.shape);
+  const { range } = options;
+  if (range !== undefined) {
+    const at = position(value);
+    if (
+      isBefore(at, boundPosition(range.earliest, options.shape)) ||
+      isBefore(boundPosition(range.latest, options.shape), at)
+    ) {
+      refused(
+        `${id} holds ${shape.plural} from ${range.earliest} to ${range.latest}, and "${written}" is outside them.`,
+      );
+    }
   }
-  if (shape === 'date') return dateText(date);
-  if (shape === 'dateTime') return `${dateText(date)}T${timeText(clock)}`;
-  const utc =
-    daysFromCivil(date) * SECONDS_PER_DAY +
-    clock.hour * 3600 +
-    clock.minute * 60 +
-    clock.second -
-    offsetSeconds;
-  const days = Math.floor(utc / SECONDS_PER_DAY);
-  const secondOfDay = utc - days * SECONDS_PER_DAY;
-  const utcClock: TimeFields = {
-    hour: Math.floor(secondOfDay / 3600),
-    minute: Math.floor(secondOfDay / 60) % 60,
-    second: secondOfDay % 60,
-    fraction: clock.fraction,
-  };
-  return `${dateText(civilFromDays(days))}T${timeText(utcClock)}Z`;
+  return printed(value, options.shape);
 }

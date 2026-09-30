@@ -12,7 +12,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
-import { pgTimestamptz, pgTimestamptzText } from './data-types';
+import { pgTimestamptz, pgTimestamptzCanonical } from './data-types';
 import { PG_TIMESTAMPTZ_NATIVE_TYPE } from './temporal-codec-helpers';
 
 const TIMESTAMPTZ_TEXT =
@@ -110,7 +110,7 @@ export class PgTimestamptzDateCodec extends CodecImpl<
     return decodeDate(wire);
   }
   encodeJson(value: Date): JsonValue {
-    return pgTimestamptzText(validateDate(value).toISOString());
+    return pgTimestamptzCanonical(validateDate(value).toISOString());
   }
   decodeJson(json: JsonValue): Date {
     return decodeDate(json);

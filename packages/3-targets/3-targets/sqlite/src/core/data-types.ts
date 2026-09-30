@@ -10,8 +10,13 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
-import { numeralText, standardDateTimeText } from '@internal/sql-relational-core/ast';
+import {
+  type CanonicalForm,
+  type Cast,
+  type DataType,
+  dataType,
+} from '@internal/framework-components/codec';
+import { canonicalDateTime, numeralText } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
 
 const unchanged: Cast = (value) => value;
@@ -54,17 +59,22 @@ export const sqliteJson: DataType = dataType('sqlite/json', {});
 export const sqliteInteger: DataType = dataType('sqlite/integer', {});
 
 /**
- * The standard text of `sqlite/datetime`: an instant in UTC as `Temporal` prints it,
- * `2024-01-01T12:34:56Z`. Turns written text into it, or refuses the text.
+ * The canonical form of `sqlite/datetime` (ADR 254), from ISO 8601 text with a UTC offset. The range
+ * is the one a JavaScript `Date`, the codec's value, holds.
  */
-export const sqliteDatetimeText = (text: string): string =>
-  standardDateTimeText(text, { shape: 'instant', typeName: 'sqlite/datetime', infinity: false });
+export const sqliteDatetimeCanonical = (text: string): string =>
+  canonicalDateTime(text, {
+    shape: 'instant',
+    dataTypeId: 'sqlite/datetime',
+    range: { earliest: '-271821-04-20T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
+  });
+
+const datetimeCanonicalForm: CanonicalForm = (value) =>
+  typeof value === 'string' ? sqliteDatetimeCanonical(value) : wrongShape(value, 'text');
 
 export const sqliteDatetime: DataType = dataType('sqlite/datetime', {
-  casts: {
-    [sqliteText.id]: (value) =>
-      typeof value === 'string' ? sqliteDatetimeText(value) : wrongShape(value, 'text'),
-  },
+  canonicalForm: datetimeCanonicalForm,
+  casts: { [sqliteText.id]: datetimeCanonicalForm },
 });
 
 export const sqliteBlob: DataType = dataType('sqlite/blob', {

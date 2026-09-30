@@ -20,7 +20,7 @@ function fromUntypedCaller(value: unknown): never {
 }
 
 describe('sqlite defineContract encodes literal defaults through the column codec', () => {
-  it('stores the standard text of a Date given to field.temporal.datetime()', () => {
+  it('stores the canonical form of a Date given to field.temporal.datetime()', () => {
     expect(
       storedDefault((field) => field.temporal.datetime().default(new Date('2024-01-01T00:00:00Z'))),
     ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });

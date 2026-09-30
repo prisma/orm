@@ -1,9 +1,9 @@
 import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
-import { pgIntervalText } from '../src/core/codec-helpers';
-import { pgTimeText, pgTimetzText } from '../src/core/data-types';
+import { pgIntervalCanonical } from '../src/core/codec-helpers';
+import { pgTimeCanonical, pgTimetzCanonical } from '../src/core/data-types';
 
-describe('pg/time standard text', () => {
+describe('pg/time canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
     ['12:34:56', '12:34:56'],
     ['12:34', '12:34:00'],
@@ -12,12 +12,12 @@ describe('pg/time standard text', () => {
     ['23:59:59.999999', '23:59:59.999999'],
   ];
 
-  it.each(accepted)('turns %s into %s', (written, standard) => {
-    expect(pgTimeText(written)).toBe(standard);
+  it.each(accepted)('turns %s into its canonical form %s', (written, canonical) => {
+    expect(pgTimeCanonical(written)).toBe(canonical);
   });
 
   it.each(accepted)('agrees with Temporal.PlainTime on %s', (written) => {
-    expect(pgTimeText(written)).toBe(Temporal.PlainTime.from(written).toString());
+    expect(pgTimeCanonical(written)).toBe(Temporal.PlainTime.from(written).toString());
   });
 
   it.each([
@@ -43,17 +43,17 @@ describe('pg/time standard text', () => {
     ],
     [
       '12:34:56.1234567',
-      '"12:34:56.1234567" has 7 digits after the decimal point, but pg/time keeps at most 6, which is microseconds. Round it, as in "12:34:56.123456".',
+      '"12:34:56.1234567" has 7 digits after the decimal point, but pg/time holds microseconds, so at most 6. Round it, as in "12:34:56.123456".',
     ],
     ['infinity', 'pg/time cannot read "infinity". Write a time of day, as in "12:34:56".'],
   ])('refuses %s', (written, message) => {
-    expect(() => pgTimeText(written)).toThrow(
+    expect(() => pgTimeCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });
 });
 
-describe('pg/timetz standard text', () => {
+describe('pg/timetz canonical form', () => {
   it.each([
     ['12:34:56+02:00', '12:34:56+02:00'],
     ['12:34:56+02', '12:34:56+02:00'],
@@ -64,8 +64,8 @@ describe('pg/timetz standard text', () => {
     ['12:34:56+05:30:15', '12:34:56+05:30:15'],
     ['12:34-08:00', '12:34:00-08:00'],
     ['12:00:00+15:59', '12:00:00+15:59'],
-  ])('turns %s into %s', (written, standard) => {
-    expect(pgTimetzText(written)).toBe(standard);
+  ])('turns %s into its canonical form %s', (written, canonical) => {
+    expect(pgTimetzCanonical(written)).toBe(canonical);
   });
 
   it.each([
@@ -82,13 +82,13 @@ describe('pg/timetz standard text', () => {
       '"12:00:00+16:00" has a UTC offset outside -15:59 to +15:59, which pg/timetz does not hold. Write a smaller offset, as in "12:34:56+02:00".',
     ],
   ])('refuses %s', (written, message) => {
-    expect(() => pgTimetzText(written)).toThrow(
+    expect(() => pgTimetzCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });
 });
 
-describe('pg/interval standard text', () => {
+describe('pg/interval canonical form', () => {
   it.each([
     ['P1Y2M3DT4H5M6S', 'P1Y2M3DT4H5M6S'],
     ['P13M', 'P1Y1M'],
@@ -103,8 +103,8 @@ describe('pg/interval standard text', () => {
     ['1 day', 'P1D'],
     ['-01:00:00', 'PT-1H'],
     ['25:00:00', 'PT25H'],
-  ])('turns %s into %s', (written, standard) => {
-    expect(pgIntervalText(written)).toBe(standard);
+  ])('turns %s into its canonical form %s', (written, canonical) => {
+    expect(pgIntervalCanonical(written)).toBe(canonical);
   });
 
   it.each([
@@ -115,10 +115,10 @@ describe('pg/interval standard text', () => {
     ['', 'pg/interval cannot read "". Write an ISO 8601 duration, as in "P1Y2M3DT4H5M6S".'],
     [
       'PT1.1234567S',
-      '"PT1.1234567S" has 7 digits after the decimal point, but pg/interval keeps at most 6, which is microseconds. Round it, as in "PT1.123456S".',
+      '"PT1.1234567S" has 7 digits after the decimal point, but pg/interval holds microseconds, so at most 6. Round it, as in "PT1.123456S".',
     ],
   ])('refuses %s', (written, message) => {
-    expect(() => pgIntervalText(written)).toThrow(
+    expect(() => pgIntervalCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
   });

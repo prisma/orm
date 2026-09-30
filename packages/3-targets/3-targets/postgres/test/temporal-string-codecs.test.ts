@@ -105,7 +105,7 @@ describe('representation-explicit temporal string codecs', () => {
       );
 
       it.each(standardJson.map(([value, json]) => ({ value, json })))(
-        'writes $value to JSON as the standard text $json',
+        'writes $value to JSON in canonical form $json',
         ({ value, json }) => {
           expect(codec.encodeJson(value)).toBe(json);
         },

@@ -8,15 +8,21 @@
  * ADR 254.
  */
 
-import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
-import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
 import {
+  type CanonicalForm,
+  type Cast,
+  type DataType,
+  dataType,
+} from '@internal/framework-components/codec';
+import {
+  type CanonicalDateTimeOptions,
+  canonicalDateTime,
   isNonFiniteText,
   numeralText,
-  standardDateTimeText,
 } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
-import { pgIntervalText } from './codec-helpers';
+import { pgIntervalCanonical } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -116,81 +122,94 @@ export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
 export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });
 export const pgBytea: DataType = dataType('pg/bytea', { casts: fromText });
 
+const POSTGRES_YEAR = /^(\d{4,6})(-.*?)( BC)?$/;
+
 /**
- * The standard text of each date and time type: the text `Temporal` prints, and for `pg/interval`
- * the ISO 8601 duration `pg/interval@1` writes. Each function turns written text into it, or
- * refuses the text.
+ * Text PostgreSQL prints, in ISO 8601: a year before 1 carries a ` BC` suffix and a year after 9999
+ * has five or six digits, and both become a signed six-digit year. Year 0 BC does not exist, so it
+ * stays as written and the reader refuses it.
  */
-export const pgDateText = (text: string): string =>
-  standardDateTimeText(text, { shape: 'date', typeName: 'pg/date', infinity: true });
-export const pgTimeText = (text: string): string =>
-  standardDateTimeText(text, { shape: 'time', typeName: 'pg/time', infinity: false });
-export const pgTimetzText = (text: string): string =>
-  standardDateTimeText(text, {
-    shape: 'timeWithOffset',
-    typeName: 'pg/timetz',
-    infinity: false,
-    maxOffsetHours: 15,
-  });
-export const pgTimestampText = (text: string): string =>
-  standardDateTimeText(text, { shape: 'dateTime', typeName: 'pg/timestamp', infinity: true });
-export const pgTimestamptzText = (text: string): string =>
-  standardDateTimeText(text, { shape: 'instant', typeName: 'pg/timestamptz', infinity: true });
-
-/** A cast from text that turns the text into the receiving type's standard text. */
-const fromTextAs = (standardText: (text: string) => string): Readonly<Record<string, Cast>> => ({
-  [pgText.id]: (value) =>
-    typeof value === 'string' ? standardText(value) : wrongShape(value, 'text'),
-});
-
-export const pgTimetz: DataType = dataType('pg/timetz', { casts: fromTextAs(pgTimetzText) });
-export const pgInterval: DataType = dataType('pg/interval', {
-  casts: fromTextAs(pgIntervalText),
-});
-export const pgDate: DataType = dataType('pg/date', { casts: fromTextAs(pgDateText) });
-export const pgTime: DataType = dataType('pg/time', { casts: fromTextAs(pgTimeText) });
-export const pgTimestamp: DataType = dataType('pg/timestamp', {
-  casts: fromTextAs(pgTimestampText),
-});
-export const pgTimestamptz: DataType = dataType('pg/timestamptz', {
-  casts: fromTextAs(pgTimestamptzText),
-});
-
-/** The standard-text function of each date and time type, by data type id. */
-export const postgresStandardTextByDataType: ReadonlyMap<string, (text: string) => string> =
-  new Map([
-    [pgDate.id, pgDateText],
-    [pgTime.id, pgTimeText],
-    [pgTimetz.id, pgTimetzText],
-    [pgTimestamp.id, pgTimestampText],
-    [pgTimestamptz.id, pgTimestamptzText],
-    [pgInterval.id, pgIntervalText],
-  ]);
-
-function inStandardText(value: JsonValue, standardText: (text: string) => string): JsonValue {
-  if (Array.isArray(value)) return value.map((element) => inStandardText(element, standardText));
-  if (typeof value !== 'string') return value;
-  try {
-    return standardText(value);
-  } catch {
-    return value;
+function isoFromPostgresText(text: string): string {
+  const match = POSTGRES_YEAR.exec(text);
+  if (match === null) return text;
+  const [, digits = '', rest = '', bc] = match;
+  const year = Number(digits);
+  if (bc !== undefined) {
+    if (year === 0) return text;
+    const astronomical = 1 - year;
+    return astronomical === 0 ? `0000${rest}` : `-${String(-astronomical).padStart(6, '0')}${rest}`;
   }
+  return digits.length > 4 ? `+${String(year).padStart(6, '0')}${rest}` : text;
+}
+
+const INFINITIES: ReadonlySet<string> = new Set(['infinity', '-infinity']);
+
+/**
+ * The canonical form of a date or time type (ADR 254), from ISO 8601 or the text PostgreSQL prints.
+ * `infinity` and `-infinity` are values of the types that hold them.
+ */
+function postgresDateTime(
+  options: CanonicalDateTimeOptions,
+  holdsInfinity: boolean,
+): (text: string) => string {
+  return (text) =>
+    holdsInfinity && INFINITIES.has(text)
+      ? text
+      : canonicalDateTime(isoFromPostgresText(text), options, text);
 }
 
 /**
- * A literal default of a date or time type in the type's standard text, element by element for a
- * list. Text the type does not read, and a value of any other type, is returned unchanged.
+ * Each range is what PostgreSQL and every codec of the type hold: PostgreSQL starts at 4714-11-24
+ * BC, and the `Temporal` and `Date` codecs end at +275760-09-13.
  */
-export function postgresStandardDefault(
-  value: ColumnDefaultLiteralInputValue,
-  dataType: string | undefined,
-): ColumnDefaultLiteralInputValue {
-  const standardText =
-    dataType === undefined ? undefined : postgresStandardTextByDataType.get(dataType);
-  return standardText === undefined || value instanceof Date
-    ? value
-    : inStandardText(value, standardText);
+export const pgDateCanonical = postgresDateTime(
+  {
+    shape: 'date',
+    dataTypeId: 'pg/date',
+    range: { earliest: '-004713-11-24', latest: '+275760-09-13' },
+  },
+  true,
+);
+export const pgTimeCanonical = postgresDateTime({ shape: 'time', dataTypeId: 'pg/time' }, false);
+export const pgTimetzCanonical = postgresDateTime(
+  { shape: 'timeWithOffset', dataTypeId: 'pg/timetz', maxOffsetHours: 15 },
+  false,
+);
+export const pgTimestampCanonical = postgresDateTime(
+  {
+    shape: 'dateTime',
+    dataTypeId: 'pg/timestamp',
+    range: { earliest: '-004713-11-24T00:00:00', latest: '+275760-09-13T23:59:59.999999' },
+  },
+  true,
+);
+export const pgTimestamptzCanonical = postgresDateTime(
+  {
+    shape: 'instant',
+    dataTypeId: 'pg/timestamptz',
+    range: { earliest: '-004713-11-24T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
+  },
+  true,
+);
+
+/** The canonical-form function of a type whose values are written as text. */
+const canonicalFromText =
+  (canonical: (text: string) => string): CanonicalForm =>
+  (value) =>
+    typeof value === 'string' ? canonical(value) : wrongShape(value, 'text');
+
+/** A date or time type: its canonical form, and a cast from text that gives it. */
+function dateTimeType(id: string, canonical: (text: string) => string): DataType {
+  const canonicalForm = canonicalFromText(canonical);
+  return dataType(id, { canonicalForm, casts: { [pgText.id]: canonicalForm } });
 }
+
+export const pgTimetz: DataType = dateTimeType('pg/timetz', pgTimetzCanonical);
+export const pgInterval: DataType = dateTimeType('pg/interval', pgIntervalCanonical);
+export const pgDate: DataType = dateTimeType('pg/date', pgDateCanonical);
+export const pgTime: DataType = dateTimeType('pg/time', pgTimeCanonical);
+export const pgTimestamp: DataType = dateTimeType('pg/timestamp', pgTimestampCanonical);
+export const pgTimestamptz: DataType = dateTimeType('pg/timestamptz', pgTimestamptzCanonical);
 
 /** Every data type this target registers. */
 export const postgresDataTypes: readonly DataType[] = [

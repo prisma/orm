@@ -54,7 +54,7 @@ describe('postgres defineContract encodes literal defaults through the column co
     });
   });
 
-  it('stores the standard text of a Date given to field.temporal.timestamptzJsDate()', () => {
+  it('stores the canonical form of a Date given to field.temporal.timestamptzJsDate()', () => {
     expect(
       storedDefault((field) =>
         field.temporal.timestamptzJsDate().default(new Date('2024-01-01T00:00:00Z')),

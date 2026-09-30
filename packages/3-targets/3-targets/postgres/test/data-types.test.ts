@@ -128,7 +128,7 @@ describe('what each cast converts', () => {
     ['pg/json to pg/jsonb, the document unchanged', pgJsonb, pgJson.id, { a: [1] }, { a: [1] }],
     ['pg/text to pg/uuid, the text unchanged', pgUuid, pgText.id, 'abc', 'abc'],
     [
-      'pg/text to pg/timestamp, the text to its standard text',
+      'pg/text to pg/timestamp, the text to its canonical form',
       pgTimestamp,
       pgText.id,
       '2020-01-01 12:00:00',

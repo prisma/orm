@@ -20,13 +20,13 @@ import {
 } from './codec-ids';
 import {
   pgDate,
-  pgDateText,
+  pgDateCanonical,
   pgTime,
+  pgTimeCanonical,
   pgTimestamp,
-  pgTimestampText,
+  pgTimestampCanonical,
   pgTimestamptz,
-  pgTimestamptzText,
-  pgTimeText,
+  pgTimestamptzCanonical,
 } from './data-types';
 import {
   PG_DATE_NATIVE_TYPE,
@@ -48,7 +48,7 @@ export class PgDateStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return pgDateText(value);
+    return pgDateCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return blindCast<string, 'date-string columns serialize to JSON as their wire string form'>(
@@ -95,7 +95,7 @@ export class PgTimestampStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return pgTimestampText(value);
+    return pgTimestampCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return blindCast<
@@ -154,7 +154,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return pgTimestamptzText(value);
+    return pgTimestamptzCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return blindCast<
@@ -213,7 +213,7 @@ export class PgTimeStringCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return pgTimeText(value);
+    return pgTimeCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return blindCast<string, 'time-string columns serialize to JSON as their wire string form'>(

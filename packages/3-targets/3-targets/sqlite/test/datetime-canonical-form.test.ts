@@ -1,9 +1,9 @@
 import { Temporal } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
 import { sqliteDatetimeDescriptor } from '../src/core/codecs';
-import { sqliteDatetimeText } from '../src/core/data-types';
+import { sqliteDatetime, sqliteDatetimeCanonical, sqliteText } from '../src/core/data-types';
 
-describe('sqlite/datetime standard text', () => {
+describe('sqlite/datetime canonical form', () => {
   const accepted: ReadonlyArray<readonly [string, string]> = [
     ['2024-01-01T00:00:00Z', '2024-01-01T00:00:00Z'],
     ['2024-01-01T00:00:00.000Z', '2024-01-01T00:00:00Z'],
@@ -12,14 +12,16 @@ describe('sqlite/datetime standard text', () => {
     ['2024-01-01T00:00:00.120Z', '2024-01-01T00:00:00.12Z'],
     ['-000043-03-15T00:00:00.000Z', '-000043-03-15T00:00:00Z'],
     ['+012026-01-02T03:04:05Z', '+012026-01-02T03:04:05Z'],
+    ['+275760-09-13T00:00:00Z', '+275760-09-13T00:00:00Z'],
+    ['-271821-04-20T00:00:00Z', '-271821-04-20T00:00:00Z'],
   ];
 
-  it.each(accepted)('turns %s into %s', (written, standard) => {
-    expect(sqliteDatetimeText(written)).toBe(standard);
+  it.each(accepted)('turns %s into its canonical form %s', (written, canonical) => {
+    expect(sqliteDatetimeCanonical(written)).toBe(canonical);
   });
 
   it.each(accepted)('agrees with Temporal.Instant on %s', (written) => {
-    expect(sqliteDatetimeText(written)).toBe(Temporal.Instant.from(written).toString());
+    expect(sqliteDatetimeCanonical(written)).toBe(Temporal.Instant.from(written).toString());
   });
 
   it.each([
@@ -37,19 +39,40 @@ describe('sqlite/datetime standard text', () => {
     ],
     [
       '2024-01-01T00:00:00.1234567Z',
-      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but sqlite/datetime keeps at most 6, which is microseconds. Round it, as in "2024-01-01T12:34:56.123456Z".',
+      '"2024-01-01T00:00:00.1234567Z" has 7 digits after the decimal point, but sqlite/datetime holds microseconds, so at most 6. Round it, as in "2024-01-01T12:34:56.123456Z".',
+    ],
+    [
+      '0044-03-15 00:00:00+00 BC',
+      'sqlite/datetime cannot read "0044-03-15 00:00:00+00 BC". Write a date and time with a UTC offset, as in "2024-01-01T12:34:56Z".',
+    ],
+    [
+      '+275760-09-13T00:00:00.001Z',
+      'sqlite/datetime holds instants from -271821-04-20T00:00:00Z to +275760-09-13T00:00:00Z, and "+275760-09-13T00:00:00.001Z" is outside them.',
+    ],
+    [
+      '-271821-04-19T23:59:59Z',
+      'sqlite/datetime holds instants from -271821-04-20T00:00:00Z to +275760-09-13T00:00:00Z, and "-271821-04-19T23:59:59Z" is outside them.',
     ],
   ])('refuses %s', (written, message) => {
-    expect(() => sqliteDatetimeText(written)).toThrow(
+    expect(() => sqliteDatetimeCanonical(written)).toThrow(
       expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED', message }),
     );
+  });
+});
+
+describe('sqlite/datetime declares its canonical form', () => {
+  it('gives the type its canonical-form function, which its cast from text shares', () => {
+    expect({
+      canonical: sqliteDatetime.canonicalForm?.('2024-01-01 01:00:00+01:00'),
+      cast: sqliteDatetime.casts[sqliteText.id]?.('2024-01-01 01:00:00+01:00'),
+    }).toEqual({ canonical: '2024-01-01T00:00:00Z', cast: '2024-01-01T00:00:00Z' });
   });
 });
 
 describe('sqlite/datetime@1 JSON text', () => {
   const codec = sqliteDatetimeDescriptor.factory()({ name: '<test>' });
 
-  it('writes a Date as the standard text', () => {
+  it('writes a Date in canonical form', () => {
     expect([
       codec.encodeJson(new Date('2024-01-01T00:00:00.000Z')),
       codec.encodeJson(new Date('2024-01-01T00:00:00.250Z')),
@@ -57,7 +80,7 @@ describe('sqlite/datetime@1 JSON text', () => {
     ]).toEqual(['2024-01-01T00:00:00Z', '2024-01-01T00:00:00.25Z', '-000043-03-15T00:00:00Z']);
   });
 
-  it('still reads the millisecond text it wrote before the standard text', () => {
+  it('still reads the millisecond text it wrote before the canonical form', () => {
     expect(codec.decodeJson('2024-01-01T00:00:00.000Z')).toEqual(
       new Date('2024-01-01T00:00:00.000Z'),
     );

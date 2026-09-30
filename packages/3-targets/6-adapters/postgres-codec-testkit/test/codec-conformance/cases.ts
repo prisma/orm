@@ -49,7 +49,7 @@ const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
 
 /**
  * The text codecs of the date and time types hand back PostgreSQL's own text, which is what the
- * projection returns, while `encodeJson` writes the data type's standard text, the one a contract
+ * projection returns, while `encodeJson` writes the data type's canonical form, the one a contract
  * stores. Both spell the same value, so these cases are judged on the round trip.
  */
 const sameText = (roundTripped: unknown, value: unknown): boolean => roundTripped === value;

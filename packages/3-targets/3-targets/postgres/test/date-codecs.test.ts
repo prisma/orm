@@ -34,7 +34,7 @@ describe('pg/timestamptz-date@1', () => {
     ['+275760-09-13T00:00:00.000Z', '275760-09-13T00:00:00.000Z', '+275760-09-13T00:00:00Z'],
     ['+012026-01-02T03:04:05.000Z', '12026-01-02T03:04:05.000Z', '+012026-01-02T03:04:05Z'],
   ])(
-    'encodes %s as PostgreSQL text on the wire and as the standard text in JSON',
+    'encodes %s as PostgreSQL text on the wire and in canonical form in JSON',
     async (iso, wire, json) => {
       const value = new Date(iso);
       expect({
@@ -50,7 +50,7 @@ describe('pg/timestamptz-date@1', () => {
     ['2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z'],
     ['0001-01-01T00:00:00.000Z BC', '0000-01-01T00:00:00.000Z'],
     ['0044-03-15T00:00:00.000Z BC', '-000043-03-15T00:00:00.000Z'],
-  ])('still reads %s, the JSON text it wrote before the standard text', (json, iso) => {
+  ])('still reads %s, the JSON text it wrote before the canonical form', (json, iso) => {
     expect(codec.decodeJson(json)).toEqual(new Date(iso));
   });
 

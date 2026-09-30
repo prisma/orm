@@ -125,7 +125,7 @@ import {
   pgText,
   pgTextArray,
   pgTimetz,
-  pgTimetzText,
+  pgTimetzCanonical,
   pgTsquery,
   pgUuid,
   pgVarbit,
@@ -1100,7 +1100,7 @@ export class PgTimetzCodec extends CodecImpl<
     return wire;
   }
   encodeJson(value: string): JsonValue {
-    return pgTimetzText(value);
+    return pgTimetzCanonical(value);
   }
   decodeJson(json: JsonValue): string {
     return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
