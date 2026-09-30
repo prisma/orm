@@ -82,7 +82,21 @@ export const sqliteBlob: DataType = dataType('sqlite/blob', {
   casts: { [sqliteText.id]: unchanged },
 });
 
+const DECIMAL_INTEGER = /^-?\d+$/;
+
+/**
+ * The canonical form of `sqlite/bigint`: digit text. SQLite reads an INTEGER default back as a
+ * number when it is a safe integer, so a safe integer reads as its digit text too; any other
+ * number may already have lost digits and is refused.
+ */
+const bigintCanonicalForm: ToCanonicalForm = (value) => {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return numeralText(value);
+  if (typeof value === 'string' && DECIMAL_INTEGER.test(value)) return BigInt(value).toString();
+  return wrongShape(value, 'digit text or a safe integer');
+};
+
 export const sqliteBigint: DataType = dataType('sqlite/bigint', {
+  toCanonicalForm: bigintCanonicalForm,
   casts: { [sqliteInteger.id]: asNumeralText },
 });
 
