@@ -21,7 +21,9 @@ import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../..
 import {
   CliStructuredError,
   errorContractValidationFailed,
+  errorFromContractError,
   errorUnexpected,
+  isContractError,
 } from '../../utils/cli-errors';
 import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
@@ -303,6 +305,9 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
               }),
             ),
           );
+        }
+        if (isContractError(error)) {
+          return notOk(normalizeError(errorFromContractError(error)));
         }
         const safeMessage = sanitizeErrorMessage(
           error instanceof Error ? error.message : String(error),

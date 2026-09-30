@@ -30,7 +30,11 @@ import type {
   MarkerReadResult,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import { encodeLiteralDefault, isDdlNode } from '@internal/sql-relational-core/ast';
+import {
+  encodeLiteralDefault,
+  isDdlNode,
+  type LiteralDefaultColumn,
+} from '@internal/sql-relational-core/ast';
 import type { ColumnDescriptor, ExcludedProxy } from '@internal/sql-relational-core/contract-free';
 import { namingOfLiveName } from '@internal/sql-schema-ir/naming';
 import type {
@@ -1838,6 +1842,7 @@ async function pgRenderDdlColumnDefault(
   nativeType: string,
   codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef | undefined,
+  where: LiteralDefaultColumn,
 ): Promise<string> {
   if (def.kind === 'function') {
     if (def.expression === 'autoincrement()') {
@@ -1860,7 +1865,7 @@ async function pgRenderDdlColumnDefault(
   const encoded =
     codecRef === undefined
       ? undefined
-      : await encodeLiteralDefault(codecLookup, codecRef, def.value);
+      : await encodeLiteralDefault(codecLookup, codecRef, def.value, where);
   if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
   if (encoded !== undefined) return `DEFAULT ${pgInlineLiteral(encoded.wire, nativeType)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
@@ -1870,6 +1875,7 @@ async function pgRenderDdlColumnDefault(
 async function pgRenderDdlColumn(
   column: DdlColumn,
   codecLookup: CodecLookupWithDescriptors,
+  table: string,
 ): Promise<string> {
   const parts = [quoteIdentifier(column.name), column.type];
   if (column.default) {
@@ -1878,6 +1884,7 @@ async function pgRenderDdlColumn(
       column.type,
       codecLookup,
       column.codecRef,
+      { table, column: column.name },
     );
     if (clause.length > 0) parts.push(clause);
   }
@@ -1929,7 +1936,7 @@ async function pgRenderCreateTable(
     ? `${quoteIdentifier(node.schema)}.${quoteIdentifier(node.table)}`
     : quoteIdentifier(node.table);
   const columnDefs = await Promise.all(
-    node.columns.map((col: DdlColumn) => pgRenderDdlColumn(col, codecLookup)),
+    node.columns.map((col: DdlColumn) => pgRenderDdlColumn(col, codecLookup, node.table)),
   );
   const constraintDefs =
     node.constraints !== undefined ? node.constraints.map(pgRenderDdlConstraint) : [];
@@ -1978,7 +1985,7 @@ async function pgRenderAlterTable(
     : quoteIdentifier(node.table);
   const actionVisitor: AlterTableActionVisitor<Promise<string>> = {
     async addColumn(action: AddColumnAction): Promise<string> {
-      const colFragment = await pgRenderDdlColumn(action.column, codecLookup);
+      const colFragment = await pgRenderDdlColumn(action.column, codecLookup, node.table);
       return `ADD COLUMN ${colFragment}`;
     },
     dropDefault(action: DropDefaultAction): Promise<string> {

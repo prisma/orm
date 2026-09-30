@@ -16,7 +16,9 @@ import type { CreateControlClient, DbInitSuccess } from '../../control-api/types
 import {
   CliStructuredError,
   errorContractValidationFailed,
+  errorFromContractError,
   errorUnexpected,
+  isContractError,
 } from '../../utils/cli-errors';
 import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
@@ -217,6 +219,9 @@ export function createDbInitCommand(createClient: CreateControlClient) {
               }),
             ),
           );
+        }
+        if (isContractError(error)) {
+          return notOk(normalizeError(errorFromContractError(error)));
         }
         const safeMessage = sanitizeErrorMessage(
           error instanceof Error ? error.message : String(error),

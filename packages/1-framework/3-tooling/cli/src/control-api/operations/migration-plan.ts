@@ -34,9 +34,11 @@ import {
   errorContractValidationFailed,
   errorDestructiveChanges,
   errorFileNotFound,
+  errorFromContractError,
   errorMigrationPlanningFailed,
   errorTargetMigrationNotSupported,
   errorUnexpected,
+  isContractError,
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
@@ -348,6 +350,9 @@ export async function executeMigrationPlanCommand(
   } catch (error) {
     if (CliStructuredError.is(error)) {
       return notOk(error);
+    }
+    if (isContractError(error)) {
+      return notOk(errorFromContractError(error));
     }
     const message = error instanceof Error ? error.message : String(error);
     return notOk(
@@ -876,6 +881,9 @@ async function executeMigrationPlanCommandInner(
     }
     if (MigrationToolsError.is(error)) {
       return notOk(error);
+    }
+    if (isContractError(error)) {
+      return notOk(errorFromContractError(error));
     }
     const message = error instanceof Error ? error.message : String(error);
     return notOk(

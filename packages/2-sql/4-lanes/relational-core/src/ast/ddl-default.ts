@@ -1,45 +1,65 @@
-import type { ColumnDefaultLiteralInputValue } from '@internal/contract/types';
-import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { codecForRef } from '@internal/framework-components/codec';
+import { structuredError } from '@internal/utils/structured-error';
 import type { CodecRef } from './codec-types';
-
-/** What a literal default becomes in DDL: SQL NULL, or a value for the column's codec to `encode`. */
-export type LiteralDefaultReading =
-  | { readonly kind: 'sql-null' }
-  | { readonly kind: 'value'; readonly value: unknown };
-
-/**
- * Reads a literal default with the column's codec, as {@link DdlColumn.codecRef} describes. A `Date` is the one authored value JSON has no notation for, so it passes through. A `null` the codec refuses is SQL NULL, because SQL NULL has no stored form of its own; a codec that reads `null` (a JSON codec) makes it the JSON value null.
- */
-export function readLiteralDefault(
-  codec: Codec,
-  value: ColumnDefaultLiteralInputValue,
-): LiteralDefaultReading {
-  if (value instanceof Date) return { kind: 'value', value };
-  try {
-    return { kind: 'value', value: codec.decodeJson(value) };
-  } catch (error) {
-    if (value === null) return { kind: 'sql-null' };
-    throw error;
-  }
-}
 
 /** What a literal default renders as in DDL: SQL NULL, or the wire value the column's codec encoded. */
 export type EncodedLiteralDefault =
   | { readonly kind: 'sql-null' }
   | { readonly kind: 'wire'; readonly wire: unknown };
 
+/** The column whose default is rendered, which a refusal names. */
+export interface LiteralDefaultColumn {
+  readonly table: string;
+  readonly column: string;
+}
+
 /**
  * Reads a column's literal default with the column's codec, built with its type parameters, and encodes it for the DDL renderer to inline. `undefined` when no codec descriptor has the column's codec id, so the renderer inlines the value as written.
+ *
+ * A `Date` is the one authored value JSON has no notation for, so it is encoded as it is. A `null` the codec refuses is SQL NULL, because SQL NULL has no stored form of its own; a codec that reads `null` (a JSON codec) makes it the JSON value null. Any other value the codec refuses is a `CONTRACT.DEFAULT_INVALID` naming the column.
  */
 export async function encodeLiteralDefault(
-  codecLookup: CodecLookupWithDescriptors,
+  codecLookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
   codecRef: CodecRef,
   value: ColumnDefaultLiteralInputValue,
+  where: LiteralDefaultColumn,
 ): Promise<EncodedLiteralDefault | undefined> {
   const codec = codecForRef(codecLookup, codecRef);
   if (codec === undefined) return undefined;
-  const reading = readLiteralDefault(codec, value);
-  if (reading.kind === 'sql-null') return reading;
-  return { kind: 'wire', wire: await codec.encode(reading.value, {}) };
+  if (value instanceof Date) return { kind: 'wire', wire: await codec.encode(value, {}) };
+  let decoded: unknown;
+  try {
+    decoded = codec.decodeJson(value);
+  } catch (error) {
+    if (value === null) return { kind: 'sql-null' };
+    throw refusedDefault(where, codecRef.codecId, value, error);
+  }
+  return { kind: 'wire', wire: await codec.encode(decoded, {}) };
+}
+
+function refusedDefault(
+  where: LiteralDefaultColumn,
+  codecId: string,
+  value: JsonValue,
+  cause: unknown,
+): Error {
+  const reason = cause instanceof Error ? cause.message : String(cause);
+  return structuredError(
+    'CONTRACT.DEFAULT_INVALID',
+    `Column "${where.table}"."${where.column}" has a default its codec ${codecId} refuses: ${reason}`,
+    {
+      why: "A contract emitted by an earlier version, or edited by hand, can hold a default that this version's codec refuses.",
+      fix: 'Emit the contract again with this version. If emit refuses the default, correct it in the schema.',
+      cause,
+      meta: {
+        table: where.table,
+        column: where.column,
+        codecId,
+        value,
+        reason: 'codec-refused-default',
+      },
+    },
+  );
 }

@@ -21,7 +21,11 @@ import type {
   MarkerReadResult,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import { encodeLiteralDefault, isDdlNode } from '@internal/sql-relational-core/ast';
+import {
+  encodeLiteralDefault,
+  isDdlNode,
+  type LiteralDefaultColumn,
+} from '@internal/sql-relational-core/ast';
 import type {
   PrimaryKeyInput,
   SqlColumnIRInput,
@@ -743,6 +747,7 @@ async function sqliteRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
   codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef | undefined,
+  where: LiteralDefaultColumn,
 ): Promise<string> {
   if (def.kind === 'function') {
     if (def.expression === 'autoincrement()') return '';
@@ -755,7 +760,7 @@ async function sqliteRenderDdlColumnDefault(
   const encoded =
     codecRef === undefined
       ? undefined
-      : await encodeLiteralDefault(codecLookup, codecRef, def.value);
+      : await encodeLiteralDefault(codecLookup, codecRef, def.value, where);
   if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
   if (encoded !== undefined) return `DEFAULT ${sqliteInlineLiteral(encoded.wire)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
@@ -765,6 +770,7 @@ async function sqliteRenderDdlColumnDefault(
 async function sqliteRenderDdlColumn(
   column: DdlColumn,
   codecLookup: CodecLookupWithDescriptors,
+  table: string,
 ): Promise<string> {
   if (column.type.includes('AUTOINCREMENT')) {
     return `${quoteIdentifier(column.name)} ${column.type}`;
@@ -773,7 +779,15 @@ async function sqliteRenderDdlColumn(
   if (column.notNull) parts.push('NOT NULL');
   if (column.primaryKey) parts.push('PRIMARY KEY');
   if (column.default) {
-    const clause = await sqliteRenderDdlColumnDefault(column.default, codecLookup, column.codecRef);
+    const clause = await sqliteRenderDdlColumnDefault(
+      column.default,
+      codecLookup,
+      column.codecRef,
+      {
+        table,
+        column: column.name,
+      },
+    );
     if (clause.length > 0) parts.push(clause);
   }
   return parts.join(' ');
@@ -825,7 +839,7 @@ async function sqliteRenderDdlExecuteRequest(
   const ifNotExists = node.ifNotExists ? 'IF NOT EXISTS ' : '';
   const tableRef = quoteIdentifier(node.table);
   const columnDefs = await Promise.all(
-    node.columns.map((col) => sqliteRenderDdlColumn(col, codecLookup)),
+    node.columns.map((col) => sqliteRenderDdlColumn(col, codecLookup, node.table)),
   );
   const constraintDefs =
     node.constraints !== undefined ? node.constraints.map(sqliteRenderDdlConstraint) : [];
