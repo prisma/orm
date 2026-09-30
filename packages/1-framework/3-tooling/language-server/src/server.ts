@@ -1,11 +1,8 @@
 import { fileURLToPath } from 'node:url';
-import { findNearestConfigPathForFile } from '@internal/config-loader';
 import { isPrismaNextSchema, type SymbolTable } from '@internal/psl-parser';
-import { join } from 'pathe';
 import {
   type CompletionItem,
   type Connection,
-  DidChangeWatchedFilesNotification,
   type DocumentDiagnosticReport,
   DocumentDiagnosticReportKind,
   type FoldingRange,
@@ -13,19 +10,17 @@ import {
   type InitializeResult,
   type Position,
   type Range,
-  RegistrationRequest,
   type SemanticTokens,
   type SignatureHelp,
   TextDocumentSyncKind,
   type TextEdit,
 } from 'vscode-languageserver';
-import { CONFIG_FILENAME } from './config-resolution';
 import type { DocumentSnapshot } from './document-snapshot';
 import { DocumentStore } from './document-store';
 import { guardedConnection } from './guarded-connection';
-import { Project } from './project';
 import type { ProjectArtifacts } from './project-artifacts';
-import { canonicalFileIdentity, normalizeFileUri } from './schema-inputs';
+import { ProjectRegistry } from './project-registry';
+import { normalizeFileUri } from './schema-inputs';
 import { semanticTokensLegend } from './semantic-tokens';
 
 export interface LanguageServer {
@@ -43,73 +38,16 @@ export function createServer(connection: Connection): LanguageServer {
 function createServerOn(connection: Connection): LanguageServer {
   const documents = new DocumentStore();
   const { getOpenDocument } = documents;
-  const projectsByConfig = new Map<string, Project>();
-  const documentConfigPaths = new Map<string, string>();
-  let membershipGeneration = 0;
+  const projects = new ProjectRegistry(documents, connection);
   let rootPath = process.cwd();
-  let watchedConfigGlob = join(rootPath, '**', CONFIG_FILENAME);
   let clientCapabilities = noClientCapabilities;
-
-  async function projectForNearestConfig(uri: string): Promise<Project | undefined> {
-    const knownConfigPath = documentConfigPaths.get(canonicalFileIdentity(uri));
-    if (knownConfigPath !== undefined) return projectForConfig(knownConfigPath);
-    const filePath = filePathFromUri(uri);
-    if (filePath === undefined) return undefined;
-    let configPath: string | undefined;
-    try {
-      configPath = await findNearestConfigPathForFile(filePath);
-    } catch {
-      return undefined;
-    }
-    if (configPath === undefined) return undefined;
-    documentConfigPaths.set(canonicalFileIdentity(uri), configPath);
-    return projectForConfig(configPath);
-  }
-
-  function projectForConfig(configPath: string): Project {
-    let project = projectsByConfig.get(configPath);
-    if (project === undefined) {
-      project = new Project(configPath, {
-        documents,
-        connection,
-        pullDiagnostics: clientCapabilities.pullDiagnostics,
-        watchedFilesRegistration: clientCapabilities.watchedFilesRegistration,
-        nextSequence: () => ++membershipGeneration,
-        unmanage: (uri) => {
-          if (uri === undefined) unmanageDocuments(configPath);
-          else documentConfigPaths.delete(canonicalFileIdentity(uri));
-        },
-      });
-      projectsByConfig.set(configPath, project);
-    }
-    return project;
-  }
-
-  function unmanageDocuments(configPath: string): void {
-    for (const document of documents.openDocuments()) {
-      if (documentConfigPaths.get(canonicalFileIdentity(document.uri)) === configPath) {
-        documentConfigPaths.delete(canonicalFileIdentity(document.uri));
-      }
-    }
-  }
-
-  async function publishForDocument(uri: string): Promise<void> {
-    const project = await projectForNearestConfig(uri);
-    await project?.publishForDocument(uri);
-  }
-
-  function publishForDocumentSafely(uri: string): void {
-    void publishForDocument(uri).catch((error: unknown) => {
-      connection.console.error(error instanceof Error ? error.message : String(error));
-    });
-  }
 
   async function formatDocument(uri: string): Promise<TextEdit[]> {
     const document = getOpenDocument(uri);
     if (document === undefined) return [];
     const source = document.getText();
     if (!isPrismaNextSchema(source)) return [];
-    const project = await projectForNearestConfig(uri);
+    const project = await projects.nearestProject(uri);
     const formatted = await project?.formatDocument(uri, source);
     if (formatted === undefined || formatted === source) return [];
     return [
@@ -125,14 +63,14 @@ function createServerOn(connection: Connection): LanguageServer {
     if (document === undefined) return emptySemanticTokens();
     const text = document.getText();
     if (text.length > semanticTokenSourceLimit) return emptySemanticTokens();
-    const project = await projectForNearestConfig(uri);
+    const project = await projects.nearestProject(uri);
     return project?.semanticTokens(uri, range) ?? emptySemanticTokens();
   }
 
   async function completeDocument(uri: string, position: Position): Promise<CompletionItem[]> {
     const document = getOpenDocument(uri);
     if (document === undefined) return [];
-    const project = await projectForNearestConfig(uri);
+    const project = await projects.nearestProject(uri);
     return project?.completions(uri, position, clientCapabilities) ?? [];
   }
 
@@ -141,14 +79,14 @@ function createServerOn(connection: Connection): LanguageServer {
     position: Position,
   ): Promise<SignatureHelp | null> {
     if (getOpenDocument(uri) === undefined) return null;
-    const project = await projectForNearestConfig(uri);
+    const project = await projects.nearestProject(uri);
     return project?.signatureHelp(uri, position, clientCapabilities.signatureLabelOffsets) ?? null;
   }
 
   connection.onInitialize(async (params): Promise<InitializeResult> => {
     rootPath = resolveRootPath(params);
-    watchedConfigGlob = join(rootPath, '**', CONFIG_FILENAME);
     clientCapabilities = resolveClientCapabilities(params);
+    projects.setClientCapabilities(clientCapabilities);
     return {
       capabilities: {
         textDocumentSync: { openClose: true, change: TextDocumentSyncKind.Incremental },
@@ -164,66 +102,8 @@ function createServerOn(connection: Connection): LanguageServer {
     };
   });
 
-  connection.onInitialized(() => {
-    if (clientCapabilities.watchedFilesRegistration) {
-      void connection.sendRequest(RegistrationRequest.type, {
-        registrations: [
-          {
-            id: 'prisma-8-config-watcher',
-            method: DidChangeWatchedFilesNotification.type.method,
-            registerOptions: { watchers: [{ globPattern: watchedConfigGlob }] },
-          },
-        ],
-      });
-    } else {
-      connection.console.warn(
-        'Client does not support dynamic file-watcher registration; Prisma 8 config changes will not be picked up without a restart.',
-      );
-    }
-  });
-
-  async function handleSchemaMemberChange(uri: string): Promise<boolean> {
-    const generation = ++membershipGeneration;
-    documents.invalidate(uri);
-    const filePath = filePathFromUri(uri);
-    if (filePath === undefined) return false;
-    let configPath: string | undefined;
-    try {
-      configPath = await findNearestConfigPathForFile(filePath);
-    } catch {
-      return false;
-    }
-    if (configPath === undefined) return false;
-    return projectsByConfig.get(configPath)?.refreshMembership(uri, generation) ?? false;
-  }
-
-  connection.onDidChangeWatchedFiles(async (params) => {
-    const configChanges: string[] = [];
-    const memberChanges: string[] = [];
-    for (const change of params.changes) {
-      const filePath = filePathFromUri(change.uri);
-      (filePath?.endsWith(CONFIG_FILENAME) ? configChanges : memberChanges).push(change.uri);
-    }
-    const changedConfigPaths = configPathsFromWatchedChanges(configChanges.map(filePathFromUri));
-    const configRefreshes = Array.from(changedConfigPaths, async (configPath) => {
-      return projectsByConfig
-        .get(configPath)
-        ?.reload()
-        .catch(() => undefined);
-    });
-    const [, memberResults] = await Promise.all([
-      Promise.all(configRefreshes),
-      Promise.all(memberChanges.map(handleSchemaMemberChange)),
-    ]);
-    const handledMemberChange = memberResults.some(Boolean);
-    if (
-      clientCapabilities.pullDiagnostics &&
-      clientCapabilities.diagnosticsRefresh &&
-      (changedConfigPaths.size > 0 || handledMemberChange)
-    ) {
-      void connection.languages.diagnostics.refresh();
-    }
-  });
+  connection.onInitialized(() => projects.watchConfigFiles(rootPath));
+  connection.onDidChangeWatchedFiles((params) => projects.watchedFilesChanged(params.changes));
 
   connection.onDocumentFormatting((params) => formatDocument(params.textDocument.uri));
   connection.onCompletion((params) => completeDocument(params.textDocument.uri, params.position));
@@ -240,7 +120,7 @@ function createServerOn(connection: Connection): LanguageServer {
     if (!clientCapabilities.pullDiagnostics)
       return { kind: DocumentDiagnosticReportKind.Full, items: [] };
     const uri = normalizeFileUri(params.textDocument.uri);
-    const project = await projectForNearestConfig(uri);
+    const project = await projects.nearestProject(uri);
     if (project === undefined) {
       return { kind: DocumentDiagnosticReportKind.Full, items: [] };
     }
@@ -248,47 +128,28 @@ function createServerOn(connection: Connection): LanguageServer {
   });
 
   connection.onFoldingRanges(async (params): Promise<FoldingRange[]> => {
-    const project = await projectForNearestConfig(params.textDocument.uri);
+    const project = await projects.nearestProject(params.textDocument.uri);
     return project?.foldingRanges(params.textDocument.uri) ?? [];
   });
 
-  function projectForDocument(uri: string): Project | undefined {
-    const configPath = documentConfigPaths.get(canonicalFileIdentity(uri));
-    return configPath === undefined ? undefined : projectsByConfig.get(configPath);
-  }
-
-  function documentChanged(uri: string): void {
-    projectForDocument(uri)?.documentChanged(uri);
-    publishForDocumentSafely(uri);
-  }
-
   connection.onDidOpenTextDocument((event) => {
     const document = documents.open(event.textDocument);
-    documentChanged(document.uri);
+    projects.documentChanged(document.uri);
   });
   connection.onDidChangeTextDocument((event) => {
     const document = documents.change(event.textDocument, event.contentChanges);
-    if (document !== undefined) documentChanged(document.uri);
+    if (document !== undefined) projects.documentChanged(document.uri);
   });
   connection.onDidCloseTextDocument((event) => {
     const document = documents.close(event.textDocument.uri);
     if (document === undefined) return;
-    const uri = document.uri;
-    const project = projectForDocument(uri);
-    project?.documentClosed(uri);
-    documentConfigPaths.delete(canonicalFileIdentity(uri));
-    if (project?.artifacts === undefined) {
-      if (!clientCapabilities.pullDiagnostics)
-        void connection.sendDiagnostics({ uri: normalizeFileUri(uri), diagnostics: [] });
-      return;
-    }
-    project.publishMembers();
+    projects.documentClosed(document.uri);
   });
 
   connection.listen();
 
   function artifactsForDocument(uri: string): ProjectArtifacts | undefined {
-    return projectForDocument(uri)?.artifacts;
+    return projects.associatedProject(uri)?.artifacts;
   }
 
   return {
@@ -368,20 +229,4 @@ function resolveRootPath(params: InitializeParams): string {
   if (params.rootUri) return fileURLToPath(params.rootUri);
   if (params.rootPath) return params.rootPath;
   return process.cwd();
-}
-
-function filePathFromUri(uri: string): string | undefined {
-  try {
-    return fileURLToPath(uri);
-  } catch {
-    return undefined;
-  }
-}
-
-function configPathsFromWatchedChanges(paths: readonly (string | undefined)[]): Set<string> {
-  const configPaths = new Set<string>();
-  for (const path of paths) {
-    if (path?.endsWith(CONFIG_FILENAME)) configPaths.add(path);
-  }
-  return configPaths;
 }
