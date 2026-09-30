@@ -21,11 +21,7 @@ import type {
   MarkerReadResult,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import {
-  isDdlNode,
-  literalDefaultCodec,
-  readLiteralDefault,
-} from '@internal/sql-relational-core/ast';
+import { encodeLiteralDefault, isDdlNode } from '@internal/sql-relational-core/ast';
 import type {
   PrimaryKeyInput,
   SqlColumnIRInput,
@@ -756,13 +752,12 @@ async function sqliteRenderDdlColumnDefault(
     if (def.expression === 'now()') return "DEFAULT (datetime('now'))";
     return `DEFAULT (${def.expression})`;
   }
-  const codec = codecRef === undefined ? undefined : literalDefaultCodec(codecLookup, codecRef);
-  if (codec !== undefined) {
-    const reading = readLiteralDefault(codec, def.value);
-    if (reading.kind === 'sql-null') return 'DEFAULT NULL';
-    const wire = await codec.encode(reading.value, {});
-    return `DEFAULT ${sqliteInlineLiteral(wire)}`;
-  }
+  const encoded =
+    codecRef === undefined
+      ? undefined
+      : await encodeLiteralDefault(codecLookup, codecRef, def.value);
+  if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
+  if (encoded !== undefined) return `DEFAULT ${sqliteInlineLiteral(encoded.wire)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
   return `DEFAULT ${sqliteInlineLiteral(def.value)}`;
 }

@@ -37,8 +37,8 @@ import type {
 } from '../shared/mutation-default-types';
 import {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,
-  materializeCodec,
-  resolveCodecDescriptorOrThrow,
+  codecDescriptorMissing,
+  codecForRef,
 } from '../shared/resolve-codec';
 import { runtimeError } from '../shared/runtime-error';
 import type { TypesImportSpec } from '../shared/types-import-spec';
@@ -664,15 +664,12 @@ export function extractCodecLookup(
       }
     }
   }
-  return {
+  const registry: CodecRegistry = {
     get: (id) => byId.get(id),
     forCodecRef(ref: CodecRef) {
-      const d = resolveCodecDescriptorOrThrow(
-        (id) => descriptorsById.get(id),
-        ref,
-        CONTRACT_CODEC_DESCRIPTOR_MISSING,
+      return (
+        codecForRef(registry, ref) ?? codecDescriptorMissing(ref, CONTRACT_CODEC_DESCRIPTOR_MISSING)
       );
-      return materializeCodec(d, ref, { name: `<ref:${ref.codecId}>` });
     },
     forColumn: () => undefined,
     targetTypesFor: (id) => targetTypesById.get(id),
@@ -681,6 +678,7 @@ export function extractCodecLookup(
     renderValueLiteralFor: (id, value, side) => valueLiteralRenderersById.get(id)?.(value, side),
     descriptorFor: (id) => descriptorsById.get(id),
   };
+  return registry;
 }
 
 export function validateScalarTypeCodecIds(

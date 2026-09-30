@@ -30,11 +30,7 @@ import type {
   MarkerReadResult,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import {
-  isDdlNode,
-  literalDefaultCodec,
-  readLiteralDefault,
-} from '@internal/sql-relational-core/ast';
+import { encodeLiteralDefault, isDdlNode } from '@internal/sql-relational-core/ast';
 import type { ColumnDescriptor, ExcludedProxy } from '@internal/sql-relational-core/contract-free';
 import { namingOfLiveName } from '@internal/sql-schema-ir/naming';
 import type {
@@ -1861,13 +1857,12 @@ async function pgRenderDdlColumnDefault(
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
     return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
   }
-  const codec = codecRef === undefined ? undefined : literalDefaultCodec(codecLookup, codecRef);
-  if (codec !== undefined) {
-    const reading = readLiteralDefault(codec, def.value);
-    if (reading.kind === 'sql-null') return 'DEFAULT NULL';
-    const wire = await codec.encode(reading.value, {});
-    return `DEFAULT ${pgInlineLiteral(wire, nativeType)}`;
-  }
+  const encoded =
+    codecRef === undefined
+      ? undefined
+      : await encodeLiteralDefault(codecLookup, codecRef, def.value);
+  if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
+  if (encoded !== undefined) return `DEFAULT ${pgInlineLiteral(encoded.wire, nativeType)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
   return `DEFAULT ${pgInlineLiteral(def.value, nativeType)}`;
 }

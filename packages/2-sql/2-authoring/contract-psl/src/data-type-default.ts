@@ -18,7 +18,7 @@ import type {
   DataTypeId,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { materializeCodec } from '@internal/framework-components/codec';
+import { codecForRef } from '@internal/framework-components/codec';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -271,26 +271,21 @@ function storedValueReader(input: {
   readonly descriptor: AnyCodecDescriptor;
   readonly read: (value: JsonValue, elementIndex: number | undefined) => ReadDefaultResult;
 } {
-  const descriptorFor = input.codecLookup?.descriptorFor;
-  if (descriptorFor === undefined) {
+  if (input.codecLookup === undefined) {
     throw new InternalError(
-      `Field "${input.fieldPath}": the codec lookup resolving column codecs exposes no descriptorFor, but the column was resolved from a codec descriptor.`,
+      `Field "${input.fieldPath}": no codec lookup was given, but the column was resolved from a codec descriptor.`,
     );
   }
-  const descriptor = descriptorFor(input.column.codecId);
-  if (descriptor === undefined) {
+  const codec = codecForRef(input.codecLookup, {
+    codecId: input.column.codecId,
+    ...ifDefined('typeParams', codecRefTypeParams(input.column.typeParams)),
+  });
+  const descriptor = input.codecLookup.descriptorFor?.(input.column.codecId);
+  if (codec === undefined || descriptor === undefined) {
     throw new InternalError(
       `Field "${input.fieldPath}": no codec descriptor is registered for "${input.column.codecId}", but the column was resolved from one.`,
     );
   }
-  const codec = materializeCodec(
-    descriptor,
-    {
-      codecId: input.column.codecId,
-      ...ifDefined('typeParams', codecRefTypeParams(input.column.typeParams)),
-    },
-    { name: input.fieldPath },
-  );
   const read = (value: JsonValue, elementIndex: number | undefined): ReadDefaultResult => {
     try {
       codec.decodeJson(value);

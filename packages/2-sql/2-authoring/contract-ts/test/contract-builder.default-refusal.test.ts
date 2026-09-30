@@ -4,6 +4,7 @@ import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
+import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -14,7 +15,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const refusingJsonb: CodecLookup = {
+const refusingJsonb: CodecLookup = withDescriptors({
   get: (id) =>
     id === 'pg/jsonb@1'
       ? {
@@ -29,10 +30,10 @@ const refusingJsonb: CodecLookup = {
       : undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
-};
+});
 
 function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLookup {
-  return {
+  return withDescriptors({
     get: (id) => {
       const codec = codecs[id];
       return codec === undefined
@@ -47,7 +48,7 @@ function lookupOf(codecs: Record<string, Pick<Codec, 'encodeJson'>>): CodecLooku
     },
     targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
-  };
+  });
 }
 
 function buildWithDefault(

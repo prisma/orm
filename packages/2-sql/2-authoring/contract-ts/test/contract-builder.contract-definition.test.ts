@@ -6,6 +6,7 @@ import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { modelsOf } from './contract-test-helpers';
 import { crossRef, documentScopedTypes } from './cross-ref-helpers';
 import { unboundTables } from './unbound-tables';
+import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -187,7 +188,7 @@ describe('shared contract definition lowering', () => {
   });
 
   it('encodes literal defaults through codecLookup during storage lowering', () => {
-    const codecLookup: CodecLookup = {
+    const codecLookup: CodecLookup = withDescriptors({
       get: (id) => {
         if (id !== 'pg/timestamptz-temporal@1') {
           return undefined;
@@ -204,7 +205,7 @@ describe('shared contract definition lowering', () => {
       },
       targetTypesFor: (id) => (id === 'pg/timestamptz-temporal@1' ? ['timestamptz'] : undefined),
       renderOutputTypeFor: () => undefined,
-    };
+    });
 
     const contract = buildSqlContractFromDefinition(
       {

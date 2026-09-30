@@ -5,6 +5,7 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import type { ContractDefinition } from '../src/contract-definition';
 import { unboundTables } from './unbound-tables';
+import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -90,7 +91,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
       'currency' in value &&
       typeof value.currency === 'string';
 
-    const codecLookup: CodecLookup = {
+    const codecLookup: CodecLookup = withDescriptors({
       get: (id) => {
         if (id !== 'pg/jsonb@1') {
           return undefined;
@@ -115,7 +116,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
       },
       targetTypesFor: (id) => (id === 'pg/jsonb@1' ? ['jsonb'] : undefined),
       renderOutputTypeFor: () => undefined,
-    };
+    });
 
     const contract = buildSqlContractFromDefinition(
       {

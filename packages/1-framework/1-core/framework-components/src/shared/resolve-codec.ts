@@ -1,7 +1,8 @@
 import { blindCast } from '@internal/utils/casts';
+import { InternalError } from '@internal/utils/internal-error';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
-import type { CodecInstanceContext, CodecRef } from './codec-types';
+import type { CodecInstanceContext, CodecLookup, CodecRef } from './codec-types';
 import { runtimeError } from './runtime-error';
 
 export const CONTRACT_CODEC_DESCRIPTOR_MISSING = 'CONTRACT.CODEC_DESCRIPTOR_MISSING' as const;
@@ -17,13 +18,17 @@ export function resolveCodecDescriptorOrThrow(
   ref: CodecRef,
   code: 'CONTRACT.CODEC_DESCRIPTOR_MISSING' | 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
 ): AnyCodecDescriptor {
-  const descriptor = descriptorFor(ref.codecId);
-  if (!descriptor) {
-    throw runtimeError(code, `No codec descriptor registered for codecId '${ref.codecId}'.`, {
-      codecId: ref.codecId,
-    });
-  }
-  return descriptor;
+  return descriptorFor(ref.codecId) ?? codecDescriptorMissing(ref, code);
+}
+
+/** Throws the error for a codec reference no descriptor has, under the plane's `code`. */
+export function codecDescriptorMissing(
+  ref: CodecRef,
+  code: 'CONTRACT.CODEC_DESCRIPTOR_MISSING' | 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+): never {
+  throw runtimeError(code, `No codec descriptor registered for codecId '${ref.codecId}'.`, {
+    codecId: ref.codecId,
+  });
 }
 
 function isAbsentOrEmpty(typeParams: CodecRef['typeParams']): boolean {
@@ -98,4 +103,19 @@ export function materializeCodec(
 ): Codec {
   const validated = validateCodecTypeParams(descriptor, ref);
   return descriptor.factory(validated)(ctx);
+}
+
+/**
+ * Builds the codec a codec reference names with the reference's type parameters, so a parameterized codec checks values against them. `undefined` when no descriptor has the id. A lookup that resolves no descriptors throws rather than hand back its representative codec, which carries no type parameters.
+ */
+export function codecForRef(lookup: CodecLookup, ref: CodecRef): Codec | undefined {
+  if (lookup.descriptorFor === undefined) {
+    throw new InternalError(
+      `The codec lookup resolves no codec descriptors, so the codec for "${ref.codecId}" cannot be built with its type parameters.`,
+    );
+  }
+  const descriptor = lookup.descriptorFor(ref.codecId);
+  return descriptor === undefined
+    ? undefined
+    : materializeCodec(descriptor, ref, { name: ref.codecId });
 }

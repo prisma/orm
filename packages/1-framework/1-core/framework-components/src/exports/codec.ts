@@ -61,6 +61,7 @@ export {
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,
+  codecForRef,
   materializeCodec,
   resolveCodecDescriptorOrThrow,
   validateCodecTypeParams,

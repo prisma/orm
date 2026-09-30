@@ -244,10 +244,10 @@ describe('written defaults a column refuses', () => {
 });
 
 describe('the codec lookup the column was resolved from', () => {
-  it('raises an internal error when it exposes no descriptorFor', () => {
+  it('raises an internal error when it resolves no codec descriptors', () => {
     const { descriptorFor: _descriptorFor, ...withoutDescriptors } = postgresCodecLookup;
     expect(() => interpret(model('  count Int @default(1)'), withoutDescriptors)).toThrow(
-      'exposes no descriptorFor',
+      'The codec lookup resolves no codec descriptors, so the codec for "pg/int4@1" cannot be built with its type parameters.',
     );
   });
 

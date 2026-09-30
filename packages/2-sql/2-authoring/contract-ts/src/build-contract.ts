@@ -37,7 +37,7 @@ import {
   type Codec,
   type CodecLookup,
   type ColumnTypeDescriptor,
-  materializeCodec,
+  codecForRef,
 } from '@internal/framework-components/codec';
 import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
@@ -98,31 +98,23 @@ import { contractError } from './contract-errors';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 /**
- * The codec that encodes one column's default. Built with the column's own `typeParams`, because a
- * parameterized codec answers for its params when it encodes — `pg/vector@1` checks the length its
- * column declares — and the lookup's representative instance carries none. Only a column has params;
- * every other encode site takes the representative instance.
+ * The codec that encodes one column's default, built with the column's own `typeParams`, because a parameterized codec checks its params when it encodes and reads a default. Only a column has params; every other encode site takes the representative instance.
  */
 function columnCodec(
   codecId: string,
   typeParams: Record<string, unknown> | undefined,
   codecLookup?: CodecLookup,
 ): Codec | undefined {
-  const descriptor = codecLookup?.descriptorFor?.(codecId);
-  if (descriptor === undefined) return codecLookup?.get(codecId);
-  return materializeCodec(
-    descriptor,
-    {
-      codecId,
-      ...ifDefined(
-        'typeParams',
-        typeParams === undefined
-          ? undefined
-          : blindCast<JsonValue, 'typeParams are validated by the codec paramsSchema'>(typeParams),
-      ),
-    },
-    { name: codecId },
-  );
+  if (codecLookup === undefined) return undefined;
+  return codecForRef(codecLookup, {
+    codecId,
+    ...ifDefined(
+      'typeParams',
+      typeParams === undefined
+        ? undefined
+        : blindCast<JsonValue, 'typeParams are validated by the codec paramsSchema'>(typeParams),
+    ),
+  });
 }
 
 function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
