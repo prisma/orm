@@ -10,6 +10,7 @@ import {
   type Diagnostic,
   DiagnosticSeverity,
   DidChangeWatchedFilesNotification,
+  type Disposable,
   type DocumentDiagnosticReport,
   DocumentDiagnosticReportKind,
   type FoldingRange,
@@ -20,6 +21,7 @@ import {
   type PublishDiagnosticsParams,
   type Range,
   RegistrationRequest,
+  type RelatedFullDocumentDiagnosticReport,
   type SemanticTokens,
   type SignatureHelp,
   TextDocumentSyncKind,
@@ -32,21 +34,22 @@ import {
   type ProjectInterpretation,
   resolveConfigInputs,
 } from './config-resolution';
-import {
-  type LspDiagnostic,
-  mapParseDiagnostics,
-  ParseDiagnosticSeverity,
-} from './diagnostic-mapping';
+import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
+import type { DocumentSnapshot } from './document-snapshot';
 import { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
-import type { PipelineInputs } from './pipeline';
+import type { LspControlStack } from './lsp-control-stack';
+import { ProjectArtifacts } from './project-artifacts';
 import {
-  createProjectArtifacts,
-  type DocumentArtifacts,
-  type ProjectArtifacts,
-} from './project-artifacts';
-import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
+  canonicalFileIdentity,
+  isWatcherCacheEligible,
+  normalizeFileUri,
+  resolveSchemaInputs,
+  type SchemaInputConfig,
+  type SchemaInputSet,
+  toWatcherGlobPattern,
+} from './schema-inputs';
 import { buildSemanticTokens, semanticTokensLegend } from './semantic-tokens';
 import { providePslSignatureHelp } from './signature-help';
 
@@ -56,19 +59,20 @@ export interface LanguageServer {
    * Exposed for future features (completion, semantic tokens); nothing consumes
    * them yet.
    */
-  getDocumentAst(uri: string): DocumentArtifacts | undefined;
+  getDocumentAst(uri: string): DocumentSnapshot | undefined;
   getProjectSymbolTable(uri: string): SymbolTable | undefined;
 }
 
 interface ProjectState {
   readonly configPath: string;
   readonly inputs: SchemaInputSet;
+  readonly schemaInputConfig: SchemaInputConfig;
   readonly formatter?: FormatOptions;
   /**
    * Resolved once per config and refreshed by the config-watch path — never
    * rebuilt per document.
    */
-  readonly controlStack: PipelineInputs;
+  readonly controlStack: LspControlStack;
   readonly interpretation?: ProjectInterpretation;
   readonly artifacts: ProjectArtifacts;
 }
@@ -111,70 +115,135 @@ export function createServer(connection: Connection): LanguageServer {
 
 function createServerOn(connection: Connection): LanguageServer {
   const documents = new DocumentStore();
-  const { getDocument } = documents;
+  const { getOpenDocument } = documents;
   const managedProjects = new Map<string, ManagedProject>();
   const documentConfigPaths = new Map<string, string>();
+  const publishedMembers = new Map<string, ReadonlySet<string>>();
+  const reportedRelatedMembers = new Map<string, ReadonlySet<string>>();
+  const schemaWatchRegistrations = new Map<
+    string,
+    { readonly disposable: Disposable; readonly schemaInputConfig: SchemaInputConfig }
+  >();
+  const schemaWatchGenerations = new Map<string, number>();
+  const membershipGenerations = new Map<string, number>();
+  let membershipGeneration = 0;
   let rootPath = process.cwd();
   let watchedConfigGlob = join(rootPath, '**', CONFIG_FILENAME);
   let clientCapabilities = noClientCapabilities;
 
   function sendDiagnostics(params: PublishDiagnosticsParams): void {
-    void connection.sendDiagnostics(params);
+    void connection.sendDiagnostics({ ...params, uri: normalizeFileUri(params.uri) });
   }
 
   function logWarn(message: string): void {
     connection.console.warn(message);
   }
 
-  async function publish(uri: string): Promise<void> {
-    const project = await resolveProjectForDocument(uri);
-    if (project === undefined) {
-      return;
+  function publishProjectMembers(project: ProjectState): void {
+    if (clientCapabilities.pullDiagnostics) return;
+    const nextLedger = new Set<string>();
+    const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
+    for (const candidateUri of project.inputs.uris()) {
+      const uri = normalizeFileUri(candidateUri);
+      sendDiagnostics({
+        uri,
+        diagnostics: toDiagnostics(project.artifacts.diagnostics(uri, projectSymbolDiagnostics)),
+      });
+      nextLedger.add(uri);
     }
-    const document = getDocument(uri);
-    if (document === undefined) {
-      documentConfigPaths.delete(canonicalFileIdentity(uri));
-      return;
+    const previousLedger = publishedMembers.get(project.configPath);
+    if (previousLedger !== undefined) {
+      for (const uri of previousLedger) {
+        if (!nextLedger.has(uri)) {
+          sendDiagnostics({ uri, diagnostics: [] });
+        }
+      }
     }
-    const artifacts = project.artifacts.document(uri);
-    if (artifacts === undefined) {
-      sendDiagnostics({ uri: document.uri, diagnostics: [] });
-      return;
-    }
-    sendDiagnostics({
-      uri: document.uri,
-      diagnostics: combinedDiagnostics(project.artifacts, artifacts),
-    });
+    publishedMembers.set(project.configPath, nextLedger);
   }
 
-  // The single diagnostics assembly — push and pull must serve the same
-  // combined response, and interpretation runs only from here.
-  function combinedDiagnostics(
-    project: ProjectArtifacts,
-    artifacts: DocumentArtifacts,
-  ): Diagnostic[] {
-    const symbolDiagnostics = project
-      .symbolDiagnostics()
-      .filter((diagnostic) => diagnostic.filename === artifacts.sourceFile.filename);
-    return toDiagnostics([
-      ...artifacts.diagnostics,
-      ...mapParseDiagnostics(symbolDiagnostics),
-      ...artifacts.interpretDiagnostics(),
-    ]);
+  function clearPublishedMembers(configPath: string): void {
+    const ledger = publishedMembers.get(configPath);
+    if (ledger === undefined) {
+      return;
+    }
+    for (const uri of ledger) {
+      sendDiagnostics({ uri, diagnostics: [] });
+    }
+    publishedMembers.delete(configPath);
   }
 
-  /**
-   * Project-scoped so a future multi-input symbol table can attach
-   * `relatedDocuments` for cross-file effects.
-   */
+  function clearSchemaWatcher(configPath: string): number {
+    const generation = (schemaWatchGenerations.get(configPath) ?? 0) + 1;
+    schemaWatchGenerations.set(configPath, generation);
+    documents.setWatchCoverage(configPath, []);
+    schemaWatchRegistrations.get(configPath)?.disposable.dispose();
+    schemaWatchRegistrations.delete(configPath);
+    return generation;
+  }
+
+  async function registerSchemaWatcher(project: ProjectState): Promise<void> {
+    const configPath = project.configPath;
+    const generation = clearSchemaWatcher(configPath);
+    if (!clientCapabilities.watchedFilesRegistration) {
+      return;
+    }
+    const patterns = project.schemaInputConfig.contract?.source.inputs ?? [];
+    if (patterns.length === 0) {
+      return;
+    }
+    try {
+      const disposable = await connection.client.register(DidChangeWatchedFilesNotification.type, {
+        watchers: patterns.map((pattern) => ({ globPattern: toWatcherGlobPattern(pattern) })),
+      });
+      if (disposable === undefined) return;
+      if (schemaWatchGenerations.get(configPath) === generation) {
+        schemaWatchRegistrations.set(configPath, {
+          disposable,
+          schemaInputConfig: project.schemaInputConfig,
+        });
+        const current = currentProjectState(configPath);
+        if (
+          current?.schemaInputConfig === project.schemaInputConfig &&
+          isWatcherCacheEligible(project.schemaInputConfig)
+        ) {
+          documents.setWatchCoverage(configPath, current.inputs.uris());
+        }
+      } else {
+        disposable.dispose();
+      }
+    } catch {}
+  }
+
+  function onProjectLoaded(project: ProjectState): void {
+    void registerSchemaWatcher(project);
+  }
+
   function buildDocumentDiagnosticReport(
     project: ProjectState,
-    uri: string,
-  ): FullDocumentDiagnosticReport {
-    const artifacts = project.artifacts.document(uri);
-    return {
+    requestedUri: string,
+  ): RelatedFullDocumentDiagnosticReport {
+    const uri = normalizeFileUri(requestedUri);
+    const projectSymbolDiagnostics = project.artifacts.symbolDiagnostics();
+    const reportFor = (memberUri: string): FullDocumentDiagnosticReport => ({
       kind: DocumentDiagnosticReportKind.Full,
-      items: artifacts === undefined ? [] : combinedDiagnostics(project.artifacts, artifacts),
+      items: toDiagnostics(project.artifacts.diagnostics(memberUri, projectSymbolDiagnostics)),
+    });
+    const members = new Set(Array.from(project.inputs.uris(), normalizeFileUri));
+    const previous = reportedRelatedMembers.get(project.configPath) ?? new Set<string>();
+    const relatedDocuments: Record<string, FullDocumentDiagnosticReport> = {};
+    for (const memberUri of new Set([...members, ...previous])) {
+      if (memberUri === uri) continue;
+      relatedDocuments[memberUri] = members.has(memberUri)
+        ? reportFor(memberUri)
+        : { kind: DocumentDiagnosticReportKind.Full, items: [] };
+    }
+    const report = reportFor(uri);
+    if (previous.has(uri)) members.add(uri);
+    reportedRelatedMembers.set(project.configPath, members);
+    return {
+      ...report,
+      ...(Object.keys(relatedDocuments).length > 0 ? { relatedDocuments } : {}),
     };
   }
 
@@ -183,11 +252,7 @@ function createServerOn(connection: Connection): LanguageServer {
     if (project === undefined || project.inputs.includes(uri)) {
       return project;
     }
-    // Only the config's declared inputs are managed: a stray document beside
-    // a config keeps no association, so reads and events never reach it — and
-    // a project it alone caused to load is dropped again.
     documentConfigPaths.delete(canonicalFileIdentity(uri));
-    dropProjectWithoutManagedDocuments(project.configPath);
     return undefined;
   }
 
@@ -245,6 +310,8 @@ function createServerOn(connection: Connection): LanguageServer {
   // config reload await the fresh resolution instead of the pre-reload
   // project.
   function startProjectLoad(configPath: string): Promise<ProjectState> {
+    membershipGenerations.set(configPath, ++membershipGeneration);
+    clearSchemaWatcher(configPath);
     const existing = managedProjects.get(configPath);
     const previousLoad = existing?.status === 'loading' ? existing.load : undefined;
     const lastGood = lastGoodProject(existing);
@@ -256,16 +323,11 @@ function createServerOn(connection: Connection): LanguageServer {
           // Entry replacement is synchronous, so a superseded load's own
           // continuation stays silent.
           if (isCurrentLoad(configPath, load)) {
-            if (hasManagedDocuments(configPath)) {
-              managedProjects.set(configPath, { status: 'loaded', project });
-            } else {
-              // A load that outlives the last association must not keep a
-              // project entry alive.
-              managedProjects.delete(configPath);
-            }
+            managedProjects.set(configPath, { status: 'loaded', project });
             // Unconditional: clients keep per-server diagnostic state, so an
             // empty publish is harmless when no marker is outstanding.
             clearConfigFailure(configPath);
+            onProjectLoaded(project);
           }
           return project;
         },
@@ -273,19 +335,16 @@ function createServerOn(connection: Connection): LanguageServer {
           // Same guard as above. All failure consequences live here — the
           // queue orders this handler strictly before any successor load.
           if (isCurrentLoad(configPath, load)) {
-            if (!hasManagedDocuments(configPath)) {
-              // No resurrection of the last-good project, no zombie marker.
-              managedProjects.delete(configPath);
-              clearConfigFailure(configPath);
-            } else {
-              publishConfigFailure(configPath, error);
-              if (lastGood !== undefined) {
-                managedProjects.set(configPath, { status: 'loaded', project: lastGood });
-                return lastGood;
-              }
-              managedProjects.set(configPath, { status: 'failed' });
-              unmanageDocuments(configPath);
+            publishConfigFailure(configPath, error);
+            if (lastGood !== undefined) {
+              managedProjects.set(configPath, { status: 'loaded', project: lastGood });
+              onProjectLoaded(lastGood);
+              return lastGood;
             }
+            managedProjects.set(configPath, { status: 'failed' });
+            unmanageDocuments(configPath);
+            clearSchemaWatcher(configPath);
+            clearPublishedMembers(configPath);
           }
           throw error;
         },
@@ -326,13 +385,14 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function loadProject(configPath: string): Promise<ProjectState> {
-    const resolution = await resolveConfigInputs(configPath);
+    const readText = (uri: string): string | undefined => documents.text(uri);
+    const resolution = await resolveConfigInputs(configPath, readText);
     // A fresh store per load: a config reload can change what a parse
     // produces (inputs, control stack), so later reads must derive from the
     // new resolution rather than anything computed under the old one.
-    const artifacts = createProjectArtifacts({
+    const artifacts = new ProjectArtifacts({
       inputs: resolution.inputs,
-      getDocument,
+      readSnapshot: documents.readSnapshot,
       onInterpretationError: (uri, error) => {
         const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
         connection.console.error(`PSL interpretation failed for ${uri}: ${detail}`);
@@ -344,6 +404,7 @@ function createServerOn(connection: Connection): LanguageServer {
     const project: ProjectState = {
       configPath,
       inputs: resolution.inputs,
+      schemaInputConfig: resolution.schemaInputConfig,
       controlStack: resolution.controlStack,
       artifacts,
       ...(resolution.formatter === undefined ? {} : { formatter: resolution.formatter }),
@@ -357,46 +418,29 @@ function createServerOn(connection: Connection): LanguageServer {
   // A failed first load serves no project: its documents drop their
   // association and re-resolve (and retry the load) on their next read.
   function unmanageDocuments(configPath: string): void {
-    for (const document of documents.all()) {
+    for (const document of documents.openDocuments()) {
       if (documentConfigPaths.get(canonicalFileIdentity(document.uri)) === configPath) {
         documentConfigPaths.delete(canonicalFileIdentity(document.uri));
       }
     }
   }
 
-  async function republishOpenDocumentsForConfig(configPath: string): Promise<void> {
-    for (const document of documents.all()) {
-      const knownConfigPath = documentConfigPaths.get(canonicalFileIdentity(document.uri));
-      if (knownConfigPath === configPath) {
-        if ((await resolveProjectForDocument(document.uri)) === undefined) {
-          // The reload dropped a previously managed document; clear its markers.
-          sendDiagnostics({ uri: document.uri, diagnostics: [] });
-          continue;
-        }
-        await publish(document.uri);
-        continue;
-      }
-
-      const filePath = filePathFromUri(document.uri);
-      if (filePath === undefined) {
-        continue;
-      }
-      const nearestConfigPath = await findNearestConfigPathForFile(filePath);
-      if (nearestConfigPath === configPath) {
-        documentConfigPaths.set(canonicalFileIdentity(document.uri), configPath);
-        await publish(document.uri);
-      }
+  async function publishForDocument(uri: string): Promise<void> {
+    const project = await resolveProjectForDocument(uri);
+    if (project === undefined) {
+      return;
     }
+    publishProjectMembers(project);
   }
 
-  function publishSafely(uri: string): void {
-    void publish(uri).catch((error: unknown) => {
+  function publishForDocumentSafely(uri: string): void {
+    void publishForDocument(uri).catch((error: unknown) => {
       connection.console.error(error instanceof Error ? error.message : String(error));
     });
   }
 
   async function formatDocument(uri: string): Promise<TextEdit[]> {
-    const document = getDocument(uri);
+    const document = getOpenDocument(uri);
     if (document === undefined) {
       return [];
     }
@@ -431,7 +475,7 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function semanticTokensForDocument(uri: string, range?: Range): Promise<SemanticTokens> {
-    const document = getDocument(uri);
+    const document = getOpenDocument(uri);
     if (document === undefined) {
       return emptySemanticTokens();
     }
@@ -451,7 +495,7 @@ function createServerOn(connection: Connection): LanguageServer {
     }
 
     const source = {
-      document: artifacts.document,
+      document: artifacts.parse().document,
       sourceFile: artifacts.sourceFile,
       symbolTable: project.artifacts.symbolTable(),
       scalarTypes: project.controlStack.scalarTypes,
@@ -460,7 +504,7 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function completeDocument(uri: string, position: Position): Promise<CompletionItem[]> {
-    const document = getDocument(uri);
+    const document = getOpenDocument(uri);
     if (document === undefined) {
       return [];
     }
@@ -477,7 +521,7 @@ function createServerOn(connection: Connection): LanguageServer {
 
     try {
       const context = classifyPslCompletionContext({
-        document: artifacts.document,
+        document: artifacts.parse().document,
         sourceFile: artifacts.sourceFile,
         position,
       });
@@ -511,7 +555,7 @@ function createServerOn(connection: Connection): LanguageServer {
     uri: string,
     position: Position,
   ): Promise<SignatureHelp | null> {
-    if (getDocument(uri) === undefined) return null;
+    if (getOpenDocument(uri) === undefined) return null;
     const project = await resolveProjectForDocument(uri);
     if (project === undefined) return null;
     const artifacts = project.artifacts.document(uri);
@@ -520,7 +564,7 @@ function createServerOn(connection: Connection): LanguageServer {
     try {
       return providePslSignatureHelp({
         clientSupportsLabelOffsets: clientCapabilities.signatureLabelOffsets,
-        document: artifacts.document,
+        document: artifacts.parse().document,
         sourceFile: artifacts.sourceFile,
         position,
         candidates: {
@@ -556,14 +600,10 @@ function createServerOn(connection: Connection): LanguageServer {
         },
         completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
         signatureHelpProvider: { triggerCharacters: ['(', ','] },
-        // Both flags reflect the current single-input implementation scope —
-        // not a property of PSL. Once the project symbol table merges multiple
-        // inputs, an edit in one file can change diagnostics in another and
-        // these must flip alongside that work.
         ...(clientCapabilities.pullDiagnostics
           ? {
               diagnosticProvider: {
-                interFileDependencies: false,
+                interFileDependencies: true,
                 workspaceDiagnostics: false,
               },
             }
@@ -590,31 +630,93 @@ function createServerOn(connection: Connection): LanguageServer {
     }
   });
 
+  async function handleSchemaMemberChange(uri: string): Promise<boolean> {
+    const generation = ++membershipGeneration;
+    documents.invalidate(uri);
+    const filePath = filePathFromUri(uri);
+    if (filePath === undefined) {
+      return false;
+    }
+    let configPath: string | undefined;
+    try {
+      configPath = await findNearestConfigPathForFile(filePath);
+    } catch {
+      return false;
+    }
+    if (configPath === undefined) {
+      return false;
+    }
+    const entry = managedProjects.get(configPath);
+    if (
+      entry === undefined ||
+      entry.status === 'failed' ||
+      (membershipGenerations.get(configPath) ?? 0) > generation
+    ) {
+      return false;
+    }
+    membershipGenerations.set(configPath, generation);
+    currentProjectState(configPath)?.artifacts.documentChanged(uri);
+    const project =
+      entry.status === 'loaded' ? entry.project : await entry.load.catch(() => undefined);
+    const isCurrent = (): boolean => {
+      const current = managedProjects.get(configPath);
+      return (
+        current?.status === 'loaded' &&
+        current.project === project &&
+        membershipGenerations.get(configPath) === generation
+      );
+    };
+    if (project === undefined || !isCurrent()) {
+      return false;
+    }
+    const readText = (candidate: string): string | undefined => documents.text(candidate);
+    const nextInputs = await resolveSchemaInputs(project.schemaInputConfig, readText);
+    if (!isCurrent()) {
+      return false;
+    }
+    project.artifacts.updateInputs(nextInputs);
+    const updated: ProjectState = { ...project, inputs: nextInputs };
+    managedProjects.set(configPath, { status: 'loaded', project: updated });
+    if (
+      schemaWatchRegistrations.get(configPath)?.schemaInputConfig === project.schemaInputConfig &&
+      isWatcherCacheEligible(project.schemaInputConfig)
+    ) {
+      documents.setWatchCoverage(configPath, nextInputs.uris());
+    }
+    publishProjectMembers(updated);
+    return true;
+  }
+
   connection.onDidChangeWatchedFiles(async (params) => {
-    const changedConfigPaths = configPathsFromWatchedChanges(
-      params.changes.map((change) => filePathFromUri(change.uri)),
-    );
-    for (const configPath of changedConfigPaths) {
-      // Only live (or currently loading) projects are refreshed eagerly, so a
-      // config change cannot resurrect a project dropped when its last input
-      // closed; a config that newly gains an open input is still picked up
-      // lazily below through per-document rediscovery.
+    const configChanges: string[] = [];
+    const memberChanges: string[] = [];
+    for (const change of params.changes) {
+      const filePath = filePathFromUri(change.uri);
+      (filePath?.endsWith(CONFIG_FILENAME) ? configChanges : memberChanges).push(change.uri);
+    }
+
+    const changedConfigPaths = configPathsFromWatchedChanges(configChanges.map(filePathFromUri));
+    const configRefreshes = Array.from(changedConfigPaths, async (configPath) => {
       if (managedProjects.has(configPath)) {
         try {
-          await refreshProject(configPath);
+          const project = await refreshProject(configPath);
+          publishProjectMembers(project);
         } catch {
           // Failure consequences live in the load chain; nothing to do here.
-          continue;
         }
       }
-      if (!clientCapabilities.pullDiagnostics) {
-        await republishOpenDocumentsForConfig(configPath);
-      }
-    }
+      return undefined;
+    });
+    const [, memberResults] = await Promise.all([
+      Promise.all(configRefreshes),
+      Promise.all(memberChanges.map(handleSchemaMemberChange)),
+    ]);
+    const handledMemberChange = memberResults.some(Boolean);
+
     if (
       clientCapabilities.pullDiagnostics &&
       clientCapabilities.diagnosticsRefresh &&
-      changedConfigPaths.size > 0
+      (changedConfigPaths.size > 0 || handledMemberChange)
     ) {
       void connection.languages.diagnostics.refresh();
     }
@@ -634,11 +736,18 @@ function createServerOn(connection: Connection): LanguageServer {
   );
 
   connection.languages.diagnostics.on(async (params): Promise<DocumentDiagnosticReport> => {
-    const project = await resolveProjectForDocument(params.textDocument.uri);
-    if (project === undefined) {
+    if (!clientCapabilities.pullDiagnostics) {
       return { kind: DocumentDiagnosticReportKind.Full, items: [] };
     }
-    return buildDocumentDiagnosticReport(project, params.textDocument.uri);
+    const uri = normalizeFileUri(params.textDocument.uri);
+    const project = await projectForNearestConfig(uri);
+    if (
+      project === undefined ||
+      (!project.inputs.includes(uri) && !reportedRelatedMembers.get(project.configPath)?.has(uri))
+    ) {
+      return { kind: DocumentDiagnosticReportKind.Full, items: [] };
+    }
+    return buildDocumentDiagnosticReport(project, uri);
   });
 
   connection.onFoldingRanges(async (params): Promise<FoldingRange[]> => {
@@ -650,26 +759,16 @@ function createServerOn(connection: Connection): LanguageServer {
     if (artifacts === undefined) {
       return [];
     }
-    return computeFoldingRanges(artifacts.document, project.artifacts.sources);
+    return computeFoldingRanges(artifacts.parse().document, project.artifacts.sources);
   });
 
   function documentChanged(uri: string): void {
     artifactsForDocument(uri)?.documentChanged(uri);
-    if (!clientCapabilities.pullDiagnostics) {
-      publishSafely(uri);
-    }
+    publishForDocumentSafely(uri);
   }
 
   connection.onDidOpenTextDocument((event) => {
-    const previous = getDocument(event.textDocument.uri);
     const document = documents.open(event.textDocument);
-    if (
-      previous !== undefined &&
-      previous.uri !== document.uri &&
-      !clientCapabilities.pullDiagnostics
-    ) {
-      sendDiagnostics({ uri: previous.uri, diagnostics: [] });
-    }
     documentChanged(document.uri);
   });
   connection.onDidChangeTextDocument((event) => {
@@ -683,16 +782,24 @@ function createServerOn(connection: Connection): LanguageServer {
     const configPath = documentConfigPaths.get(canonicalFileIdentity(uri));
     artifactsForDocument(uri)?.documentClosed(uri);
     documentConfigPaths.delete(canonicalFileIdentity(uri));
-    // A live project always has at least one open input; when the last one
-    // closes the project is dropped, and a reopen re-resolves and reloads the
-    // config from scratch.
-    if (configPath !== undefined) {
-      dropProjectWithoutManagedDocuments(configPath);
+    const project = currentProjectState(configPath);
+    if (project === undefined) {
+      if (!clientCapabilities.pullDiagnostics) sendDiagnostics({ uri, diagnostics: [] });
+      return;
     }
-    if (!clientCapabilities.pullDiagnostics) {
-      sendDiagnostics({ uri, diagnostics: [] });
-    }
+    publishProjectMembers(project);
   });
+
+  function currentProjectState(configPath: string | undefined): ProjectState | undefined {
+    if (configPath === undefined) {
+      return undefined;
+    }
+    const entry = managedProjects.get(configPath);
+    if (entry === undefined || entry.status === 'failed') {
+      return undefined;
+    }
+    return entry.status === 'loaded' ? entry.project : entry.lastGood;
+  }
 
   connection.listen();
 
@@ -706,29 +813,6 @@ function createServerOn(connection: Connection): LanguageServer {
       return entry.project.artifacts;
     }
     return entry?.status === 'loading' ? entry.lastGood?.artifacts : undefined;
-  }
-
-  function hasManagedDocuments(configPath: string): boolean {
-    for (const managedConfigPath of documentConfigPaths.values()) {
-      if (managedConfigPath === configPath) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Deletes only settled entries: an in-flight load settles through the
-  // association check in startProjectLoad and cleans up after itself.
-  function dropProjectWithoutManagedDocuments(configPath: string): void {
-    if (hasManagedDocuments(configPath)) {
-      return;
-    }
-    const entry = managedProjects.get(configPath);
-    if (entry === undefined || entry.status === 'loading') {
-      return;
-    }
-    managedProjects.delete(configPath);
-    clearConfigFailure(configPath);
   }
 
   return {
@@ -810,7 +894,7 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
       params.initializationOptions,
       'supportsTriggerParameterHintsCommand',
     ),
-    pullDiagnostics: params.capabilities.textDocument?.diagnostic !== undefined,
+    pullDiagnostics: params.capabilities.textDocument?.diagnostic?.relatedDocumentSupport === true,
     diagnosticsRefresh: params.capabilities.workspace?.diagnostics?.refreshSupport === true,
   };
 }

@@ -124,7 +124,7 @@ withTempDir(({ createTempDir }) => {
 
           expect(status.exitCode).toBe(0);
           expect(out).toMatch(/pending/);
-          expect(out).toContain('{bin} db migrate');
+          expect(out).toContain('prisma-test db migrate');
         },
         timeouts.spinUpPpgDev,
       );
@@ -207,7 +207,7 @@ withTempDir(({ createTempDir }) => {
 
           expect(status.exitCode).toBe(0);
           expect(out).toMatch(/1 pending/);
-          expect(out).toContain('{bin} db migrate');
+          expect(out).toContain('prisma-test db migrate');
         },
         timeouts.spinUpPpgDev,
       );
@@ -281,7 +281,7 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           expect(out).toContain('@contract');
           expect(out).toContain("to the application's contract");
-          expect(out).toContain('{bin} migration plan --name');
+          expect(out).toContain('prisma-test migration plan --name');
         },
         timeouts.spinUpPpgDev,
       );
@@ -574,7 +574,7 @@ withTempDir(({ createTempDir }) => {
           expect(status.exitCode).toBe(0);
           expect(out).toContain('No migration path from the database state');
           expect(out).toContain('via `production`');
-          expect(out).toContain('{bin} migration plan');
+          expect(out).toContain('prisma-test migration plan');
         },
         timeouts.spinUpPpgDev,
       );

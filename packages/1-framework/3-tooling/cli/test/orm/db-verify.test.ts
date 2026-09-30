@@ -480,7 +480,7 @@ describe('db verify', () => {
         {
           kind: 'run-command',
           label: 'Change the database to match the contract, then verify again',
-          command: '{bin} db update',
+          command: 'prisma-test db update',
         },
         {
           kind: 'user-choice',
