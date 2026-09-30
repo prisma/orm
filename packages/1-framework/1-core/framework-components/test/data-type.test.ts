@@ -41,13 +41,13 @@ describe('dataType', () => {
 
   it('keeps the function that gives a value its canonical form', () => {
     const date = dataType('pg/date', {
-      canonicalForm: (value) => (value === '2024-1-1' ? '2024-01-01' : value),
+      toCanonicalForm: (value) => (value === '2024-1-1' ? '2024-01-01' : value),
     });
-    expect(date.canonicalForm?.('2024-1-1')).toBe('2024-01-01');
+    expect(date.toCanonicalForm?.('2024-1-1')).toBe('2024-01-01');
   });
 
   it('declares no canonical-form function when none is given', () => {
-    expect(dataType('pg/int2', {}).canonicalForm).toBeUndefined();
+    expect(dataType('pg/int2', {}).toCanonicalForm).toBeUndefined();
   });
 
   it('validates the id of every type it casts from', () => {

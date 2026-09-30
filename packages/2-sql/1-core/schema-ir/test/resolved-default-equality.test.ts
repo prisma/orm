@@ -83,7 +83,7 @@ describe('resolvedDefaultsEqual', () => {
       ['2026-01-01 00:00:00+00', '2026-01-01T00:00:00Z'],
       ['2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z'],
     ]);
-    const canonicalForm = (value: JsonValue): JsonValue => {
+    const toCanonicalForm = (value: JsonValue): JsonValue => {
       const canonical = typeof value === 'string' ? canonicalForms.get(value) : undefined;
       if (canonical === undefined)
         throw new Error(`${JSON.stringify(value)} is not a date and time`);
@@ -96,13 +96,13 @@ describe('resolvedDefaultsEqual', () => {
           literal('2026-01-01T00:00:00Z'),
           literal('2026-01-01T00:00:00.000Z'),
           'timestamptz',
-          canonicalForm,
+          toCanonicalForm,
         ),
         databaseText: resolvedDefaultsEqual(
           literal('2026-01-01T00:00:00Z'),
           literal('2026-01-01 00:00:00+00'),
           'timestamptz',
-          canonicalForm,
+          toCanonicalForm,
         ),
       }).toEqual({ millisecondText: true, databaseText: true });
     });
@@ -113,7 +113,7 @@ describe('resolvedDefaultsEqual', () => {
           literal(new Date('2026-01-01T00:00:00.000Z')),
           literal('2026-01-01 00:00:00+00'),
           'timestamptz',
-          canonicalForm,
+          toCanonicalForm,
         ),
       ).toBe(true);
     });
@@ -124,7 +124,7 @@ describe('resolvedDefaultsEqual', () => {
           literal('2026-01-01T00:00:00Z'),
           literal('2026-01-02T00:00:00Z'),
           'timestamptz',
-          canonicalForm,
+          toCanonicalForm,
         ),
       ).toBe(false);
     });
@@ -135,13 +135,13 @@ describe('resolvedDefaultsEqual', () => {
           literal('not a date'),
           literal('not a date'),
           'timestamptz',
-          canonicalForm,
+          toCanonicalForm,
         ),
         other: resolvedDefaultsEqual(
           literal('not a date'),
           literal('2026-01-01T00:00:00Z'),
           'timestamptz',
-          canonicalForm,
+          toCanonicalForm,
         ),
       }).toEqual({ same: true, other: false });
     });
@@ -162,7 +162,7 @@ describe('resolvedDefaultsEqual', () => {
           literal(['2026-01-01T00:00:00.000Z']),
           literal(['2026-01-01 00:00:00+00']),
           'timestamptz[]',
-          canonicalForm,
+          toCanonicalForm,
         ),
       ).toBe(true);
     });

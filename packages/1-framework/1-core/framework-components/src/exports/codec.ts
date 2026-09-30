@@ -32,13 +32,13 @@ export type {
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
 export type {
-  CanonicalForm,
   Cast,
   DataType,
   DataTypeId,
   DataTypeLookup,
   DataTypeSpec,
   ListCast,
+  ToCanonicalForm,
 } from '../shared/data-type';
 export {
   createDataTypeLookup,

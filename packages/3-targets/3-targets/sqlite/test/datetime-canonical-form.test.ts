@@ -63,7 +63,7 @@ describe('sqlite/datetime canonical form', () => {
 describe('sqlite/datetime declares its canonical form', () => {
   it('gives the type its canonical-form function, which its cast from text shares', () => {
     expect({
-      canonical: sqliteDatetime.canonicalForm?.('2024-01-01 01:00:00+01:00'),
+      canonical: sqliteDatetime.toCanonicalForm?.('2024-01-01 01:00:00+01:00'),
       cast: sqliteDatetime.casts[sqliteText.id]?.('2024-01-01 01:00:00+01:00'),
     }).toEqual({ canonical: '2024-01-01T00:00:00Z', cast: '2024-01-01T00:00:00Z' });
   });

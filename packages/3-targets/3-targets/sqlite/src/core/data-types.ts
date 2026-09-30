@@ -11,10 +11,10 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import {
-  type CanonicalForm,
   type Cast,
   type DataType,
   dataType,
+  type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import { canonicalDateTime, numeralText } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
@@ -69,11 +69,11 @@ export const sqliteDatetimeCanonical = (text: string): string =>
     range: { earliest: '-271821-04-20T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
   });
 
-const datetimeCanonicalForm: CanonicalForm = (value) =>
+const datetimeCanonicalForm: ToCanonicalForm = (value) =>
   typeof value === 'string' ? sqliteDatetimeCanonical(value) : wrongShape(value, 'text');
 
 export const sqliteDatetime: DataType = dataType('sqlite/datetime', {
-  canonicalForm: datetimeCanonicalForm,
+  toCanonicalForm: datetimeCanonicalForm,
   casts: { [sqliteText.id]: datetimeCanonicalForm },
 });
 

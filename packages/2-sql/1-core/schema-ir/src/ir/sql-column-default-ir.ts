@@ -117,7 +117,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
         this.resolved,
         node.resolved,
         node.nativeTypeContext ?? this.nativeTypeContext,
-        (this.dataType ?? node.dataType)?.canonicalForm,
+        (this.dataType ?? node.dataType)?.toCanonicalForm,
       );
     }
     if (this.resolved !== undefined || node.resolved !== undefined) {

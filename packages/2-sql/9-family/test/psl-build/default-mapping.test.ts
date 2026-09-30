@@ -53,7 +53,7 @@ const blob = dataType('pg/bytea', {});
 const canonicalDate: Cast = (value) =>
   typeof value === 'string' ? value.replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') : value;
 const date = dataType('pg/date', {
-  canonicalForm: canonicalDate,
+  toCanonicalForm: canonicalDate,
   casts: { [text.id]: canonicalDate },
 });
 

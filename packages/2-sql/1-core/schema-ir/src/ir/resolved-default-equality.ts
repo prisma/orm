@@ -3,21 +3,21 @@ import type {
   ColumnDefaultLiteralInputValue,
   JsonValue,
 } from '@internal/contract/types';
-import type { CanonicalForm } from '@internal/framework-components/codec';
+import type { ToCanonicalForm } from '@internal/framework-components/codec';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 
 /**
  * Structural equality for two resolved column defaults, ported from the relational walk's
  * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (a
  * value of a type with a canonical form, such as a date or time type, to that form through
- * `canonicalForm`; a 64-bit-integer native type's safe-integer number to its
+ * `toCanonicalForm`; a 64-bit-integer native type's safe-integer number to its
  * decimal-text spelling; a numeric native type's number to its decimal text, and when the type has
  * a modifier, its decimal text to its digits without zeros that do not change the value; a list
  * element by element under its element type) then compared canonically (JSON objects match their
  * canonical string form); function expressions compare case- and whitespace-insensitively.
  *
  * `nativeType` provides the normalization context (the actual side's resolved native type in a diff
- * comparison). `canonicalForm` is the column data type's canonical-form function (ADR 254), from the
+ * comparison). `toCanonicalForm` is the column data type's canonical-form function (ADR 254), from the
  * assembled stack; a value it refuses compares as it is. A target that reads a raw
  * expression as a literal does so before this comparison, through its `resolveDefault` hook.
  */
@@ -25,13 +25,13 @@ export function resolvedDefaultsEqual(
   expected: ColumnDefault,
   actual: ColumnDefault,
   nativeType?: string,
-  canonicalForm?: CanonicalForm,
+  toCanonicalForm?: ToCanonicalForm,
 ): boolean {
   if (expected.kind !== actual.kind) return false;
   if (expected.kind === 'literal' && actual.kind === 'literal') {
     return literalValuesEqual(
-      normalizeLiteralValue(expected.value, nativeType, canonicalForm),
-      normalizeLiteralValue(actual.value, nativeType, canonicalForm),
+      normalizeLiteralValue(expected.value, nativeType, toCanonicalForm),
+      normalizeLiteralValue(actual.value, nativeType, toCanonicalForm),
     );
   }
   if (expected.kind === 'function' && actual.kind === 'function') {
@@ -87,9 +87,9 @@ function decimalDigits(value: string | number): string | number {
   return digits === '0' ? digits : `${numeral[1] ?? ''}${digits}`;
 }
 
-function inCanonicalForm(value: JsonValue, canonicalForm: CanonicalForm): JsonValue {
+function inCanonicalForm(value: JsonValue, toCanonicalForm: ToCanonicalForm): JsonValue {
   try {
-    return canonicalForm(value);
+    return toCanonicalForm(value);
   } catch {
     return value;
   }
@@ -98,15 +98,15 @@ function inCanonicalForm(value: JsonValue, canonicalForm: CanonicalForm): JsonVa
 function normalizeLiteralValue(
   value: ColumnDefaultLiteralInputValue,
   nativeType: string | undefined,
-  canonicalForm: CanonicalForm | undefined,
+  toCanonicalForm: ToCanonicalForm | undefined,
 ): unknown {
   if (Array.isArray(value) && nativeType?.endsWith('[]')) {
     const elementType = nativeType.slice(0, -2);
-    return value.map((element) => normalizeLiteralValue(element, elementType, canonicalForm));
+    return value.map((element) => normalizeLiteralValue(element, elementType, toCanonicalForm));
   }
   const json = value instanceof Date ? value.toISOString() : value;
-  if (canonicalForm !== undefined) {
-    return inCanonicalForm(json, canonicalForm);
+  if (toCanonicalForm !== undefined) {
+    return inCanonicalForm(json, toCanonicalForm);
   }
   if (value instanceof Date) {
     return json;

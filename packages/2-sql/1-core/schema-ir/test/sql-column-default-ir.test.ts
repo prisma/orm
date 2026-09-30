@@ -44,7 +44,7 @@ describe('SqlColumnDefaultIR', () => {
 
     it("a literal compares through the canonical form of the contract-derived side's data type", () => {
       const timestamptz = dataType('pg/timestamptz', {
-        canonicalForm: (value) =>
+        toCanonicalForm: (value) =>
           typeof value === 'string'
             ? value.replace(' ', 'T').replace('.000Z', 'Z').replace('+00', 'Z')
             : value,

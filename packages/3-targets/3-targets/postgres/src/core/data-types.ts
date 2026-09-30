@@ -10,10 +10,10 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import {
-  type CanonicalForm,
   type Cast,
   type DataType,
   dataType,
+  type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import {
   type CanonicalDateTimeOptions,
@@ -194,14 +194,14 @@ export const pgTimestamptzCanonical = postgresDateTime(
 
 /** The canonical-form function of a type whose values are written as text. */
 const canonicalFromText =
-  (canonical: (text: string) => string): CanonicalForm =>
+  (canonical: (text: string) => string): ToCanonicalForm =>
   (value) =>
     typeof value === 'string' ? canonical(value) : wrongShape(value, 'text');
 
 /** A date or time type: its canonical form, and a cast from text that gives it. */
 function dateTimeType(id: string, canonical: (text: string) => string): DataType {
-  const canonicalForm = canonicalFromText(canonical);
-  return dataType(id, { canonicalForm, casts: { [pgText.id]: canonicalForm } });
+  const toCanonicalForm = canonicalFromText(canonical);
+  return dataType(id, { toCanonicalForm, casts: { [pgText.id]: toCanonicalForm } });
 }
 
 export const pgTimetz: DataType = dateTimeType('pg/timetz', pgTimetzCanonical);

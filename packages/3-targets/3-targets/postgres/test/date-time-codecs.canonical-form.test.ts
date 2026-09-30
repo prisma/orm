@@ -10,7 +10,7 @@ const dataTypes = createDataTypeLookup(postgresDataTypes);
 
 /** Every codec of a type that declares a canonical form, found in the target's codec registry. */
 const codecsWithCanonicalForm = codecDescriptors.flatMap((descriptor) =>
-  dataTypes.get(descriptor.dataType)?.canonicalForm === undefined
+  dataTypes.get(descriptor.dataType)?.toCanonicalForm === undefined
     ? []
     : [
         {

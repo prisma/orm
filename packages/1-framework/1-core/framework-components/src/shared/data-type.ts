@@ -42,7 +42,7 @@ export interface ListCast {
  * values have more than one written form, such as a date written with or without a fraction. It
  * may throw a structured error for a value the type does not hold.
  */
-export type CanonicalForm = (value: JsonValue) => JsonValue;
+export type ToCanonicalForm = (value: JsonValue) => JsonValue;
 
 export interface DataType {
   readonly id: DataTypeId;
@@ -53,13 +53,13 @@ export interface DataType {
    * Gives a value of this type its canonical form. Everything that reads, compares or writes a
    * stored value of the type goes through it, so two forms of one value are one value.
    */
-  readonly canonicalForm?: CanonicalForm;
+  readonly toCanonicalForm?: ToCanonicalForm;
 }
 
 export interface DataTypeSpec {
   readonly casts?: Readonly<Record<string, Cast>>;
   readonly listCast?: { readonly of: readonly string[]; readonly cast: ListCast['cast'] };
-  readonly canonicalForm?: CanonicalForm;
+  readonly toCanonicalForm?: ToCanonicalForm;
 }
 
 /** The assembled types of one stack, by id. */
@@ -95,7 +95,7 @@ export function dataType(id: string, spec: DataTypeSpec): DataType {
     ...(listCast === undefined
       ? {}
       : { listCast: { of: listCast.of.map(dataTypeId), cast: listCast.cast } }),
-    ...(spec.canonicalForm === undefined ? {} : { canonicalForm: spec.canonicalForm }),
+    ...(spec.toCanonicalForm === undefined ? {} : { toCanonicalForm: spec.toCanonicalForm }),
   };
 }
 

@@ -3,7 +3,7 @@ import type { TargetBoundComponentDescriptor } from '@internal/framework-compone
 import { describe, expect, it } from 'vitest';
 import { buildDataTypeResolver } from '../src/core/migrations/data-type-resolver';
 
-const instant = dataType('demo/instant', { canonicalForm: (value) => value });
+const instant = dataType('demo/instant', { toCanonicalForm: (value) => value });
 const point = dataType('geo/point', {});
 
 function component(

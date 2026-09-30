@@ -280,9 +280,9 @@ function writeListCast(
 }
 
 function canonicalOrAsIs(value: JsonValue, dataType: DataType | undefined): JsonValue {
-  if (dataType?.canonicalForm === undefined) return value;
+  if (dataType?.toCanonicalForm === undefined) return value;
   try {
-    return dataType.canonicalForm(value);
+    return dataType.toCanonicalForm(value);
   } catch {
     return value;
   }
