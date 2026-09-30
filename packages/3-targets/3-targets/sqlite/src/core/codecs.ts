@@ -106,17 +106,17 @@ const hexJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   );
 
 /**
- * Projects a REAL as SQLite writes it in JSON, except an infinity, which SQLite writes as `9.0e+999` and which becomes the text `Infinity` or `-Infinity` that `encodeJson` writes. No finite double is larger in magnitude than `Number.MAX_VALUE`. SQLite cannot store NaN.
+ * Projects a REAL as SQLite writes it in JSON, except an infinity, which SQLite writes as `9.0e+999` and which becomes the text `Infinity` or `-Infinity` that `encodeJson` writes. The test is equality with an infinity, so text or a blob that a REAL column holds outside a STRICT table passes through unchanged.
  */
 const floatJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   CaseExpr.of(
     [
       {
-        condition: BinaryExpr.gt(expression, LiteralExpr.of(Number.MAX_VALUE)),
+        condition: BinaryExpr.eq(expression, LiteralExpr.of(Number.POSITIVE_INFINITY)),
         value: LiteralExpr.of('Infinity'),
       },
       {
-        condition: BinaryExpr.lt(expression, LiteralExpr.of(-Number.MAX_VALUE)),
+        condition: BinaryExpr.eq(expression, LiteralExpr.of(Number.NEGATIVE_INFINITY)),
         value: LiteralExpr.of('-Infinity'),
       },
     ],

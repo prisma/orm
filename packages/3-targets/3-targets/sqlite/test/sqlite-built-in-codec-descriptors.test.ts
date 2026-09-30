@@ -138,11 +138,11 @@ describe('SQLite built-in codec descriptors', () => {
     const infinityAsText = CaseExpr.of(
       [
         {
-          condition: BinaryExpr.gt(expression, LiteralExpr.of(Number.MAX_VALUE)),
+          condition: BinaryExpr.eq(expression, LiteralExpr.of(Number.POSITIVE_INFINITY)),
           value: LiteralExpr.of('Infinity'),
         },
         {
-          condition: BinaryExpr.lt(expression, LiteralExpr.of(-Number.MAX_VALUE)),
+          condition: BinaryExpr.eq(expression, LiteralExpr.of(Number.NEGATIVE_INFINITY)),
           value: LiteralExpr.of('-Infinity'),
         },
       ],
