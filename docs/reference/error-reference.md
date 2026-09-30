@@ -39,11 +39,11 @@ The `contract` section is missing (or incomplete) in `prisma.config.ts` when a c
 
 ### CONFIG.DB_CONNECTION_REQUIRED
 
-A DB-connected command (`migrate`, `db init`, `db sign`, `db verify`, `db update`, `inspect-live-schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
+A DB-connected command (`db migrate`, `db init`, `db sign`, `db verify`, `db update`, `db schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
 
 ### CONFIG.DRIVER_REQUIRED
 
-A DB-connected command was run but `prisma.config.ts` has no control-plane `driver` entry (e.g. `driver: postgresDriver`). Raised by the migration command scaffold, `migrate`, `db sign`, `db verify`, and `inspect-live-schema`. Payload: none.
+A DB-connected command was run but `prisma.config.ts` has no control-plane `driver` entry (e.g. `driver: postgresDriver`). Raised by the migration command scaffold, `db migrate`, `db sign`, `db verify`, and `db schema`. Payload: none.
 
 ### CONFIG.EVALUATION_FAILED
 
@@ -97,11 +97,11 @@ The migration-file CLI (`prisma migration`) received `--config` without a path a
 
 ### CLI.FILE_NOT_FOUND
 
-A file the command needs does not exist at the given path. Produced by several commands: the migration command scaffold, `migrate`, `migration plan`, `migration show`, `db sign`, `db update`, `db verify`, and `ref` all raise it when the emitted `contract.json` (or another required file) is missing from the expected location. Most sites carry the path in `where.path`; the `migration new` contract-file site carries it in the summary text only. Payload: none.
+A file the command needs does not exist at the given path. Produced by several commands: the migration command scaffold, `db migrate`, `migration plan`, `migration show`, `db sign`, `db update`, `db verify`, and `migration ref` all raise it when the emitted `contract.json` (or another required file) is missing from the expected location. Most sites carry the path in `where.path`; the `migration new` contract-file site carries it in the summary text only. Payload: none.
 
 ### CLI.FILE_WRITE_FAILED
 
-Writing a file failed: currently raised when `format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
+Writing a file failed: currently raised when `contract format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
 
 ### CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH
 
@@ -109,7 +109,7 @@ During `prisma orm init`, `--authoring` and `--schema-path` disagree on file ext
 
 ### CLI.INIT_EMIT_FAILED
 
-During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
+During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `orm init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
 
 ### CLI.INIT_FLAG_CONFLICT
 
@@ -117,7 +117,7 @@ During `prisma orm init`, the `prisma contract emit` step failed after a success
 
 ### CLI.INIT_INSTALL_FAILED
 
-During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `init` again once the dependencies install. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
+During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `orm init` again once the dependencies install. `orm init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
@@ -129,7 +129,7 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 ### CLI.INIT_INVALID_OUTPUT_DOCUMENT
 
-`prisma orm init` completed but its own success output document failed schema validation. This indicates a bug in Prisma 8 itself, not user error. The engine-hosted `init` settles it as an errored envelope at exit 2 (the commander `init`, deleted in the S5 cutover, mapped it to exit 1), because the ORM's error boundary converts every failure into a structured settlement and the engine reserves exit 1 for a throw that reaches it uncaught. Payload: none.
+`prisma orm init` completed but its own success output document failed schema validation. This indicates a bug in Prisma 8 itself, not user error. The engine-hosted `orm init` settles it as an errored envelope at exit 2 (the commander `orm init`, deleted in the S5 cutover, mapped it to exit 1), because the ORM's error boundary converts every failure into a structured settlement and the engine reserves exit 1 for a throw that reaches it uncaught. Payload: none.
 
 ### CLI.INIT_INVALID_TSCONFIG
 
@@ -173,9 +173,9 @@ On the Prisma 7 path of `prisma orm init`, `--target` names a different database
 
 ### CLI.INIT_REINIT_NEEDS_FORCE
 
-`prisma orm init` ran non-interactively in a directory that already has a `prisma.config.ts`, and consent to overwrite the existing scaffold was not given. Re-scaffolding is destructive, so it needs explicit consent: interactively, `init` asks the user to type the working directory's name back; non-interactively, the same consent is granted by `--confirm <directory name>`. Neither `--yes` nor any flag skips it. Maps to init exit code 2 (PRECONDITION). Payload: none.
+`prisma orm init` ran non-interactively in a directory that already has a `prisma.config.ts`, and consent to overwrite the existing scaffold was not given. Re-scaffolding is destructive, so it needs explicit consent: interactively, `orm init` asks the user to type the working directory's name back; non-interactively, the same consent is granted by `--confirm <directory name>`. Neither `--yes` nor any flag skips it. Maps to init exit code 2 (PRECONDITION). Payload: none.
 
-The code was raised by the commander `init` (deleted in the S5 cutover), whose consent flag was `--force`. The engine-hosted `init` reaches the same outcome through the engine's own `CLI.CONSENT_REQUIRED`, which names the exact `--confirm` value to pass.
+The code was raised by the commander `orm init` (deleted in the S5 cutover), whose consent flag was `--force`. The engine-hosted `orm init` reaches the same outcome through the engine's own `CLI.CONSENT_REQUIRED`, which names the exact `--confirm` value to pass.
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
@@ -189,7 +189,7 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 
 The user cancelled an interactive `prisma orm init` prompt (Ctrl-C, escape, or declining a selection) before all required inputs were supplied. No files were modified. Severity is `info`, not `error`; maps to init exit code 3 (USER_ABORTED). Payload: none.
 
-Raised by the commander `init` (deleted in the S5 cutover). On the engine-hosted `init` a cancelled prompt is the engine's own `CLI.PROMPT_CANCELLED`, which exits 3 for every command rather than only this one; the engine-hosted `init` keeps this code for a consent the user declines, which settles as an errored envelope at exit 2 like every other structured failure there. Because that command's consent declares a token, the engine answers a wrong or absent answer with `CLI.PROMPT_INVALID` or `CLI.CONSENT_REQUIRED` before a decline can be expressed, so the code is the refusal that runs if a future consent drops its token.
+Raised by the commander `orm init` (deleted in the S5 cutover). On the engine-hosted `orm init` a cancelled prompt is the engine's own `CLI.PROMPT_CANCELLED`, which exits 3 for every command rather than only this one; the engine-hosted `orm init` keeps this code for a consent the user declines, which settles as an errored envelope at exit 2 like every other structured failure there. Because that command's consent declares a token, the engine answers a wrong or absent answer with `CLI.PROMPT_INVALID` or `CLI.CONSENT_REQUIRED` before a decline can be expressed, so the code is the refusal that runs if a future consent drops its token.
 
 ### CLI.INIT_WRITE_FAILED
 
@@ -561,7 +561,7 @@ One finding a contract source reported with a code that is not yet dotted, such 
 
 ### CONTRACT.SOURCE_LOAD_FAILED
 
-Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit` or `contract print`, or `format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
+Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit` or `contract print`, or `contract format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
 
 ### CONTRACT.TABLE_AMBIGUOUS
 
@@ -585,7 +585,7 @@ The emitted contract file could not be read or parsed while computing `migration
 
 ### CONTRACT.TYPES_RENDER_FAILED
 
-A command advancing a ref (`db sign`, `db init`, `db update`, `migrate --advance-ref`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
+A command advancing a ref (`db sign`, `db init`, `db update`, `db migrate --advance-ref`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
 
 ### CONTRACT.VALIDATION_FAILED
 
@@ -607,7 +607,7 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 
 ### PSL.PARSE_FAILED
 
-`format()` was asked to format PSL source that has parse errors; formatting refuses to run on an unparseable document. The message carries the first diagnostic and a count of the rest; the CLI `format` command wraps this into a structured failure telling the user to fix the parse errors, attaching the parser error as `cause`. Payload: `diagnostics`.
+`format()` was asked to format PSL source that has parse errors; formatting refuses to run on an unparseable document. The message carries the first diagnostic and a count of the rest; the CLI `contract format` command wraps this into a structured failure telling the user to fix the parse errors, attaching the parser error as `cause`. Payload: `diagnostics`.
 
 ### PSL.PRISMA6_MONGO_COMPOSITE_ID_UNSUPPORTED
 
@@ -1214,7 +1214,7 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 ### MIGRATION.CHECK_DANGLING_REF
 
-A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file points at a contract hash that does not exist in the space's migration graph. Update the ref with `prisma ref set <name> <valid-hash>` or delete it.
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file points at a contract hash that does not exist in the space's migration graph. Update the ref with `prisma migration ref set <name> <valid-hash>` or delete it.
 
 ### MIGRATION.CHECK_DECLARED_BUT_UNMIGRATED
 
@@ -1294,7 +1294,7 @@ A contract JSON on disk failed to deserialize into a valid contract: either a sn
 
 ### MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH
 
-A contract snapshot loaded from `migrations/snapshots/<hash>/contract.json` does not reproduce the storage hash it is addressed by: the store is content-addressed, and the file has been edited (or corrupted) since it was written. Raised at the snapshot-store load seam, so every command that resolves a contract from the store (`migration plan`, `ref set`, `db sign` / `db update --to`, aggregate contract resolution) refuses instead of treating the edited content as the recorded contract. The envelope names the file and both hashes (meta: `storageHash`, `computedHash`, `jsonPath`). Restore `migrations/snapshots/` from version control, or re-run the command that authored the referencing migration to regenerate the snapshot.
+A contract snapshot loaded from `migrations/snapshots/<hash>/contract.json` does not reproduce the storage hash it is addressed by: the store is content-addressed, and the file has been edited (or corrupted) since it was written. Raised at the snapshot-store load seam, so every command that resolves a contract from the store (`migration plan`, `migration ref set`, `db sign` / `db update --to`, aggregate contract resolution) refuses instead of treating the edited content as the recorded contract. The envelope names the file and both hashes (meta: `storageHash`, `computedHash`, `jsonPath`). Restore `migrations/snapshots/` from version control, or re-run the command that authored the referencing migration to regenerate the snapshot.
 
 ### MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH
 
@@ -1310,7 +1310,7 @@ The on-disk `migrations/` directory and the `extensions` declaration in config d
 
 ### MIGRATION.CONTRACT_SPACE_VIOLATION
 
-A contract-space check raised under one code, in two lanes with different exits. As an error at exit `2` when the check could not run: a space's target mismatches the project target, two spaces claim the same storage element, a space contract is unreadable, or aggregate introspection failed (`db verify`, `db run`). As an `error`-severity diagnostic on a completed `db verify` run that exits `4`, including under `--marker-only`, when the check ran and found per-space marker drift: a marker hash mismatch, missing invariants, or an orphan marker row, reported next to the single-contract marker findings that already settle there. The envelope's `why` lists the specific violations. Payload: `violations`.
+A contract-space check raised under one code, in two lanes with different exits. As an error at exit `2` when the check could not run: a space's target mismatches the project target, two spaces claim the same storage element, a space contract is unreadable, or aggregate introspection failed (`db verify`, `db init`, `db update`). As an `error`-severity diagnostic on a completed `db verify` run that exits `4`, including under `--marker-only`, when the check ran and found per-space marker drift: a marker hash mismatch, missing invariants, or an orphan marker row, reported next to the single-contract marker findings that already settle there. The envelope's `why` lists the specific violations. Payload: `violations`.
 
 ### MIGRATION.CONTRACT_VIEW_MISSING
 
@@ -1330,7 +1330,7 @@ An extension descriptor publishes a `contractSpace` whose `headRef.hash` does no
 
 ### MIGRATION.DESTINATION_CONTRACT_MISMATCH
 
-Runner-level failure during apply (`db init`, `db update`, `migrate`): the plan's destination storage hash (or profile hash) does not match the destination contract handed to the runner alongside it. Indicates the plan and contract came from different emits. Payload: `planStorageHash`/`contractStorageHash` (or `planProfileHash`/`contractProfileHash`).
+Runner-level failure during apply (`db init`, `db update`, `db migrate`): the plan's destination storage hash (or profile hash) does not match the destination contract handed to the runner alongside it. Indicates the plan and contract came from different emits. Payload: `planStorageHash`/`contractStorageHash` (or `planProfileHash`/`contractProfileHash`).
 
 ### MIGRATION.DESTRUCTIVE_CHANGES
 
@@ -1354,7 +1354,7 @@ The per-space migration planner received the same contract-space id more than on
 
 ### MIGRATION.EXECUTION_FAILED
 
-A migration operation's SQL step failed while being executed against the database during apply (`db init`, `db update`, `migrate`). The envelope carries the database error detail so you can see which statement failed and why. Payload: `operationId`, `stepDescription`, `sql`, `sqlState`, `constraint`, `table`, `column`, `detail`.
+A migration operation's SQL step failed while being executed against the database during apply (`db init`, `db update`, `db migrate`). The envelope carries the database error detail so you can see which statement failed and why. Payload: `operationId`, `stepDescription`, `sql`, `sqlState`, `constraint`, `table`, `column`, `detail`.
 
 ### MIGRATION.FILE_MISSING
 
@@ -1370,7 +1370,7 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 ### MIGRATION.HASH_NOT_IN_GRAPH
 
-A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
+A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `migration ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -1406,11 +1406,11 @@ A ref file under `migrations/<space>/refs/` is not valid JSON or does not match 
 
 ### MIGRATION.INVALID_REF_NAME
 
-A ref name is syntactically invalid: names must be lowercase alphanumeric with hyphens or forward slashes, with no `.` or `..` segments. Raised by `ref` commands and any ref-consuming tooling. Payload: `refName`.
+A ref name is syntactically invalid: names must be lowercase alphanumeric with hyphens or forward slashes, with no `.` or `..` segments. Raised by `migration ref` commands and any ref-consuming tooling. Payload: `refName`.
 
 ### MIGRATION.INVALID_REF_VALUE
 
-The value given for a ref (e.g. to `ref set`) is not a valid contract hash: it must be 64 lowercase hex chars or `empty`. Payload: `value`.
+The value given for a ref (e.g. to `migration ref set`) is not a valid contract hash: it must be 64 lowercase hex chars or `empty`. Payload: `value`.
 
 ### MIGRATION.INVALID_REFS
 
@@ -1434,7 +1434,7 @@ While finalizing an apply, the compare-and-swap update of the database's contrac
 
 ### MIGRATION.MARKER_MISMATCH
 
-The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`.
+The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan` (catch the graph up), `migration ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`.
 
 ### MIGRATION.MARKER_NOT_IN_HISTORY
 
@@ -1454,7 +1454,7 @@ A diagnostic in `migration status`: the active ref requires data invariants that
 
 ### MIGRATION.NO_INVARIANT_PATH
 
-The target (or named ref) requires data invariants, and no path through the migration graph from the current state covers all of them. Add a migration on the path that runs a `dataTransform` with each missing `invariantId`, or retarget the ref. Payload: `required`, `missing`, `structuralPath` (edges: `dirName`, `migrationHash`, `from`, `to`, `invariants`), `refName` (when applicable). Also raised per space by `migrate` in show/plan mode when a space's path requires invariants not available on disk; that site's meta is `spaceId`, `missing`.
+The target (or named ref) requires data invariants, and no path through the migration graph from the current state covers all of them. Add a migration on the path that runs a `dataTransform` with each missing `invariantId`, or retarget the ref. Payload: `required`, `missing`, `structuralPath` (edges: `dirName`, `migrationHash`, `from`, `to`, `invariants`), `refName` (when applicable). Also raised per space by `db migrate` in show/plan mode when a space's path requires invariants not available on disk; that site's meta is `spaceId`, `missing`.
 
 ### MIGRATION.NO_MIGRATIONS
 
@@ -1470,7 +1470,7 @@ A Mongo migration check uses a filter feature the check evaluator does not suppo
 
 ### MIGRATION.PATH_UNREACHABLE
 
-An apply command (`migrate`/`db update`) cannot find a path through the on-disk migration graph from the database's current marker to the requested target: the connecting edge was never planned. The fix walks you through `migration plan` (with the right `--from`/`--to`) then `migrate`. Payload: carries the underlying failure's meta (`fromHash`, `targetHash`, `deadEnds`, `kind`).
+An apply command (`db migrate`/`db update`) cannot find a path through the on-disk migration graph from the database's current marker to the requested target: the connecting edge was never planned. The fix walks you through `migration plan` (with the right `--from`/`--to`) then `db migrate`. Payload: carries the underlying failure's meta (`fromHash`, `targetHash`, `deadEnds`, `kind`).
 
 ### MIGRATION.PLANNING_FAILED
 
@@ -1518,15 +1518,15 @@ A contract or migration reference does not resolve: no matching hash, ref name, 
 
 ### MIGRATION.REF_NOT_RESOLVABLE
 
-A ref name resolves to nothing: no pointer file with that name exists, and the fallback hash is not a node in the migration graph either, so there is no contract to materialize. Create the ref with `ref set`, advance it via `db update --advance-ref`, or pass a graph-node hash. Payload: `refName`, `identifier`.
+A ref name resolves to nothing: no pointer file with that name exists, and the fallback hash is not a node in the migration graph either, so there is no contract to materialize. Create the ref with `migration ref set`, advance it via `db update --advance-ref`, or pass a graph-node hash. Payload: `refName`, `identifier`.
 
 ### MIGRATION.REF_SET_BUNDLE_NOT_FOUND
 
-`ref set` resolved the given hash to a graph node, but no on-disk migration bundle has that hash as its destination, so the ref would point at a node with no backing package. Re-emit the migration that produces this hash. Payload: `hash`.
+`migration ref set` resolved the given hash to a graph node, but no on-disk migration bundle has that hash as its destination, so the ref would point at a node with no backing package. Re-emit the migration that produces this hash. Payload: `hash`.
 
 ### MIGRATION.REF_SET_EMPTY_SENTINEL
 
-`ref set` was asked to point a ref at the empty-database sentinel hash, which is a planner internal and not a valid ref target. Use a real contract hash from the migration graph. Payload: `hash`.
+`migration ref set` was asked to point a ref at the empty-database sentinel hash, which is a planner internal and not a valid ref target. Use a real contract hash from the migration graph. Payload: `hash`.
 
 ### MIGRATION.REF_WRONG_GRAMMAR
 
@@ -1534,7 +1534,7 @@ A reference parsed, but as the wrong kind for the argument position, e.g. a migr
 
 ### MIGRATION.RUNNER_FAILED
 
-Generic wrapper for a migration runner failure during execution that has no more specific code; the summary/why carry the underlying detail (also used to surface the legacy-marker-shape condition from marker reads, with `meta.runnerErrorCode`). `migrate` and `db init` map unrecognized apply failures through it, passing the failure's own meta through unchanged. Inspect the reported summary/why detail and address the underlying failure before re-running the command. Payload: the wrapped failure's meta, when it has any; `runnerErrorCode` at the legacy-marker-shape site.
+Generic wrapper for a migration runner failure during execution that has no more specific code; the summary/why carry the underlying detail (also used to surface the legacy-marker-shape condition from marker reads, with `meta.runnerErrorCode`). `db migrate` and `db init` map unrecognized apply failures through it, passing the failure's own meta through unchanged. Inspect the reported summary/why detail and address the underlying failure before re-running the command. Payload: the wrapped failure's meta, when it has any; `runnerErrorCode` at the legacy-marker-shape site.
 
 ### MIGRATION.SAME_SOURCE_AND_TARGET
 
@@ -1542,7 +1542,7 @@ A migration's `from` and `to` hashes are identical and it declares no data-trans
 
 ### MIGRATION.SCHEMA_VERIFY_FAILED
 
-After applying migrations, the runner introspected the database and the resulting schema does not satisfy the destination contract; the apply is rolled back. Runner-level failure during `db init`/`db update`/`migrate`. Payload: `issues` (schema diff issues).
+After applying migrations, the runner introspected the database and the resulting schema does not satisfy the destination contract; the apply is rolled back. Runner-level failure during `db init`/`db update`/`db migrate`. Payload: `issues` (schema diff issues).
 
 ### MIGRATION.SNAPSHOT_MISSING
 
@@ -1582,7 +1582,7 @@ A ref declares required invariants that no migration anywhere in the graph provi
 
 ### MIGRATION.UNKNOWN_REF
 
-A ref name was used (read, resolved, or deleted via `ref` commands) but no ref file with that name exists. Create it with `prisma ref set <name> <hash>`, or run `ref list` to see what exists. Payload: `refName`, `filePath` or `availableRefs` depending on the site.
+A ref name was used (read, resolved, or deleted via `migration ref` commands) but no ref file with that name exists. Create it with `prisma migration ref set <name> <hash>`, or run `migration ref list` to see what exists. Payload: `refName`, `filePath` or `availableRefs` depending on the site.
 
 ## PLAN
 
