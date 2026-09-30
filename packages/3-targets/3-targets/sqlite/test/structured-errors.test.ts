@@ -5,10 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { sqliteBigintDescriptor, sqliteRealDescriptor } from '../src/core/codecs';
 import sqliteControlTargetDescriptor from '../src/core/control-target';
 import { CreateTableCall, DropTableCall } from '../src/core/migrations/op-factory-call';
-import {
-  buildColumnDefaultSql,
-  buildColumnTypeSql,
-} from '../src/core/migrations/planner-ddl-builders';
+import { buildColumnTypeSql } from '../src/core/migrations/planner-ddl-builders';
 import { renderOps } from '../src/core/migrations/render-ops';
 import { createSqliteMigrationRunner } from '../src/core/migrations/runner';
 import { escapeLiteral, quoteIdentifier } from '../src/core/sql-utils';
@@ -98,14 +95,6 @@ describe('structured error codes', () => {
       code: 'CONTRACT.NATIVE_TYPE_INVALID',
       meta: { nativeType: 'TEXT; DROP' },
     });
-  });
-
-  it('unsafe default expression raises CONTRACT.DEFAULT_INVALID', () => {
-    const error = capture(() =>
-      buildColumnDefaultSql({ kind: 'function', expression: "eek(); DROP TABLE 'x'" }),
-    );
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({ code: 'CONTRACT.DEFAULT_INVALID' });
   });
 
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {

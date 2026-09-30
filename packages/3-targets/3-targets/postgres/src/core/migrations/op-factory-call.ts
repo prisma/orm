@@ -628,24 +628,24 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
   readonly operationClass: 'additive' | 'widening';
   readonly schemaName: string;
   readonly tableName: string;
+  /** The column with the default to set, its type and its codec; the adapter writes the clause. */
+  readonly column: DdlColumn;
   readonly columnName: string;
-  readonly defaultSql: string;
   readonly label: string;
 
   constructor(
     schemaName: string,
     tableName: string,
-    columnName: string,
-    defaultSql: string,
+    column: DdlColumn,
     operationClass: 'additive' | 'widening' = 'additive',
   ) {
     super();
     this.schemaName = schemaName;
     this.tableName = tableName;
-    this.columnName = columnName;
-    this.defaultSql = defaultSql;
+    this.column = column;
+    this.columnName = column.name;
     this.operationClass = operationClass;
-    this.label = `Set default on "${tableName}"."${columnName}"`;
+    this.label = `Set default on "${tableName}"."${column.name}"`;
     this.freeze();
   }
 
@@ -657,14 +657,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
         { meta: { factory: 'SetDefaultCall' } },
       );
     }
-    return setDefault(
-      this.schemaName,
-      this.tableName,
-      this.columnName,
-      this.defaultSql,
-      lowerer,
-      this.operationClass,
-    );
+    return setDefault(this.schemaName, this.tableName, this.column, lowerer, this.operationClass);
   }
 
   renderTypeScript(): string {
@@ -673,8 +666,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
       opts.push(`schema: ${jsonToTsSource(this.schemaName)}`);
     }
     opts.push(`table: ${jsonToTsSource(this.tableName)}`);
-    opts.push(`column: ${jsonToTsSource(this.columnName)}`);
-    opts.push(`defaultSql: ${jsonToTsSource(this.defaultSql)}`);
+    opts.push(`column: ${renderDdlColumnAsTsCall(this.column)}`);
     if (this.operationClass !== 'additive') {
       opts.push(`operationClass: ${jsonToTsSource(this.operationClass)}`);
     }
@@ -682,7 +674,13 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
   }
 
   override importRequirements(): readonly ImportRequirement[] {
-    return [];
+    return [
+      { moduleSpecifier: POSTGRES_MIGRATION_FACADE, symbol: 'col' },
+      ...defaultImportSymbols([this.column]).map((symbol) => ({
+        moduleSpecifier: POSTGRES_MIGRATION_FACADE,
+        symbol,
+      })),
+    ];
   }
 }
 

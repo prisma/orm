@@ -142,6 +142,13 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\bmapCaughtMigrationError\b'
+  - id: migration-ts-column-defaults
+    summary: |
+      In `migration.ts`, the adapter writes every column default, reading it with the column's codec. Postgres `setDefault` takes the column as `col(name, type, { default, codecRef })` instead of `column` (the name) and `defaultSql`. A SQLite `addColumn` or `recreateTable` column carries `default` and `codecRef` instead of `defaultSql`, and a `recreateTable` postcheck for a default is `{ description, columnDefault }`. An earlier `migration.ts` that uses `defaultSql` no longer compiles; its `ops.json` still applies.
+    detection:
+      glob: "**/migration.ts"
+      matches:
+        - '\bdefaultSql\s*:'
 ---
 
 ## `domain-types-match-their-columns`
@@ -181,7 +188,7 @@ Correct the value the diagnostic names.
 
 The built-in SQL, PostgreSQL and SQLite codecs now refuse a value that is not a stored form of their type, including one its type parameters rule out, where most used to pass it through. A TypeScript `.default()` given such a value is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` naming the model and field: a value of another kind, such as a number for a text column, or one the PostgreSQL column rules in `psl-values-checked-by-codecs` refuse, such as `'toolong'` for a `varchar(3)` column. A TypeScript `enumType` member its codec does not take is refused the same way, with `CONTRACT.ENUM_INVALID` naming the enum, the member and the codec: for example a `pg/char@1` or `sql/char@1` member longer than one character on PostgreSQL, since the enum's column is `character`, which holds one. Correct the value the error names.
 
-A `contract.json` with such a default, emitted by an earlier version or edited by hand, still loads. `db init`, `db update` and `migration plan` used to plan the default; they now stop with `CONTRACT.DEFAULT_INVALID`, which names the table, the column, the codec and the value. Emit the contract again with this version, and correct the default in the contract source if emit refuses it. Running a `migration.ts` that an earlier version planned with such a default fails with the same message; correct the default in that file. Each element of a list default is read the same way, and the message names the element's position: `Column "post"."tags" has a default (element 2) its codec pg/text@1 refuses: pg/text@1 JSON value must be a string`. A NULL element stays NULL. The codecs that carry PostgreSQL's own date and time text, those of `DateString`, `TimeString`, `TimestampString`, `TimestamptzString` and `Timetz`, read only a date or time in ISO 8601 or as PostgreSQL writes it, so such a default as `'now'`, which PostgreSQL would read once when it creates the table, is refused the same way. An `.include()` of such a column reads the text PostgreSQL writes in the ISO DateStyle, its default; on a server set to another DateStyle it now fails with `RUNTIME.DECODE_FAILED`, where it passed the text through. Set `DateStyle` to `ISO` on that server.
+A `contract.json` with such a default, emitted by an earlier version or edited by hand, still loads. `db init`, `db update` and `migration plan` used to plan the default; they now stop with `CONTRACT.DEFAULT_INVALID`, which names the table, the column, the codec and the value. Emit the contract again with this version, and correct the default in the contract source if emit refuses it. Running a `migration.ts` that an earlier version planned with such a default fails with the same message; correct the default in that file. Every statement that writes a default reads it this way: a new table or column, a changed default, and on SQLite a rebuilt table, which used to write a changed default or a rebuilt table's defaults unread. Each element of a list default is read the same way, and the message names the element's position: `Column "post"."tags" has a default (element 2) its codec pg/text@1 refuses: pg/text@1 JSON value must be a string`. A NULL element stays NULL. The codecs that carry PostgreSQL's own date and time text, those of `DateString`, `TimeString`, `TimestampString`, `TimestamptzString` and `Timetz`, read only a date or time in ISO 8601 or as PostgreSQL writes it, so such a default as `'now'`, which PostgreSQL would read once when it creates the table, is refused the same way. An `.include()` of such a column reads the text PostgreSQL writes in the ISO DateStyle, its default; on a server set to another DateStyle it now fails with `RUNTIME.DECODE_FAILED`, where it passed the text through. Set `DateStyle` to `ISO` on that server.
 
 ## `text-array-elements-nullable`
 
@@ -313,3 +320,29 @@ const ast = sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaN
 ## `cli-error-from-caught`
 
 `mapCaughtMigrationError(error)`, exported from `@prisma/orm-toolchain/cli/control-api` (`@internal/cli/control-api`), returned a CLI error unchanged and `null` for anything else, which the caller wrapped as `CLI.UNEXPECTED`. `errorFromCaught(error, why)`, exported from the same place, does the whole job: it returns a CLI error unchanged, reports any other error with a structured `NAMESPACE.SUBCODE` code as itself, reports anything else as `CLI.UNEXPECTED` with `why` given the error's message, and throws an `InternalError` again. Replace `mapCaughtMigrationError(error) ?? errorUnexpected(...)` with `errorFromCaught(error, (message) => ...)`. A caller that holds a database connection string passes it as `errorFromCaught(error, why, { connection })`, which removes it from every field of the reported error.
+
+## `migration-ts-column-defaults`
+
+A `migration.ts` no longer carries a column default as SQL text. The control adapter writes the `DEFAULT …` clause for every statement, the same way for a new table, a new column, a changed default and a rebuilt SQLite table, and it reads a literal default with the column's codec first. A `migration.ts` that sets a default the codec refuses fails when it runs, with `CONTRACT.DEFAULT_INVALID` naming the table and the column.
+
+On PostgreSQL, `setDefault` takes the column and its default:
+
+```typescript
+// before
+this.setDefault({ table: 'user', column: 'role', defaultSql: "DEFAULT 'member'" })
+// after
+this.setDefault({ table: 'user', column: col('role', 'text', { default: lit('member'), codecRef: { codecId: 'pg/text@1' } }) })
+```
+
+On SQLite, a column in `addColumn` or `recreateTable` carries the default and its codec, and a `recreateTable` postcheck that checks a default names the column:
+
+```typescript
+// before
+{ name: 'role', typeSql: 'TEXT', defaultSql: "DEFAULT 'member'", nullable: false }
+{ description: 'verify "role" default on "user"', sql: "SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE ..." }
+// after
+{ name: 'role', typeSql: 'TEXT', default: { kind: 'literal', value: 'member' }, codecRef: { codecId: 'sqlite/text@1' }, nullable: false }
+{ description: 'verify "role" default on "user"', columnDefault: 'role' }
+```
+
+An applied migration needs nothing: `db migrate` applies `ops.json`, which holds the SQL. Change a `migration.ts` this way only when you run it again to write `ops.json`.

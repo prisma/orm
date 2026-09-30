@@ -196,9 +196,8 @@ export async function dropNotNull(
 }
 
 /**
- * `defaultSql` is the full `DEFAULT …` clause as produced by
- * `buildColumnDefaultSql` — e.g. `"DEFAULT 42"`,
- * `"DEFAULT (CURRENT_TIMESTAMP)"`, or `"DEFAULT nextval('seq'::regclass)"`.
+ * Sets `column`'s default. The adapter writes the `DEFAULT …` clause, reading a literal default with
+ * the column's codec first, as every DDL statement that writes a default does.
  *
  * `operationClass` defaults to `'additive'` (setting a default on a column
  * that currently has none). The reconciliation planner passes `'widening'`
@@ -211,12 +210,13 @@ export async function dropNotNull(
 export async function setDefault(
   schemaName: string,
   tableName: string,
-  columnName: string,
-  defaultSql: string,
+  column: DdlColumn,
   lowerer: ExecuteRequestLowerer,
   operationClass: 'additive' | 'widening' = 'additive',
 ): Promise<Op> {
+  const columnName = column.name;
   const qualified = qualifyTableName(schemaName, tableName);
+  const clause = await lowerer.renderColumnDefault(column, tableName);
   const { present } = await columnExistsSteps(lowerer, {
     schema: schemaName,
     table: tableName,
@@ -241,7 +241,7 @@ export async function setDefault(
     execute: [
       step(
         `set default on "${columnName}"`,
-        `ALTER TABLE ${qualified} ALTER COLUMN ${quoteIdentifier(columnName)} SET ${defaultSql}`,
+        `ALTER TABLE ${qualified} ALTER COLUMN ${quoteIdentifier(columnName)} SET ${clause}`,
       ),
     ],
     postcheck:

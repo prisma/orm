@@ -388,15 +388,13 @@ export abstract class PostgresMigration<
   protected setDefault(options: {
     readonly schema: string;
     readonly table: string;
-    readonly column: string;
-    readonly defaultSql: string;
+    readonly column: DdlColumn;
     readonly operationClass?: 'additive' | 'widening';
   }): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
     return new SetDefaultCall(
       options.schema,
       options.table,
       options.column,
-      options.defaultSql,
       options.operationClass,
     ).toOp(this.controlAdapterFor('setDefault'));
   }

@@ -7,10 +7,7 @@ import { postgresLowerEntityHandles } from '../src/core/authoring';
 import { renderLength } from '../src/core/codec-helpers';
 import { pgNumericDescriptor } from '../src/core/codecs';
 import { errorPostgresMigrationStackMissing } from '../src/core/errors';
-import {
-  buildColumnDefaultSql,
-  buildColumnTypeSql,
-} from '../src/core/migrations/planner-ddl-builders';
+import { buildColumnTypeSql } from '../src/core/migrations/planner-ddl-builders';
 import { createPostgresMigrationRunner } from '../src/core/migrations/runner';
 
 describe('errorPostgresMigrationStackMissing', () => {
@@ -93,14 +90,6 @@ describe('postgresError sites', () => {
     const error = catchError(() => buildColumnTypeSql(column, new Map()));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' });
-  });
-
-  it('buildColumnDefaultSql rejects an unsafe default expression as CONTRACT.DEFAULT_INVALID', () => {
-    const error = catchError(() =>
-      buildColumnDefaultSql({ kind: 'function', expression: 'now(); DROP TABLE users' }),
-    );
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({ code: 'CONTRACT.DEFAULT_INVALID' });
   });
 
   it('postgresLowerEntityHandles rejects an unknown entity kind as CONTRACT.ENTITY_KIND_INVALID', () => {

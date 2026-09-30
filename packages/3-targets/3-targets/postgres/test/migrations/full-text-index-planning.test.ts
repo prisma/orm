@@ -126,6 +126,7 @@ async function plannedCreateIndexNodes(schema: string): Promise<readonly Postgre
   const lowered: unknown[] = [];
   const lowerer: ExecuteRequestLowerer = {
     lower: () => ({ sql: 'stub', params: [] }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async (ast) => {
       lowered.push(ast);
       return { sql: 'stub', params: [] };

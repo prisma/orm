@@ -1,6 +1,8 @@
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
+import { SetDefaultCall } from '@internal/target-postgres/op-factory-call';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 import type { PostgresContract } from '../../src/core/types';
@@ -68,6 +70,32 @@ describe('a list default the codecs read applies', { concurrent: false }, () => 
       );
 
       expect(read.rows).toEqual([{ tags: '{a,NULL,b}', counts: '{1,2}', none: '{}' }]);
+    },
+    testTimeout,
+  );
+
+  it(
+    'sets a changed list default with a NULL element',
+    async () => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      await driver!.query(
+        'CREATE TABLE "lists" (id int4 PRIMARY KEY, tags text[] DEFAULT \'{x}\')',
+      );
+      const op = await new SetDefaultCall(
+        UNBOUND_NAMESPACE_ID,
+        'lists',
+        col('tags', 'text[]', {
+          default: lit(['c', null]),
+          codecRef: { codecId: 'pg/text@1', many: true },
+        }),
+        'widening',
+      ).toOp(adapter);
+      for (const step of op.execute) await driver!.query(step.sql);
+      await driver!.query('INSERT INTO "lists" (id) VALUES (1)');
+
+      const read = await driver!.query('SELECT tags::text FROM "lists"');
+
+      expect(read.rows).toEqual([{ tags: '{c,NULL}' }]);
     },
     testTimeout,
   );

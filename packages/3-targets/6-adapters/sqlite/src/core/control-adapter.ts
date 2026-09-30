@@ -1,5 +1,6 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/errors/execution';
+import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
@@ -159,6 +160,14 @@ export class SqliteControlAdapter implements SqlControlAdapter<'sqlite'> {
       blindCast<SqliteContract, 'caller must supply a matching SqliteContract'>(context.contract),
       this.codecRegistry,
     );
+  }
+
+  async renderColumnDefault(column: DdlColumn, table: string): Promise<string> {
+    if (column.default === undefined) return '';
+    return sqliteRenderDdlColumnDefault(column.default, this.codecRegistry, column.codecRef, {
+      table,
+      column: column.name,
+    });
   }
 
   /**
@@ -757,6 +766,14 @@ async function sqliteRenderDdlColumnDefault(
     // `CURRENT_TIMESTAMP` / `datetime('now')` to `now()`, so map it back to a
     // valid SQLite expression on the way out.
     if (def.expression === 'now()') return "DEFAULT (datetime('now'))";
+    if (checkSqlDefaultBody(def.expression) !== undefined) {
+      throw structuredError(
+        'CONTRACT.DEFAULT_INVALID',
+        `Unsafe default expression in contract: "${def.expression}". ` +
+          'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
+        { meta: { expression: def.expression } },
+      );
+    }
     return `DEFAULT (${def.expression})`;
   }
   const encoded =

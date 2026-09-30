@@ -14,7 +14,7 @@
  * op-factory-call.lowering.test.ts.
  */
 
-import { col, lit, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { col, fn, lit, primaryKey } from '@internal/sql-relational-core/contract-free';
 import {
   AddColumnCall,
   AddForeignKeyCall,
@@ -55,23 +55,19 @@ describe('Postgres call classes - renderTypeScript + importRequirements', () => 
     expect(call.importRequirements()).toEqual([]);
   });
 
-  it('SetDefaultCall emits this.setDefault({...}), omits operationClass when additive', () => {
-    const additive = new SetDefaultCall('public', 'user', 'created_at', "DEFAULT 'now'");
-    expect(additive.renderTypeScript()).toBe(
-      `this.setDefault({ schema: "public", table: "user", column: "created_at", defaultSql: "DEFAULT 'now'" })`,
-    );
-    expect(additive.importRequirements()).toEqual([]);
-
-    const widening = new SetDefaultCall(
-      'public',
-      'user',
-      'created_at',
-      "DEFAULT 'now'",
-      'widening',
-    );
-    expect(widening.renderTypeScript()).toBe(
-      `this.setDefault({ schema: "public", table: "user", column: "created_at", defaultSql: "DEFAULT 'now'", operationClass: "widening" })`,
-    );
+  it('SetDefaultCall emits this.setDefault({...}) with the column, omits operationClass when additive', () => {
+    const column = col('created_at', 'timestamptz', { default: fn('now()') });
+    const additive = new SetDefaultCall('public', 'user', column);
+    const widening = new SetDefaultCall('public', 'user', column, 'widening');
+    expect({
+      additive: additive.renderTypeScript(),
+      widening: widening.renderTypeScript(),
+      imports: additive.importRequirements().map((requirement) => requirement.symbol),
+    }).toEqual({
+      additive: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }) })`,
+      widening: `this.setDefault({ schema: "public", table: "user", column: col("created_at", "timestamptz", { default: fn("now()") }), operationClass: "widening" })`,
+      imports: ['col', 'fn'],
+    });
   });
 
   it('DropConstraintCall omits kind when unique, emits it otherwise', () => {

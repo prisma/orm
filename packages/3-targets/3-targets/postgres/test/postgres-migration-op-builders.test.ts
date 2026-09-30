@@ -7,7 +7,7 @@ import type {
 import type { ControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import type { AlterColumnTypeOptions } from '../src/core/migrations/op-factory-call';
@@ -181,8 +181,7 @@ class ExposedMigration extends PostgresMigration<Contract, Contract> {
   callSetDefault(options: {
     readonly schema: string;
     readonly table: string;
-    readonly column: string;
-    readonly defaultSql: string;
+    readonly column: DdlColumn;
     readonly operationClass?: 'additive' | 'widening';
   }): Promise<Op> {
     return this.setDefault(options);
@@ -365,8 +364,7 @@ const cases: ReadonlyArray<{
       m.callSetDefault({
         schema: 'public',
         table: 'widget',
-        column: 'name',
-        defaultSql: "'unnamed'",
+        column: col('name', 'text', { default: lit('unnamed') }),
       }),
   },
   {
@@ -453,6 +451,7 @@ function fakeControlStack(): ControlStack<'sql', 'postgres'> {
   let counter = 0;
   const lowerer: ExecuteRequestLowerer = {
     lower: () => ({ sql: 'UNUSED', params: [] }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async () => {
       counter += 1;
       return { sql: `LOWERED ${counter}`, params: [`p${counter}`] };

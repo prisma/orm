@@ -52,7 +52,7 @@ import { PostgresSchemaNodeKind } from '../schema-ir/schema-node-kinds';
 import {
   renderColumnAlterType,
   renderColumnDdl,
-  renderColumnDefaultSql,
+  renderColumnDefaultDdl,
 } from './column-ddl-rendering';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
 import {
@@ -712,14 +712,13 @@ function mapColumnDefaultNodeIssue(
     SqlColumnDefaultIR,
     'a not-found/not-equal column-default issue always carries the expected default node'
   >(issue.expected);
-  const defaultSql = renderColumnDefaultSql(columnName, defaultNode, codecHooks);
-  if (!defaultSql) return ok([]);
+  const column = renderColumnDefaultDdl(columnName, defaultNode, codecHooks);
+  if (column === undefined) return ok([]);
   return ok([
     new SetDefaultCall(
       schemaName,
       tableName,
-      columnName,
-      defaultSql,
+      column,
       issueOutcome(issue) === 'not-equal' ? 'widening' : 'additive',
     ),
   ]);

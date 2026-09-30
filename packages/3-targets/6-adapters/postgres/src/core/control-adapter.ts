@@ -8,6 +8,7 @@ import {
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
 } from '@internal/errors/execution';
+import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
@@ -211,6 +212,20 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         context.contract,
       ),
       this.codecRegistry,
+    );
+  }
+
+  async renderColumnDefault(column: DdlColumn, table: string): Promise<string> {
+    if (column.default === undefined) return '';
+    return pgRenderDdlColumnDefault(
+      column.default,
+      column.type,
+      this.codecRegistry,
+      column.codecRef,
+      {
+        table,
+        column: column.name,
+      },
     );
   }
 
@@ -1863,6 +1878,14 @@ async function pgRenderDdlColumnDefault(
         );
       }
       return '';
+    }
+    if (checkSqlDefaultBody(def.expression) !== undefined) {
+      throw postgresError(
+        'CONTRACT.DEFAULT_INVALID',
+        `Unsafe default expression in contract: "${def.expression}". ` +
+          'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
+        { meta: { expression: def.expression } },
+      );
     }
     return `DEFAULT (${def.expression})`;
   }

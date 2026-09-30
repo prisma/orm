@@ -1,4 +1,5 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
+import { DdlColumn, LiteralColumnDefault } from '@internal/sql-relational-core/ast';
 import { col, primaryKey } from '@internal/sql-relational-core/contract-free';
 import { describe, expect, it } from 'vitest';
 import { columnExistsAst } from '../../src/contract-free/checks';
@@ -20,6 +21,7 @@ import type {
 function stubLowerer(sql: string): ExecuteRequestLowerer {
   return {
     lower: () => Object.freeze({ sql, params: Object.freeze([]) }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async () => Object.freeze({ sql, params: Object.freeze([]) }),
   };
 }
@@ -28,7 +30,6 @@ function colSpec(overrides: Partial<SqliteColumnSpec> = {}): SqliteColumnSpec {
   return {
     name: 'col',
     typeSql: 'TEXT',
-    defaultSql: '',
     nullable: true,
     ...overrides,
   };
@@ -125,6 +126,7 @@ function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: un
   const received: unknown[] = [];
   const lowerer: ExecuteRequestLowerer = {
     lower: () => Object.freeze({ sql: 'UNUSED', params: Object.freeze([]) }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async (ast) => {
       received.push(ast);
       return Object.freeze({
@@ -163,20 +165,40 @@ describe('AddColumnCall', () => {
     ]);
   });
 
-  it('includes default and NOT NULL', async () => {
-    const { lowerer } = recordingCheckLowerer();
+  it('writes the default clause the adapter renders for the column, and NOT NULL', async () => {
+    const rendered: unknown[] = [];
+    const lowerer: ExecuteRequestLowerer = {
+      ...recordingCheckLowerer().lowerer,
+      renderColumnDefault: async (column, table) => {
+        rendered.push({ column, table });
+        return "DEFAULT 'user'";
+      },
+    };
     const call = new AddColumnCall(
       'user',
       colSpec({
         name: 'role',
         typeSql: 'TEXT',
-        defaultSql: "DEFAULT 'user'",
+        default: { kind: 'literal', value: 'user' },
+        codecRef: { codecId: 'sqlite/text@1' },
         nullable: false,
       }),
     );
     const op = await call.toOp(lowerer);
-    expect(op.execute[0]?.sql).toContain("DEFAULT 'user'");
-    expect(op.execute[0]?.sql).toContain('NOT NULL');
+    expect({ rendered, sql: op.execute[0]?.sql }).toEqual({
+      rendered: [
+        {
+          table: 'user',
+          column: new DdlColumn({
+            name: 'role',
+            type: 'TEXT',
+            default: new LiteralColumnDefault('user'),
+            codecRef: { codecId: 'sqlite/text@1' },
+          }),
+        },
+      ],
+      sql: `ALTER TABLE "user" ADD COLUMN "role" TEXT DEFAULT 'user' NOT NULL`,
+    });
   });
 
   it('toOp() throws when no lowerer is provided', async () => {
@@ -305,6 +327,58 @@ describe('RecreateTableCall', () => {
     expect(descriptions[4]).toContain('idx_email');
 
     expect(op.postcheck.some((s) => s.description.includes('type'))).toBe(true);
+  });
+
+  it('writes each column default the adapter renders, and checks the recreated table carries it', async () => {
+    const lowerer: ExecuteRequestLowerer = {
+      ...stubLowerer('CHECK SQL'),
+      renderColumnDefault: async (column, table) =>
+        column.default?.kind === 'literal'
+          ? `DEFAULT '${String(column.default.value)}' /* ${table} */`
+          : column.default?.kind === 'function'
+            ? `DEFAULT (${column.default.expression})`
+            : '',
+    };
+    const call = new RecreateTableCall({
+      tableName: 'user',
+      contractTable: tableSpec([
+        colSpec({ name: 'id', typeSql: 'INTEGER', nullable: false }),
+        colSpec({
+          name: 'role',
+          default: { kind: 'literal', value: 'member' },
+          codecRef: { codecId: 'sqlite/text@1' },
+        }),
+        colSpec({ name: 'at', default: { kind: 'function', expression: "datetime('now')" } }),
+      ]),
+      schemaColumnNames: ['id', 'role', 'at'],
+      indexes: [],
+      summary: 'Recreates table user',
+      postchecks: [
+        { description: 'verify "role" default on "user"', columnDefault: 'role' },
+        { description: 'verify "at" default on "user"', columnDefault: 'at' },
+        { description: 'verify "id" default on "user"', columnDefault: 'id' },
+      ],
+      operationClass: 'widening',
+    });
+
+    const op = await call.toOp(lowerer);
+    expect({
+      create: op.execute[0]?.sql,
+      defaultChecks: op.postcheck.slice(2),
+    }).toEqual({
+      create:
+        'CREATE TABLE "_prisma_new_user" (\n  "id" INTEGER NOT NULL,\n  "role" TEXT DEFAULT \'member\' /* user */,\n  "at" TEXT DEFAULT (datetime(\'now\'))\n)',
+      defaultChecks: [
+        {
+          description: 'verify "role" default on "user"',
+          sql: "SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE name = 'role' AND dflt_value = '''member'' /* user */'",
+        },
+        {
+          description: 'verify "at" default on "user"',
+          sql: "SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE name = 'at' AND dflt_value = 'datetime(''now'')'",
+        },
+      ],
+    });
   });
 
   it('skips columns missing from the live schema in the data-copy column list', async () => {
