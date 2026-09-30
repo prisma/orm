@@ -42,6 +42,8 @@ This package defines the core types for the SQL Schema IR, a target-agnostic rep
 
 4. **Name-identified indexes**: `SqlIndexIR` is identified by its full physical name (its diff-tree `id` is the name, so same-column-tuple siblings and expression indexes are representable). Wire-named indexes carry a `prefix` plus a content-hash wire name; the shared naming helpers (`formatWireName`, `parseWireName`, `normalizeSqlBody`, `computeIndexContentHash`) live in `@internal/sql-schema-ir/naming`.
 
+5. **Defaults in canonical form**: `defaultInCanonicalForm` puts a literal default into the canonical form of the column's data type ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md)). The default comparison, PSL printing and Postgres DDL all use it. It keeps a value the type refuses as it is and returns the refusal; `contractDefaultRefusal` turns that into the message a column default's mismatch carries and the planners refuse with.
+
 ## Usage
 
 ### Basic Usage
