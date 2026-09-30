@@ -18,7 +18,7 @@ changes:
         - '^\s*type\s+\w+\s*\{'
   - id: codecs-check-stored-json
     summary: |
-      A TypeScript `.default()` value or `enumType` member that its column's codec does not take is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` or `CONTRACT.ENUM_INVALID`. A `contract.json` or `migration.ts` that holds such a default stops the commands that apply it with `CONTRACT.DEFAULT_INVALID`. Correct the value the error names.
+      A TypeScript `.default()` value or `enumType` member that its column's codec does not take is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` or `CONTRACT.ENUM_INVALID`. A `contract.json` that holds such a default stops `db init`, `db update` and `migration plan` with `CONTRACT.DEFAULT_INVALID`, and a `migration.ts` that holds one fails when it runs. Correct the value the error names.
     detection:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
@@ -159,7 +159,7 @@ The PSL reader reads each literal default, and each member of a SQL `enum`, with
 - `Int`, `sql/int@1` and an enum whose members are integers take an integer from -2147483648 to 2147483647, and `SmallInt` one from -32768 to 32767.
 - `Real` takes a finite number only if float4 holds it, neither overflowing to an infinity nor becoming 0.
 
-Such a default used to load, and the migration planned and applied; the first insert that used the default then failed. A `Char` or bit column without a length did not apply on PostgreSQL, whatever its default. SQLite does not enforce a declared length, so on SQLite the char and varchar codecs take text of any length. Each of these is now refused at `contract emit`:
+Such a default used to load, and the migration planned and applied; the first insert that used the default then failed. A `Char` or bit column without a length, which did not apply on PostgreSQL whatever its default, now applies as `character(1)` or `bit(1)`. SQLite does not enforce a declared length, so on SQLite the char and varchar codecs take text of any length. Each of these is now refused at `contract emit`:
 
 | Schema | Diagnostic |
 | --- | --- |
