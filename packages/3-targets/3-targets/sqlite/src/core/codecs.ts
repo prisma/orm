@@ -161,7 +161,7 @@ const UPPERCASE_HEX = /^(?:[0-9A-F]{2})*$/;
 const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
-/** SQLite stores an infinity but not NaN, which it turns into NULL. */
+/** SQLite stores an infinity but not NaN, which it turns into NULL, so NaN has no stored JSON form. */
 const refuseNaN = (value: number) => {
   if (Number.isNaN(value)) {
     throw sqliteError(
@@ -373,7 +373,7 @@ export class SqliteRealCodec extends CodecImpl<
   number
 > {
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
-    return refuseNaN(value);
+    return value;
   }
   async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
     return wire;

@@ -41,6 +41,19 @@ describe('SqliteControlDriverDescriptor', () => {
     await driver.close();
   });
 
+  it('refuses a NaN parameter, which SQLite would bind as NULL', async () => {
+    const driver = await sqliteControlDriverDescriptor.create(testPath);
+    await driver.query('CREATE TABLE t(id INTEGER PRIMARY KEY, value REAL)');
+    await expect(driver.query('INSERT INTO t VALUES (?, ?)', [1, Number.NaN])).rejects.toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.ENCODE_FAILED',
+        message:
+          'Parameter 2 is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.',
+      }),
+    );
+    await driver.close();
+  });
+
   it('names the database file it is connected to', async () => {
     const driver = await sqliteControlDriverDescriptor.create(testPath);
     await expect(driver.databaseName()).resolves.toBe('test.db');

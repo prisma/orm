@@ -123,12 +123,7 @@ describe('sqlite/real@1 encode', () => {
     ).toEqual([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]);
   });
 
-  it('refuses NaN, which SQLite would store as NULL', async () => {
-    await expect(codec.encode(Number.NaN, {})).rejects.toThrow(
-      expect.objectContaining({
-        code: 'RUNTIME.ENCODE_FAILED',
-        message: 'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
-      }),
-    );
+  it('passes NaN on, as sql/float@1 does, for the SQLite driver to refuse where it binds parameters', async () => {
+    await expect(codec.encode(Number.NaN, {})).resolves.toBeNaN();
   });
 });
