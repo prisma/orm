@@ -1870,13 +1870,13 @@ async function pgRenderDdlColumnDefault(
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
     return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
   }
-  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
-    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType, where)}`;
-  }
   const encoded =
     codecRef === undefined
       ? undefined
       : await encodeLiteralDefault(codecLookup, codecRef, def.value, where);
+  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
+    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType, where)}`;
+  }
   if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
   if (encoded !== undefined) return `DEFAULT ${pgInlineLiteral(encoded.wire, nativeType, where)}`;
   // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
