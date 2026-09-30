@@ -149,6 +149,40 @@ function bind(...texts: string[]) {
   };
 }
 
+describe('named-type base references', () => {
+  it('binds definition-site bases without adding diagnostics or following aliases', () => {
+    const { binder, symbolTable, diagnostics } = bind(`model String { id Int }
+namespace app { model Item { id Int } }
+types {
+  Shadowed = String
+  Scalar = Int
+  Constructed = pgvector.Vector(3)
+  PlainQualified = pgvector.Vector
+  Missing = Unknown
+  QualifiedMiss = app.String
+  Indirect = Scalar
+}`);
+    const expected = {
+      Shadowed: 'model',
+      Scalar: 'contributedType',
+      Constructed: 'contributedType',
+      PlainQualified: 'contributedType',
+      Missing: 'unresolved',
+      QualifiedMiss: 'unresolved',
+      Indirect: 'namedType',
+    };
+    expect(
+      Object.fromEntries(
+        Object.values(symbolTable.topLevel.namedTypes).map((symbol) => [
+          symbol.name,
+          binder.symbolForNode(symbol.node.typeAnnotation()!.name()!.syntax)?.kind,
+        ]),
+      ),
+    ).toEqual(expected);
+    expect(diagnostics).toEqual([]);
+  });
+});
+
 describe('lexical scope retrieval', () => {
   it('retains one namespace scope across reopened declarations and files', () => {
     const { binder, symbolTable, documents } = bind(

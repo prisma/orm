@@ -50,6 +50,7 @@ import {
   ObjectLiteralExprAst,
 } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
+import type { QualifiedNameAst } from './syntax/ast/qualified-name';
 import type { SyntaxNode } from './syntax/red';
 
 export const PSL_UNRESOLVED_REFERENCE =
@@ -113,8 +114,8 @@ export interface BinderResult {
   readonly diagnostics: readonly ParseDiagnostic[];
 }
 
-export function typeReferenceNode(field: FieldSymbol): SyntaxNode | undefined {
-  return field.node.typeAnnotation()?.name()?.syntax;
+export function typeReferenceNode(symbol: FieldSymbol | NamedTypeSymbol): SyntaxNode | undefined {
+  return symbol.node.typeAnnotation()?.name()?.syntax;
 }
 
 class PslBinder implements Binder {
@@ -190,6 +191,11 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
 
   for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);
+    const name = symbol.node.typeAnnotation()?.name();
+    const outcome = resolveTypeReference(name, document);
+    if (name !== undefined && outcome !== undefined) {
+      references.set(name.syntax, outcome.resolution);
+    }
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -215,7 +221,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const outcome = resolveTypeReference(field, scope);
+      const outcome = resolveTypeReference(field.node.typeAnnotation()?.name(), scope);
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
       if (outcome.message !== undefined) {
@@ -616,12 +622,15 @@ interface TypeReferenceOutcome {
   readonly name?: string;
 }
 
-function resolveTypeReference(field: FieldSymbol, scope: Scope): TypeReferenceOutcome | undefined {
-  if (field.malformedType === true) return undefined;
-  if (field.typeContractSpaceId !== undefined) return { resolution: { kind: 'crossSpace' } };
-  const name = field.typeName;
-  if (name === '') return undefined;
-  const namespaceId = field.typeNamespaceId;
+function resolveTypeReference(
+  reference: QualifiedNameAst | undefined,
+  scope: Scope,
+): TypeReferenceOutcome | undefined {
+  if (reference === undefined || reference.isOverQualified()) return undefined;
+  if (reference.space() !== undefined) return { resolution: { kind: 'crossSpace' } };
+  const name = reference.identifier()?.name();
+  if (name === undefined || name === '') return undefined;
+  const namespaceId = reference.namespace()?.name();
   const found =
     namespaceId === undefined ? scope.lookup(name) : qualifiedMember(namespaceId, name, scope);
   if (found === undefined) {
