@@ -9,6 +9,10 @@
  * plain-data shape that introspection adapters produce.
  */
 
+export {
+  type DefaultInCanonicalForm,
+  defaultInCanonicalForm,
+} from './ir/default-in-canonical-form';
 export { PrimaryKey, type PrimaryKeyInput } from './ir/primary-key';
 export {
   RelationalSchemaNodeKind,

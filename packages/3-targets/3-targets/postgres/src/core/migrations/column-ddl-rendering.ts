@@ -1,11 +1,14 @@
 import type { ColumnDefault } from '@internal/contract/types';
 import type { CodecControlHooks } from '@internal/family-sql/control';
-import { defaultInCanonicalForm } from '@internal/family-sql/psl-build';
 import type { DataType } from '@internal/framework-components/codec';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import type { DdlColumn } from '@internal/sql-relational-core/ast';
 import * as contractFree from '@internal/sql-relational-core/contract-free';
-import type { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
+import {
+  defaultInCanonicalForm,
+  type SqlColumnDefaultIR,
+  type SqlColumnIR,
+} from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -80,7 +83,10 @@ function inCanonicalForm(
   many: boolean,
 ): ColumnDefault | undefined {
   return columnDefault?.kind === 'literal'
-    ? { kind: 'literal', value: defaultInCanonicalForm(columnDefault.value, dataType, many) }
+    ? {
+        kind: 'literal',
+        value: defaultInCanonicalForm(columnDefault.value, dataType?.toCanonicalForm, many).value,
+      }
     : columnDefault;
 }
 

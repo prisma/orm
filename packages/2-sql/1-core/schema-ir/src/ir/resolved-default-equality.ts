@@ -1,10 +1,7 @@
-import type {
-  ColumnDefault,
-  ColumnDefaultLiteralInputValue,
-  JsonValue,
-} from '@internal/contract/types';
+import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
 import type { ToCanonicalForm } from '@internal/framework-components/codec';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
+import { defaultInCanonicalForm } from './default-in-canonical-form';
 
 /**
  * Structural equality for two resolved column defaults, ported from the relational walk's
@@ -87,14 +84,6 @@ function decimalDigits(value: string | number): string | number {
   return digits === '0' ? digits : `${numeral[1] ?? ''}${digits}`;
 }
 
-function inCanonicalForm(value: JsonValue, toCanonicalForm: ToCanonicalForm): JsonValue {
-  try {
-    return toCanonicalForm(value);
-  } catch {
-    return value;
-  }
-}
-
 function normalizeLiteralValue(
   value: ColumnDefaultLiteralInputValue,
   nativeType: string | undefined,
@@ -106,7 +95,7 @@ function normalizeLiteralValue(
   }
   const json = value instanceof Date ? value.toISOString() : value;
   if (toCanonicalForm !== undefined) {
-    return inCanonicalForm(json, toCanonicalForm);
+    return defaultInCanonicalForm(json, toCanonicalForm, false).value;
   }
   if (value instanceof Date) {
     return json;

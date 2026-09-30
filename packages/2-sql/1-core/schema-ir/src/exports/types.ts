@@ -1,4 +1,5 @@
 export type {
+  DefaultInCanonicalForm,
   PrimaryKeyInput,
   SqlAnnotations,
   SqlCheckConstraintIRInput,
@@ -16,6 +17,7 @@ export type {
 
 export {
   assertNode,
+  defaultInCanonicalForm,
   defineNonEnumerable,
   PrimaryKey,
   RelationalSchemaNodeKind,

@@ -5,7 +5,6 @@ import {
 } from '@internal/contract/types';
 import {
   type DefaultMappingOptions,
-  defaultInCanonicalForm,
   mapDefault,
   type PslTypeMap,
 } from '@internal/family-sql/psl-build';
@@ -25,7 +24,11 @@ import {
   computeCheckContentHash,
   formatWireName,
 } from '@internal/sql-schema-ir/naming';
-import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import {
+  defaultInCanonicalForm,
+  type SqlColumnIR,
+  type SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
 import {
@@ -402,9 +405,9 @@ function literalOrRawAttribute(
             columnDefault.value,
             defaultMapping.columnDataType === undefined
               ? undefined
-              : defaultMapping.dataTypes?.get(defaultMapping.columnDataType),
+              : defaultMapping.dataTypes?.get(defaultMapping.columnDataType)?.toCanonicalForm,
             defaultMapping.list === true,
-          ),
+          ).value,
         }
       : columnDefault;
   const result =

@@ -3,6 +3,7 @@ import type {
   ColumnDefaultLiteralInputValue,
   JsonValue,
 } from '@internal/contract/types';
+import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 
 import { resolvedDefaultsEqual } from '../src/ir/resolved-default-equality';
@@ -85,8 +86,12 @@ describe('resolvedDefaultsEqual', () => {
     ]);
     const toCanonicalForm = (value: JsonValue): JsonValue => {
       const canonical = typeof value === 'string' ? canonicalForms.get(value) : undefined;
-      if (canonical === undefined)
-        throw new Error(`${JSON.stringify(value)} is not a date and time`);
+      if (canonical === undefined) {
+        throw structuredError(
+          'CONTRACT.CAST_REFUSED',
+          `${JSON.stringify(value)} is not a date and time`,
+        );
+      }
       return canonical;
     };
 
