@@ -88,6 +88,21 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 }
 
 /**
+ * Returns true when the property schema `dest` admits every value `origin` admits: the same schema,
+ * the empty schema, or an array of any items over an array schema.
+ */
+function isPropertyWidening(origin: unknown, dest: unknown): boolean {
+  if (canonicalize(origin) === canonicalize(dest)) return true;
+  if (!isPlainObject(dest)) return false;
+  if (Object.keys(dest).length === 0) return true;
+  return (
+    isPlainObject(origin) &&
+    origin['bsonType'] === 'array' &&
+    canonicalize(dest) === canonicalize({ bsonType: 'array', items: {} })
+  );
+}
+
+/**
  * Returns true when `dest` is a structural superset of `origin` for the common
  * additive case: adding non-required properties to a top-level object schema.
  * Anything uncertain falls through to the safe `destructive` default.
@@ -117,13 +132,13 @@ function isWideningSchemaChange(
     if (!originRequired.has(field)) return false;
   }
 
-  // All properties that existed in origin must still exist unchanged.
+  // All properties that existed in origin must still exist, unchanged or widened.
   // New properties in dest (absent from origin) are allowed — widening.
   const originProps = isPlainObject(origin['properties']) ? origin['properties'] : {};
   const destProps = isPlainObject(dest['properties']) ? dest['properties'] : {};
   for (const field of Object.keys(originProps)) {
     if (!Object.hasOwn(destProps, field)) return false; // Property removed → destructive.
-    if (canonicalize(originProps[field]) !== canonicalize(destProps[field])) return false; // Property narrowed → destructive.
+    if (!isPropertyWidening(originProps[field], destProps[field])) return false; // Property narrowed → destructive.
   }
 
   return true;

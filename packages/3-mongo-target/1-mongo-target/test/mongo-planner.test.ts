@@ -41,6 +41,8 @@ const ADDITIVE_ONLY_POLICY: MigrationOperationPolicy = {
   allowedOperationClasses: ['additive'],
 };
 
+const JSON_BSON_TYPES = ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'];
+
 type MongoCollectionData = {
   readonly indexes?: readonly (MongoIndex | MongoIndexInput)[];
   readonly validator?: MongoValidator | MongoValidatorInput;
@@ -817,6 +819,83 @@ describe('MongoMigrationPlanner', () => {
             jsonSchema: {
               bsonType: 'object',
               properties: { age: { bsonType: ['null', 'int'] } },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
+        }),
+      ]);
+      const plan = planSuccess(planner, contract, origin);
+      const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
+        (op) => op.execute[0]?.command.kind === 'collMod',
+      );
+      expect(collModOps).toHaveLength(1);
+      expect(collModOps[0]!.operationClass).toBe('destructive');
+    });
+
+    it.each([
+      ['a Json field to Bson', { bsonType: JSON_BSON_TYPES }, {}],
+      [
+        'a Json list field to Bson',
+        { bsonType: 'array', items: { bsonType: JSON_BSON_TYPES } },
+        { bsonType: 'array', items: {} },
+      ],
+    ])('classifies changing %s as widening', (_, originProperty, destProperty) => {
+      const contract = makeContract({
+        users: {
+          validator: {
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['payload'],
+              properties: { payload: destProperty },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          },
+        },
+      });
+      const origin = new MongoSchemaIR([
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              required: ['payload'],
+              properties: { payload: originProperty },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          }),
+        }),
+      ]);
+      const plan = planSuccess(planner, contract, origin);
+      const collModOps = (plan.operations as MongoMigrationPlanOperation[]).filter(
+        (op) => op.execute[0]?.command.kind === 'collMod',
+      );
+      expect(collModOps).toHaveLength(1);
+      expect(collModOps[0]!.operationClass).toBe('widening');
+    });
+
+    it('classifies changing a non-array property to an array of any items as destructive', () => {
+      const contract = makeContract({
+        users: {
+          validator: {
+            jsonSchema: {
+              bsonType: 'object',
+              properties: { payload: { bsonType: 'array', items: {} } },
+            },
+            validationLevel: 'strict',
+            validationAction: 'error',
+          },
+        },
+      });
+      const origin = new MongoSchemaIR([
+        new MongoSchemaCollection({
+          name: 'users',
+          validator: new MongoSchemaValidator({
+            jsonSchema: {
+              bsonType: 'object',
+              properties: { payload: { bsonType: JSON_BSON_TYPES } },
             },
             validationLevel: 'strict',
             validationAction: 'error',
