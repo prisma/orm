@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { findNearestConfigPathForFile } from '@internal/config-loader';
 import { join } from 'pathe';
 import {
@@ -24,6 +24,7 @@ export class ProjectRegistry {
   readonly #projectsByConfig = new Map<string, Project>();
   readonly #projectsByDocument = new Map<string, Project>();
   #eventSequence = 0;
+  #disposed = false;
   #capabilities: RegistryCapabilities = {
     pullDiagnostics: false,
     watchedFilesRegistration: false,
@@ -40,6 +41,7 @@ export class ProjectRegistry {
   }
 
   async nearestProject(uri: string): Promise<Project | undefined> {
+    if (this.#disposed) return undefined;
     const knownProject = this.associatedProject(uri);
     if (knownProject !== undefined) return knownProject;
     const filePath = filePathFromUri(uri);
@@ -50,7 +52,7 @@ export class ProjectRegistry {
     } catch {
       return undefined;
     }
-    if (configPath === undefined) return undefined;
+    if (this.#disposed || configPath === undefined) return undefined;
     const project = this.#projectForConfig(configPath);
     this.#projectsByDocument.set(canonicalFileIdentity(uri), project);
     return project;
@@ -91,38 +93,30 @@ export class ProjectRegistry {
           },
         ],
       });
-    } else {
-      this.#connection.console.warn(
-        'Client does not support dynamic file-watcher registration; Prisma 8 config changes will not be picked up without a restart.',
+    }
+  }
+
+  watchedFilesChanged(changes: readonly FileEvent[]): void {
+    for (const project of this.#projectsByConfig.values()) {
+      project.filesChanged(
+        changes
+          .filter((change) => {
+            const path = filePathFromUri(change.uri);
+            return (
+              path !== undefined &&
+              (!path.endsWith(CONFIG_FILENAME) ||
+                canonicalFileIdentity(change.uri) ===
+                  canonicalFileIdentity(pathToFileURL(project.configPath).toString()))
+            );
+          })
+          .map((change) => change.uri),
       );
     }
   }
 
-  async watchedFilesChanged(changes: readonly FileEvent[]): Promise<void> {
-    const changedConfigPaths = new Set<string>();
-    const memberChanges: string[] = [];
-    for (const change of changes) {
-      const filePath = filePathFromUri(change.uri);
-      if (filePath?.endsWith(CONFIG_FILENAME)) changedConfigPaths.add(filePath);
-      else memberChanges.push(change.uri);
-    }
-    const configRefreshes = Array.from(changedConfigPaths, async (configPath) => {
-      return this.#projectsByConfig
-        .get(configPath)
-        ?.reload()
-        .catch(() => undefined);
-    });
-    const [, memberResults] = await Promise.all([
-      Promise.all(configRefreshes),
-      Promise.all(memberChanges.map((uri) => this.#handleSchemaMemberChange(uri))),
-    ]);
-    if (
-      this.#capabilities.pullDiagnostics &&
-      this.#capabilities.diagnosticsRefresh &&
-      (changedConfigPaths.size > 0 || memberResults.some(Boolean))
-    ) {
-      void this.#connection.languages.diagnostics.refresh();
-    }
+  async dispose(): Promise<void> {
+    this.#disposed = true;
+    await Promise.all(Array.from(this.#projectsByConfig.values(), (project) => project.dispose()));
   }
 
   #projectForConfig(configPath: string): Project {
@@ -134,6 +128,11 @@ export class ProjectRegistry {
         pullDiagnostics: this.#capabilities.pullDiagnostics,
         watchedFilesRegistration: this.#capabilities.watchedFilesRegistration,
         nextSequence: () => ++this.#eventSequence,
+        refreshDiagnostics: () => {
+          if (this.#capabilities.pullDiagnostics && this.#capabilities.diagnosticsRefresh) {
+            void this.#connection.languages.diagnostics.refresh();
+          }
+        },
         unmanage: (uri) => {
           if (uri === undefined) this.#unmanageDocuments(configPath);
           else this.#projectsByDocument.delete(canonicalFileIdentity(uri));
@@ -155,21 +154,6 @@ export class ProjectRegistry {
   async #publishForDocument(uri: string): Promise<void> {
     const project = await this.nearestProject(uri);
     await project?.publishForDocument(uri);
-  }
-
-  async #handleSchemaMemberChange(uri: string): Promise<boolean> {
-    const sequence = ++this.#eventSequence;
-    this.#documents.invalidate(uri);
-    const filePath = filePathFromUri(uri);
-    if (filePath === undefined) return false;
-    let configPath: string | undefined;
-    try {
-      configPath = await findNearestConfigPathForFile(filePath);
-    } catch {
-      return false;
-    }
-    if (configPath === undefined) return false;
-    return this.#projectsByConfig.get(configPath)?.refreshMembership(uri, sequence) ?? false;
   }
 }
 

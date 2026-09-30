@@ -159,36 +159,30 @@ describe('document store', () => {
       expect(store.openDocuments()).toEqual([]);
     });
 
-    it.each([false, true])(
-      'reuses disk snapshots until refresh with watcher coverage %s',
-      async (watched) => {
-        const file = await fixtureFile('first');
-        const store = new DocumentStore();
-        if (watched) store.setWatchCoverage('project', [file.uri]);
-        const first = store.readSnapshot(file.uri)!;
-        expect(store.readSnapshot(file.uri)).toBe(first);
-        await writeFile(file.path, 'changed content');
-        if (watched) {
-          expect(store.readSnapshot(file.uri)).toBe(first);
-          store.invalidate(file.uri);
-        }
-        const second = store.readSnapshot(file.uri)!;
-        expect(second).not.toBe(first);
-        expect(second.text).toBe('changed content');
-        expect(first.text).toBe('first');
-        expect(first.sourceFile.text).toBe('first');
-        expect(second.sourceFile.text).toBe('changed content');
-        expect(first.parse()).not.toBe(second.parse());
-        expect(store.readSnapshot(file.uri)).toBe(second);
-        open(store, file.uri, 'overlay');
-        const overlay = store.readSnapshot(file.uri);
-        store.setWatchCoverage('project', []);
-        store.invalidate(file.uri);
-        expect(store.readSnapshot(file.uri)).toBe(overlay);
-        store.close(file.uri);
-        expect(store.readSnapshot(file.uri)).not.toBe(second);
-      },
-    );
+    it('reuses disk snapshots until explicit invalidation', async () => {
+      const file = await fixtureFile('first');
+      const store = new DocumentStore();
+
+      const first = store.readSnapshot(file.uri)!;
+      expect(store.readSnapshot(file.uri)).toBe(first);
+      await writeFile(file.path, 'changed content');
+      expect(store.readSnapshot(file.uri)).toBe(first);
+      store.invalidate(file.uri);
+      const second = store.readSnapshot(file.uri)!;
+      expect(second).not.toBe(first);
+      expect(second.text).toBe('changed content');
+      expect(first.text).toBe('first');
+      expect(first.sourceFile.text).toBe('first');
+      expect(second.sourceFile.text).toBe('changed content');
+      expect(first.parse()).not.toBe(second.parse());
+      expect(store.readSnapshot(file.uri)).toBe(second);
+      open(store, file.uri, 'overlay');
+      const overlay = store.readSnapshot(file.uri);
+      store.invalidate(file.uri);
+      expect(store.readSnapshot(file.uri)).toBe(overlay);
+      store.close(file.uri);
+      expect(store.readSnapshot(file.uri)).not.toBe(second);
+    });
 
     it('normalizes disk snapshots independently of the first URI read', async () => {
       const file = await fixtureFile('disk');
@@ -210,10 +204,9 @@ describe('document store', () => {
       expect(store.getOpenDocument(fileUri)).toBeUndefined();
     });
 
-    it('skips stat for covered identities and reloads after invalidation', async () => {
+    it('never stats cached identities and reloads after invalidation', async () => {
       const file = await fixtureFile('first');
       const store = new DocumentStore();
-      store.setWatchCoverage('project', [file.uri]);
       expect(store.text(file.uri)).toBe('first');
       vi.mocked(statSync).mockClear();
       await writeFile(file.path, 'second');
@@ -222,87 +215,33 @@ describe('document store', () => {
       expect(statSync).not.toHaveBeenCalled();
       store.invalidate(file.uri);
       expect(store.text(file.uri)).toBe('second');
-      expect(statSync).toHaveBeenCalledTimes(1);
+      expect(statSync).not.toHaveBeenCalled();
     });
 
-    it('revalidates uncovered files independently of other project coverage', async () => {
+    it('caches files independently', async () => {
       const watched = await fixtureFile('watched');
       const unwatched = await fixtureFile('before');
       const store = new DocumentStore();
-      store.setWatchCoverage('watched-project', [watched.uri]);
+      expect(store.text(watched.uri)).toBe('watched');
       expect(store.text(unwatched.uri)).toBe('before');
       vi.mocked(statSync).mockClear();
       expect(store.text(unwatched.uri)).toBe('before');
-      expect(statSync).toHaveBeenCalledTimes(1);
+      expect(statSync).not.toHaveBeenCalled();
       await writeFile(unwatched.path, 'changed externally');
-      expect(store.text(unwatched.uri)).toBe('changed externally');
+      expect(store.text(unwatched.uri)).toBe('before');
     });
 
-    it('discards disk text cached before gaining coverage even when metadata is unchanged', async () => {
-      const file = await fixtureFile('first');
-      const pinned = new Date('2020-01-01T00:00:00Z');
-      await utimes(file.path, pinned, pinned);
-      const store = new DocumentStore();
-      expect(store.text(file.uri)).toBe('first');
-      await writeFile(file.path, 'other');
-      await utimes(file.path, pinned, pinned);
-      store.setWatchCoverage('project', [file.uri]);
-      expect(store.text(file.uri)).toBe('other');
-      store.setWatchCoverage('project', []);
-      expect(store.text(file.uri)).toBe('other');
-      await writeFile(file.path, 'third');
-      await utimes(file.path, pinned, pinned);
-      store.setWatchCoverage('project', [file.uri]);
-      expect(store.text(file.uri)).toBe('third');
-    });
-
-    it('retains shared coverage until the last owner removes it', async () => {
-      const file = await fixtureFile('first');
-      const store = new DocumentStore();
-      store.setWatchCoverage('one', [file.uri]);
-      store.setWatchCoverage('two', [file.uri]);
-      expect(store.text(file.uri)).toBe('first');
-      store.setWatchCoverage('one', []);
-      vi.mocked(statSync).mockClear();
-      expect(store.text(file.uri)).toBe('first');
-      expect(statSync).not.toHaveBeenCalled();
-      store.setWatchCoverage('two', []);
-      expect(store.text(file.uri)).toBe('first');
-      vi.mocked(statSync).mockClear();
-      expect(store.text(file.uri)).toBe('first');
-      expect(statSync).toHaveBeenCalledTimes(1);
-    });
-
-    it('canonicalizes coverage and stops trusting files removed from an owner', async () => {
-      const previous = await fixtureFile('previous');
-      const next = await fixtureFile('next');
-      const store = new DocumentStore();
-      store.setWatchCoverage('project', [previous.uri.replace('member.prisma', '%6dember.prisma')]);
-      expect(store.text(previous.uri)).toBe('previous');
-      vi.mocked(statSync).mockClear();
-      expect(store.text(previous.uri)).toBe('previous');
-      expect(statSync).not.toHaveBeenCalled();
-      store.setWatchCoverage('project', [next.uri]);
-      expect(store.text(previous.uri)).toBe('previous');
-      vi.mocked(statSync).mockClear();
-      expect(store.text(previous.uri)).toBe('previous');
-      expect(statSync).toHaveBeenCalledTimes(1);
-      await writeFile(previous.path, 'external change');
-      expect(store.text(previous.uri)).toBe('external change');
-    });
-
-    it('preserves overlays across coverage changes and watcher invalidation', async () => {
+    it('invalidates directory descendants without replacing overlays', async () => {
       const file = await fixtureFile('disk');
       const store = new DocumentStore();
-      const overlay = open(store, file.uri, 'overlay');
-      store.setWatchCoverage('project', [file.uri]);
-      store.invalidate(file.uri);
-      store.setWatchCoverage('project', []);
-      expect(store.text(file.uri)).toBe('overlay');
-      expect(store.getOpenDocument(file.uri)).toBe(overlay);
-      store.setWatchCoverage('project', [file.uri]);
-      store.close(file.uri);
       expect(store.text(file.uri)).toBe('disk');
+      await writeFile(file.path, 'changed');
+      store.invalidateTree(file.uri.slice(0, file.uri.lastIndexOf('/')));
+      expect(store.text(file.uri)).toBe('changed');
+      const overlay = open(store, file.uri, 'overlay');
+      store.invalidateTree(file.uri);
+      expect(store.getOpenDocument(file.uri)).toBe(overlay);
+      expect(store.text(file.uri)).toBe('overlay');
     });
 
     it('returns a defined miss (never throws) for a nonexistent member', () => {
@@ -374,7 +313,7 @@ describe('document store', () => {
       expect(store.text(fileUri)).toBe('model Bravo {}');
     });
 
-    it('detects an mtime change with identical size and re-reads', async () => {
+    it('keeps cached content when mtime changes', async () => {
       const { path, uri: fileUri } = await fixtureFile('AAAA');
       const store = new DocumentStore();
       const older = new Date('2020-01-01T00:00:00Z');
@@ -384,10 +323,10 @@ describe('document store', () => {
       await writeFile(path, 'BBBB', 'utf8');
       const newer = new Date('2020-01-02T00:00:00Z');
       await utimes(path, newer, newer);
-      expect(store.text(fileUri)).toBe('BBBB');
+      expect(store.text(fileUri)).toBe('AAAA');
     });
 
-    it('detects a size change with an identical mtime and re-reads', async () => {
+    it('keeps cached content when size changes', async () => {
       const { path, uri: fileUri } = await fixtureFile('AA');
       const store = new DocumentStore();
       const pinned = new Date('2020-01-01T00:00:00Z');
@@ -396,7 +335,7 @@ describe('document store', () => {
 
       await writeFile(path, 'AAAA', 'utf8');
       await utimes(path, pinned, pinned);
-      expect(store.text(fileUri)).toBe('AAAA');
+      expect(store.text(fileUri)).toBe('AA');
     });
 
     it('reuses the cached disk entry when mtime and size both match', async () => {

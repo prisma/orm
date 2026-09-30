@@ -1,12 +1,13 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
+import * as configLoader from '@internal/config-loader';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   canonicalFileIdentity,
-  isWatcherCacheEligible,
+  isClientWatcherCompatible,
   normalizeFileUri,
   resolveSchemaInputs,
   type SchemaInputConfig,
@@ -76,7 +77,7 @@ describe('watcher cache eligibility', () => {
     '/project/**/*.prisma',
     '/project/model?.prisma',
   ])('accepts interoperable pattern %s', (pattern) =>
-    expect(isWatcherCacheEligible(configWith([pattern]))).toBe(true),
+    expect(isClientWatcherCompatible(configWith([pattern]))).toBe(true),
   );
 
   it.each([
@@ -91,17 +92,23 @@ describe('watcher cache eligibility', () => {
     '/project/**model.prisma',
     '/project/***/schema.prisma',
   ])('rejects uncertain pattern %s even alongside a literal input', (pattern) => {
-    expect(isWatcherCacheEligible(configWith(['/project/schema.prisma', pattern]))).toBe(false);
+    expect(isClientWatcherCompatible(configWith(['/project/schema.prisma', pattern]))).toBe(false);
   });
 
   it('requires nonempty PSL inputs', () => {
-    expect(isWatcherCacheEligible(configWith([]))).toBe(false);
-    expect(isWatcherCacheEligible(configWith(undefined))).toBe(false);
-    expect(isWatcherCacheEligible(configWith(['/project/schema.prisma'], 'ts'))).toBe(false);
+    expect(isClientWatcherCompatible(configWith([]))).toBe(false);
+    expect(isClientWatcherCompatible(configWith(undefined))).toBe(false);
+    expect(isClientWatcherCompatible(configWith(['/project/schema.prisma'], 'ts'))).toBe(false);
   });
 });
 
-describe('resolveSchemaInputs', () => {
+describe('resolveSchemaInputs URI membership for expanded files', () => {
+  beforeEach(() => {
+    vi.spyOn(configLoader, 'expandContractInputs').mockImplementation(
+      async (inputs) => inputs ?? [],
+    );
+  });
+
   it('includes only the listed inputs by their file URI', async () => {
     const set = await resolveSchemaInputs(
       configWith(['/abs/schema.psl', '/abs/more.psl']),
@@ -259,6 +266,8 @@ describe('resolveSchemaInputs', () => {
   describe('glob expansion', { timeout: timeouts.databaseOperation }, () => {
     const tempDirs: string[] = [];
 
+    beforeEach(() => vi.restoreAllMocks());
+
     afterEach(async () => {
       for (const dir of tempDirs) {
         await rm(dir, { recursive: true, force: true });
@@ -271,6 +280,22 @@ describe('resolveSchemaInputs', () => {
       tempDirs.push(dir);
       return dir;
     }
+
+    it('requires a wildcard-free input to exist on disk even when an editor supplies text', async () => {
+      const dir = await fixtureDir();
+      const path = join(dir, 'schema.prisma');
+      const uri = pathToFileURL(path).toString();
+      const config = configWith([path]);
+      const before = await resolveSchemaInputs(config, alwaysMember);
+      expect([...before.uris()]).toEqual([]);
+      expect(before.includes(uri)).toBe(false);
+      await writeFile(path, directive, 'utf8');
+      const after = await resolveSchemaInputs(config, alwaysMember);
+      expect([...after.uris()]).toEqual([uri]);
+      expect(after.includes(uri)).toBe(true);
+      await rm(path);
+      expect([...(await resolveSchemaInputs(config, alwaysMember)).uris()]).toEqual([]);
+    });
 
     it('picks up a file created after the project exists on the next resolution pass, without a config change', async () => {
       const dir = await fixtureDir();

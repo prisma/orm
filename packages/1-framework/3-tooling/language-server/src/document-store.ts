@@ -1,4 +1,5 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { sep } from 'node:path';
 import { InternalError } from '@internal/utils/internal-error';
 import type {
   OptionalVersionedTextDocumentIdentifier,
@@ -18,31 +19,16 @@ interface OverlayEntry {
 interface DiskEntry {
   readonly origin: 'disk';
   readonly snapshot: DocumentSnapshot;
-  readonly mtime: number;
-  readonly size: number;
 }
 
 type StoreEntry = OverlayEntry | DiskEntry;
 
-function statSafe(path: string): { readonly mtime: number; readonly size: number } | undefined {
-  try {
-    const stats = statSync(path);
-    return { mtime: stats.mtimeMs, size: stats.size };
-  } catch {
-    return undefined;
-  }
-}
-
 function readDiskEntry(path: string, uri: string): DiskEntry | undefined {
-  const stats = statSafe(path);
-  if (stats === undefined) return undefined;
   try {
     const text = readFileSync(path, 'utf8');
     return {
       origin: 'disk',
       snapshot: new DocumentSnapshot(uri, text),
-      mtime: stats.mtime,
-      size: stats.size,
     };
   } catch {
     return undefined;
@@ -51,27 +37,13 @@ function readDiskEntry(path: string, uri: string): DiskEntry | undefined {
 
 export class DocumentStore {
   private readonly entries = new Map<string, StoreEntry>();
-  private readonly watchCoverage = new Map<string, ReadonlySet<string>>();
-  private watchedIdentities = new Set<string>();
-
-  setWatchCoverage(owner: string, uris: Iterable<string>): void {
-    const identities = new Set(Array.from(uris, canonicalFileIdentity));
-    if (identities.size === 0) {
-      this.watchCoverage.delete(owner);
-    } else {
-      this.watchCoverage.set(owner, identities);
+  invalidateTree(uri: string): void {
+    const root = canonicalFileIdentity(uri);
+    for (const [identity, entry] of this.entries) {
+      if (entry.origin === 'disk' && (identity === root || identity.startsWith(`${root}${sep}`))) {
+        this.entries.delete(identity);
+      }
     }
-    const next = new Set<string>();
-    for (const coverage of this.watchCoverage.values()) {
-      for (const identity of coverage) next.add(identity);
-    }
-    for (const identity of this.watchedIdentities) {
-      if (!next.has(identity)) this.invalidate(identity);
-    }
-    for (const identity of next) {
-      if (!this.watchedIdentities.has(identity)) this.invalidate(identity);
-    }
-    this.watchedIdentities = next;
   }
 
   readonly getOpenDocument = (uri: string): TextDocument | undefined => {
@@ -94,16 +66,7 @@ export class DocumentStore {
   readonly readSnapshot = (uri: string): DocumentSnapshot | undefined => {
     const identity = canonicalFileIdentity(uri);
     const entry = this.entries.get(identity);
-    if (entry?.origin === 'overlay') {
-      return entry.snapshot;
-    }
-    if (entry?.origin === 'disk') {
-      if (this.watchedIdentities.has(identity)) return entry.snapshot;
-      const stats = statSafe(identity);
-      if (stats !== undefined && stats.mtime === entry.mtime && stats.size === entry.size) {
-        return entry.snapshot;
-      }
-    }
+    if (entry !== undefined) return entry.snapshot;
     const fresh = readDiskEntry(identity, normalizeFileUri(uri));
     if (fresh === undefined) {
       this.entries.delete(identity);

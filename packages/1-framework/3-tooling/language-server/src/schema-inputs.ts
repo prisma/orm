@@ -53,7 +53,7 @@ function toExpandablePath(input: string): string {
   return isFileUri(input) ? fileURLToPath(new URL(input), { windows: isWindowsPlatform() }) : input;
 }
 
-export function isWatcherCacheEligible(config: SchemaInputConfig): boolean {
+export function isClientWatcherCompatible(config: SchemaInputConfig): boolean {
   const patterns = config.contract?.source.inputs;
   return (
     hasPslInputs(config) &&

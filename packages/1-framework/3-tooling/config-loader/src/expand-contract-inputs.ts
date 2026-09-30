@@ -1,57 +1,37 @@
-import { matchesGlob, resolve } from 'pathe';
-import { glob, isDynamicPattern } from 'tinyglobby';
+import { glob, stat } from 'node:fs/promises';
+import { matchesGlob } from 'node:path';
+import { resolve } from 'pathe';
 
-const UNC_PREFIX_RE = /^(?:\\\\|\/\/)/;
-
-function isUncLike(entry: string): boolean {
-  return UNC_PREFIX_RE.test(entry);
+async function isSymlinkFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path, { throwIfNoEntry: false }))?.isFile() ?? false;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ELOOP') {
+      return false;
+    }
+    throw error;
+  }
 }
 
-function resolveLiteral(entry: string): string {
-  return isUncLike(entry) ? entry : resolve(entry);
-}
-
-/**
- * Expands a finalized contract source input list into its member file set:
- * absolute, deduped by canonical path, sorted. `patterns` must already be
- * absolute (the `orm` config schema resolves each entry against the config
- * file that wrote it but does not expand it).
- *
- * A wildcard-free entry (per tinyglobby's own magic-character check) passes
- * through verbatim — no globbing, no existence check, no directory
- * expansion — so a literal file, a nonexistent path (its read error
- * surfaces downstream), and a directory (`contract-prisma7`'s adoption
- * surface) all reach the result unchanged. Only entries containing glob
- * magic run through `tinyglobby`, directories-not-auto-expanded and
- * files-only; a glob matching nothing contributes nothing — no diagnostic
- * here.
- */
 export async function expandContractInputs(
   patterns: readonly string[] | undefined,
 ): Promise<readonly string[]> {
   if (patterns === undefined || patterns.length === 0) {
     return [];
   }
-  const literals: string[] = [];
-  const globPatterns: string[] = [];
-  for (const pattern of patterns) {
-    (isDynamicPattern(pattern) ? globPatterns : literals).push(pattern);
+  const canonical = new Set<string>();
+  for await (const entry of glob(patterns, { withFileTypes: true })) {
+    const path = resolve(entry.parentPath, entry.name);
+    if (entry.isFile() || (entry.isSymbolicLink() && (await isSymlinkFile(path)))) {
+      canonical.add(path);
+    }
   }
-  const globMatches =
-    globPatterns.length === 0
-      ? []
-      : await glob(globPatterns, { absolute: true, onlyFiles: true, expandDirectories: false });
-  const canonical = new Set([...literals, ...globMatches].map(resolveLiteral));
   return Array.from(canonical).sort();
 }
 
-/**
- * The first glob entry of `patterns` that `path` matches, whether or not a
- * file exists at `path`. Both must be absolute.
- */
 export function globContractInputMatching(
   patterns: readonly string[],
   path: string,
 ): string | undefined {
-  return patterns.find((pattern) => isDynamicPattern(pattern) && matchesGlob(path, pattern));
+  return patterns.find((pattern) => matchesGlob(path, pattern));
 }

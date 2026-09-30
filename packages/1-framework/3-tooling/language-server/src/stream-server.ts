@@ -91,10 +91,11 @@ export function runServerOverStreams(streams: LanguageServerStreams): Promise<nu
       if (clientWatch !== undefined) {
         clearInterval(clientWatch);
       }
-      releaseConsole();
-      server.dispose();
-      input.destroy();
-      resolve(code);
+      void server.dispose().finally(() => {
+        releaseConsole();
+        input.destroy();
+        resolve(code);
+      });
     }
 
     function moved(): void {

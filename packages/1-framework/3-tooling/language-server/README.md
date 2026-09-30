@@ -6,7 +6,22 @@ The Prisma 8 language server provides diagnostics, formatting, code completion, 
 
 A project's schema is every file matching the config's `contract.source.inputs` glob(s) whose current text carries `// use prisma-8` — the same gate `contract emit` applies, so the two surfaces agree on what the schema is. Membership is re-expanded on load, config reload, and schema-file watcher events, not fixed at config-read time: a file created after the server started joins on the next membership refresh without a config edit.
 
-Unopened members are read from disk and interpreted alongside open ones — the project symbol table and diagnostics span the whole membership set, not just currently-open documents. After the client successfully registers a `workspace/didChangeWatchedFiles` watcher for a project's input globs, covered members reuse cached disk text without checking file metadata on each read only when every pattern is in a conservatively supported subset: simple ASCII paths with ordinary `*`, `?`, or whole-segment `**` wildcards. Extended or uncertain syntax, including extglobs, negation, braces, brackets, backslash escapes, and file URIs, retains stat revalidation even after successful registration and membership refresh. Member create/change/delete events invalidate disk text and refresh membership, including coverage for newly discovered members. Open editor text remains authoritative. Files without successful watcher coverage re-check modification time and size on every read, including while registration is pending or after registration fails. Coverage is tracked per project and file identity; registration replacement and coverage changes discard affected disk entries so text cached during a registration gap is not trusted afterward.
+Unopened members are read from disk and interpreted alongside open ones: symbols and diagnostics span the whole membership set. Disk snapshots are cached until invalidation, without read-time metadata checks. Open editor text remains authoritative even when disk notifications invalidate cached content.
+
+### Filesystem updates
+
+Each loaded project selects one of two notification backends:
+
+- **Client notifications:** when dynamic registration succeeds and every input pattern is compatible with LSP watching. The supported subset is simple ASCII paths with ordinary `*`, `?`, or whole-segment `**` wildcards. A successful compatible registration does not create a duplicate internal watcher.
+- **Internal Chokidar 5 watching:** when the client lacks support, registration fails or exceeds its 10-second deadline, or patterns use extended or uncertain syntax such as extglobs, braces, brackets, negation, escapes, or file URIs. Late registrations are disposed.
+
+Internal watching covers literal directory roots derived from positive input patterns, including safe existing ancestors of missing directories. This detects future members under initially empty globs. The owning config's directory is also observed so atomic config replacement updates membership without editor activity; a config-only subscription is shallow. Events trigger the same input expansion and directive check as loading, rather than a separate watcher-specific membership matcher.
+
+Internal watching refuses recursive filesystem-root/share coverage and dynamic parent traversal. Symbolic schema roots or ancestors are rejected; encountered symlink paths are skipped with a warning, not followed. Inputs outside the config directory work when they have safe roots. Watching does not discover new projects across the workspace or follow imported config dependencies.
+
+Loading and editor operations do not wait for registration or internal readiness. On readiness, the project discards potentially stale disk snapshots and reconciles membership to include changes during startup. Watcher failures are logged and do not suspend analysis or discard overlays. Working subscriptions are retained where possible, but external changes in unwatched paths may remain undetected until a project/config reload or server restart. Reload explicitly evicts disk snapshots and retries setup. There is no stat-on-read fallback or polling, including environment-forced Chokidar polling. A client that silently drops notifications is not detected.
+
+### Diagnostic delivery
 
 Diagnostic delivery has exactly two modes, selected during initialization:
 
@@ -21,7 +36,7 @@ In pull mode, `interFileDependencies: true` tells the client that editor edits c
 
 Equivalent file URIs share one document and one normalized URI for source filenames and diagnostic publications, including clears. Normalization follows file-path identity: percent encoding is standardized, Windows paths are case-folded, and UNC authorities are preserved. The server does not resolve symlinks or preserve the editor's original URI spelling.
 
-Each immutable document snapshot parses lazily, at most once, and owns its AST, source registry, and raw parser diagnostics. Reading text alone does not parse. Projects reuse unchanged snapshots across configuration reloads while independently rebuilding combined sources, symbols, and interpretation. `ProjectArtifacts.document(uri)` returns the snapshot itself without parsing. `ProjectArtifacts.diagnostics(uri)` combines mapped parse, symbol, and interpretation diagnostics; whole-project reports supply precomputed symbol diagnostics so each report scans the project once for symbols. Interpretation is memoized per project revision, not attached to a document snapshot. Edits and disk invalidation produce new snapshots without changing previous parses.
+Each immutable document snapshot parses lazily, at most once, and owns its AST, source registry, and raw parser diagnostics. Reading text alone does not parse. Configuration reloads evict project disk snapshots while retaining editor overlays, and rebuild combined sources, symbols, and interpretation. `ProjectArtifacts.document(uri)` returns the snapshot itself without parsing. `ProjectArtifacts.diagnostics(uri)` combines mapped parse, symbol, and interpretation diagnostics; whole-project reports supply precomputed symbol diagnostics so each report scans the project once for symbols. Interpretation is memoized per project revision, not attached to a document snapshot. Edits and disk invalidation produce new snapshots without changing previous parses.
 
 ## Internal ownership
 
@@ -31,13 +46,17 @@ Closing the last editor document does not remove its project. Each config path h
 | --- | --- |
 | [`server.ts`](src/server.ts) | Capability negotiation, protocol registration, editor-buffer updates, and feature-handler delegation. |
 | [`ProjectRegistry`](src/project-registry.ts) | Config-to-project and document-to-project indexes, nearest-config discovery, association cleanup, config watching, watched-file dispatch, and the global event sequence. |
-| [`Project`](src/project.ts) | Private resolved configuration and load state, serialized reloads and last-good fallback, membership transitions, schema-watcher registration, diagnostic history, and operations using the resolved analysis. |
+| [`Project`](src/project.ts) | Private resolved configuration and load state, serialized reloads and last-good fallback, membership transitions, client/internal watcher lifecycle and event batches, diagnostic history, and operations using the resolved analysis. |
 | [`ProjectArtifacts`](src/project-artifacts.ts) | Participating snapshots, combined sources and symbols, interpretation, and diagnostic assembly. |
-| [`DocumentStore`](src/document-store.ts) and [`DocumentSnapshot`](src/document-snapshot.ts) | Editor overlays and disk text with watcher coverage; immutable text snapshots with lazy parsing. |
+| [`DocumentStore`](src/document-store.ts) and [`DocumentSnapshot`](src/document-snapshot.ts) | Authoritative editor overlays and explicitly invalidated disk caches; immutable text snapshots with lazy parsing. |
 
 Nearest-config discovery does not establish schema membership. Project operations check membership against their resolved configuration; pull reports can also serve a previously reported URI that has left membership so the client receives its clearing report. Synchronous AST and symbol reads use the existing document association without starting discovery or loading.
 
-The registry allocates a member event's sequence before asynchronous config discovery and invalidates its disk text immediately. Reloads advance the same sequence. Each project checks its accepted sequence and resolved configuration identity across membership expansion, while a separate watcher generation rejects and disposes late registrations. Failed reloads retain the last-good configuration; failed first loads remove open-document associations so later requests can retry. In-flight reads retain the resolution they awaited rather than switching to a later queued load.
+The registry supplies the event sequence used by project membership transitions. Projects invalidate disk text before expanding membership; reloads advance the same sequence. Each project checks its accepted sequence and resolved configuration identity across membership expansion, while a separate watcher generation rejects and disposes late registrations. Failed reloads retain the last-good configuration; failed first loads remove open-document associations so later requests can retry. In-flight reads retain the resolution they awaited rather than switching to a later queued load.
+
+Both backends use the project's 50 ms coalescing delay, allowing Chokidar's same-path change suppression window to finish before reading final content. Each batch invalidates affected disk entries and reconciles final membership once; events arriving during asynchronous work schedule a later pass. Generation and configuration checks reject stale schema work. During a reload, previous internal subscriptions continue observing the owning config until replacement coverage is ready, so repeated config edits during loading are not lost. Old schema callbacks remain rejected. Server shutdown and asynchronous disposal cancel queued work and await all owned Chokidar closures, including watchers still starting.
+
+The decision and tradeoffs are recorded in [ADR 256 — Project-owned language-server file watching](../../../../docs/architecture%20docs/adrs/ADR%20256%20-%20Project-owned%20language-server%20file%20watching.md).
 
 ## Completion
 

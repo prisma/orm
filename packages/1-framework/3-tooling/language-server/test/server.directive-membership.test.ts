@@ -20,6 +20,12 @@ import {
 import { resolveSchemaInputs } from '../src/schema-inputs';
 import { createServer } from '../src/server';
 
+vi.mock('../src/internal-watcher', () => ({
+  InternalWatcher: class {
+    async close() {}
+  },
+}));
+
 vi.mock('@internal/config-loader', async (original) => ({
   ...(await original<typeof import('@internal/config-loader')>()),
   findNearestConfigPathForFile: async (path: string) => join(dirname(path), 'prisma.config.ts'),
@@ -78,8 +84,8 @@ async function harness(pull: boolean) {
   });
   const server = createServer(connection);
   client.listen();
-  cleanups.push(() => {
-    server.dispose();
+  cleanups.push(async () => {
+    await server.dispose();
     client.dispose();
     incoming.destroy();
     outgoing.destroy();

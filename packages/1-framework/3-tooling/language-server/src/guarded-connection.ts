@@ -1,4 +1,27 @@
-import { type Connection, ConnectionError, ConnectionErrors } from 'vscode-languageserver';
+import {
+  type Connection,
+  ConnectionError,
+  ConnectionErrors,
+  type RegistrationParams,
+  RegistrationRequest,
+} from 'vscode-languageserver';
+
+const originalConnections = new WeakMap<Connection, Connection>();
+
+export async function requestWatcherRegistration(
+  connection: Connection,
+  params: RegistrationParams,
+): Promise<{ readonly ok: true } | { readonly ok: false; readonly error: unknown }> {
+  try {
+    await (originalConnections.get(connection) ?? connection).sendRequest(
+      RegistrationRequest.type,
+      params,
+    );
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error };
+  }
+}
 
 /**
  * Wraps a connection so that an outbound call the client is no longer there to
@@ -17,7 +40,10 @@ import { type Connection, ConnectionError, ConnectionErrors } from 'vscode-langu
  * in the caller and still reaches it.
  */
 export function guardedConnection(connection: Connection): Connection {
-  return guardCalls(connection);
+  const original = originalConnections.get(connection) ?? connection;
+  const guarded = guardCalls(original);
+  originalConnections.set(guarded, original);
+  return guarded;
 }
 
 function guardCalls<Target extends object>(target: Target): Target {

@@ -20,10 +20,11 @@ catalog:
   '@types/pg': 8.20.4
   ajv: ^8.20.0
   arktype: ^2.2.2
-  # bson and mongodb must share a major: the Mongo target builds the bson values the
-  # driver serialises, and the driver rejects values from another bson major.
-  # Use the bson range the mongodb release declares.
+  # bson and mongodb must share a major: the Mongo target builds the bson values
+  # the driver serialises, and the driver rejects values from another bson
+  # major. Use the bson range the mongodb release declares.
   bson: ^7.2.0
+  chokidar: ^5.0.0
   gray-matter: ^4.0.3
   mongodb: ^7.4.0
   mongodb-connection-string-url: ^7.0.1
@@ -55,10 +56,11 @@ trustPolicy: no-downgrade
 
 trustPolicyExclude:
   - chokidar@4.0.3
-  # examples/prisma7-adoption installs Prisma 7 for real (@prisma/prisma7 depends on
-  # prisma@7.10.0). Prisma's 7.x releases stopped carrying provenance attestation at
-  # some point before 7.10.0, so the no-downgrade check refuses the pin; 7.10.0 is
-  # the published Prisma 7 release the upgrade guide names, not a known compromise.
+  # examples/prisma7-adoption installs Prisma 7 for real (@prisma/prisma7 depends
+  # on prisma@7.10.0). Prisma's 7.x releases stopped carrying provenance
+  # attestation at some point before 7.10.0, so the no-downgrade check refuses the
+  # pin; 7.10.0 is the published Prisma 7 release the upgrade guide names, not a
+  # known compromise.
   - prisma@7.10.0
   - evlog@1.9.0
   - semver@6.3.1
@@ -68,5 +70,6 @@ trustPolicyExclude:
   - undici@5.29.0
   # Same family: undici-types 6.13.0 and 6.18.2 carried provenance, 6.21.0
   # (the ~6.21.0 range @types/node 22 pins) does not. A scratch install that
-  # resolves it fresh trips the downgrade check; the workspace lockfile does not.
+  # resolves it fresh trips the downgrade check; the workspace lockfile does
+  # not.
   - undici-types@6.21.0

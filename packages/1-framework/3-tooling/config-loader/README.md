@@ -17,6 +17,12 @@ performs the emitter-derived artifact-collision check (`getEmittedArtifactPaths`
 
 The package also exports the pieces `loadConfig` is built from: `loadConfigFiles` evaluates the config chain and returns each file's sections as written, `evaluateConfigModule` returns one config file's raw default export, and `buildLoadedConfig` validates an `orm` section built in memory, resolving its paths against a given directory as if a `prisma.config.ts` there had written it.
 
+## Contract input expansion
+
+The config schema resolves `contract.source.inputs` against the config file that declares them. `expandContractInputs` expands these absolute patterns using Node.js 24+ built-in `fs/promises.glob` defaults, including locations outside the process working directory. Results are absolute, deduplicated, sorted files. All inputs go through glob expansion, including wildcard-free paths. Only existing files are returned: missing paths and directory inputs are excluded, and directory inputs do not implicitly expand to their children. Symbolic links to files are included; dangling and cyclic symbolic links are excluded. UNC paths receive Node's platform-specific glob behavior, with no literal passthrough.
+
+`globContractInputMatching` uses Node's `path.matchesGlob` for every input, including wildcard-free paths, to check potential future paths without requiring files to exist. Wildcards do not match leading dots by default: explicitly name dot-prefixed segments to include hidden files or directories (for example, `**/.*.prisma` or `.schemas/*.prisma`). Bracket classes, bracket escapes such as `[[]id[]]`, brace alternatives, `?`, and `**` follow Node's semantics, not an exact VS Code-compatible grammar. There is no configurable dotfile option. There is no separate literal/glob classification or matcher dependency.
+
 ## Usage
 
 ```ts

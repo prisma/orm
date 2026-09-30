@@ -22,8 +22,7 @@
     "@internal/utils": "workspace:8.0.0-rc.13",
     "arktype": "^2.2.2",
     "c12": "^3.3.4",
-    "pathe": "^2.0.3",
-    "tinyglobby": "catalog:"
+    "pathe": "^2.0.3"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.6.2",

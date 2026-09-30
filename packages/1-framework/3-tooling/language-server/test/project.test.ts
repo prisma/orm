@@ -6,6 +6,12 @@ import { DocumentStore } from '../src/document-store';
 import { Project } from '../src/project';
 import { resolveSchemaInputs } from '../src/schema-inputs';
 
+vi.mock('../src/internal-watcher', () => ({
+  InternalWatcher: class {
+    async close() {}
+  },
+}));
+
 const load = vi.hoisted(() => vi.fn<() => Promise<ConfigResolution>>());
 vi.mock('../src/config-resolution', async (original) => ({
   ...(await original<typeof import('../src/config-resolution')>()),
@@ -38,6 +44,7 @@ async function setup(pullDiagnostics = false) {
     watchedFilesRegistration: false,
     nextSequence: () => ++sequence,
     unmanage,
+    refreshDiagnostics: vi.fn(),
   });
   return { project, documents, resolution, sendDiagnostics, unmanage };
 }
