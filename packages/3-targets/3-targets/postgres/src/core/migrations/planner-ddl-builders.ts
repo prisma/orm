@@ -203,9 +203,9 @@ function renderScalarLiteral(value: unknown, codecId: string | undefined): strin
 /**
  * An `ARRAY[...]` of quoted elements has type `text[]`, which Postgres does not assign to a list of
  * numbers, decimals, timestamps or enums, so the constructor is cast to the list type. Each element
- * is the text Postgres reads for its type: an `int8` or `numeric` value as decimal text, a temporal
- * value as ISO text. `nativeType` is the element type or the list type, written as SQL, so a
- * user-defined type name arrives already quoted.
+ * is the text Postgres reads for its type: an `int8` or `numeric` value as decimal text, a date or
+ * time value as its type's standard text. `nativeType` is the element type or the list type,
+ * written as SQL, so a user-defined type name arrives already quoted.
  */
 function renderArrayLiteralDefault(
   elements: unknown[],
