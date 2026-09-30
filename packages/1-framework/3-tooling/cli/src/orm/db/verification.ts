@@ -221,7 +221,8 @@ const OUTCOME_LABEL: Record<ExpectationFailureReason, string> = {
 
 /** What a diff issue says, in the words the commander shell used. */
 export function issueLabel(issue: SchemaDiffIssue): string {
-  return `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
+  const label = `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
+  return issue.reason === undefined ? label : `${label}. ${issue.reason}`;
 }
 
 function issueNodes(issues: readonly SchemaDiffIssue[], status: 'error' | 'warn'): TreeNode[] {
@@ -280,7 +281,9 @@ export function schemaVerdictDiagnostic(inputs: {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...(issues.length === 0 ? {} : { why: `The live schema differs: ${issues.join('; ')}.` }),
+    ...(issues.length === 0
+      ? {}
+      : { why: sentence(`The live schema differs: ${issues.join('; ')}`) }),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -288,6 +291,10 @@ export function schemaVerdictDiagnostic(inputs: {
       ...(dotted || code === undefined ? {} : { code }),
     },
   };
+}
+
+function sentence(text: string): string {
+  return text.endsWith('.') ? text : `${text}.`;
 }
 
 export function schemaDriftNextActions(inputs: {

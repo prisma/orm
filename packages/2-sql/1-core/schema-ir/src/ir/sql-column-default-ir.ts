@@ -3,6 +3,7 @@ import type { CodecRef, DataType } from '@internal/framework-components/codec';
 import type { DiffableNode } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { blindCast } from '@internal/utils/casts';
+import { contractDefaultRefusal } from './default-in-canonical-form';
 import { resolvedDefaultsEqual } from './resolved-default-equality';
 import { RelationalSchemaNodeKind } from './schema-node-kinds';
 import { assertNode, defineNonEnumerable, SqlSchemaIRNode } from './sql-schema-ir-node';
@@ -124,5 +125,17 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
       return false;
     }
     return this.raw === node.raw;
+  }
+
+  /**
+   * The refusal of an expected literal its data type does not hold, which a contract emitted by an
+   * earlier version can carry, so the mismatch names its cause.
+   */
+  mismatchReason(): string | undefined {
+    return contractDefaultRefusal(
+      this.resolved,
+      this.dataType?.toCanonicalForm,
+      (this.many ?? this.codecRef?.many) === true,
+    );
   }
 }

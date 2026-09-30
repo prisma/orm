@@ -712,7 +712,7 @@ function mapColumnDefaultNodeIssue(
     SqlColumnDefaultIR,
     'a not-found/not-equal column-default issue always carries the expected default node'
   >(issue.expected);
-  const defaultSql = renderColumnDefaultSql(defaultNode, codecHooks);
+  const defaultSql = renderColumnDefaultSql(columnName, defaultNode, codecHooks);
   if (!defaultSql) return ok([]);
   return ok([
     new SetDefaultCall(

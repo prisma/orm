@@ -1,4 +1,5 @@
 import { dataType } from '@internal/framework-components/codec';
+import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 
 import { SqlColumnDefaultIR } from '../src/ir/sql-column-default-ir';
@@ -97,6 +98,35 @@ describe('SqlColumnDefaultIR', () => {
       const c = new SqlColumnDefaultIR({ raw: "'y'" });
       expect(a.isEqualTo(b)).toBe(true);
       expect(a.isEqualTo(c)).toBe(false);
+    });
+  });
+
+  describe('mismatchReason (this = expected)', () => {
+    const timestamptz = dataType('pg/timestamptz', {
+      toCanonicalForm: (value) => {
+        if (value === '2024-01-01T00:00:00Z') return value;
+        throw structuredError(
+          'CONTRACT.CAST_REFUSED',
+          `pg/timestamptz needs a UTC offset, but ${JSON.stringify(value)} has none.`,
+        );
+      },
+    });
+    it('names the refusal of a contract default its data type does not hold, and says to re-emit', () => {
+      const expected = new SqlColumnDefaultIR({
+        resolved: { kind: 'literal', value: '2024-01-01 00:00:00' },
+        dataType: timestamptz,
+      });
+      expect(expected.mismatchReason()).toBe(
+        'The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Re-emit the contract, then try again.',
+      );
+    });
+
+    it('gives no reason for a default its data type holds', () => {
+      const expected = new SqlColumnDefaultIR({
+        resolved: { kind: 'literal', value: '2024-01-01T00:00:00Z' },
+        dataType: timestamptz,
+      });
+      expect(expected.mismatchReason()).toBeUndefined();
     });
   });
 });

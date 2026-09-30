@@ -10,6 +10,7 @@
  */
 
 export {
+  contractDefaultRefusal,
   type DefaultInCanonicalForm,
   defaultInCanonicalForm,
 } from './ir/default-in-canonical-form';

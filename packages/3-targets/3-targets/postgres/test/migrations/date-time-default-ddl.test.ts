@@ -112,7 +112,7 @@ describe('a date or time default written by the planner', () => {
       const node = column(nativeType, codecId, dataType, written);
       expect({
         createTable: renderColumnDdl('v', node, noHooks).default,
-        setDefault: renderColumnDefaultSql(defaultNode(node), noHooks),
+        setDefault: renderColumnDefaultSql('v', defaultNode(node), noHooks),
       }).toEqual({
         createTable: { kind: 'literal', value: canonical },
         setDefault: `DEFAULT ${literal}`,
@@ -127,7 +127,7 @@ describe('a date or time default written by the planner', () => {
     ]);
     expect({
       createTable: renderColumnDdl('v', node, noHooks).default,
-      setDefault: renderColumnDefaultSql(defaultNode(node), noHooks),
+      setDefault: renderColumnDefaultSql('v', defaultNode(node), noHooks),
     }).toEqual({
       createTable: {
         kind: 'literal',
@@ -135,5 +135,21 @@ describe('a date or time default written by the planner', () => {
       },
       setDefault: "DEFAULT ARRAY['2024-01-01T00:00:00Z', '0044-03-15T00:00:00Z BC']::timestamptz[]",
     });
+  });
+
+  it('refuses to write a contract default its data type does not hold, and says to re-emit', () => {
+    const node = column(
+      'timestamptz',
+      'pg/timestamptz-temporal@1',
+      pgTimestamptz,
+      '2024-01-01 00:00:00',
+    );
+    const refusal = expect.objectContaining({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      message:
+        'Column "v": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.',
+    });
+    expect(() => renderColumnDdl('v', node, noHooks)).toThrow(refusal);
+    expect(() => renderColumnDefaultSql('v', defaultNode(node), noHooks)).toThrow(refusal);
   });
 });

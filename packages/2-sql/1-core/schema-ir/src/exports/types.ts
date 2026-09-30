@@ -17,6 +17,7 @@ export type {
 
 export {
   assertNode,
+  contractDefaultRefusal,
   defaultInCanonicalForm,
   defineNonEnumerable,
   PrimaryKey,

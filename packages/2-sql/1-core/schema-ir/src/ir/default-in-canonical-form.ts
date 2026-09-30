@@ -1,4 +1,8 @@
-import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
+import type {
+  ColumnDefault,
+  ColumnDefaultLiteralInputValue,
+  JsonValue,
+} from '@internal/contract/types';
 import type { ToCanonicalForm } from '@internal/framework-components/codec';
 import { isStructuredError } from '@internal/utils/structured-error';
 
@@ -45,4 +49,20 @@ function inCanonicalForm(
     }
     throw error;
   }
+}
+
+/**
+ * The refusal of a contract's literal default that its column's data type does not hold, which a
+ * contract emitted by an earlier version can carry, with what to do about it.
+ */
+export function contractDefaultRefusal(
+  columnDefault: ColumnDefault | undefined,
+  toCanonicalForm: ToCanonicalForm | undefined,
+  list: boolean,
+): string | undefined {
+  if (columnDefault?.kind !== 'literal') return undefined;
+  const { refusal } = defaultInCanonicalForm(columnDefault.value, toCanonicalForm, list);
+  return refusal === undefined
+    ? undefined
+    : `The contract holds this default in a form its data type does not store: ${refusal} Re-emit the contract, then try again.`;
 }
