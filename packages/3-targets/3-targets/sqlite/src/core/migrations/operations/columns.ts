@@ -2,7 +2,13 @@ import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter
 import { columnExistsAst } from '../../../contract-free/checks';
 import { quoteIdentifier } from '../../sql-utils';
 import { buildTargetDetails } from '../planner-target-details';
-import { type Op, renderSpecDefault, type SqliteColumnSpec, step } from './shared';
+import {
+  type Op,
+  refuseEarlierColumnSpecs,
+  renderSpecDefault,
+  type SqliteColumnSpec,
+  step,
+} from './shared';
 
 export function addColumnExecuteSql(
   tableName: string,
@@ -27,6 +33,7 @@ export async function addColumn(
   column: SqliteColumnSpec,
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
+  refuseEarlierColumnSpecs('addColumn', tableName, [column]);
   const defaultClause = await renderSpecDefault(column, tableName, lowerer);
   const checks = columnExistsAst(tableName, column.name);
   const absent = await lowerer.lowerToExecuteRequest(checks.columnAbsent());

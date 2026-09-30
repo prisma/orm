@@ -1498,6 +1498,10 @@ The target (or named ref) requires data invariants, and no path through the migr
 
 `migration show` was given a non-path reference but the app space has no migration packages at all, so there is nothing to resolve against. Create a migration with `prisma migration plan` first. Payload: none.
 
+### MIGRATION.OPERATION_OPTION_REMOVED
+
+A `migration.ts` passes an operation an option in the form an earlier version wrote, which this version no longer reads. `node migration.ts` strips types without checking them, so such a file runs; the operation refuses the option rather than leave out what it carries. Raised for a column default written as SQL text in `defaultSql`: by PostgreSQL `setDefault`, whose `column` is now `col(name, type, { default, codecRef })`, and by SQLite `addColumn` and `recreateTable`, whose columns now carry `default` and `codecRef`. The fix names the new form and the upgrade entry that shows it; if the migration is not applied, deleting its package and running `migration plan` again also works. Payload: `operation`, `option`, `upgradeEntry`.
+
 ### MIGRATION.OPERATION_UNSUPPORTED
 
 A Mongo migration check uses a filter feature the check evaluator does not support: an unsupported filter operator, or an aggregation-expression filter. Payload: `operator`.

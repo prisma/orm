@@ -11,6 +11,7 @@ import { buildCreateIndexSql } from '../planner-ddl-builders';
 import { buildTargetDetails } from '../planner-target-details';
 import {
   type Op,
+  refuseEarlierColumnSpecs,
   renderColumnDefinition,
   renderForeignKeyClause,
   renderSpecDefault,
@@ -141,6 +142,7 @@ export async function recreateTable(
     postchecks,
     operationClass,
   } = args;
+  refuseEarlierColumnSpecs('recreateTable', tableName, contractTable.columns);
   const tempName = `_prisma_new_${tableName}`;
   const liveSet = new Set(schemaColumnNames);
   const sharedColumns = contractTable.columns.filter((c) => liveSet.has(c.name)).map((c) => c.name);

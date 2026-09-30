@@ -1,7 +1,8 @@
 /**
  * Journey: the `migration.ts` that `migration plan` writes, run with `node migration.ts`, writes the
  * same `ops.json` as the plan, reading each column default with the column's codec. A default the
- * codec refuses, written into the file by hand, stops the run with the contract error.
+ * codec refuses, written into the file by hand, stops the run with the contract error, and so does a
+ * default an earlier version wrote as SQL text.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -16,6 +17,7 @@ import {
   selfEmitMigration,
   setupJourney,
   timeouts,
+  useDevDatabase,
 } from '../utils/journey-test-helpers';
 
 const SQLITE_CONFIG_TEMPLATE = join(
@@ -42,18 +44,24 @@ function writeSchema(ctx: JourneyContext, schema: string): void {
 async function emitAndPlan(ctx: JourneyContext, name: string): Promise<string> {
   const emit = await runContractEmit(ctx);
   expect(emit.exitCode, stripAnsi(emit.stderr)).toBe(0);
-  const plan = await runMigrationPlan(ctx, ['--name', name]);
+  const from = getLatestMigrationDir(ctx);
+  const plan = await runMigrationPlan(ctx, [
+    '--name',
+    name,
+    ...(from === undefined ? [] : ['--from', from]),
+  ]);
   expect(plan.exitCode, stripAnsi(plan.stderr)).toBe(0);
   const dir = getLatestMigrationDir(ctx);
   if (dir === undefined) throw new Error('migration plan wrote no migration package');
   return join(ctx.testDir, 'migrations', 'app', dir);
 }
 
-function editMigrationTs(packageDir: string, from: string, to: string): void {
+function editMigrationTs(packageDir: string, from: string | RegExp, to: string): void {
   const path = join(packageDir, 'migration.ts');
   const source = readFileSync(path, 'utf-8');
-  expect(source.split(from)).toHaveLength(2);
-  writeFileSync(path, source.replace(from, to), 'utf-8');
+  const edited = source.replace(from, to);
+  expect(edited).not.toBe(source);
+  writeFileSync(path, edited, 'utf-8');
 }
 
 async function runMigrationTs(ctx: JourneyContext, packageDir: string) {
@@ -98,6 +106,60 @@ withTempDir(({ createTempDir }) => {
           exitCode: 1,
           firstErrorLine:
             'CONTRACT.DEFAULT_INVALID: Column "Note"."at" has a default its codec sqlite/datetime@1 refuses: sqlite/datetime@1 JSON value must be a date and time string',
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'a SQLite addColumn in the shape an earlier version wrote stops the migration.ts',
+      async () => {
+        const ctx = sqliteJourney(createTempDir);
+        writeSchema(ctx, 'model Note {\n  id Int @id\n}\n');
+        await emitAndPlan(ctx, 'init');
+        writeSchema(ctx, 'model Note {\n  id    Int    @id\n  added String @default("new")\n}\n');
+        const packageDir = await emitAndPlan(ctx, 'add');
+        editMigrationTs(
+          packageDir,
+          /column: \{[\s\S]*?nullable: false,?\s*\}/,
+          "column: { name: 'added', typeSql: 'TEXT', defaultSql: \"DEFAULT 'new'\", nullable: false }",
+        );
+
+        expect(await runMigrationTs(ctx, packageDir)).toEqual({
+          exitCode: 1,
+          firstErrorLine:
+            'MIGRATION.OPERATION_OPTION_REMOVED: `addColumn` in migration.ts passes `defaultSql`, which this version no longer reads, for column "added" of table "Note"',
+        });
+      },
+      timeouts.spinUpPpgDev,
+    );
+  });
+
+  describe('Journey: a Postgres setDefault in a migration.ts an earlier version wrote', () => {
+    const db = useDevDatabase();
+
+    it(
+      'stops the migration.ts, naming the column',
+      async () => {
+        const ctx = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        writeSchema(ctx, 'model Box {\n  id      Int @id\n  changed Int @default(1)\n}\n');
+        await emitAndPlan(ctx, 'init');
+        writeSchema(ctx, 'model Box {\n  id      Int @id\n  changed Int @default(2)\n}\n');
+        const packageDir = await emitAndPlan(ctx, 'change');
+        editMigrationTs(
+          packageDir,
+          /this\.setDefault\(\{[\s\S]*?operationClass: 'widening',?\s*\}\)/,
+          "this.setDefault({ schema: 'public', table: 'Box', column: 'changed', defaultSql: 'DEFAULT 2', operationClass: 'widening' })",
+        );
+
+        expect(await runMigrationTs(ctx, packageDir)).toEqual({
+          exitCode: 1,
+          firstErrorLine:
+            'MIGRATION.OPERATION_OPTION_REMOVED: `setDefault` in migration.ts passes `defaultSql`, which this version no longer reads, for column "changed" of table "Box"',
         });
       },
       timeouts.spinUpPpgDev,

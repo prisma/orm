@@ -1,4 +1,5 @@
 import type { ColumnDefault } from '@internal/contract/types';
+import { errorMigrationOperationOptionRemoved } from '@internal/errors/migration';
 import type {
   SqlMigrationPlanOperation,
   SqlMigrationPlanOperationStep,
@@ -74,6 +75,26 @@ export function sqliteDefaultToDdlColumnDefault(
       );
     }
   }
+}
+
+/**
+ * A column spec an earlier version wrote carries its default as SQL text in `defaultSql`, empty when it has none.
+ */
+export function refuseEarlierColumnSpecs(
+  operation: 'addColumn' | 'recreateTable',
+  tableName: string,
+  columns: readonly SqliteColumnSpec[],
+): void {
+  const earlier = columns.find((column) => Object.hasOwn(column, 'defaultSql'));
+  if (earlier === undefined) return;
+  throw errorMigrationOperationOptionRemoved({
+    operation,
+    option: 'defaultSql',
+    subject: `column ${JSON.stringify(earlier.name)} of table ${JSON.stringify(tableName)}`,
+    rewrite:
+      "Write the column's default as `default: { kind: 'literal', value }` or `default: { kind: 'function', expression }`, with the column's `codecRef`, in place of `defaultSql`, and delete an empty `defaultSql`.",
+    upgradeEntry: 'migration-ts-column-defaults',
+  });
 }
 
 /** The `DEFAULT …` clause the adapter writes for a column spec, `''` when it has none. */

@@ -492,6 +492,31 @@ describe('PostgresMigration op-builder methods with a ControlStack', () => {
     expect(typeof op.execute[0]?.sql).toBe('string');
   });
 
+  it('setDefault refuses the options an earlier version wrote, naming the column and the rewrite', () => {
+    const m = new ExposedMigration(fakeControlStack());
+    const earlier = {
+      schema: 'public',
+      table: 'Box',
+      column: 'changed',
+      defaultSql: 'DEFAULT 2',
+      operationClass: 'widening',
+    } as unknown as Parameters<ExposedMigration['callSetDefault']>[0];
+
+    expect(() => m.callSetDefault(earlier)).toThrow(
+      expect.objectContaining({
+        code: 'MIGRATION.OPERATION_OPTION_REMOVED',
+        message:
+          '`setDefault` in migration.ts passes `defaultSql`, which this version no longer reads, for column "changed" of table "Box"',
+        fix: 'Pass the column as `col(name, type, { default, codecRef })`, with its default written as `lit(value)` or `fn(expression)`, in place of its name and `defaultSql`. Or, if the migration is not applied, delete its package and run `migration plan` again. The upgrade entry `migration-ts-column-defaults` shows the new shape: https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading',
+        meta: {
+          operation: 'setDefault',
+          option: 'defaultSql',
+          upgradeEntry: 'migration-ts-column-defaults',
+        },
+      }),
+    );
+  });
+
   it('createSchema lowers to an additive create-schema operation', async () => {
     const m = new ExposedMigration(fakeControlStack());
     const op = await m.callCreateSchema({ schema: 'reporting' });

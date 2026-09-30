@@ -96,14 +96,14 @@ changes:
         - '\bmapCaughtMigrationError\b'
   - id: migration-ts-column-defaults
     summary: |
-      In `migration.ts`, the adapter writes every column default, reading it with the column's codec. Postgres `setDefault` takes the column as `col(name, type, { default, codecRef })` instead of `column` (the name) and `defaultSql`. A SQLite `addColumn` or `recreateTable` column carries `default` and `codecRef` instead of `defaultSql`, and a `recreateTable` postcheck for a default is `{ description, columnDefault }`. An earlier `migration.ts` that uses `defaultSql` no longer compiles; its `ops.json` still applies.
+      In `migration.ts`, the adapter writes every column default, reading it with the column's codec. Postgres `setDefault` takes the column as `col(name, type, { default, codecRef })` instead of `column` (the name) and `defaultSql`. A SQLite `addColumn` or `recreateTable` column carries `default` and `codecRef` instead of `defaultSql`, and a `recreateTable` postcheck for a default is `{ description, columnDefault }`. An earlier `migration.ts` that uses `defaultSql` no longer compiles, and running it with `node migration.ts` stops with `MIGRATION.OPERATION_OPTION_REMOVED`; its `ops.json` still applies.
     detection:
       glob: "**/migration.ts"
       matches:
         - '\bdefaultSql\s*:'
   - id: postgres-changed-default-applied
     summary: |
-      On PostgreSQL, `db update` and `db migrate` now change a column default that is already there. They used to skip the change and then fail with `MIGRATION.SCHEMA_VERIFY_FAILED`. A migration an earlier version planned still skips it: run its `migration.ts` to write `ops.json` again before you apply it.
+      On PostgreSQL, `db update` and `db migrate` now change a column default that is already there. They used to skip the change and then fail with `MIGRATION.SCHEMA_VERIFY_FAILED`. A migration an earlier version planned still skips it: before you apply it, delete its package and plan it again, or rewrite its `setDefault` call to the form `migration-ts-column-defaults` shows and run its `migration.ts` to write `ops.json` again.
     detection:
       glob: "**/ops.json"
       matches:
@@ -227,7 +227,7 @@ An attribute inside a `type` block was ignored: `street String @default("x")` st
 
 A migration operation that changes an existing default on PostgreSQL checked afterwards only that the column has a default. The old default passes that check, and the runner skips an operation whose check already passes, so the default stayed as it was and verification then failed with `MIGRATION.SCHEMA_VERIFY_FAILED`. Such an operation now has no check afterwards and always runs; setting a default twice changes nothing.
 
-A migration package an earlier version planned keeps the old check in `ops.json`. If one changes a default and you have not applied it, run its `migration.ts` (`node migration.ts`) to write `ops.json` again, then apply it with `prisma db migrate`. `db update` plans again each time, so it needs nothing.
+A migration package an earlier version planned keeps the old check in `ops.json`. If one changes a default and you have not applied it, write its `ops.json` again before you apply it with `prisma db migrate`. Either delete the package and run `prisma migration plan` again, or rewrite its `setDefault` call in `migration.ts` to the form [`migration-ts-column-defaults`](#migration-ts-column-defaults) shows and then run the file (`node migration.ts`). Run unchanged, the file stops with `MIGRATION.OPERATION_OPTION_REMOVED`, because its `setDefault` still passes `defaultSql`. `db update` plans again each time, so it needs nothing.
 
 ## `migration-ts-column-defaults`
 
@@ -253,4 +253,6 @@ On SQLite, a column in `addColumn` or `recreateTable` carries the default and it
 { description: 'verify "role" default on "user"', columnDefault: 'role' }
 ```
 
-An applied migration needs nothing: `db migrate` applies `ops.json`, which holds the SQL. Change a `migration.ts` this way only when you run it again to write `ops.json`.
+An applied migration needs nothing: `db migrate` applies `ops.json`, which holds the SQL. Change a `migration.ts` this way only when you run it again to write `ops.json`. `node migration.ts` does not check types, so an earlier file still runs; `setDefault`, `addColumn` and `recreateTable` then refuse a `defaultSql` with `MIGRATION.OPERATION_OPTION_REMOVED`, naming the table and the column, rather than leave the default out. Rewrite the call as shown, or, if the migration is not applied, delete its package and run `migration plan` again.
+
+The `migration.ts` that `migration plan` writes for a new SQLite table now gives each column its `codecRef`, so running it writes the same `ops.json` as the plan. To apply a changed PostgreSQL default that an earlier version planned, see [`postgres-changed-default-applied`](#postgres-changed-default-applied).

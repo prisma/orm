@@ -220,6 +220,46 @@ describe('AddColumnCall', () => {
   });
 });
 
+describe('a column spec an earlier version wrote', () => {
+  const earlier = {
+    name: 'added',
+    typeSql: 'TEXT',
+    defaultSql: "DEFAULT 'new'",
+    nullable: false,
+  };
+  const refusal = (operation: string) =>
+    expect.objectContaining({
+      code: 'MIGRATION.OPERATION_OPTION_REMOVED',
+      message: `\`${operation}\` in migration.ts passes \`defaultSql\`, which this version no longer reads, for column "added" of table "Note"`,
+      fix: "Write the column's default as `default: { kind: 'literal', value }` or `default: { kind: 'function', expression }`, with the column's `codecRef`, in place of `defaultSql`, and delete an empty `defaultSql`. Or, if the migration is not applied, delete its package and run `migration plan` again. The upgrade entry `migration-ts-column-defaults` shows the new shape: https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading",
+      meta: {
+        operation,
+        option: 'defaultSql',
+        upgradeEntry: 'migration-ts-column-defaults',
+      },
+    });
+
+  it('is refused by addColumn', async () => {
+    await expect(new AddColumnCall('Note', earlier).toOp(stubLowerer('SQL'))).rejects.toThrow(
+      refusal('addColumn'),
+    );
+  });
+
+  it('is refused by recreateTable, even with an empty defaultSql', async () => {
+    const emptyDefault = { ...earlier, defaultSql: '' };
+    const call = new RecreateTableCall({
+      tableName: 'Note',
+      contractTable: tableSpec([colSpec({ name: 'id' }), emptyDefault]),
+      schemaColumnNames: ['id'],
+      indexes: [],
+      summary: 'Rebuild Note',
+      postchecks: [],
+      operationClass: 'widening',
+    });
+    await expect(call.toOp(stubLowerer('SQL'))).rejects.toThrow(refusal('recreateTable'));
+  });
+});
+
 describe('DropColumnCall', () => {
   it('produces a destructive op with ALTER TABLE DROP COLUMN and lowered typed checks', async () => {
     const { lowerer, received } = recordingCheckLowerer();
