@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CODEC_ID_BY_INFERRED_TYPE } from '../../../3-targets/postgres/src/core/psl-infer/infer-default-codec';
+import { BINDING_BY_INFERRED_TYPE } from '../../../3-targets/postgres/src/core/psl-infer/infer-default-codec';
 import {
   postgresNativeAuthoringTypes,
   postgresScalarAuthoringTypes,
@@ -10,26 +10,34 @@ import {
  * writes reads back. It restates that binding for the type names it writes, because the authoring
  * namespaces that own it sit above the target package; this fails if the two disagree.
  */
-const emitCodecIdByTypeName: ReadonlyMap<string, string> = new Map(
+const emitBindingByTypeName: ReadonlyMap<string, unknown> = new Map(
   [
     ...Object.entries(postgresScalarAuthoringTypes),
     ...Object.entries(postgresNativeAuthoringTypes),
-  ].map(([typeName, typeConstructor]) => [typeName, typeConstructor.output.codecId]),
+  ].map(([typeName, typeConstructor]) => [
+    typeName,
+    {
+      codecId: typeConstructor.output.codecId,
+      ...('typeParams' in typeConstructor.output && typeConstructor.output.typeParams !== undefined
+        ? { typeParams: typeConstructor.output.typeParams }
+        : {}),
+    },
+  ]),
 );
 
 describe('the codec bound to each inferred PSL type name', () => {
   it('has a binding to compare against', () => {
-    expect(emitCodecIdByTypeName.size).toBeGreaterThan(0);
-    expect(CODEC_ID_BY_INFERRED_TYPE.size).toBeGreaterThan(0);
+    expect(emitBindingByTypeName.size).toBeGreaterThan(0);
+    expect(BINDING_BY_INFERRED_TYPE.size).toBeGreaterThan(0);
   });
 
-  it('agrees with the type constructor contract emit resolves', () => {
+  it('agrees with the codec and type parameters of the type constructor contract emit resolves', () => {
     expect(
-      [...CODEC_ID_BY_INFERRED_TYPE].map(([typeName, codecId]) => ({ typeName, codecId })),
+      [...BINDING_BY_INFERRED_TYPE].map(([typeName, binding]) => ({ typeName, binding })),
     ).toEqual(
-      [...CODEC_ID_BY_INFERRED_TYPE.keys()].map((typeName) => ({
+      [...BINDING_BY_INFERRED_TYPE.keys()].map((typeName) => ({
         typeName,
-        codecId: emitCodecIdByTypeName.get(typeName),
+        binding: emitBindingByTypeName.get(typeName),
       })),
     );
   });

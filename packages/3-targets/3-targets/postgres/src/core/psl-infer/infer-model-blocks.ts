@@ -291,7 +291,7 @@ function buildScalarField(
       list: column.many === true,
     },
     (value) =>
-      inferredDefaultReadsBack(value, resolution.pslType.name, isEnumColumn, column.many === true),
+      inferredDefaultReadsBack(value, resolution.pslType, isEnumColumn, column.many === true),
   );
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));

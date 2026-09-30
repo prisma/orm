@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { INFERRED_PSL_TYPE_NAMES } from '../../../src/core/psl-build/postgres-type-map';
 import {
-  CODEC_ID_BY_INFERRED_TYPE,
+  BINDING_BY_INFERRED_TYPE,
   dataTypeForInferredType,
 } from '../../../src/core/psl-infer/infer-default-codec';
 import { printPslFromFlat } from '../fixtures';
@@ -200,13 +200,13 @@ describe('the codec bound to each inferred type name', () => {
   it('covers every PSL type name the type map prints', () => {
     expect(INFERRED_PSL_TYPE_NAMES.size).toBeGreaterThan(0);
     expect(
-      [...INFERRED_PSL_TYPE_NAMES].filter((name) => !CODEC_ID_BY_INFERRED_TYPE.has(name)),
+      [...INFERRED_PSL_TYPE_NAMES].filter((name) => !BINDING_BY_INFERRED_TYPE.has(name)),
     ).toEqual([]);
   });
 
   it('names a registered codec that represents a data type for every inferred type', () => {
     expect(
-      [...CODEC_ID_BY_INFERRED_TYPE.keys()].filter(
+      [...BINDING_BY_INFERRED_TYPE.keys()].filter(
         (typeName) => dataTypeForInferredType(typeName, false) === undefined,
       ),
     ).toEqual([]);
