@@ -1,47 +1,45 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { Contract } from '@internal/contract/types';
-import postgresDriver, {
-  type PostgresDriverCreateOptions,
-  suppressIdleConnectionErrors,
-} from '@internal/driver-postgres/runtime';
+import postgresDriver, { suppressIdleConnectionErrors } from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
-import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
-import type { Db } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type {
-  ExecutionContext,
-  Runtime,
-  SqlExecutionStackWithDriver,
-  SqlMiddleware,
-  SqlRuntimeExtensionDescriptor,
-  VerifyMarkerOption,
-} from '@internal/sql-runtime';
+import type { Runtime } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import { redactDatabaseUrl } from '@internal/utils/redact-db-url';
 import { Client } from 'pg';
 import { postgresError } from '../errors';
-import type { PostgresTargetId } from './postgres';
+import { buildPostgresStaticContext } from '../static/postgres-static';
+import { validatePostgresUrl } from './binding';
+import {
+  buildPostgresRuntimeBoundMembers,
+  type PostgresLifecycleMembers,
+  type PostgresRuntimeBoundMembers,
+  type PostgresStaticMembers,
+} from './postgres-members';
+import {
+  DEFAULT_CONNECT_TIMEOUT_MILLIS,
+  type PostgresExecutionOptions,
+  toDriverCursorOptions,
+  toRuntimeOptions,
+  validateCursorOptions,
+} from './postgres-options';
 import { PostgresRuntimeImpl } from './postgres-runtime';
+import type { PostgresTargetId } from './postgres-target-id';
 
-export type PostgresServerlessCursorOptions = NonNullable<PostgresDriverCreateOptions['cursor']>;
+export interface PostgresServerlessConnection<TContract extends Contract<SqlStorage>>
+  extends PostgresStaticMembers<TContract>,
+    PostgresRuntimeBoundMembers<TContract>,
+    PostgresLifecycleMembers {}
 
-export interface PostgresServerlessClient<TContract extends Contract<SqlStorage>> {
-  readonly sql: Db<TContract>;
-  readonly context: ExecutionContext<TContract>;
-  readonly stack: SqlExecutionStackWithDriver<PostgresTargetId>;
-  readonly contract: TContract;
-  connect(binding: { readonly url: string }): Promise<Runtime & AsyncDisposable>;
+export interface PostgresServerlessClient<TContract extends Contract<SqlStorage>>
+  extends PostgresStaticMembers<TContract> {
+  connect(binding: { readonly url: string }): Promise<PostgresServerlessConnection<TContract>>;
 }
 
-export interface PostgresServerlessOptionsBase {
-  readonly extensions?: readonly SqlRuntimeExtensionDescriptor<PostgresTargetId>[];
-  readonly middleware?: readonly SqlMiddleware[];
-  readonly verifyMarker?: VerifyMarkerOption;
-  readonly cursor?: PostgresServerlessCursorOptions;
-}
+export interface PostgresServerlessOptionsBase extends PostgresExecutionOptions {}
 
 export type PostgresServerlessOptionsWithContract<TContract extends Contract<SqlStorage>> =
   PostgresServerlessOptionsBase & {
@@ -80,35 +78,42 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
   >(contractSerializer.deserializeContract(contractJson));
 }
 
-function validateConnectionString(url: string): string {
-  const trimmed = url.trim();
-  if (trimmed.length === 0) {
-    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a non-empty string', {
-      meta: { extension: 'postgres', reason: 'empty url' },
-    });
-  }
-  return trimmed;
+function closedConnectionError() {
+  return postgresError('DRIVER.NOT_CONNECTED', 'Postgres connection is closed', {
+    why: 'close() was called on this connection, or the await using scope that held it has ended.',
+    fix: 'Call connect({ url }) again to open a new connection.',
+    meta: { extension: 'postgres' },
+  });
+}
+
+function connectionFailedError(url: string, cause: unknown) {
+  return postgresError('DRIVER.CONNECTION_FAILED', 'Database connection failed', {
+    why: cause instanceof Error ? cause.message : String(cause),
+    fix: 'Verify the database URL, ensure the database is reachable, and confirm credentials/permissions',
+    meta: { extension: 'postgres', ...redactDatabaseUrl(url) },
+    cause,
+  });
 }
 
 /**
- * Per-request Postgres facade for serverless / edge runtimes (Cloudflare Workers + Hyperdrive,
- * AWS Lambda, Vercel, Deno Deploy, Bun edge, etc.).
+ * Creates a serverless client for serverless and edge runtimes (Cloudflare Workers + Hyperdrive,
+ * AWS Lambda, Vercel, Deno Deploy).
  *
- * Construction shape mirrors the Node `postgres()` factory but the returned client deliberately
- * omits `orm`, `runtime()`, and `transaction()`. Closure-cached convenience surfaces are unsafe
- * across `fetch` invocations: stale connections after isolate idle, concurrent-query races on a
- * shared `pg.Client`, no clean shutdown. Per-request callers acquire a fresh `Runtime` via
- * `db.connect({ url })` and dispose it via `await using` on scope exit.
+ * The serverless client holds no database connection and has the static members. Each
+ * `connect({ url })` opens one database connection, a fresh `pg.Client`, and returns a connection
+ * with the members of a `postgres()` client except `connect`. It rejects with
+ * `DRIVER.CONNECTION_FAILED` when the database refuses the connection, rejects the credentials,
+ * or does not answer within 20 seconds. Close the connection with `await using` or `close()`.
  *
  * @example
  * ```ts
- * const db = postgresServerless<Contract>({ contractJson });
+ * const postgres = postgresServerless<Contract>({ contractJson });
  *
  * export default {
  *   async fetch(_req: Request, env: Env): Promise<Response> {
- *     await using runtime = await db.connect({ url: env.HYPERDRIVE.connectionString });
- *     const rows = await runtime.query(db.sql.from(t).select(...).build());
- *     return Response.json(rows);
+ *     await using db = await postgres.connect({ url: env.HYPERDRIVE.connectionString });
+ *     const users = await db.orm.public.User.all();
+ *     return Response.json(users);
  *   },
  * };
  * ```
@@ -122,6 +127,7 @@ export default function postgresServerless<TContract extends Contract<SqlStorage
 export default function postgresServerless<TContract extends Contract<SqlStorage>>(
   options: PostgresServerlessOptions<TContract>,
 ): PostgresServerlessClient<TContract> {
+  const cursor = validateCursorOptions(options.cursor, 'postgresServerless');
   const contract = resolveContract(options);
   const stack = createSqlExecutionStack({
     target: postgresTarget,
@@ -130,24 +136,70 @@ export default function postgresServerless<TContract extends Contract<SqlStorage
     extensions: options.extensions ?? [],
   });
 
-  const context = createExecutionContext({
+  const context = createExecutionContext<TContract, PostgresTargetId>({
     contract,
     stack,
+    driver: postgresDriver,
+  });
+  const rawCodecInferer = stack.adapter.rawCodecInferer;
+  const { sql, raw, enums, nativeEnums } = buildPostgresStaticContext<TContract>(
+    context,
+    rawCodecInferer,
+  );
+
+  const buildRuntimeBoundMembers = (getRuntime: () => Runtime) =>
+    buildPostgresRuntimeBoundMembers<TContract>({
+      context,
+      rawCodecInferer,
+      enums,
+      nativeEnums,
+      getRuntime,
+    });
+
+  // The ORM checks the execution context when it is built. Building the members once here makes
+  // a contract or extension the ORM rejects fail at the factory call, as it does for postgres().
+  buildRuntimeBoundMembers(() => {
+    throw new InternalError('The serverless client has no runtime');
   });
 
-  const sql: Db<TContract> = sqlBuilder<TContract>({
-    context,
-    rawCodecInferer: stack.adapter.rawCodecInferer,
-  });
+  const createConnection = (runtime: Runtime): PostgresServerlessConnection<TContract> => {
+    let closing: Promise<void> | undefined;
+    const close = (): Promise<void> => {
+      closing ??= runtime.close();
+      return closing;
+    };
+    const runtimeBoundMembers = buildRuntimeBoundMembers(() => {
+      if (closing !== undefined) {
+        throw closedConnectionError();
+      }
+      return runtime;
+    });
+
+    return {
+      sql,
+      raw,
+      enums,
+      nativeEnums,
+      context,
+      contract,
+      stack,
+      ...runtimeBoundMembers,
+      close,
+      [Symbol.asyncDispose]: close,
+    };
+  };
 
   return {
     sql,
+    raw,
+    enums,
+    nativeEnums,
     context,
     stack,
     contract,
 
     async connect(binding) {
-      const url = validateConnectionString(binding.url);
+      const url = validatePostgresUrl(binding.url);
 
       const driverDescriptor = stack.driver;
       if (!driverDescriptor) {
@@ -156,43 +208,38 @@ export default function postgresServerless<TContract extends Contract<SqlStorage
 
       const stackInstance = instantiateExecutionStack(stack);
       const driver = driverDescriptor.create({
-        ...ifDefined('cursor', options.cursor),
+        cursor: toDriverCursorOptions(cursor),
       });
 
-      const client = suppressIdleConnectionErrors(new Client({ connectionString: url }));
-      await driver.connect({ kind: 'pgClient', client });
+      const pgClient = suppressIdleConnectionErrors(
+        new Client({
+          connectionString: url,
+          connectionTimeoutMillis: DEFAULT_CONNECT_TIMEOUT_MILLIS,
+        }),
+      );
+      await driver.connect({ kind: 'pgClient', client: pgClient });
 
-      let runtime: Runtime;
+      // Everything that can fail for a reason other than the database is built before the
+      // database connection opens, so a failure here leaves nothing to close.
+      const runtime = new PostgresRuntimeImpl({
+        context,
+        adapter: stackInstance.adapter,
+        driver,
+        ...toRuntimeOptions(options),
+      });
+      const connection = createConnection(runtime);
+
       try {
-        runtime = new PostgresRuntimeImpl({
-          context,
-          adapter: stackInstance.adapter,
-          driver,
-          ...ifDefined('verifyMarker', options.verifyMarker),
-          ...ifDefined('middleware', options.middleware),
-        });
+        const driverConnection = await driver.acquireConnection();
+        await driverConnection.release();
       } catch (err) {
-        // The driver is bound to the pg.Client at this point; without a runtime
-        // to wrap it, the caller has no handle to dispose. Close the driver so
-        // the underlying pg.Client is released even if its TCP socket has not
-        // yet opened (lazy connect): keeps cleanup symmetric with successful
-        // construction and prevents real socket leaks if pg ever changes its
-        // connect semantics.
-        await driver.close().catch(() => undefined);
-        throw err;
+        // A pg.Client whose connect failed has no socket. Its end() is not awaited, because
+        // under pg-cloudflare that promise never settles.
+        void pgClient.end().catch(() => undefined);
+        throw connectionFailedError(url, err);
       }
 
-      Object.defineProperty(runtime, Symbol.asyncDispose, {
-        value: () => runtime.close(),
-        configurable: true,
-        writable: false,
-        enumerable: false,
-      });
-
-      return blindCast<
-        Runtime & AsyncDisposable,
-        'Symbol.asyncDispose is defined on the runtime before returning'
-      >(runtime);
+      return connection;
     },
   };
 }

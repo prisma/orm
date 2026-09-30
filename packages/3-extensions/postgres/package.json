@@ -37,6 +37,7 @@
     "@internal/utils": "workspace:8.0.0-rc.13",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
+    "arktype": "catalog:",
     "pathe": "^2.0.3",
     "pg": "catalog:",
     "tinyglobby": "catalog:"
