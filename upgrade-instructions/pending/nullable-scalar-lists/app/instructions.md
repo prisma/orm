@@ -1,16 +1,16 @@
 ---
 changes:
   - id: reemit-explicit-list-cardinality
-    summary: Re-emit contracts with explicit scalar cardinality and nested list element nullability.
+    summary: Re-emit list contracts with nested element nullability while preserving scalar JSON.
   - id: refresh-historical-list-contracts
     summary: Refresh historical contract snapshots and their migration references together.
 ---
 
-## Re-emit contracts with explicit cardinality
+## Re-emit contracts with nested list cardinality
 
-Re-run contract emission from each application's original PSL or TypeScript authoring source using its existing Prisma configuration (`pnpm exec prisma contract emit`, with `--config` where needed). Replace both `contract.json` and `contract.d.ts`, including contracts for composed spaces. Do not patch just the generated declarations or copy old hashes into newly emitted JSON. Applications without lists also need re-emission: every domain `ContractField` now has explicit `many: false` for non-list fields.
+Re-run contract emission from each application's original PSL or TypeScript authoring source using its existing Prisma configuration (`pnpm exec prisma contract emit`, with `--config` where needed). Replace both `contract.json` and `contract.d.ts`, including contracts for composed spaces. Do not patch just the generated declarations or copy old hashes into newly emitted JSON. Scalar-only contract JSON remains compatible: omitted `many` in serialized model and value-object fields still means scalar. Regenerate declarations to match the required internal `many: false` even when the scalar JSON is unchanged.
 
-For hand-authored contract objects, replace a list's `many: true` with `many: { elementNullable: false }` to preserve its existing strict-element meaning, and set `many: false` on non-list domain fields. Native SQL array columns use the same descriptor; non-array storage columns use `many: false`. If adopting an intermediate representation with a sibling `elementNullable`, move that property into the `many` descriptor and remove the sibling. The old boolean-list and sibling-property representations are rejected. Do not change relation cardinality or mark JSON-backed value-object storage as a native SQL array.
+For hand-authored contract objects, replace a list's `many: true` with `many: { elementNullable: false }` to preserve its existing strict-element meaning. Serialized non-list model and value-object fields may omit `many`; deserialization normalizes omission to required internal `many: false`, and canonical emission omits it again. Keep nested `elementNullable: false` in list descriptors. Native SQL array columns use the same descriptor; non-array storage columns use `many: false`. If adopting an intermediate representation with a sibling `elementNullable`, move that property into the `many` descriptor and remove the sibling. Explicit malformed `many` values, including the old boolean-list form and descriptors without a boolean `elementNullable`, and sibling-property representations are rejected. Do not change relation cardinality or mark JSON-backed value-object storage as a native SQL array.
 
 Keep `nullable` unchanged: it describes the whole value, not list elements. Existing `String[]` and `String[]?` declarations and `.many()` calls retain non-null elements. Only when nullable elements are intended, use `String?[]` / `String?[]?` or `.many({ elementsNullable: true })` / `.many({ elementsNullable: true }).nullable()`. The authoring option is plural `elementsNullable`; the emitted descriptor uses singular `elementNullable`. Generated types distinguish `ReadonlyArray<T | null>` from `ReadonlyArray<T> | null`.
 

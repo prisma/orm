@@ -14,6 +14,32 @@ function compileGeneratedSchema() {
 }
 
 describe('data contract JSON schema', () => {
+  it('accepts omitted cardinality on model and value-object fields', () => {
+    const validate = new Ajv2020({ strict: false }).compile(
+      JSON.parse(readFileSync(checkedInSchemaPath, 'utf8')),
+    );
+    const field = { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false };
+    const contract = validSqlContractJson({
+      domain: {
+        namespaces: {
+          __unbound__: {
+            models: {
+              User: {
+                storage: { namespaceId: '__unbound__', table: 'User', fields: {} },
+                fields: { name: field },
+              },
+            },
+            valueObjects: { Address: { fields: { city: field } } },
+          },
+        },
+      },
+    });
+    expect({ valid: validate(contract), errors: validate.errors }).toEqual({
+      valid: true,
+      errors: null,
+    });
+  });
+
   describe.each(['domain field', 'storage column'])('%s many metadata', (location) => {
     it.each([
       { many: false, valid: true },

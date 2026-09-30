@@ -20,7 +20,6 @@
           "Child": {
             "fields": {
               "bit": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bit@1",
@@ -31,7 +30,6 @@
                 }
               },
               "char": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/char@1",
@@ -42,7 +40,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -50,7 +47,6 @@
                 }
               },
               "ip": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/inet@1",
@@ -58,7 +54,6 @@
                 }
               },
               "text": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -66,7 +61,6 @@
                 }
               },
               "uuid": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/uuid@1",
@@ -74,7 +68,6 @@
                 }
               },
               "vBit": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/varbit@1",
@@ -85,7 +78,6 @@
                 }
               },
               "vChar": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/varchar@1",
@@ -148,7 +140,6 @@
           "Parent": {
             "fields": {
               "childId": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -156,7 +147,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

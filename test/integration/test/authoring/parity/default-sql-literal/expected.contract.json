@@ -16,7 +16,6 @@
           "T": {
             "fields": {
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -24,7 +23,6 @@
                 }
               },
               "digest": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -32,7 +30,6 @@
                 }
               },
               "escaped": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -40,7 +37,6 @@
                 }
               },
               "expires": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -48,7 +44,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

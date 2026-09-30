@@ -363,7 +363,7 @@ describe('default omission', () => {
     });
   });
 
-  it('preserves many: false on non-list fields', () => {
+  it('omits many: false on non-list model and value-object fields', () => {
     const result = canonicalizeContractToObject(
       minimal({
         models: {
@@ -375,10 +375,28 @@ describe('default omission', () => {
             relations: {},
           },
         },
+        valueObjects: {
+          Address: {
+            fields: {
+              city: { type: { kind: 'scalar', codecId: 'text' }, nullable: false, many: false },
+            },
+          },
+        },
       }),
     );
     const nameField = drillDomainModel(result, 'User', 'fields', 'name');
-    expect(nameField['many']).toBe(false);
+    expect(nameField).not.toHaveProperty('many');
+    const cityField = drill(
+      result,
+      'domain',
+      'namespaces',
+      UNBOUND,
+      'valueObjects',
+      'Address',
+      'fields',
+      'city',
+    );
+    expect(cityField).not.toHaveProperty('many');
   });
 
   it('preserves a literal false column default value via the family hook', () => {

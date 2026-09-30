@@ -16,7 +16,6 @@
           "CommentRequiredList": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -34,7 +33,6 @@
                 }
               },
               "country": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -52,7 +50,6 @@
           "CommentContent": {
             "fields": {
               "text": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -74,7 +71,6 @@
           "CommentContentUpvotes": {
             "fields": {
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -82,7 +78,6 @@
                 }
               },
               "vote": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/bool@1",

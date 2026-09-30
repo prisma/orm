@@ -16,7 +16,6 @@
           "User": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -24,7 +23,6 @@
                 }
               },
               "memo": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

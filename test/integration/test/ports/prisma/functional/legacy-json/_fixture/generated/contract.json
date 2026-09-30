@@ -16,7 +16,6 @@
           "Resource": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -24,7 +23,6 @@
                 }
               },
               "optionalJson": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -32,7 +30,6 @@
                 }
               },
               "requiredJson": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/jsonb@1",

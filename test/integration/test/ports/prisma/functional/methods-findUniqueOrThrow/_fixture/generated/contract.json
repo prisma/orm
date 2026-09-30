@@ -20,7 +20,6 @@
           "Post": {
             "fields": {
               "authorId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -28,7 +27,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -36,7 +34,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -81,7 +78,6 @@
           "User": {
             "fields": {
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -89,7 +85,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

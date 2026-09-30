@@ -24,7 +24,6 @@
           "Compound": {
             "fields": {
               "field1": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -32,7 +31,6 @@
                 }
               },
               "field2": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -40,7 +38,6 @@
                 }
               },
               "id1": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -48,7 +45,6 @@
                 }
               },
               "id2": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -56,7 +52,6 @@
                 }
               },
               "val": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -90,7 +85,6 @@
           "Post": {
             "fields": {
               "authorId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -98,7 +92,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -106,7 +99,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -151,7 +143,6 @@
           "User": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -159,7 +150,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

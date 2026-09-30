@@ -24,7 +24,6 @@
           "Class": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -32,7 +31,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -73,7 +71,6 @@
           "Student": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -81,7 +78,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -122,7 +118,6 @@
           "StudentClass": {
             "fields": {
               "classId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -130,7 +125,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -138,7 +132,6 @@
                 }
               },
               "studentId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

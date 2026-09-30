@@ -35,7 +35,6 @@
           "Model": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -43,7 +42,6 @@
                 }
               },
               "composite": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -51,7 +49,6 @@
                 }
               },
               "enum": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -91,7 +88,6 @@
                 }
               },
               "otherId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -99,7 +95,6 @@
                 }
               },
               "value": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -132,7 +127,6 @@
           "Other": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -167,7 +161,6 @@
           "Composite": {
             "fields": {
               "value": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

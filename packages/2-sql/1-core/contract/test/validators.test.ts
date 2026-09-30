@@ -14,6 +14,7 @@ import { StorageTable } from '../src/ir/storage-table';
 import { indexInputFromSerialized, type SerializedIndex } from '../src/serialized-index';
 import type { ReferentialAction, SqlModelFieldStorage, SqlStorage } from '../src/types';
 import {
+  createSqlContractSchema,
   createSqlStorageSchema,
   StorageValueSetSchema,
   validateModel,
@@ -70,9 +71,66 @@ function contractModel(
 }
 
 describe('SQL contract validators', () => {
+  it('normalizes omitted model-field cardinality without changing the input', () => {
+    const field = { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false };
+    const input = {
+      storage: { namespaceId: UNBOUND_NAMESPACE_ID, table: 'Item', fields: {} },
+      fields: { name: field },
+    };
+    expect(validateModel(input)).toEqual({ ...input, fields: { name: { ...field, many: false } } });
+    expect(field).not.toHaveProperty('many');
+  });
+
+  it.each([
+    { metadata: {}, valid: true, many: false },
+    { metadata: { many: false }, valid: true, many: false },
+    {
+      metadata: { many: { elementNullable: false } },
+      valid: true,
+      many: { elementNullable: false },
+    },
+    { metadata: { many: { elementNullable: true } }, valid: true, many: { elementNullable: true } },
+    { metadata: { many: true }, valid: false, many: undefined },
+    { metadata: { many: null }, valid: false, many: undefined },
+    { metadata: { many: {} }, valid: false, many: undefined },
+    { metadata: { many: { elementNullable: 'false' } }, valid: false, many: undefined },
+  ])('validates and normalizes value-object cardinality $metadata', ({ metadata, valid, many }) => {
+    const field = { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, ...metadata };
+    const schema = createSqlContractSchema(composeSqlEntityKinds());
+    const result = schema({
+      target: 'postgres',
+      targetFamily: 'sql',
+      profileHash: 'test',
+      domain: {
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            models: {},
+            valueObjects: { Address: { fields: { city: field } } },
+          },
+        },
+      },
+      storage: { storageHash: 'test', namespaces: {} },
+    });
+    if (valid) {
+      expect(result).toMatchObject({
+        domain: {
+          namespaces: {
+            [UNBOUND_NAMESPACE_ID]: {
+              valueObjects: { Address: { fields: { city: { ...field, many } } } },
+            },
+          },
+        },
+      });
+    } else {
+      expect(result).toBeInstanceOf(type.errors);
+    }
+  });
+
   describe.each(['domain field', 'storage column'])('%s many metadata', (location) => {
     it.each([
       { many: false, valid: true },
+      { many: true, valid: false },
+      { many: null, valid: false },
       { many: { elementNullable: false }, valid: true },
       { many: { elementNullable: true }, valid: true },
       { many: { elementNullable: false, elementNullabe: true }, valid: false },

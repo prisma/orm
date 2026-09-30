@@ -70,6 +70,10 @@
                       "additionalProperties": {
                         "type": "object",
                         "properties": {
+                          "nullable": {
+                            "type": "boolean"
+                          },
+                          "type": {},
                           "many": {
                             "anyOf": [
                               {
@@ -85,12 +89,9 @@
                               {
                                 "const": false
                               }
-                            ]
+                            ],
+                            "default": false
                           },
-                          "nullable": {
-                            "type": "boolean"
-                          },
-                          "type": {},
                           "dict": {
                             "const": true
                           },
@@ -116,7 +117,7 @@
                             "required": ["entityKind", "entityName", "namespaceId", "plane"]
                           }
                         },
-                        "required": ["many", "nullable", "type"],
+                        "required": ["nullable", "type"],
                         "additionalProperties": false
                       }
                     },
@@ -386,7 +387,68 @@
               },
               "valueObjects": {
                 "type": "object",
-                "additionalProperties": {}
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "fields": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "object",
+                        "properties": {
+                          "nullable": {
+                            "type": "boolean"
+                          },
+                          "type": {},
+                          "many": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "elementNullable": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["elementNullable"],
+                                "additionalProperties": false
+                              },
+                              {
+                                "const": false
+                              }
+                            ],
+                            "default": false
+                          },
+                          "dict": {
+                            "const": true
+                          },
+                          "valueSet": {
+                            "type": "object",
+                            "properties": {
+                              "entityKind": {
+                                "const": "enum"
+                              },
+                              "entityName": {
+                                "type": "string"
+                              },
+                              "namespaceId": {
+                                "type": "string"
+                              },
+                              "plane": {
+                                "const": "domain"
+                              },
+                              "spaceId": {
+                                "type": "string"
+                              }
+                            },
+                            "required": ["entityKind", "entityName", "namespaceId", "plane"]
+                          }
+                        },
+                        "required": ["nullable", "type"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["fields"]
+                }
               }
             },
             "required": ["models"]

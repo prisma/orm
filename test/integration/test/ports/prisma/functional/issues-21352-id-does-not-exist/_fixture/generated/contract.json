@@ -28,7 +28,6 @@
           "Relation1": {
             "fields": {
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -36,7 +35,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -78,7 +76,6 @@
           "Relation2": {
             "fields": {
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -86,7 +83,6 @@
                 }
               },
               "field": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -128,7 +124,6 @@
           "User1": {
             "fields": {
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -166,7 +161,6 @@
           "User2": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

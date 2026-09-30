@@ -24,7 +24,6 @@
           "Person": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -32,7 +31,6 @@
                 }
               },
               "managerId": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -40,7 +38,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -48,7 +45,6 @@
                 }
               },
               "partnerId": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -229,7 +225,6 @@
           "PersonConnection": {
             "fields": {
               "sourceId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -237,7 +232,6 @@
                 }
               },
               "targetId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -245,7 +239,6 @@
                 }
               },
               "weight": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -306,7 +299,6 @@
           "PersonFollow": {
             "fields": {
               "followeeId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -314,7 +306,6 @@
                 }
               },
               "followerId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

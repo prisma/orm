@@ -20,7 +20,6 @@
           "Post": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -28,7 +27,6 @@
                 }
               },
               "authorId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -36,7 +34,6 @@
                 }
               },
               "publishedAt": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -44,7 +41,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -77,7 +73,6 @@
           "User": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -85,7 +80,6 @@
                 }
               },
               "bio": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -93,7 +87,6 @@
                 }
               },
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -101,7 +94,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

@@ -36,7 +36,6 @@
           "Role": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -44,7 +43,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -69,7 +67,6 @@
           "User": {
             "fields": {
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -77,7 +74,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -85,7 +81,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -142,7 +137,6 @@
           "UserRole": {
             "fields": {
               "roleId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -150,7 +144,6 @@
                 }
               },
               "token": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -161,7 +154,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -193,7 +185,6 @@
           "ShadowRole": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -201,7 +192,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -226,7 +216,6 @@
           "ShadowUser": {
             "fields": {
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -234,7 +223,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -242,7 +230,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -299,7 +286,6 @@
           "ShadowUserRole": {
             "fields": {
               "roleId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -307,7 +293,6 @@
                 }
               },
               "token": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -315,7 +300,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

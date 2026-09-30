@@ -20,7 +20,6 @@
           "Contact": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -58,7 +57,6 @@
           "ContactAnalytics": {
             "fields": {
               "bool1": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -66,7 +64,6 @@
                 }
               },
               "bool2": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -74,7 +71,6 @@
                 }
               },
               "bool3": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -82,7 +78,6 @@
                 }
               },
               "contactId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -90,7 +85,6 @@
                 }
               },
               "date1": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -98,7 +92,6 @@
                 }
               },
               "date2": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -106,7 +99,6 @@
                 }
               },
               "date3": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -114,7 +106,6 @@
                 }
               },
               "date4": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -122,7 +113,6 @@
                 }
               },
               "date5": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -130,7 +120,6 @@
                 }
               },
               "date6": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -138,7 +127,6 @@
                 }
               },
               "date7": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -146,7 +134,6 @@
                 }
               },
               "float1": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -154,7 +141,6 @@
                 }
               },
               "float2": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -162,7 +148,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -170,7 +155,6 @@
                 }
               },
               "val1": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -178,7 +162,6 @@
                 }
               },
               "val2": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -186,7 +169,6 @@
                 }
               },
               "val3": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -194,7 +176,6 @@
                 }
               },
               "val4": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -202,7 +183,6 @@
                 }
               },
               "val5": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",

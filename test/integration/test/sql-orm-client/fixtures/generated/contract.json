@@ -56,7 +56,6 @@
           "Article": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -64,7 +63,6 @@
                 }
               },
               "reviewerId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -72,7 +70,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -117,7 +114,6 @@
           "Comment": {
             "fields": {
               "body": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -125,7 +121,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -133,7 +128,6 @@
                 }
               },
               "postId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -161,7 +155,6 @@
           "Post": {
             "fields": {
               "embedding": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/vector@1",
@@ -172,7 +165,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -180,7 +172,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -188,7 +179,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -196,7 +186,6 @@
                 }
               },
               "views": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -262,7 +251,6 @@
           "Profile": {
             "fields": {
               "bio": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -270,7 +258,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -278,7 +265,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -323,7 +309,6 @@
           "Project": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -331,7 +316,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -339,7 +323,6 @@
                 }
               },
               "tenantId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -401,7 +384,6 @@
           "ProjectLink": {
             "fields": {
               "dstId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -409,7 +391,6 @@
                 }
               },
               "dstTenantId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -417,7 +398,6 @@
                 }
               },
               "srcId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -425,7 +405,6 @@
                 }
               },
               "srcTenantId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -456,7 +435,6 @@
           "Role": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -467,7 +445,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -492,7 +469,6 @@
           "Tag": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -503,7 +479,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -528,7 +503,6 @@
           "User": {
             "fields": {
               "address": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "kind": "valueObject",
@@ -536,7 +510,6 @@
                 }
               },
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -544,7 +517,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -552,7 +524,6 @@
                 }
               },
               "invitedById": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -560,7 +531,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -713,7 +683,6 @@
           "UserRole": {
             "fields": {
               "level": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -721,7 +690,6 @@
                 }
               },
               "roleId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -732,7 +700,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -760,7 +727,6 @@
           "UserTag": {
             "fields": {
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -768,7 +734,6 @@
                 }
               },
               "note": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -776,7 +741,6 @@
                 }
               },
               "tagId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -787,7 +751,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -820,7 +783,6 @@
           "Address": {
             "fields": {
               "city": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -828,7 +790,6 @@
                 }
               },
               "street": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -836,7 +797,6 @@
                 }
               },
               "zip": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",

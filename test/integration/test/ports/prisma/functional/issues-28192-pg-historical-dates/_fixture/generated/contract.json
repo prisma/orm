@@ -16,7 +16,6 @@
           "TestData": {
             "fields": {
               "date": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/date-temporal@1",
@@ -24,7 +23,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -32,7 +30,6 @@
                 }
               },
               "timestamp": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -40,7 +37,6 @@
                 }
               },
               "timestamptz": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",

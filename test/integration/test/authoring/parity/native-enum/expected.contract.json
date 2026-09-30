@@ -20,7 +20,6 @@
           "Session": {
             "fields": {
               "aal": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/enum@1",
@@ -31,7 +30,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -60,7 +58,6 @@
           "Account": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -68,7 +65,6 @@
                 }
               },
               "role": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",

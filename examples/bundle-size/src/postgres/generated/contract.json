@@ -16,7 +16,6 @@
           "Note": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",

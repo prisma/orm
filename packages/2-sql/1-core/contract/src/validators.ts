@@ -330,7 +330,7 @@ const ModelFieldSchema = type({
   '+': 'reject',
   nullable: 'boolean',
   type: ContractFieldTypeSchema,
-  many: type('false').or({ '+': 'reject', elementNullable: 'boolean' }),
+  many: type('false').or({ '+': 'reject', elementNullable: 'boolean' }).default(false),
   'dict?': 'true',
   'valueSet?': DomainEnumRefSchema,
 });
@@ -435,7 +435,9 @@ export function createSqlContractSchema(
       namespaces: type({
         '[string]': type({
           models: type({ '[string]': ModelSchema }),
-          'valueObjects?': 'Record<string, unknown>',
+          'valueObjects?': type({
+            '[string]': type({ fields: type({ '[string]': ModelFieldSchema }) }),
+          }),
           'enum?': type({ '[string]': ContractEnumSchema }),
         }),
       }),

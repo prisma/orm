@@ -28,7 +28,6 @@
           "Post": {
             "fields": {
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/datetime@1",
@@ -36,7 +35,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -47,7 +45,6 @@
                 }
               },
               "impressionCount": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/bigint@1",
@@ -55,7 +52,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -63,7 +59,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -74,7 +69,6 @@
                 }
               },
               "viewCount": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "sqlite/bigintnumber@1",
@@ -156,7 +150,6 @@
           "PostTag": {
             "fields": {
               "postId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -167,7 +160,6 @@
                 }
               },
               "tagId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -195,7 +187,6 @@
           "Tag": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",
@@ -206,7 +197,6 @@
                 }
               },
               "label": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -260,7 +250,6 @@
           "User": {
             "fields": {
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/datetime@1",
@@ -268,7 +257,6 @@
                 }
               },
               "displayName": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -276,7 +264,6 @@
                 }
               },
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sqlite/text@1",
@@ -284,7 +271,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/char@1",

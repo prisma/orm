@@ -16,7 +16,6 @@
           "Item": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -24,7 +23,6 @@
                 }
               },
               "price": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",

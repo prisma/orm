@@ -54,7 +54,6 @@
             },
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -62,7 +61,6 @@
                 }
               },
               "kind": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -205,7 +203,6 @@
             },
             "fields": {
               "exif": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/json@1",
@@ -213,7 +210,6 @@
                 }
               },
               "ownerId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -239,7 +235,6 @@
           "Post": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -247,7 +242,6 @@
                 }
               },
               "meta": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/json@1",
@@ -255,7 +249,6 @@
                 }
               },
               "notes": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/json@1",
@@ -263,7 +256,6 @@
                 }
               },
               "price": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/decimal128@1",
@@ -271,7 +263,6 @@
                 }
               },
               "raw": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/bson@1",
@@ -279,7 +270,6 @@
                 }
               },
               "thumbnail": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/binary@1",
@@ -287,7 +277,6 @@
                 }
               },
               "views": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/int64@1",
@@ -466,7 +455,6 @@
           "Stamp": {
             "fields": {
               "note": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/json@1",

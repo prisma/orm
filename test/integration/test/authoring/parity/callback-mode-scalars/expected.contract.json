@@ -20,7 +20,6 @@
           "Post": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -28,7 +27,6 @@
                 }
               },
               "rating": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -36,7 +34,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -44,7 +41,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -88,7 +84,6 @@
           "User": {
             "fields": {
               "age": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -96,7 +91,6 @@
                 }
               },
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -104,7 +98,6 @@
                 }
               },
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -112,7 +105,6 @@
                 }
               },
               "embedding": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/vector@1",
@@ -123,7 +115,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -131,7 +122,6 @@
                 }
               },
               "isActive": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -139,7 +129,6 @@
                 }
               },
               "profile": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/jsonb@1",
@@ -147,7 +136,6 @@
                 }
               },
               "score": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/float8@1",

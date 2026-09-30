@@ -16,7 +16,6 @@
           "Entry": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -24,7 +23,6 @@
                 }
               },
               "json": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/json@1",

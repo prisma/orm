@@ -20,7 +20,6 @@
           "Character": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -58,7 +57,6 @@
           "CharacterInfo": {
             "fields": {
               "characterId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -66,7 +64,6 @@
                 }
               },
               "entryId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -74,7 +71,6 @@
                 }
               },
               "entryLanguage": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

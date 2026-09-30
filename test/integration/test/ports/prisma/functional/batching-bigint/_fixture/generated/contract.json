@@ -16,7 +16,6 @@
           "Resource": {
             "fields": {
               "bigint": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -24,7 +23,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

@@ -20,7 +20,6 @@
           "Post": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -28,7 +27,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -36,7 +34,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -44,7 +41,6 @@
                 }
               },
               "userId_2": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -94,7 +90,6 @@
           "User": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -102,7 +97,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -110,7 +104,6 @@
                 }
               },
               "userId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -118,7 +111,6 @@
                 }
               },
               "userId2": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",

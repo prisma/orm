@@ -39,7 +39,6 @@
           "workspace_member": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -80,7 +79,6 @@
           "workspace_member_role": {
             "fields": {
               "memberId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -88,7 +86,6 @@
                 }
               },
               "roleId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -146,7 +143,6 @@
           "workspace_role": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
@@ -157,7 +153,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

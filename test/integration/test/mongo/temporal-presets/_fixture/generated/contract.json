@@ -28,7 +28,6 @@
             },
             "fields": {
               "url": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -113,7 +112,6 @@
             },
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -121,7 +119,6 @@
                 }
               },
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -129,7 +126,6 @@
                 }
               },
               "kind": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -153,7 +149,6 @@
           "Post": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -161,7 +156,6 @@
                 }
               },
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -169,7 +163,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -177,7 +170,6 @@
                 }
               },
               "touchedAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -185,7 +177,6 @@
                 }
               },
               "updated_at": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -205,7 +196,6 @@
             },
             "fields": {
               "path": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

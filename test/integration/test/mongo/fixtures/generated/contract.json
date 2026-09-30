@@ -20,7 +20,6 @@
           "Address": {
             "fields": {
               "city": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -28,7 +27,6 @@
                 }
               },
               "street": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -36,7 +34,6 @@
                 }
               },
               "zip": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -55,7 +52,6 @@
             },
             "fields": {
               "severity": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -71,7 +67,6 @@
           "Comment": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -79,7 +74,6 @@
                 }
               },
               "createdAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/date@1",
@@ -87,7 +81,6 @@
                 }
               },
               "text": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -106,7 +99,6 @@
             },
             "fields": {
               "priority": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -114,7 +106,6 @@
                 }
               },
               "targetRelease": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -133,7 +124,6 @@
             },
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -141,7 +131,6 @@
                 }
               },
               "assigneeId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -149,7 +138,6 @@
                 }
               },
               "title": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -157,7 +145,6 @@
                 }
               },
               "type": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -210,7 +197,6 @@
           "User": {
             "fields": {
               "_id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",
@@ -218,7 +204,6 @@
                 }
               },
               "email": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",
@@ -226,7 +211,6 @@
                 }
               },
               "name": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/string@1",

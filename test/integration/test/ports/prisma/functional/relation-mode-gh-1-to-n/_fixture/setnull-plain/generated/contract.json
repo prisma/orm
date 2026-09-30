@@ -24,7 +24,6 @@
           "PostOneToMany": {
             "fields": {
               "authorId": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -32,7 +31,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -74,7 +72,6 @@
           "PostOptionalOneToMany": {
             "fields": {
               "authorId": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/text@1",
@@ -82,7 +79,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -124,7 +120,6 @@
           "UserOneToMany": {
             "fields": {
               "enabled": {
-                "many": false,
                 "nullable": true,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -132,7 +127,6 @@
                 }
               },
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",

@@ -16,7 +16,6 @@
           "Stamp": {
             "fields": {
               "id": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -24,7 +23,6 @@
                 }
               },
               "label": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -32,7 +30,6 @@
                 }
               },
               "updatedAt": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -43,7 +40,6 @@
                 }
               },
               "updatedAtTz": {
-                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",

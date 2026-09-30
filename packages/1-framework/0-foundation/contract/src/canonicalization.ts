@@ -57,26 +57,6 @@ const DOMAIN_MODEL_STORAGE_PATTERN = [
   '*',
   'storage',
 ] as const satisfies PathPattern;
-const DOMAIN_MODEL_FIELD_MANY_PATTERN = [
-  'domain',
-  'namespaces',
-  '*',
-  'models',
-  '*',
-  'fields',
-  '*',
-  'many',
-] as const satisfies PathPattern;
-const DOMAIN_VALUE_OBJECT_FIELD_MANY_PATTERN = [
-  'domain',
-  'namespaces',
-  '*',
-  'valueObjects',
-  '*',
-  'fields',
-  '*',
-  'many',
-] as const satisfies PathPattern;
 const STORAGE_NAMESPACE_ENTRIES_PATTERN = [
   'storage',
   'namespaces',
@@ -168,9 +148,6 @@ function omitDefaults(
 
       const isNullableField = key === 'nullable';
       const isManyElementNullable = key === 'elementNullable' && path.at(-1) === 'many';
-      const isContractFieldMany =
-        matchesPathPattern(currentPath, DOMAIN_MODEL_FIELD_MANY_PATTERN) ||
-        matchesPathPattern(currentPath, DOMAIN_VALUE_OBJECT_FIELD_MANY_PATTERN);
 
       const isFamilyPreserved = shouldPreserveEmpty?.(currentPath) ?? false;
 
@@ -190,7 +167,6 @@ function omitDefaults(
         !isModelStorage &&
         !isNullableField &&
         !isManyElementNullable &&
-        !isContractFieldMany &&
         !isFamilyPreserved
       ) {
         continue;
