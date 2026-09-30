@@ -50,8 +50,17 @@ const holdsInfinity: ReadonlySet<string> = new Set([
   'pg/timestamptz-string@1',
 ]);
 
-/** The codecs whose value cannot carry a digit below one microsecond, so they refuse to read one. */
-const refusesToReadBelowMicroseconds: ReadonlySet<string> = new Set(['pg/timestamptz-date@1']);
+/**
+ * The codecs that refuse to read a value with a digit below one microsecond: one whose value cannot
+ * carry it, and those whose value is PostgreSQL's own text, which PostgreSQL never writes with one.
+ */
+const refusesToReadBelowMicroseconds: ReadonlySet<string> = new Set([
+  'pg/timestamptz-date@1',
+  'pg/timestamp-string@1',
+  'pg/timestamptz-string@1',
+  'pg/time-string@1',
+  'pg/timetz@1',
+]);
 
 /** Text with a digit below one microsecond, which no type holds. */
 const belowMicroseconds: Readonly<Record<string, string>> = {

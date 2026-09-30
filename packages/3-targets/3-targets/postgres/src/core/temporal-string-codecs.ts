@@ -6,7 +6,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  decodeJsonString,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -28,6 +27,13 @@ import {
   pgTimestamptz,
   pgTimestamptzCanonical,
 } from './data-types';
+import {
+  decodeJsonDateTimeText,
+  pgDateStoredText,
+  pgTimeStoredText,
+  pgTimestampStoredText,
+  pgTimestamptzStoredText,
+} from './date-time-stored-text';
 import {
   PG_DATE_NATIVE_TYPE,
   PG_TIME_NATIVE_TYPE,
@@ -51,7 +57,7 @@ export class PgDateStringCodec extends CodecImpl<
     return pgDateCanonical(value);
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonString(PG_DATE_STRING_CODEC_ID, json);
+    return decodeJsonDateTimeText(PG_DATE_STRING_CODEC_ID, json, pgDateStoredText);
   }
 }
 
@@ -96,7 +102,7 @@ export class PgTimestampStringCodec extends CodecImpl<
     return pgTimestampCanonical(value);
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonString(PG_TIMESTAMP_STRING_CODEC_ID, json);
+    return decodeJsonDateTimeText(PG_TIMESTAMP_STRING_CODEC_ID, json, pgTimestampStoredText);
   }
 }
 
@@ -152,7 +158,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
     return pgTimestamptzCanonical(value);
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonString(PG_TIMESTAMPTZ_STRING_CODEC_ID, json);
+    return decodeJsonDateTimeText(PG_TIMESTAMPTZ_STRING_CODEC_ID, json, pgTimestamptzStoredText);
   }
 }
 
@@ -208,7 +214,7 @@ export class PgTimeStringCodec extends CodecImpl<
     return pgTimeCanonical(value);
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonString(PG_TIME_STRING_CODEC_ID, json);
+    return decodeJsonDateTimeText(PG_TIME_STRING_CODEC_ID, json, pgTimeStoredText);
   }
 }
 

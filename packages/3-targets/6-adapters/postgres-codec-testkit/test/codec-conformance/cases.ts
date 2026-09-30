@@ -302,6 +302,35 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '03:04:05+00',
     setupSql: HOSTILE_TEMPORAL_SESSION,
   },
+  // Text PostgreSQL writes with ` BC`, with an offset that has seconds, and to a precision below six digits, read back
+  // as PostgreSQL wrote it.
+  { codecId: 'pg/date-string@1', label: 'a year before Christ', value: '0044-03-15 BC' },
+  {
+    codecId: 'pg/timestamp-string@1',
+    label: 'a year before Christ',
+    value: '0044-03-15 12:00:00 BC',
+    typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'a year before Christ at UTC',
+    value: '0044-03-15 12:00:00+00 BC',
+    typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'an offset with seconds, in the local mean time of Amsterdam',
+    value: '1800-01-01 00:17:30+00:17:30',
+    typeParams: { precision: 6 },
+    setupSql: ["SET TimeZone = 'Europe/Amsterdam'"],
+  },
+  {
+    codecId: 'pg/time-string@1',
+    label: 'millisecond precision',
+    value: '12:34:56.123',
+    typeParams: { precision: 3 },
+  },
+  { codecId: 'pg/timetz@1', label: 'an offset with seconds', value: '12:00:00+01:30:15' },
   // An interval's application value is its three stored fields. A month has no
   // fixed length, so `{ months: 1 }` and `{ days: 30 }` stay distinct rather than
   // collapsing through a common epoch; the ISO string is the JSON side only.

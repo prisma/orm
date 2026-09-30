@@ -145,6 +145,7 @@ import {
   pgVarchar,
 } from './data-types';
 import { pgTimestamptzDateDescriptor } from './date-codecs';
+import { decodeJsonDateTimeText, pgTimetzStoredText } from './date-time-stored-text';
 import { postgresError } from './errors';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { NUMERIC_PRECISION_RANGE, NUMERIC_SCALE_RANGE } from './numeric-limits';
@@ -1167,7 +1168,7 @@ export class PgTimetzCodec extends CodecImpl<
     return pgTimetzCanonical(value);
   }
   decodeJson(json: JsonValue): string {
-    return decodeJsonString(PG_TIMETZ_CODEC_ID, json);
+    return decodeJsonDateTimeText(PG_TIMETZ_CODEC_ID, json, pgTimetzStoredText);
   }
 }
 
