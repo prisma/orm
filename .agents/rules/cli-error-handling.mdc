@@ -6,24 +6,24 @@ alwaysApply: false
 
 # CLI Error Handling
 
-Paths below are relative to `packages/1-framework/3-tooling/cli/src`.
+Paths below are relative to `packages/1-framework/3-tooling/cli`.
 
 ## A command settles a result; it does not exit
 
-- An ORM command is a `defineOrmCommand({ help, args, needs, exitCodes, handler })` (`orm/define-command.ts`), which wraps `@prisma/cli-engine`'s `defineCommand`.
-- The handler returns `ok(...)` or `notOk(error)` from `@prisma/cli-engine/protocol`. It does not end the process: `bin.ts` sets `process.exitCode = await runOrmCli(process)`, and the engine picks the code from the settled result.
-- A `notOk` error settles at exit 2. A finding on a completed run, such as drift, is a success whose `ctx.present({ data, exitCode })` names a code the command declares in `exitCodes` (`orm/db/verify.ts`, `INIT_EXIT_CODES` in `orm/init.ts`).
+- An ORM command is a `defineOrmCommand({ help, args, needs, exitCodes, handler })` (`src/orm/define-command.ts`), which wraps `@prisma/cli-engine`'s `defineCommand`.
+- The handler returns `ok(...)` or `notOk(error)` from `@prisma/cli-engine/protocol`. It does not end the process: `src/bin.ts` sets `process.exitCode = await runOrmCli(process)`, and the engine picks the code from the settled result.
+- A `notOk` error settles at exit 2. A finding on a completed run, such as drift, is a success whose `ctx.present({ data, exitCode })` names a code the command declares in `exitCodes` (`src/orm/db/verify.ts`, `INIT_EXIT_CODES` in `src/orm/init.ts`).
 
 ## Errors are structured, with dotted codes
 
 - Codes are `NAMESPACE.SUBCODE`: `CONFIG.FILE_NOT_FOUND`, `CONTRACT.DEFAULT_INVALID`, `CLI.UNEXPECTED`. See [ADR 239](../../docs/architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md).
-- Build a CLI error with a factory from `utils/cli-errors.ts`, which re-exports those of `@internal/errors/control` (`errorConfigFileNotFound`, `errorFileNotFound`, `errorUnexpected`, …). A command-specific factory lives with the command, such as `commands/init/errors.ts`.
-- `ActionableCliError` (`utils/cli-errors.ts`) carries typed `nextActions` as well as `fix` prose; only the CLI knows the invocation that fixes a failure.
-- `normalizeError` (`orm/normalize-error.ts`) is the one conversion to the engine's protocol shape. It turns `fix` prose into `user-choice` next actions. Pass every error a handler returns through it.
+- Build a CLI error with a factory from `src/utils/cli-errors.ts`, which re-exports those of `@internal/errors/control` (`errorConfigFileNotFound`, `errorFileNotFound`, `errorUnexpected`, …). A command-specific factory lives with the command, such as `src/commands/init/errors.ts`.
+- `ActionableCliError` (`src/utils/cli-errors.ts`) carries typed `nextActions` as well as `fix` prose; only the CLI knows the invocation that fixes a failure.
+- `normalizeError` (`src/orm/normalize-error.ts`) is the one conversion to the engine's protocol shape. It turns `fix` prose into `user-choice` next actions. Pass every error a handler returns through it.
 
 ## Catching an error
 
-A handler's `try` reports what it caught with `errorFromCaught(error, why, { connection })` (`control-api/operations/caught-errors.ts`):
+A handler's `try` reports what it caught with `errorFromCaught(error, why, { connection })` (`src/control-api/operations/caught-errors.ts`):
 
 - a CLI error is reported as it is;
 - any other error with a structured code a library raised is reported as itself, whatever its namespace, such as `RUNTIME.TYPE_PARAMS_INVALID`;
