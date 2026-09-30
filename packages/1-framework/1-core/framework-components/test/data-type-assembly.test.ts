@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { CreateControlStackInput } from '../src/control/control-stack';
 import {
   assembleAuthoringDataTypes,
   assembleDataTypes,
+  createControlStack,
   enforceDataTypeInvariants,
 } from '../src/control/control-stack';
 import { type DataType, type DataTypeId, dataType, dataTypeId } from '../src/shared/data-type';
-import { loweringEntryKey } from '../src/shared/framework-authoring';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
 const int2 = dataType('demo/int2', {});
@@ -82,6 +83,16 @@ describe('enforceDataTypeInvariants', () => {
         authoringEntries: [{ key: 'demo/gone', entry: tagEntry('gone'), contributedBy: 'x-pack' }],
       }),
     ).toThrow(/x-pack.*demo\/gone|demo\/gone.*x-pack/s);
+  });
+
+  it('refuses an authoring entry under a key that is not a registered data type id', () => {
+    expect(() =>
+      invariants({
+        authoringEntries: [
+          { key: 'lowering:sql', entry: tagEntry('sql'), contributedBy: 'x-pack' },
+        ],
+      }),
+    ).toThrow(/x-pack.*lowering:sql|lowering:sql.*x-pack/s);
   });
 
   it('refuses a classifier that returns a data type nobody registered', () => {
@@ -161,23 +172,12 @@ describe('enforceDataTypeInvariants', () => {
 });
 
 describe('assembleAuthoringDataTypes', () => {
-  it('merges every contributor’s entries, keyed by data type id and by lowering key', () => {
+  it('merges every contributor’s entries, keyed by data type id', () => {
     const merged = assembleAuthoringDataTypes([
       { id: 'one', authoring: { dataTypes: { [int2.id]: numberEntry() } } },
-      {
-        id: 'two',
-        authoring: {
-          dataTypes: {
-            [loweringEntryKey('sql')]: {
-              written: { kind: 'tag', tag: 'sql' },
-              documentation: 'An expression in the stored language.',
-              lower: () => ({ ok: false, diagnostic: { code: 'x', message: 'x', sourceId: 'x' } }),
-            },
-          },
-        },
-      },
+      { id: 'two', authoring: { dataTypes: { [text.id]: tagEntry('sql') } } },
     ]);
-    expect(Object.keys(merged).sort()).toEqual(['demo/int2', 'lowering:sql']);
+    expect(Object.keys(merged).sort()).toEqual(['demo/int2', 'demo/text']);
   });
 
   it('refuses two contributors claiming one key', () => {
@@ -190,8 +190,26 @@ describe('assembleAuthoringDataTypes', () => {
   });
 });
 
-describe('loweringEntryKey', () => {
-  it('is never a data type id', () => {
-    expect(() => dataTypeId(loweringEntryKey('sql'))).toThrow();
+describe('createControlStack', () => {
+  it('exposes every declared data type with its contributor, in stack order', () => {
+    const uuid = dataType('demo/uuid', {});
+    const component = (kind: string, id: string, dataTypes: readonly DataType[]) => ({
+      kind,
+      id,
+      version: '0.0.1',
+      dataTypes,
+    });
+    const input = {
+      family: component('family', 'fam', [text]),
+      target: component('target', 'tgt', [int2]),
+      adapter: component('adapter', 'adp', []),
+      extensions: [component('extension', 'ext', [uuid])],
+    } as unknown as CreateControlStackInput;
+
+    expect(createControlStack(input).declaredDataTypes).toEqual([
+      { type: text, contributedBy: 'fam' },
+      { type: int2, contributedBy: 'tgt' },
+      { type: uuid, contributedBy: 'ext' },
+    ]);
   });
 });

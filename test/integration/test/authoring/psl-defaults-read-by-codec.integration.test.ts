@@ -66,7 +66,7 @@ model Token {
 
     expect(authored.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
       {
-        code: 'PSL_INVALID_DEFAULT_LITERAL',
+        code: 'PSL_INVALID_LITERAL',
         message:
           'Field "Token.u": "nope" is not a UUID: PostgreSQL reads 32 hexadecimal digits, with a hyphen after any group of four and optionally in braces.',
       },

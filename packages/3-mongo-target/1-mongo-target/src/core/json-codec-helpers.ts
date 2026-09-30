@@ -13,10 +13,59 @@ import {
 import { MONGO_JSON_CODEC_ID } from './codec-ids';
 import { mongoTargetError } from './mongo-target-errors';
 
+const BSON_TYPE_BY_TAG: Readonly<Record<string, string>> = {
+  ObjectId: 'objectId',
+  Decimal128: 'decimal',
+  Binary: 'binData',
+  BSONRegExp: 'regex',
+  Timestamp: 'timestamp',
+  BSONSymbol: 'symbol',
+  Code: 'javascript',
+  MinKey: 'minKey',
+  MaxKey: 'maxKey',
+};
+
+const NOT_FINITE_FIX =
+  'JSON has no NaN or Infinity; store null or a string, or declare the field Bson.';
+const BSON_FIX = 'Declare the field Bson to store BSON values.';
+const PLAIN_VALUE_FIX = 'Convert it to a plain object or array.';
+
+const ENCODE_FIX_BY_RECEIVED: Readonly<Record<string, string>> = {
+  Date: 'Store the date as an ISO 8601 string, or declare the field Bson.',
+  bigint:
+    'Store it as a number in the safe-integer range or as decimal text, or declare the field Int64 or Bson.',
+  NaN: NOT_FINITE_FIX,
+  Infinity: NOT_FINITE_FIX,
+  '-Infinity': NOT_FINITE_FIX,
+  undefined: 'Leave the key out, or store null.',
+  Uint8Array: 'Store the bytes as a base64 string, or declare the field Binary or Bson.',
+  Buffer: 'Store the bytes as a base64 string, or declare the field Binary or Bson.',
+  Binary: 'Store the bytes as a base64 string, or declare the field Binary or Bson.',
+  ObjectId: 'Store its hex string, or declare the field ObjectId or Bson.',
+  Long: 'Store a number in the safe-integer range or decimal text, or declare the field Int64 or Bson.',
+  Decimal128: 'Store the decimal text, or declare the field Decimal128 or Bson.',
+  Int32: 'Pass a plain number.',
+  Double: 'Pass a plain number.',
+  RegExp: 'Store the pattern as a string, or declare the field Bson.',
+  BSONRegExp: 'Store the pattern as a string, or declare the field Bson.',
+  symbol: 'Store a string instead.',
+  function: 'Store data, not a function.',
+  'circular reference': 'Remove the cycle; a JSON value is a tree.',
+  'sparse array hole': 'Fill the hole with null.',
+  DBRef: 'Write it as a { $ref, $id } document instead.',
+};
+
+function encodeFix(received: string): string {
+  return (
+    ENCODE_FIX_BY_RECEIVED[received] ??
+    (Object.hasOwn(BSON_TYPE_BY_TAG, received) ? BSON_FIX : PLAIN_VALUE_FIX)
+  );
+}
+
 function encodeRefused(received: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
-    `${MONGO_JSON_CODEC_ID} value must be a JSON value; received ${received} at ${where(path)}`,
+    `${MONGO_JSON_CODEC_ID} value must be a JSON value; received ${received} at ${where(path)}. ${encodeFix(received)}`,
     { meta: { codecId: MONGO_JSON_CODEC_ID, received, valuePath: path } },
   );
 }
@@ -59,18 +108,6 @@ export function encodeJsonValue(value: JsonValue): JsonValue {
   return value;
 }
 
-const BSON_TYPE_BY_TAG: Readonly<Record<string, string>> = {
-  ObjectId: 'objectId',
-  Decimal128: 'decimal',
-  Binary: 'binData',
-  BSONRegExp: 'regex',
-  Timestamp: 'timestamp',
-  BSONSymbol: 'symbol',
-  Code: 'javascript',
-  MinKey: 'minKey',
-  MaxKey: 'maxKey',
-};
-
 function decodeRefused(bsonType: string, path: string): never {
   throw mongoTargetError(
     'RUNTIME.DECODE_FAILED',
@@ -87,7 +124,13 @@ function safeLong(value: bigint, path: string): number {
 }
 
 function finiteDouble(value: number, path: string): number {
-  return Number.isFinite(value) ? value : decodeRefused('double', path);
+  if (Number.isFinite(value)) return value;
+  const received = String(value);
+  throw mongoTargetError(
+    'RUNTIME.DECODE_FAILED',
+    `${MONGO_JSON_CODEC_ID} wire value contains ${received} at ${where(path)}; a JSON number cannot be NaN or Infinity`,
+    { meta: { codecId: MONGO_JSON_CODEC_ID, received, valuePath: path } },
+  );
 }
 
 function decodeEntries(

@@ -11,6 +11,7 @@ import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-types';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
@@ -33,6 +34,7 @@ function contractConfigFromPath(contractPath: string, output: string): ContractC
     : mongoContract(contractPath, {
         output,
         enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
+        formerScalarCodecIds: prisma6MongoBinding.scalarCodecIds,
       });
 }
 

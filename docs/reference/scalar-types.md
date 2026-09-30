@@ -1,6 +1,6 @@
 # Scalar types
 
-Each target names its scalar types after what the database stores. This page lists every scalar type per target, then maps the types across targets by concept, with the Prisma 6/7 name for readers migrating a schema. Other docs link here rather than repeat the lists.
+Each target names its scalar types after what the database stores ([ADR 257](../architecture%20docs/adrs/ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md)). This page lists every scalar type per target, then maps the types across targets by concept, with the Prisma 6/7 name for readers migrating a schema. Other docs link here rather than repeat the lists.
 
 Columns: the PSL name, the TypeScript builder helper (inside the `defineContract` callback), the codec id recorded in `contract.json`, the storage type, and the application type a query reads and writes.
 
@@ -12,7 +12,7 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 | `Int32` | `field.int32()` | `mongo/int32@1` | `int` | `number` |
 | `Int64` | `field.int64()` | `mongo/int64@1` | `long` | `bigint` |
 | `Double` | `field.double()` | `mongo/double@1` | `double` | `number` |
-| `Decimal128` | `field.decimal128()` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent) |
+| `Decimal128` | `field.decimal128()` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent; a stored value with an extreme exponent such as `1E-6176` reads back as a digit string of about 6,100 characters) |
 | `Bool` | `field.bool()` | `mongo/bool@1` | `bool` | `boolean` |
 | `Date` | `field.date()` | `mongo/date@1` | `date` | `Date` |
 | `ObjectId` | `field.objectId()` | `mongo/objectId@1` | `objectId` | `string` (hex) |
@@ -26,6 +26,22 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 The collection validator is derived from the contract only when the contract is written in Prisma 8 PSL. A contract built with the TypeScript builder or read from a Prisma 6 schema (`prisma6Schema`) gets no validator, so there the codecs' checks on read and write are the only ones.
 
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+
+Two limitations to know about:
+
+- `Binary` reads every binData subtype back as its bytes and writes subtype 0, so a UUID stored as subtype 4 round-trips as subtype 0. Use `Bson` to keep the subtype.
+- `field.temporal.timestamp(undefined, 'now')` sets an update default only, and TypeScript infers both phases as optional, so its update default is typed as possibly absent. `field.temporal.timestamp()` and `field.temporal.timestamp('now', 'now')` are typed exactly.
+
+### Values through the Mongo ORM
+
+- A whole number written to a `Double` field is stored as a BSON `double`, not an `int`, so `$type: 'double'` matches it. An `Int32` field refuses a fraction or a number outside the signed 32-bit range with `RUNTIME.ENCODE_FAILED`.
+- The update operations `inc` and `mul` exist on required single-valued `Int32`, `Double`, `Int64` and `Decimal128` fields and take the field's write type: a `number`, a `bigint` for `Int64` (`u.karma.inc(2n)`), and decimal text for `Decimal128` (`u.balance.inc('0.5')`).
+- A list field is encoded element by element through its element codec, so an `ObjectId[]` field stores hex strings as `ObjectId`s and an `Int64[]` field stores `bigint`s as `long`s.
+- `create()` and `createAll()` return each document as stored, decoded as a read decodes it. The ORM computes it from the document it sent, without a second query: a `Bson` field comes back as a read returns it, and a nullable field left out comes back as `null`.
+- A nullable field missing from a stored document reads as `null`, the same as one that holds `null`.
+- A `MongoFieldFilter` passed to the ORM's `where()` compares the field's application value, encoded through the field's codec as the object form of `where()` is: a hex string or an `ObjectId` for an `ObjectId` field, a `bigint` for an `Int64` field. A value that is not a `MongoValue`, such as a `bigint` or an `ObjectId`, goes in a `MongoParamRef`: `MongoFieldFilter.gt('views', new MongoParamRef(5n))`. The query builder's `match()` does not know the field's codec and sends values as given, so compare there with the driver's classes, such as `new MongoParamRef(new ObjectId(hex))`.
+- Each codec refuses a value of the wrong type with `RUNTIME.ENCODE_FAILED` naming the field, a list element included: a `null` in a `String[]` list, a string for a `Bool` field, an invalid `Date`, or anything but a 24-digit hex string or an `ObjectId` for an `ObjectId` field.
+- A write refuses a value outside the field's enum and `null` for a field that is not nullable, with `RUNTIME.ENCODE_FAILED` naming the field. A filter accepts both, so it can find documents that hold one.
 
 ## PostgreSQL
 

@@ -186,7 +186,7 @@ model User {
 
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       {
-        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
         message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
         sourceId: 'schema.prisma',
         span: {

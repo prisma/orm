@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reservedSqlDefaultBody } from '../src/default-sql-body';
+import { checkSqlDefaultBody, reservedSqlDefaultBody } from '../src/default-sql-body';
 
 describe('reservedSqlDefaultBody', () => {
   it.each([
@@ -21,5 +21,32 @@ describe('reservedSqlDefaultBody', () => {
     [''],
   ])('passes %j as raw SQL', (body) => {
     expect(reservedSqlDefaultBody(body)).toBeUndefined();
+  });
+});
+
+describe('checkSqlDefaultBody', () => {
+  it.each([
+    ['gen_random_uuid()'],
+    ["(now() + '00:03:00'::interval)"],
+    ["'{}'::text[]"],
+    ['CURRENT_TIMESTAMP'],
+    ['selected_at'],
+    [''],
+  ])('accepts %j', (body) => {
+    expect(checkSqlDefaultBody(body)).toBeUndefined();
+  });
+
+  it.each([
+    ['a semicolon', "eek(); DROP TABLE 'x'"],
+    ['a line comment', 'now() -- x'],
+    ['a block comment', 'now() /* x */'],
+    ['dollar quoting', '$$x$$'],
+    ['a subquery', '(select 1)'],
+    ['an upper-case subquery', '(SELECT 1)'],
+    ['the word select inside a SQL string literal', "'no select here'"],
+  ])('rejects %s', (_name, body) => {
+    expect(checkSqlDefaultBody(body)).toBe(
+      'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
+    );
   });
 });

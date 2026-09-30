@@ -14,13 +14,11 @@ import type {
   ColumnDefaultLiteralInputValue,
   JsonValue,
 } from '@internal/contract/types';
-import type {
-  AuthoringDataTypeEntry,
-  DataTypeAuthoringEntry,
-} from '@internal/framework-components/authoring';
-import { isDataTypeLoweringEntry } from '@internal/framework-components/authoring';
+import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import { printTaggedLiteral } from '@internal/framework-components/authoring';
 import type { DataTypeId, DataTypeLookup } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
+import { printSqlExpressionLiteral } from '@internal/sql-contract/sql-expression';
 import { escapePslString, numeralText } from '@internal/sql-relational-core/ast';
 import { defaultInCanonicalForm } from '@internal/sql-schema-ir/types';
 
@@ -32,7 +30,7 @@ const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
 export interface DefaultMappingOptions {
   readonly functionAttributes?: Readonly<Record<string, string>>;
   /** PSL support for the stack's data types, keyed by data type id. */
-  readonly dataTypeEntries?: Readonly<Record<string, AuthoringDataTypeEntry>> | undefined;
+  readonly dataTypeEntries?: Readonly<Record<string, DataTypeAuthoringEntry>> | undefined;
   /** The stack's data types, whose casts say which other types' values each one takes. */
   readonly dataTypes?: DataTypeLookup | undefined;
   /** The data type of the column's codec. */
@@ -48,7 +46,7 @@ export type DefaultMappingResult = { readonly attribute: string };
 
 /**
  * The attribute a stored default prints as: a named function, a literal the column takes, or any
- * other expression as a raw SQL tagged literal. `undefined` when a literal has no written form.
+ * other expression as a `sql` literal. `undefined` when a literal has no written form.
  */
 export function mapDefault(
   columnDefault: ColumnDefault,
@@ -63,19 +61,10 @@ export function mapDefault(
       const attribute =
         options?.functionAttributes?.[columnDefault.expression] ??
         DEFAULT_FUNCTION_ATTRIBUTES[columnDefault.expression] ??
-        `@default(${sqlLiteralText(columnDefault.expression)})`;
+        `@default(${printSqlExpressionLiteral(columnDefault.expression)})`;
       return { attribute };
     }
   }
-}
-
-/**
- * A raw SQL default as a `sql` tagged literal. The backtick fence resolves only `` \` `` and `\\`,
- * so a body holding a backtick is written inside the double-quote fence with PSL string escaping.
- */
-function sqlLiteralText(expression: string): string {
-  if (expression.includes('`')) return `sql"${escapePslString(expression)}"`;
-  return `sql\`${expression.replace(/\\/g, '\\\\')}\``;
 }
 
 /** One data type's value in the form its own authoring entry reads and writes. */
@@ -96,14 +85,13 @@ interface WritingSurface {
   readonly tagTypes: readonly DataTypeId[];
 }
 
-function writingSurface(entries: Readonly<Record<string, AuthoringDataTypeEntry>>): WritingSurface {
+function writingSurface(entries: Readonly<Record<string, DataTypeAuthoringEntry>>): WritingSurface {
   const entryOf = new Map<string, DataTypeAuthoringEntry>();
   let classify: ((text: string) => TypedValue | undefined) | undefined;
   let plainStringType: DataTypeId | undefined;
   let plainBooleanType: DataTypeId | undefined;
   const tagTypes: DataTypeId[] = [];
   for (const [key, entry] of Object.entries(entries)) {
-    if (isDataTypeLoweringEntry(entry)) continue;
     const written = entry.written;
     if (written.kind === 'tag') {
       entryOf.set(key, entry);
@@ -188,16 +176,9 @@ function readBack(
   }
 }
 
-/**
- * The literal as PSL source. A tag body sits inside a backtick fence, which resolves `` \` `` and
- * `\\` and nothing else, so a `\n` in the body survives as the two characters the entry wrote.
- */
 function literalText(entry: DataTypeAuthoringEntry, body: string): string {
   const written = entry.written;
-  if (written.kind === 'tag') {
-    const fenced = body.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
-    return `${written.tag}\`${fenced}\``;
-  }
+  if (written.kind === 'tag') return printTaggedLiteral(written.tag, body);
   return written.syntax === 'string' ? `"${escapePslString(body)}"` : body;
 }
 

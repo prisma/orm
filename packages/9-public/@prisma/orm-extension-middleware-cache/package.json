@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-extension-middleware-cache",
-  "version": "8.0.0-rc.13",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,12 +14,12 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.13"
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14"
   },
   "devDependencies": {
-    "@internal/middleware-cache": "workspace:8.0.0-rc.13",
-    "@repo/tsconfig": "workspace:8.0.0-rc.13",
-    "@repo/tsdown": "workspace:8.0.0-rc.13",
+    "@internal/middleware-cache": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },

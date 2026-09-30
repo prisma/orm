@@ -49,3 +49,5 @@ export type {
   TargetPackRef,
 } from '../shared/framework-components';
 export { checkContractComponentRequirements } from '../shared/framework-components';
+export type { RuntimeErrorEnvelope } from '../shared/runtime-error';
+export { isRuntimeError, runtimeError } from '../shared/runtime-error';

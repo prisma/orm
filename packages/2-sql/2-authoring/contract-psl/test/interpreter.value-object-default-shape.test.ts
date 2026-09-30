@@ -102,7 +102,7 @@ ${fields}
   return {
     schema,
     diagnostics: result.ok ? [] : result.failure.diagnostics,
-    incompatible: at('PSL_DEFAULT_TYPE_INCOMPATIBLE'),
+    incompatible: at('PSL_VALUE_TYPE_INCOMPATIBLE'),
     invalidLiteral: at('PSL_INVALID_DEFAULT_LITERAL'),
   };
 }

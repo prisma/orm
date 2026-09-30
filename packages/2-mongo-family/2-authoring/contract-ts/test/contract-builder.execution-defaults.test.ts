@@ -7,7 +7,12 @@ import {
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
-import { defineContract } from '../src/contract-builder';
+import { defineContract, type FieldBuilder } from '../src/contract-builder';
+
+/** What a JavaScript caller, whom the types do not stop, can write on a preset field. */
+function untyped(builder: unknown): { optional(): FieldBuilder; many(): FieldBuilder } {
+  return builder as { optional(): FieldBuilder; many(): FieldBuilder };
+}
 
 const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
 
@@ -134,13 +139,18 @@ describe('Mongo TS temporal preset misuse', () => {
         models: {
           Post: model('Post', {
             collection: 'posts',
-            fields: { _id: field.objectId(), createdAt: field.temporal.createdAt().optional() },
+            fields: {
+              _id: field.objectId(),
+              createdAt: untyped(field.temporal.createdAt()).optional(),
+            },
           }),
         },
       })),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
+        message:
+          'Field "Post.createdAt" is filled on write by a preset such as temporal.createdAt(), so it cannot be optional; remove .optional().',
         meta: expect.objectContaining({
           modelName: 'Post',
           fieldName: 'createdAt',
@@ -156,13 +166,18 @@ describe('Mongo TS temporal preset misuse', () => {
         models: {
           Post: model('Post', {
             collection: 'posts',
-            fields: { _id: field.objectId(), createdAt: field.temporal.createdAt().many() },
+            fields: {
+              _id: field.objectId(),
+              createdAt: untyped(field.temporal.createdAt()).many(),
+            },
           }),
         },
       })),
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.DEFAULT_INVALID',
+        message:
+          'Field "Post.createdAt" is filled on write by a preset such as temporal.createdAt(), so it cannot be a list; remove .many().',
         meta: expect.objectContaining({ reason: 'many-with-executionDefaults' }),
       }),
     );

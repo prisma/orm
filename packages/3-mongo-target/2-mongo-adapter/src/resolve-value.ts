@@ -12,6 +12,19 @@ import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 /**
+ * A value the driver serializes as one BSON value rather than a document: a `Date`, `RegExp` or `Uint8Array`, or an instance of a `bson` class, recognised by its `_bsontype` tag because the driver's classes come from its own load of `bson`. A plain object carrying a `_bsontype` key is a stored subdocument, not a class.
+ */
+function isWireScalar(value: object): boolean {
+  if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return true;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return (
+    prototype !== Object.prototype &&
+    prototype !== null &&
+    typeof Reflect.get(value, '_bsontype') === 'string'
+  );
+}
+
+/**
  * Resolves a `MongoValue` (which may contain `MongoParamRef` leaves) into the
  * driver-ready wire shape. When a leaf has a `codecId` and the registry has a
  * codec for it, the codec's async `encode` is awaited so codecs may perform
@@ -71,10 +84,7 @@ export async function resolveValue(
     }
     return value.value;
   }
-  if (value === null || typeof value !== 'object') {
-    return value;
-  }
-  if (value instanceof Date) {
+  if (value === null || typeof value !== 'object' || isWireScalar(value)) {
     return value;
   }
   if (Array.isArray(value)) {
@@ -109,8 +119,7 @@ async function resolveDraftSlot(
   if (value instanceof MongoParamRef) {
     return resolveValue(value, codecs, ctx);
   }
-  if (value === null || typeof value !== 'object') return value;
-  if (value instanceof Date) return value;
+  if (value === null || typeof value !== 'object' || isWireScalar(value)) return value;
   if (Array.isArray(value)) {
     const tasks = Promise.all(value.map((v: unknown) => resolveDraftSlot(v, codecs, ctx)));
     return raceAgainstAbort(tasks, ctx.signal, 'encode');

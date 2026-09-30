@@ -330,7 +330,8 @@ describe('coverage config', () => {
     assert.match(testJob, /needs\.coverage\.result != 'success'/);
     assert.match(testJob, /run: exit 1/);
 
-    assert.doesNotMatch(workflow, /actions\/cache\/(?:save|restore)@/);
+    assert.doesNotMatch(shardJob, /actions\/cache\/(?:save|restore)@/);
+    assert.doesNotMatch(coverageJob, /actions\/cache\/(?:save|restore)@/);
     assert.equal(workflow.match(/run: pnpm coverage:packages:merge/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm coverage:report/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm test:examples/g)?.length, 1);

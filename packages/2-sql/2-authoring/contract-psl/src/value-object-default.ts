@@ -16,8 +16,8 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import {
-  PSL_DEFAULT_TYPE_INCOMPATIBLE,
   PSL_INVALID_DEFAULT_LITERAL,
+  PSL_VALUE_TYPE_INCOMPATIBLE,
   readStoredValue,
 } from './data-type-default';
 
@@ -51,7 +51,7 @@ export function valueObjectDefaultMismatches(
   const mismatches: ValueObjectDefaultMismatch[] = [];
   const shape = (path: string, message: string) =>
     mismatches.push({
-      code: PSL_DEFAULT_TYPE_INCOMPATIBLE,
+      code: PSL_VALUE_TYPE_INCOMPATIBLE,
       message: `Field "${path}": ${message}`,
     });
   const checkObject = (value: JsonValue, valueObjectName: string, path: string) => {

@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-target-mongo",
-  "version": "8.0.0-rc.13",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,18 +14,18 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.13",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.13",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.13",
+    "@prisma/orm-family-mongo": "workspace:8.0.0-rc.14",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
     "arktype": "catalog:",
     "bson": "catalog:"
   },
   "devDependencies": {
-    "@internal/adapter-mongo": "workspace:8.0.0-rc.13",
-    "@internal/driver-mongo": "workspace:8.0.0-rc.13",
-    "@internal/target-mongo": "workspace:8.0.0-rc.13",
-    "@repo/tsconfig": "workspace:8.0.0-rc.13",
-    "@repo/tsdown": "workspace:8.0.0-rc.13",
+    "@internal/adapter-mongo": "workspace:8.0.0-rc.14",
+    "@internal/driver-mongo": "workspace:8.0.0-rc.14",
+    "@internal/target-mongo": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },

@@ -66,7 +66,7 @@ Conceptually, the execution context provides:
 - a single helper:
   - `applyMutationDefaults({ op, namespace, entry, values }) → appliedDefaults`, where each applied default is `{ field, value }`
 
-Lanes call this once per mutation and then build a Plan normally. The helper, the generator registry, and the availability check are framework runtime code shared by every family; see [ADR 255](ADR%20255%20-%20Mutation-default%20generators%20are%20a%20framework%20runtime%20concern.md).
+Lanes call this once per mutation and then build a Plan normally. The helper, the generator registry, and the availability check are framework runtime code shared by every family; see [ADR 256](ADR%20256%20-%20Mutation-default%20generators%20are%20a%20framework%20runtime%20concern.md).
 
 ### 3) Generator registry + compatibility validation
 

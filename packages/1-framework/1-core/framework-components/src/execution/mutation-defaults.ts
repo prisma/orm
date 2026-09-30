@@ -80,7 +80,7 @@ export function collectMutationDefaultGenerators(
   return generators;
 }
 
-/** Fails when the contract's mutation defaults name a generator the registry does not hold, listing every missing id. */
+/** Fails when the contract's mutation defaults name a generator the registry does not hold, listing every missing id and the fields that need it. */
 export function assertMutationDefaultGeneratorsAvailable(
   execution: ContractExecutionSection | undefined,
   generatorRegistry: ReadonlyMap<string, RuntimeMutationDefaultGenerator>,
@@ -88,25 +88,43 @@ export function assertMutationDefaultGeneratorsAvailable(
   const defaults = execution?.mutations.defaults ?? [];
   if (defaults.length === 0) return;
 
-  const missing = new Set<string>();
+  const fieldsById = new Map<string, string[]>();
   for (const mutationDefault of defaults) {
-    for (const phase of [mutationDefault.onCreate, mutationDefault.onUpdate]) {
-      if (!phase) continue;
-      if (phase.kind === 'generator' && !generatorRegistry.has(phase.id)) {
-        missing.add(phase.id);
-      }
+    const phaseIds = new Set(
+      [mutationDefault.onCreate, mutationDefault.onUpdate].flatMap((phase) =>
+        phase?.kind === 'generator' && !generatorRegistry.has(phase.id) ? [phase.id] : [],
+      ),
+    );
+    for (const id of phaseIds) {
+      const fields = fieldsById.get(id) ?? [];
+      fields.push(`${mutationDefault.ref.entry}.${mutationDefault.ref.field}`);
+      fieldsById.set(id, fields);
     }
   }
 
-  if (missing.size === 0) return;
+  if (fieldsById.size === 0) return;
 
-  const ids = Array.from(missing);
-  const idList = ids.map((id) => `'${id}'`).join(', ');
+  const ids = [...fieldsById.keys()];
+  const needs = [...fieldsById].map(([id, fields]) => `'${id}' for ${listInProse(fields)}`);
+  const message =
+    ids.length === 1
+      ? `Contract requires mutation default generator ${needs[0]}, but no runtime component in the execution stack provides it.`
+      : `Contract requires mutation default generators ${listInProse(needs)}, but no runtime component in the execution stack provides them.`;
   throw runtimeError(
     'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-    `Contract requires mutation default generator(s) ${idList}, but no runtime component provides them.`,
-    { ids },
+    `${message} ${WHERE_GENERATORS_COME_FROM}`,
+    {
+      ids,
+      fields: [...fieldsById.values()].flat(),
+    },
   );
+}
+
+const WHERE_GENERATORS_COME_FROM =
+  "Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.";
+
+function listInProse(items: readonly string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(', ')} and ${items.at(-1)}` : items.join('');
 }
 
 function computeExecutionDefaultValue(
@@ -117,7 +135,7 @@ function computeExecutionDefaultValue(
   if (!generator) {
     throw runtimeError(
       'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-      `Contract references mutation default generator '${spec.id}' but no runtime component provides it.`,
+      `Contract references mutation default generator '${spec.id}' but no runtime component in the execution stack provides it. ${WHERE_GENERATORS_COME_FROM}`,
       {
         id: spec.id,
       },

@@ -144,7 +144,7 @@ model User {
 }`;
     const { schemaPath, diagnostics } = await sqliteDiagnosticsOf(schema);
     const incompatible = (field: string, message: string) => ({
-      code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+      code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
       message,
       sourceId: schemaPath,
       span: defaultSpanOf(schema, field),

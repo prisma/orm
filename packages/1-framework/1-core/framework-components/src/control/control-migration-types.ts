@@ -266,6 +266,8 @@ export interface MigrationPlannerConflict {
   readonly summary: string;
   /** Optional explanation of why this conflict occurred. */
   readonly why?: string;
+  /** Set when the conflict is an operation the policy does not allow: the class of that operation. */
+  readonly refusedOperationClass?: MigrationOperationClass;
 }
 
 /**

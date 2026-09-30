@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
+  printTaggedLiteral,
   resolvePslBacktickEscapes,
   resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
@@ -118,5 +119,53 @@ describe('describeTaggedLiteralFailure', () => {
     expect(describeTaggedLiteralFailure('too-large')).toBe(
       `Tagged literal exceeds ${TAGGED_LITERAL_MAX_BYTES} bytes.`,
     );
+  });
+});
+
+describe('printTaggedLiteral', () => {
+  it('prints a single-line text between backticks', () => {
+    expect(printTaggedLiteral('sql', 'gen_random_uuid()')).toBe('sql`gen_random_uuid()`');
+  });
+
+  it('prints a multi-line text on its own lines', () => {
+    expect(printTaggedLiteral('sql', "(now()\n  + '1 day'::interval)")).toBe(
+      "sql`\n(now()\n  + '1 day'::interval)\n`",
+    );
+  });
+
+  it('doubles a backslash in the backtick form', () => {
+    expect(printTaggedLiteral('sql', "E'a\\nb'")).toBe("sql`E'a\\\\nb'`");
+  });
+
+  it('prints a text holding a backtick in the double-quote form', () => {
+    expect(printTaggedLiteral('json', '{"a":"`"}')).toBe('json"{\\"a\\":\\"`\\"}"');
+  });
+
+  it('escapes a backslash, a line break and a carriage return in the double-quote form', () => {
+    expect(printTaggedLiteral('sql', 'a`\\\nb\rc')).toBe('sql"a`\\\\\\nb\\rc"');
+  });
+
+  it.each([
+    ['single-line', 'md5(random()::text)'],
+    ['multi-line', "(now()\n  + '1 day'::interval)"],
+    ['a backslash', "E'a\\nb'"],
+    ['an internal empty line', 'a\n\nb'],
+  ])('reads %s text back unchanged from the backtick form', (_name, text) => {
+    const printed = printTaggedLiteral('sql', text);
+    const raw = printed.slice('sql`'.length, -1);
+    expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
+      ok: true,
+      body: text,
+    });
+  });
+
+  it('reads a multi-line text back unchanged after every continuation line was indented', () => {
+    const text = "(now()\n  + '1 day'::interval)";
+    const indented = printTaggedLiteral('sql', text).split('\n').join('\n    ');
+    const raw = indented.slice('sql`'.length, -1);
+    expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
+      ok: true,
+      body: text,
+    });
   });
 });

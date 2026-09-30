@@ -305,6 +305,7 @@ export function conflictForDisallowedCall(
     kind: conflictKindForCall(call),
     summary,
     why: 'Use `migration new` to author a custom migration for this change.',
+    refusedOperationClass: call.operationClass,
     ...(location ? { location } : {}),
   };
 }

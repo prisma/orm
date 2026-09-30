@@ -1,0 +1,60 @@
+name: Supabase Images
+
+# The supabase-acceptance job in ci.yml needs about 2 GB of Docker images,
+# and public.ecr.aws refuses anonymous pulls once its rate limit is hit.
+# This workflow saves those images to the Actions cache so CI can load them
+# instead of pulling.
+#
+# It writes on main because a run can restore cache entries written on its
+# own ref or on the default branch only: an entry written on main serves every
+# PR and merge-queue run, and the images are stored once. ci.yml only
+# restores. The daily run re-creates the entry if GitHub has evicted it.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/actions/supabase-cli/**
+      - .github/workflows/supabase-images.yml
+      - examples/supabase/supabase/config.toml
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  save-images:
+    name: Cache Supabase Docker images (main)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Supabase CLI
+        id: supabase-cli
+        uses: ./.github/actions/supabase-cli
+      - name: Check for an existing cache entry
+        id: lookup
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.supabase-cli.outputs.images-archive }}
+          key: ${{ steps.supabase-cli.outputs.images-cache-key }}
+          lookup-only: true
+      - name: Pull the images by starting the stack
+        if: steps.lookup.outputs.cache-hit != 'true'
+        working-directory: examples/supabase
+        run: supabase start
+      - name: Save the images to an archive
+        if: steps.lookup.outputs.cache-hit != 'true'
+        env:
+          ARCHIVE: ${{ steps.supabase-cli.outputs.images-archive }}
+        run: .github/workflows/scripts/save-supabase-images.sh "$ARCHIVE"
+      - name: Save the archive to the cache
+        if: steps.lookup.outputs.cache-hit != 'true'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.supabase-cli.outputs.images-archive }}
+          key: ${{ steps.supabase-cli.outputs.images-cache-key }}

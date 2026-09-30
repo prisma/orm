@@ -260,7 +260,7 @@ example audit.foo()
         code: 'PSL_UNKNOWN_FIELD_PRESET',
         sourceId: 'schema.prisma',
         message:
-          'Field "Bad.example" references unknown field preset "audit.foo". Check the spelling against the available presets in the "audit" namespace.',
+          'Field "Bad.example" references unknown field preset "audit.foo". The "audit" namespace has no field presets.',
         span: {
           start: { offset: 31, line: 3, column: 9 },
           end: { offset: 42, line: 3, column: 20 },

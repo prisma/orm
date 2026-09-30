@@ -23,7 +23,7 @@ describe('document snapshot', () => {
     expect(parse).not.toHaveBeenCalled();
     const result = snapshot.parse();
     expect(snapshot.parse()).toBe(result);
-    expect(parse).toHaveBeenCalledExactlyOnceWith(text, uri);
+    expect(parse).toHaveBeenCalledExactlyOnceWith(text, uri, {});
     expect(snapshot.sourceFile.filename).toBe(uri);
     expect(result.sources.sourceFileFor(result.document.syntax)).toBe(snapshot.sourceFile);
     expect(result.diagnostics).toEqual([]);
@@ -40,7 +40,7 @@ describe('document snapshot', () => {
     expect(snapshot.parse()).toBe(result);
     expect(result.sources.sourceFileFor(result.document.syntax)).toBe(sourceFile);
     expect(sourceFile.filename).toBe(uri);
-    expect(parse).toHaveBeenCalledExactlyOnceWith(text, uri);
+    expect(parse).toHaveBeenCalledExactlyOnceWith(text, uri, {});
   });
 
   it('reports an over-qualified field type as a raw parser diagnostic', () => {

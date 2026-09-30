@@ -1,5 +1,6 @@
 import { isStructuredError } from '@internal/utils/structured-error';
-import { ObjectId } from 'bson';
+import { BSON, Double, ObjectId } from 'bson';
+import { ObjectId as DriverObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import { MONGO_DOUBLE_CODEC_ID, MONGO_VECTOR_CODEC_ID } from '../src/core/codec-ids';
 import {
@@ -44,12 +45,47 @@ describe('mongoInt32Codec', () => {
     expect(await mongoInt32Codec.decode(42, {})).toBe(42);
     expect(await mongoInt32Codec.encode(42, {})).toBe(42);
   });
+
+  it('encodes both ends of the signed 32-bit range', async () => {
+    expect(await mongoInt32Codec.encode(-(2 ** 31), {})).toBe(-(2 ** 31));
+    expect(await mongoInt32Codec.encode(2 ** 31 - 1, {})).toBe(2 ** 31 - 1);
+  });
+
+  it.each([
+    ['1.5', 1.5],
+    ['2147483648', 2 ** 31],
+    ['1099511627776', 2 ** 40],
+    ['-2147483649', -(2 ** 31) - 1],
+    ['NaN', Number.NaN],
+    ['string "1"', '1'],
+  ])('refuses %s instead of letting the server reject it', async (received, value) => {
+    await expect(mongoInt32Codec.encode(value as number, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: `mongo/int32@1 value must be an integer from -2147483648 to 2147483647; received ${received}`,
+    });
+  });
 });
 
 describe('mongoDoubleCodec', () => {
   it('round-trips floating-point number values', async () => {
     expect(await mongoDoubleCodec.decode(42.5, {})).toBe(42.5);
-    expect(await mongoDoubleCodec.encode(42.5, {})).toBe(42.5);
+    expect(await mongoDoubleCodec.encode(42.5, {})).toEqual(new Double(42.5));
+  });
+
+  it('encodes a whole number so that it is stored as a BSON double, not an int', async () => {
+    const stored = BSON.deserialize(
+      BSON.serialize({ value: await mongoDoubleCodec.encode(2, {}) }),
+      { promoteValues: false },
+    );
+    expect(stored['value']).toMatchObject({ _bsontype: 'Double' });
+    expect(stored['value'].valueOf()).toBe(2);
+  });
+
+  it('refuses a value that is not a number', async () => {
+    await expect(mongoDoubleCodec.encode('2' as unknown as number, {})).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      message: 'mongo/double@1 value must be a number; received string "2"',
+    });
   });
 
   it('has id mongo/double@1', () => {
@@ -69,6 +105,99 @@ describe('mongoDateCodec', () => {
     const date = new Date('2024-01-15T10:30:00Z');
     expect(await mongoDateCodec.decode(date, {})).toBe(date);
     expect(await mongoDateCodec.encode(date, {})).toBe(date);
+  });
+});
+
+describe('codecs that check the type of the value they write', () => {
+  it.each<[string, { encode(value: never, ctx: object): unknown }, unknown]>([
+    ['mongo/string@1 value must be a string; received null', mongoStringCodec, null],
+    ['mongo/string@1 value must be a string; received 5', mongoStringCodec, 5],
+    [
+      'mongo/string@1 value must be a string; received a Date',
+      mongoStringCodec,
+      new Date('2020-01-01T00:00:00Z'),
+    ],
+    ['mongo/bool@1 value must be a boolean; received object', mongoBooleanCodec, { on: true }],
+    ['mongo/bool@1 value must be a boolean; received undefined', mongoBooleanCodec, undefined],
+    ['mongo/bool@1 value must be a boolean; received string "true"', mongoBooleanCodec, 'true'],
+    ['mongo/bool@1 value must be a boolean; received null', mongoBooleanCodec, null],
+    [
+      'mongo/date@1 value must be a valid Date; received string "2020-01-01"',
+      mongoDateCodec,
+      '2020-01-01',
+    ],
+    [
+      'mongo/date@1 value must be a valid Date; received an invalid Date',
+      mongoDateCodec,
+      new Date('not a date'),
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received null',
+      mongoObjectIdCodec,
+      null,
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received 1700000000',
+      mongoObjectIdCodec,
+      1700000000,
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received string "abcdefabcdef"',
+      mongoObjectIdCodec,
+      'abcdefabcdef',
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received string "zzzzzzzzzzzzzzzzzzzzzzzz"',
+      mongoObjectIdCodec,
+      'zzzzzzzzzzzzzzzzzzzzzzzz',
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
+      mongoObjectIdCodec,
+      { _bsontype: 'ObjectId' },
+    ],
+    [
+      'mongo/objectId@1 value must be a 24-digit hex string or an ObjectId; received an object tagged ObjectId whose toHexString() does not return 24 hex digits',
+      mongoObjectIdCodec,
+      { _bsontype: 'ObjectId', toHexString: () => 'not hex' },
+    ],
+    [
+      'mongo/vector@1 value must be an array of numbers; received an array',
+      mongoVectorCodec,
+      [1, '2'],
+    ],
+    ['mongo/vector@1 value must be an array of numbers; received null', mongoVectorCodec, null],
+  ])('refuses with: %s', async (message, codec, value) => {
+    await expect(
+      Promise.resolve().then(() => codec.encode(value as never, {})),
+    ).rejects.toMatchObject({ code: 'RUNTIME.ENCODE_FAILED', message });
+  });
+
+  it('ObjectId takes upper-case hex digits', async () => {
+    const encoded = await mongoObjectIdCodec.encode('65F0000000000000000000A1', {});
+    expect(encoded.toHexString()).toBe('65f0000000000000000000a1');
+  });
+
+  it('ObjectId takes the driver`s ObjectId as well as a hex string', async () => {
+    const hex = '65f0000000000000000000a1';
+    const encoded = await mongoObjectIdCodec.encode(
+      new DriverObjectId(hex) as unknown as string,
+      {},
+    );
+    expect(encoded).toBeInstanceOf(ObjectId);
+    expect(encoded.toHexString()).toBe(hex);
+  });
+
+  it('ObjectId takes an ObjectId from another major version of bson, by its hex string', async () => {
+    const hex = '65f0000000000000000000a2';
+    const otherMajorObjectId = {
+      _bsontype: 'ObjectId',
+      [Symbol.for('@@mdb.bson.version')]: 6,
+      toHexString: () => hex,
+    };
+    const encoded = await mongoObjectIdCodec.encode(otherMajorObjectId as unknown as string, {});
+    expect(encoded).toBeInstanceOf(ObjectId);
+    expect(encoded.toHexString()).toBe(hex);
   });
 });
 

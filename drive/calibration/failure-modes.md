@@ -579,11 +579,13 @@ Patterns to **catch** the F-family modes live in [`grep-library.md`](./grep-libr
 
 **Mitigation.**
 
-- A reviewer of code that renders SQL, lowers an AST, or validates user input has a non-zero execution budget by default. The brief names three probes the reviewer must run, not read: (1) push a hostile value through every public entry point that reaches SQL text and show the rendered SQL rejects or escapes it; (2) compile the new construct through every wrapper on its path and run the result on PGlite or SQLite; (3) for any guard that cites a database rule, quote the rule from the database documentation and test both the allowed and the refused side.
+- A reviewer of code that renders SQL, lowers an AST, validates user input, or encodes and decodes stored values (a codec) has a non-zero execution budget by default. For a codec the brief names three codec probes the reviewer must run: (1) build the value the way the driver produces it, not the way the target's own import produces it (a class from `mongodb`'s CommonJS `bson` is not the class from the target's ESM `bson`, so `instanceof` silently never matches); (2) write a document with the raw driver that the codec must refuse, and read it back; (3) remove the fix and show which test goes red. For SQL, an AST or input validation, the brief names three SQL probes the reviewer must run, not read: (1) push a hostile value through every public entry point that reaches SQL text and show the rendered SQL rejects or escapes it; (2) compile the new construct through every wrapper on its path and run the result on PGlite or SQLite; (3) for any guard that cites a database rule, quote the rule from the database documentation and test both the allowed and the refused side.
 - "Trust the implementer's gates" means the reviewer does not re-run typecheck, lint and the package suite. It never means the reviewer does not execute anything. Reading is for design judgment; correctness of lowering is empirical (sibling of F13 and F15).
 - Run the two-pass local review (`drive-code-review`, architect and principal-engineer lenses, with execution allowed) before opening the PR, not after. Its findings then land as dispatches in the same build loop instead of a fix round on a public PR.
 
 **Reference incident.** prisma/orm#30402 (2026-09-25, relation ordering in the SQL ORM client). Six dispatches and eight review rounds closed SATISFIED. The reviewer brief said the implementer's gates were green and the reviewer's `pnpm` budget was zero. A `drive-code-review` pass after PR-open, with execution allowed, found: `nulls: 'last, (SELECT 1/0)'` rendered as `NULLS LAST, (SELECT 1/0)` on both adapters, and the sql-builder's `direction` had lost its normalisation on the same path; `aggregate()` over `distinct()` rows with a relation order emitted `ORDER BY (SELECT ... WHERE ... = "posts"."user_id")` over a derived table that no longer had `user_id`, which PGlite rejected; and the `distinctOn` guard refused trailing expression orders that Postgres accepts and that worked before the PR. All three were fixed in a second round (`57e5c01b81`, `e9c626fede`, `459774dfd1`).
+
+**Second incident.** prisma/orm#30439 (2026-09-28, Mongo `Json` and `Bson` codecs). The in-loop reviewer closed the slice SATISFIED by reading. A `drive-code-review` pass after PR-open, with execution allowed, ran the built codecs and found: both decoders threw a raw `TypeError` on a stored plain subdocument carrying a `_bsontype` key; `Bson` encode let through look-alike objects and values from another `bson` major that the driver then rejected without naming the field; the `Bson` JSON form turned bytes into `$numberInt` documents. The first fix round then introduced an `instanceof Code` check that never matched a `Code` the driver had read, because the target loads `bson`'s ESM build and `mongodb` loads the CommonJS build; only a test built from a CommonJS load of `bson` exposed it. Three fix rounds, 33 commits, before the PR could be queued.
 
 ## Slice-shape scope traps
 
@@ -699,7 +701,7 @@ Per-repo stop conditions beyond the canonical ones:
 
 **Reference incident.** prisma/orm#30291 (2026-09-24): a scripted prompt returned `false` from `consent`, and a test showed that a declined consent printed the command to remove packages init had installed. The engine's `consent` with a token never returns `false`: it returns `true` or throws `CLI.CONSENT_REQUIRED`, a token mismatch, or `CLI.PROMPT_CANCELLED`. Real users never saw the command. An independent review found it; the fix attached the command to whatever error follows the install.
 
-### F34. Stacked PR fails upgrade coverage because the fragment lives on its base branch
+### F36. Stacked PR fails upgrade coverage because the fragment lives on its base branch
 
 **Symptom.** A stacked PR's local `pnpm check:upgrade-coverage --mode pr` passes, but CI's `Lint` job fails it with `[per-pr-declaration] ... requires a new declaration relative to --prev`.
 
@@ -727,3 +729,27 @@ Per-repo stop conditions beyond the canonical ones:
 - Sibling of F34: that entry covers SQL the code writes; this one covers text the database writes and the code reads.
 
 **Reference incident.** prisma/orm#30436 (2026-09-28, brace-form Postgres array defaults infer as literal lists). `parseArrayLiteralBody` in `packages/3-targets/3-targets/postgres/src/core/default-normalizer.ts` gained a reading rule per element type for unquoted elements. The Drive loop ran one implementer and one reviewer; two rounds closed SATISFIED after the reviewer read the diff and tests and ran the package suite. A `drive-code-review` pass after PR-open, with the principal-engineer reviewer allowed to run node scripts against the built dist and to create tables on PGlite, found three wrong-value defects: the SQL `''` escape was never undone on the array body, so a text element `a'b`, stored by Postgres as `'{a''b}'::text[]`, read back as `a''b`, infer printed it, `db verify` passed because both sides read the same wrong value, and a database created from the emitted contract would store the wrong string; `'{(3,4),(1,2)}'::box[]` was split on commas, because `box` is the one core type whose array delimiter is `;`; and `'{a\,b}'::text[]` read as two elements. Fixed in `3912519a86`, `d6bf888a37` and `8a89d6d3c7`.
+
+### F37. Stacked PRs that ship in one release each write an upgrade entry relative to the previous slice, so the release guide describes states users never had
+
+**Symptom.** A release's upgrade guide tells users to change something that did not exist in the previous release. A user of the previous tag reads "`Json` now refuses non-JSON values" for a type their version refused outright, or a variant-field entry that names scalar types added in the same release.
+
+**Root cause.** Each stacked PR records a fragment against its own base branch, which is the previous slice, not the previous release. When every slice of a project ships in the same release, the guide concatenates the intermediate steps instead of describing the difference between the two released tags.
+
+**Mitigation.**
+
+- Each stacked PR still records its own pending declaration, because the per-PR upgrade coverage check requires one relative to the PR's base. Each entry names the release its "before" state comes from.
+- When the release guide is assembled, entries whose "before" state is an earlier unreleased slice of the same release are merged into one entry that describes the change from the previous tag. The folding happens at release, never by leaving a PR's declaration out.
+- At release, check every entry against `git diff <previous tag> <new tag>` and against a checkout of the previous tag: build a small project on the previous tag and follow the guide literally.
+
+**Reference incident.** 2026-09-29, the rc.12 to rc.13 guides: manual QA on a real rc.12 project found `mongo-json-field-semantics` describing a change to Mongo `Json`, which rc.12 did not support, and `mongo-variant-field-codecs` naming `Int64`, `Decimal128`, `Binary` and Prisma 6 contracts, none of which rc.12 had.
+
+### F38. Slice close treats a green review and green CI as manual QA, and the project reaches close-out with no QA run
+
+**Symptom.** Close-out finds no `drive-qa-plan` script and no `drive-qa-run` report for any slice. Manual QA run at close-out against merged `main` then finds user-blocking bugs that every slice's review and CI passed.
+
+**Root cause.** The slice-close walk marked the QA-side items as covered by the reviewer's verdict, which [`dod.md`](./dod.md#slice-close-ritual-added-2026-05-21-retro) already names as a known failure. Nothing stopped the next slice from starting.
+
+**Mitigation.** A slice is not closed until its QA report exists. The orchestrator runs manual QA after each slice merges, against a build of `main`, as a real user following the docs and upgrade guide, before starting the next slice. Where the QA skills are not installed, the runner writes the script and reports by hand where [`drive/qa/README.md`](../qa/README.md) puts them: `projects/<x>/manual-qa.md` and `projects/<x>/manual-qa-reports/<YYYY-MM-DD>-<runner>.md` for a slice in a project, or the PR description for a slice with no project.
+
+**Reference incident.** 2026-09-29, the Mongo defaults, codecs and Prisma 6 source project: six slices merged with no manual QA. The close-out QA found that Mongo `db update` could not confirm any destructive change, a `Double` field refused whole numbers, `include()` returned related documents undecoded, a `Bson` filter on an `ObjectId` matched nothing, and `orm init` sent Prisma 6 Mongo users down the Prisma 7 path. Twelve bugs and about thirty points of friction were fixed in follow-up PRs before the project closed.

@@ -138,7 +138,7 @@ describe('authoring template resolution', () => {
         [{ kind: 'object', properties: { label: { kind: 'string' } } }],
         [{}],
       ),
-    ).toThrow(/Missing required authoring helper argument at field\.test\[0\]\.label/);
+    ).toThrow('Authoring helper argument at field.test[0].label is missing');
   });
 
   it('rejects malformed helper argument values', () => {
@@ -489,13 +489,31 @@ describe('authoring template resolution', () => {
         [{ kind: 'option', values: ['now'] }],
         ['later'],
       ),
-    ).toThrow(/Authoring helper argument at field\.test\[0\] must be one of: now/);
+    ).toThrow('Authoring helper argument at field.test[0] must be "now"; received "later"');
   });
 
   it('rejects a non-string value for an option-kind argument', () => {
     expect(() =>
       validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: ['now'] }], [42]),
-    ).toThrow(/Authoring helper argument at field\.test\[0\] must be one of: now/);
+    ).toThrow('Authoring helper argument at field.test[0] must be "now"; received 42');
+  });
+
+  it('says an option that lists no values takes none', () => {
+    expect(() =>
+      validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: [] }], ['now']),
+    ).toThrow('Authoring helper argument at field.test[0] takes no value; received "now"');
+  });
+
+  it('names a named argument and lists every value an option takes', () => {
+    expect(() =>
+      validateAuthoringHelperArguments(
+        'temporal.timestamp',
+        [{ name: 'onCreate', kind: 'option', values: ['now', 'never'], optional: true }],
+        ['later'],
+      ),
+    ).toThrow(
+      'Argument "onCreate" of temporal.timestamp must be one of "now", "never"; received "later"',
+    );
   });
 
   it('rejects a missing required option-kind argument', () => {
@@ -505,7 +523,7 @@ describe('authoring template resolution', () => {
         [{ kind: 'option', values: ['now'] }],
         [undefined],
       ),
-    ).toThrow(/Missing required authoring helper argument at field\.test\[0\]/);
+    ).toThrow('Authoring helper argument at field.test[0] is missing');
   });
 
   it('allows an omitted optional option-kind argument', () => {

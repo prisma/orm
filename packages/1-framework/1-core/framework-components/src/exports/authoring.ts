@@ -5,6 +5,7 @@ export type {
 export { findAuthoringTypeConstructorCall } from '../shared/authoring-type-constructor-call';
 export {
   checkUncomposedNamespace,
+  fieldPresetSpellings,
   getAuthoringFieldPreset,
 } from '../shared/field-preset-resolution';
 export type {
@@ -13,7 +14,6 @@ export type {
   AuthoringAttributeSpecContributions,
   AuthoringColumnDefaultTemplate,
   AuthoringContributions,
-  AuthoringDataTypeEntry,
   AuthoringDiagnosticSink,
   AuthoringEntityContext,
   AuthoringEntityTypeDescriptor,
@@ -40,7 +40,6 @@ export type {
   AuthoringWarning,
   AuthoringWarningSink,
   DataTypeAuthoringEntry,
-  DataTypeLoweringAuthoringEntry,
   DataTypeWrittenForm,
   ScalarTypeConstructorOutput,
 } from '../shared/framework-authoring';
@@ -61,9 +60,6 @@ export {
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
   isAuthoringTypeConstructorDescriptor,
-  isDataTypeLoweringEntry,
-  isLoweringEntryKey,
-  loweringEntryKey,
   mergeAuthoringNamespaces,
   resolveAuthoringTemplateValue,
   resolveEnumCodecId,
@@ -76,6 +72,7 @@ export type {
   PslExtensionBlockParsedAttribute,
   PslExtensionBlockPrintEntry,
 } from '../shared/psl-extension-block';
+export { printTaggedLiteral } from '../shared/tagged-literal';
 export type { PresetStorageTemplate } from '../shared/temporal-presets';
 export {
   TEMPORAL_ON_CREATE_ARG,

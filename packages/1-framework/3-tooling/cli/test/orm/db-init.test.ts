@@ -415,6 +415,98 @@ describe('db init', () => {
     });
   });
 
+  it('points a planning failure the additive policy caused at db update', async () => {
+    mocks.dbInit.mockResolvedValue(
+      notOk({
+        code: 'PLANNING_FAILED',
+        summary: 'planning failed',
+        why: undefined,
+        conflicts: [
+          {
+            kind: 'policy-violation',
+            summary: 'destructive operation disallowed: Add validator on events',
+            why: "Policy does not allow 'destructive' operations",
+            refusedOperationClass: 'destructive',
+          },
+        ],
+        meta: undefined,
+      }),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], {
+      cwd: projectDir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'MIGRATION.PLANNING_FAILED',
+        why: 'destructive operation disallowed: Add validator on events',
+        nextActions: [
+          {
+            kind: 'run-command',
+            label:
+              'Apply the change with db update, which lists the destructive operations and asks you to confirm them',
+            command: 'prisma-test db update',
+          },
+        ],
+      },
+    });
+  });
+
+  function refusedClass(refusedOperationClass: 'widening' | 'destructive' | 'data') {
+    return {
+      kind: 'policy-violation',
+      summary: `${refusedOperationClass} operation disallowed`,
+      why: `Policy does not allow '${refusedOperationClass}' operations`,
+      refusedOperationClass,
+    };
+  }
+
+  function refusePlanning(...conflicts: ReturnType<typeof refusedClass>[]) {
+    mocks.dbInit.mockResolvedValue(
+      notOk({
+        code: 'PLANNING_FAILED',
+        summary: 'planning failed',
+        why: undefined,
+        conflicts,
+        meta: undefined,
+      }),
+    );
+  }
+
+  it('points a widening refusal at db update without mentioning confirmation', async () => {
+    refusePlanning(refusedClass('widening'));
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        nextActions: [
+          { label: 'Apply the change with db update', command: 'prisma-test db update' },
+        ],
+      },
+    });
+  });
+
+  it('points a data refusal at a planned migration, since db update does not apply data operations', async () => {
+    refusePlanning(refusedClass('destructive'), refusedClass('data'));
+
+    const run = await harness(ormConfig()).run(['db', 'init', '--json'], { cwd: projectDir });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      error: {
+        nextActions: [
+          {
+            label: 'Plan a migration, since db update does not apply data operations',
+            command: 'prisma-test migration plan',
+          },
+        ],
+      },
+    });
+  });
+
   describe('a contract default its data type refuses', () => {
     it('reports the planner`s CONTRACT.DEFAULT_INVALID, not an unexpected error', async () => {
       mocks.dbInit.mockRejectedValue(refusedDefault());
