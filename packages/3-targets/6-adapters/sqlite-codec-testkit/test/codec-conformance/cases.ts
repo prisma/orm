@@ -69,6 +69,12 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     value: new Date('2026-01-02T03:04:05.678Z'),
     storageType: 'TEXT',
   },
+  {
+    codecId: 'sqlite/datetime@1',
+    label: 'instant with a trailing zero in its milliseconds',
+    value: new Date('2026-01-02T03:04:05.500Z'),
+    storageType: 'TEXT',
+  },
   { codecId: 'sqlite/json@1', label: 'document', value: { a: 1, b: ['x'] }, storageType: 'TEXT' },
   // A document is not always an object: the retag has to carry every JSON shape,
   // including the scalars whose text form is indistinguishable from a stored string.

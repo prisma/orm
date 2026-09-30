@@ -111,7 +111,7 @@ describe('printPsl literal defaults', () => {
 
         model RawDefaults {
           id       Int          @id
-          stamp    Timestamp(3) @default("2024-01-01 00:00:00")
+          stamp    Timestamp(3) @default("2024-01-01T00:00:00")
           day      Date         @default("2024-01-01")
           jsonNull Jsonb?       @default(json\`null\`)
           textNull VarChar(32)? @default(sql\`NULL::character varying\`)
@@ -143,7 +143,7 @@ describe('printPsl literal defaults', () => {
           floatNegInf  Float   @default(-Infinity)
           realNaN      Real    @default(NaN)
           decimalNaN   Numeric @default(NaN)
-          timeWithZone Timetz  @default("12:34:56+00")
+          timeWithZone Timetz  @default("12:34:56Z")
 
           @@map("special_value_defaults")
         }
@@ -235,7 +235,7 @@ describe('printPsl literal defaults', () => {
 
         model RawListDefaults {
           id         Int             @id
-          timestamps Timestamp(3)[]? @default(["2024-01-01 00:00:00"]) @noCheck(elementNotNull)
+          timestamps Timestamp(3)[]? @default(["2024-01-01T00:00:00"]) @noCheck(elementNotNull)
 
           @@map("raw_list_defaults")
         }

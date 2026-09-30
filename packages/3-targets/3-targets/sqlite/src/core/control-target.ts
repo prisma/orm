@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlControlTargetDescriptor } from '@internal/family-sql/control';
+import { buildDataTypeResolver } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type {
   ControlTargetInstance,
@@ -8,6 +9,7 @@ import type {
 } from '@internal/framework-components/control';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { relationalNodeEntityKind, relationalNodeGranularity } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
 import { sqliteTargetDescriptorMeta } from './descriptor-meta';
 import { sqliteError } from './errors';
 import { diffSqliteSchema, sqliteContractToSchema } from './migrations/diff-database-schema';
@@ -38,7 +40,7 @@ const sqliteControlTargetDescriptor: SqlControlTargetDescriptor<'sqlite', Sqlite
       createRunner(family) {
         return createSqliteMigrationRunner(family) as MigrationRunner<'sql', 'sqlite'>;
       },
-      contractToSchema(contract, _frameworkComponents) {
+      contractToSchema(contract, frameworkComponents) {
         // The framework SPI types `contract` as the generic
         // `Contract | null`. Any contract reaching the sqlite
         // target descriptor is SQL-family by construction (the
@@ -52,7 +54,9 @@ const sqliteControlTargetDescriptor: SqlControlTargetDescriptor<'sqlite', Sqlite
             'sqliteControlTargetDescriptor.contractToSchema received a non-SQL contract; expected Contract<SqlStorage>',
           );
         }
-        return sqliteContractToSchema(contract);
+        return sqliteContractToSchema(contract, {
+          ...ifDefined('dataTypeOf', buildDataTypeResolver(frameworkComponents)),
+        });
       },
     },
     create(): ControlTargetInstance<'sql', 'sqlite'> {

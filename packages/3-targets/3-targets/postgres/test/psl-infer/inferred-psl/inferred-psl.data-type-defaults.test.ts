@@ -153,12 +153,21 @@ describe('printPsl writes each default as the literal the column data type takes
     },
   );
 
-  it('prints an ordinary temporal default as the string its codec reads', () => {
-    expect(
-      printedDefaults([
-        introspected('stamp', 'timestamp', "'2024-01-01 00:00:00'::timestamp without time zone"),
-      ]),
-    ).toEqual({ stamp: '@default("2024-01-01 00:00:00")' });
+  it.each([
+    ['timestamp', "'2024-01-01 00:00:00'::timestamp without time zone", '2024-01-01T00:00:00'],
+    ['timestamptz', "'2024-01-01 01:00:00+00'::timestamp with time zone", '2024-01-01T01:00:00Z'],
+    ['date', "'2024-01-01'::date", '2024-01-01'],
+    ['time', "'12:34:56.5'::time without time zone", '12:34:56.5'],
+    ['timetz', "'12:34:56+02'::time with time zone", '12:34:56+02:00'],
+    [
+      'timestamptz',
+      "'0044-03-15 00:00:00+00 BC'::timestamp with time zone",
+      '-000043-03-15T00:00:00Z',
+    ],
+  ])('prints a %s default as a literal in canonical form', (nativeType, rawDefault, standard) => {
+    expect(printedDefaults([introspected('stamp', nativeType, rawDefault)])).toEqual({
+      stamp: `@default("${standard}")`,
+    });
   });
 
   it.each([

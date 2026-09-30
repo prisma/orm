@@ -74,6 +74,111 @@ function interpretWith(schema: string) {
 }
 
 describe('pslBlockDescriptors.requiresModelAttribute enforcement', () => {
+  it.each([
+    ['', ''],
+    ['public', 'public'],
+    ['public', ''],
+    ['unbound', 'unbound'],
+    ['__unbound__', '__unbound__'],
+  ])(
+    'resolves mapped references from namespace "%s" to namespace "%s"',
+    (namespace, modelNamespace) => {
+      const block = 'audit_rule track_widgets {\n  target = Widget\n}';
+      const model = `model Widget {
+  id Int @id
+  @@map("mapped_widgets")
+  @@audited
+}`;
+      const result = interpretWith(
+        [
+          namespace === '' ? block : `namespace ${namespace} {\n${block}\n}`,
+          modelNamespace === '' ? model : `namespace ${modelNamespace} {\n${model}\n}`,
+        ].join('\n'),
+      );
+      expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
+      if (!result.ok) return;
+      const namespaceId = namespace === '' || namespace === 'public' ? 'public' : '__unbound__';
+      expect(result.value.storage.namespaces[namespaceId]?.entries['audit_rule']).toMatchObject({
+        track_widgets: { resolvedModelRefs: { target: { tableName: 'mapped_widgets' } } },
+      });
+    },
+  );
+
+  it.each([
+    ['', 'public'],
+    ['unbound', '__unbound__'],
+  ])(
+    'rejects unqualified references from namespace "%s" to namespace "%s"',
+    (namespace, modelNamespace) => {
+      const block = 'audit_rule track_widgets {\n  target = Widget\n}';
+      const model = 'model Widget {\n  id Int @id\n  @@audited\n}';
+      const result = interpretWith(
+        [
+          namespace === '' ? block : `namespace ${namespace} {\n${block}\n}`,
+          `namespace ${modelNamespace} {\n${model}\n}`,
+        ].join('\n'),
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+        { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find entity "Widget"' },
+      ]);
+    },
+  );
+
+  it('decodes mapped names before extension blocks and field lowering', () => {
+    const result = interpretWith(String.raw`
+audit_rule track_widgets {
+  target = Widget
+}
+model Widget {
+  id Int @id @map("widget\u005fid")
+  @@map("mapped\u005fwidgets")
+  @@audited
+}`);
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
+    if (!result.ok) return;
+    expect(result.value.storage.namespaces['public']?.entries).toMatchObject({
+      audit_rule: {
+        track_widgets: { resolvedModelRefs: { target: { tableName: 'mapped_widgets' } } },
+      },
+      table: {
+        mapped_widgets: { columns: { widget_id: expect.anything() } },
+      },
+    });
+  });
+
+  it.each(['name: "ignored"', '"ignored", extra: true', '', '""'])(
+    'reports map diagnostics once with early extension consumers (%s)',
+    (argument) => {
+      const result = interpretWith(`
+audit_rule first {
+  target = Widget
+}
+audit_rule second {
+  target = Widget
+}
+model Widget {
+  id Int @id @map(${argument})
+  others Other[] @map(${argument})
+  @@map(${argument})
+  @@audited
+}
+model Other {
+  id Int @id
+}`);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
+        ...Array.from(
+          { length: argument.startsWith('name:') ? 6 : 3 },
+          () => 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        ),
+        'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+      ]);
+    },
+  );
+
   it('rejects a block whose target model lacks the required attribute, naming block and model', () => {
     const result = interpretWith(`
 namespace public {

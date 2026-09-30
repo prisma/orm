@@ -1,6 +1,6 @@
 import type { ColumnDefault } from '@internal/contract/types';
 import type { SqlControlTargetDescriptor } from '@internal/family-sql/control';
-import { buildNativeTypeExpander } from '@internal/family-sql/control';
+import { buildDataTypeResolver, buildNativeTypeExpander } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type {
   ControlTargetInstance,
@@ -9,6 +9,7 @@ import type {
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { Temporal as fallbackTemporal } from 'temporal-polyfill/full/implementation';
 import { postgresResolveDefault } from '../core/default-normalizer';
 import { postgresTargetDescriptorMeta } from '../core/descriptor-meta';
 import { contractToPostgresDatabaseSchemaNode } from '../core/migrations/contract-to-postgres-database-schema-node';
@@ -22,6 +23,7 @@ import type { PostgresContract } from '../core/postgres-schema';
 import { PostgresSchemaVerifier } from '../core/postgres-schema-verifier';
 import { inferPostgresPslContract } from '../core/psl-infer/infer-psl-contract';
 import { buildPostgresPslContract } from '../core/psl-print/psl-contract';
+import { setFallbackTemporal } from '../core/require-temporal';
 import { PostgresDatabaseSchemaNode } from '../core/schema-ir/postgres-database-schema-node';
 import {
   postgresDiffSubjectEntityKind,
@@ -35,8 +37,12 @@ export function postgresRenderDefault(def: ColumnDefault, column: StorageColumn)
   return renderDefaultLiteral(def.value, column);
 }
 
-const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresPlanTargetDetails> =
-  {
+function createPostgresTargetDescriptor(): SqlControlTargetDescriptor<
+  'postgres',
+  PostgresPlanTargetDetails
+> {
+  setFallbackTemporal(fallbackTemporal);
+  return {
     ...postgresTargetDescriptorMeta,
     contractSerializer: new PostgresContractSerializer(),
     schemaVerifier: new PostgresSchemaVerifier(),
@@ -73,6 +79,7 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
           ...ifDefined('expandNativeType', expander),
           renderDefault: postgresRenderDefault,
           resolveDefault: postgresResolveDefault,
+          ...ifDefined('dataTypeOf', buildDataTypeResolver(frameworkComponents)),
         });
       },
     },
@@ -97,6 +104,9 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
       return createPostgresMigrationRunner(family);
     },
   };
+}
+
+const postgresTargetDescriptor = createPostgresTargetDescriptor();
 
 export {
   INSTANT_NOW_GENERATOR_ID,

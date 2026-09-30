@@ -26,17 +26,32 @@ describe('pg/timestamptz-date@1', () => {
   });
 
   it.each([
-    ['2026-01-02T03:04:05.123Z', '2026-01-02T03:04:05.123Z'],
-    ['0000-01-01T00:00:00.000Z', '0001-01-01T00:00:00.000Z BC'],
-    ['-000043-03-15T00:00:00.000Z', '0044-03-15T00:00:00.000Z BC'],
-    ['-004713-11-24T00:00:00.000Z', '4714-11-24T00:00:00.000Z BC'],
-    ['+275760-09-13T00:00:00.000Z', '275760-09-13T00:00:00.000Z'],
-    ['+012026-01-02T03:04:05.000Z', '12026-01-02T03:04:05.000Z'],
-  ])('encodes %s as PostgreSQL-compatible UTC text', async (iso, wire) => {
-    const value = new Date(iso);
-    expect(await codec.encode(value, {})).toBe(wire);
-    expect(codec.encodeJson(value)).toBe(wire);
-    expect(await codec.decode(wire, {})).toEqual(value);
+    ['2026-01-02T03:04:05.123Z', '2026-01-02T03:04:05.123Z', '2026-01-02T03:04:05.123Z'],
+    ['2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05Z'],
+    ['0000-01-01T00:00:00.000Z', '0001-01-01T00:00:00.000Z BC', '0000-01-01T00:00:00Z'],
+    ['-000043-03-15T00:00:00.000Z', '0044-03-15T00:00:00.000Z BC', '-000043-03-15T00:00:00Z'],
+    ['-004713-11-24T00:00:00.000Z', '4714-11-24T00:00:00.000Z BC', '-004713-11-24T00:00:00Z'],
+    ['+275760-09-13T00:00:00.000Z', '275760-09-13T00:00:00.000Z', '+275760-09-13T00:00:00Z'],
+    ['+012026-01-02T03:04:05.000Z', '12026-01-02T03:04:05.000Z', '+012026-01-02T03:04:05Z'],
+  ])(
+    'encodes %s as PostgreSQL text on the wire and in canonical form in JSON',
+    async (iso, wire, json) => {
+      const value = new Date(iso);
+      expect({
+        wire: await codec.encode(value, {}),
+        json: codec.encodeJson(value),
+        fromWire: await codec.decode(wire, {}),
+        fromJson: codec.decodeJson(json),
+      }).toEqual({ wire, json, fromWire: value, fromJson: value });
+    },
+  );
+
+  it.each([
+    ['2026-01-02T03:04:05.000Z', '2026-01-02T03:04:05.000Z'],
+    ['0001-01-01T00:00:00.000Z BC', '0000-01-01T00:00:00.000Z'],
+    ['0044-03-15T00:00:00.000Z BC', '-000043-03-15T00:00:00.000Z'],
+  ])('still reads %s, the JSON text it wrote before the canonical form', (json, iso) => {
+    expect(codec.decodeJson(json)).toEqual(new Date(iso));
   });
 
   it.each([

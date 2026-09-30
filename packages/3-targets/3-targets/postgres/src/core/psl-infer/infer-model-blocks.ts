@@ -24,7 +24,11 @@ import {
   computeCheckContentHash,
   formatWireName,
 } from '@internal/sql-schema-ir/naming';
-import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import {
+  defaultInCanonicalForm,
+  type SqlColumnIR,
+  type SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
 import {
@@ -393,10 +397,23 @@ function literalOrRawAttribute(
   defaultMapping: DefaultMappingOptions,
   readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
 ): string | undefined {
+  const printed: ColumnDefault =
+    columnDefault.kind === 'literal'
+      ? {
+          kind: 'literal',
+          value: defaultInCanonicalForm(
+            columnDefault.value,
+            defaultMapping.columnDataType === undefined
+              ? undefined
+              : defaultMapping.dataTypes?.get(defaultMapping.columnDataType)?.toCanonicalForm,
+            defaultMapping.list === true,
+          ).value,
+        }
+      : columnDefault;
   const result =
-    columnDefault.kind === 'literal' && !readsBack(columnDefault.value)
+    printed.kind === 'literal' && !readsBack(printed.value)
       ? undefined
-      : mapDefault(columnDefault, defaultMapping);
+      : mapDefault(printed, defaultMapping);
   if (result !== undefined) return result.attribute;
   return typeof column.default === 'string'
     ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)

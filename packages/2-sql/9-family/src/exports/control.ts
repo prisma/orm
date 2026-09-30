@@ -39,6 +39,8 @@ export {
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
 } from '../core/migrations/control-policy';
+export type { DataTypeResolver } from '../core/migrations/data-type-resolver';
+export { buildDataTypeResolver } from '../core/migrations/data-type-resolver';
 export type { PlanFieldEventOperationsOptions } from '../core/migrations/field-event-planner';
 export { planFieldEventOperations } from '../core/migrations/field-event-planner';
 export { buildNativeTypeExpander } from '../core/migrations/native-type-expander';

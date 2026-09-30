@@ -351,18 +351,21 @@ model User {
       if (result.ok) return;
 
       expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: schemaPath,
-            message: expect.stringContaining('Unknown'),
-            span: expect.objectContaining({
-              start: expect.objectContaining({ line: 4 }),
-            }),
-          }),
-        ]),
-      );
+      expect(
+        result.failure.diagnostics.map(({ code, message, sourceId, span }) => ({
+          code,
+          message,
+          sourceId,
+          line: span?.start.line,
+        })),
+      ).toEqual([
+        {
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "Unknown"',
+          sourceId: schemaPath,
+          line: 4,
+        },
+      ]);
     });
 
     it('returns diagnostics when navigation list fields declare unsupported attributes', async () => {
@@ -510,9 +513,10 @@ model Other {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const codes = result.failure.diagnostics.map((d) => d.code);
-      expect(codes).toContain('PSL_DUPLICATE_DECLARATION');
-      expect(codes).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+      expect(result.failure.diagnostics.map((d) => d.code)).toEqual([
+        'PSL_DUPLICATE_DECLARATION',
+        'PSL_UNRESOLVED_REFERENCE',
+      ]);
     });
   });
 
@@ -839,13 +843,9 @@ model User {
       );
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          }),
-        ]),
-      );
+      expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+        { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Bytes"' },
+      ]);
     });
   });
 

@@ -88,7 +88,7 @@ describe('a sql`...` default on Postgres renders as authored', () => {
         type: nativeType,
         default: { kind: 'function', expression },
       });
-      expect(renderColumnDefaultSql(defaultNodeOf(column), new Map())).toBe(
+      expect(renderColumnDefaultSql('v', defaultNodeOf(column), new Map())).toBe(
         `DEFAULT (${expression})`,
       );
     },

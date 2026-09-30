@@ -588,17 +588,16 @@ model Post {
         throw new Error('Expected source provider to fail for unsupported field type');
       }
       expect(sourceResult.failure.summary).toBe('PSL to SQL contract interpretation failed');
-      expect(sourceResult.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: join(testSetup.testDir, 'schema.prisma'),
-            span: expect.objectContaining({
-              start: expect.objectContaining({ line: 4 }),
-            }),
+      expect(sourceResult.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "Unsupported"',
+          sourceId: join(testSetup.testDir, 'schema.prisma'),
+          span: expect.objectContaining({
+            start: expect.objectContaining({ line: 4 }),
           }),
-        ]),
-      );
+        }),
+      ]);
 
       const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
       expect(run.exitCode).toBe(2);
@@ -615,7 +614,9 @@ model Post {
       });
 
       const reported = JSON.stringify(envelope);
-      expect(reported).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+      expect(reported).toContain('PSL_UNRESOLVED_REFERENCE');
+      expect(reported).toContain(JSON.stringify('Cannot find type "Unsupported"'));
+      expect(reported).not.toContain('PSL_UNSUPPORTED_FIELD_TYPE');
       expect(reported).toContain('schema.prisma');
     } finally {
       testSetup.cleanup();

@@ -66,26 +66,7 @@ import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
-
-export function findModelAttributeNode(
-  model: ModelSymbol,
-  name: string,
-): ModelAttributeAst | undefined {
-  for (const attribute of model.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
-export function findFieldAttributeNode(
-  field: FieldSymbol,
-  name: string,
-): FieldAttributeAst | undefined {
-  for (const attribute of field.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
+import { getAttribute } from './psl-attribute-parsing';
 
 function buildModelAttributeCtx(input: {
   readonly symbols: SymbolTable;
@@ -670,7 +651,7 @@ function baseModelSpec() {
 }
 
 function relationAttributeSpan(ctx: FieldAttributeCtx): PslSpan {
-  const node = findFieldAttributeNode(ctx.field, 'relation');
+  const node = getAttribute(ctx.field.attributes, 'relation')?.node;
   if (node !== undefined) {
     return nodePslSpan(node.syntax, ctx.sources);
   }

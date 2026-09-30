@@ -441,9 +441,26 @@ describe('createBinder — diagnostics', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message: 'Cannot find type "Dog"',
-        data: { reference: 'type', name: 'Dog' },
+        data: { reference: 'type', name: 'Dog', constructorCall: false },
         filename: '1.psl',
         range: { start: { line: 1, character: 6 }, end: { line: 1, character: 9 } },
+      },
+    ]);
+  });
+
+  it('distinguishes an unresolved type name from an unresolved type-constructor call', () => {
+    const { diagnostics } = bind(
+      'model Cart {\n  plain unknown.Thing\n  called unknown.Thing(3)\n}',
+    );
+
+    expect(diagnostics.map(({ message, data }) => ({ message, data }))).toEqual([
+      {
+        message: 'Cannot find type "unknown.Thing"',
+        data: { reference: 'type', name: 'unknown.Thing', constructorCall: false },
+      },
+      {
+        message: 'Cannot find type "unknown.Thing"',
+        data: { reference: 'type', name: 'unknown.Thing', constructorCall: true },
       },
     ]);
   });

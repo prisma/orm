@@ -18,7 +18,11 @@ import type {
   ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
-import { diagnosticSource, type PslDiagnosticCollector } from '@internal/psl-parser';
+import {
+  diagnosticSource,
+  type PslDiagnosticCollector,
+  typeReferenceNode,
+} from '@internal/psl-parser';
 import { uncomposedNamespaceDiagnostic } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import type {
@@ -30,16 +34,16 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { DataTypeSupport } from './data-type-default';
-import { defaultTableName } from './default-table-name';
-import { formatDbAttributeMigrationMessage, getAttribute } from './psl-attribute-parsing';
+import {
+  formatDbAttributeMigrationMessage,
+  getAttribute,
+  storageName,
+} from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
 import { lowerDefaultForField, resolveFieldTypeDescriptor } from './psl-column-resolution';
 import {
   fieldSpecContext,
-  findFieldAttributeNode,
-  findModelAttributeNode,
   interpretFieldAttribute,
-  interpretModelAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
 
@@ -62,7 +66,7 @@ function lowerEnumDefaultForField(input: {
   readonly diagnostics: PslDiagnosticCollector;
 }): LoweredFieldDefault {
   const { field, model, enumHandle, diagnostics } = input;
-  const node = findFieldAttributeNode(field, 'default');
+  const node = getAttribute(field.attributes, 'default')?.node;
   if (node === undefined) return {};
   if (enumHandle.enumMembers.length === 0) return {};
   const spec = sqlAttributeSpecs.field.default(
@@ -126,12 +130,6 @@ export type ResolvedField = {
   readonly scalarCodecId?: string;
 };
 
-export type ModelNameMapping = {
-  readonly model: ModelSymbol;
-  readonly tableName: string;
-  readonly fieldColumns: Map<string, string>;
-};
-
 /**
  * A PSL model paired with its resolved namespace coordinate (undefined when
  * the target leaves the model late-bound). Two models may share a bare name
@@ -152,12 +150,10 @@ export function modelCoordinateKey(namespaceId: string, modelName: string): stri
 
 export interface CollectResolvedFieldsInput {
   readonly model: ModelSymbol;
+  readonly physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
   readonly symbolTable: SymbolTable;
-  readonly mapping: ModelNameMapping;
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
-  readonly modelNames: Set<string>;
-  readonly compositeTypeNames: ReadonlySet<string>;
   readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly familyId: string;
@@ -307,7 +303,7 @@ function extractFieldConstraintNames(input: {
 } {
   const idAttribute = getAttribute(input.field.attributes, 'id');
   const uniqueAttribute = getAttribute(input.field.attributes, 'unique');
-  const idNode = findFieldAttributeNode(input.field, 'id');
+  const idNode = getAttribute(input.field.attributes, 'id')?.node;
   const idName =
     idNode === undefined
       ? undefined
@@ -321,7 +317,7 @@ function extractFieldConstraintNames(input: {
           binder: input.binder,
           diagnostics: input.diagnostics,
         })?.map;
-  const uniqueNode = findFieldAttributeNode(input.field, 'unique');
+  const uniqueNode = getAttribute(input.field.attributes, 'unique')?.node;
   const uniqueName =
     uniqueNode === undefined
       ? undefined
@@ -359,7 +355,7 @@ function lowerNoCheckForField(input: {
   readonly isDomainEnum: boolean;
   readonly diagnostics: PslDiagnosticCollector;
 }): readonly NoCheckKind[] | undefined {
-  const node = findFieldAttributeNode(input.field, 'noCheck');
+  const node = getAttribute(input.field.attributes, 'noCheck')?.node;
   if (node === undefined) return undefined;
   const interpreted = interpretFieldAttribute({
     node,
@@ -414,11 +410,8 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
   const {
     model,
     symbolTable,
-    mapping,
     enumTypeDescriptors,
     namedTypeDescriptors,
-    modelNames,
-    compositeTypeNames,
     composedExtensions,
     authoringContributions,
     binder,
@@ -457,7 +450,10 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
 
   for (const field of Object.values(model.fields)) {
     const source = diagnosticSource(sources, field.node.syntax);
-    const isModelField = modelNames.has(field.typeName);
+    const fieldTypeReference = typeReferenceNode(field);
+    const fieldTypeResolution =
+      fieldTypeReference === undefined ? undefined : binder.symbolForNode(fieldTypeReference);
+    const isModelField = fieldTypeResolution?.kind === 'model';
 
     if (field.list && isModelField) {
       continue;
@@ -481,7 +477,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       continue;
     }
 
-    const isValueObjectField = compositeTypeNames.has(field.typeName);
+    const isValueObjectField = fieldTypeResolution?.kind === 'compositeType';
     const isListField = field.list;
 
     let descriptor: ColumnDescriptor | undefined;
@@ -523,7 +519,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       }
       const resolved = resolveFieldTypeDescriptor(resolveInput);
       if (!resolved.ok) {
-        if (!resolved.alreadyReported) {
+        if (!resolved.alreadyReported && fieldTypeResolution?.kind !== 'unresolved') {
           diagnostics.push({
             code: 'PSL_UNSUPPORTED_FIELD_TYPE',
             message: `Field "${model.name}.${field.name}" type "${field.typeName}" is not supported in SQL PSL provider v1`,
@@ -547,7 +543,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     } else {
       const resolved = resolveFieldTypeDescriptor(resolveInput);
       if (!resolved.ok) {
-        if (!resolved.alreadyReported) {
+        if (!resolved.alreadyReported && fieldTypeResolution?.kind !== 'unresolved') {
           diagnostics.push({
             code: 'PSL_UNSUPPORTED_FIELD_TYPE',
             message: `Field "${model.name}.${field.name}" type "${field.typeName}" is not supported in SQL PSL provider v1`,
@@ -652,7 +648,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       });
       continue;
     }
-    const mappedColumnName = mapping.fieldColumns.get(field.name) ?? field.name;
+    const mappedColumnName = storageName(field, input.physicalNames);
     const { idAttribute, uniqueAttribute, idName, uniqueName } = extractFieldConstraintNames({
       symbolTable: input.symbolTable,
       model,
@@ -734,54 +730,4 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
   }
 
   return resolvedFields;
-}
-
-export function buildModelMappings(
-  symbols: SymbolTable,
-  modelEntries: readonly ModelNamespaceEntry[],
-  defaultNamespaceId: string,
-  diagnostics: PslDiagnosticCollector,
-  sources: PslSources,
-  binder: Binder,
-): Map<string, ModelNameMapping> {
-  const result = new Map<string, ModelNameMapping>();
-  for (const { model, namespaceId } of modelEntries) {
-    const mapNode = findModelAttributeNode(model, 'map');
-    const tableName =
-      mapNode === undefined
-        ? defaultTableName(model.name)
-        : (interpretModelAttribute({
-            node: mapNode,
-            symbols,
-            spec: sqlAttributeSpecs.model.map(),
-            model,
-            sources,
-            binder,
-            diagnostics,
-          })?.name ?? defaultTableName(model.name));
-    const fieldColumns = new Map<string, string>();
-    for (const field of Object.values(model.fields)) {
-      const fieldMapNode = findFieldAttributeNode(field, 'map');
-      const columnName =
-        fieldMapNode === undefined
-          ? field.name
-          : (interpretFieldAttribute({
-              node: fieldMapNode,
-              symbols,
-              spec: sqlAttributeSpecs.field.map(),
-              model,
-              field,
-              binder,
-              sources,
-              diagnostics,
-            })?.name ?? field.name);
-      fieldColumns.set(field.name, columnName);
-    }
-    result.set(modelCoordinateKey(namespaceId ?? defaultNamespaceId, model.name), {
-      model,
-      tableName,
-      fieldColumns,
-    });
-  }
-  return result;
 }

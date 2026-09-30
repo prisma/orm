@@ -255,15 +255,40 @@ example audit.foo()
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNKNOWN_FIELD_PRESET',
-          sourceId: 'schema.prisma',
-          message: expect.stringContaining('audit.foo'),
-          data: { namespace: 'audit', helperPath: 'audit.foo' },
-        }),
-      ]),
-    );
+    expect(result.failure.diagnostics).toEqual([
+      {
+        code: 'PSL_UNKNOWN_FIELD_PRESET',
+        sourceId: 'schema.prisma',
+        message:
+          'Field "Bad.example" references unknown field preset "audit.foo". Check the spelling against the available presets in the "audit" namespace.',
+        span: {
+          start: { offset: 31, line: 3, column: 9 },
+          end: { offset: 42, line: 3, column: 20 },
+        },
+        data: { namespace: 'audit', helperPath: 'audit.foo' },
+      },
+    ]);
+  });
+
+  it('keeps the binder voice for a bare name in a registered field namespace', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Bad {
+id Int @id
+example audit.foo
+}`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+      authoringContributions: { field: { audit: {} }, type: {} },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "audit.foo"' },
+    ]);
   });
 });

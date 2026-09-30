@@ -54,12 +54,12 @@ describe('postgres defineContract encodes literal defaults through the column co
     });
   });
 
-  it('stores a Date given to field.temporal.timestamptzJsDate()', () => {
+  it('stores the canonical form of a Date given to field.temporal.timestamptzJsDate()', () => {
     expect(
       storedDefault((field) =>
         field.temporal.timestamptzJsDate().default(new Date('2024-01-01T00:00:00Z')),
       ),
-    ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00.000Z' });
+    ).toEqual({ kind: 'literal', value: '2024-01-01T00:00:00Z' });
   });
 
   it('refuses a fractional number on a bigint column', () => {
