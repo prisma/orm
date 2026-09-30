@@ -512,17 +512,19 @@ describe('db verify', () => {
         },
       });
 
-      it('leads with re-emitting the contract', async () => {
+      it('offers only re-emitting the contract', async () => {
         const dir = await projectDir();
         mocks.dbVerify.mockResolvedValue(aggregateOk({ perSpace: [['app', REFUSED]] }));
 
         const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
 
-        expect(diagnosticsOf(run)[0]?.nextActions[0]).toEqual({
-          kind: 'run-command',
-          label: 'Re-emit the contract first, then verify again',
-          command: 'prisma-test contract emit',
-        });
+        expect(diagnosticsOf(run)[0]?.nextActions).toEqual([
+          {
+            kind: 'run-command',
+            label: 'Re-emit the contract, which stores the refused default as its type holds it',
+            command: 'prisma-test contract emit',
+          },
+        ]);
       });
 
       it('prints the refusal on the missing default', async () => {
@@ -536,7 +538,8 @@ describe('db verify', () => {
         const shown = stripAnsi(`${run.stderr}\n${run.stdout}`);
 
         expect(shown).toContain(`missing: public/event/at/default. ${REFUSAL}`);
-        expect(shown.indexOf('contract emit')).toBeLessThan(shown.indexOf('db update'));
+        expect(shown).toContain('contract emit');
+        expect(shown).not.toContain('db update');
       });
     });
 

@@ -298,8 +298,9 @@ function sentence(text: string): string {
 }
 
 /**
- * What to do about schema drift. An issue with an explanation means the contract holds a value its
- * type refuses, which only re-emitting the contract fixes, so that comes first.
+ * What to do about schema drift. An issue with an explanation means the emitted contract holds a
+ * value its type refuses. Only re-emitting fixes that, and the re-emitted contract has a new hash,
+ * so that is the one action offered.
  */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
@@ -324,10 +325,9 @@ export function schemaDriftNextActions(inputs: {
   return contractRefused
     ? [
         runCommandAction(
-          `Re-emit the contract first, then ${retryAfterEmit}`,
+          'Re-emit the contract, which stores the refused default as its type holds it',
           '{bin} contract emit',
         ),
-        ...drift,
       ]
     : drift;
 }

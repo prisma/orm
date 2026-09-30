@@ -55,7 +55,7 @@ describe('schemaDriftNextActions', () => {
     ]);
   });
 
-  it('points a sign of a snapshot at the emitted contract after re-emitting', () => {
+  it('offers only re-emitting when a sign of a snapshot finds a refused contract value', () => {
     expect(
       schemaDriftNextActions({
         verb: 'sign',
@@ -67,15 +67,17 @@ describe('schemaDriftNextActions', () => {
             explanation: 'Re-emit the contract, then try again.',
           },
         ],
-      })[0],
-    ).toEqual({
-      kind: 'run-command',
-      label: 'Re-emit the contract first, then sign the emitted contract instead of "staging"',
-      command: '{bin} contract emit',
-    });
+      }),
+    ).toEqual([
+      {
+        kind: 'run-command',
+        label: 'Re-emit the contract, which stores the refused default as its type holds it',
+        command: '{bin} contract emit',
+      },
+    ]);
   });
 
-  it('leads with re-emitting the contract when an issue explains a refused contract value', () => {
+  it('offers only re-emitting the contract when an issue explains a refused contract value', () => {
     expect(
       schemaDriftNextActions({
         verb: 'verify',
@@ -92,18 +94,8 @@ describe('schemaDriftNextActions', () => {
     ).toEqual([
       {
         kind: 'run-command',
-        label: 'Re-emit the contract first, then verify again',
+        label: 'Re-emit the contract, which stores the refused default as its type holds it',
         command: '{bin} contract emit',
-      },
-      {
-        kind: 'run-command',
-        label: 'Change the database to match the contract, then verify again',
-        command: '{bin} db update',
-      },
-      {
-        kind: 'user-choice',
-        label:
-          'Or change the contract source to describe the database as it is, re-run contract emit, then verify again',
       },
     ]);
   });
