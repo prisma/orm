@@ -163,6 +163,7 @@ export {
 } from '../resolve';
 export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
 export type { Scope, ScopeResolution } from '../scope';
+export { isNamespaceLike, memberEntries } from '../scope';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,

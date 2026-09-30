@@ -84,6 +84,7 @@ export type Resolution =
 export interface Binder {
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined;
   symbolForNode(node: SyntaxNode): Resolution | undefined;
+  scopeAt(node: SyntaxNode): Scope;
 }
 
 export interface UnsupportedAttribute {
@@ -119,13 +120,22 @@ export function typeReferenceNode(field: FieldSymbol): SyntaxNode | undefined {
 class PslBinder implements Binder {
   readonly #declarations: WeakMap<SyntaxNode, PslSymbol>;
   readonly #references: WeakMap<SyntaxNode, Resolution>;
+  readonly #sources: PslSources;
+  readonly #documentScope: Scope;
+  readonly #scopes: WeakMap<SyntaxNode, Scope>;
 
   constructor(
     declarations: WeakMap<SyntaxNode, PslSymbol>,
     references: WeakMap<SyntaxNode, Resolution>,
+    sources: PslSources,
+    documentScope: Scope,
+    scopes: WeakMap<SyntaxNode, Scope>,
   ) {
     this.#declarations = declarations;
     this.#references = references;
+    this.#sources = sources;
+    this.#documentScope = documentScope;
+    this.#scopes = scopes;
   }
 
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined {
@@ -135,43 +145,25 @@ class PslBinder implements Binder {
   symbolForNode(node: SyntaxNode): Resolution | undefined {
     return this.#references.get(node);
   }
-}
 
-class ScopeStack {
-  readonly #base: Scope;
-  readonly #scopes: Scope[];
-
-  constructor(base: Scope) {
-    this.#base = base;
-    this.#scopes = [base];
-  }
-
-  current(): Scope {
-    return this.#scopes[this.#scopes.length - 1] ?? this.#base;
-  }
-
-  push(scope: Scope): void {
-    this.#scopes.push(scope);
-  }
-
-  pop(): void {
-    this.#scopes.pop();
+  scopeAt(node: SyntaxNode): Scope {
+    this.#sources.sourceFileFor(node);
+    return node.findAncestor((ancestor) => this.#scopes.get(ancestor)) ?? this.#documentScope;
   }
 }
 
 function walkEntities(
   symbolTable: SymbolTable,
-  stack: ScopeStack,
-  visit: (entity: ModelSymbol | CompositeTypeSymbol) => void,
+  documentScope: Scope,
+  namespaceScopes: ReadonlyMap<NamespaceSymbol, Scope>,
+  visit: (entity: ModelSymbol | CompositeTypeSymbol, scope: Scope) => void,
 ): void {
   const { topLevel } = symbolTable;
-  for (const entity of Object.values(topLevel.models)) visit(entity);
-  for (const entity of Object.values(topLevel.compositeTypes)) visit(entity);
-  for (const namespace of Object.values(topLevel.namespaces)) {
-    stack.push(namespaceScope(namespace, stack.current()));
-    for (const entity of Object.values(namespace.models)) visit(entity);
-    for (const entity of Object.values(namespace.compositeTypes)) visit(entity);
-    stack.pop();
+  for (const entity of Object.values(topLevel.models)) visit(entity, documentScope);
+  for (const entity of Object.values(topLevel.compositeTypes)) visit(entity, documentScope);
+  for (const [namespace, scope] of namespaceScopes) {
+    for (const entity of Object.values(namespace.models)) visit(entity, scope);
+    for (const entity of Object.values(namespace.compositeTypes)) visit(entity, scope);
   }
 }
 
@@ -185,13 +177,16 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     describeUnsupportedAttribute,
   } = options;
   const pslBlockDescriptors = options.pslBlockDescriptors ?? {};
-  const stack = new ScopeStack(
-    documentScope(symbolTable.topLevel, contributedScope(contributedTypeScope(typeConstructors))),
+  const document = documentScope(
+    symbolTable.topLevel,
+    contributedScope(contributedTypeScope(typeConstructors)),
   );
+  const namespaceScopes = new Map<NamespaceSymbol, Scope>();
+  const scopes = new WeakMap<SyntaxNode, Scope>();
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
   const diagnostics: ParseDiagnostic[] = [];
-  const binder = new PslBinder(declarations, references);
+  const binder = new PslBinder(declarations, references, sources, document, scopes);
 
   for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -200,8 +195,11 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     declarations.set(symbol.node.syntax, symbol);
   }
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    const scope = namespaceScope(namespace, document);
+    namespaceScopes.set(namespace, scope);
     for (const declaration of namespace.declarations) {
       declarations.set(declaration.node.syntax, namespace);
+      scopes.set(declaration.node.syntax, scope);
     }
     for (const symbol of Object.values(namespace.blocks)) {
       declarations.set(symbol.node.syntax, symbol);
@@ -211,13 +209,13 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   // Attributes are parsed in a second walk once every field type is bound.
   // @relation(references: [x]) reads the referenced model's fields, and that
   // model may be declared further down the file.
-  walkEntities(symbolTable, stack, (entity) => {
+  walkEntities(symbolTable, document, namespaceScopes, (entity, scope) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const outcome = resolveTypeReference(field, stack.current());
+      const outcome = resolveTypeReference(field, scope);
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
       if (outcome.message !== undefined) {
@@ -235,10 +233,10 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   });
 
-  walkEntities(symbolTable, stack, (entity) => {
+  walkEntities(symbolTable, document, namespaceScopes, (entity, scope) => {
     const context = {
       owner: entity,
-      scope: stack.current(),
+      scope,
       references,
       diagnostics,
       symbolTable,
@@ -274,15 +272,13 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     references,
     diagnostics,
   };
-  const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>) => {
-    const context = { ...blockContext, scope: stack.current() };
+  const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>, scope: Scope) => {
+    const context = { ...blockContext, scope };
     for (const block of Object.values(blocks)) bindBlock(block, context);
   };
-  bindBlocks(symbolTable.topLevel.blocks);
-  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
-    stack.push(namespaceScope(namespace, stack.current()));
-    bindBlocks(namespace.blocks);
-    stack.pop();
+  bindBlocks(symbolTable.topLevel.blocks, document);
+  for (const [namespace, scope] of namespaceScopes) {
+    bindBlocks(namespace.blocks, scope);
   }
 
   return { binder, diagnostics };

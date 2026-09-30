@@ -32,6 +32,32 @@ export type ScopeResolution =
 
 export interface Scope {
   lookup(name: string): ScopeResolution | undefined;
+  entries(): Iterable<readonly [string, ScopeResolution]>;
+}
+
+function ownMember<T>(record: Readonly<Record<string, T>>, name: string): T | undefined {
+  return Object.hasOwn(record, name) ? record[name] : undefined;
+}
+
+function* recordNames(...records: readonly Readonly<Record<string, unknown>>[]): Iterable<string> {
+  for (const record of records) yield* Object.keys(record);
+}
+
+function* visibleEntries(
+  names: Iterable<string>,
+  lookup: (name: string) => ScopeResolution | undefined,
+  parent?: Scope,
+): Iterable<readonly [string, ScopeResolution]> {
+  const seen = new Set<string>();
+  for (const name of names) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const resolution = lookup(name);
+    if (resolution !== undefined) yield [name, resolution];
+  }
+  for (const entry of parent?.entries() ?? []) {
+    if (!seen.has(entry[0])) yield entry;
+  }
 }
 
 function contributedResolution(member: ContributedMember): ScopeResolution {
@@ -41,12 +67,12 @@ function contributedResolution(member: ContributedMember): ScopeResolution {
 }
 
 function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolution | undefined {
-  const model = namespace.models[name];
+  const model = ownMember(namespace.models, name);
   if (model !== undefined) return { kind: 'model', symbol: model, namespace };
-  const compositeType = namespace.compositeTypes[name];
+  const compositeType = ownMember(namespace.compositeTypes, name);
   if (compositeType !== undefined)
     return { kind: 'compositeType', symbol: compositeType, namespace };
-  const block = namespace.blocks[name];
+  const block = ownMember(namespace.blocks, name);
   if (block !== undefined) return { kind: 'block', symbol: block, namespace };
   return undefined;
 }
@@ -62,6 +88,12 @@ class ContributedScope implements Scope {
     const member = this.#registry.lookup(name);
     return member === undefined ? undefined : contributedResolution(member);
   }
+
+  *entries(): Iterable<readonly [string, ScopeResolution]> {
+    for (const [name, member] of this.#registry.entries()) {
+      yield [name, contributedResolution(member)];
+    }
+  }
 }
 
 class DocumentScope implements Scope {
@@ -75,17 +107,32 @@ class DocumentScope implements Scope {
 
   lookup(name: string): ScopeResolution | undefined {
     const records = this.#records;
-    const model = records.models[name];
+    const model = ownMember(records.models, name);
     if (model !== undefined) return { kind: 'model', symbol: model };
-    const compositeType = records.compositeTypes[name];
+    const compositeType = ownMember(records.compositeTypes, name);
     if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-    const namedType = records.namedTypes[name];
+    const namedType = ownMember(records.namedTypes, name);
     if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
-    const block = records.blocks[name];
+    const block = ownMember(records.blocks, name);
     if (block !== undefined) return { kind: 'block', symbol: block };
-    const namespace = records.namespaces[name];
+    const namespace = ownMember(records.namespaces, name);
     if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
     return this.#parent?.lookup(name);
+  }
+
+  entries(): Iterable<readonly [string, ScopeResolution]> {
+    const records = this.#records;
+    return visibleEntries(
+      recordNames(
+        records.models,
+        records.compositeTypes,
+        records.namedTypes,
+        records.blocks,
+        records.namespaces,
+      ),
+      (name) => this.lookup(name),
+      this.#parent,
+    );
   }
 }
 
@@ -100,6 +147,15 @@ class NamespaceScope implements Scope {
 
   lookup(name: string): ScopeResolution | undefined {
     return namespaceMember(this.#namespace, name) ?? this.#parent.lookup(name);
+  }
+
+  entries(): Iterable<readonly [string, ScopeResolution]> {
+    const namespace = this.#namespace;
+    return visibleEntries(
+      recordNames(namespace.models, namespace.compositeTypes, namespace.blocks),
+      (name) => this.lookup(name),
+      this.#parent,
+    );
   }
 }
 
@@ -119,6 +175,22 @@ export function isNamespaceLike(
   resolution: ScopeResolution,
 ): resolution is Extract<ScopeResolution, { kind: 'namespace' | 'contributedNamespace' }> {
   return resolution.kind === 'namespace' || resolution.kind === 'contributedNamespace';
+}
+
+export function* memberEntries(
+  qualifier: Extract<ScopeResolution, { kind: 'namespace' | 'contributedNamespace' }>,
+): Iterable<readonly [string, ScopeResolution]> {
+  if (qualifier.kind === 'contributedNamespace') {
+    for (const [name, member] of qualifier.symbol.members) {
+      yield [name, contributedResolution(member)];
+    }
+    return;
+  }
+  const namespace = qualifier.symbol;
+  yield* visibleEntries(
+    recordNames(namespace.models, namespace.compositeTypes, namespace.blocks),
+    (name) => lookupMember(qualifier, name),
+  );
 }
 
 export function lookupMember(
