@@ -82,7 +82,6 @@ type ColumnSpec = {
   readonly many?: false | { readonly elementNullable: boolean };
 };
 
-/** Builds the checks the Postgres pack would emit for one column. */
 function checksForColumn(
   tableName: string,
   columnName: string,

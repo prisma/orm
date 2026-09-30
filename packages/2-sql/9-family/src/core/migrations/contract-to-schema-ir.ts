@@ -123,7 +123,7 @@ function convertColumn(
   // form: it is the side both this and the introspected column already
   // agree on as the comparable "expanded" type.
   const nativeType = baseNativeType;
-  const many = column.many !== false;
+  const many = column.many !== undefined && column.many !== false;
   const resolvedNativeType = many ? `${baseNativeType}[]` : baseNativeType;
   const rawColumnDefault = column.default ?? undefined;
   const resolvedColumnDefault =
