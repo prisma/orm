@@ -217,6 +217,7 @@ describe('the orm section', () => {
       'contract.source.parserOptions.grammer',
     ]);
     expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-7' }) } }))).toEqual([]);
+    expect(fields(validRaw({ contract: { source: source({ grammar: 'prisma-8' }) } }))).toEqual([]);
   });
 
   it('reports migrations and formatter problems', () => {

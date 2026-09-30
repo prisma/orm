@@ -103,6 +103,16 @@ describe('a view block body, by default', () => {
     const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_EXTENSION_BLOCK_MEMBER']);
   });
+
+  it('parses the same way when the grammar is prisma-8 explicitly', () => {
+    const source = 'view ActiveUsers {\n  id Int @unique\n}';
+    const explicit = parse(source, 'test.psl', { grammar: 'prisma-8' });
+    const implicit = parse(source, 'test.psl');
+    expect(printTree(explicit.document.syntax.green)).toBe(
+      printTree(implicit.document.syntax.green),
+    );
+    expect(explicit.diagnostics).toEqual(implicit.diagnostics);
+  });
 });
 
 describe('a generic block that is not a view or an enum', () => {

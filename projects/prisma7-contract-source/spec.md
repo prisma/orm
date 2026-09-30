@@ -42,7 +42,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 - Migration history and `_prisma_migrations`.
 - Prisma 6 SQL schemas that are not valid Prisma 7 schemas. The Mongo slice is the exception it has to be: Prisma 7 has no MongoDB connector, so that slice reads the Prisma 6 MongoDB dialect through `prisma6Schema`.
 - Extending the Prisma 7 dialect. It is frozen.
-- Teaching the language server to read Prisma 7 files. `contract format` formats a Prisma 7 schema with the Prisma 8 formatter when it parses, because the Prisma 7 source is a `psl` source.
+- Teaching the language server to read Prisma 7 files. It reads only files marked `// use prisma-8`, which a Prisma 7 schema does not carry. When it reads a file of a source that declares a grammar, it parses the file in that grammar. `contract format` parses a Prisma 7 source's files in the `prisma-7` grammar and formats them with the Prisma 8 formatter, because the Prisma 7 source is a `psl` source.
 
 ## Place in the larger world
 
@@ -74,7 +74,7 @@ Postgres and Mongo. SQLite is not a Prisma 7 side-by-side target in this project
 
 ## ADR pointer
 
-[ADR 252 — An earlier Prisma version's schema is a contract source](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the decisions: the earlier dialect as a first-class contract source, hard errors instead of relaxed Prisma 8 checks, fidelity defined by `db verify`, one parser grammar for every PSL document, where dialect rules and target facts live, the public names, and the diagnostic code space. The extension point itself is [ADR 163](<../../docs/architecture docs/adrs/ADR 163 - Provider-invoked source interpretation packages.md>), which this project follows rather than changes.
+[ADR 252 — An earlier Prisma version's schema is a contract source](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the decisions: the earlier dialect as a first-class contract source, hard errors instead of relaxed Prisma 8 checks, fidelity defined by `db verify`, one parser for every PSL document, reading the grammar version the source declares, where dialect rules and target facts live, the public names, and the diagnostic code space. The extension point itself is [ADR 163](<../../docs/architecture docs/adrs/ADR 163 - Provider-invoked source interpretation packages.md>), which this project follows rather than changes.
 
 ## Project Definition of Done
 
