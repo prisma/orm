@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../src/config-resolution';
 import { DocumentSnapshot } from '../src/document-snapshot';
 import { providePslSignatureHelp } from '../src/signature-help';
+import { testBinder } from './helpers/binder';
 
 vi.mock('@internal/config-loader', { spy: true });
 
@@ -132,6 +133,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       position: pipeline.sourceFile.positionAt(source.indexOf('Missing')),
       clientSupportsLabelOffsets: true,
       candidates: {
+        binder: testBinder(pipeline),
         symbolTable: pipeline.symbolTable,
         pslBlockDescriptors: {},
         authoringContributions,

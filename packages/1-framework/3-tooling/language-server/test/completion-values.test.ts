@@ -34,6 +34,7 @@ import {
   provideAttributeNamedKeyCompletionItems,
   provideAttributeValueCompletionItems,
 } from '../src/completion-values';
+import { testBinder } from './helpers/binder';
 
 const emptyTabStop1 = '$' + '{1:}';
 const namedTabStop = (index: number, name: string) => `\${${index}:${name}}`;
@@ -216,6 +217,13 @@ function complete(markedSource: string, snippets = false, parameterHints = false
     }),
     sourceFile,
     candidates: {
+      binder: testBinder({
+        sources,
+        symbolTable,
+        scalarTypes: ['String'],
+        authoringContributions,
+        pslBlockDescriptors,
+      }),
       scalarTypes: ['String'],
       pslBlockDescriptors,
       symbolTable,

@@ -1,15 +1,15 @@
 import {
   type AuthoringPslBlockDescriptorNamespace,
   isAuthoringPslBlockDescriptor,
-  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import {
   type AttributeSpec,
   assembleAttributeSpecs,
   blockSpecFactoryOf,
   findBlockDescriptor,
-  type NamespaceSymbol,
-  type SymbolTable,
+  isNamespaceLike,
+  memberEntries,
+  type ScopeResolution,
 } from '@internal/psl-parser';
 import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
 import {
@@ -28,7 +28,7 @@ import type {
   PslCompletionContext,
 } from './completion-context';
 import { requiredArgumentsSnippet } from './completion-snippets';
-import { blockSymbolForNode, localFieldNames, referencedFieldNames } from './completion-symbols';
+import { localFieldNames, referencedFieldNames } from './completion-symbols';
 import {
   provideAttributeArgumentSlotCompletionItems,
   provideAttributeNamedKeyCompletionItems,
@@ -194,18 +194,8 @@ export function providePslCompletionItems(
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
-                  ? localFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    )
-                  : referencedFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    ),
+                  ? localFieldNames(context, input.candidates.binder)
+                  : referencedFieldNames(context, input.candidates.binder),
             },
             spec,
           );
@@ -225,18 +215,8 @@ export function providePslCompletionItems(
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
-                  ? localFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    )
-                  : referencedFieldNames(
-                      context,
-                      input.candidates.symbolTable,
-                      input.candidates.scalarTypes,
-                      input.candidates.authoringContributions?.type,
-                    ),
+                  ? localFieldNames(context, input.candidates.binder)
+                  : referencedFieldNames(context, input.candidates.binder),
             },
             spec,
           );
@@ -446,8 +426,8 @@ function provideGenericBlockKeyCompletionItems(
   if (descriptor === undefined) {
     return [];
   }
-  const block = blockSymbolForNode(source.symbolTable, context.block);
-  if (block === undefined) {
+  const block = source.binder.declaredSymbol(context.block.syntax);
+  if (block?.kind !== 'block') {
     return [];
   }
   const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
@@ -498,11 +478,11 @@ function provideModelTypeCompletionItems(
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
 ): readonly CompletionItem[] {
-  return modelTypeCompletionItems(context, sourceFile, [
-    ...configuredScalarCandidates(source),
-    ...topLevelSymbolCandidates(source.symbolTable, source.scalarTypes),
-    ...allNamespaceCandidates(source.symbolTable),
-  ]);
+  return modelTypeCompletionItems(
+    context,
+    sourceFile,
+    typeCandidates(source.binder.scopeAt(context.field.syntax).entries(), source),
+  );
 }
 
 function provideNamespaceMemberCompletionItems(
@@ -515,10 +495,13 @@ function provideNamespaceMemberCompletionItems(
   if (context.space !== undefined) {
     return [];
   }
+  const qualifier = source.binder.scopeAt(context.field.syntax).lookup(context.namespace);
   return modelTypeCompletionItems(
     context,
     sourceFile,
-    namespaceCandidates(source.symbolTable.topLevel.namespaces[context.namespace]),
+    qualifier !== undefined && isNamespaceLike(qualifier)
+      ? typeCandidates(memberEntries(qualifier), source)
+      : [],
   );
 }
 
@@ -546,131 +529,74 @@ function modelTypeCompletionItems(
   }));
 }
 
-function configuredScalarCandidates(
+function typeCandidates(
+  entries: Iterable<readonly [string, ScopeResolution]>,
   source: PslCompletionCandidateSource,
 ): readonly ModelTypeCompletionCandidate[] {
-  const constructors = source.authoringContributions?.type ?? {};
-  return sortedUnique(source.scalarTypes).map((name) => {
-    const descriptor = constructors[name];
-    const typeConstructor =
-      descriptor !== undefined && isAuthoringTypeConstructorDescriptor(descriptor)
-        ? descriptor
-        : undefined;
-    const base = {
-      label: name,
-      insertText: name,
-      filterText: name,
-      kind: CompletionItemKind.Keyword,
-    };
-    if (typeConstructor?.deprecated !== undefined) {
-      return {
-        ...base,
-        category: 'deprecatedScalar',
-        detail: `Deprecated: use ${typeConstructor.deprecated.replacement}.`,
-        deprecated: true,
-      };
+  const candidates: ModelTypeCompletionCandidate[] = [];
+  for (const [name, resolution] of entries) {
+    const base = { label: name, insertText: name, filterText: name };
+    switch (resolution.kind) {
+      case 'model':
+      case 'compositeType': {
+        const model = resolution.kind === 'model';
+        const detail = model ? 'Model' : 'Composite type';
+        candidates.push({
+          ...base,
+          category:
+            resolution.namespace === undefined
+              ? model
+                ? 'topLevelModel'
+                : 'topLevelCompositeType'
+              : model
+                ? 'namespaceModel'
+                : 'namespaceCompositeType',
+          detail:
+            resolution.namespace === undefined
+              ? detail
+              : `${detail} in namespace ${resolution.namespace.name}`,
+          kind: model ? CompletionItemKind.Class : CompletionItemKind.Struct,
+        });
+        break;
+      }
+      case 'namedType': {
+        const scalar = refinesScalarType(resolution.symbol, source.binder);
+        candidates.push({
+          ...base,
+          category: scalar ? 'scalar' : 'typeAlias',
+          detail: scalar ? 'Scalar type' : 'Type alias',
+          kind: scalar ? CompletionItemKind.Unit : CompletionItemKind.Reference,
+        });
+        break;
+      }
+      case 'namespace':
+      case 'contributedNamespace':
+        candidates.push({
+          ...base,
+          category: 'namespace',
+          detail: 'Namespace',
+          kind: CompletionItemKind.Module,
+        });
+        break;
+      case 'contributedType': {
+        const descriptor = resolution.symbol.descriptor;
+        candidates.push({
+          ...base,
+          category: descriptor.deprecated === undefined ? 'configuredScalar' : 'deprecatedScalar',
+          detail:
+            descriptor.deprecated === undefined
+              ? descriptor.documentation || 'Configured scalar type'
+              : `Deprecated: use ${descriptor.deprecated.replacement}.`,
+          kind: CompletionItemKind.Keyword,
+          ...(descriptor.deprecated === undefined ? {} : { deprecated: true }),
+        });
+        break;
+      }
+      case 'block':
+        break;
     }
-    return {
-      ...base,
-      category: 'configuredScalar',
-      detail: typeConstructor?.documentation || 'Configured scalar type',
-    };
-  });
-}
-
-function topLevelSymbolCandidates(
-  symbolTable: SymbolTable,
-  scalarTypes: readonly string[],
-): readonly ModelTypeCompletionCandidate[] {
-  const { topLevel } = symbolTable;
-  const namedTypes = Object.values(topLevel.namedTypes);
-  const scalarRefinementNames = namedTypes
-    .filter((symbol) => refinesScalarType(symbol, scalarTypes))
-    .map((symbol) => symbol.name)
-    .sort(compareNames);
-  const aliasNames = namedTypes
-    .filter((symbol) => !refinesScalarType(symbol, scalarTypes))
-    .map((symbol) => symbol.name)
-    .sort(compareNames);
-  return [
-    ...symbolCandidates(
-      recordNames(topLevel.models),
-      'topLevelModel',
-      'Model',
-      CompletionItemKind.Class,
-    ),
-    ...symbolCandidates(
-      recordNames(topLevel.compositeTypes),
-      'topLevelCompositeType',
-      'Composite type',
-      CompletionItemKind.Struct,
-    ),
-    ...symbolCandidates(scalarRefinementNames, 'scalar', 'Scalar type', CompletionItemKind.Unit),
-    ...symbolCandidates(aliasNames, 'typeAlias', 'Type alias', CompletionItemKind.Reference),
-  ];
-}
-
-function allNamespaceCandidates(symbolTable: SymbolTable): readonly ModelTypeCompletionCandidate[] {
-  return Object.values(symbolTable.topLevel.namespaces)
-    .sort((left, right) => compareNames(left.name, right.name))
-    .map(namespaceQualifierCandidate);
-}
-
-function namespaceCandidates(
-  namespace: NamespaceSymbol | undefined,
-): readonly ModelTypeCompletionCandidate[] {
-  if (namespace === undefined) {
-    return [];
   }
-  return [
-    ...symbolCandidates(
-      recordNames(namespace.models),
-      'namespaceModel',
-      `Model in namespace ${namespace.name}`,
-      CompletionItemKind.Class,
-    ),
-    ...symbolCandidates(
-      recordNames(namespace.compositeTypes),
-      'namespaceCompositeType',
-      `Composite type in namespace ${namespace.name}`,
-      CompletionItemKind.Struct,
-    ),
-  ];
-}
-
-function namespaceQualifierCandidate(namespace: NamespaceSymbol): ModelTypeCompletionCandidate {
-  return {
-    category: 'namespace',
-    label: namespace.name,
-    insertText: namespace.name,
-    filterText: namespace.name,
-    detail: 'Namespace',
-    kind: CompletionItemKind.Module,
-  };
-}
-
-function symbolCandidates(
-  names: readonly string[],
-  category: ModelTypeCompletionCandidateCategory,
-  detail: string,
-  kind: CompletionItemKind,
-): readonly ModelTypeCompletionCandidate[] {
-  return names.map((name) => ({
-    category,
-    label: name,
-    insertText: name,
-    filterText: name,
-    detail,
-    kind,
-  }));
-}
-
-function recordNames<T extends { readonly name: string }>(
-  record: Record<string, T>,
-): readonly string[] {
-  return Object.values(record)
-    .map((symbol) => symbol.name)
-    .sort(compareNames);
+  return candidates.sort((left, right) => compareNames(sortText(left), sortText(right)));
 }
 
 function sortedUnique(names: readonly string[]): readonly string[] {

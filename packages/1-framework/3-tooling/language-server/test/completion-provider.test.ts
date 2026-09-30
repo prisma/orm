@@ -13,6 +13,7 @@ import {
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
+  type BlockSpecContext,
   blockAttribute,
   buildSymbolTable,
   entityRef,
@@ -39,6 +40,7 @@ import {
 } from 'vscode-languageserver';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
+import { testBinder } from './helpers/binder';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
@@ -265,6 +267,7 @@ interface ActualMongoBlockModule {
 
 function completeWithSource(input: {
   readonly markedSource: string;
+  readonly siblings?: readonly string[];
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
@@ -275,9 +278,15 @@ function completeWithSource(input: {
   const cursorOffset = input.markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
   const source = `${input.markedSource.slice(0, cursorOffset)}${input.markedSource.slice(cursorOffset + 1)}`;
-  const { document, sources } = parse(source, 'language-server-test.psl');
+  const parsed = parse(source, 'language-server-test.psl');
+  const { document } = parsed;
+  const others = (input.siblings ?? []).map((text, index) => parse(text, `sibling-${index}.psl`));
+  const sources = parsed.sources.merge(...others.map((other) => other.sources));
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+  const { symbolTable } = buildSymbolTable({
+    documents: [...others.map((other) => other.document), document],
+    sources,
+  });
   const context = classifyPslCompletionContext({
     document,
     sourceFile,
@@ -289,6 +298,12 @@ function completeWithSource(input: {
       context,
       sourceFile,
       candidates: {
+        binder: testBinder({
+          ...input,
+          sources,
+          symbolTable,
+          scalarTypes: input.scalarTypes ?? scalarTypes,
+        }),
         scalarTypes: input.scalarTypes ?? scalarTypes,
         pslBlockDescriptors: input.pslBlockDescriptors,
         symbolTable,
@@ -401,6 +416,86 @@ function completionItemByLabel(items: readonly CompletionItem[], label: string):
 }
 
 describe('providePslCompletionItems', () => {
+  it('binds the correct block owner when declarations in different files have identical spans', () => {
+    const { items } = completeWithSource({
+      markedSource: 'policy Other { | }',
+      siblings: ['policy First {  }'],
+      pslBlockDescriptors: {
+        policy: {
+          kind: 'pslBlock',
+          keyword: 'policy',
+          discriminator: 'policy',
+          name: { required: true },
+          spec: ({ block }: BlockSpecContext) =>
+            structBlock({
+              parameters: {
+                [block.name]: { type: str(), documentation: '' },
+              },
+            }),
+        },
+      },
+    });
+    expect(items.map(({ label }) => label)).toEqual(['Other']);
+  });
+
+  it('filters candidates after nearest-name shadowing and includes namespace locals', () => {
+    const { items } = completeWithSource({
+      pslBlockDescriptors,
+      markedSource: `model Shared { id Int }
+namespace app {
+  enum Shared { VALUE }
+  model Int { id String }
+  model Local { value | }
+}
+namespace other { model Hidden { id Int } }`,
+    });
+    expect(items.map(({ label }) => label).sort()).toEqual([
+      'Boolean',
+      'DateTime',
+      'Int',
+      'Local',
+      'String',
+      'app',
+      'other',
+    ]);
+    expect(items.find(({ label }) => label === 'Int')?.kind).toBe(CompletionItemKind.Class);
+  });
+
+  it('enumerates only contributed members for a qualified completion', () => {
+    const { items } = completeWithSource({
+      markedSource: 'model Top { id Int }\nmodel Owner { value custom.| }',
+      pslBlockDescriptors: {},
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'constructors',
+          authoring: {
+            type: {
+              custom: {
+                Value: {
+                  kind: 'typeConstructor',
+                  documentation: 'Custom value',
+                  output: { codecId: 'value', nativeType: 'value' },
+                },
+              },
+            },
+          },
+        },
+      ]),
+    });
+    expect(items.map(({ label, kind, detail }) => ({ label, kind, detail }))).toEqual([
+      { label: 'Value', kind: CompletionItemKind.Keyword, detail: 'Custom value' },
+    ]);
+  });
+
+  it('does not complete a global namespace when its qualifier is shadowed locally', () => {
+    const { items } = complete(`namespace remote { model Item { id Int } }
+namespace app {
+  model remote { id Int }
+  model Owner { value remote.| }
+}`);
+    expect(items).toEqual([]);
+  });
+
   it('returns document-level declaration keyword candidates with stable plain-text edits', () => {
     const { items, sourceFile, cursorOffset } = complete('|');
 
@@ -578,7 +673,7 @@ describe('providePslCompletionItems', () => {
     expect(items.map((item) => item.label)).toEqual(['marker', 'orderFixture', 'ownerAware']);
   });
 
-  it('resolves the attribute owner once per attribute-name completion request', () => {
+  it('resolves the attribute owner without enumerating declarations', () => {
     const markedSource = ['model User {', '  id Int @|', '}'].join('\n');
     const cursorOffset = markedSource.indexOf('|');
     const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
@@ -636,6 +731,14 @@ describe('providePslCompletionItems', () => {
         scalarTypes,
         pslBlockDescriptors,
         symbolTable: observedSymbolTable,
+        binder: testBinder({
+          sources,
+          symbolTable,
+          scalarTypes,
+          authoringContributions: attributeContributions,
+          controlMutationDefaults,
+          pslBlockDescriptors,
+        }),
         authoringContributions: observedAuthoringContributions,
         controlMutationDefaults,
       },
@@ -644,7 +747,7 @@ describe('providePslCompletionItems', () => {
 
     expect(items.map((item) => item.label)).toEqual(['first', 'second']);
     expect(factoryOwnerNames).toEqual(['User', 'User']);
-    expect(modelEnumerationCount).toBe(1);
+    expect(modelEnumerationCount).toBe(0);
   });
 
   it('returns attribute named keys including optional keys while omitting supplied keys', () => {
@@ -1180,7 +1283,7 @@ describe('providePslCompletionItems', () => {
 
     expect(items.map((item) => item.label)).toEqual(['shield']);
     expect(items[0]?.detail).toBe('The shield key.');
-    expect(factoryContexts).toHaveLength(1);
+    expect(factoryContexts).toHaveLength(2);
     for (const raw of factoryContexts) {
       const ctx = raw as { symbols: unknown; block: { name: string } };
       expect(ctx.block.name).toBe('Rule');
