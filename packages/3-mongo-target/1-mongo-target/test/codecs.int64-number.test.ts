@@ -64,6 +64,15 @@ describe('mongo/int64Number@1', () => {
     );
   });
 
+  it('reads a stored double past the safe integer range, or not finite, as an error', async () => {
+    for (const wire of [2 ** 60, Number.NaN, Number.NEGATIVE_INFINITY]) {
+      await expect(codec().decode(wire, {})).rejects.toThrow(decodeFailed);
+    }
+    await expect(codec().decode(2 ** 60, {})).rejects.toThrow(
+      'mongo/int64Number@1 value must be an integer within the safe integer range, got 1152921504606847000',
+    );
+  });
+
   it('reads a stored int and a whole double as the number they hold', async () => {
     expect(await codec().decode(7, {})).toBe(7);
     expect(await codec().decode(2 ** 40, {})).toBe(2 ** 40);
