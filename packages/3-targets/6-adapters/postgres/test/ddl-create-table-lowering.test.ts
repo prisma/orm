@@ -232,6 +232,63 @@ describe('PostgresCreateTable DDL lowering', () => {
     );
   });
 
+  it.each([
+    ['text[]', 'pg/text@1', ['a', 1], 1],
+    ['int4[]', 'pg/int4@1', [1, 'two'], 'two'],
+  ])(
+    'refuses a list default on a %s column with an element its codec %s does not read, as a hand-written migration may hold',
+    async (nativeType, codecId, value, element) => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const lowering = adapter.lowerToExecuteRequest(
+        new PostgresCreateTable({
+          table: 'tokens',
+          columns: [
+            col('l', nativeType, { default: lit(value), codecRef: { codecId, many: true } }),
+          ],
+        }),
+        { contract: {} as PostgresContract },
+      );
+      await expect(lowering).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: {
+          table: 'tokens',
+          column: 'l',
+          codecId,
+          value: element,
+          elementPosition: 2,
+          reason: 'codec-refused-default',
+        },
+      });
+    },
+  );
+
+  it('renders a list default, a NULL element and an empty list', async () => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(
+      new PostgresCreateTable({
+        table: 'lists',
+        columns: [
+          col('tags', 'text[]', {
+            default: lit(['a', null, 'b']),
+            codecRef: { codecId: 'pg/text@1', many: true },
+          }),
+          col('counts', 'int4[]', {
+            default: lit([1, 2]),
+            codecRef: { codecId: 'pg/int4@1', many: true },
+          }),
+          col('none', 'text[]', {
+            default: lit([]),
+            codecRef: { codecId: 'pg/text@1', many: true },
+          }),
+        ],
+      }),
+      { contract: {} as PostgresContract },
+    );
+    expect(lowered.sql).toBe(
+      `CREATE TABLE "lists" (\n  "tags" text[] DEFAULT ARRAY['a', NULL, 'b']::text[],\n  "counts" int4[] DEFAULT ARRAY[1, 2]::int4[],\n  "none" text[] DEFAULT '{}'\n)`,
+    );
+  });
+
   it('renders a null literal default as SQL NULL on a text column and as the JSON null on a jsonb column', async () => {
     const ast = new PostgresCreateTable({
       table: 'defaults',

@@ -31,6 +31,7 @@ import type {
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import {
+  encodeListLiteralDefault,
   encodeLiteralDefault,
   isDdlNode,
   type LiteralDefaultColumn,
@@ -1868,6 +1869,9 @@ async function pgRenderDdlColumnDefault(
   const dataTypeId =
     codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
+    if (codecRef !== undefined) {
+      await encodeListLiteralDefault(codecLookup, codecRef, def.value, where);
+    }
     return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
   }
   const encoded =
