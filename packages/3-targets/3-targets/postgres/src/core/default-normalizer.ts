@@ -25,19 +25,30 @@ const NUMERAL = String.raw`[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`;
 const NUMERIC_PATTERN = new RegExp(`^${NUMERAL}$`);
 
 /**
+ * A type modifier: `(3)`, `(65,30)`, or a numeric type's negative scale, `(5,-2)`, which PostgreSQL
+ * 15 and later accept.
+ */
+const TYPE_MODIFIER = String.raw`\(\d+(?:,\s*-?\d+)?\)`;
+
+/**
  * A cast target type: a builtin of one or more words, where any word may carry a modifier
  * (`timestamp(3) without time zone`, `numeric(65,30)`), or a quoted identifier (`"AuditAction"`);
  * either may be qualified by a possibly quoted schema (`audit."AuditAction"`, `"my schema".t`).
  */
-const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:\(\d+(?:,\s*\d+)?\))?(?:\s+\w+(?:\(\d+(?:,\s*\d+)?\))?)*)`;
+const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:${TYPE_MODIFIER})?(?:\s+\w+(?:${TYPE_MODIFIER})?)*)`;
 const QUOTED_LITERAL_PATTERN = new RegExp(`^'((?:[^']|'')*)'(?:::(${TYPE_NAME}))?$`);
 const NUMBER_LITERAL_PATTERN = new RegExp(`^(${NUMERAL})(?:::(${TYPE_NAME}))?$`);
 const PARENTHESISED_CAST_PATTERN = new RegExp(String.raw`^\((.+)\)::(${TYPE_NAME})$`, 's');
 const INTEGER_PATTERN = /^-?\d+$/;
 const INTEGER_TYPE_PATTERN = /^(?:smallint|integer|bigint|int2|int4|int8)$/i;
-const NUMBER_TYPE_PATTERN =
-  /^(?:smallint|integer|bigint|int2|int4|int8|real|double precision|float4|float8|numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i;
-const DECIMAL_TEXT_TYPE_PATTERN = /^(?:bigint|int8|numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i;
+const NUMBER_TYPE_PATTERN = new RegExp(
+  `^(?:smallint|integer|bigint|int2|int4|int8|real|double precision|float4|float8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
+  'i',
+);
+const DECIMAL_TEXT_TYPE_PATTERN = new RegExp(
+  `^(?:bigint|int8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
+  'i',
+);
 
 /**
  * Matches a Postgres array literal default of the form `'{...}'::elemtype[]`.

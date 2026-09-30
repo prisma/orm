@@ -209,6 +209,9 @@ describe('parsePostgresDefault numeric columns', () => {
     },
     { raw: '1.5::numeric(10,2)', nativeType: 'numeric(10,2)', value: '1.5' },
     { raw: "'NaN'::numeric", nativeType: 'numeric', value: 'NaN' },
+    { raw: "'12300'::numeric(5,-2)", nativeType: 'numeric(5,-2)', value: '12300' },
+    { raw: "'-500'::numeric(5,-2)", nativeType: 'numeric(5,-2)', value: '-500' },
+    { raw: '0.00123::numeric(3,5)', nativeType: 'numeric(3,5)', value: '0.00123' },
   ])('reads $raw as the decimal text $value for $nativeType', ({ raw, nativeType, value }) => {
     expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
   });

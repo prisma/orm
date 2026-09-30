@@ -1,9 +1,9 @@
 /**
- * Infer -> Emit -> Sign -> Verify for defaults on numeric columns whose scale PostgreSQL 15 and later
- * accept outside 0..precision: a negative scale, which rounds to tens or hundreds, and a scale above
- * the precision, which holds only values below 1.
+ * Infer -> Emit -> Sign -> Verify, then Init on an empty database, for defaults on numeric columns
+ * whose scale PostgreSQL 15 and later accept outside 0..precision: a negative scale, which rounds to
+ * tens or hundreds, and a scale above the precision, which holds only values below 1.
  */
-import { readFileSync } from 'node:fs';
+import { copyFileSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
@@ -14,6 +14,7 @@ import {
   parseJsonOutput,
   runContractEmit,
   runContractInfer,
+  runDbInit,
   runDbSign,
   runDbVerify,
   setupJourney,
@@ -43,9 +44,10 @@ withTempDir(({ createTempDir }) => {
     const db = useDevDatabase({
       onReady: (cs) => withClient(cs, (client) => client.query(SCALED_DEFAULTS_SQL)),
     });
+    const emptyDb = useDevDatabase();
 
     it(
-      'infer prints each default as a number, and the emitted contract signs and verifies',
+      'infer prints each default as a number; the emitted contract signs, verifies, and applies to an empty database',
       async () => {
         const ctx = setupJourney({
           connectionString: db.connectionString,
@@ -75,6 +77,25 @@ withTempDir(({ createTempDir }) => {
         expect(parseJsonOutput<VerifyResult>(verify), `db verify\n${output(verify)}`).toMatchObject(
           { ok: true, schema: { warnings: [] } },
         );
+
+        const fresh = setupJourney({
+          connectionString: emptyDb.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+        copyFileSync(join(ctx.testDir, 'contract.prisma'), join(fresh.testDir, 'contract.prisma'));
+        const freshEmit = await runContractEmit(fresh);
+        expect(freshEmit.exitCode, `contract emit\n${output(freshEmit)}`).toBe(0);
+
+        const init = await runDbInit(fresh);
+        expect(init.exitCode, `db init\n${output(init)}`).toBe(0);
+
+        const freshVerify = await runDbVerify(fresh, ['--strict', '--json']);
+        expect(freshVerify.exitCode, `db verify\n${output(freshVerify)}`).toBe(0);
+        expect(
+          parseJsonOutput<VerifyResult>(freshVerify),
+          `db verify\n${output(freshVerify)}`,
+        ).toMatchObject({ ok: true, schema: { warnings: [] } });
       },
       timeouts.spinUpPpgDev,
     );

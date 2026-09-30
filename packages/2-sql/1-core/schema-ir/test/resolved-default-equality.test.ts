@@ -208,12 +208,14 @@ describe('resolvedDefaultsEqual', () => {
         leading: resolvedDefaultsEqual(literal('0.5'), literal('00.5'), nativeType),
         negativeZero: resolvedDefaultsEqual(literal('0'), literal('-0.0'), nativeType),
         scaleZero: resolvedDefaultsEqual(literal('2'), literal('2.0'), 'numeric(10,0)'),
+        negativeScale: resolvedDefaultsEqual(literal(12300), literal('12300.0'), 'numeric(5,-2)'),
       }).toEqual({
         trailing: true,
         whole: true,
         leading: true,
         negativeZero: true,
         scaleZero: true,
+        negativeScale: true,
       });
     });
 

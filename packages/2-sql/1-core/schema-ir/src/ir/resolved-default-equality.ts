@@ -53,10 +53,11 @@ function isInt64NativeType(nativeType?: string): boolean {
 }
 
 /**
- * A numeric type with a modifier (`numeric(10,2)`) stores every value at its scale, so zeros that
- * do not change the value do not count. Without one, the value keeps the scale it was written with.
+ * A numeric type with a modifier (`numeric(10,2)`, or `numeric(5,-2)` with the negative scale
+ * PostgreSQL 15 and later accept) stores every value at its scale, so zeros that do not change the
+ * value do not count. Without one, the value keeps the scale it was written with.
  */
-const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*\d+)?\))?$/i;
+const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*-?\d+)?\))?$/i;
 const DECIMAL_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?$/;
 const EXPONENT_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/;
 

@@ -63,7 +63,11 @@ async function applyContract(
 }
 
 /** Applies a PSL schema to a new database, then verifies it and plans again against what was applied. */
-async function applyAndVerify(schema: string, columns: readonly string[]) {
+async function applyAndVerify(
+  schema: string,
+  columns: readonly string[],
+  options: { readonly strict: boolean } = { strict: false },
+) {
   const authored = await authorSqlContractFromPsl(schema);
   const contract = authored.contract!;
   const database = await createDevDatabase();
@@ -74,7 +78,7 @@ async function applyAndVerify(schema: string, columns: readonly string[]) {
     const verified = familyInstance.verifySchema({
       contract,
       schema: introspected,
-      strict: false,
+      strict: options.strict,
       frameworkComponents: postgresFrameworkComponents,
     });
     const replanned = planner.plan({
@@ -149,6 +153,36 @@ model Tag {
         defaults: [
           { kind: 'literal', value: 'a  ' },
           { kind: 'literal', value: 'a\t' },
+        ],
+        applied: true,
+        issues: [],
+        replannedOperations: [],
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});
+
+describe('a Numeric default with a negative scale', () => {
+  it(
+    'applies on a single and a list column, then verifies strictly with no issue and plans no change',
+    async () => {
+      expect(
+        await applyAndVerify(
+          `
+model Amount {
+  id            Int              @id
+  hundreds      Numeric(5, -2)   @default(12300)
+  hundredsList  Numeric(5, -2)[] @default([100, -9999900]) @map("hundreds_list")
+}
+`,
+          ['hundreds', 'hundreds_list'],
+          { strict: true },
+        ),
+      ).toEqual({
+        defaults: [
+          { kind: 'literal', value: '12300' },
+          { kind: 'literal', value: ['100', '-9999900'] },
         ],
         applied: true,
         issues: [],
