@@ -61,6 +61,7 @@ describe('buildPostgresNativeTypeExpander', () => {
         'float',
         'boolean',
         'decimal(10,2)',
+        'timestamp(3) with time zone',
       ].map((nativeType) => expand({ nativeType })),
     ).toEqual([
       'character(1)',
@@ -78,6 +79,7 @@ describe('buildPostgresNativeTypeExpander', () => {
       'float8',
       'bool',
       'numeric(10,2)',
+      'timestamptz(3)',
     ]);
   });
 });

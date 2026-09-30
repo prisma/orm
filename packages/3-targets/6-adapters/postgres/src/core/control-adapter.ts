@@ -1077,7 +1077,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       for (const colRow of columnsByTable.get(tableName) ?? []) {
         let nativeType = colRow.udt_name;
         const formattedType = colRow.formatted_type
-          ? normalizeFormattedType(colRow.formatted_type, colRow.data_type, colRow.udt_name)
+          ? normalizeFormattedType(colRow.formatted_type)
           : null;
         if (formattedType) {
           nativeType = formattedType;
@@ -1505,55 +1505,15 @@ function extractContractNamespaceIds(contract: unknown): readonly string[] {
   return Object.keys(namespaces);
 }
 
-function normalizeFormattedType(formattedType: string, dataType: string, udtName: string): string {
+/**
+ * `format_type`'s name for a column type, named as the contract names it: a built-in type through the one normaliser, and a user-defined type, which `format_type` quotes where it needs to (mixed case, a reserved word, a dot) and schema-qualifies outside the search path, as `audit."AuditAction"` arrives, with the quotes removed from each identifier, splitting only on dots outside them.
+ */
+function normalizeFormattedType(formattedType: string): string {
   if (formattedType.endsWith('[]')) {
-    return `${normalizeFormattedType(formattedType.slice(0, -2), dataType, udtName)}[]`;
+    return `${normalizeFormattedType(formattedType.slice(0, -2))}[]`;
   }
-  if (formattedType === 'integer') {
-    return 'int4';
-  }
-  if (formattedType === 'smallint') {
-    return 'int2';
-  }
-  if (formattedType === 'bigint') {
-    return 'int8';
-  }
-  if (formattedType === 'real') {
-    return 'float4';
-  }
-  if (formattedType === 'double precision') {
-    return 'float8';
-  }
-  if (formattedType === 'boolean') {
-    return 'bool';
-  }
-  if (formattedType.startsWith('varchar')) {
-    return formattedType.replace('varchar', 'character varying');
-  }
-  if (formattedType.startsWith('bpchar')) {
-    return formattedType.replace('bpchar', 'character');
-  }
-  if (formattedType.startsWith('varbit')) {
-    return formattedType.replace('varbit', 'bit varying');
-  }
-  if (dataType === 'timestamp with time zone' || udtName === 'timestamptz') {
-    return formattedType.replace('timestamp', 'timestamptz').replace(' with time zone', '').trim();
-  }
-  if (dataType === 'timestamp without time zone' || udtName === 'timestamp') {
-    return formattedType.replace(' without time zone', '').trim();
-  }
-  if (dataType === 'time with time zone' || udtName === 'timetz') {
-    return formattedType.replace('time', 'timetz').replace(' with time zone', '').trim();
-  }
-  if (dataType === 'time without time zone' || udtName === 'time') {
-    return formattedType.replace(' without time zone', '').trim();
-  }
-  // `format_type` quotes a user-defined type name that needs it (mixed case,
-  // reserved word, a dot) and schema-qualifies one outside the search path,
-  // so a mixed-case enum in another schema arrives as `audit."AuditAction"`.
-  // The contract side spells every type name unquoted (`audit.AuditAction`),
-  // so strip the quotes from each identifier segment, splitting only on dots
-  // that sit outside the quotes.
+  const normalized = normalizeSchemaNativeType(formattedType);
+  if (normalized !== formattedType) return normalized;
   return splitQualifiedName(formattedType).map(unquoteIdentifier).join('.');
 }
 

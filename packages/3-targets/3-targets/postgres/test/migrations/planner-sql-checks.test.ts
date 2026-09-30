@@ -59,6 +59,41 @@ describe('buildExpectedFormatType', () => {
     ).toEqual(['character(1)', 'character varying', 'integer', 'double precision']);
   });
 
+  it('names a type with type parameters as format_type does', () => {
+    const withParams = new Map([
+      [
+        'pg/timestamptz-temporal@1',
+        {
+          expandNativeType: ({
+            nativeType,
+            typeParams,
+          }: {
+            readonly nativeType: string;
+            readonly typeParams?: Record<string, unknown>;
+          }) => `${nativeType}(${String(typeParams?.['precision'])})`,
+        },
+      ],
+    ]);
+    expect(
+      [
+        { nativeType: 'timestamptz', typeParams: { precision: 3 } },
+        { nativeType: 'timestamp', typeParams: { precision: 6 } },
+        { nativeType: 'time', typeParams: { precision: 0 } },
+        { nativeType: 'timetz', typeParams: { precision: 2 } },
+      ].map((column) =>
+        buildExpectedFormatType(
+          { ...column, codecId: 'pg/timestamptz-temporal@1', nullable: false },
+          withParams,
+        ),
+      ),
+    ).toEqual([
+      'timestamp(3) with time zone',
+      'timestamp(6) without time zone',
+      'time(0) without time zone',
+      'time(2) with time zone',
+    ]);
+  });
+
   describe('unmapped native types pass through', () => {
     it('returns nativeType as-is for text', () => {
       expect(
