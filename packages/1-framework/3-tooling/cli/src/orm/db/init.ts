@@ -24,7 +24,7 @@ import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { baseDirFor } from '../migration/paths';
-import { normalizeError } from '../normalize-error';
+import { isContractError, normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { prepareMigrationRun } from './prepare';
@@ -217,6 +217,9 @@ export function createDbInitCommand(createClient: CreateControlClient) {
               }),
             ),
           );
+        }
+        if (isContractError(error)) {
+          return notOk(normalizeError(error));
         }
         const safeMessage = sanitizeErrorMessage(
           error instanceof Error ? error.message : String(error),

@@ -107,6 +107,23 @@ describe('a contract default the canonical form of its data type refuses', {
     ).toEqual([{ path: 'database/public/event/column:at/default', explanation: REFUSAL }]);
   });
 
+  it('names the refusal when the database has no default', { timeout: testTimeout }, async () => {
+    await driver!.query('ALTER TABLE "event" ALTER COLUMN "at" DROP DEFAULT');
+    const schema = await familyInstance.introspect({ driver: driver!, contract });
+    const result = familyInstance.verifySchema({
+      contract,
+      schema,
+      strict: true,
+      frameworkComponents,
+    });
+    expect(
+      result.schema.issues.map((issue) => ({
+        path: issue.path.join('/'),
+        explanation: issue.explanation,
+      })),
+    ).toEqual([{ path: 'database/public/event/column:at/default', explanation: REFUSAL }]);
+  });
+
   it('is not written by the planner', { timeout: testTimeout }, async () => {
     const schema = await familyInstance.introspect({ driver: driver!, contract });
     const planner = postgresTargetDescriptor.createPlanner(controlAdapter);

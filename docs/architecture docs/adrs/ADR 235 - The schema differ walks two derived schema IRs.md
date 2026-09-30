@@ -43,7 +43,7 @@ interface DiffableNode {
   readonly nodeKind: string;                 // per-node discriminant; never folded into id
   readonly dependsOn?: readonly SchemaNodeRef[]; // nodes that must exist before this one
   isEqualTo(other: DiffableNode): boolean;   // compares a matched pair's OWN attributes only
-  explainMismatch?(other: DiffableNode): string | undefined; // optional; asked only after isEqualTo is false
+  explainMismatch?(actual: DiffableNode | undefined): string | undefined; // optional; asked for not-equal and not-found
   children(): readonly DiffableNode[];       // the node's children; empty for a leaf
 }
 ```
@@ -72,7 +72,7 @@ The issue stores no separate kind field: the outcome it represents is discrimina
 
 Caching the outcome as a stored `reason` alongside the very presence that determines it only invited the two to drift, so presence is the single source of truth. `dependsOn` is the issue-to-issue mirror of the node's own `dependsOn`: the differ resolves each node ref to the path of the in-diff issue at that coordinate, dropping any ref whose target produced no issue (that prerequisite is already satisfied by reality). The planner topologically sorts on these edges — a dependency's op before its dependent on the way up, after it on the way down.
 
-An expected node may explain a not-equal outcome through `explainMismatch`, for example a contract default its data type refuses. The differ copies that text onto the issue as `explanation` and never reads it. It is text for people, not an outcome kind: the outcome still comes only from presence.
+An expected node may explain a not-equal or not-found outcome through `explainMismatch`, for example a contract default its data type refuses. The differ copies that text onto the issue as `explanation` and never reads it. It is text for people, not an outcome kind: the outcome still comes only from presence.
 
 ## How pairing works
 

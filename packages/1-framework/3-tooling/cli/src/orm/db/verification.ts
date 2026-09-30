@@ -297,16 +297,21 @@ function sentence(text: string): string {
   return text.endsWith('.') ? text : `${text}.`;
 }
 
+/**
+ * What to do about schema drift. An issue with an explanation means the contract holds a value its
+ * type refuses, which only re-emitting the contract fixes, so that comes first.
+ */
 export function schemaDriftNextActions(inputs: {
   readonly verb: 'sign' | 'verify';
   readonly contractRef: string | undefined;
+  readonly issues: readonly SchemaDiffIssue[];
 }): readonly NextAction[] {
   const { verb, contractRef } = inputs;
   const retryAfterEmit =
     contractRef === undefined
       ? `${verb} again`
       : `${verb} the emitted contract instead of "${contractRef}"`;
-  return [
+  const drift = [
     runCommandAction(
       `Change the database to match the contract, then ${verb} again`,
       contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
@@ -315,4 +320,11 @@ export function schemaDriftNextActions(inputs: {
       `Or change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`,
     ),
   ];
+  const contractRefused = inputs.issues.some((issue) => issue.explanation !== undefined);
+  return contractRefused
+    ? [
+        runCommandAction(`Re-emit the contract first, then ${verb} again`, '{bin} contract emit'),
+        ...drift,
+      ]
+    : drift;
 }

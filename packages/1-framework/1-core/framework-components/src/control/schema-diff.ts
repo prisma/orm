@@ -88,10 +88,11 @@ export interface DiffableNode {
   readonly dependsOn?: readonly SchemaNodeRef[];
   isEqualTo(other: DiffableNode): boolean;
   /**
-   * Why `other` is not equal to this node, when the difference has a cause beyond the two values,
-   * such as an expected value the node's type refuses. Called only after `isEqualTo` returned false.
+   * Why the actual state does not satisfy this expected node, when the difference has a cause beyond
+   * the two values, such as an expected value the node's type refuses. Called after `isEqualTo`
+   * returned false, and with `undefined` when the actual side has no such node.
    */
-  explainMismatch?(other: DiffableNode): string | undefined;
+  explainMismatch?(actual: DiffableNode | undefined): string | undefined;
   children(): readonly DiffableNode[];
 }
 
@@ -115,6 +116,7 @@ function emitMissingSubtree(node: DiffableNode, parentPath: readonly string[]): 
     {
       path,
       expected: node,
+      ...ifDefined('explanation', node.explainMismatch?.(undefined)),
     },
     ...node.children().flatMap((c) => emitMissingSubtree(c, path)),
   ];

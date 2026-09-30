@@ -2,6 +2,7 @@ import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
@@ -10,6 +11,15 @@ import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
+
+const REFUSAL =
+  'Column "at": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.';
+
+function refusedDefault(): Error {
+  return structuredError('CONTRACT.DEFAULT_INVALID', REFUSAL, {
+    meta: { reason: 'default-not-canonical', column: 'at' },
+  });
+}
 
 const mocks = {
   connect: vi.fn(),
@@ -388,6 +398,38 @@ describe('db update', () => {
     expect(envelopeOf(run.json)).toMatchObject({
       ok: false,
       error: { code: 'MIGRATION.PLANNING_FAILED' },
+    });
+  });
+
+  describe('a contract default its data type refuses', () => {
+    it('reports the planner`s CONTRACT.DEFAULT_INVALID, not an unexpected error', async () => {
+      mocks.dbUpdate.mockRejectedValue(refusedDefault());
+
+      const run = await harness().run(['db', 'update', '--json'], { cwd: projectDir });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run.json)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CONTRACT.DEFAULT_INVALID',
+          summary: REFUSAL,
+          meta: { reason: 'default-not-canonical', column: 'at' },
+        },
+      });
+    });
+
+    it('shows the refusal and the hint to re-emit', async () => {
+      mocks.dbUpdate.mockRejectedValue(refusedDefault());
+
+      const run = await harness().run(['db', 'update'], {
+        cwd: projectDir,
+        isTty: { stdout: true, stderr: true },
+      });
+      const shown = stripAnsi(run.stderr);
+
+      expect(shown).toContain('CONTRACT.DEFAULT_INVALID');
+      expect(shown).toContain(REFUSAL);
+      expect(shown).not.toContain('Unexpected error');
     });
   });
 
