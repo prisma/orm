@@ -23,7 +23,7 @@ import { codecForRef } from '@internal/framework-components/codec';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 /** A `` json`...` `` body that is not a JSON document. */
@@ -209,6 +209,7 @@ function readValue(
       },
     };
   } catch (error) {
+    if (isInternalError(error)) throw error;
     return refuse({ kind: 'unreadable', json: isJsonRefusal(error), message: messageOf(error) });
   }
 }
@@ -238,6 +239,7 @@ function castInto(
   try {
     return { ok: true, value: cast(typed.value) };
   } catch (error) {
+    if (isInternalError(error)) throw error;
     return {
       ok: false,
       refusal: {
@@ -292,6 +294,7 @@ function storedValueReader(input: {
       codec.decodeJson(value);
       return { ok: true, value };
     } catch (error) {
+      if (isInternalError(error)) throw error;
       return {
         ok: false,
         refusal: {
@@ -432,6 +435,7 @@ function readListIntoScalar(input: {
   try {
     return input.readStored(listCast.cast(elements), undefined);
   } catch (error) {
+    if (isInternalError(error)) throw error;
     return {
       ok: false,
       refusal: {

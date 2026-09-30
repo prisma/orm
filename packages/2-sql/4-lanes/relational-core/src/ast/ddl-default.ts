@@ -1,6 +1,7 @@
 import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { codecForRef } from '@internal/framework-components/codec';
+import { isInternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import type { CodecRef } from './codec-types';
 
@@ -33,6 +34,7 @@ export async function encodeLiteralDefault(
   try {
     decoded = codec.decodeJson(value);
   } catch (error) {
+    if (isInternalError(error)) throw error;
     if (value === null) return { kind: 'sql-null' };
     throw refusedDefault(where, codecRef.codecId, value, error);
   }

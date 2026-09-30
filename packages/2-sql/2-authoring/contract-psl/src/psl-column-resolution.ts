@@ -53,7 +53,7 @@ import {
 } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import {
   type DataTypeSupport,
@@ -162,6 +162,7 @@ export function instantiatePslTypeConstructor(input: {
     validateAuthoringHelperArguments(helperPath, input.descriptor.args, args);
     return instantiateAuthoringTypeConstructor(input.descriptor, args);
   } catch (error) {
+    if (isInternalError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',

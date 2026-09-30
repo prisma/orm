@@ -1,5 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { encodeLiteralDefault } from '../../src/ast/ddl-default';
 import { sqlTextDescriptor } from '../../src/ast/sql-codecs';
@@ -17,9 +18,22 @@ const documentDescriptor = {
   factory: () => () => document,
 } as unknown as AnyCodecDescriptor;
 
+const brokenDescriptor = {
+  codecId: 'test/broken@1',
+  paramsSchema: undefined,
+  factory: () => () => ({
+    ...document,
+    id: 'test/broken@1',
+    decodeJson: () => {
+      throw new InternalError('a codec broke an invariant');
+    },
+  }),
+} as unknown as AnyCodecDescriptor;
+
 const descriptors: readonly AnyCodecDescriptor[] = [
   sqlTextDescriptor as unknown as AnyCodecDescriptor,
   documentDescriptor,
+  brokenDescriptor,
 ];
 
 const lookup = {
@@ -72,5 +86,12 @@ describe('encodeLiteralDefault', () => {
         },
       }),
     );
+  });
+
+  it('passes a codec internal error through, for a value and for null, instead of blaming the default', async () => {
+    const encode = (value: JsonValue) =>
+      encodeLiteralDefault(lookup, { codecId: 'test/broken@1' }, value, where);
+    await expect(encode('x')).rejects.toThrow(InternalError);
+    await expect(encode(null)).rejects.toThrow(InternalError);
   });
 });

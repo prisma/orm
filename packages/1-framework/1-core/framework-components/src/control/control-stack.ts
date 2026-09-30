@@ -1,6 +1,6 @@
 import type { Contract, JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import type { AggregateDescriptor } from '../shared/aggregate-descriptor';
 import { aggregateDescriptorKey, isAggregateDescriptor } from '../shared/aggregate-descriptor';
 import type { CapabilityMatrix } from '../shared/capabilities';
@@ -652,8 +652,9 @@ export function extractCodecLookup(
               name: `<lookup:${codecDescriptor.codecId}>`,
             } as Parameters<ReturnType<typeof codecDescriptor.factory>>[0]);
             byId.set(codecDescriptor.codecId, representative);
-          } catch {
+          } catch (error) {
             // Factory requires concrete params; skip representative materialization. Per-column instances are built at runtime; id-keyed lookup miss is the correct outcome here.
+            if (isInternalError(error)) throw error;
           }
         } else {
           const representative = codecDescriptor.factory(undefined as never)({
