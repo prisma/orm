@@ -571,9 +571,7 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     expect(nullable.rows[0]?.is_nullable).toBe('NO');
   });
 
-  // TML-2089: the existence-only postcheck (IS NOT NULL) passes before the operation runs
-  // because the column already has a (wrong) default. The idempotency probe skips SET DEFAULT.
-  it.fails('applies ALTER DEFAULT to change an existing column default', {
+  it('applies ALTER DEFAULT to change an existing column default', {
     timeout: testTimeout,
   }, async () => {
     const baselineContract = makeContract(
@@ -945,9 +943,7 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
     expect(indexExists.rows[0]?.exists).toBe(true);
   });
 
-  // TML-2089: same as "applies ALTER DEFAULT" — the existence-only postcheck (IS NOT NULL)
-  // passes before the operation runs because the column already has a (wrong) default.
-  it.fails('changes a literal default to a function default', {
+  it('changes a literal default to a function default', {
     timeout: testTimeout,
   }, async () => {
     const baselineContract = makeContract(
