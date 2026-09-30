@@ -19,6 +19,19 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
 
+/**
+ * Whether text fits `length` characters, counted as PostgreSQL counts them: code points. A `character` value is padded with spaces, and spaces past its length are dropped, so they do not count.
+ */
+export function fitsCharacterLength(text: string, length: number, blankPadded: boolean): boolean {
+  const significant = blankPadded ? text.replace(/ +$/, '') : text;
+  return significant.length <= length || [...significant].length <= length;
+}
+
+/** `1 character`, `3 characters`: a count and its noun, for a refusal. */
+export function counted(count: number, noun: string): string {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}
+
 export type PrecisionParams = { readonly precision?: number };
 
 export const precisionParamsSchema = arktype({

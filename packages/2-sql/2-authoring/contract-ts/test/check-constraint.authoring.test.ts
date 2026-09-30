@@ -511,9 +511,7 @@ describe('check emission — guards', () => {
       const codec: Codec = {
         id: 'pg/text@1',
         encodeJson: ((value: unknown) => String(value)) as Codec['encodeJson'],
-        decodeJson: (() => {
-          throw new Error('unused');
-        }) as Codec['decodeJson'],
+        decodeJson: ((json: unknown) => String(json)) as Codec['decodeJson'],
         encode: (() => {
           throw new Error('unused');
         }) as Codec['encode'],

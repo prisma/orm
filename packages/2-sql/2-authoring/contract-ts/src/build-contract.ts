@@ -117,9 +117,12 @@ function columnCodec(
   });
 }
 
+/** Encodes a value the contract stores, and reads it back with the codec, which refuses a value its column would not hold. */
 function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
-    return codec.encodeJson(value);
+    const json = codec.encodeJson(value);
+    codec.decodeJson(json);
+    return json;
   }
   return blindCast<
     JsonValue,

@@ -1,5 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { float4Column, int4Column } from '@internal/adapter-postgres/column-types';
+import { defineContract, field, model } from '@internal/postgres/contract-builder';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -160,6 +162,82 @@ model Task {
       ],
     ])('refuses %s', async (_name, members, code, message) => {
       expect(await diagnosticsOf(enumOf(members))).toEqual([{ code, message }]);
+    });
+  });
+
+  describe('a default PostgreSQL would refuse at the first insert', () => {
+    it('refuses an integer outside int4 for an sql/int@1 enum member, whose column is int4', async () => {
+      expect(
+        await diagnosticsOf(`
+enum Priority {
+  @@type("sql/int@1")
+  Low = 3000000000
+}
+
+model Task {
+  id Int @id
+}
+`),
+      ).toEqual([
+        {
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message:
+            'enum "Priority" member "Low" was rejected by codec "sql/int@1": sql/int@1 JSON value must be an integer from -2147483648 to 2147483647',
+        },
+      ]);
+    });
+
+    it('refuses a Char default longer than one character, which is what a Char with no length holds', async () => {
+      expect(
+        await diagnosticsOf(`
+model Tag {
+  id Int  @id
+  c  Char @default("abc")
+}
+`),
+      ).toEqual([
+        {
+          code: 'PSL_INVALID_DEFAULT_LITERAL',
+          message:
+            'Field "Tag.c": sql/char@1 JSON value must be a string of at most 1 character before any trailing spaces',
+        },
+      ]);
+    });
+
+    it.each([
+      [
+        'a float4 default outside the float4 range',
+        () => field.column(float4Column).default(1e300),
+        'pg/float4@1',
+        'Field "Reading.value" has a default that its codec refuses: pg/float4@1 JSON value must be a number float4 holds, at most 3.4028234663852886e+38 in magnitude and not so small that it becomes 0, or the text NaN, Infinity or -Infinity',
+      ],
+      [
+        'a bit default of two bits on a bit column with no length, which holds one',
+        () => field.column({ codecId: 'pg/bit@1', nativeType: 'bit' } as const).default('01'),
+        'pg/bit@1',
+        'Field "Reading.value" has a default that its codec refuses: pg/bit@1 JSON value must be a string of exactly 1 bit',
+      ],
+    ])('refuses %s when the TypeScript contract is built', (_name, value, codecId, message) => {
+      const build = () =>
+        defineContract({
+          models: {
+            Reading: model('Reading', {
+              fields: { id: field.column(int4Column).id(), value: value() },
+            }).sql({ table: 'readings' }),
+          },
+        });
+      expect(build).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.DEFAULT_INVALID',
+          message,
+          meta: expect.objectContaining({
+            modelName: 'Reading',
+            fieldName: 'value',
+            codecId,
+            reason: 'codec-refused-default',
+          }),
+        }),
+      );
     });
   });
 });

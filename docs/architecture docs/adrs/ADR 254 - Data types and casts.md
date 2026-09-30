@@ -91,6 +91,8 @@ Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both re
 
 Checks that depend on a column's parameters run in the codec instance built with those parameters, on the canonical form: `vector(3)` refuses four elements, `numeric(10,2)` refuses a third decimal place, an enum codec refuses a member it was not declared with. A limit of the stored representation is also the codec's to refuse: `sqlite/real@1` refuses `NaN`, because SQLite cannot store it, with its own message. Whether a SQLite boolean is stored as the integer `1` is likewise the boolean type's codec's business.
 
+`decodeJson` refuses a value the target's column would not store unchanged. A family codec checks only what every target of the family stores, and each target adds its own column's rule where it adapts the family codec. `sql/int@1` refuses an integer past 2^53 on every SQL target; on PostgreSQL, whose column is an `int4`, it also refuses one outside the `int4` range. `sql/char@1` has no length rule in the family; on PostgreSQL it refuses text longer than the column's length, which is 1 when the column declares none, because a bare `character` is `character(1)`.
+
 ## Columns and type constructors
 
 A column names a data type, its parameters, and the codec that represents it; its DDL name is rendered from the type and the parameters, so the contract stores no separate native-type string.

@@ -7,8 +7,7 @@
  *
  * After TML-2357 this is the canonical source of Postgres codec metadata and runtime behaviour — the legacy `mkCodec` / `defineCodec` carriers (and the parallel `byScalar`/`codecDescriptorDefinitions`/ `codecDescriptorList` collection exports) retired with the deletion sweep.
  *
- * Audit (parameterized codecs): every parameterized codec in this file is **parameter-stateless** — the params (`length`, `precision`, `precision`+`scale`, `values`) only inform the emit-path `renderOutputType` renderer or stay as JSON metadata. None of the runtime encode/decode/encodeJson/decodeJson conversions thread params into their behavior, so each `factory(_params)` returns a fresh codec constructed solely from
- * `this` (the descriptor).
+ * A parameterized codec whose parameters limit what its column stores (`pg/bit@1`, `pg/varbit@1`, `pg/char@1`, `pg/varchar@1`, `pg/numeric@1`, and `sql/char@1` and `sql/varchar@1` as adapted here) is built with them, and its `decodeJson` refuses a value the column would not store unchanged.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -55,8 +54,10 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';
 import {
+  counted,
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
+  fitsCharacterLength,
   type PgInterval,
   type PrecisionParams,
   pgBigintEncode,
@@ -225,6 +226,14 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
 
 const INT4_RANGE = { min: -2147483648, max: 2147483647 } as const;
 
+const FLOAT4_MAX = 3.4028234663852886e38;
+
+/** Whether float4 holds a finite number: it does not overflow to an infinity or underflow to 0, as PostgreSQL refuses both. */
+const fitsFloat4 = (value: number): boolean => {
+  const single = Math.fround(value);
+  return Number.isFinite(single) && (value === 0 || single !== 0);
+};
+
 const identityJsonProjection = (expression: ProjectionExpr): ProjectionExpr => expression;
 
 const BIT_STRING = /^[01]*$/;
@@ -352,18 +361,21 @@ export const postgresSqlCharDescriptor = postgresCodec(sqlCharDescriptor, {
   dataType: pgChar.id,
   nativeType: () => 'character',
   jsonProjection: identityJsonProjection,
+  factory: (descriptor, params) => () => new PgCharCodec(descriptor, params.length),
 });
 
 export const postgresSqlVarcharDescriptor = postgresCodec(sqlVarcharDescriptor, {
   dataType: pgVarchar.id,
   nativeType: () => 'character varying',
   jsonProjection: identityJsonProjection,
+  factory: (descriptor, params) => () => new PgVarcharCodec(descriptor, params.length),
 });
 
 export const postgresSqlIntDescriptor = postgresCodec(sqlIntDescriptor, {
   dataType: pgInt4.id,
   nativeType: () => 'int4',
   jsonProjection: identityJsonProjection,
+  factory: (descriptor) => () => new PgIntCodec(descriptor),
 });
 
 export const postgresSqlFloatDescriptor = postgresCodec(sqlFloatDescriptor, {
@@ -857,7 +869,15 @@ export class PgFloat4Codec extends CodecImpl<
     return encodeJsonFloat(value);
   }
   decodeJson(json: JsonValue): number {
-    return decodeJsonFloat(PG_FLOAT4_CODEC_ID, json);
+    const value = decodeJsonFloat(PG_FLOAT4_CODEC_ID, json);
+    if (Number.isFinite(value) && !fitsFloat4(value)) {
+      return refuseJsonValue(
+        PG_FLOAT4_CODEC_ID,
+        `a number float4 holds, at most ${FLOAT4_MAX} in magnitude and not so small that it becomes 0, or the text NaN, Infinity or -Infinity`,
+        json,
+      );
+    }
+    return value;
   }
 }
 
@@ -1187,7 +1207,7 @@ export class PgBitCodec extends CodecImpl<
   }
   constructor(
     descriptor: PgBitDescriptor,
-    private readonly length: number | undefined,
+    private readonly length: number,
   ) {
     super(descriptor);
   }
@@ -1198,10 +1218,10 @@ export class PgBitCodec extends CodecImpl<
       BIT_STRING,
       'a string of 0 and 1 digits',
     );
-    if (this.length !== undefined && bits.length !== this.length) {
+    if (bits.length !== this.length) {
       return refuseJsonValue(
         PG_BIT_CODEC_ID,
-        `a string of exactly ${this.length} 0 and 1 digits`,
+        `a string of exactly ${counted(this.length, 'bit')}`,
         json,
       );
     }
@@ -1225,7 +1245,7 @@ export class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams> {
     return renderLength('Bit', params);
   }
   override factory(params: LengthParams): (ctx: CodecInstanceContext) => PgBitCodec {
-    return () => new PgBitCodec(this, params?.length);
+    return () => new PgBitCodec(this, params?.length ?? 1);
   }
 }
 
@@ -1268,7 +1288,7 @@ export class PgVarbitCodec extends CodecImpl<
     if (this.length !== undefined && bits.length > this.length) {
       return refuseJsonValue(
         PG_VARBIT_CODEC_ID,
-        `a string of at most ${this.length} 0 and 1 digits`,
+        `a string of at most ${counted(this.length, 'bit')}`,
         json,
       );
     }
@@ -1663,10 +1683,10 @@ pgJsonbColumn satisfies ColumnHelperForStrict<PgJsonbDescriptor>;
 
 // --- pg aliases for the SQL base codecs ------------------------------------
 // These descriptors give a SQL-base codec a PostgreSQL identity: its own codec
-// id and native type. The factories instantiate the SQL-base codec class
-// (`SqlCharCodec` etc.) passing `this` (the pg-alias descriptor), so `codec.id`
-// resolves to the pg-alias codec id via `CodecImpl`'s `descriptor.codecId`
-// proxy.
+// id and native type. The factories instantiate a subclass of the SQL-base codec
+// class (`PgCharCodec` etc.) passing `this` (the pg-alias descriptor), so
+// `codec.id` resolves to the pg-alias codec id via `CodecImpl`'s
+// `descriptor.codecId` proxy.
 
 const PG_CHAR_NATIVE_TYPE = 'character';
 const PG_VARCHAR_NATIVE_TYPE = 'character varying';
@@ -1679,6 +1699,51 @@ export class PgIntCodec extends SqlIntCodec {
   }
   override decodeJson(json: JsonValue): number {
     return decodeJsonInteger(this.id, json, INT4_RANGE);
+  }
+}
+
+/**
+ * `sql/char@1` as PostgreSQL stores it: a `character` column holds its length in characters, and one with no length is `character(1)`.
+ */
+export class PgCharCodec extends SqlCharCodec {
+  private readonly length: number;
+  constructor(
+    descriptor: ConstructorParameters<typeof SqlCharCodec>[0],
+    length: number | undefined,
+  ) {
+    super(descriptor);
+    this.length = length ?? 1;
+  }
+  override decodeJson(json: JsonValue): string {
+    if (!fitsCharacterLength(decodeJsonString(this.id, json), this.length, true)) {
+      return refuseJsonValue(
+        this.id,
+        `a string of at most ${counted(this.length, 'character')} before any trailing spaces`,
+        json,
+      );
+    }
+    return super.decodeJson(json);
+  }
+}
+
+/** `sql/varchar@1` as PostgreSQL stores it: a `character varying` column with a length holds at most that many characters. */
+export class PgVarcharCodec extends SqlVarcharCodec {
+  constructor(
+    descriptor: ConstructorParameters<typeof SqlVarcharCodec>[0],
+    private readonly length: number | undefined,
+  ) {
+    super(descriptor);
+  }
+  override decodeJson(json: JsonValue): string {
+    const text = super.decodeJson(json);
+    if (this.length !== undefined && !fitsCharacterLength(text, this.length, false)) {
+      return refuseJsonValue(
+        this.id,
+        `a string of at most ${counted(this.length, 'character')}`,
+        json,
+      );
+    }
+    return text;
   }
 }
 
@@ -1706,8 +1771,8 @@ export class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
-  override factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
-    return () => new SqlCharCodec(this, params?.length);
+  override factory(params: LengthParams): (ctx: CodecInstanceContext) => PgCharCodec {
+    return () => new PgCharCodec(this, params?.length);
   }
 }
 
@@ -1736,8 +1801,8 @@ export class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override renderValueLiteral(value: JsonValue): string | undefined {
     return renderTsLiteral(value);
   }
-  override factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
-    return () => new SqlVarcharCodec(this, params?.length);
+  override factory(params: LengthParams): (ctx: CodecInstanceContext) => PgVarcharCodec {
+    return () => new PgVarcharCodec(this, params?.length);
   }
 }
 

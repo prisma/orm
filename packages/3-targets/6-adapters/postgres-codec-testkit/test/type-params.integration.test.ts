@@ -14,6 +14,8 @@ interface TypeCase {
   /** The type the stored value is compared as, so a value PostgreSQL rounds or truncates is told apart. */
   readonly compareAs: string;
   readonly candidates: readonly (readonly [value: string, storedUnchanged: boolean])[];
+  /** Whether the codec's JSON form of a candidate is a JSON number rather than the text. */
+  readonly numeric?: true;
 }
 
 // Each candidate is stored in a column of the type and compared with itself as written: decodeJson must take exactly the values PostgreSQL stores without changing them, and the JSON PostgreSQL writes for each stored value.
@@ -131,10 +133,67 @@ const typeCases: readonly TypeCase[] = [
     typeParams: undefined,
     columnType: 'int4',
     compareAs: 'int8',
+    numeric: true,
     candidates: [
       ['2147483647', true],
       ['-2147483648', true],
       ['2147483648', false],
+    ],
+  },
+  {
+    codecId: 'sql/int@1',
+    typeParams: undefined,
+    columnType: 'int4',
+    compareAs: 'int8',
+    numeric: true,
+    candidates: [
+      ['2147483647', true],
+      ['-2147483648', true],
+      ['2147483648', false],
+      ['3000000000', false],
+    ],
+  },
+  {
+    codecId: 'sql/char@1',
+    typeParams: undefined,
+    columnType: 'character',
+    compareAs: 'bpchar',
+    candidates: [
+      ['a', true],
+      ['a ', true],
+      ['', true],
+      ['ab', false],
+      ['abc', false],
+    ],
+  },
+  {
+    codecId: 'pg/bit@1',
+    typeParams: undefined,
+    columnType: 'bit',
+    compareAs: 'varbit',
+    candidates: [
+      ['1', true],
+      ['0', true],
+      ['01', false],
+      ['', false],
+    ],
+  },
+  {
+    codecId: 'pg/float4@1',
+    typeParams: undefined,
+    columnType: 'float4',
+    compareAs: 'float4',
+    numeric: true,
+    candidates: [
+      ['1.5', true],
+      ['0', true],
+      ['3.4e38', true],
+      ['-3.4e38', true],
+      ['1e-40', true],
+      ['1e300', false],
+      ['-1e300', false],
+      ['3.5e38', false],
+      ['1e-50', false],
     ],
   },
 ];
@@ -165,7 +224,7 @@ describe('decodeJson checks the type parameters PostgreSQL enforces', { concurre
     } catch {
       return { unchanged: false, json: undefined };
     }
-    const projected = typeCase.codecId === 'pg/int@1' ? 'v' : 'v::text';
+    const projected = typeCase.numeric === true ? 'v' : 'v::text';
     const result = await driver!.query<{ same: boolean; json: JsonValue }>(
       `select v = $1::${typeCase.compareAs} as same, to_json(${projected}) as json from type_params_probe`,
       [value],
@@ -197,7 +256,7 @@ describe('decodeJson checks the type parameters PostgreSQL enforces', { concurre
         };
         const results = [];
         for (const [value] of typeCase.candidates) {
-          const written = typeCase.codecId === 'pg/int@1' ? Number(value) : value;
+          const written = typeCase.numeric === true ? Number(value) : value;
           const stored = await store(typeCase, value);
           results.push({
             value,

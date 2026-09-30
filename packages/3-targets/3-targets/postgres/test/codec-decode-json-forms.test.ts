@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   pgBitDescriptor,
   pgBoolDescriptor,
+  pgCharDescriptor,
   pgEnumDescriptor,
   pgFloat4Descriptor,
   pgFloat8Descriptor,
@@ -19,6 +20,10 @@ import {
   pgTsqueryDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
+  pgVarcharDescriptor,
+  postgresSqlCharDescriptor,
+  postgresSqlIntDescriptor,
+  postgresSqlVarcharDescriptor,
 } from '../src/core/codecs';
 import {
   pgDateTemporalDescriptor,
@@ -70,12 +75,42 @@ const cases: readonly DecodeJsonCase[] = [
     rejects: ['1.5', 'nan', true, null, []],
   })),
   {
+    codec: pgFloat4Descriptor.factory()(ctx),
+    accepts: [3.4e38, -3.4e38, 1e-40, -0],
+    rejects: [1e300, 3.5e38, -3.5e38, 1e-50],
+  },
+  {
+    codec: postgresSqlIntDescriptor.factory()(ctx),
+    accepts: [2147483647, -2147483648],
+    rejects: [2147483648, 3000000000, -2147483649],
+  },
+  ...[pgCharDescriptor, postgresSqlCharDescriptor].flatMap((descriptor) => [
+    {
+      codec: descriptor.factory({ length: 3 })(ctx),
+      accepts: ['abc', 'ab', 'abc  ', '\u{1F600}\u{1F600}\u{1F600}'],
+      rejects: ['abcd', ' abc', 1, null],
+    },
+    { codec: descriptor.factory({})(ctx), accepts: ['a', 'a  ', ''], rejects: ['ab'] },
+  ]),
+  ...[pgVarcharDescriptor, postgresSqlVarcharDescriptor].flatMap((descriptor) => [
+    {
+      codec: descriptor.factory({ length: 3 })(ctx),
+      accepts: ['abc', '', '\u{1F600}\u{1F600}\u{1F600}'],
+      rejects: ['abcd', 'abc ', 1, null],
+    },
+    { codec: descriptor.factory({})(ctx), accepts: ['a'.repeat(1000)], rejects: [1] },
+  ]),
+  {
     codec: pgBoolDescriptor.factory()(ctx),
     accepts: [true, false],
     rejects: ['true', 1, 0, null],
   },
   { codec: pgTimetzDescriptor.factory({})(ctx), accepts: ['03:04:05+02'], rejects: [1, null] },
-  { codec: pgBitDescriptor.factory({})(ctx), accepts: ['1', '0'], rejects: [1, '2', 'a', null] },
+  {
+    codec: pgBitDescriptor.factory({})(ctx),
+    accepts: ['1', '0'],
+    rejects: [1, '2', 'a', '01', '', null],
+  },
   {
     codec: pgBitDescriptor.factory({ length: 4 })(ctx),
     accepts: ['1010'],

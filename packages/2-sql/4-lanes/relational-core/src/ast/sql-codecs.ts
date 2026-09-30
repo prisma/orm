@@ -12,7 +12,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
-  type CodecDescriptorTemplate,
   CodecDescriptorTemplateImpl,
   CodecImpl,
   type CodecInstanceContext,
@@ -23,13 +22,11 @@ import {
   decodeJsonInteger,
   decodeJsonString,
   encodeJsonFloat,
-  refuseJsonValue,
   SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import {
-  fitsCharacterLength,
   SQL_CHAR_CODEC_ID,
   SQL_FLOAT_CODEC_ID,
   SQL_INT_CODEC_ID,
@@ -175,12 +172,6 @@ export class SqlCharCodec extends CodecImpl<
   string,
   string
 > {
-  constructor(
-    descriptor: CodecDescriptorTemplate<LengthParams>,
-    private readonly length: number | undefined,
-  ) {
-    super(descriptor);
-  }
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlCharEncode(value);
   }
@@ -191,15 +182,7 @@ export class SqlCharCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    const text = decodeJsonString(this.id, json);
-    if (this.length !== undefined && !fitsCharacterLength(text, this.length, true)) {
-      return refuseJsonValue(
-        this.id,
-        `a string of at most ${this.length} characters before any trailing spaces`,
-        json,
-      );
-    }
-    return sqlCharDecode(text);
+    return sqlCharDecode(decodeJsonString(this.id, json));
   }
 }
 
@@ -211,8 +194,8 @@ export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams>
   override renderOutputType(params: LengthParams): string | undefined {
     return sqlCharRenderOutputType(params);
   }
-  override factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
-    return () => new SqlCharCodec(this, params?.length);
+  override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlCharCodec {
+    return () => new SqlCharCodec(this);
   }
 }
 
@@ -230,12 +213,6 @@ export class SqlVarcharCodec extends CodecImpl<
   string,
   string
 > {
-  constructor(
-    descriptor: CodecDescriptorTemplate<LengthParams>,
-    private readonly length: number | undefined,
-  ) {
-    super(descriptor);
-  }
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlVarcharEncode(value);
   }
@@ -246,11 +223,7 @@ export class SqlVarcharCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    const text = decodeJsonString(this.id, json);
-    if (this.length !== undefined && !fitsCharacterLength(text, this.length, false)) {
-      return refuseJsonValue(this.id, `a string of at most ${this.length} characters`, json);
-    }
-    return text;
+    return decodeJsonString(this.id, json);
   }
 }
 
@@ -262,8 +235,8 @@ export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthPara
   override renderOutputType(params: LengthParams): string | undefined {
     return sqlVarcharRenderOutputType(params);
   }
-  override factory(params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
-    return () => new SqlVarcharCodec(this, params?.length);
+  override factory(_params: LengthParams): (ctx: CodecInstanceContext) => SqlVarcharCodec {
+    return () => new SqlVarcharCodec(this);
   }
 }
 
