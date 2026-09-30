@@ -159,6 +159,13 @@ changes:
         - '\bnew\s+SetDefaultCall\s*\('
         - '(?<![.\w])lowerToExecuteRequest\s*[(:]'
         - '\bimplements\b[^{]*\b(?:ExecuteRequestLowerer|SqlControlAdapter)\b'
+  - id: adapter-control-loads-temporal-polyfill
+    summary: |
+      The adapter's control entry, `adapter/control` of `@prisma/orm-postgres` and `@prisma/orm-target-postgres`, now loads `temporal-polyfill` too, as the target's control entry does since `temporal-polyfill-is-a-peer-dependency`. A Yarn project that added the polyfill for that change needs nothing more. An extension package that installs with Yarn and loads only the adapter's control entry in its tests or tooling must add `temporal-polyfill` (`^1.0.4`) to its `devDependencies`.
+    detection:
+      glob: "**/*.{ts,mts,cts,tsx,js,mjs,cjs}"
+      matches:
+        - '[''"]@prisma/orm-(?:target-)?postgres/adapter/control[''"]'
 ---
 
 ## `domain-types-match-their-columns`
@@ -399,3 +406,9 @@ It returns the `DEFAULT …` clause for the column, or `''` when the column has 
   // after
   new SetDefaultCall('public', 'user', col('role', 'text', { default: lit('member'), codecRef: { codecId: 'pg/text@1' } }), 'widening');
   ```
+
+## `adapter-control-loads-temporal-polyfill`
+
+The adapter contributes the PostgreSQL type constructors, which it imports from the target's control entry, and that entry sets up the fallback `Temporal` from `temporal-polyfill`. So the adapter's control entry, `@prisma/orm-postgres/adapter/control` or `@prisma/orm-target-postgres/adapter/control`, now loads `temporal-polyfill` as well. Both packages declare it as a required peer dependency, and npm, pnpm and bun install it automatically.
+
+For each Yarn project whose tests or tooling load the adapter's control entry, `detection` finds the import. If the project's `package.json` does not already list `temporal-polyfill`, add `"temporal-polyfill": "^1.0.4"` to its `devDependencies` and reinstall. Without it, a test or script that loads the adapter's control entry fails because Node.js cannot find the package `temporal-polyfill`.
