@@ -628,6 +628,7 @@ export class ClientEngine implements Engine {
               results.push(err as Error)
               rollback = true
               if (!canContinueOnError) {
+                results.push(...queries.slice(batchIndex + 1).map(() => err as Error))
                 break
               }
             }

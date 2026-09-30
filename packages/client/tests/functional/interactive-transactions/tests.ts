@@ -803,6 +803,27 @@ testMatrix.setupTestSuite(
       expect(users.length).toBe(0)
     })
 
+    test('batching rejects queries after a failed one within callback', async () => {
+      await prisma.user.create({
+        data: {
+          email: 'user_1@website.com',
+        },
+      })
+
+      const results = await prisma.$transaction(async (tx) => {
+        return await Promise.allSettled([
+          tx.user.create({
+            data: {
+              email: 'user_1@website.com',
+            },
+          }),
+          tx.user.findMany(),
+        ])
+      })
+
+      expect(results).toMatchObject([{ status: 'rejected' }, { status: 'rejected' }])
+    })
+
     test('batching timeout override', async () => {
       const isolatedPrisma = newPrismaClient({
         transactionOptions: {
