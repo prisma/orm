@@ -2,7 +2,7 @@
 changes:
   - id: domain-types-match-their-columns
     summary: |
-      The domain half of an emitted SQL contract now carries the type parameters and enum value sets the schema declares: on fields typed by a named type, on enum list fields, and on composite type members. In `contract.d.ts`, a composite type member with type parameters now has the parameterized output type. Re-emit the contract. The storage half, every hash and migration snapshots are unchanged.
+      The domain half of an emitted SQL contract now carries the type parameters and enum value sets the schema declares: on fields typed by a named type, on enum list fields, and on composite type members. In `contract.d.ts`, a composite type member with type parameters now has the parameterized output type. Re-emit the contract. This change leaves the storage half, every hash and migration snapshots unchanged.
     detection:
       glob: "**/contract.json"
       matches:
@@ -18,21 +18,23 @@ changes:
         - '^\s*type\s+\w+\s*\{'
   - id: codecs-check-stored-json
     summary: |
-      The built-in SQL, PostgreSQL and SQLite codecs now refuse a JSON value that is not a stored form of their type, including one its type parameters rule out, where they used to pass it through: a TypeScript literal default of that kind is now refused when the contract is built, and one in a `contract.json` that an earlier version emitted, or that was edited by hand, stops `db init`, `db update` and `migration plan` with `CONTRACT.DEFAULT_INVALID`. Emit the contract again, and correct the default if emit refuses it.
+      The built-in SQL, PostgreSQL and SQLite codecs now refuse a JSON value that is not a stored form of their type, including one its type parameters rule out, where they used to pass it through. A TypeScript `.default()` value or `enumType` member of that kind is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` or `CONTRACT.ENUM_INVALID`. The elements of a `textArray()` column can now be `null`. Correct the value the error names, and handle `null` elements.
     detection:
-      glob: "**/contract.json"
+      glob: "**/*.{ts,mts,cts,tsx}"
       matches:
-        - '"kind"\s*:\s*"literal"'
+        - '\.default\(\s*(?!now\(|sql`|autoincrement\()'
+        - '\benumType\s*\('
+        - '\btextArray\s*\('
   - id: char-reads-drop-only-padding
     summary: |
-      A `char(n)` column now reads the same through `.include()` as through a flat read: without the trailing spaces that pad it, where an include used to return them, and keeping a trailing tab or newline, which both reads used to drop. Compare `char` values without their padding.
+      A `char(n)` column now reads the same through `.include()` as through a flat read: without the trailing spaces that pad it, where an include used to return them, and keeping a trailing tab or newline, which a flat read used to drop. Compare `char` values without their padding.
     detection:
       glob: "**/contract.json"
       matches:
         - '"codecId"\s*:\s*"(?:sql|pg)/char@1"'
   - id: sqlite-nan-parameters-refused
     summary: |
-      On SQLite, NaN written to a float column, used as a filter value, or given as a TypeScript `.default()`, now throws `RUNTIME.ENCODE_FAILED` naming the codec, where SQLite stored NULL or matched nothing. Write `null` for no value.
+      On SQLite, NaN written to a float column or used as a filter value now throws `RUNTIME.ENCODE_FAILED` naming the codec, where SQLite stored NULL or matched nothing. Write `null` for no value.
     detection:
       glob: "**/contract.json"
       matches:
@@ -50,11 +52,12 @@ changes:
         - '\bChar\s[^\n]*@default\('
   - id: uuid-defaults-stored-as-postgresql-writes
     summary: |
-      A uuid default written in upper case, in braces or without hyphens, in PSL or in a TypeScript `.default()`, is now stored as PostgreSQL writes it, so emitting the contract again changes its storage hash. Earlier versions could not apply such a contract. Emit the contract again, then run `prisma db sign` for a database already at it, or plan one more migration.
+      A uuid default written in upper case, in braces or without hyphens, in PSL or in a TypeScript `.default()`, is now stored as PostgreSQL writes it, so emitting the contract again changes its storage hash. Earlier versions could not apply such a contract: the command that applied it failed and changed nothing. Emit the contract again, then run that command again. With migrations, first delete the migration package that never applied.
     detection:
-      glob: "**/contract.json"
+      glob: "**/*.{prisma,ts,mts,cts,tsx}"
       matches:
-        - '"value"\s*:\s*"(?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")(?=[^"]*[A-Fa-f{-])\{?[0-9A-Fa-f]{4}(?:-?[0-9A-Fa-f]{4}){7}\}?"'
+        - '\bUuid\b[^\n]*@default\(\s*"(?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")\{?[0-9A-Fa-f]{4}'
+        - '\buuidNative\s*\([^\n]*\.default\(\s*[''"`](?![0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[''"`])\{?[0-9A-Fa-f]{4}'
   - id: mongo-codecs-check-json
     summary: |
       The built-in Mongo codecs now refuse a JSON value that is not the JSON form of their type, where most passed it through: a PSL enum member whose value its `@@type` codec does not take is now refused. Correct the member.
@@ -112,7 +115,7 @@ The float codecs `pg/float8@1`, `pg/float4@1`, `pg/float@1`, `sql/float@1` and `
 
 On PostgreSQL the codecs also check what the column stores. `VarChar(n)` and `Char(n)` (`sql/varchar@1`, `sql/char@1`, `pg/varchar@1`, `pg/char@1`) take at most n characters, counted as PostgreSQL counts them, by code point, and a `Char` value's trailing spaces do not count. A `Char` without a length is `character(1)`, so it takes one character. `Bit(n)` takes exactly n bits and `VarBit(n)` at most n, and a `pg/bit@1` column without a length is `bit(1)`, so it takes exactly one bit. `Numeric(p, s)` takes a value it stores without rounding, and `pg/numeric@1` takes only decimal text without an exponent or a leading `+`. The scale may now be negative or above the precision, from -1000 to 1000, as PostgreSQL 15 and later allow: `Numeric(5, -2)` stores multiples of 100, and `contract infer` writes such a column. `sql/int@1`, and `pg/int@1`, the codec of an enum whose members are integers, store an int4, so each takes an integer from -2147483648 to 2147483647. `pg/float4@1` takes a finite number only if float4 holds it, neither overflowing to an infinity nor becoming 0. A default that breaks one of these, such as `VarChar(3) @default("toolong")`, used to load, and the migration planned and applied; the first insert that used the default then failed. A `Char` or `pg/bit@1` column without a length did not apply on PostgreSQL, whatever its default. Such a default is now refused when the contract is emitted, with `PSL_INVALID_DEFAULT_LITERAL`, or `PSL_EXTENSION_INVALID_VALUE` for an enum member, and a TypeScript `.default()` when the contract is built, with `CONTRACT.DEFAULT_INVALID`. Shorten or correct the value. SQLite does not enforce a declared length, so on SQLite the char and varchar codecs take text of any length.
 
-A TypeScript `.default()` given a value its column's type does not take is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` naming the model and field. A TypeScript `enumType` member its codec does not take is refused the same way, with `CONTRACT.ENUM_INVALID` naming the enum, the member and the codec: for example a `pg/char@1` or `sql/char@1` member longer than one character on PostgreSQL, since the enum's column is `character`, which holds one. A `contract.json` with such a default, emitted by an earlier version or edited by hand, still loads, and `db init`, `db update` and `migration plan` now stop with `CONTRACT.DEFAULT_INVALID`, which names the table, the column, the codec and the value, where they used to fail with `CLI.UNEXPECTED`. Emit the contract again with this version. If emit refuses the default, correct it in the contract source. A PSL schema is refused earlier, when it is emitted; see `psl-values-checked-by-codecs`. A `null` literal default is written as `DEFAULT NULL`, as before.
+A TypeScript `.default()` given a value its column's type does not take is now refused when the contract is built, with `CONTRACT.DEFAULT_INVALID` naming the model and field. A TypeScript `enumType` member its codec does not take is refused the same way, with `CONTRACT.ENUM_INVALID` naming the enum, the member and the codec: for example a `pg/char@1` or `sql/char@1` member longer than one character on PostgreSQL, since the enum's column is `character`, which holds one. A `contract.json` with such a default, emitted by an earlier version or edited by hand, still loads. `db init`, `db update` and `migration plan` used to plan the default, as above; they now stop with `CONTRACT.DEFAULT_INVALID`, which names the table, the column, the codec and the value. Emit the contract again with this version, and correct the default in the contract source if emit refuses it. Running a `migration.ts` that an earlier version planned with such a default fails with the same message; correct the default in that file. A PSL schema is refused earlier, when it is emitted; see `psl-values-checked-by-codecs`. A `null` literal default is written as `DEFAULT NULL`, as before.
 
 ## `char-reads-drop-only-padding`
 
@@ -120,7 +123,7 @@ PostgreSQL pads a `char(n)` value with spaces to its length: `'a'` in a `char(3)
 
 ## `sqlite-nan-parameters-refused`
 
-SQLite cannot store NaN: bound as a parameter, it becomes NULL. So `create({ value: 0 / 0 })` on an optional `Float` column stored NULL, and `where((p) => p.value.eq(Number.NaN))` matched nothing. On SQLite, `sqlite/real@1` and `sql/float@1` now refuse NaN with `RUNTIME.ENCODE_FAILED`, `<codecId> value must be a number other than NaN, which SQLite cannot store`, with `meta.codecId` and `meta.received`: when they encode a value to write or filter by, and when they encode a TypeScript `.default()`, which is then refused when the contract is built with `CONTRACT.DEFAULT_INVALID`. Their `decodeJson` refuses the text `"NaN"`. A NaN parameter no codec encoded, such as one in raw SQL, is refused by the SQLite driver with the same code: `Parameter 2 is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.`, with `meta.paramIndex`, counted from 0. On a required column SQLite already refused the NULL, so only the error changes. Where a computed value can be NaN, write `null` for no value, and filter with `isNull()` for rows that have none. Infinity and -Infinity are stored and read back as before.
+SQLite cannot store NaN: bound as a parameter, it becomes NULL. So `create({ value: 0 / 0 })` on an optional `Float` column stored NULL, and `where((p) => p.value.eq(Number.NaN))` matched nothing. On SQLite, `sqlite/real@1` and `sql/float@1` now refuse NaN with `RUNTIME.ENCODE_FAILED`, `<codecId> value must be a number other than NaN, which SQLite cannot store`, with `meta.codecId` and `meta.received`: when they encode a value to write or filter by, and when they encode a TypeScript `.default()`, which is still refused when the contract is built with `CONTRACT.DEFAULT_INVALID`, now with this message. Their `decodeJson` refuses the text `"NaN"`. A NaN parameter no codec encoded, such as one in raw SQL, is refused by the SQLite driver with the same code: `Parameter 2 is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.`, with `meta.paramIndex`, counted from 0. On a required column SQLite already refused the NULL, so only the error changes. Where a computed value can be NaN, write `null` for no value, and filter with `isNull()` for rows that have none. Infinity and -Infinity are stored and read back as before.
 
 ## `psl-values-checked-by-codecs`
 
@@ -144,12 +147,12 @@ Give each enum member a value its codec takes, and each default a value its colu
 
 A `Uuid` default may be written in any form PostgreSQL reads: either case, with or without a hyphen after any group of four digits, and optionally in braces. The contract now stores it as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12, and so does a TypeScript `.default()` on a `pg/uuid@1` column, so the applied default verifies against the database with no difference.
 
-Earlier versions stored such a default as written. The database stores the lower-case form, so the check after a migration applied failed: `db init` and `db migrate` stopped with `MIGRATION.RUNNER_FAILED`. With this version, a `contract.json` that still holds such a default stops `db init`, `db update` and `migration plan` with `CONTRACT.DEFAULT_INVALID`, as `codecs-check-stored-json` describes.
+Earlier versions stored such a default as written. The database stores the lower-case form, so the check that runs after the change is applied failed: `db init`, `db update` and `db migrate` stopped with `MIGRATION.RUNNER_FAILED` and rolled the change back. The database has none of the changes that contract adds, and no marker for it. With this version, a `contract.json` that still holds such a default stops `db init`, `db update` and `migration plan` with `CONTRACT.DEFAULT_INVALID`, as `codecs-check-stored-json` describes.
 
-Emit the contract again. The stored default changes, and with it the storage hash, so `db verify` reports `CONTRACT.MARKER_MISMATCH` for a database marked with the old hash. The database already holds the lower-case default:
+Emit the contract again with this version. The stored default changes, and with it the storage hash. Then:
 
-- For a database kept with `db update` or `db sign`, run `prisma db sign`. It records the new hash, and nothing in the schema changes.
-- For a project with migrations, run `prisma migration plan`. It plans a migration that sets each such default again, one `SET DEFAULT` statement per column, and `prisma db migrate` applies it and moves the marker to the new hash.
+- For a project kept with `db init` or `db update`, run the command that failed again. It applies the contract, and `db verify` then passes.
+- For a project with migrations, delete the migration package that never applied: its directory under `migrations/app/`, and its contract snapshot `migrations/snapshots/<hash>/`, where `<hash>` is the `to` hash in the package's `migration.json`. Then run `prisma migration plan` and `prisma db migrate`. Left in place, the package stays in the migration graph, ending at a contract no database reaches.
 
 ## `mongo-codecs-check-json`
 
