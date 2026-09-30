@@ -61,8 +61,8 @@ describe('encodeLiteralDefault', () => {
         code: 'CONTRACT.DEFAULT_INVALID',
         message:
           'Column "posts"."title" has a default its codec sql/text@1 refuses: sql/text@1 JSON value must be a string',
-        why: "A contract emitted by an earlier version, or edited by hand, can hold a default that this version's codec refuses.",
-        fix: 'Emit the contract again with this version. If emit refuses the default, correct it in the schema.',
+        why: "A contract.json that an earlier version emitted, or a migration.ts it planned, can hold a default that this version's codec refuses, and so can either file after a hand edit.",
+        fix: 'If contract.json holds the default, emit the contract again with this version, and correct the default in the contract source if emit refuses it. If a migration.ts sets it, correct it in that file.',
         meta: {
           table: 'posts',
           column: 'title',

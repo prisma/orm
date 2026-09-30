@@ -50,8 +50,8 @@ function refusedDefault(
     'CONTRACT.DEFAULT_INVALID',
     `Column "${where.table}"."${where.column}" has a default its codec ${codecId} refuses: ${reason}`,
     {
-      why: "A contract emitted by an earlier version, or edited by hand, can hold a default that this version's codec refuses.",
-      fix: 'Emit the contract again with this version. If emit refuses the default, correct it in the schema.',
+      why: "A contract.json that an earlier version emitted, or a migration.ts it planned, can hold a default that this version's codec refuses, and so can either file after a hand edit.",
+      fix: 'If contract.json holds the default, emit the contract again with this version, and correct the default in the contract source if emit refuses it. If a migration.ts sets it, correct it in that file.',
       cause,
       meta: {
         table: where.table,

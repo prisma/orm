@@ -34,7 +34,7 @@ model Token {
 const refusal = {
   code: 'CONTRACT.DEFAULT_INVALID',
   summary: `Column "Token"."value" has a default its codec pg/uuid@1 refuses: pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12`,
-  why: "A contract emitted by an earlier version, or edited by hand, can hold a default that this version's codec refuses.",
+  why: "A contract.json that an earlier version emitted, or a migration.ts it planned, can hold a default that this version's codec refuses, and so can either file after a hand edit.",
   meta: {
     table: 'Token',
     column: 'value',
@@ -112,7 +112,7 @@ withTempDir(({ createTempDir }) => {
               {
                 kind: 'user-choice',
                 label:
-                  'Emit the contract again with this version. If emit refuses the default, correct it in the schema.',
+                  'If contract.json holds the default, emit the contract again with this version, and correct the default in the contract source if emit refuses it. If a migration.ts sets it, correct it in that file.',
               },
             ],
           },
