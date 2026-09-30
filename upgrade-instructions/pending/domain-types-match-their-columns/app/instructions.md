@@ -94,6 +94,13 @@ changes:
       glob: "**/*.{ts,mts,cts,tsx}"
       matches:
         - '\bmapCaughtMigrationError\b'
+  - id: postgres-changed-default-applied
+    summary: |
+      On PostgreSQL, `db update` and `db migrate` now change a column default that is already there. They used to skip the change and then fail with `MIGRATION.SCHEMA_VERIFY_FAILED`. A migration an earlier version planned still skips it: run its `migration.ts` to write `ops.json` again before you apply it.
+    detection:
+      glob: "**/ops.json"
+      matches:
+        - '"id":\s*"setDefault\.'
 ---
 
 ## `domain-types-match-their-columns`
@@ -208,3 +215,9 @@ An attribute inside a `type` block was ignored: `street String @default("x")` st
 ## `cli-error-from-caught`
 
 `mapCaughtMigrationError(error)`, exported from `@prisma/orm-toolchain/cli/control-api` (`@internal/cli/control-api`), returned a CLI error unchanged and `null` for anything else, which the caller wrapped as `CLI.UNEXPECTED`. `errorFromCaught(error, why)`, exported from the same place, does the whole job: it returns a CLI error unchanged, reports any other error with a structured `NAMESPACE.SUBCODE` code as itself, reports anything else as `CLI.UNEXPECTED` with `why` given the error's message, and throws an `InternalError` again. Replace `mapCaughtMigrationError(error) ?? errorUnexpected(...)` with `errorFromCaught(error, (message) => ...)`. A caller that holds a database connection string passes it as `errorFromCaught(error, why, { connection })`, which removes it from every field of the reported error.
+
+## `postgres-changed-default-applied`
+
+A migration operation that changes an existing default on PostgreSQL checked afterwards only that the column has a default. The old default passes that check, and the runner skips an operation whose check already passes, so the default stayed as it was and verification then failed with `MIGRATION.SCHEMA_VERIFY_FAILED`. Such an operation now has no check afterwards and always runs; setting a default twice changes nothing.
+
+A migration package an earlier version planned keeps the old check in `ops.json`. If one changes a default and you have not applied it, run its `migration.ts` (`node migration.ts`) to write `ops.json` again, then apply it with `prisma db migrate`. `db update` plans again each time, so it needs nothing.

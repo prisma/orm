@@ -341,6 +341,18 @@ describe('SetDefaultCall', () => {
     expect(op.operationClass).toBe('widening');
   });
 
+  it('checks no default afterwards when it changes one, since the old default would pass for the new one and the runner would skip the change', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new SetDefaultCall('public', 'user', 'status', "DEFAULT 'pending'", 'widening');
+    const op = await call.toOp(lowerer);
+    expect({ precheck: op.precheck, postcheck: op.postcheck }).toEqual({
+      precheck: [
+        { description: 'ensure column "status" exists', sql: 'LOWERED 1', params: ['p1'] },
+      ],
+      postcheck: [],
+    });
+  });
+
   it('toOp() throws when no lowerer is provided', async () => {
     const call = new SetDefaultCall('public', 'user', 'status', "DEFAULT 'pending'");
     await expect(async () => call.toOp()).rejects.toThrow('createPostgresMigrationPlanner');

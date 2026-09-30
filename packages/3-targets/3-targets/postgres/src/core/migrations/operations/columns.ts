@@ -203,7 +203,10 @@ export async function dropNotNull(
  * `operationClass` defaults to `'additive'` (setting a default on a column
  * that currently has none). The reconciliation planner passes `'widening'`
  * when the column already has a different default — policy enforcement
- * treats that as a widening change rather than an additive one.
+ * treats that as a widening change rather than an additive one. A widening
+ * change has no postcheck: the old default would pass a check for a default,
+ * and the runner skips an operation whose postcheck already passes. Setting a
+ * default again is harmless.
  */
 export async function setDefault(
   schemaName: string,
@@ -219,9 +222,16 @@ export async function setDefault(
     table: tableName,
     column: columnName,
   });
-  const hasDefault = await lowerer.lowerToExecuteRequest(
-    columnDefaultAst({ schema: schemaName, table: tableName, column: columnName }).defaultPresent(),
-  );
+  const hasDefault =
+    operationClass === 'additive'
+      ? await lowerer.lowerToExecuteRequest(
+          columnDefaultAst({
+            schema: schemaName,
+            table: tableName,
+            column: columnName,
+          }).defaultPresent(),
+        )
+      : undefined;
   return {
     id: `setDefault.${tableName}.${columnName}`,
     label: `Set default on "${tableName}"."${columnName}"`,
@@ -234,9 +244,10 @@ export async function setDefault(
         `ALTER TABLE ${qualified} ALTER COLUMN ${quoteIdentifier(columnName)} SET ${defaultSql}`,
       ),
     ],
-    postcheck: [
-      step(`verify column "${columnName}" has a default`, hasDefault.sql, hasDefault.params),
-    ],
+    postcheck:
+      hasDefault === undefined
+        ? []
+        : [step(`verify column "${columnName}" has a default`, hasDefault.sql, hasDefault.params)],
   };
 }
 
