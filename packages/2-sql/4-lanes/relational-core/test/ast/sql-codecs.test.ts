@@ -1,3 +1,4 @@
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
   SQL_CHAR_CODEC_ID,
@@ -120,6 +121,16 @@ describe('sql-codecs', () => {
           ),
         ),
       ).toEqual(['user_001', 'user_001', 'a\t', 'a\n', ' a']);
+    });
+
+    it('trims a value with a long interior run of spaces in time linear in its length', async () => {
+      const wire = `${' '.repeat(50_000)}x${' '.repeat(49_999)}`;
+      const started = performance.now();
+      const decoded = await codec.decode(wire, callCtx);
+      expect({ decoded, withinBound: performance.now() - started < timeouts.default }).toEqual({
+        decoded: `${' '.repeat(50_000)}x`,
+        withinBound: true,
+      });
     });
 
     it('round-trips through JSON identity, keeping trailing spaces, as a default is written', () => {

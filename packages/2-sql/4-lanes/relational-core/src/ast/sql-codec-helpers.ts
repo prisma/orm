@@ -5,6 +5,7 @@
  */
 
 import { structuredError } from '@internal/utils/structured-error';
+import { withoutTrailing } from '@internal/utils/text';
 
 export const SQL_CHAR_CODEC_ID = 'sql/char@1' as const;
 export const SQL_VARCHAR_CODEC_ID = 'sql/varchar@1' as const;
@@ -14,7 +15,7 @@ export const SQL_TEXT_CODEC_ID = 'sql/text@1' as const;
 
 export const sqlCharEncode = (value: string): string => value;
 /** A `character` value as the database returns it, without the spaces that pad it to its length. Only spaces pad it, so a trailing tab or newline is part of the value. */
-export const sqlCharDecode = (wire: string): string => wire.replace(/ +$/, '');
+export const sqlCharDecode = (wire: string): string => withoutTrailing(wire, ' ');
 export const sqlCharRenderOutputType = (typeParams: { readonly length?: number }) => {
   const length = typeParams.length;
   if (length === undefined) return undefined;

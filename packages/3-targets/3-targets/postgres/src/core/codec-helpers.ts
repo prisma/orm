@@ -15,6 +15,7 @@ import {
   SAFE_INTEGER_BIGINT_RANGE,
 } from '@internal/framework-components/codec';
 import { numeralText } from '@internal/sql-relational-core/ast';
+import { withoutTrailing } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -23,7 +24,7 @@ import { postgresError } from './errors';
  * Whether text fits `length` characters, counted as PostgreSQL counts them: code points. A `character` value is padded with spaces, and spaces past its length are dropped, so they do not count.
  */
 export function fitsCharacterLength(text: string, length: number, blankPadded: boolean): boolean {
-  const significant = blankPadded ? text.replace(/ +$/, '') : text;
+  const significant = blankPadded ? withoutTrailing(text, ' ') : text;
   return significant.length <= length || [...significant].length <= length;
 }
 

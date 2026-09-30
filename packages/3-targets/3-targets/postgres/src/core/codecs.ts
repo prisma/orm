@@ -52,6 +52,7 @@ import {
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
+import { withoutTrailing } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';
@@ -224,7 +225,7 @@ function fitsNumeric(text: string, precision: number, scale: number): boolean {
   if (text === 'NaN') return true;
   if (text.endsWith('Infinity')) return false;
   const [whole = '', fraction = ''] = text.replace(/^-/, '').split('.');
-  const significantFraction = fraction.replace(/0+$/, '');
+  const significantFraction = withoutTrailing(fraction, '0');
   if (significantFraction.length > scale) return false;
   return `${whole}${significantFraction.padEnd(scale, '0')}`.replace(/^0+/, '').length <= precision;
 }

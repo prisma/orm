@@ -1,0 +1,1 @@
+export { withoutTrailing } from '../text';

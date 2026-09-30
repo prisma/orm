@@ -1,5 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecInstanceContext } from '@internal/framework-components/codec';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
   pgBitDescriptor,
@@ -269,5 +270,35 @@ describe('pg/uuid@1 encodeJson', () => {
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
       'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     ]);
+  });
+});
+
+describe('the length and scale checks on a long run of padding', () => {
+  const run = 50_000;
+
+  it.each([
+    [
+      'pg/char@1 with a length',
+      () => pgCharDescriptor.factory({ length: run + 1 })(ctx),
+      `${' '.repeat(run)}x${' '.repeat(run - 1)}`,
+    ],
+    [
+      'pg/numeric@1 with a scale',
+      () => pgNumericDescriptor.factory({ precision: 5, scale: 2 })(ctx),
+      `1.${'0'.repeat(run)}1${'0'.repeat(run - 1)}`,
+    ],
+  ])('%s decides in time linear in the length', (_name, build, json) => {
+    const codec = build();
+    const started = performance.now();
+    let refused = false;
+    try {
+      codec.decodeJson(json);
+    } catch {
+      refused = true;
+    }
+    expect({ withinBound: performance.now() - started < timeouts.default, refused }).toEqual({
+      withinBound: true,
+      refused: _name.startsWith('pg/numeric'),
+    });
   });
 });
