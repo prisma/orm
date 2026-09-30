@@ -81,8 +81,13 @@ export class Project {
   }
 
   async publishForDocument(uri: string): Promise<void> {
-    const data = await this.#resolveMember(uri);
-    if (data !== undefined) this.#publishMembers(data);
+    const data = await this.#resolveData().catch(() => undefined);
+    if (data === undefined) return;
+    const member = data.inputs.includes(uri);
+    if (!member) this.#options.unmanage(uri);
+    if (member || this.#reportedMembers.has(normalizeFileUri(uri))) {
+      this.#publishMembers(data);
+    }
   }
 
   async formatDocument(uri: string, source: string): Promise<string | undefined> {
