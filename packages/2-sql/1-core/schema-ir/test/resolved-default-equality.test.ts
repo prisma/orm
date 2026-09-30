@@ -1,4 +1,8 @@
-import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
+import type {
+  ColumnDefault,
+  ColumnDefaultLiteralInputValue,
+  JsonValue,
+} from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 
 import { resolvedDefaultsEqual } from '../src/ir/resolved-default-equality';
@@ -72,43 +76,44 @@ describe('resolvedDefaultsEqual', () => {
     });
   });
 
-  describe('literals of a type with a standard text', () => {
-    const standardTexts = new Map([
+  describe('literals of a type with a canonical form', () => {
+    const canonicalForms = new Map([
       ['2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z'],
       ['2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00Z'],
       ['2026-01-01 00:00:00+00', '2026-01-01T00:00:00Z'],
       ['2026-01-02T00:00:00Z', '2026-01-02T00:00:00Z'],
     ]);
-    const standardText = (text: string): string => {
-      const standard = standardTexts.get(text);
-      if (standard === undefined) throw new Error(`"${text}" is not a date and time`);
-      return standard;
+    const canonicalForm = (value: JsonValue): JsonValue => {
+      const canonical = typeof value === 'string' ? canonicalForms.get(value) : undefined;
+      if (canonical === undefined)
+        throw new Error(`${JSON.stringify(value)} is not a date and time`);
+      return canonical;
     };
 
-    it('compares two texts of one value through the standard text', () => {
+    it('compares two forms of one value through the canonical form', () => {
       expect({
         millisecondText: resolvedDefaultsEqual(
           literal('2026-01-01T00:00:00Z'),
           literal('2026-01-01T00:00:00.000Z'),
           'timestamptz',
-          standardText,
+          canonicalForm,
         ),
         databaseText: resolvedDefaultsEqual(
           literal('2026-01-01T00:00:00Z'),
           literal('2026-01-01 00:00:00+00'),
           'timestamptz',
-          standardText,
+          canonicalForm,
         ),
       }).toEqual({ millisecondText: true, databaseText: true });
     });
 
-    it('compares a Date through the standard text of the ISO text it denotes', () => {
+    it('compares a Date through the canonical form of the ISO text it denotes', () => {
       expect(
         resolvedDefaultsEqual(
           literal(new Date('2026-01-01T00:00:00.000Z')),
           literal('2026-01-01 00:00:00+00'),
           'timestamptz',
-          standardText,
+          canonicalForm,
         ),
       ).toBe(true);
     });
@@ -119,29 +124,29 @@ describe('resolvedDefaultsEqual', () => {
           literal('2026-01-01T00:00:00Z'),
           literal('2026-01-02T00:00:00Z'),
           'timestamptz',
-          standardText,
+          canonicalForm,
         ),
       ).toBe(false);
     });
 
-    it('compares text the standard text refuses as it is', () => {
+    it('compares a value the canonical form refuses as it is', () => {
       expect({
         same: resolvedDefaultsEqual(
           literal('not a date'),
           literal('not a date'),
           'timestamptz',
-          standardText,
+          canonicalForm,
         ),
         other: resolvedDefaultsEqual(
           literal('not a date'),
           literal('2026-01-01T00:00:00Z'),
           'timestamptz',
-          standardText,
+          canonicalForm,
         ),
       }).toEqual({ same: true, other: false });
     });
 
-    it('compares two texts as they are without a standard text, whatever the native type', () => {
+    it('compares two forms as they are without a canonical form, whatever the native type', () => {
       expect(
         resolvedDefaultsEqual(
           literal('2026-01-01T00:00:00Z'),
@@ -151,21 +156,15 @@ describe('resolvedDefaultsEqual', () => {
       ).toBe(false);
     });
 
-    it('compares each element of a list through the standard text', () => {
-      expect({
-        listType: resolvedDefaultsEqual(
+    it('compares each element of a list through the canonical form', () => {
+      expect(
+        resolvedDefaultsEqual(
           literal(['2026-01-01T00:00:00.000Z']),
           literal(['2026-01-01 00:00:00+00']),
           'timestamptz[]',
-          standardText,
+          canonicalForm,
         ),
-        elementType: resolvedDefaultsEqual(
-          literal(['2026-01-01T00:00:00.000Z']),
-          literal(['2026-01-01 00:00:00+00']),
-          'timestamptz',
-          standardText,
-        ),
-      }).toEqual({ listType: true, elementType: true });
+      ).toBe(true);
     });
   });
 

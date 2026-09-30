@@ -76,8 +76,8 @@ import { parsePostgresDefault } from '@internal/target-postgres/default-normaliz
 import { postgresError } from '@internal/target-postgres/errors';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 import {
-  postgresDefaultLiteralText,
-  postgresStandardTextOfCodec,
+  isPostgresDateTimeDataType,
+  postgresDateTimeDdlText,
   renderDefaultLiteral,
 } from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
@@ -1867,15 +1867,13 @@ async function pgRenderDdlColumnDefault(
     }
     return `DEFAULT (${def.expression})`;
   }
+  const dataTypeId =
+    codecRef === undefined ? undefined : codecLookup.descriptorFor?.(codecRef.codecId)?.dataType;
   if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
-    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, codecId: codecRef?.codecId })}`;
+    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
   }
-  if (
-    codecRef !== undefined &&
-    typeof def.value === 'string' &&
-    postgresStandardTextOfCodec(codecRef.codecId) !== undefined
-  ) {
-    return `DEFAULT ${pgInlineLiteral(postgresDefaultLiteralText(def.value, codecRef.codecId), nativeType)}`;
+  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
+    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType)}`;
   }
   if (codecRef !== undefined) {
     // Built with the column's own `typeParams`: a parameterized codec answers for them when it

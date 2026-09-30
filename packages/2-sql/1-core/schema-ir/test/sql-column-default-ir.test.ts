@@ -1,3 +1,4 @@
+import { dataType } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 
 import { SqlColumnDefaultIR } from '../src/ir/sql-column-default-ir';
@@ -41,23 +42,27 @@ describe('SqlColumnDefaultIR', () => {
       expect(expected.isEqualTo(actual)).toBe(true);
     });
 
-    it('a literal compares through the standard text the contract-derived side carries', () => {
-      const standardText = (text: string): string =>
-        text.replace(' ', 'T').replace('.000Z', 'Z').replace('+00', 'Z');
-      const expected = (withStandardText: boolean) =>
+    it("a literal compares through the canonical form of the contract-derived side's data type", () => {
+      const timestamptz = dataType('pg/timestamptz', {
+        canonicalForm: (value) =>
+          typeof value === 'string'
+            ? value.replace(' ', 'T').replace('.000Z', 'Z').replace('+00', 'Z')
+            : value,
+      });
+      const expected = (withDataType: boolean) =>
         new SqlColumnDefaultIR({
           resolved: { kind: 'literal', value: new Date('2024-01-02T03:04:05.000Z') },
           nativeTypeContext: 'timestamptz',
-          ...(withStandardText ? { standardText } : {}),
+          ...(withDataType ? { dataType: timestamptz } : {}),
         });
       const actual = new SqlColumnDefaultIR({
         resolved: { kind: 'literal', value: '2024-01-02 03:04:05+00' },
         nativeTypeContext: 'timestamptz',
       });
       expect({
-        withStandardText: expected(true).isEqualTo(actual),
-        withoutStandardText: expected(false).isEqualTo(actual),
-      }).toEqual({ withStandardText: true, withoutStandardText: false });
+        withDataType: expected(true).isEqualTo(actual),
+        withoutDataType: expected(false).isEqualTo(actual),
+      }).toEqual({ withDataType: true, withoutDataType: false });
     });
 
     it('JSON literals compare canonically: object vs equivalent JSON string', () => {

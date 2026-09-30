@@ -26,7 +26,6 @@ export type {
   DefaultResolver,
   EnumNamespaceSchemaResolver,
   NativeTypeExpander,
-  StandardTextResolver,
 } from '../core/migrations/contract-to-schema-ir';
 // Contract → SchemaIR conversion for offline migration planning
 export {
@@ -40,6 +39,8 @@ export {
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
 } from '../core/migrations/control-policy';
+export type { DataTypeResolver } from '../core/migrations/data-type-resolver';
+export { buildDataTypeResolver } from '../core/migrations/data-type-resolver';
 export type { PlanFieldEventOperationsOptions } from '../core/migrations/field-event-planner';
 export { planFieldEventOperations } from '../core/migrations/field-event-planner';
 export { buildNativeTypeExpander } from '../core/migrations/native-type-expander';

@@ -109,7 +109,7 @@ export function isInlineAutoincrementPrimaryKeyNode(
 export function columnSpecFromNode(column: SqlColumnIR, inline: boolean): SqliteColumnSpec {
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, {});
-  const defaultSql = buildColumnDefaultSql(like.default);
+  const defaultSql = buildColumnDefaultSql(like.default, like.codecId);
   return {
     name: column.name,
     typeSql,

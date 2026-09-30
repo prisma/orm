@@ -31,6 +31,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { sqlFamilyError } from '../errors';
+import type { DataTypeResolver } from './data-type-resolver';
 
 /**
  * Target-specific callback that expands a column's base `nativeType` and optional
@@ -71,15 +72,6 @@ export type DefaultRenderer = (def: ColumnDefault, column: StorageColumn) => str
 export type DefaultResolver = (def: ColumnDefault, resolvedNativeType: string) => ColumnDefault;
 
 /**
- * Target-supplied callback (same IoC seam as `DefaultResolver`) that returns the standard-text
- * function of the data type a codec represents, for the types that store one standard text per
- * value, such as the date and time types. A column's literal default then compares through it, so
- * `2024-01-01T00:00:00.000Z` in one contract and `2024-01-01 00:00:00+00` from the database are one
- * value. `undefined` for every other codec.
- */
-export type StandardTextResolver = (codecId: string) => ((text: string) => string) | undefined;
-
-/**
  * Target-supplied callback that resolves a contract namespace to the live
  * database schema its enums are stored under.
  *
@@ -101,7 +93,7 @@ function convertColumn(
   expandNativeType: NativeTypeExpander | undefined,
   renderDefault: DefaultRenderer | undefined,
   resolveDefault: DefaultResolver | undefined,
-  standardTextOf: StandardTextResolver | undefined,
+  dataTypeOf: DataTypeResolver | undefined,
 ): SqlColumnIRInput {
   // Resolve `typeRef` so columns that delegate their `nativeType`/`codecId`/
   // `typeParams` to a named `storage.types` entry expand the same way as
@@ -163,7 +155,7 @@ function convertColumn(
     codecRef: buildColumnCodecRef(resolved, column.many),
     codecBaseNativeType: resolved.nativeType,
     ...(column.typeRef !== undefined ? { codecNamedType: true } : {}),
-    ...ifDefined('defaultStandardText', standardTextOf?.(resolved.codecId)),
+    ...ifDefined('dataType', dataTypeOf?.(resolved.codecId)),
   };
 }
 
@@ -343,7 +335,7 @@ function convertTable(
   expandNativeType: NativeTypeExpander | undefined,
   renderDefault: DefaultRenderer | undefined,
   resolveDefault: DefaultResolver | undefined,
-  standardTextOf: StandardTextResolver | undefined,
+  dataTypeOf: DataTypeResolver | undefined,
   storage: SqlStorage,
 ): SqlTableIR {
   const columns: Record<string, SqlColumnIRInput> = {};
@@ -355,7 +347,7 @@ function convertTable(
       expandNativeType,
       renderDefault,
       resolveDefault,
-      standardTextOf,
+      dataTypeOf,
     );
   }
 
@@ -452,7 +444,11 @@ export interface ContractToSchemaIROptions {
   readonly expandNativeType?: NativeTypeExpander;
   readonly renderDefault?: DefaultRenderer;
   readonly resolveDefault?: DefaultResolver;
-  readonly standardTextOf?: StandardTextResolver;
+  /**
+   * Gives each column the data type its codec represents, so a literal default compares through
+   * the type's canonical form. Build it with `buildDataTypeResolver(frameworkComponents)`.
+   */
+  readonly dataTypeOf?: DataTypeResolver;
   /**
    * Target-supplied resolver mapping a namespace to the live database schema
    * its enums are stored under. When provided (Postgres), namespace-scoped
@@ -522,7 +518,7 @@ export function contractNamespaceToSchemaIR(
       options.expandNativeType,
       options.renderDefault,
       options.resolveDefault,
-      options.standardTextOf,
+      options.dataTypeOf,
       storage,
     );
   }
@@ -574,7 +570,7 @@ export function contractToSchemaIR(
         options.expandNativeType,
         options.renderDefault,
         options.resolveDefault,
-        options.standardTextOf,
+        options.dataTypeOf,
         storage,
       );
     }

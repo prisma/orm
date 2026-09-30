@@ -1,6 +1,6 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { SqlSchemaDiffResult } from '@internal/family-sql/control';
-import { buildNativeTypeExpander } from '@internal/family-sql/control';
+import { buildDataTypeResolver, buildNativeTypeExpander } from '@internal/family-sql/control';
 import { classifyDiffSubjectGranularity } from '@internal/family-sql/diff';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { DiffableNode, SchemaDiffIssue } from '@internal/framework-components/control';
@@ -18,7 +18,6 @@ import {
   postgresDiffSubjectGranularity,
   type SqlSchemaDiffNode,
 } from '../schema-ir/schema-node-kinds';
-import { postgresStandardTextOfCodec } from '../standard-default-text';
 import { contractToPostgresDatabaseSchemaNode } from './contract-to-postgres-database-schema-node';
 import { resolvePostgresNodeIssueControlPolicySubject } from './control-policy';
 
@@ -138,7 +137,7 @@ export function diffPostgresSchema(input: {
     annotationNamespace: 'pg',
     ...ifDefined('expandNativeType', expandNativeType),
     resolveDefault: postgresResolveDefault,
-    standardTextOf: postgresStandardTextOfCodec,
+    ...ifDefined('dataTypeOf', buildDataTypeResolver(input.frameworkComponents)),
   });
   const expected = pruneTableLessNamespaces(fullExpected);
   const relationalOwned = ownedSchemaNames(expected);
@@ -235,7 +234,7 @@ export function buildPostgresPlanDiff(input: {
     annotationNamespace: 'pg',
     ...ifDefined('expandNativeType', expandNativeType),
     resolveDefault: postgresResolveDefault,
-    standardTextOf: postgresStandardTextOfCodec,
+    ...ifDefined('dataTypeOf', buildDataTypeResolver(input.frameworkComponents)),
   };
   const fullExpected = contractToPostgresDatabaseSchemaNode(postgresContract, projectionOptions);
   const expected = pruneTableLessNamespaces(fullExpected);

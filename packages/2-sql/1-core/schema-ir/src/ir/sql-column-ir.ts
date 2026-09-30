@@ -1,5 +1,5 @@
 import type { ColumnDefault } from '@internal/contract/types';
-import type { CodecRef } from '@internal/framework-components/codec';
+import type { CodecRef, DataType } from '@internal/framework-components/codec';
 import type { DiffableNode } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { blindCast } from '@internal/utils/casts';
@@ -80,12 +80,12 @@ export interface SqlColumnIRInput {
    */
   readonly codecNamedType?: boolean;
   /**
-   * The function that turns written text of the column's data type into the type's one standard
-   * text, supplied by the target for the types that have one, such as the date and time types. A
-   * literal default compares through it, so two texts of one value are equal. Stamped on the
-   * contract-derived column; absent on introspected nodes.
+   * The data type the column's codec represents, from the assembled stack (ADR 254). A literal
+   * default compares through its canonical form, so two forms of one value are equal, and DDL
+   * writes the canonical form. Stamped on the contract-derived column; absent on introspected
+   * nodes.
    */
-  readonly defaultStandardText?: (text: string) => string;
+  readonly dataType?: DataType;
 }
 
 /**
@@ -124,8 +124,8 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
   declare readonly codecBaseNativeType?: string;
   /** See {@link SqlColumnIRInput.codecNamedType}. Non-enumerable, same reason as {@link codecRef}. */
   declare readonly codecNamedType?: boolean;
-  /** See {@link SqlColumnIRInput.defaultStandardText}. Non-enumerable, same reason as {@link codecRef}. */
-  declare readonly defaultStandardText?: (text: string) => string;
+  /** See {@link SqlColumnIRInput.dataType}. Non-enumerable, same reason as {@link codecRef}. */
+  declare readonly dataType?: DataType;
 
   constructor(input: SqlColumnIRInput) {
     super();
@@ -141,7 +141,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
     defineNonEnumerable(this, 'codecNamedType', input.codecNamedType);
-    defineNonEnumerable(this, 'defaultStandardText', input.defaultStandardText);
+    defineNonEnumerable(this, 'dataType', input.dataType);
     freezeNode(this);
   }
 
@@ -175,7 +175,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
         ...ifDefined('codecRef', this.codecRef),
         ...ifDefined('codecBaseNativeType', this.codecBaseNativeType),
         ...ifDefined('codecNamedType', this.codecNamedType),
-        ...ifDefined('standardText', this.defaultStandardText),
+        ...ifDefined('dataType', this.dataType),
       }),
     ];
   }

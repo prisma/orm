@@ -164,14 +164,11 @@ describe('printPsl writes each default as the literal the column data type takes
       "'0044-03-15 00:00:00+00 BC'::timestamp with time zone",
       '-000043-03-15T00:00:00Z',
     ],
-  ])(
-    'prints a %s default as a literal in the standard text',
-    (nativeType, rawDefault, standard) => {
-      expect(printedDefaults([introspected('stamp', nativeType, rawDefault)])).toEqual({
-        stamp: `@default("${standard}")`,
-      });
-    },
-  );
+  ])('prints a %s default as a literal in canonical form', (nativeType, rawDefault, standard) => {
+    expect(printedDefaults([introspected('stamp', nativeType, rawDefault)])).toEqual({
+      stamp: `@default("${standard}")`,
+    });
+  });
 
   it.each([
     ['a database function', 'uuid', 'gen_random_uuid()'],

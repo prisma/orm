@@ -1,4 +1,7 @@
+import type { ColumnDefault } from '@internal/contract/types';
 import type { CodecControlHooks } from '@internal/family-sql/control';
+import { defaultInCanonicalForm } from '@internal/family-sql/psl-build';
+import type { DataType } from '@internal/framework-components/codec';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import type { DdlColumn } from '@internal/sql-relational-core/ast';
 import * as contractFree from '@internal/sql-relational-core/contract-free';
@@ -70,6 +73,17 @@ function columnTypeLike(
   };
 }
 
+/** A literal default in the canonical form of the column's data type, which DDL writes (ADR 254). */
+function inCanonicalForm(
+  columnDefault: ColumnDefault | undefined,
+  dataType: DataType | undefined,
+  many: boolean,
+): ColumnDefault | undefined {
+  return columnDefault?.kind === 'literal'
+    ? { kind: 'literal', value: defaultInCanonicalForm(columnDefault.value, dataType, many) }
+    : columnDefault;
+}
+
 /**
  * Builds the `CREATE TABLE` / `ADD COLUMN` DDL column for an expected column
  * node, resolving type rendering from the node's codec identity against the
@@ -83,7 +97,9 @@ export function renderColumnDdl(
 ): DdlColumn {
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, codecHooks, {});
-  const ddlDefault = postgresDefaultToDdlColumnDefault(like.default);
+  const ddlDefault = postgresDefaultToDdlColumnDefault(
+    inCanonicalForm(like.default, column.dataType, like.many === true),
+  );
   return contractFree.col(name, typeSql, {
     ...(!column.nullable ? { notNull: true } : {}),
     ...ifDefined('default', ddlDefault),
@@ -126,12 +142,13 @@ export function renderColumnDefaultSql(
   defaultNode: SqlColumnDefaultIR,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,
 ): string {
-  const columnDefault = defaultNode.authored ?? defaultNode.resolved;
-  if (columnDefault === undefined) return '';
+  const authored = defaultNode.authored ?? defaultNode.resolved;
+  if (authored === undefined) return '';
   const typeLike = columnTypeLike('column default', defaultNode);
+  const columnDefault = inCanonicalForm(authored, defaultNode.dataType, typeLike.many === true);
   return buildColumnDefaultSql(columnDefault, {
     nativeType: buildColumnTypeSql(typeLike, codecHooks, {}, false),
-    codecId: typeLike.codecId,
+    ...ifDefined('dataTypeId', defaultNode.dataType?.id),
     ...ifDefined('many', typeLike.many),
   });
 }

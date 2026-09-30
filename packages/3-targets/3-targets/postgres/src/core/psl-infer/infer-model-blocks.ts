@@ -5,6 +5,7 @@ import {
 } from '@internal/contract/types';
 import {
   type DefaultMappingOptions,
+  defaultInCanonicalForm,
   mapDefault,
   type PslTypeMap,
 } from '@internal/family-sql/psl-build';
@@ -27,7 +28,6 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
-import { postgresStandardDefault } from '../data-types';
 import {
   buildCheckAttribute,
   buildIndexAttribute,
@@ -398,7 +398,13 @@ function literalOrRawAttribute(
     columnDefault.kind === 'literal'
       ? {
           kind: 'literal',
-          value: postgresStandardDefault(columnDefault.value, defaultMapping.columnDataType),
+          value: defaultInCanonicalForm(
+            columnDefault.value,
+            defaultMapping.columnDataType === undefined
+              ? undefined
+              : defaultMapping.dataTypes?.get(defaultMapping.columnDataType),
+            defaultMapping.list === true,
+          ),
         }
       : columnDefault;
   const result =

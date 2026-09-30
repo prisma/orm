@@ -19,7 +19,7 @@ import type {
   DataTypeAuthoringEntry,
 } from '@internal/framework-components/authoring';
 import { isDataTypeLoweringEntry } from '@internal/framework-components/authoring';
-import type { DataTypeId, DataTypeLookup } from '@internal/framework-components/codec';
+import type { DataType, DataTypeId, DataTypeLookup } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
 import { escapePslString, numeralText } from '@internal/sql-relational-core/ast';
 
@@ -279,15 +279,47 @@ function writeListCast(
   return `[${parts.join(', ')}]`;
 }
 
-function writeDefaultLiteral(
+function canonicalOrAsIs(value: JsonValue, dataType: DataType | undefined): JsonValue {
+  if (dataType?.canonicalForm === undefined) return value;
+  try {
+    return dataType.canonicalForm(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * A default in the canonical form of the column's data type, element by element for a list
+ * column (ADR 254). A value the type does not read, and a value of a type with no canonical-form
+ * function, is returned as it is.
+ */
+export function defaultInCanonicalForm(
   value: ColumnDefaultLiteralInputValue,
+  dataType: DataType | undefined,
+  list: boolean,
+): ColumnDefaultLiteralInputValue {
+  if (value instanceof Date) return value;
+  if (list && Array.isArray(value)) {
+    return value.map((element) => canonicalOrAsIs(element, dataType));
+  }
+  return canonicalOrAsIs(value, dataType);
+}
+
+function writeDefaultLiteral(
+  stored: ColumnDefaultLiteralInputValue,
   options: DefaultMappingOptions | undefined,
 ): string | undefined {
-  if (value instanceof Date) return undefined;
+  if (stored instanceof Date) return undefined;
   const { dataTypeEntries, dataTypes, columnDataType } = options ?? {};
   if (dataTypeEntries === undefined || dataTypes === undefined || columnDataType === undefined) {
     return undefined;
   }
+  const value = defaultInCanonicalForm(
+    stored,
+    dataTypes.get(columnDataType),
+    options?.list === true,
+  );
+  if (value instanceof Date) return undefined;
   const surface = writingSurface(dataTypeEntries);
   if (options?.list === true) {
     if (!Array.isArray(value)) return undefined;

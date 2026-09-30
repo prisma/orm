@@ -1,32 +1,37 @@
-import type { ColumnDefault } from '@internal/contract/types';
+import type {
+  ColumnDefault,
+  ColumnDefaultLiteralInputValue,
+  JsonValue,
+} from '@internal/contract/types';
+import type { CanonicalForm } from '@internal/framework-components/codec';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 
 /**
  * Structural equality for two resolved column defaults, ported from the relational walk's
- * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (text of
- * a type with a standard text, such as a date or time type, to that text through `standardText`,
- * element by element for a list; a 64-bit-integer native type's safe-integer number to its
+ * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (a
+ * value of a type with a canonical form, such as a date or time type, to that form through
+ * `canonicalForm`; a 64-bit-integer native type's safe-integer number to its
  * decimal-text spelling; a numeric native type's number to its decimal text, and when the type has
  * a modifier, its decimal text to its digits without zeros that do not change the value; a list
  * element by element under its element type) then compared canonically (JSON objects match their
  * canonical string form); function expressions compare case- and whitespace-insensitively.
  *
  * `nativeType` provides the normalization context (the actual side's resolved native type in a diff
- * comparison). `standardText` is the column data type's function from written text to its standard
- * text, supplied by the target; text it refuses compares as it is. A target that reads a raw
+ * comparison). `canonicalForm` is the column data type's canonical-form function (ADR 254), from the
+ * assembled stack; a value it refuses compares as it is. A target that reads a raw
  * expression as a literal does so before this comparison, through its `resolveDefault` hook.
  */
 export function resolvedDefaultsEqual(
   expected: ColumnDefault,
   actual: ColumnDefault,
   nativeType?: string,
-  standardText?: (text: string) => string,
+  canonicalForm?: CanonicalForm,
 ): boolean {
   if (expected.kind !== actual.kind) return false;
   if (expected.kind === 'literal' && actual.kind === 'literal') {
     return literalValuesEqual(
-      normalizeLiteralValue(expected.value, nativeType, standardText),
-      normalizeLiteralValue(actual.value, nativeType, standardText),
+      normalizeLiteralValue(expected.value, nativeType, canonicalForm),
+      normalizeLiteralValue(actual.value, nativeType, canonicalForm),
     );
   }
   if (expected.kind === 'function' && actual.kind === 'function') {
@@ -82,29 +87,29 @@ function decimalDigits(value: string | number): string | number {
   return digits === '0' ? digits : `${numeral[1] ?? ''}${digits}`;
 }
 
-function inStandardText(text: string, standardText: (text: string) => string): string {
+function inCanonicalForm(value: JsonValue, canonicalForm: CanonicalForm): JsonValue {
   try {
-    return standardText(text);
+    return canonicalForm(value);
   } catch {
-    return text;
+    return value;
   }
 }
 
 function normalizeLiteralValue(
-  value: unknown,
+  value: ColumnDefaultLiteralInputValue,
   nativeType: string | undefined,
-  standardText: ((text: string) => string) | undefined,
+  canonicalForm: CanonicalForm | undefined,
 ): unknown {
-  if (Array.isArray(value) && (nativeType?.endsWith('[]') || standardText !== undefined)) {
-    const elementType = nativeType?.endsWith('[]') ? nativeType.slice(0, -2) : nativeType;
-    return value.map((element) => normalizeLiteralValue(element, elementType, standardText));
+  if (Array.isArray(value) && nativeType?.endsWith('[]')) {
+    const elementType = nativeType.slice(0, -2);
+    return value.map((element) => normalizeLiteralValue(element, elementType, canonicalForm));
   }
-  const text = value instanceof Date ? value.toISOString() : value;
-  if (typeof text === 'string' && standardText !== undefined) {
-    return inStandardText(text, standardText);
+  const json = value instanceof Date ? value.toISOString() : value;
+  if (canonicalForm !== undefined) {
+    return inCanonicalForm(json, canonicalForm);
   }
   if (value instanceof Date) {
-    return text;
+    return json;
   }
   if (typeof value === 'number' && Number.isSafeInteger(value) && isInt64NativeType(nativeType)) {
     return String(value);

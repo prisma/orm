@@ -1,10 +1,9 @@
-import type { ColumnDefault, ContractEnum } from '@internal/contract/types';
+import type { ContractEnum } from '@internal/contract/types';
 import type { SqlPslBuildContext } from '@internal/family-sql/control';
 import { mapDefault } from '@internal/family-sql/psl-build';
 import type { PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { PG_TEXT_CODEC_ID } from '../codec-ids';
-import { postgresStandardDefault } from '../data-types';
 import {
   buildAttribute,
   parseDefaultAttributeString,
@@ -57,17 +56,12 @@ export function buildColumnDefault(input: {
   }
 
   const { context } = input;
-  const columnDataType = context.codecLookup.descriptorFor?.(
-    input.isEnum ? PG_TEXT_CODEC_ID : input.column.codecId,
-  )?.dataType;
-  const printed: ColumnDefault =
-    columnDefault.kind === 'literal'
-      ? { kind: 'literal', value: postgresStandardDefault(columnDefault.value, columnDataType) }
-      : columnDefault;
-  const result = mapDefault(printed, {
+  const result = mapDefault(columnDefault, {
     dataTypeEntries: context.authoringContributions.dataTypes,
     dataTypes: context.dataTypeLookup,
-    columnDataType,
+    columnDataType: context.codecLookup.descriptorFor?.(
+      input.isEnum ? PG_TEXT_CODEC_ID : input.column.codecId,
+    )?.dataType,
     list: input.column.many === true,
   });
   if (result === undefined) {
