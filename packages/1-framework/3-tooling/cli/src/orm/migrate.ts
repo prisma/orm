@@ -477,7 +477,9 @@ export function createMigrateCommand(createClient: CreateControlClient) {
       } catch (error) {
         return notOk(
           normalizeError(
-            errorFromCaught(error, (message) => `Unexpected error during migrate: ${message}`),
+            errorFromCaught(error, (message) => `Unexpected error during migrate: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+            }),
           ),
         );
       } finally {

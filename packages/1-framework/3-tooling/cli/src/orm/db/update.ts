@@ -20,7 +20,7 @@ import {
 } from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
-import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { closeQuietly } from '../../utils/command-helpers';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
@@ -304,11 +304,9 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         }
         return notOk(
           normalizeError(
-            errorFromCaught(
-              error,
-              (message) =>
-                `Unexpected error during db update: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
-            ),
+            errorFromCaught(error, (message) => `Unexpected error during db update: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+            }),
           ),
         );
       } finally {

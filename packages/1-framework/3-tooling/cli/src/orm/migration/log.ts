@@ -157,7 +157,9 @@ export const migrationLogCommand = defineOrmCommand({
     } catch (error) {
       return notOk(
         normalizeError(
-          errorFromCaught(error, (message) => `Failed to read migration log: ${message}`),
+          errorFromCaught(error, (message) => `Failed to read migration log: ${message}`, {
+            connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+          }),
         ),
       );
     } finally {

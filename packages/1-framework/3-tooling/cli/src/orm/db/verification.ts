@@ -22,7 +22,11 @@ import {
   errorFileNotFound,
   errorUnexpected,
 } from '../../utils/cli-errors';
-import { sanitizeErrorMessage } from '../../utils/command-helpers';
+import {
+  metaWithoutConnectionString,
+  nextActionWithoutConnectionString,
+  sanitizeErrorMessage,
+} from '../../utils/command-helpers';
 import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { contractPathFor, displayPath } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
@@ -168,48 +172,18 @@ function withoutConnectionString(
   const clean = (text: string): string => sanitizeErrorMessage(text, connection);
   return new CliStructuredError(error.code, clean(error.message), {
     severity: error.severity,
-    nextActions: error.nextActions.map((action) => cleanNextAction(action, clean)),
+    nextActions: error.nextActions.map((action) =>
+      nextActionWithoutConnectionString(action, connection),
+    ),
     ...ifDefined('why', error.why === undefined ? undefined : clean(error.why)),
     ...ifDefined('where', error.where),
-    ...ifDefined('meta', error.meta === undefined ? undefined : cleanMetaRecord(error.meta, clean)),
+    ...ifDefined(
+      'meta',
+      error.meta === undefined ? undefined : metaWithoutConnectionString(error.meta, connection),
+    ),
     ...ifDefined('docsUrl', error.docsUrl),
     cause: error.cause,
   });
-}
-
-function cleanNextAction(action: NextAction, clean: (text: string) => string): NextAction {
-  return {
-    kind: action.kind,
-    label: clean(action.label),
-    ...ifDefined('command', action.command === undefined ? undefined : clean(action.command)),
-    ...ifDefined('commands', action.commands?.map(clean)),
-    ...ifDefined('url', action.url === undefined ? undefined : clean(action.url)),
-    ...ifDefined('reason', action.reason === undefined ? undefined : clean(action.reason)),
-  };
-}
-
-function cleanMetaValue(value: unknown, clean: (text: string) => string): unknown {
-  if (typeof value === 'string') {
-    return clean(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => cleanMetaValue(entry, clean));
-  }
-  if (typeof value === 'object' && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, cleanMetaValue(entry, clean)]),
-    );
-  }
-  return value;
-}
-
-function cleanMetaRecord(
-  meta: Record<string, unknown>,
-  clean: (text: string) => string,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(meta).map(([key, value]) => [key, cleanMetaValue(value, clean)]),
-  );
 }
 
 const OUTCOME_LABEL: Record<ExpectationFailureReason, string> = {

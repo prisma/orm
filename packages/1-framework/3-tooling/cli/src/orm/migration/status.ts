@@ -102,7 +102,9 @@ async function readDatabaseState(inputs: {
   } catch (error) {
     return notOk(
       normalizeError(
-        errorFromCaught(error, (message) => `Failed to read database state: ${message}`),
+        errorFromCaught(error, (message) => `Failed to read database state: ${message}`, {
+          connection: typeof inputs.connection === 'string' ? inputs.connection : undefined,
+        }),
       ),
     );
   } finally {

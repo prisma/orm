@@ -15,7 +15,7 @@ import {
 } from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
-import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { closeQuietly } from '../../utils/command-helpers';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
@@ -218,11 +218,9 @@ export function createDbInitCommand(createClient: CreateControlClient) {
         }
         return notOk(
           normalizeError(
-            errorFromCaught(
-              error,
-              (message) =>
-                `Unexpected error during db init: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
-            ),
+            errorFromCaught(error, (message) => `Unexpected error during db init: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+            }),
           ),
         );
       } finally {

@@ -7,7 +7,7 @@ import { createControlClient } from '../../control-api/client';
 import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import type { CreateControlClient } from '../../control-api/types';
 import { errorDatabaseConnectionRequired, errorDriverRequired } from '../../utils/cli-errors';
-import { closeQuietly, maskConnectionUrl, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -191,11 +191,9 @@ export function createDbSchemaCommand(createClient: CreateControlClient) {
       } catch (error) {
         return notOk(
           normalizeError(
-            errorFromCaught(
-              error,
-              (message) =>
-                `Unexpected error during db schema: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
-            ),
+            errorFromCaught(error, (message) => `Unexpected error during db schema: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+            }),
           ),
         );
       } finally {

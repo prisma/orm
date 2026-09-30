@@ -4,6 +4,8 @@ import { hasMigrations } from '@internal/framework-components/control';
 import type { NoInvariantPathStructuralEdge } from '@internal/migration-tools/errors';
 import type { MigrationEdge, MigrationGraph } from '@internal/migration-tools/graph';
 import { APP_SPACE_ID, spaceMigrationDirectory } from '@internal/migration-tools/spaces';
+import { ifDefined } from '@internal/utils/defined';
+import type { NextAction } from '@internal/utils/structured-error';
 import { relative, resolve } from 'pathe';
 import type { ControlClient } from '../control-api/types';
 import { CliStructuredError, errorRuntime } from './cli-errors';
@@ -244,6 +246,38 @@ export function sanitizeErrorMessage(message: string, connectionUrl?: string): s
     sanitized = sanitized.replaceAll(secret, '****');
   }
   return sanitized;
+}
+
+/** A next action with the connection string removed from each of its strings. */
+export function nextActionWithoutConnectionString(
+  action: NextAction,
+  connectionUrl: string,
+): NextAction {
+  const clean = (text: string): string => sanitizeErrorMessage(text, connectionUrl);
+  return {
+    kind: action.kind,
+    label: clean(action.label),
+    ...ifDefined('command', action.command === undefined ? undefined : clean(action.command)),
+    ...ifDefined('commands', action.commands?.map(clean)),
+    ...ifDefined('url', action.url === undefined ? undefined : clean(action.url)),
+    ...ifDefined('reason', action.reason === undefined ? undefined : clean(action.reason)),
+  };
+}
+
+/** `meta` with the connection string removed from every string it holds, however deeply nested. */
+export function metaWithoutConnectionString(
+  meta: Record<string, unknown>,
+  connectionUrl: string,
+): Record<string, unknown> {
+  const clean = (value: unknown): unknown => {
+    if (typeof value === 'string') return sanitizeErrorMessage(value, connectionUrl);
+    if (Array.isArray(value)) return value.map(clean);
+    if (typeof value === 'object' && value !== null) {
+      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, clean(entry)]));
+    }
+    return value;
+  };
+  return Object.fromEntries(Object.entries(meta).map(([key, value]) => [key, clean(value)]));
 }
 
 function connectionUrlSecrets(connectionUrl: string): string[] | undefined {

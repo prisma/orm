@@ -249,7 +249,9 @@ export async function executeMigrateShowPlan(
       }
     } catch (error) {
       return notOk(
-        errorFromCaught(error, (message) => `Failed to read live DB marker: ${message}`),
+        errorFromCaught(error, (message) => `Failed to read live DB marker: ${message}`, {
+          connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+        }),
       );
     } finally {
       await closeQuietly(client);

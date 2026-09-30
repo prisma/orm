@@ -1,4 +1,5 @@
 import { InternalError } from '@internal/utils/internal-error';
+import { structuredError } from '@internal/utils/structured-error';
 import type { StreamEvent } from '@prisma/cli-engine';
 import stripAnsi from 'strip-ansi';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -256,6 +257,24 @@ describe('db schema', () => {
     expect(run.exitCode).toBe(2);
     expect(mocks.close).toHaveBeenCalled();
     expect(settled).toContain('CLI.UNEXPECTED');
+    expect(settled).not.toContain('secret');
+  });
+
+  it('keeps the connection string out of a library error it reports as itself', async () => {
+    const url = 'postgres://user:secret@localhost:5432/appdb';
+    mocks.introspect.mockRejectedValue(
+      structuredError('DRIVER.CONNECTION_FAILED', `connect failed for ${url}`, {
+        why: `The server at ${url} refused the connection`,
+        fix: `Check that ${url} is reachable`,
+        meta: { url, attempts: [{ url }] },
+      }),
+    );
+
+    const run = await harness(ormConfig()).run(['db', 'schema', '--json'], { cwd: '/tmp' });
+    const settled = JSON.stringify(run.json.at(-1));
+
+    expect(run.exitCode).toBe(2);
+    expect(settled).toContain('DRIVER.CONNECTION_FAILED');
     expect(settled).not.toContain('secret');
   });
 

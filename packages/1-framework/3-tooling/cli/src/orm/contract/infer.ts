@@ -14,7 +14,7 @@ import {
   errorDriverRequired,
   errorRuntime,
 } from '../../utils/cli-errors';
-import { closeQuietly, maskConnectionUrl, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import { publishTextArtifact } from '../../utils/publish-text-artifact';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -160,8 +160,10 @@ export function createContractInferCommand({
           normalizeError(
             errorFromCaught(
               error,
-              (message) =>
-                `Unexpected error during contract infer: ${sanitizeErrorMessage(message, typeof dbConnection === 'string' ? dbConnection : undefined)}`,
+              (message) => `Unexpected error during contract infer: ${message}`,
+              {
+                connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+              },
             ),
           ),
         );
