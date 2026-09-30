@@ -85,11 +85,21 @@ interface LanguageServerResponse {
   readonly error?: unknown;
 }
 
+interface PublishedDiagnostics {
+  readonly uri: string;
+  readonly diagnostics: readonly { readonly code?: unknown; readonly message?: unknown }[];
+}
+
+function isPublishedDiagnostics(message: LanguageServerResponse): boolean {
+  return message.method === 'textDocument/publishDiagnostics';
+}
+
 /** `prisma lsp` as a child process with no `Temporal`, spoken to over its standard streams. */
 function languageServerWithoutTemporal(ctx: JourneyContext) {
   const child = spawnNodeWithoutTemporal([BIN_PATH, 'lsp', '--stdio'], { cwd: ctx.testDir });
   const responses = new Map<number, (response: LanguageServerResponse) => void>();
   const notifications: LanguageServerResponse[] = [];
+  const diagnosticsWaiters: { uri: string; resolve: (value: PublishedDiagnostics) => void }[] = [];
   let received = Buffer.alloc(0);
   let stderr = '';
   let lastId = 0;
@@ -112,12 +122,19 @@ function languageServerWithoutTemporal(ctx: JourneyContext) {
       received = received.subarray(end);
       if (message.id === undefined) {
         notifications.push(message);
+        if (isPublishedDiagnostics(message)) publishedDiagnostics(message.params);
       } else {
         responses.get(message.id)?.(message);
         responses.delete(message.id);
       }
     }
   });
+  function publishedDiagnostics(params: unknown): void {
+    const report = params as PublishedDiagnostics;
+    const waiter = diagnosticsWaiters.findIndex((candidate) => candidate.uri === report.uri);
+    if (waiter < 0) return;
+    diagnosticsWaiters.splice(waiter, 1)[0]?.resolve(report);
+  }
   function send(message: object): void {
     const body = JSON.stringify({ jsonrpc: '2.0', ...message });
     child.stdin.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
@@ -125,6 +142,9 @@ function languageServerWithoutTemporal(ctx: JourneyContext) {
   return {
     output: () => JSON.stringify({ notifications, stderr }, null, 2),
     notify: (method: string, params: object) => send({ method, params }),
+    nextDiagnostics(uri: string): Promise<PublishedDiagnostics> {
+      return new Promise((resolve) => diagnosticsWaiters.push({ uri, resolve }));
+    },
     request(method: string, params: object): Promise<LanguageServerResponse> {
       lastId += 1;
       const id = lastId;
@@ -274,29 +294,29 @@ withTempDir(({ createTempDir }) => {
           const initialized = await server.request('initialize', {
             processId: null,
             rootUri: pathToFileURL(ctx.testDir).href,
-            capabilities: { textDocument: { diagnostic: {} } },
+            capabilities: {},
           });
           server.notify('initialized', {});
+          const cleanPublished = server.nextDiagnostics(uri);
           server.notify('textDocument/didOpen', {
             textDocument: { uri, languageId: 'prisma', version: 1, text: EMIT_SCHEMA },
           });
-          const clean = await server.request('textDocument/diagnostic', { textDocument: { uri } });
+          const clean = await cleanPublished;
+          const brokenPublished = server.nextDiagnostics(uri);
           server.notify('textDocument/didChange', {
             textDocument: { uri, version: 2 },
             contentChanges: [{ text: EMIT_SCHEMA.replace('2024-01-01T00:00:00Z', 'not a date') }],
           });
-          const broken = await server.request('textDocument/diagnostic', { textDocument: { uri } });
+          const broken = await brokenPublished;
           await server.request('shutdown', {});
           server.notify('exit', {});
 
           expect(await server.exited).toEqual({ exitCode: 0, ...NO_GLOBAL_TEMPORAL });
           expect(initialized.error).toBeUndefined();
-          expect(clean, server.output()).toMatchObject({ result: { kind: 'full', items: [] } });
+          expect(clean, server.output()).toEqual({ uri, diagnostics: [] });
           expect(broken, server.output()).toMatchObject({
-            result: {
-              kind: 'full',
-              items: [expect.objectContaining({ code: 'PSL_INVALID_DEFAULT_LITERAL' })],
-            },
+            uri,
+            diagnostics: [expect.objectContaining({ code: 'PSL_INVALID_DEFAULT_LITERAL' })],
           });
         },
         timeouts.spinUpPpgDev,
