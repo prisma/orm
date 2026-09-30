@@ -225,7 +225,7 @@ Raised by `@prisma/cli-engine`, not by this repository: a command asked a questi
 
 ### CLI.UNEXPECTED
 
-Catch-all for an unanticipated failure inside a CLI command: an unclassified exception is wrapped in this envelope with the original message as the `why`. Thrown across nearly every command (migrate, db init/sign/update/verify, migration plan/new/show/status/log, contract emit, ref, inspect-live-schema, config loading). Payload: none.
+Catch-all for an unanticipated failure inside a CLI command: an unclassified exception is wrapped in this envelope with the original message in the `why`, without the connection string. Thrown across nearly every command (migrate, db init/sign/update/verify, migration plan/new/show/status/log, contract emit, ref, inspect-live-schema, config loading). Payload: `code`, when the exception carried one that is not a structured code, such as a driver's `ECONNREFUSED` or a SQLSTATE; otherwise none.
 
 ### CLI.UNKNOWN_FLAG
 

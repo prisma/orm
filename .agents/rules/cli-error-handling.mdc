@@ -28,7 +28,7 @@ A handler's `try` reports what it caught with `errorFromCaught(error, why, { con
 - a CLI error is reported as it is;
 - any other error with a structured code a library raised is reported as itself, whatever its namespace, such as `RUNTIME.TYPE_PARAMS_INVALID`;
 - an `InternalError` is thrown again;
-- anything else is `CLI.UNEXPECTED`, with `why(message)`.
+- anything else is `CLI.UNEXPECTED`, with `why(message)` and any non-structured `code` it carries, such as `ECONNREFUSED`, in `meta.code`.
 
 A command that holds a database connection passes its connection string as `connection`, so it is removed from every field of the reported error.
 

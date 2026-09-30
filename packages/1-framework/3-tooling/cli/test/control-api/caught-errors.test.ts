@@ -52,18 +52,28 @@ describe('errorFromCaught', () => {
     expect(() => errorFromCaught(error, why)).toThrow(error);
   });
 
-  it('reports anything else as unexpected, with the why the command gives', () => {
+  it('reports anything else as unexpected, with the why the command gives and any code it carries in meta', () => {
     const plain = new Error('boom');
     const coded = Object.assign(new Error('no such file'), { code: 'ENOENT' });
     expect(
       [plain, coded, 'string failure'].map((error) => {
-        const { code, summary, why: reason } = errorFromCaught(error, why).toEnvelope();
-        return { code, summary, why: reason };
+        const { code, summary, why: reason, meta } = errorFromCaught(error, why).toEnvelope();
+        return { code, summary, why: reason, meta };
       }),
     ).toEqual([
-      { code: 'CLI.UNEXPECTED', summary: 'Unexpected error', why: why('boom') },
-      { code: 'CLI.UNEXPECTED', summary: 'Unexpected error', why: why('no such file') },
-      { code: 'CLI.UNEXPECTED', summary: 'Unexpected error', why: why('string failure') },
+      { code: 'CLI.UNEXPECTED', summary: 'Unexpected error', why: why('boom'), meta: undefined },
+      {
+        code: 'CLI.UNEXPECTED',
+        summary: 'Unexpected error',
+        why: why('no such file'),
+        meta: { code: 'ENOENT' },
+      },
+      {
+        code: 'CLI.UNEXPECTED',
+        summary: 'Unexpected error',
+        why: why('string failure'),
+        meta: undefined,
+      },
     ]);
   });
 

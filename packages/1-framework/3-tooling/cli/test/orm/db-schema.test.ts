@@ -6,6 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
+import {
+  refusedConnection,
+  refusedWithDiagnostics,
+  reportedDiagnostics,
+  reportedRefusedConnection,
+} from './unreachable-database';
 
 const mocks = {
   introspect: vi.fn(),
@@ -276,6 +282,31 @@ describe('db schema', () => {
     expect(run.exitCode).toBe(2);
     expect(settled).toContain('DRIVER.CONNECTION_FAILED');
     expect(settled).not.toContain('secret');
+  });
+
+  it('reports a refused connection as every command does, with its driver code', async () => {
+    mocks.introspect.mockRejectedValue(refusedConnection());
+
+    const run = await harness(ormConfig()).run(['db', 'schema', '--json'], { cwd: '/tmp' });
+
+    expect(run.exitCode).toBe(2);
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: reportedRefusedConnection('db schema'),
+    });
+  });
+
+  it('keeps the diagnostics of a structured driver error, without the connection string', async () => {
+    mocks.introspect.mockRejectedValue(refusedWithDiagnostics());
+
+    const run = await harness(ormConfig()).run(['db', 'schema', '--json'], { cwd: '/tmp' });
+
+    expect(envelopeOf(run.json)).toMatchObject({
+      ok: false,
+      error: { code: 'DRIVER.CONNECTION_FAILED' },
+      diagnostics: reportedDiagnostics,
+    });
+    expect(JSON.stringify(run.json.at(-1))).not.toContain('secret');
   });
 
   it('lets an internal error reach the engine as a bug at exit 1', async () => {
