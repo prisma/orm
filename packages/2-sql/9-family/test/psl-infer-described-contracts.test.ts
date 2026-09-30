@@ -20,7 +20,10 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
 import { createSqlFamilyInstance } from '../src/core/control-instance';
-import type { SqlDescribedContractSpace } from '../src/core/control-target-descriptor';
+import type {
+  SqlDescribedContractSpace,
+  SqlPslBuildContext,
+} from '../src/core/control-target-descriptor';
 import type { SqlControlExtensionDescriptor } from '../src/core/migrations/types';
 
 const TARGET = 'postgres' as const;
@@ -67,6 +70,7 @@ function stubModel(name: string): PslModel {
  */
 function stubInferPslContract(
   schema: SqlSchemaIRNode,
+  _context: SqlPslBuildContext,
   describedContracts?: readonly SqlDescribedContractSpace[],
 ): PslDocumentAst {
   const tree = schema instanceof TestSchemaTree ? schema : new TestSchemaTree([]);

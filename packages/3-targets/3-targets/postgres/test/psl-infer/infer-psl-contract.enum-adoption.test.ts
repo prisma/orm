@@ -36,6 +36,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { inferBuildContext } from './fixtures';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
@@ -93,7 +94,7 @@ function inferAndPrint(
   dbTree: PostgresDatabaseSchemaNode,
   describedContracts?: readonly SqlDescribedContractSpace[],
 ): string {
-  return printPsl(inferPostgresPslContract(dbTree, describedContracts), {
+  return printPsl(inferPostgresPslContract(dbTree, inferBuildContext, describedContracts), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
 }
@@ -316,7 +317,7 @@ describe('native enum adoption — happy path', () => {
 
   it('does not throw the old remediation diagnostic', () => {
     expect(() =>
-      inferPostgresPslContract(tree({ public: sessionsNamespace('public') })),
+      inferPostgresPslContract(tree({ public: sessionsNamespace('public') }), inferBuildContext),
     ).not.toThrow();
   });
 });
@@ -327,7 +328,7 @@ describe('enum-free output stays flat', () => {
       public: namespaceNode('public', { user: table('user', { id: idColumn }) }),
     });
 
-    const ast = inferPostgresPslContract(enumFree);
+    const ast = inferPostgresPslContract(enumFree, inferBuildContext);
     expect(ast.namespaces).toHaveLength(1);
     expect(ast.namespaces[0]?.name).toBe(UNSPECIFIED_PSL_NAMESPACE_ID);
 
@@ -344,7 +345,7 @@ describe('single-namespace stopgap guard', () => {
       auth: sessionsNamespace('auth'),
     });
 
-    expect(() => inferPostgresPslContract(multi)).toThrow(
+    expect(() => inferPostgresPslContract(multi, inferBuildContext)).toThrow(
       /adopting native enums or RLS policies with content across multiple schemas/,
     );
   });
@@ -404,7 +405,7 @@ describe('pack-owned enum subtraction (by type name)', () => {
       ),
     });
 
-    expect(() => inferPostgresPslContract(dbTree, [pack])).toThrow(
+    expect(() => inferPostgresPslContract(dbTree, inferBuildContext, [pack])).toThrow(
       /aal_level.*(pack|space "pack")/i,
     );
 
@@ -421,7 +422,7 @@ describe('pack-owned enum subtraction (by type name)', () => {
       ),
     });
 
-    expect(() => inferPostgresPslContract(qualifiedTree, [pack])).toThrow(
+    expect(() => inferPostgresPslContract(qualifiedTree, inferBuildContext, [pack])).toThrow(
       /aal_level.*(pack|space "pack")/i,
     );
   });

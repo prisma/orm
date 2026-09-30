@@ -2,7 +2,7 @@ import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringArgumentDescriptor } from '@internal/framework-components/authoring';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { describe, expect, it } from 'vitest';
-import { mapPslHelperArgs } from '../src/authoring-arguments';
+import { mapPslHelperArgs, parsePslPositionalArgs } from '../src/authoring-arguments';
 import { createPslDiagnosticCollector, diagnosticSource } from '../src/diagnostic';
 import { parse } from '../src/parse';
 import type { ResolvedAttributeArg } from '../src/resolve';
@@ -326,5 +326,27 @@ describe('mapPslHelperArgs positional/named dispatch', () => {
     );
     expect(result).toBeUndefined();
     expect(diagnostics[0]?.message).toMatch(/does not define positional argument #1/);
+  });
+});
+
+describe('parsePslPositionalArgs', () => {
+  const descriptors = [
+    { kind: 'number', name: 'precision', integer: true },
+    { kind: 'number', name: 'scale', integer: true, optional: true },
+  ] as const;
+
+  it('reads each positional argument as its descriptor says, as the PSL reader does', () => {
+    expect(parsePslPositionalArgs(descriptors, ['5', '-2'])).toEqual([5, -2]);
+  });
+
+  it('reads fewer arguments than descriptors', () => {
+    expect(parsePslPositionalArgs(descriptors, ['10'])).toEqual([10]);
+  });
+
+  it('answers undefined for more arguments than descriptors or one that does not parse', () => {
+    expect([
+      parsePslPositionalArgs(descriptors, ['1', '2', '3']),
+      parsePslPositionalArgs(descriptors, ['ten']),
+    ]).toEqual([undefined, undefined]);
   });
 });

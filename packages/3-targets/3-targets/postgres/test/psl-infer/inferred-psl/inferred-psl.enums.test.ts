@@ -8,7 +8,7 @@
  * introspection; the infer entry (`inferPostgresPslContract`) still throws on
  * native enums until the adoption dispatch wires real data through.
  */
-import type { EnumInfo, PslPrinterOptions } from '@internal/family-sql/psl-infer';
+import type { EnumInfo } from '@internal/family-sql/psl-infer';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { printPsl } from '@internal/psl-printer';
@@ -18,8 +18,13 @@ import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../../../src/core/authoring';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { createPostgresTypeMap } from '../../../src/core/psl-build/postgres-type-map';
-import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
+import { inferredColumnDefaults } from '../../../src/core/psl-infer/infer-default-codec';
+import {
+  buildPslDocumentAst,
+  type PostgresPslInferOptions,
+} from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
+import { inferBuildContext } from '../fixtures';
 
 function enumInfoOf(definitions: Record<string, readonly string[]>): EnumInfo {
   return {
@@ -33,7 +38,8 @@ function printWithEnums(
   definitions: Record<string, readonly string[]>,
 ): string {
   const enumInfo = enumInfoOf(definitions);
-  const options: PslPrinterOptions = {
+  const options: PostgresPslInferOptions = {
+    columnDefaults: inferredColumnDefaults(inferBuildContext),
     typeMap: createPostgresTypeMap(enumInfo.typeNames),
     defaultMapping: createPostgresDefaultMapping(),
     parseRawDefault: parsePostgresDefault,

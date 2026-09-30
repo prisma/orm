@@ -49,6 +49,7 @@ import type { SqlControlAdapter } from './control-adapter';
 import type {
   SqlControlTargetDescriptor,
   SqlDescribedContractSpace,
+  SqlPslBuildContext,
 } from './control-target-descriptor';
 import {
   classifyDiffEntityKind,
@@ -587,6 +588,13 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     SqlControlTargetDescriptor<TTargetId, unknown>,
     'reading the optional target-descriptor inferPslContract hook'
   >(target).inferPslContract;
+  // The stack parts `contract emit` reads a PSL document with, which `contract infer` and
+  // `contract print` write one with.
+  const pslBuildContext: SqlPslBuildContext = {
+    authoringContributions: stack.authoringContributions,
+    codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
+  };
   // The hook that builds the PSL document of a contract is read off the descriptor the same way.
   // Absent for targets without `contract print`.
   const targetBuildPslContract = blindCast<
@@ -1021,7 +1029,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
           },
         );
       }
-      return targetInferPslContract(schemaIR, describedContracts);
+      return targetInferPslContract(schemaIR, pslBuildContext, describedContracts);
     },
 
     buildPslContract(contract: Contract<SqlStorage>): PslContractDocument {
@@ -1037,11 +1045,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
         );
       }
       return {
-        document: targetBuildPslContract(contract, {
-          authoringContributions: stack.authoringContributions,
-          codecLookup: stack.codecLookup,
-          dataTypeLookup: stack.dataTypeLookup,
-        }),
+        document: targetBuildPslContract(contract, pslBuildContext),
         sourceSettings: ifDefined('defaultControlPolicy', contract.defaultControlPolicy),
       };
     },

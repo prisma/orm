@@ -8,15 +8,14 @@ import type {
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeNamespace,
   AuthoringTypeConstructorDescriptor,
-  AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
   checkUncomposedNamespace,
   getAuthoringFieldPreset,
+  getAuthoringTypeConstructor,
   hasRegisteredFieldNamespace,
   instantiateAuthoringTypeConstructor,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringTypeConstructorDescriptor,
   isDataTypeLoweringEntry,
   loweringEntryKey,
   validateAuthoringHelperArguments,
@@ -102,25 +101,6 @@ export function toNamedTypeFieldDescriptor(
     nativeType: descriptor.nativeType,
     typeRef,
   };
-}
-
-export function getAuthoringTypeConstructor(
-  contributions: AuthoringContributions | undefined,
-  path: readonly string[],
-): AuthoringTypeConstructorDescriptor | undefined {
-  let current: AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace | undefined =
-    contributions?.type;
-
-  for (const segment of path) {
-    if (typeof current !== 'object' || current === null || 'kind' in current) {
-      return undefined;
-    }
-    current = current[segment];
-  }
-
-  return current !== undefined && isAuthoringTypeConstructorDescriptor(current)
-    ? current
-    : undefined;
 }
 
 /**

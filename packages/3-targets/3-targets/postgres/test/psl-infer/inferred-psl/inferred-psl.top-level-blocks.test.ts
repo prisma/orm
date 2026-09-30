@@ -13,7 +13,6 @@
  * the blocks in directly.
  */
 import sqlFamilyPack from '@internal/family-sql/pack';
-import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
 import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
@@ -47,9 +46,13 @@ import {
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { createPostgresTypeMap } from '../../../src/core/psl-build/postgres-type-map';
-import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
+import { inferredColumnDefaults } from '../../../src/core/psl-infer/infer-default-codec';
+import {
+  buildPslDocumentAst,
+  type PostgresPslInferOptions,
+} from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
-import { inferPslAstFromFlat } from '../fixtures';
+import { inferBuildContext, inferPslAstFromFlat } from '../fixtures';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
@@ -294,7 +297,8 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
     },
   });
 
-  const printerOptions: PslPrinterOptions = {
+  const printerOptions: PostgresPslInferOptions = {
+    columnDefaults: inferredColumnDefaults(inferBuildContext),
     typeMap: createPostgresTypeMap(new Set()),
     defaultMapping: createPostgresDefaultMapping(),
     parseRawDefault: parsePostgresDefault,

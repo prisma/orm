@@ -1,12 +1,21 @@
+import type { SqlPslBuildContext } from '@internal/family-sql/control';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { printPsl } from '@internal/psl-printer';
 import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
-import { postgresAuthoringPslBlockDescriptors } from '../../src/core/authoring';
+import {
+  postgresAuthoringPslBlockDescriptors,
+  postgresAuthoringTypes,
+} from '../../src/core/authoring';
+import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-registry';
+import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
+import { postgresDataTypes } from '../../src/core/data-types';
 import { inferPostgresPslContract } from '../../src/core/psl-infer/infer-psl-contract';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { adapterTypeConstructors } from './adapter-type-constructors';
 
 /**
  * Wraps a flat `{ tables, annotations? }` introspection fixture into the
@@ -53,9 +62,22 @@ export function treeFromFlat(schemaIR: SqlSchemaIR): PostgresDatabaseSchemaNode 
   });
 }
 
+/**
+ * The stack `contract emit` reads an inferred schema with: the adapter's type constructors for the
+ * type names infer writes, the target's own, and the target's codecs and data types.
+ */
+export const inferBuildContext: SqlPslBuildContext = {
+  authoringContributions: {
+    type: { ...postgresAuthoringTypes, ...adapterTypeConstructors },
+    dataTypes: postgresDataTypeEntries(),
+  },
+  codecLookup: createPostgresBuiltinCodecLookup(),
+  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+};
+
 /** Infers and prints PSL from a flat introspection fixture, with the header `contract infer` writes. */
 export function printPslFromFlat(schemaIR: SqlSchemaIR): string {
-  return printPsl(inferPostgresPslContract(treeFromFlat(schemaIR)), {
+  return printPsl(inferPostgresPslContract(treeFromFlat(schemaIR), inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     description:
       'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
@@ -64,7 +86,7 @@ export function printPslFromFlat(schemaIR: SqlSchemaIR): string {
 
 /** Infers a PSL AST from a flat introspection fixture. */
 export function inferPslAstFromFlat(schemaIR: SqlSchemaIR): PslDocumentAst {
-  return inferPostgresPslContract(treeFromFlat(schemaIR));
+  return inferPostgresPslContract(treeFromFlat(schemaIR), inferBuildContext);
 }
 
 function readPgAnnotationArray(

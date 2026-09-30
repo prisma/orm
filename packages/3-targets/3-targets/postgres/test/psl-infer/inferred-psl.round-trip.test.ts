@@ -6,10 +6,7 @@
  * a literal that prints but does not read back fails here rather than in a user's terminal.
  */
 
-import {
-  type AuthoringTypeNamespace,
-  collectScalarTypeConstructors,
-} from '@internal/framework-components/authoring';
+import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import {
   type CodecLookupWithDescriptors,
   createDataTypeLookup,
@@ -30,48 +27,13 @@ import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
 import { postgresDataTypes } from '../../src/core/data-types';
 import { parsePostgresDefault } from '../../src/core/default-normalizer';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
-import { BINDING_BY_INFERRED_TYPE } from '../../src/core/psl-infer/infer-default-codec';
+import { INFERRED_PSL_TYPE_NAMES } from '../../src/core/psl-build/postgres-type-map';
 import { postgresCodecRegistry } from '../../src/core/registry';
+import { adapterTypeConstructors } from './adapter-type-constructors';
 import { printPslFromFlat } from './fixtures';
 
-/** The type constructors the printed schema names, bound to the codec `contract emit` resolves. */
-const authoringTypes = {
-  String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1', nativeType: 'text' } },
-  Boolean: { kind: 'typeConstructor', output: { codecId: 'pg/bool@1', nativeType: 'bool' } },
-  Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
-  SmallInt: { kind: 'typeConstructor', output: { codecId: 'pg/int2@1', nativeType: 'int2' } },
-  BigInt: { kind: 'typeConstructor', output: { codecId: 'pg/int8@1', nativeType: 'int8' } },
-  Float: { kind: 'typeConstructor', output: { codecId: 'pg/float8@1', nativeType: 'float8' } },
-  Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } },
-  Timestamp: {
-    kind: 'typeConstructor',
-    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
-    output: {
-      codecId: 'pg/timestamp-temporal@1',
-      nativeType: 'timestamp',
-      typeParams: { precision: { kind: 'arg', index: 0 } },
-    },
-  },
-  Numeric: {
-    kind: 'typeConstructor',
-    args: [
-      { kind: 'number', name: 'precision', integer: true, minimum: 1, optional: true },
-      {
-        kind: 'number',
-        name: 'scale',
-        integer: true,
-        minimum: -1000,
-        maximum: 1000,
-        optional: true,
-      },
-    ],
-    output: {
-      codecId: 'pg/numeric@1',
-      nativeType: 'numeric',
-      typeParams: { precision: { kind: 'arg', index: 0 }, scale: { kind: 'arg', index: 1 } },
-    },
-  },
-} as const satisfies AuthoringTypeNamespace;
+/** The type constructors the printed schema names, as the adapter contributes them. */
+const authoringTypes = adapterTypeConstructors;
 
 const assembled = assembleAuthoringContributions([
   {
@@ -213,9 +175,31 @@ two lines é'::text`,
     });
   });
 
-  it('prints a type constructor for every inferred type name the round trip covers', () => {
+  it('round-trips a default of every parameterized type the type map writes', () => {
     expect(
-      Object.keys(authoringTypes).filter((name) => !BINDING_BY_INFERRED_TYPE.has(name)),
-    ).toEqual([]);
+      roundTrippedDefaults([
+        introspected('name', 'character varying(10)', "'abc'::character varying"),
+        introspected('code', 'character(10)', "'abc'::bpchar"),
+        introspected('hundreds', 'numeric(5,-2)', '12300'),
+        introspected('tiny', 'numeric(2,5)', '0.00012'),
+        introspected('stamp', 'timestamp(3)', "'2024-01-01 00:00:00'::timestamp(3)"),
+        introspected('at', 'timestamptz(3)', "'2024-01-01 00:00:00+00'::timestamptz(3)"),
+        introspected('clock', 'time(3)', "'12:00:00'::time(3)"),
+        introspected('zoned', 'timetz(3)', "'12:00:00+00'::timetz(3)"),
+      ]),
+    ).toEqual({
+      name: { kind: 'literal', value: 'abc' },
+      code: { kind: 'literal', value: 'abc' },
+      hundreds: { kind: 'literal', value: '12300' },
+      tiny: { kind: 'literal', value: '0.00012' },
+      stamp: { kind: 'literal', value: '2024-01-01 00:00:00' },
+      at: { kind: 'literal', value: '2024-01-01 00:00:00+00' },
+      clock: { kind: 'literal', value: '12:00:00' },
+      zoned: { kind: 'literal', value: '12:00:00+00' },
+    });
+  });
+
+  it('has a type constructor for every type name the type map writes', () => {
+    expect([...INFERRED_PSL_TYPE_NAMES].filter((name) => !(name in authoringTypes))).toEqual([]);
   });
 });
