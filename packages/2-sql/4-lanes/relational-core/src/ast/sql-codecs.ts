@@ -199,7 +199,7 @@ export class SqlCharCodec extends CodecImpl<
         json,
       );
     }
-    return text;
+    return sqlCharDecode(text);
   }
 }
 
