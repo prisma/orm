@@ -14,7 +14,7 @@ import type { DbUpdateResult, OnControlProgress } from '../types';
 import { executeRun } from './db-run';
 import { computePlanHash } from './plan-identity';
 
-const DB_UPDATE_POLICY = {
+export const DB_UPDATE_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 } as const;
 

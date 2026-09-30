@@ -1,6 +1,14 @@
 import type { ColumnDefault, Contract, ControlPolicy } from '@internal/contract/types';
-import type { NativeTypeExpander, SqlSchemaDiffResult } from '@internal/family-sql/control';
-import { buildNativeTypeExpander, contractToSchemaIR } from '@internal/family-sql/control';
+import type {
+  DataTypeResolver,
+  NativeTypeExpander,
+  SqlSchemaDiffResult,
+} from '@internal/family-sql/control';
+import {
+  buildDataTypeResolver,
+  buildNativeTypeExpander,
+  contractToSchemaIR,
+} from '@internal/family-sql/control';
 import { verifySqlSchemaByDiff } from '@internal/family-sql/diff';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type {
@@ -31,14 +39,14 @@ interface SqliteDiffDatabaseSchemaInput {
 }
 
 /** Renders a column default for the SQLite dialect. */
-export function sqliteRenderDefault(def: ColumnDefault, _column: StorageColumn): string {
+export function sqliteRenderDefault(def: ColumnDefault, column: StorageColumn): string {
   if (def.kind === 'function') {
     if (def.expression === 'now()') {
       return "datetime('now')";
     }
     return def.expression;
   }
-  return renderDefaultLiteral(def.value);
+  return renderDefaultLiteral(def.value, column.codecId);
 }
 
 /**
@@ -54,6 +62,7 @@ export function sqliteContractToSchema(
   contract: Contract<SqlStorage> | null,
   extras?: {
     readonly expandNativeType?: NativeTypeExpander;
+    readonly dataTypeOf?: DataTypeResolver;
   },
 ): SqlSchemaIR {
   // SQLite is single-schema: every contract FK targets the unbound namespace
@@ -65,6 +74,7 @@ export function sqliteContractToSchema(
     renderDefault: sqliteRenderDefault,
     resolveDefault: sqliteResolveDefault,
     ...ifDefined('expandNativeType', extras?.expandNativeType),
+    ...ifDefined('dataTypeOf', extras?.dataTypeOf),
   });
 }
 
@@ -128,6 +138,7 @@ export function diffSqliteSchema(input: {
   const expandNativeType = buildNativeTypeExpander(input.frameworkComponents);
   const expected = sqliteContractToSchema(input.contract, {
     ...ifDefined('expandNativeType', expandNativeType),
+    ...ifDefined('dataTypeOf', buildDataTypeResolver(input.frameworkComponents)),
   });
   const actual =
     input.schema instanceof SqlSchemaIR
@@ -170,6 +181,7 @@ export function buildSqlitePlanDiff(input: {
   const expandNativeType = buildNativeTypeExpander(input.frameworkComponents);
   const expected = sqliteContractToSchema(input.contract, {
     ...ifDefined('expandNativeType', expandNativeType),
+    ...ifDefined('dataTypeOf', buildDataTypeResolver(input.frameworkComponents)),
   });
   // The differ dispatches polymorphically (`.isEqualTo()` / `.children()`), so
   // the actual tree must be genuine `SqlSchemaIR`/`SqlTableIR`/`SqlColumnIR`

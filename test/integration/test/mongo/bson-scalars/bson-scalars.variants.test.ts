@@ -41,7 +41,7 @@ describe('Mongo fields declared only on a variant', () => {
         ).rejects.toMatchObject({
           code: 'RUNTIME.ENCODE_FAILED',
           message:
-            "Failed to encode field exif in collection 'assets' with codec 'mongo/json@1': mongo/json@1 value must be a JSON value; received Date at at",
+            "Failed to encode field exif in collection 'assets' with codec 'mongo/json@1': mongo/json@1 value must be a JSON value; received Date at at. Store the date as an ISO 8601 string, or declare the field Bson.",
         });
       }),
     timeouts.spinUpMongoMemoryServer,
@@ -60,7 +60,7 @@ describe('Mongo fields declared only on a variant', () => {
         ).rejects.toMatchObject({
           code: 'RUNTIME.ENCODE_FAILED',
           message:
-            "Failed to encode field stamps.1.note in collection 'assets' with codec 'mongo/json@1': mongo/json@1 value must be a JSON value; received Date at at",
+            "Failed to encode field stamps.1.note in collection 'assets' with codec 'mongo/json@1': mongo/json@1 value must be a JSON value; received Date at at. Store the date as an ISO 8601 string, or declare the field Bson.",
         });
       }),
     timeouts.spinUpMongoMemoryServer,

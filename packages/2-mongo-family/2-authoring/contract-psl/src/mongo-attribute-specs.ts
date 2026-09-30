@@ -18,6 +18,7 @@ import type {
   ModelAttributeCtx,
   ModelSymbol,
   PslDiagnostic,
+  ResolvedAttribute,
   SymbolTable,
   TypedFuncCall,
 } from '@internal/psl-parser';
@@ -102,6 +103,16 @@ const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
   ],
 ]);
 
+const DEFAULT_NOW_HINT =
+  'To fill the timestamp on create, use `temporal.createdAt()` as the field type.';
+
+function unloweredAttributeHint(attribute: ResolvedAttribute): string | undefined {
+  if (attribute.name === 'default' && attribute.args[0]?.value.replace(/\s/g, '') === 'now()') {
+    return DEFAULT_NOW_HINT;
+  }
+  return UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attribute.name);
+}
+
 function describeUnsupportedMongoAttribute(sources: PslSources): DescribeUnsupportedAttribute {
   return ({ attribute, level, owner, field }) => {
     if (level === 'model') {
@@ -113,7 +124,7 @@ function describeUnsupportedMongoAttribute(sources: PslSources): DescribeUnsuppo
     }
     if (field === undefined) return undefined;
     const base = `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`;
-    const hint = UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attribute.name);
+    const hint = unloweredAttributeHint(attribute);
     return {
       code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
       message: hint === undefined ? base : `${base}. ${hint}`,

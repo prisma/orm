@@ -1313,6 +1313,7 @@ See `.cursor/rules/config-validation-and-normalization.mdc` for detailed pattern
 - `src/bin.ts` is the thin process entry: it adapts the host process into the engine's `Runtime` (`runtimeFromProcess`) and exits with the settled code
 - Exit codes, help output, `--json`, and shared flags (`--config`, `-q`, `-v`, `--color`) are engine policy, not implemented here
 - The unified `prisma-cli` bin mounts the same family from `@prisma/orm-toolchain/cli`
+- The CLI sets no global `Temporal` and has no dependency on a polyfill. The Postgres target's control entry sets a fallback `Temporal` for the target's own code when it is loaded, which happens when the CLI loads `prisma.config.ts`
 
 ### Contract Emit Command (`src/orm/contract/emit.ts`)
 - Engine command definition; the handler returns a settled envelope and the engine renders it

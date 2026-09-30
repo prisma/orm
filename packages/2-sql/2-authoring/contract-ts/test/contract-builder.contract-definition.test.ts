@@ -519,7 +519,9 @@ describe('shared contract definition lowering', () => {
           },
         ],
       }),
-    ).toThrow('Field "User.id" cannot be nullable when executionDefaults are present.');
+    ).toThrow(
+      'Field "User.id" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().',
+    );
   });
 
   it('rejects nullable identity fields', () => {

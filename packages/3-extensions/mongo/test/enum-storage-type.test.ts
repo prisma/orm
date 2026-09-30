@@ -45,10 +45,10 @@ describe('a Mongo enum over a codec without exactly one BSON type', () => {
     ['mongo/json@1', 8],
     ['mongo/bson@1', 0],
   ])(
-    'refuses @@type("%s"), which declares %i BSON types, at the @@type argument',
+    'refuses @@type("%s"), which declares %i BSON types, at the @@type argument and nowhere else',
     (codecId, count) => {
       const typeAttribute = `@@type("${codecId}")`;
-      const schema = `enum Shape {\n  ${typeAttribute}\n  a\n}\n`;
+      const schema = `enum Shape {\n  ${typeAttribute}\n  a\n}\nmodel Figure {\n  id    ObjectId @id @map("_id")\n  shape Shape\n  other Shape?\n}\n`;
       const result = interpret(schema);
 
       expect(result.ok).toBe(false);
@@ -57,7 +57,7 @@ describe('a Mongo enum over a codec without exactly one BSON type', () => {
       expect(result.failure.diagnostics).toEqual([
         expect.objectContaining({
           code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one`,
+          message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one. Use a codec with one BSON type, such as mongo/string@1.`,
           span: expect.objectContaining({
             start: expect.objectContaining({ offset: start }),
             end: expect.objectContaining({ offset: start + codecId.length + 2 }),

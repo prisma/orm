@@ -77,7 +77,11 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
-import { type FieldPresetContext, resolveFieldPreset } from './field-presets';
+import {
+  type FieldPresetContext,
+  type PresetWithoutEffect,
+  resolveFieldPreset,
+} from './field-presets';
 import {
   createMongoBinder,
   findFieldAttributeNode,
@@ -107,6 +111,8 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
   /** Receives a warning for each field typed with a deprecated scalar name. */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
+  /** Scalar names an earlier Prisma schema used that this schema does not accept, with the codec each maps to; a field typed with one is refused with the name that stores the same way. */
+  readonly formerScalarCodecIds?: ReadonlyMap<string, string>;
 }
 
 /**
@@ -136,6 +142,97 @@ function deprecatedScalarWarner(input: {
           code: 'PSL_DEPRECATED_SCALAR_NAME',
           message: `Scalar type "${field.typeName}" is deprecated and will be removed; use "${descriptor.deprecated.replacement}" (stored as BSON ${descriptor.output.nativeType}).`,
           ...diagnosticSource(input.sources, typeNode).at(),
+        },
+      ],
+      input.sources,
+    );
+    if (warning !== undefined) reportWarning({ ...warning, severity: 'warning' });
+  };
+}
+
+interface ScalarNames {
+  readonly warnDeprecated: (field: FieldSymbol) => void;
+  readonly unknownTypeMessage: (field: FieldSymbol, ownerName: string) => string;
+  /** Every enum the schema declares, including one whose own declaration failed and was already reported. */
+  readonly declaredEnums: ReadonlySet<string>;
+}
+
+/**
+ * The words for a field type the schema cannot resolve: a name from an earlier Prisma that maps to a codec gets the current name for that codec; any other name gets the list of scalar types.
+ */
+function unknownTypeMessages(input: {
+  readonly types: AuthoringTypeNamespace | undefined;
+  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  readonly formerScalarCodecIds: ReadonlyMap<string, string>;
+}): ScalarNames['unknownTypeMessage'] {
+  const current = [...input.scalarTypeCodecIds].filter(([name]) => {
+    const type = input.types?.[name];
+    return !(
+      type !== undefined &&
+      isAuthoringTypeConstructorDescriptor(type) &&
+      type.deprecated !== undefined
+    );
+  });
+  const names = current.map(([name]) => name);
+  const scalarTypes =
+    names.length === 0
+      ? 'No Mongo scalar types are registered.'
+      : `The Mongo scalar types are ${names.length === 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`}.`;
+  return (field, ownerName) => {
+    const subject = `Field "${ownerName}.${field.name}" has type "${field.typeName}"`;
+    const codecId = input.formerScalarCodecIds.get(field.typeName);
+    const replacement = current.find(([, id]) => id === codecId)?.[0];
+    if (replacement === undefined) {
+      return `${subject}, which is not a scalar type, an enum, a composite type or a model. ${scalarTypes}`;
+    }
+    const type = input.types?.[replacement];
+    const stored =
+      type !== undefined && isAuthoringTypeConstructorDescriptor(type)
+        ? ` (stored as BSON ${type.output.nativeType})`
+        : '';
+    return `${subject}, which is not a Mongo scalar type; use "${replacement}"${stored}.`;
+  };
+}
+
+/**
+ * Reports `PSL_PRESET_WITHOUT_EFFECT` for a preset call that fills nothing, such as `temporal.timestamp()` with no phase: it is stored exactly like the scalar type with the same codec, which the warning names.
+ */
+function presetWithoutEffectWarner(input: {
+  readonly types: AuthoringTypeNamespace | undefined;
+  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  readonly sources: PslSources;
+  readonly reportWarning: ((diagnostic: ContractSourceDiagnostic) => void) | undefined;
+}): (preset: PresetWithoutEffect) => void {
+  const { reportWarning } = input;
+  if (reportWarning === undefined) return () => {};
+  return ({ field, entityLabel, helperPath, descriptor, codecId }) => {
+    const typeName = [...input.scalarTypeCodecIds].find(([name, id]) => {
+      const type = input.types?.[name];
+      const deprecated =
+        type !== undefined &&
+        isAuthoringTypeConstructorDescriptor(type) &&
+        type.deprecated !== undefined;
+      return id === codecId && !deprecated;
+    })?.[0];
+    if (typeName === undefined) return;
+    const phases = (descriptor.args ?? []).flatMap((arg) =>
+      arg.kind === 'option' && arg.name !== undefined
+        ? [{ name: arg.name, value: arg.values[0] }]
+        : [],
+    );
+    const without =
+      phases.length === 0 ? '' : ` without ${phases.map(({ name }) => name).join(' or ')}`;
+    const pass =
+      phases.length === 0
+        ? ''
+        : `, or pass ${phases.map(({ name, value }) => `${name}: ${value}`).join(' or ')}`;
+    const call = field.typeConstructor?.span;
+    const [warning] = mapPslDiagnostics(
+      [
+        {
+          code: 'PSL_PRESET_WITHOUT_EFFECT',
+          message: `${entityLabel} uses ${helperPath}()${without}, so nothing fills it and it is stored exactly like ${typeName}. Write ${typeName}${pass}.`,
+          ...diagnosticSource(input.sources, field.node.syntax).at(call ?? field.span),
         },
       ],
       input.sources,
@@ -1032,7 +1129,7 @@ function resolveNonRelationField(
   scalarTypeCodecIds: ReadonlyMap<string, string>,
   codecIdByEnumName: ReadonlyMap<string, string>,
   presetContext: FieldPresetContext,
-  warnDeprecatedScalar: (field: FieldSymbol) => void,
+  scalarNames: ScalarNames,
 ): ResolvedNonRelationField | undefined {
   const { sources, diagnostics } = presetContext;
   const ownerName = owner.name;
@@ -1084,16 +1181,23 @@ function resolveNonRelationField(
   }
 
   const codecId = resolveFieldCodecId(field, scalarTypeCodecIds);
+  if (!codecId && scalarNames.declaredEnums.has(field.typeName)) {
+    return undefined;
+  }
   if (!codecId) {
+    const typeNode = field.node.typeAnnotation()?.name()?.syntax;
+    const source = diagnosticSource(sources, field.node.syntax);
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-      message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
-      ...diagnosticSource(sources, field.node.syntax).at(field.span),
+      message: scalarNames.unknownTypeMessage(field, ownerName),
+      ...(typeNode === undefined
+        ? source.at(field.span)
+        : diagnosticSource(sources, typeNode).at()),
     });
     return undefined;
   }
 
-  warnDeprecatedScalar(field);
+  scalarNames.warnDeprecated(field);
   const result: ContractField = {
     type: { kind: 'scalar', codecId },
     nullable: field.optional,
@@ -1170,13 +1274,31 @@ export function interpretPslDocumentToMongoContract(
     composedExtensions: new Set(input.composedExtensions ?? []),
     sources,
     diagnostics,
+    warnPresetWithoutEffect: presetWithoutEffectWarner({
+      types: input.authoringContributions?.type,
+      scalarTypeCodecIds,
+      sources,
+      reportWarning: input.reportWarning,
+    }),
   };
   const presetExecutionDefaults: PresetExecutionDefault[] = [];
-  const warnDeprecatedScalar = deprecatedScalarWarner({
-    types: input.authoringContributions?.type,
-    sources,
-    reportWarning: input.reportWarning,
-  });
+  const scalarNames: ScalarNames = {
+    warnDeprecated: deprecatedScalarWarner({
+      types: input.authoringContributions?.type,
+      sources,
+      reportWarning: input.reportWarning,
+    }),
+    unknownTypeMessage: unknownTypeMessages({
+      types: input.authoringContributions?.type,
+      scalarTypeCodecIds,
+      formerScalarCodecIds: input.formerScalarCodecIds ?? new Map(),
+    }),
+    declaredEnums: new Set(
+      Object.values(symbolTable.topLevel.blocks)
+        .filter((block) => block.keyword === 'enum')
+        .map((block) => block.name),
+    ),
+  };
   const { binder, diagnostics: binderDiagnostics } = createMongoBinder({
     symbolTable,
     sources,
@@ -1368,7 +1490,7 @@ export function interpretPslDocumentToMongoContract(
         scalarTypeCodecIds,
         codecIdByEnumName,
         presetContext,
-        warnDeprecatedScalar,
+        scalarNames,
       );
       if (!resolved) continue;
 
@@ -1467,7 +1589,7 @@ export function interpretPslDocumentToMongoContract(
         scalarTypeCodecIds,
         codecIdByEnumName,
         presetContext,
-        warnDeprecatedScalar,
+        scalarNames,
       );
       if (!resolved) continue;
       fields[field.name] = resolved.field;

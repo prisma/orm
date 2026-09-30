@@ -128,7 +128,7 @@ describe('renderColumnDefaultSql', () => {
   it('renders an empty string when the diff node carries no resolved default', () => {
     const defaultNode = new SqlColumnDefaultIR({ raw: "'hello'::text" });
 
-    expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe('');
+    expect(renderColumnDefaultSql('v', defaultNode, noHooks)).toBe('');
   });
 
   it('renders a DEFAULT clause for a scalar literal', () => {
@@ -139,7 +139,7 @@ describe('renderColumnDefaultSql', () => {
       codecBaseNativeType: 'text',
     });
 
-    expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe("DEFAULT 'hello'");
+    expect(renderColumnDefaultSql('v', defaultNode, noHooks)).toBe("DEFAULT 'hello'");
   });
 
   it('renders a DEFAULT clause for a number literal', () => {
@@ -150,7 +150,7 @@ describe('renderColumnDefaultSql', () => {
       codecBaseNativeType: 'int4',
     });
 
-    expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe('DEFAULT 42');
+    expect(renderColumnDefaultSql('v', defaultNode, noHooks)).toBe('DEFAULT 42');
   });
 
   it.each([
@@ -169,7 +169,9 @@ describe('renderColumnDefaultSql', () => {
         codecBaseNativeType: typeName,
       });
 
-      expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe(`DEFAULT ARRAY['asc']::${cast}`);
+      expect(renderColumnDefaultSql('v', defaultNode, noHooks)).toBe(
+        `DEFAULT ARRAY['asc']::${cast}`,
+      );
     },
   );
 
@@ -179,6 +181,8 @@ describe('renderColumnDefaultSql', () => {
       nativeTypeContext: 'int4',
     });
 
-    expect(() => renderColumnDefaultSql(defaultNode, noHooks)).toThrow(/carries no codec identity/);
+    expect(() => renderColumnDefaultSql('v', defaultNode, noHooks)).toThrow(
+      /carries no codec identity/,
+    );
   });
 });

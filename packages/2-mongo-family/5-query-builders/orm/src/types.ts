@@ -255,10 +255,23 @@ type GeneratedOnCreateFields<
       : never
     : never;
 
+/**
+ * Fields a document may leave out: nullable ones, which read back as `null`. The create input makes them optional, as the SQL ORM client does for nullable columns.
+ */
+type NullableFields<
+  TContract extends MongoContract,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+> = {
+  [K in keyof MongoModelsMap<TContract>[ModelName]['fields'] &
+    string]: MongoModelsMap<TContract>[ModelName]['fields'][K] extends { readonly nullable: true }
+    ? K
+    : never;
+}[keyof MongoModelsMap<TContract>[ModelName]['fields'] & string];
+
 type OptionalOnCreate<
   TContract extends MongoContract,
   ModelName extends string & keyof MongoModelsMap<TContract>,
-> = '_id' | GeneratedOnCreateFields<TContract, ModelName>;
+> = '_id' | GeneratedOnCreateFields<TContract, ModelName> | NullableFields<TContract, ModelName>;
 
 export type CreateInput<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
@@ -270,6 +283,13 @@ export type CreateInput<
       OptionalOnCreate<TContract, ModelName> & keyof ResolvedInputRow<TContract, ModelName>
     >
   >;
+
+type VariantNullableFields<
+  TContract extends MongoContract,
+  VariantName extends string,
+> = VariantName extends string & keyof MongoModelsMap<TContract>
+  ? NullableFields<TContract, VariantName>
+  : never;
 
 type DiscriminatorField<
   TContract extends MongoContract,
@@ -290,7 +310,9 @@ export type VariantCreateInput<
   VariantName extends string,
 > = Omit<
   VariantModelRow<TContract, ModelName, VariantName>,
-  OptionalOnCreate<TContract, ModelName> | DiscriminatorField<TContract, ModelName>
+  | OptionalOnCreate<TContract, ModelName>
+  | VariantNullableFields<TContract, VariantName>
+  | DiscriminatorField<TContract, ModelName>
 > &
   Partial<
     Pick<
@@ -301,7 +323,11 @@ export type VariantCreateInput<
   Partial<
     Pick<
       VariantModelRow<TContract, ModelName, VariantName>,
-      GeneratedOnCreateFields<TContract, ModelName> &
+      (
+        | GeneratedOnCreateFields<TContract, ModelName>
+        | NullableFields<TContract, ModelName>
+        | VariantNullableFields<TContract, VariantName>
+      ) &
         keyof VariantModelRow<TContract, ModelName, VariantName>
     >
   >;

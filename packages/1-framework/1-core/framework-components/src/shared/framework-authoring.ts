@@ -1622,45 +1622,30 @@ function validateAuthoringArgument(
     if (descriptor.optional) {
       return;
     }
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Missing required authoring helper argument at ${path}`,
-    );
+    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} is missing`);
   }
 
   if (descriptor.kind === 'string') {
     if (typeof value !== 'string') {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be a string`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a string`);
     }
     return;
   }
 
   if (descriptor.kind === 'boolean') {
     if (typeof value !== 'boolean') {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be a boolean`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a boolean`);
     }
     return;
   }
 
   if (descriptor.kind === 'stringArray') {
     if (!Array.isArray(value)) {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be an array of strings`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an array of strings`);
     }
     for (const entry of value) {
       if (typeof entry !== 'string') {
-        throw runtimeError(
-          'CONTRACT.ARGUMENT_INVALID',
-          `Authoring helper argument at ${path} must be an array of strings`,
-        );
+        throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an array of strings`);
       }
     }
     return;
@@ -1668,10 +1653,7 @@ function validateAuthoringArgument(
 
   if (descriptor.kind === 'object') {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      throw runtimeError(
-        'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be an object`,
-      );
+      throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an object`);
     }
 
     const input = value as Record<string, unknown>;
@@ -1681,7 +1663,7 @@ function validateAuthoringArgument(
       if (!expectedKeys.has(key)) {
         throw runtimeError(
           'CONTRACT.ARGUMENT_INVALID',
-          `Authoring helper argument at ${path} contains unknown property "${key}"`,
+          `${path} contains unknown property "${key}"`,
         );
       }
     }
@@ -1695,37 +1677,36 @@ function validateAuthoringArgument(
 
   if (descriptor.kind === 'option') {
     if (typeof value !== 'string' || !descriptor.values.includes(value)) {
+      const quoted = descriptor.values.map((option) => JSON.stringify(option));
+      const rule =
+        quoted.length === 0
+          ? 'takes no value'
+          : `must be ${quoted.length === 1 ? quoted.join('') : `one of ${quoted.join(', ')}`}`;
       throw runtimeError(
         'CONTRACT.ARGUMENT_INVALID',
-        `Authoring helper argument at ${path} must be one of: ${descriptor.values.join(', ')}`,
+        `${path} ${rule}; received ${describeReceivedArgument(value)}`,
       );
     }
     return;
   }
 
   if (typeof value !== 'number' || Number.isNaN(value)) {
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be a number`,
-    );
+    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be a number`);
   }
 
   if (descriptor.integer && !Number.isInteger(value)) {
-    throw runtimeError(
-      'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be an integer`,
-    );
+    throw runtimeError('CONTRACT.ARGUMENT_INVALID', `${path} must be an integer`);
   }
   if (descriptor.minimum !== undefined && value < descriptor.minimum) {
     throw runtimeError(
       'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be >= ${descriptor.minimum}, received ${value}`,
+      `${path} must be >= ${descriptor.minimum}, received ${value}`,
     );
   }
   if (descriptor.maximum !== undefined && value > descriptor.maximum) {
     throw runtimeError(
       'CONTRACT.ARGUMENT_INVALID',
-      `Authoring helper argument at ${path} must be <= ${descriptor.maximum}, received ${value}`,
+      `${path} must be <= ${descriptor.maximum}, received ${value}`,
     );
   }
 }
@@ -1748,8 +1729,26 @@ export function validateAuthoringHelperArguments(
   }
 
   expected.forEach((descriptor, index) => {
-    validateAuthoringArgument(descriptor, args[index], `${helperPath}[${index}]`);
+    validateAuthoringArgument(
+      descriptor,
+      args[index],
+      argumentLabel(helperPath, descriptor, index),
+    );
   });
+}
+
+function argumentLabel(
+  helperPath: string,
+  descriptor: AuthoringArgumentDescriptor,
+  index: number,
+): string {
+  return descriptor.name === undefined
+    ? `Authoring helper argument at ${helperPath}[${index}]`
+    : `Argument "${descriptor.name}" of ${helperPath}`;
+}
+
+function describeReceivedArgument(value: unknown): string {
+  return typeof value === 'string' ? JSON.stringify(value) : String(value);
 }
 
 function resolveAuthoringStorageTypeTemplate(

@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import { Binary, Decimal128, Long } from 'bson';
+import { Binary, BSON, Decimal128, Long } from 'bson';
 import { describe, expect, it } from 'vitest';
 import {
   MONGO_BINARY_CODEC_ID,
@@ -191,9 +191,7 @@ describe('mongoBinaryCodec', () => {
   const bytes = new Uint8Array([0, 1, 2, 250, 255]);
 
   it('encodes bytes to a Binary', async () => {
-    const wire = await mongoBinaryCodec.encode(bytes, {});
-    expect(wire).toBeInstanceOf(Binary);
-    expect([...wire.buffer]).toEqual([...bytes]);
+    expect(await mongoBinaryCodec.encode(bytes, {})).toStrictEqual(new Binary(bytes));
   });
 
   it('decodes a Binary to a plain Uint8Array of the same bytes', async () => {
@@ -201,6 +199,24 @@ describe('mongoBinaryCodec', () => {
     expect(decoded).toBeInstanceOf(Uint8Array);
     expect(Buffer.isBuffer(decoded)).toBe(false);
     expect([...decoded]).toEqual([...bytes]);
+  });
+
+  it.each([
+    ['the default options', {}],
+    ['promoteBuffers: true', { promoteBuffers: true }],
+    ['promoteValues: false', { promoteValues: false }],
+  ])('decodes what the driver reads with %s to a plain Uint8Array', async (_name, options) => {
+    const stored = BSON.deserialize(BSON.serialize({ value: new Binary(bytes) }), options);
+    const decoded = await mongoBinaryCodec.decode(stored['value'], {});
+    expect(Buffer.isBuffer(decoded)).toBe(false);
+    expect(decoded).toEqual(bytes);
+  });
+
+  it('decodes a Uint8Array to a copy of its bytes', async () => {
+    const wire = new Uint8Array(bytes);
+    const decoded = await mongoBinaryCodec.decode(wire, {});
+    expect(decoded).toEqual(bytes);
+    expect(decoded).not.toBe(wire);
   });
 
   it('refuses a wire value of the wrong type', async () => {

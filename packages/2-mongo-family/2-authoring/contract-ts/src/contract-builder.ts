@@ -154,21 +154,66 @@ export type ExtractCodecTypesFromPack<P> = P extends { __codecTypes?: infer Code
 // This mirrors @internal/target-mongo/codec-types because authoring must stay decoupled from
 // the target layer while still exposing the built-in Mongo codec registry to type inference.
 type MongoCodecTypes = {
-  readonly 'mongo/objectId@1': { readonly input: string; readonly output: string };
-  readonly 'mongo/string@1': { readonly input: string; readonly output: string };
-  readonly 'mongo/double@1': { readonly input: number; readonly output: number };
-  readonly 'mongo/int32@1': { readonly input: number; readonly output: number };
-  readonly 'mongo/bool@1': { readonly input: boolean; readonly output: boolean };
-  readonly 'mongo/date@1': { readonly input: Date; readonly output: Date };
+  readonly 'mongo/objectId@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality';
+  };
+  readonly 'mongo/string@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order' | 'textual';
+  };
+  readonly 'mongo/double@1': {
+    readonly input: number;
+    readonly output: number;
+    readonly traits: 'equality' | 'order' | 'numeric';
+  };
+  readonly 'mongo/int32@1': {
+    readonly input: number;
+    readonly output: number;
+    readonly traits: 'equality' | 'order' | 'numeric';
+  };
+  readonly 'mongo/bool@1': {
+    readonly input: boolean;
+    readonly output: boolean;
+    readonly traits: 'equality' | 'boolean';
+  };
+  readonly 'mongo/date@1': {
+    readonly input: Date;
+    readonly output: Date;
+    readonly traits: 'equality' | 'order';
+  };
   readonly 'mongo/vector@1': {
     readonly input: readonly number[];
     readonly output: readonly number[];
+    readonly traits: 'equality';
   };
-  readonly 'mongo/int64@1': { readonly input: bigint; readonly output: bigint };
-  readonly 'mongo/decimal128@1': { readonly input: string; readonly output: string };
-  readonly 'mongo/binary@1': { readonly input: Uint8Array; readonly output: Uint8Array };
-  readonly 'mongo/json@1': { readonly input: JsonValue; readonly output: JsonValue };
-  readonly 'mongo/bson@1': { readonly input: BsonInputValue; readonly output: BsonValue };
+  readonly 'mongo/int64@1': {
+    readonly input: bigint;
+    readonly output: bigint;
+    readonly traits: 'equality' | 'order' | 'numeric';
+  };
+  readonly 'mongo/decimal128@1': {
+    readonly input: string;
+    readonly output: string;
+    readonly traits: 'equality' | 'order' | 'numeric';
+  };
+  readonly 'mongo/binary@1': {
+    readonly input: Uint8Array;
+    readonly output: Uint8Array;
+    readonly traits: 'equality';
+  };
+  readonly 'mongo/json@1': {
+    readonly input: JsonValue;
+    readonly output: JsonValue;
+    readonly traits: never;
+  };
+  readonly 'mongo/bson@1': {
+    readonly input: BsonInputValue;
+    readonly output: BsonValue;
+    readonly traits: never;
+  };
 };
 
 type MergeExtensionCodecTypes<Packs extends Record<string, unknown>> = UnionToIntersection<
@@ -197,9 +242,22 @@ export interface FieldBuilder<
   readonly __many: Many;
   readonly __enumHandle: Handle;
   readonly __executionDefaults?: ExecutionDefaults;
-  optional(): FieldBuilder<Type, true, Many, Handle, ExecutionDefaults>;
-  many(): FieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>;
+  readonly optional: FilledOnWrite<ExecutionDefaults> extends true
+    ? (this: 'A preset fills this field on write, so it cannot be optional') => never
+    : () => FieldBuilder<Type, true, Many, Handle, ExecutionDefaults>;
+  readonly many: FilledOnWrite<ExecutionDefaults> extends true
+    ? (this: 'A preset fills this field on write, so it cannot be a list') => never
+    : () => FieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>;
 }
+
+/**
+ * Whether a preset such as `temporal.createdAt()` fills the field on write. Distributes over a union, so the widest `FieldBuilder` constraint keeps both signatures and every field builder satisfies it.
+ */
+type FilledOnWrite<ExecutionDefaults> = ExecutionDefaults extends undefined
+  ? false
+  : [keyof ExecutionDefaults] extends [never]
+    ? false
+    : true;
 
 export interface ValueObjectBuilder<
   Name extends string = string,
@@ -1175,20 +1233,26 @@ function createFieldBuilder<
       Handle,
       'optional param widens to Handle | undefined; Handle defaults to undefined when no enum handle is passed'
     >(enumHandle),
-    optional() {
-      return createFieldBuilder<Type, true, Many, Handle, ExecutionDefaults>(
+    optional: blindCast<
+      FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults>['optional'],
+      'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
+    >(() =>
+      createFieldBuilder<Type, true, Many, Handle, ExecutionDefaults>(
         { type: spec.type, nullable: true, many: spec.many },
         enumHandle,
         executionDefaults,
-      );
-    },
-    many() {
-      return createFieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>(
+      ),
+    ),
+    many: blindCast<
+      FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults>['many'],
+      'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
+    >(() =>
+      createFieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>(
         { type: spec.type, nullable: spec.nullable, many: true },
         enumHandle,
         executionDefaults,
-      );
-    },
+      ),
+    ),
   };
 }
 
@@ -2303,7 +2367,7 @@ function buildExecutionDefaults(
           modelName,
           fieldName,
           'nullable-with-executionDefaults',
-          'cannot be nullable when executionDefaults are present.',
+          'is filled on write by a preset such as temporal.createdAt(), so it cannot be optional; remove .optional().',
         );
       }
       if (fieldBuilder.__many) {
@@ -2311,7 +2375,7 @@ function buildExecutionDefaults(
           modelName,
           fieldName,
           'many-with-executionDefaults',
-          'cannot be a list when executionDefaults are present.',
+          'is filled on write by a preset such as temporal.createdAt(), so it cannot be a list; remove .many().',
         );
       }
       if (modelBuilder.__base !== undefined) {

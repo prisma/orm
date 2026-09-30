@@ -374,7 +374,7 @@ describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage t
     expect(handle).toBeUndefined();
     expect(diagnostics).toEqual([
       expect.objectContaining({
-        message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one`,
+        message: `enum "Shape" @@type codec "${codecId}" declares ${count} BSON types; an enum needs exactly one. Use a codec with one BSON type, such as mongo/string@1.`,
         span: SPAN,
       }),
     ]);

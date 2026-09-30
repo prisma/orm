@@ -290,6 +290,39 @@ describe('executeContractEmit', () => {
       ]);
     });
 
+    it('names a file under the working directory by its relative path', async () => {
+      const source = createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Source interpretation failed',
+          diagnostics: [
+            {
+              code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+              message: 'Field "P6.big" has type "BigInt"',
+              sourceId: `${tmpDir}/prisma/schema.prisma`,
+              span: {
+                start: { offset: 4, line: 5, column: 3 },
+                end: { offset: 7, line: 5, column: 6 },
+              },
+            },
+          ],
+        },
+      }));
+      const error = await executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ).then(
+        () => expect.unreachable('contract emit succeeded'),
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toHaveProperty('diagnostics', [
+        expect.objectContaining({
+          summary:
+            'prisma/schema.prisma:5:3 PSL_UNSUPPORTED_FIELD_TYPE: Field "P6.big" has type "BigInt"',
+          where: { path: 'prisma/schema.prisma', line: 5 },
+        }),
+      ]);
+    });
+
     it('keeps the raw diagnostics, their issues, and the provider meta in meta', async () => {
       expect(await emitFailure()).toHaveProperty('meta', {
         diagnostics: sourceDiagnostics,

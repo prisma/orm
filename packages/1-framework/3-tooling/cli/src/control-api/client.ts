@@ -643,6 +643,7 @@ class ControlClientImpl implements ControlClient {
     const loaded = await loadContractSourceWithStack({
       stack: this.stack!,
       source: contractConfig.source,
+      cwd: undefined,
       reportWarning: (diagnostic) => {
         sourceWarnings.push(diagnostic);
       },

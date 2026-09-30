@@ -1,5 +1,7 @@
 import {
+  type AuthoringContributions,
   type AuthoringFieldPresetDescriptor,
+  fieldPresetSpellings,
   instantiateAuthoringFieldPreset,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
@@ -51,13 +53,21 @@ export function reportUnknownFieldPreset(input: {
   readonly entityLabel: string;
   readonly namespace: string;
   readonly helperPath: string;
+  readonly authoringContributions: AuthoringContributions | undefined;
   readonly source: DiagnosticSource;
   readonly span: PslSpan;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
+  const presets = fieldPresetSpellings(input.authoringContributions, input.namespace);
+  const listed =
+    presets.length === 0
+      ? 'no field presets'
+      : presets.length === 1
+        ? presets.join('')
+        : `${presets.slice(0, -1).join(', ')} and ${presets.at(-1)}`;
   input.diagnostics.push({
     code: 'PSL_UNKNOWN_FIELD_PRESET',
-    message: `${input.entityLabel} references unknown field preset "${input.helperPath}". Check the spelling against the available presets in the "${input.namespace}" namespace.`,
+    message: `${input.entityLabel} references unknown field preset "${input.helperPath}". The "${input.namespace}" namespace has ${listed}.`,
     ...input.source.at(input.span),
     data: { namespace: input.namespace, helperPath: input.helperPath },
   });
@@ -96,7 +106,7 @@ export function instantiatePslFieldPreset(input: {
     const message = error instanceof Error ? error.message : String(error);
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-      message: `${input.entityLabel} preset "${helperPath}" ${message}`,
+      message: `${input.entityLabel}: ${message}`,
       ...input.source.at(input.call.span),
     });
     return undefined;

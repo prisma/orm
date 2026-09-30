@@ -111,6 +111,96 @@ describe('Mongo temporal presets end to end', () => {
   );
 
   it(
+    'upsert keeps the values create sets explicitly when it inserts, and advances them when it updates',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db }) => {
+        const y2k = new Date('2000-01-01T00:00:00Z');
+        const create = { title: 'b', touchedAt, createdAt: y2k, updated_at: y2k };
+
+        const inserted = await db.posts
+          .where({ title: 'b' })
+          .upsert({ create, update: { title: 'b' } });
+        expect({
+          createdAt: inserted.createdAt,
+          updated_at: inserted.updated_at,
+          touchedAt: inserted.touchedAt,
+        }).toEqual({ createdAt: y2k, updated_at: y2k, touchedAt });
+
+        const updated = await db.posts
+          .where({ title: 'b' })
+          .upsert({ create, update: { title: 'b' } });
+        expect(updated.createdAt).toEqual(y2k);
+        expect(updated.updated_at.getTime()).toBeGreaterThan(y2k.getTime());
+        expect(updated.touchedAt.getTime()).toBeGreaterThan(touchedAt.getTime());
+        expect(updated.touchedAt).toEqual(updated.updated_at);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'upsert that keeps create values runs as one command, with update operators, filtered by _id',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const y2k = new Date('2000-01-01T00:00:00Z');
+        const _id = '65f0000000000000000000f1';
+        const upsert = () =>
+          db.counters.where({ _id }).upsert({
+            create: {
+              _id,
+              key: '$literal-looking',
+              tags: ['a'],
+              scores: [],
+              factor: 1,
+              hits: 0,
+              label: 'x',
+              updatedAt: y2k,
+            },
+            update: (u) => [u.hits.inc(2), u.label.unset()],
+          });
+
+        const inserted = await upsert();
+        expect(inserted).toMatchObject({
+          _id,
+          key: '$literal-looking',
+          tags: ['a'],
+          updatedAt: y2k,
+          hits: 2,
+          label: null,
+        });
+        const updated = await upsert();
+        expect(updated).toMatchObject({ _id, key: '$literal-looking', hits: 4, label: null });
+        expect(updated.updatedAt.getTime()).toBeGreaterThan(y2k.getTime());
+        expect(await mongoDb.collection('counters').countDocuments()).toBe(1);
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
+    'concurrent upserts that keep create values never lose the update default',
+    () =>
+      withMongoPort<Contract>({ contractJson }, async ({ db, mongoDb }) => {
+        const y2k = new Date('2000-01-01T00:00:00Z');
+        for (let round = 0; round < 40; round++) {
+          const key = `race-${round}`;
+          const results = await Promise.all(
+            Array.from({ length: 6 }, () =>
+              db.counters.where({ key }).upsert({
+                create: { key, tags: [], scores: [], factor: 1, hits: 0, updatedAt: y2k },
+                update: (u) => [u.hits.inc(1)],
+              }),
+            ),
+          );
+          const stored = await mongoDb.collection('counters').find({ key }).toArray();
+          const inserts = results.filter((row) => row.updatedAt.getTime() === y2k.getTime());
+          expect(inserts.every((row) => row.hits === 1)).toBe(true);
+          expect(inserts).toHaveLength(stored.length);
+          expect(stored.reduce((sum, doc) => sum + doc['hits'], 0)).toBe(6);
+        }
+      }),
+    timeouts.spinUpMongoMemoryServer,
+  );
+
+  it(
     'mongo() fills generated fields through the facade',
     () =>
       withMongoPort<Contract>({ contractJson }, async ({ client, mongoDb }) => {

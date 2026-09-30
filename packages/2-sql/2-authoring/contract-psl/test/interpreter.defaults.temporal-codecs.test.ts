@@ -161,7 +161,7 @@ stamped ${field}
     {
       name: 'an option value outside the descriptor values',
       field: 'temporal.timestamp(onCreate: later)',
-      message: /must be one of: now/,
+      message: /: Argument "onCreate" of temporal\.timestamp must be "now"; received "later"$/,
     },
     {
       name: 'a quoted option value (one spelling only)',

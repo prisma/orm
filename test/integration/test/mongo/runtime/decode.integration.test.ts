@@ -11,6 +11,7 @@ import {
 import { mongoQuery } from '@internal/mongo-query-builder';
 import { MongoParamRef } from '@internal/mongo-value';
 import { timeouts } from '@repo/test-utils';
+import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
 import {
   decodeFixtureContractJson,
@@ -103,7 +104,10 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
 
   it('names the collection and field when a Decimal128 field holds a double', async () => {
     await withMongod(async (ctx) => {
-      await ctx.client.db(ctx.dbName).collection('posts').insertOne({ price: 19.99 });
+      await ctx.client
+        .db(ctx.dbName)
+        .collection('posts')
+        .insertOne({ _id: new ObjectId('65f0000000000000000000b2'), price: 19.99 });
       const shape: MongoResultShape = {
         kind: 'document',
         fields: {
@@ -128,12 +132,13 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
       expect({ code: err.code, message: err.message, details: err.details }).toEqual({
         code: 'RUNTIME.DECODE_FAILED',
         message:
-          "Failed to decode field price in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
+          "Failed to decode field price of the document with _id 65f0000000000000000000b2 in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
         details: {
           codecId: 'mongo/decimal128@1',
           received: 'number',
           collection: 'posts',
           path: 'price',
+          documentId: '65f0000000000000000000b2',
           codec: 'mongo/decimal128@1',
           wirePreview: '19.99',
         },
