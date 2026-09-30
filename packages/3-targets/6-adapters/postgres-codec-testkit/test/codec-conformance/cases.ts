@@ -47,13 +47,6 @@ const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
   value instanceof Temporal.PlainDateTime &&
   roundTripped.equals(value);
 
-/**
- * The text codecs of the date and time types hand back PostgreSQL's own text, which is what the
- * projection returns, while `encodeJson` writes the data type's canonical form, the one a contract
- * stores. Both spell the same value, so these cases are judged on the round trip.
- */
-const sameText = (roundTripped: unknown, value: unknown): boolean => roundTripped === value;
-
 const ENUM_TYPE = 'codec_conformance_mood';
 
 /**
@@ -208,10 +201,10 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
-  // value itself rather than as text. `encodeJson` renders it through `toString()` and the
-  // projection renders whatever PostgreSQL emits for the column: the same moment in time, but not
-  // necessarily the same characters. A case agrees here only where those two spellings happen to
-  // coincide, which is a fact about spelling rather than about the value surviving the round trip.
+  // value itself rather than as text. `encodeJson` writes the data type's canonical form and the
+  // projection renders whatever PostgreSQL emits for the column; the harness compares the two in
+  // canonical form. A `Temporal` value is not deep-equal to its copy, so these cases give the
+  // round trip its own equality.
   {
     codecId: 'pg/date-temporal@1',
     label: 'calendar date',
@@ -222,8 +215,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
     typeParams: { precision: 6 },
-    // The projection emits `2026-01-02 03:04:05.123456`; toString() spells the same wall-clock
-    // reading with a T. Both are correct, so the round trip is what there is to check.
     valueEquality: plainDateTimesEqual,
   },
   {
@@ -231,10 +222,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision at UTC',
     value: Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
     typeParams: { precision: 6 },
-    // The projection emits `2026-01-02 03:04:05.123456+00`; toString() spells the same instant with
-    // a T and a trailing Z. The disagreement is permanent and correct, which is why this is a
-    // round-trip case rather than a marked one — a marker would assert forever that a working
-    // system is broken.
     valueEquality: instantsEqual,
   },
   {
@@ -261,14 +248,12 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: '2026-01-02 03:04:05.123456',
     typeParams: { precision: 6 },
-    valueEquality: sameText,
   },
   {
     codecId: 'pg/timestamptz-string@1',
     label: 'microsecond precision at UTC',
     value: '2026-01-02 03:04:05.123456+00',
     typeParams: { precision: 6 },
-    valueEquality: sameText,
   },
   {
     codecId: 'pg/time-string@1',
@@ -276,18 +261,12 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '03:04:05.123456',
     typeParams: { precision: 6 },
   },
-  {
-    codecId: 'pg/timetz@1',
-    label: 'time of day at UTC',
-    value: '03:04:05+00',
-    valueEquality: sameText,
-  },
+  { codecId: 'pg/timetz@1', label: 'time of day at UTC', value: '03:04:05+00' },
   {
     codecId: 'pg/timetz@1',
     label: 'time of day at UTC under a hostile session',
     value: '03:04:05+00',
     setupSql: HOSTILE_TEMPORAL_SESSION,
-    valueEquality: sameText,
   },
   // An interval's application value is its three stored fields. A month has no
   // fixed length, so `{ months: 1 }` and `{ days: 30 }` stay distinct rather than
