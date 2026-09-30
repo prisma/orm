@@ -4,6 +4,7 @@ import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { prismaContract } from '@internal/sql-contract-psl/provider';
 import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlitePackRef from '@internal/target-sqlite/pack';
 import { definePrismaConfig } from '@prisma/cli-engine';
 import { extensions } from './packs';
 
@@ -16,7 +17,7 @@ export default definePrismaConfig({
     extensions,
     contract: prismaContract('./schema.prisma', {
       output: 'output/contract.json',
-      target: sqlite,
+      target: sqlitePackRef,
       createNamespace: sqliteCreateNamespace,
     }),
   }),
