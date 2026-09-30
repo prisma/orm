@@ -1,5 +1,6 @@
 import type {
   ColumnDefault,
+  ColumnDefaultLiteralInputValue,
   ContractMarkerRecord,
   LedgerEntryRecord,
 } from '@internal/contract/types';
@@ -32,6 +33,7 @@ import type {
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import {
+  type EncodedLiteralDefault,
   encodeListLiteralDefault,
   encodeLiteralDefault,
   isDdlNode,
@@ -83,7 +85,6 @@ import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type
 import {
   isPostgresDateTimeDataType,
   postgresDateTimeDdlText,
-  renderDefaultLiteral,
 } from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
@@ -1810,13 +1811,29 @@ async function readWithDefaultOutputSettings<T>(
   return result;
 }
 
+/**
+ * A value as DDL writes it: `ARRAY[...]` of each element's literal, cast to the list type, for a list written to a list type, and otherwise the value's literal, cast to the column type where PostgreSQL would read it as another type.
+ */
 function pgInlineLiteral(wire: unknown, nativeType: string, where: LiteralDefaultColumn): string {
+  if (Array.isArray(wire) && nativeType.endsWith('[]')) {
+    if (wire.length === 0) return "'{}'";
+    return `ARRAY[${wire.map((element) => pgLiteralText(element, where)).join(', ')}]::${nativeType}`;
+  }
+  const text = pgLiteralText(wire, where);
+  return pgLiteralNeedsCast(wire, nativeType) ? `${text}::${nativeType}` : text;
+}
+
+function pgLiteralNeedsCast(wire: unknown, nativeType: string): boolean {
+  if (typeof wire === 'number') return !Number.isFinite(wire);
+  if (typeof wire === 'string' || wire instanceof Date) return !pgIsTextLikeNativeType(nativeType);
+  return typeof wire === 'object' && wire !== null;
+}
+
+/** A value's literal without a cast: SQL NULL, a bare number or boolean, or quoted text. */
+function pgLiteralText(wire: unknown, where: LiteralDefaultColumn): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? 'true' : 'false';
-  if (typeof wire === 'number') {
-    if (!Number.isFinite(wire)) return `'${String(wire)}'::${nativeType}`;
-    return String(wire);
-  }
+  if (typeof wire === 'number') return Number.isFinite(wire) ? String(wire) : `'${String(wire)}'`;
   if (typeof wire === 'bigint') return String(wire);
   if (wire instanceof Date) {
     if (Number.isNaN(wire.getTime())) {
@@ -1826,27 +1843,20 @@ function pgInlineLiteral(wire: unknown, nativeType: string, where: LiteralDefaul
         { meta: { table: where.table, column: where.column, reason: 'invalid-date-default' } },
       );
     }
-    const quoted = `'${escapeLiteral(wire.toISOString())}'`;
-    return pgIsTextLikeNativeType(nativeType) ? quoted : `${quoted}::${nativeType}`;
+    return `'${escapeLiteral(wire.toISOString())}'`;
   }
-  if (typeof wire === 'string') {
-    const quoted = `'${escapeLiteral(wire)}'`;
-    return pgIsTextLikeNativeType(nativeType) ? quoted : `${quoted}::${nativeType}`;
-  }
+  if (typeof wire === 'string') return `'${escapeLiteral(wire)}'`;
   if (wire instanceof Uint8Array) {
     const hex = Array.from(wire)
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    return `'\\x${hex}'::${nativeType}`;
+    return `'\\x${hex}'`;
   }
-  if (typeof wire === 'object') {
-    const quoted = `'${escapeLiteral(JSON.stringify(wire))}'`;
-    return `${quoted}::${nativeType}`;
-  }
+  if (typeof wire === 'object') return `'${escapeLiteral(JSON.stringify(wire))}'`;
   throw adapterError(
     'CONTRACT.PACK_CONTRIBUTION_INVALID',
-    `pgRenderDdlExecuteRequest: unexpected wire type "${typeof wire}" for native type "${nativeType}"`,
-    { meta: { wireType: typeof wire, nativeType } },
+    `pgRenderDdlExecuteRequest: unexpected wire type "${typeof wire}"`,
+    { meta: { wireType: typeof wire } },
   );
 }
 
@@ -1891,23 +1901,52 @@ async function pgRenderDdlColumnDefault(
   }
   const dataTypeId =
     codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
-  if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
-    if (codecRef !== undefined) {
-      await encodeListLiteralDefault(codecLookup, codecRef, def.value, where);
-    }
-    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
+  const written = await pgWrittenDefault(
+    def.value,
+    nativeType,
+    dataTypeId,
+    codecLookup,
+    codecRef,
+    where,
+  );
+  return `DEFAULT ${pgInlineLiteral(written, nativeType, where)}`;
+}
+
+/**
+ * The value DDL writes for a literal default, and for each element of a list default: a date or time value as the text PostgreSQL reads for its type, a value the codec reads as SQL NULL as `null`, and anything else as the codec's wire value. Without a codec, the value as written.
+ */
+async function pgWrittenDefault(
+  value: ColumnDefaultLiteralInputValue,
+  nativeType: string,
+  dataTypeId: string | undefined,
+  codecLookup: CodecLookupWithDescriptors,
+  codecRef: CodecRef | undefined,
+  where: LiteralDefaultColumn,
+): Promise<unknown> {
+  if (Array.isArray(value) && nativeType.endsWith('[]')) {
+    const encoded =
+      codecRef === undefined
+        ? undefined
+        : await encodeListLiteralDefault(codecLookup, codecRef, value, where);
+    return value.map((element, index) => pgWrittenValue(element, encoded?.[index], dataTypeId));
   }
   const encoded =
     codecRef === undefined
       ? undefined
-      : await encodeLiteralDefault(codecLookup, codecRef, def.value, where);
-  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
-    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType, where)}`;
+      : await encodeLiteralDefault(codecLookup, codecRef, value, where);
+  return pgWrittenValue(value, encoded, dataTypeId);
+}
+
+function pgWrittenValue(
+  value: ColumnDefaultLiteralInputValue,
+  encoded: EncodedLiteralDefault | undefined,
+  dataTypeId: string | undefined,
+): unknown {
+  if (typeof value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
+    return postgresDateTimeDdlText(value, dataTypeId);
   }
-  if (encoded?.kind === 'sql-null') return 'DEFAULT NULL';
-  if (encoded !== undefined) return `DEFAULT ${pgInlineLiteral(encoded.wire, nativeType, where)}`;
-  // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
-  return `DEFAULT ${pgInlineLiteral(def.value, nativeType, where)}`;
+  if (encoded === undefined) return value;
+  return encoded.kind === 'sql-null' ? null : encoded.wire;
 }
 
 async function pgRenderDdlColumn(

@@ -289,6 +289,29 @@ describe('PostgresCreateTable DDL lowering', () => {
     );
   });
 
+  it('writes each list element as the codec writes a single value, inside the cast to the list type', async () => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(
+      new PostgresCreateTable({
+        table: 'lists',
+        columns: [
+          col('bytes', 'bytea[]', {
+            default: lit(['aGVsbG8=', null]),
+            codecRef: { codecId: 'pg/bytea@1', many: true },
+          }),
+          col('docs', 'jsonb[]', {
+            default: lit(['x', { a: 1 }]),
+            codecRef: { codecId: 'pg/jsonb@1', many: true },
+          }),
+        ],
+      }),
+      { contract: {} as PostgresContract },
+    );
+    expect(lowered.sql).toBe(
+      `CREATE TABLE "lists" (\n  "bytes" bytea[] DEFAULT ARRAY['\\x68656c6c6f', NULL]::bytea[],\n  "docs" jsonb[] DEFAULT ARRAY['"x"', '{"a":1}']::jsonb[]\n)`,
+    );
+  });
+
   it('renders a null literal default as SQL NULL on a text column and as the JSON null on a jsonb column', async () => {
     const ast = new PostgresCreateTable({
       table: 'defaults',

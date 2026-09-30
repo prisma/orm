@@ -1,4 +1,6 @@
+import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import type { CodecRef } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
@@ -70,6 +72,60 @@ describe('a list default the codecs read applies', { concurrent: false }, () => 
       );
 
       expect(read.rows).toEqual([{ tags: '{a,NULL,b}', counts: '{1,2}', none: '{}' }]);
+    },
+    testTimeout,
+  );
+
+  it(
+    'writes each element as the codec writes it, beside a NULL element',
+    async () => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const list = (name: string, type: string, codecRef: CodecRef, value: JsonValue[]) =>
+        col(name, type, { default: lit(value), codecRef: { ...codecRef, many: true } });
+      const createTable = await adapter.lowerToExecuteRequest(
+        new PostgresCreateTable({
+          table: 'lists',
+          columns: [
+            col('id', 'int4', { notNull: true, primaryKey: true }),
+            list('texts', 'text[]', { codecId: 'pg/text@1' }, ['a', null]),
+            list('counts', 'int4[]', { codecId: 'pg/int4@1' }, [1, null]),
+            list('tokens', 'uuid[]', { codecId: 'pg/uuid@1' }, [
+              'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+              null,
+            ]),
+            list('stamps', 'timestamptz[]', { codecId: 'pg/timestamptz-temporal@1' }, [
+              '2020-01-01T00:00:00Z',
+              null,
+            ]),
+            list(
+              'hundreds',
+              'numeric(5,-2)[]',
+              { codecId: 'pg/numeric@1', typeParams: { precision: 5, scale: -2 } },
+              ['12300', null],
+            ),
+            list('bytes', 'bytea[]', { codecId: 'pg/bytea@1' }, ['aGVsbG8=', null]),
+          ],
+        }),
+        { contract: {} as PostgresContract },
+      );
+      await executeStatement(driver!, createTable);
+      await driver!.query('INSERT INTO "lists" (id) VALUES (1)');
+      await driver!.query("SET TIME ZONE 'UTC'");
+
+      const read = await driver!.query(
+        'SELECT texts::text, counts::text, tokens::text, stamps::text, hundreds::text, bytes::text FROM "lists"',
+      );
+
+      expect(read.rows).toEqual([
+        {
+          texts: '{a,NULL}',
+          counts: '{1,NULL}',
+          tokens: '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11,NULL}',
+          stamps: '{"2020-01-01 00:00:00+00",NULL}',
+          hundreds: '{12300,NULL}',
+          bytes: '{"\\\\x68656c6c6f",NULL}',
+        },
+      ]);
     },
     testTimeout,
   );
