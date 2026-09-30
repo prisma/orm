@@ -43,6 +43,16 @@ const someCodecsHold: Readonly<Record<string, readonly string[]>> = {
   'pg/date': ['-infinity'],
 };
 
+/** The codecs that hold `infinity` and `-infinity`: those whose value is PostgreSQL's own text. */
+const holdsInfinity: ReadonlySet<string> = new Set([
+  'pg/date-string@1',
+  'pg/timestamp-string@1',
+  'pg/timestamptz-string@1',
+]);
+
+/** The codecs whose value cannot carry a digit below one microsecond, so they refuse to read one. */
+const refusesToReadBelowMicroseconds: ReadonlySet<string> = new Set(['pg/timestamptz-date@1']);
+
 /** Text with a digit below one microsecond, which no type holds. */
 const belowMicroseconds: Readonly<Record<string, string>> = {
   'pg/timestamptz': '2024-01-01T00:00:00.123456789Z',
@@ -66,26 +76,33 @@ describe('every codec of a date or time type writes the canonical form', () => {
     );
   });
 
-  describe.each(codecsWithCanonicalForm)('$codecId', ({ codec, dataType }) => {
+  describe.each(codecsWithCanonicalForm)('$codecId', ({ codecId, codec, dataType }) => {
     it.each(everyCodecHolds[dataType] ?? [])('writes %s back as it read it', (canonical) => {
       expect(codec.encodeJson(codec.decodeJson(canonical))).toBe(canonical);
     });
 
     it.each(someCodecsHold[dataType] ?? [])(
-      'writes %s back as it read it, when it holds it',
+      'writes %s back as it read it if it holds it, and otherwise refuses to read it',
       (canonical) => {
         const read = decoded(codec, canonical);
-        if (read !== undefined) expect(codec.encodeJson(read.value)).toBe(canonical);
+        expect(read === undefined ? 'refused' : codec.encodeJson(read.value)).toBe(
+          holdsInfinity.has(codecId) ? canonical : 'refused',
+        );
       },
     );
 
     const tooPrecise = belowMicroseconds[dataType];
-    it.runIf(tooPrecise !== undefined)(
-      'refuses a value with a digit below one microsecond, rather than rounding it',
+    it.runIf(tooPrecise !== undefined && refusesToReadBelowMicroseconds.has(codecId))(
+      'refuses to read a value with a digit below one microsecond',
       () => {
-        const read = decoded(codec, tooPrecise ?? '');
-        if (read === undefined) return;
-        expect(() => codec.encodeJson(read.value)).toThrow(
+        expect(decoded(codec, tooPrecise ?? '')).toBeUndefined();
+      },
+    );
+
+    it.runIf(tooPrecise !== undefined && !refusesToReadBelowMicroseconds.has(codecId))(
+      'refuses to write a value with a digit below one microsecond, rather than rounding it',
+      () => {
+        expect(() => codec.encodeJson(codec.decodeJson(tooPrecise ?? ''))).toThrow(
           expect.objectContaining({
             code: 'CONTRACT.CAST_REFUSED',
             message: expect.stringContaining(`${dataType} holds microseconds`),
