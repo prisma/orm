@@ -473,6 +473,38 @@ function resolveCheckExpressionRenderer(
 }
 
 /**
+ * Each member's value in the form the enum's codec stores it, read back by the codec. A member the codec refuses is a `CONTRACT.ENUM_INVALID` naming the enum and the member.
+ */
+function encodeEnumMembers(
+  handle: EnumTypeHandle,
+  codecLookup: CodecLookupWithDescriptors | undefined,
+): readonly { readonly name: string; readonly value: JsonValue }[] {
+  const codec = codecLookup?.get(handle.codecId);
+  return handle.enumMembers.map((member) => {
+    try {
+      return { name: member.name, value: encodeViaCodec(member.value, codec) };
+    } catch (cause) {
+      if (cause instanceof InternalError) throw cause;
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      throw contractError(
+        'CONTRACT.ENUM_INVALID',
+        `enumType("${handle.enumName}") member "${member.name}" has a value its codec ${handle.codecId} refuses: ${reason}`,
+        {
+          fix: 'Give the member a value the codec takes, or type the enum with a codec that takes it.',
+          cause,
+          meta: {
+            enumName: handle.enumName,
+            member: member.name,
+            codecId: handle.codecId,
+            reason: 'codec-refused-member',
+          },
+        },
+      );
+    }
+  });
+}
+
+/**
  * The member values a membership check must enforce, encoded exactly as the
  * column stores them. Membership predicates support strings and finite numbers.
  */
@@ -480,9 +512,7 @@ function checkMemberValues(
   handle: EnumTypeHandle,
   codecLookup: CodecLookupWithDescriptors | undefined,
 ): readonly (string | number)[] {
-  const encoded = handle.values.map((value) =>
-    encodeViaCodec(value, codecLookup?.get(handle.codecId)),
-  );
+  const encoded = encodeEnumMembers(handle, codecLookup).map((member) => member.value);
   const values: (string | number)[] = [];
   for (const value of encoded) {
     if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
@@ -1617,12 +1647,10 @@ export function buildSqlContractFromDefinition(
       domainSlot = {};
       domainEnumsByNs[nsId] = domainSlot;
     }
+    const storedMembers = encodeEnumMembers(handle, codecLookup);
     domainSlot[enumName] = {
       codecId: handle.codecId,
-      members: handle.enumMembers.map((m) => ({
-        name: m.name,
-        value: encodeViaCodec(m.value, codecLookup?.get(handle.codecId)),
-      })),
+      members: storedMembers,
     };
 
     let storageSlot = storageValueSetsByNs[nsId];
@@ -1632,7 +1660,7 @@ export function buildSqlContractFromDefinition(
     }
     storageSlot[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) => encodeViaCodec(v, codecLookup?.get(handle.codecId))),
+      values: storedMembers.map((member) => member.value),
     };
   }
 

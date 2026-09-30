@@ -401,7 +401,7 @@ An enum declares a `codecId` that no family, target, or extension pack in the co
 
 ### CONTRACT.ENUM_INVALID
 
-An enum declaration is malformed: it has no members, a duplicate member name or value, or the declaration key in `defineContract({ enums })` does not match the `enumType` name. Raised while authoring a contract (framework `enumType`, SQL and Mongo builders). Payload: `enumName`, `member`, `reason`.
+An enum declaration is malformed: it has no members, a duplicate member name or value, or the declaration key in `defineContract({ enums })` does not match the `enumType` name. Raised while authoring a contract (framework `enumType`, SQL and Mongo builders). Payload: `enumName`, `member`, `reason`. The SQL TypeScript builder also raises it for a member whose value the enum's codec refuses, such as a `pg/char@1` member longer than one character, since the enum's column is `character`: `enumType("<name>") member "<member>" has a value its codec <codecId> refuses: <codec message>`, with `codecId` in the payload and `reason: 'codec-refused-member'`. Give the member a value the codec takes.
 
 ### CONTRACT.ENUM_UNKNOWN
 
