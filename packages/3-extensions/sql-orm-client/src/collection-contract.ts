@@ -5,6 +5,7 @@ import type {
   CrossReference,
 } from '@internal/contract/types';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import { type CapabilityRequirement, missingCapability } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -649,6 +650,21 @@ export function assertDistinctOnCapability(
     `${methodName}() requires capability postgres.distinctOn`,
     { meta: { capability: 'postgres.distinctOn', method: methodName } },
   );
+}
+
+export function assertLockCapability(
+  contract: Contract<SqlStorage>,
+  requirement: CapabilityRequirement,
+  methodName: string,
+): void {
+  const capability = missingCapability(contract.capabilities, requirement);
+  if (capability === undefined) {
+    return;
+  }
+
+  throw ormError('ORM.CAPABILITY_MISSING', `${methodName}() requires capability ${capability}`, {
+    meta: { capability, method: methodName },
+  });
 }
 
 export function hasContractCapability(contract: Contract<SqlStorage>, capability: string): boolean {

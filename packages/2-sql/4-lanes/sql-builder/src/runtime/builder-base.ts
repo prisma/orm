@@ -17,7 +17,9 @@ import {
   isOrderByDirection,
   isOrderByNulls,
   type LimitOffsetValue,
+  type LockConflict,
   type LockingClause,
+  lockIncompatible,
   OrderByItem,
   ProjectionItem,
   SelectAst,
@@ -158,41 +160,41 @@ export function combineWhereExprs(exprs: readonly AstExpression[]): AstExpressio
   return AndExpr.of(exprs);
 }
 
-function lockConflictOf(state: BuilderState): string | undefined {
-  const conflicts = {
+const lockConflictKinds = [
+  'distinct',
+  'distinctOn',
+  'groupBy',
+  'having',
+] as const satisfies readonly LockConflict[];
+
+function lockConflictOf(state: BuilderState): LockConflict | undefined {
+  const conflicts: Record<(typeof lockConflictKinds)[number], boolean> = {
     distinct: state.distinct !== undefined,
     distinctOn: state.distinctOn !== undefined && state.distinctOn.length > 0,
     groupBy: state.groupBy.length > 0,
     having: state.having !== undefined,
   };
-  return Object.entries(conflicts).find(([, present]) => present)?.[0];
+  return lockConflictKinds.find((conflict) => conflicts[conflict]);
 }
 
 function assertLockable(state: BuilderState): void {
   if (state.locking === undefined) return;
   const conflict = lockConflictOf(state);
   if (conflict !== undefined) {
-    throw structuredError(
-      'ORM.LOCK_INCOMPATIBLE',
-      `A locking clause cannot be combined with ${conflict}`,
-      { meta: { conflict } },
-    );
+    throw lockIncompatible(conflict, `A locking clause cannot be combined with ${conflict}`);
   }
   const item = state.projections.find(isAggregateProjection);
   if (item !== undefined) {
-    throw structuredError(
-      'ORM.LOCK_INCOMPATIBLE',
+    throw lockIncompatible(
+      'aggregate',
       `A locking clause cannot be combined with an aggregate or window function in the projection (column "${item.alias}")`,
-      { meta: { conflict: 'aggregate' } },
     );
   }
 }
 
 export function assertNotLocked(state: BuilderState): void {
   if (state.locking !== undefined) {
-    throw structuredError('ORM.LOCK_INCOMPATIBLE', 'A locked select cannot be used as a subquery', {
-      meta: { conflict: 'subquery' },
-    });
+    throw lockIncompatible('subquery', 'A locked select cannot be used as a subquery');
   }
 }
 

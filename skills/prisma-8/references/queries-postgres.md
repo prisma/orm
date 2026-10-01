@@ -439,6 +439,28 @@ await db.transaction(async (tx) => {
 
 The callback's return value passes through `db.transaction(...)`. Capture inserted ids out of the callback and use them downstream after commit.
 
+To read a row and then write it without another transaction changing it in between, lock it when you read it. The lock lasts until the transaction ends; outside a transaction it is released when the statement ends.
+
+```typescript
+await db.transaction(async (tx) => {
+  // ORM: locks only the model's own rows (`FOR UPDATE OF "product"`).
+  const product = await tx.orm.public.Product.where({ id }).forUpdate().first();
+
+  // SQL builder: the same lock on a plan.
+  const [row] = await tx.query(
+    tx.sql.public.product.select('id', 'stock').where((f, fns) => fns.eq(f.id, id)).forUpdate().build(),
+  );
+
+  // Work queue: claim the next unclaimed job, skipping jobs other workers hold.
+  const job = await tx.orm.public.Job.where({ state: 'queued' })
+    .orderBy((j) => j.createdAt.asc())
+    .forUpdate({ skipLocked: true })
+    .first();
+});
+```
+
+The four methods are `forUpdate()`, `forNoKeyUpdate()`, `forShare()` and `forKeyShare()`, each with `{ nowait: true }` or `{ skipLocked: true }`. On the ORM a lock cannot be combined with `include`, `groupBy`, `aggregate`, `distinct`, `distinctOn` or a mutation terminal (`ORM.LOCK_INCOMPATIBLE`).
+
 ## Namespace-aware accessors
 
 On Postgres both `db.sql` and `db.orm` are keyed by storage namespace (the Postgres schema) — always, not only when a contract declares more than one. A model outside any `namespace { }` block is in `public`:
@@ -472,6 +494,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 10. **Mixing the ORM mutation return with `runtime.query(plan)` / `runtime.execute(plan)`.** ORM terminals issue the query themselves and return rows. The runtime methods are for SQL-builder plans.
 11. **Adding a `cursor()` to a relation, count, operation or `nulls` order.** It throws `ORM.ARGUMENT_INVALID`. Use `.limit(n).offset(n)`, or order by plain columns.
 12. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
+13. **Locking a parent row with `forUpdate()` while other transactions write rows that reference it.** Every insert or update of a row with a foreign key to the locked row takes `FOR KEY SHARE` on it to check the key, and `FOR KEY SHARE` conflicts with `FOR UPDATE`, so those writes wait and can deadlock. Use `forNoKeyUpdate()`: it still blocks writes to the row, but not the foreign-key check.
 
 ## Reference Files
 

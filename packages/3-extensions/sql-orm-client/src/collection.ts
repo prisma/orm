@@ -12,6 +12,15 @@ import {
   ColumnRef,
   isWhereExpr,
   LiteralExpr,
+  LockingClause,
+  type LockStrength,
+  type LockStrengthCapabilities,
+  type LockWaitOptions,
+  type LockWaitRequest,
+  lockIncompatible,
+  lockOptionCapabilities,
+  lockStrengthCapabilities,
+  lockWaitPolicyOf,
   type OrderByItem,
   type ToWhereExpr,
   type WhereArg,
@@ -31,6 +40,7 @@ import { mapCursorValuesToColumns, mapFieldsToColumns } from './collection-colum
 import {
   assertDistinctOnCapability,
   assertInsertConflictSkipCapability,
+  assertLockCapability,
   assertReturningCapability,
   getColumnToFieldMap,
   getFieldToColumnMap,
@@ -84,6 +94,7 @@ import {
   isIncludeCombine,
   isIncludeScalar,
 } from './include-descriptors';
+import { assertLockCompatible } from './lock-guards';
 import { createModelAccessor } from './model-accessor';
 import {
   buildRowIdentityFilterFromRow,
@@ -912,6 +923,7 @@ class CollectionImpl<
       ...(keyof DefaultModelRow<TContract, ModelName, State['nsId']> & string)[],
     ],
   >(...fields: Fields): GroupedCollection<TContract, ModelName, Fields, State['nsId']> {
+    assertLockCompatible(this.state, 'groupBy');
     const groupByColumns = mapFieldsToColumns(
       this.contract,
       this.namespaceId,
@@ -1115,6 +1127,62 @@ class CollectionImpl<
   }
 
   /**
+   * Lock the selected rows of this model with `FOR UPDATE` until the transaction ends.
+   *
+   * Requires the `sql.forUpdate` capability.
+   *
+   * ```typescript
+   * const job = await tx.orm.Job.where({ state: 'queued' }).limit(1).forUpdate({ skipLocked: true }).first();
+   * ```
+   */
+  forUpdate(
+    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forUpdate']
+      ? [options?: LockWaitOptions<TContract['capabilities']>]
+      : never
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forUpdate', options[0]);
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR NO KEY UPDATE` until the transaction ends. Unlike `forUpdate`, it does not block foreign-key checks from rows that reference them.
+   *
+   * Requires the `postgres.forNoKeyUpdate` capability.
+   */
+  forNoKeyUpdate(
+    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forNoKeyUpdate']
+      ? [options?: LockWaitOptions<TContract['capabilities']>]
+      : never
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forNoKeyUpdate', options[0]);
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR SHARE` until the transaction ends; other transactions may share-lock them but not write them.
+   *
+   * Requires the `sql.forShare` capability.
+   */
+  forShare(
+    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forShare']
+      ? [options?: LockWaitOptions<TContract['capabilities']>]
+      : never
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forShare', options[0]);
+  }
+
+  /**
+   * Lock the selected rows of this model with `FOR KEY SHARE` until the transaction ends; only deletes and key changes are blocked.
+   *
+   * Requires the `postgres.forKeyShare` capability.
+   */
+  forKeyShare(
+    ...options: TContract['capabilities'] extends LockStrengthCapabilities['forKeyShare']
+      ? [options?: LockWaitOptions<TContract['capabilities']>]
+      : never
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#lock('forKeyShare', options[0]);
+  }
+
+  /**
    * Apply `LIMIT n`. Replaces any previous limit set on this collection.
    *
    * ```typescript
@@ -1296,6 +1364,7 @@ class CollectionImpl<
     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>> {
+    assertLockCompatible(this.state, 'aggregate');
     const aggregateSpec = fn(
       createAggregateBuilder<TContract, ModelName, State['nsId']>(
         this.contract,
@@ -1434,6 +1503,7 @@ class CollectionImpl<
       | MutationCreateInputWithRelations<TContract, ModelName, State['nsId']>,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<Row> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'create()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'create');
 
@@ -1542,6 +1612,7 @@ class CollectionImpl<
     optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
     configure?: WriteConfigure,
   ): AsyncIterableResult<Row> {
+    assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAll()');
     return this.#createAllWithAnnotations(
@@ -1923,6 +1994,7 @@ class CollectionImpl<
     optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
     configure?: WriteConfigure,
   ): Promise<number> {
+    assertLockCompatible(this.state, 'mutation');
     const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
     const conflictSkip = this.#resolveConflictSkip(options, 'createAndCount()');
 
@@ -2008,6 +2080,7 @@ class CollectionImpl<
     },
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<Row> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'upsert()');
     this.#assertNotMtiVariant('upsert()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'upsert');
@@ -2142,6 +2215,7 @@ class CollectionImpl<
       : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<Row | null> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'update()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'update');
 
@@ -2231,6 +2305,7 @@ class CollectionImpl<
       : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<Row> {
+    assertLockCompatible(this.state, 'mutation');
     return this.#updateAllWithAnnotations(
       data,
       this.#collectAnnotationsFromMeta(configure, 'write', 'updateAll'),
@@ -2306,6 +2381,7 @@ class CollectionImpl<
       : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
+    assertLockCompatible(this.state, 'mutation');
     const mappedData = mapModelDataToStorageRow(
       this.contract,
       this.namespaceId,
@@ -2354,6 +2430,7 @@ class CollectionImpl<
     this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<Row | null> {
+    assertLockCompatible(this.state, 'mutation');
     assertReturningCapability(this.contract, 'delete()');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'delete');
     return withMutationScope(this.ctx.runtime, async (scope) => {
@@ -2395,6 +2472,7 @@ class CollectionImpl<
     this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<Row> {
+    assertLockCompatible(this.state, 'mutation');
     return blindCast<
       Collection<TContract, ModelName, Row, State>,
       'deleteAll() conditional this parameter is a filtered collection at runtime'
@@ -2508,6 +2586,7 @@ class CollectionImpl<
     this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
+    assertLockCompatible(this.state, 'mutation');
     const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'deleteAndCount');
 
     const compiled = mergeAnnotations(
@@ -2680,6 +2759,28 @@ class CollectionImpl<
       `${action} is only available inside include() refinement callbacks`,
       { meta: { action } },
     );
+  }
+
+  #lock(
+    strength: LockStrength,
+    options: LockWaitRequest | undefined,
+  ): Collection<TContract, ModelName, Row, State> {
+    if (this.includeRefinementMode) {
+      throw lockIncompatible(
+        'includeRefinement',
+        `${strength}() cannot be called inside an include() refinement callback`,
+      );
+    }
+    assertLockCapability(this.contract, lockStrengthCapabilities[strength], strength);
+    const waitPolicy = lockWaitPolicyOf(strength, options);
+    if (waitPolicy !== undefined) {
+      assertLockCapability(this.contract, lockOptionCapabilities[waitPolicy], strength);
+    }
+    const clause = LockingClause.of(strength, {
+      of: [this.tableName],
+      ...ifDefined('waitPolicy', waitPolicy),
+    });
+    return this.#clone({ locking: [...(this.state.locking ?? []), clause] });
   }
 
   #clone<NextState extends CollectionTypeState = State>(

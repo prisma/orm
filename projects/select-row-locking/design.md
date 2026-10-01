@@ -243,13 +243,15 @@ Future renderers map the same node to their own syntax: MariaDB writes `LOCK IN 
 | A method called without its flag, ORM | the method | `ORM.CAPABILITY_MISSING`, `meta.capability` = the flag |
 | A lock with `distinct`, `distinctOn`, `groupBy`, `having`, or an aggregate or window function in the projection | builder `build()` | `ORM.LOCK_INCOMPATIBLE`, `meta.conflict` naming the clause; the builder's errors already use the `ORM` namespace. `groupBy()` already returns a type without the methods, so that case is a type error first |
 | A locked select used as a subquery, through `.as(...)` or as an `exists`, `in` or lateral source | the moment it becomes a subquery, one step before the outer `build()` | `ORM.LOCK_INCOMPATIBLE`, `meta.conflict: 'subquery'` |
-| A lock with `include`, `aggregate`, `distinct` or `distinctOn`, ORM | compile | a structured error, `ORM.LOCK_INCOMPATIBLE` |
-| A mutation terminal (`update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll`, `deleteAndCount`, `create`, `upsert`) on a locked collection | the terminal | `ORM.LOCK_INCOMPATIBLE`; a mutation already locks the rows it changes, and dropping the requested lock silently would hide a mistake |
+| A locked collection with `include()`, `distinct()` or `distinctOn()` in its state, ORM | when the read compiles | `ORM.LOCK_INCOMPATIBLE`, `meta.conflict: 'include'`, `'distinct'` or `'distinctOn'` |
+| A lock placed on the nested collection inside an `include()` refinement, scalar or `combine` branch, ORM | when the method is called in refinement mode, and again when the parent compiles | `ORM.LOCK_INCOMPATIBLE`, `meta.conflict: 'includeRefinement'` |
+| `groupBy()` or `aggregate()` (and the aggregate terminals) on a locked collection, ORM | when the method is called | `ORM.LOCK_INCOMPATIBLE`, `meta.conflict: 'groupBy'` or `'aggregate'` |
+| A mutation terminal (`create`, `createAll`, `createAndCount`, `upsert`, `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll`, `deleteAndCount`) on a locked collection, ORM | the first statement of the terminal, before any read-back | `ORM.LOCK_INCOMPATIBLE`, `meta.conflict: 'mutation'`; a mutation already locks the rows it changes, and dropping the requested lock silently would hide a mistake |
 | A strength or option the adapter did not report, in a tree | Postgres renderer | `RUNTIME.AST_UNSUPPORTED` with `meta: { target, feature: 'locking-clause', capability }`, the code the renderers already use for a feature a target cannot render |
 | Any lock, SQLite | renderer | `RUNTIME.AST_UNSUPPORTED` with `meta: { target: 'sqlite', feature: 'locking-clause' }` |
 | A row is locked and `nowait` was set | the database | SQLSTATE `55P03`, `lock_not_available`, surfaced as the driver error |
 
-The namespace of each code is the one the neighbouring errors in that package use, from the closed list in ADR 239, so `SQL_BUILDER.` and `ORM.` above stand only if those namespaces exist; the suffix is always `LOCK_INCOMPATIBLE`, and every new code gets an entry in `docs/reference/error-reference.md`. Mapping `55P03` to a structured code is a follow-up.
+Both the builder and the ORM already use the `ORM` namespace from the closed list in ADR 239, so one code, `ORM.LOCK_INCOMPATIBLE`, serves both, and `meta.conflict` is one `LockConflict` union declared once in `sql-relational-core` beside `LockingClause`, with the values above plus the builder's `having` and `subquery`. Every new code gets an entry in `docs/reference/error-reference.md`. Mapping `55P03` to a structured code is a follow-up.
 
 ## What the documentation must say
 

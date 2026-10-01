@@ -892,7 +892,7 @@ A method argument on the ORM client, or on the `sql()` / Mongo query-builder DSL
 
 ### ORM.CAPABILITY_MISSING
 
-The requested operation requires a contract capability the contract does not declare: the `returning` capability needed for mutations that read back the affected row (payload `capability`, `action`); or, on the `sql()` builder, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods, and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
+The requested operation requires a contract capability the contract does not declare: the `returning` capability needed for mutations that read back the affected row (payload `capability`, `action`); or, on the `sql()` builder or an ORM collection, the flag a gated method or option needs, such as `postgres.distinctOn` for `distinctOn()`, `sql.forUpdate`, `sql.forShare`, `postgres.forNoKeyUpdate` or `postgres.forKeyShare` for the four row-locking methods (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`), and `sql.lockOf`, `sql.lockNowait` or `sql.lockSkipLocked` for their `of`, `nowait` and `skipLocked` options; the ORM has no `of` option, so it never raises the code for `sql.lockOf` (payload `method`, `capability`). Raised by the ORM client and the `sql()` builder.
 
 ### ORM.COLUMN_UNKNOWN
 
@@ -932,7 +932,7 @@ The include is well-formed but not supported in this position: scalar aggregatio
 
 ### ORM.LOCK_INCOMPATIBLE
 
-A row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) was combined with something Postgres refuses to lock. Raised by the SQL builder: at `build()` when the select also has `distinct`, `distinctOn`, `groupBy` or `having`, or an aggregate or window function in the projection; and when a locked select is turned into a subquery through `.as()` or passed where a subquery is expected. Payload: `conflict` (`distinct`, `distinctOn`, `groupBy`, `having`, `aggregate` or `subquery`).
+A row-locking method (`forUpdate()`, `forNoKeyUpdate()`, `forShare()`, `forKeyShare()`) was combined with something that cannot be locked. Raised by the SQL builder: at `build()` when the select also has `distinct`, `distinctOn`, `groupBy` or `having`, or an aggregate or window function in the projection; and when a locked select is turned into a subquery through `.as()` or passed where a subquery is expected. Raised by the ORM client: when a locked collection is compiled with `include()`, `distinct()` or `distinctOn()`; when a row-locking method is called inside an `include()` refinement callback, or when a collection compiled with `include()` has a lock anywhere in its included rows (`includeRefinement`); when `groupBy()` or `aggregate()` is called on a locked collection; and when a mutation terminal (`create`, `createAll`, `createAndCount`, `upsert`, `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll`, `deleteAndCount`) is called on a locked collection, which already locks the rows it changes. Payload: `conflict` (`distinct`, `distinctOn`, `groupBy`, `having`, `aggregate`, `subquery`, `include`, `includeRefinement` or `mutation`).
 
 ### ORM.MODEL_UNKNOWN
 

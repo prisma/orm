@@ -10,6 +10,7 @@ import {
   type AnyParamRef,
   type AnyQueryAst,
   type BinaryExpr,
+  type CapabilityRequirement,
   type CaseExpr,
   type CastExpr,
   type ColumnRef,
@@ -29,6 +30,9 @@ import {
   type LockStrength,
   type LockWaitPolicy,
   type LoweredParam,
+  lockOptionCapabilities,
+  lockStrengthCapabilities,
+  missingCapability,
   type NullCheckExpr,
   type OperationExpr,
   type OrderByItem,
@@ -250,33 +254,27 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
   return clauses.trim();
 }
 
-function lockStrengthSql(strength: LockStrength): {
-  readonly keyword: string;
-  readonly capability: readonly [string, string];
-} {
+function lockStrengthKeyword(strength: LockStrength): string {
   switch (strength) {
     case 'forUpdate':
-      return { keyword: 'FOR UPDATE', capability: ['sql', 'forUpdate'] };
+      return 'FOR UPDATE';
     case 'forNoKeyUpdate':
-      return { keyword: 'FOR NO KEY UPDATE', capability: ['postgres', 'forNoKeyUpdate'] };
+      return 'FOR NO KEY UPDATE';
     case 'forShare':
-      return { keyword: 'FOR SHARE', capability: ['sql', 'forShare'] };
+      return 'FOR SHARE';
     case 'forKeyShare':
-      return { keyword: 'FOR KEY SHARE', capability: ['postgres', 'forKeyShare'] };
+      return 'FOR KEY SHARE';
     default:
       return assertNever(strength, `Unsupported lock strength: ${String(strength)}`);
   }
 }
 
-function lockWaitPolicySql(waitPolicy: LockWaitPolicy): {
-  readonly keyword: string;
-  readonly capability: readonly [string, string];
-} {
+function lockWaitPolicyKeyword(waitPolicy: LockWaitPolicy): string {
   switch (waitPolicy) {
     case 'nowait':
-      return { keyword: 'NOWAIT', capability: ['sql', 'lockNowait'] };
+      return 'NOWAIT';
     case 'skipLocked':
-      return { keyword: 'SKIP LOCKED', capability: ['sql', 'lockSkipLocked'] };
+      return 'SKIP LOCKED';
     default:
       return assertNever(waitPolicy, `Unsupported lock wait policy: ${String(waitPolicy)}`);
   }
@@ -284,10 +282,10 @@ function lockWaitPolicySql(waitPolicy: LockWaitPolicy): {
 
 function requireCapability(
   capabilities: CapabilityMatrix,
-  [group, flag]: readonly [string, string],
+  requirement: CapabilityRequirement,
 ): void {
-  if (capabilities[group]?.[flag] !== true) {
-    const capability = `${group}.${flag}`;
+  const capability = missingCapability(capabilities, requirement);
+  if (capability !== undefined) {
     throw adapterError(
       'RUNTIME.AST_UNSUPPORTED',
       `Postgres adapter does not report capability ${capability}, which this locking clause needs`,
@@ -297,17 +295,15 @@ function requireCapability(
 }
 
 function renderLockingClause(clause: LockingClause, capabilities: CapabilityMatrix): string {
-  const strength = lockStrengthSql(clause.strength);
-  requireCapability(capabilities, strength.capability);
-  const parts = [strength.keyword];
+  requireCapability(capabilities, lockStrengthCapabilities[clause.strength]);
+  const parts = [lockStrengthKeyword(clause.strength)];
   if (clause.of !== undefined) {
-    requireCapability(capabilities, ['sql', 'lockOf']);
+    requireCapability(capabilities, lockOptionCapabilities.of);
     parts.push(`OF ${clause.of.map((name) => quoteIdentifier(name)).join(', ')}`);
   }
   if (clause.waitPolicy !== undefined) {
-    const waitPolicy = lockWaitPolicySql(clause.waitPolicy);
-    requireCapability(capabilities, waitPolicy.capability);
-    parts.push(waitPolicy.keyword);
+    requireCapability(capabilities, lockOptionCapabilities[clause.waitPolicy]);
+    parts.push(lockWaitPolicyKeyword(clause.waitPolicy));
   }
   return parts.join(' ');
 }
