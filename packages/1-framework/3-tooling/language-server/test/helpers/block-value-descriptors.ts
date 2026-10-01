@@ -28,6 +28,16 @@ const everyCall = funcCall('every', {
   },
 });
 
+const policyParameters = {
+  target: { type: entityRef({ kind: 'model' }), documentation: 'The protected model.' },
+  roles: {
+    type: optional(list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier()))),
+    documentation: 'The roles the policy applies to.',
+  },
+  using: { type: optional(str()), documentation: 'The row predicate.' },
+  permissive: { type: optional(bool()), documentation: 'Whether the policy is permissive.' },
+};
+
 export const blockValueDescriptors: AuthoringPslBlockDescriptorNamespace = {
   role: {
     kind: 'pslBlock',
@@ -41,21 +51,18 @@ export const blockValueDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy_select',
     discriminator: 'fixture-policy-select',
     name: { required: true },
+    spec: () => structBlock({ parameters: policyParameters }),
+  },
+  policy_all: {
+    kind: 'pslBlock',
+    keyword: 'policy_all',
+    discriminator: 'fixture-policy-all',
+    name: { required: true },
     spec: () =>
       structBlock({
         parameters: {
-          target: { type: entityRef({ kind: 'model' }), documentation: 'The protected model.' },
-          roles: {
-            type: optional(
-              list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier())),
-            ),
-            documentation: 'The roles the policy applies to.',
-          },
-          using: { type: optional(str()), documentation: 'The row predicate.' },
-          permissive: {
-            type: optional(bool()),
-            documentation: 'Whether the policy is permissive.',
-          },
+          ...policyParameters,
+          withCheck: { type: optional(str()), documentation: 'The written-row predicate.' },
         },
       }),
   },

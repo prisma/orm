@@ -16,6 +16,7 @@ import {
   ModelDeclarationAst,
   NamespaceDeclarationAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   type Position,
   type QualifiedNameAst,
   type SourceFile,
@@ -131,6 +132,7 @@ export interface AttributeArgumentSlotPosition extends AttributeNamedKeyPosition
 
 export interface AttributeValuePosition extends AttributeArgumentPosition {
   readonly syntax: 'scalar' | 'functionName';
+  readonly qualifier: string | undefined;
 }
 
 export interface FieldAttributeNamedKeyCompletionContext
@@ -758,7 +760,11 @@ function classifyAttributeExpression(
   path: readonly AttributeArgumentPathStep[],
 ): PslCompletionContext {
   if (expression === undefined)
-    return cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
+    return cursor.factory.value({
+      ...argumentPosition(cursor, path),
+      syntax: 'scalar',
+      qualifier: undefined,
+    });
   if (expression instanceof ArrayLiteralAst) {
     if (!betweenDelimiters(cursor.offset, expression.lbracket(), expression.rbracket()))
       return UNSUPPORTED;
@@ -788,12 +794,36 @@ function classifyAttributeExpression(
         : UNSUPPORTED;
     }
     return expression.name()?.syntax.isInside(cursor.offset) === true
-      ? cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'functionName' })
+      ? cursor.factory.value({
+          ...argumentPosition(cursor, path),
+          syntax: 'functionName',
+          qualifier: undefined,
+        })
       : UNSUPPORTED;
   }
-  return expression.syntax.isOutside(cursor.offset)
-    ? UNSUPPORTED
-    : cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
+  if (expression.syntax.isOutside(cursor.offset)) return UNSUPPORTED;
+  if (expression instanceof PathExprAst) return classifyQualifiedValue(cursor, expression, path);
+  return cursor.factory.value({
+    ...argumentPosition(cursor, path),
+    syntax: 'scalar',
+    qualifier: undefined,
+  });
+}
+
+function classifyQualifiedValue(
+  cursor: ArgumentCursor,
+  expression: PathExprAst,
+  path: readonly AttributeArgumentPathStep[],
+): PslCompletionContext {
+  const qualifier = [...expression.segments()].filter(
+    (segment) => segment.syntax.endOffset < cursor.replacementStartOffset,
+  );
+  if (qualifier.length > 1) return UNSUPPORTED;
+  return cursor.factory.value({
+    ...argumentPosition(cursor, path),
+    syntax: 'scalar',
+    qualifier: qualifier[0]?.name(),
+  });
 }
 
 function isValueToken(token: SyntaxToken | undefined): token is SyntaxToken {

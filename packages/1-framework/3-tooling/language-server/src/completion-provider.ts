@@ -156,6 +156,7 @@ export function providePslCompletionItems(
               context,
               binder: input.candidates.binder,
               scope: input.candidates.binder.scopeAt(ownerSyntax(context)),
+              offersNamespaces: context.ownerKind === 'blockValue',
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerSuggestCommand:
@@ -182,8 +183,11 @@ export function providePslCompletionItems(
               context,
               binder: input.candidates.binder,
               scope: input.candidates.binder.scopeAt(ownerSyntax(context)),
+              offersNamespaces: context.ownerKind === 'blockValue',
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerSuggestCommand:
+                input.clientSupportsTriggerSuggestCommand === true,
               clientSupportsTriggerParameterHintsCommand:
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>

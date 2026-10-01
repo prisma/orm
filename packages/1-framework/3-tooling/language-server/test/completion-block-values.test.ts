@@ -1,49 +1,12 @@
-import { buildSymbolTable } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { InsertTextFormat } from 'vscode-languageserver';
-import { classifyPslCompletionContext } from '../src/completion-context';
-import { providePslCompletionItems } from '../src/completion-provider';
-import { testBinder } from './helpers/binder';
-import { blockValueDescriptors, blockValueSource } from './helpers/block-value-descriptors';
+import { completeBlockValueSource } from './helpers/block-value-completion';
+import { blockValueSource } from './helpers/block-value-descriptors';
 
 function complete(markedBlock: string, clientSupportsSnippets = false) {
-  const markedSource = `${blockValueSource}\n${markedBlock}`;
-  const cursorOffset = markedSource.indexOf('|');
-  expect(cursorOffset).toBeGreaterThanOrEqual(0);
-  const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
-  const { document, sources } = parse(source, 'language-server-test.psl');
-  const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const items = providePslCompletionItems({
-    context: classifyPslCompletionContext({
-      document,
-      sourceFile,
-      position: sourceFile.positionAt(cursorOffset),
-    }),
-    sourceFile,
-    candidates: {
-      binder: testBinder({ sources, symbolTable, pslBlockDescriptors: blockValueDescriptors }),
-      scalarTypes: [],
-      pslBlockDescriptors: blockValueDescriptors,
-      symbolTable,
-    },
+  return completeBlockValueSource(`${blockValueSource}\n${markedBlock}`, {
     clientSupportsSnippets,
   });
-  return {
-    items,
-    labels: items.map((item) => item.label),
-    edits: items.map((item) => {
-      const edit = item.textEdit;
-      if (edit === undefined || !('range' in edit)) throw new Error('Expected a range text edit');
-      return {
-        start: sourceFile.offsetAt(edit.range.start),
-        end: sourceFile.offsetAt(edit.range.end),
-        newText: edit.newText,
-      };
-    }),
-    cursorOffset,
-  };
 }
 
 function policy(entry: string) {

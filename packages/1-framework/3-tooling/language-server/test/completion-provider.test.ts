@@ -1289,7 +1289,7 @@ namespace app {
   it('completes a generic block value from the block spec', () => {
     const { items } = complete(['policy Rule {', '  on = |', '}'].join('\n'));
 
-    expect(items.map((item) => item.label)).toEqual(['User']);
+    expect(items.map((item) => item.label)).toEqual(['User', 'auth']);
   });
 
   it('returns descriptor-backed generic block parameter completions', () => {
