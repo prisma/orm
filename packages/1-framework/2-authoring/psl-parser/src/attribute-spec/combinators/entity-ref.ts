@@ -5,8 +5,13 @@ import type {
   EntitySelector,
   ResolvedEntityReference,
 } from '../../entity-reference';
-import { describeResolution, entityReference, matchesSelector } from '../../entity-reference';
-import { IdentifierAst } from '../../syntax/ast/identifier';
+import {
+  describeResolution,
+  describeWrittenEntityReference,
+  entityReference,
+  matchesSelector,
+  writtenEntityReference,
+} from '../../entity-reference';
 import type { AttributeCtx, EntityRefArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
@@ -22,10 +27,11 @@ export function entityRef<const S extends EntitySelector>(
       arg,
       ctx,
     ): Result<ResolvedEntityReference<DeclarationFor<S>>, readonly PslDiagnostic[]> => {
-      const name = IdentifierAst.cast(arg.syntax)?.name();
-      if (name === undefined) {
+      const written = writtenEntityReference(arg.syntax);
+      if (written === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Expected ${label}`)]);
       }
+      const name = describeWrittenEntityReference(written);
       const resolution = ctx.binder.symbolForNode(arg.syntax);
       if (resolution === undefined || resolution.kind === 'unresolved') return notOk([]);
       const reference = entityReference(resolution);

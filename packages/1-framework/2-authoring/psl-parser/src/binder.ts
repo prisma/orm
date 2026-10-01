@@ -31,6 +31,11 @@ import {
   mergeContributedTypes,
 } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
+import {
+  describeWrittenEntityReference,
+  type WrittenEntityReference,
+  writtenEntityReference,
+} from './entity-reference';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
 import { type ResolvedAttribute, readResolvedAttributes } from './resolve';
@@ -518,10 +523,10 @@ function tryBindExpression(
     }
     case 'entityRef': {
       const node = expression.syntax;
-      const name = IdentifierAst.cast(node)?.name();
-      if (name === undefined) return { matched: false, references, diagnostics };
+      const written = writtenEntityReference(node);
+      if (written === undefined) return { matched: false, references, diagnostics };
       const failures: ParseDiagnostic[] = [];
-      const resolution = resolveEntity(name, node, { ...ctx, diagnostics: failures });
+      const resolution = resolveEntity(written, node, { ...ctx, diagnostics: failures });
       references.set(node, resolution);
       for (const diagnostic of failures) diagnostics.set(node, diagnostic);
       return {
@@ -690,11 +695,23 @@ function targetFields(
   return undefined;
 }
 
-function resolveEntity(name: string, node: SyntaxNode, ctx: ReferenceContext): Resolution {
-  const found = ctx.scope.lookup(name);
+function resolveEntity(
+  written: WrittenEntityReference,
+  node: SyntaxNode,
+  ctx: ReferenceContext,
+): Resolution {
+  const found =
+    written.namespace === undefined
+      ? ctx.scope.lookup(written.name)
+      : qualifiedMember(written.namespace, written.name, ctx.scope);
   if (found === undefined) {
+    const name = describeWrittenEntityReference(written);
     report(`Cannot find entity "${name}"`, node, ctx, 'entity');
     return { kind: 'unresolved', name };
+  }
+  if ('badQualifier' in found) {
+    report(found.badQualifier, node, ctx, 'entity');
+    return { kind: 'unresolved', name: found.qualifier };
   }
   return found;
 }
