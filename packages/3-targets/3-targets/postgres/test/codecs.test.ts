@@ -148,6 +148,23 @@ describe('adapter-postgres codecs', () => {
       expect(await codec.decode(value, {})).toBe(value);
     });
 
+    it.each([
+      'sql/int@1',
+      'sql/float@1',
+      'pg/int@1',
+      'pg/float@1',
+      'pg/int2@1',
+      'pg/int4@1',
+      'pg/float4@1',
+      'pg/float8@1',
+    ])('%s reads the decimal text of a list element as a number', async (codecId) => {
+      const descriptor = postgresCodecRegistry.descriptorFor(codecId);
+      const codec = descriptor?.factory(undefined as never)(SYNTH_CTX) as {
+        decode: (input: string, ctx: SqlCodecCallContext) => Promise<unknown>;
+      };
+      expect(await codec.decode('-7', {})).toBe(-7);
+    });
+
     it('keeps boolean values unchanged', async () => {
       const boolCodec = codecForScalar('bool') as {
         encode: (input: boolean, ctx: SqlCodecCallContext) => Promise<boolean>;

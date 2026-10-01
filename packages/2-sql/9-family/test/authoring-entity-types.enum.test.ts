@@ -37,6 +37,7 @@ const TEXT_CODEC_ID = 'pg/text@1';
 const INT_CODEC_ID = 'pg/int@1';
 const JSON_CODEC_ID = 'test/json@1';
 const FOLDING_CODEC_ID = 'test/folding-text@1';
+const ENCODE_FOLDING_CODEC_ID = 'test/encode-folding-text@1';
 const BROKEN_CODEC_ID = 'test/broken@1';
 
 const textCodec: Codec = {
@@ -83,6 +84,17 @@ const foldingCodec: Codec = {
   },
 };
 
+const encodeFoldingCodec: Codec = {
+  id: ENCODE_FOLDING_CODEC_ID,
+  encode: async (v: unknown) => v,
+  decode: async (w: unknown) => w,
+  encodeJson: (value) => String(value).toLowerCase(),
+  decodeJson(json) {
+    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
+    return json;
+  },
+};
+
 const brokenCodec: Codec = {
   ...textCodec,
   id: BROKEN_CODEC_ID,
@@ -97,6 +109,7 @@ const testCodecLookup: CodecLookup = {
     if (id === INT_CODEC_ID) return intCodec;
     if (id === JSON_CODEC_ID) return jsonCodec;
     if (id === FOLDING_CODEC_ID) return foldingCodec;
+    if (id === ENCODE_FOLDING_CODEC_ID) return encodeFoldingCodec;
     if (id === BROKEN_CODEC_ID) return brokenCodec;
     return undefined;
   },
@@ -105,6 +118,7 @@ const testCodecLookup: CodecLookup = {
     if (id === INT_CODEC_ID) return ['int'];
     if (id === JSON_CODEC_ID) return ['json'];
     if (id === FOLDING_CODEC_ID) return ['text'];
+    if (id === ENCODE_FOLDING_CODEC_ID) return ['text'];
     if (id === BROKEN_CODEC_ID) return ['text'];
     return undefined;
   },
@@ -352,6 +366,26 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, nev
       expect.objectContaining({
         code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
         message: expect.stringContaining('"admin"'),
+      }),
+    ]);
+  });
+
+  it('collides on the values the contract stores, naming both members', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({
+        name: 'Folded',
+        values: { first: 'Admin', second: 'admin' },
+        typeCodecId: ENCODE_FOLDING_CODEC_ID,
+      }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
+        message: 'enum "Folded": members "first" and "second" both store "admin"',
       }),
     ]);
   });

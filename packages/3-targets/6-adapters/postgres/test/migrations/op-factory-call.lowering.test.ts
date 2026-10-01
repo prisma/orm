@@ -313,3 +313,33 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
     );
   });
 });
+
+describe('SetDefaultCall', () => {
+  it('refuses a column with no default, which SET DEFAULT has nothing to write for', async () => {
+    await expect(
+      new SetDefaultCall('public', 'user', col('name', 'text')).toOp(testAdapter),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      message:
+        'setDefault on column "name" of table "user" has no default. Pass the column with its default, as in col(name, type, { default: lit(value) }) or col(name, type, { default: fn(expression) }).',
+      meta: { table: 'user', column: 'name', reason: 'set-default-without-default' },
+    });
+  });
+
+  it.each(['serial', 'int4'])(
+    'refuses an autoincrement() default on a %s column, which SET DEFAULT cannot write',
+    async (type) => {
+      await expect(
+        new SetDefaultCall(
+          'public',
+          'user',
+          col('id', type, { default: fn('autoincrement()') }),
+        ).toOp(testAdapter),
+      ).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: `setDefault cannot give the existing column "id" of table "user" an autoincrement() default, because autoincrement() is written as the column's SERIAL type when the column is created. Set a sequence default instead, as in fn("nextval('<sequence>'::regclass)").`,
+        meta: { table: 'user', column: 'id', reason: 'set-default-autoincrement' },
+      });
+    },
+  );
+});

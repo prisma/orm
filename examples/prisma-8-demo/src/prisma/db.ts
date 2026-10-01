@@ -21,7 +21,7 @@ export const db = postgres<Contract>({
     // fires for all of them with `source: 'middleware'`. The cache stores
     // raw rows; the runtime still runs `decodeRow` on the hit path, so
     // consumers see decoded values in both cases.
-    createCacheMiddleware({ maxEntries: 1_000 }),
+    createCacheMiddleware(),
     lints(),
     budgets({
       maxRows: 10_000,

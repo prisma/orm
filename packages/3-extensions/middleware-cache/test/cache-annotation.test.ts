@@ -1,6 +1,6 @@
 import type { PlanMeta } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { type CachePayload, cacheAnnotation } from '../src/cache-annotation';
+import { type CacheAnnotationOptions, cacheAnnotation } from '../src/cache-annotation';
 
 const baseMeta: PlanMeta = {
   target: 'postgres',
@@ -23,19 +23,19 @@ describe('cacheAnnotation handle', () => {
   });
 
   it('produces an applied annotation under namespace "cache" carrying the payload', () => {
-    const applied = cacheAnnotation({ ttl: 60 });
+    const applied = cacheAnnotation({ key: 'user-1' });
 
     expect(applied.namespace).toBe('cache');
-    expect(applied.value).toEqual({ ttl: 60 });
+    expect(applied.value).toEqual({ key: 'user-1' });
     expect(Array.from(applied.applicableTo)).toEqual(['read']);
   });
 
   it('round-trips a payload via call -> read on a plan', () => {
-    const applied = cacheAnnotation({ ttl: 60 });
+    const applied = cacheAnnotation({ key: 'user-1' });
     const plan = planWith({ cache: applied });
 
     const recovered = cacheAnnotation.read(plan);
-    expect(recovered).toEqual({ ttl: 60 });
+    expect(recovered).toEqual({ key: 'user-1' });
   });
 
   it('returns undefined when reading a plan without a cache annotation', () => {
@@ -48,8 +48,12 @@ describe('cacheAnnotation handle', () => {
     expect(cacheAnnotation.read(plan)).toBeUndefined();
   });
 
-  it('preserves all CachePayload fields (ttl, skip, key)', () => {
-    const payload: CachePayload = { ttl: 120, skip: false, key: 'custom-key' };
+  it('preserves all CacheAnnotationOptions fields (key, meta, bypass)', () => {
+    const payload: CacheAnnotationOptions = {
+      key: 'custom-key',
+      meta: { tags: ['users'] },
+      bypass: false,
+    };
     const applied = cacheAnnotation(payload);
     const plan = planWith({ cache: applied });
 

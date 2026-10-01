@@ -15,6 +15,7 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
   type ParsedPslExtensionBlock,
+  readEnumBlockMembers,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
@@ -43,7 +44,7 @@ import { postgresCodecLookup } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
-  block: ParsedPslExtensionBlock,
+  block: ParsedPslExtensionBlock<Readonly<Record<string, JsonValue | undefined>>>,
   ctx: AuthoringEntityContext,
 ): EnumTypeHandle | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
@@ -76,73 +77,10 @@ function testEnumFactory(
     });
     return undefined;
   }
-  const members: { name: string; value: unknown }[] = [];
-  let memberError = false;
-  const seenValues = new Set<string>();
+  const members = readEnumBlockMembers(block, codecId, codec, ctx);
+  if (members === undefined) return undefined;
 
-  for (const [memberName, memberValue] of Object.entries(block.values)) {
-    const span = block.parameterSpans[memberName] ?? block.span;
-    let value: unknown;
-    if (memberValue === undefined) {
-      try {
-        value = codec.decodeJson(memberName as unknown as JsonValue);
-      } catch {
-        diagnostics?.push({
-          code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
-          message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
-          sourceId,
-          span,
-        });
-        memberError = true;
-        continue;
-      }
-    } else {
-      try {
-        value = codec.decodeJson(memberValue as JsonValue);
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : String(err);
-        diagnostics?.push({
-          code: 'PSL_EXTENSION_INVALID_VALUE',
-          message: `enum "${block.name}" member "${memberName}" was rejected by codec "${codecId}": ${reason}`,
-          sourceId,
-          span,
-        });
-        memberError = true;
-        continue;
-      }
-    }
-    const valueKey = String(value);
-    if (seenValues.has(valueKey)) {
-      diagnostics?.push({
-        code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
-        message: `enum "${block.name}": duplicate member value "${valueKey}"`,
-        sourceId,
-        span,
-      });
-      memberError = true;
-      continue;
-    }
-    seenValues.add(valueKey);
-    members.push({ name: memberName, value });
-  }
-
-  if (memberError) return undefined;
-
-  if (members.length === 0) {
-    diagnostics?.push({
-      code: 'PSL_ENUM_MISSING_TYPE',
-      message: `enum "${block.name}" must have at least one member`,
-      sourceId,
-      span: block.span,
-    });
-    return undefined;
-  }
-
-  return enumType(
-    block.name,
-    { codecId, nativeType },
-    ...members.map((m) => ({ name: m.name, value: m.value })),
-  );
+  return enumType(block.name, { codecId, nativeType }, ...members);
 }
 
 export const testEnumPslBlockDescriptor = {
