@@ -2,7 +2,7 @@
 
 ## At a glance
 
-Use the PSL binder for existing language-server features, removing reverse-binding span scans and independent declaration-resolution cascades. The branch starts from Mongo PR #30538 while it awaits merge. No new LSP features or interpreter capabilities are included.
+Use the PSL binder for existing language-server features, removing reverse-binding span scans and independent declaration-resolution cascades. The branch starts from Mongo PR #30538 while it awaits merge. The operator subsequently added bare `entityRef` argument completion to scope; no new interpreter capabilities are included.
 
 ## Chosen design
 
@@ -22,7 +22,9 @@ The scope API supplies the missing enumeration operation needed to remove the LS
 
 **In:** Parser binder/scope APIs and tests; existing language-server completion, signature help, semantic tokens, diagnostic publishing and snapshot lifecycle; directly affected tests.
 
-**Out:** Go-to-definition, hover, new language features, namespace support changes, SQL/Mongo/Prisma7 interpretation changes, unrelated framework refactors, and CI/example changes without approval.
+**Out:** Go-to-definition, hover, new language syntax, qualified entity-reference arguments, namespace support changes, SQL/Mongo/Prisma7 interpretation changes, unrelated framework refactors, and CI/example changes without approval.
+
+**Operator review amendments:** retain `ScopeStack` while preserving namespace scopes only in the node-keyed map; use one abstract `Scope` rather than an interface plus base class; no redundant prototype/source-ownership guards or custom model-type completion ordering. Bare `entityRef` argument completion enumerates binder-visible entries before applying the existing selector semantics, including named types and exact block keywords. It includes self references and never suggests unsupported qualified entity syntax.
 
 ## Pre-investigated edge cases
 
