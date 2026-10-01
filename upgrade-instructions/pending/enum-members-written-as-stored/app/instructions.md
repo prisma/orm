@@ -4,7 +4,7 @@ changes:
     summary: |
       `defineContract` from the Postgres and SQLite packages now refuses an `enumType` member that its codec takes but stores as a different value, with `CONTRACT.ENUM_INVALID`. A uuid member written with an upper-case hex digit, in braces, or with hyphens anywhere other than the 8-4-4-4-12 positions Postgres prints (including none) is refused, because `pg/uuid@1` stores lower-case 8-4-4-4-12 text. Write each refused member as the error message says, re-emit, and apply a migration that replaces the enum's CHECK constraint.
     detection:
-      glob: "**/*.{ts,mts,cts}"
+      glob: "**/*.{ts,tsx,mts,cts}"
       matches:
         - '\benumType\('
 ---
