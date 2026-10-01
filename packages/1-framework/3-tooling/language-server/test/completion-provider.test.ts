@@ -491,7 +491,7 @@ namespace other { model Hidden { id Int } }`,
       ]),
     });
     expect(items.map(({ label, kind, detail }) => ({ label, kind, detail }))).toEqual([
-      { label: 'Value', kind: CompletionItemKind.Keyword, detail: 'Custom value' },
+      { label: 'Value', kind: CompletionItemKind.Class, detail: 'Custom value' },
     ]);
   });
 
@@ -596,7 +596,7 @@ namespace other { model Hidden { id Int } }`,
             tags: item.tags,
           }).toEqual({
             label,
-            kind: callable ? CompletionItemKind.Function : CompletionItemKind.Keyword,
+            kind: callable ? CompletionItemKind.Function : CompletionItemKind.Class,
             newText: snippets ? snippet : callable ? `${label}()` : label,
             format: callable && snippets ? InsertTextFormat.Snippet : undefined,
             command: undefined,
@@ -1474,7 +1474,7 @@ namespace app {
         ]),
         controlMutationDefaults,
       });
-      const scalars = items.filter((item) => item.kind === CompletionItemKind.Keyword);
+      const scalars = items.filter((item) => item.kind === CompletionItemKind.Class);
       const current = ['Int32', 'Double', 'Bool', 'Date'];
       const deprecated = [
         ['Int', 'Int32'],

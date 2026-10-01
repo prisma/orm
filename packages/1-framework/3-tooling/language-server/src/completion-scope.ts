@@ -70,7 +70,7 @@ export function scopeCompletionItems(
       case 'contributedType': {
         const descriptor = resolution.symbol.descriptor;
         const callable = descriptor.args !== undefined || descriptor.entityRefArg !== undefined;
-        item.kind = callable ? CompletionItemKind.Function : CompletionItemKind.Keyword;
+        item.kind = callable ? CompletionItemKind.Function : CompletionItemKind.Class;
         if (callable) {
           item.textEdit = {
             range,
