@@ -1,10 +1,15 @@
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
   buildSymbolTable,
   entityRef,
   fieldAttribute,
   fieldRef,
+  list,
   modelAttribute,
+  optional,
+  str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -19,17 +24,56 @@ const guardedBy = modelAttribute('guardedBy', {
   documentation: '',
   named: { policy: { type: entityRef({ kind: 'block', keyword: 'policy' }), documentation: '' } },
 });
+const relationSpec = fieldAttribute('relation', {
+  documentation: 'Declares a relation.',
+  named: { name: { type: optional(str()), documentation: 'An explicit relation name.' } },
+});
+const indexSpec = modelAttribute('index', {
+  documentation: 'Declares an index.',
+  named: { fields: { type: list(str()), documentation: 'Indexed field names.' } },
+});
 const authoringContributions = assembleAuthoringContributions([
   {
     id: 'hover-fixture',
     authoring: {
       attributeSpecs: {
-        field: { relatesTo: () => relatesTo },
-        model: { guardedBy: () => guardedBy },
+        field: { relatesTo: () => relatesTo, relation: () => relationSpec },
+        model: { guardedBy: () => guardedBy, index: () => indexSpec },
+      },
+      type: {
+        pg: {
+          Varchar: {
+            kind: 'typeConstructor',
+            documentation: 'A variable-length string.',
+            args: [{ name: 'length', kind: 'number' }],
+            output: { codecId: 'fixture/varchar', nativeType: 'varchar' },
+          },
+          Text: {
+            kind: 'typeConstructor',
+            output: { codecId: 'fixture/text', nativeType: 'text' },
+          },
+        },
       },
     },
   },
 ]);
+const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
+  policy: {
+    kind: 'pslBlock',
+    documentation: 'Row-level access rule.',
+    keyword: 'policy',
+    discriminator: 'hover-policy',
+    name: { required: true },
+    spec: () => structBlock({ parameters: {} }),
+  },
+  view: {
+    kind: 'pslBlock',
+    keyword: 'view',
+    discriminator: 'hover-view',
+    name: { required: true },
+    spec: () => structBlock({ parameters: {} }),
+  },
+};
 
 function hover(markedSource: string, siblings: readonly string[] = []) {
   const offset = markedSource.indexOf('|');
@@ -48,7 +92,8 @@ function hover(markedSource: string, siblings: readonly string[] = []) {
     document,
     sourceFile,
     position: sourceFile.positionAt(offset),
-    binder: testBinder({ sources, symbolTable, authoringContributions }),
+    binder: testBinder({ sources, symbolTable, authoringContributions, pslBlockDescriptors }),
+    pslBlockDescriptors,
   });
 }
 
@@ -206,6 +251,60 @@ describe('providePslHover', () => {
 
   it('returns null when the cursor is not on an Ident token', () => {
     const result = hover('model User {| id Int\n}');
+    expect(result).toBeNull();
+  });
+
+  it('shows a field-attribute signature label and its documentation', () => {
+    const result = hover('model User {\n  id Int\n  author User @relat|ion\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\n@relation(name?: string)\n```\n\nDeclares a relation.',
+      },
+      range: { start: { line: 2, character: 15 }, end: { line: 2, character: 23 } },
+    });
+  });
+
+  it('shows a model-attribute signature label and its documentation', () => {
+    const result = hover('model User {\n  id Int\n  @@ind|ex\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\n@@index(fields: string[])\n```\n\nDeclares an index.',
+      },
+      range: { start: { line: 2, character: 4 }, end: { line: 2, character: 9 } },
+    });
+  });
+
+  it('shows a contributed type with documentation and args', () => {
+    const result = hover('model Product {\n  price pg.Varc|har(255)\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npg.Varchar(length: number)\n```\n\nA variable-length string.',
+      },
+      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 18 } },
+    });
+  });
+
+  it('shows a contributed type without documentation as the bare path', () => {
+    const result = hover('model Product {\n  label pg.Te|xt\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\npg.Text\n```' },
+      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 15 } },
+    });
+  });
+
+  it('shows a block keyword with documentation', () => {
+    const result = hover('polic|y ReadOwn {\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: 'Row-level access rule.' },
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 6 } },
+    });
+  });
+
+  it('returns null for a block keyword without documentation', () => {
+    const result = hover('vie|w Summary {\n}');
     expect(result).toBeNull();
   });
 });

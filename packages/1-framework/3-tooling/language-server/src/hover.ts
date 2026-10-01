@@ -1,13 +1,17 @@
+import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type {
+  AttributeSymbol,
   Binder,
   BlockSymbol,
   CompositeTypeSymbol,
+  ContributedTypeSymbol,
   FieldSymbol,
   ModelSymbol,
   NamedTypeSymbol,
   PslSymbol,
   Resolution,
 } from '@internal/psl-parser';
+import { findBlockDescriptor } from '@internal/psl-parser';
 import {
   CompositeTypeDeclarationAst,
   FieldDeclarationAst,
@@ -20,9 +24,11 @@ import {
 import { type Hover, MarkupKind } from 'vscode-languageserver';
 import type { PslCursorInput } from './attribute-syntax-context';
 import { readDocComment } from './doc-comment';
+import { renderSignatureLabel, resolveSignatureParameters } from './signature-help';
 
 export interface ProvidePslHoverInput extends PslCursorInput {
   readonly binder: Binder;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
 }
 
 type HoverEntitySymbol =
@@ -32,19 +38,34 @@ type HoverEntitySymbol =
   | NamedTypeSymbol
   | BlockSymbol;
 
+type HoverResult =
+  | { readonly kind: 'entity'; readonly symbol: HoverEntitySymbol }
+  | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
+  | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol };
+
 export function providePslHover(input: ProvidePslHoverInput): Hover | null {
   const offset = input.sourceFile.offsetAt(input.position);
   const token = identTokenAt(input.document.syntax, offset);
   if (token === undefined) return null;
-  const entity = resolveHoverEntity(input.binder, token);
-  if (entity === undefined) return null;
+  const value = hoverValueAt(input.binder, token, input.pslBlockDescriptors);
+  if (value === undefined) return null;
   return {
-    contents: { kind: MarkupKind.Markdown, value: renderHoverContent(entity) },
+    contents: { kind: MarkupKind.Markdown, value },
     range: {
       start: input.sourceFile.positionAt(token.offset),
       end: input.sourceFile.positionAt(token.endOffset),
     },
   };
+}
+
+function hoverValueAt(
+  binder: Binder,
+  token: SyntaxToken,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace | undefined,
+): string | undefined {
+  const result = resolveHoverResult(binder, token);
+  if (result !== undefined) return renderHoverResult(result);
+  return blockKeywordDocumentationAt(token, pslBlockDescriptors);
 }
 
 function identTokenAt(root: SyntaxNode, offset: number): SyntaxToken | undefined {
@@ -55,9 +76,11 @@ function identTokenAt(root: SyntaxNode, offset: number): SyntaxToken | undefined
   return right?.kind === 'Ident' ? right : undefined;
 }
 
-function resolveHoverEntity(binder: Binder, token: SyntaxToken): HoverEntitySymbol | undefined {
+function resolveHoverResult(binder: Binder, token: SyntaxToken): HoverResult | undefined {
   const identifier = token.parent;
-  return declaredEntityAt(binder, identifier) ?? referencedEntityAt(binder, identifier);
+  const declared = declaredEntityAt(binder, identifier);
+  if (declared !== undefined) return { kind: 'entity', symbol: declared };
+  return identifier.findAncestor((node) => narrowHoverResult(binder.symbolForNode(node)));
 }
 
 function declaredEntityAt(binder: Binder, identifier: SyntaxNode): HoverEntitySymbol | undefined {
@@ -77,18 +100,18 @@ function declarationNamedBy(identifier: SyntaxNode): SyntaxNode | undefined {
   return declaration?.name()?.syntax === identifier ? parent : undefined;
 }
 
-function referencedEntityAt(binder: Binder, identifier: SyntaxNode): HoverEntitySymbol | undefined {
-  return identifier.findAncestor((node) => narrowResolution(binder.symbolForNode(node)));
-}
-
-function narrowResolution(resolution: Resolution | undefined): HoverEntitySymbol | undefined {
+function narrowHoverResult(resolution: Resolution | undefined): HoverResult | undefined {
   switch (resolution?.kind) {
     case 'model':
     case 'compositeType':
     case 'namedType':
     case 'block':
     case 'field':
-      return resolution.symbol;
+      return { kind: 'entity', symbol: resolution.symbol };
+    case 'attribute':
+      return { kind: 'attribute', symbol: resolution.symbol };
+    case 'contributedType':
+      return { kind: 'contributedType', symbol: resolution.symbol };
     default:
       return undefined;
   }
@@ -107,10 +130,50 @@ function narrowDeclaredSymbol(symbol: PslSymbol | undefined): HoverEntitySymbol 
   }
 }
 
-function renderHoverContent(entity: HoverEntitySymbol): string {
+function renderHoverResult(result: HoverResult): string {
+  if (result.kind === 'entity') return renderEntityContent(result.symbol);
+  if (result.kind === 'attribute') return renderAttributeContent(result.symbol);
+  return renderContributedTypeContent(result.symbol);
+}
+
+function renderEntityContent(entity: HoverEntitySymbol): string {
   const fence = ['```prisma', renderDeclarationLine(entity), '```'].join('\n');
   const doc = readDocComment(entity.node.syntax);
   return doc === undefined ? fence : `${fence}\n\n${doc}`;
+}
+
+function renderAttributeContent(symbol: AttributeSymbol): string {
+  const name = `${symbol.level === 'field' ? '@' : '@@'}${symbol.name}`;
+  const params = resolveSignatureParameters(symbol.spec, undefined);
+  const { label } = renderSignatureLabel(name, symbol.spec, params);
+  const fence = ['```prisma', label, '```'].join('\n');
+  return `${fence}\n\n${symbol.spec.documentation}`;
+}
+
+function renderContributedTypeContent(symbol: ContributedTypeSymbol): string {
+  const fence = ['```prisma', renderContributedTypeLabel(symbol), '```'].join('\n');
+  const doc = symbol.descriptor.documentation;
+  return doc === undefined ? fence : `${fence}\n\n${doc}`;
+}
+
+function renderContributedTypeLabel(symbol: ContributedTypeSymbol): string {
+  const path = symbol.path.join('.');
+  const args = symbol.descriptor.args ?? [];
+  if (args.length === 0) return path;
+  const labels = args.map((arg, index) => {
+    const key = arg.name ?? `arg${index + 1}`;
+    return `${key}${arg.optional === true ? '?' : ''}: ${arg.kind}`;
+  });
+  return `${path}(${labels.join(', ')})`;
+}
+
+function blockKeywordDocumentationAt(
+  token: SyntaxToken,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace | undefined,
+): string | undefined {
+  const declaration = GenericBlockDeclarationAst.cast(token.parent);
+  if (declaration === undefined || declaration.keyword()?.offset !== token.offset) return undefined;
+  return findBlockDescriptor(pslBlockDescriptors, token.text)?.documentation;
 }
 
 function renderDeclarationLine(entity: HoverEntitySymbol): string {

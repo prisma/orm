@@ -41,7 +41,10 @@ function signatureHelp(
   const signatures = resolveGrammar(spec, signaturePath).flatMap((grammar) => {
     if ('kind' in grammar) return [];
     const active = context.path[callIndex + 1];
-    const params = parameters(grammar, active?.kind === 'namedArgument' ? active.name : undefined);
+    const params = resolveSignatureParameters(
+      grammar,
+      active?.kind === 'namedArgument' ? active.name : undefined,
+    );
     const index = parameterIndex(context, active, params);
     return [{ signature: renderSignature(name, grammar, params, labelOffsets), index }];
   });
@@ -76,7 +79,10 @@ function parameterIndex(
   return -1;
 }
 
-function parameters(signature: ArgumentSignature, activeName: string | undefined) {
+export function resolveSignatureParameters(
+  signature: ArgumentSignature,
+  activeName: string | undefined,
+): readonly PositionalParam<unknown, never>[] {
   const positional = signature.positional ?? [];
   const keys = new Set(positional.map((param) => param.key));
   const namedAlias = activeName === undefined ? undefined : signature.named?.[activeName];
@@ -92,14 +98,26 @@ function parameters(signature: ArgumentSignature, activeName: string | undefined
   ];
 }
 
-function renderSignature(
+export interface SignatureLabelPart {
+  readonly param: PositionalParam<unknown, never>;
+  readonly text: string;
+  readonly start: number;
+  readonly end: number;
+  readonly positional: boolean;
+}
+
+export interface SignatureLabel {
+  readonly label: string;
+  readonly parts: readonly SignatureLabelPart[];
+}
+
+export function renderSignatureLabel(
   name: string,
   signature: ArgumentSignature,
   params: readonly PositionalParam<unknown, never>[],
-  labelOffsets: boolean,
-): SignatureInformation {
+): SignatureLabel {
   let label = `${name}(`;
-  const rendered: ParameterInformation[] = params.map((param, index) => {
+  const parts: SignatureLabelPart[] = params.map((param, index) => {
     if (index > 0) label += ', ';
     const positional = index < (signature.positional?.length ?? 0);
     const optional = 'optional' in param.type && param.type.optional === true;
@@ -110,11 +128,24 @@ function renderSignature(
       : `${param.key}${optional ? '?' : ''}: ${param.type.label}`;
     const start = label.length;
     label += text;
+    return { param, text, start, end: label.length, positional };
+  });
+  return { label: `${label})`, parts };
+}
+
+function renderSignature(
+  name: string,
+  signature: ArgumentSignature,
+  params: readonly PositionalParam<unknown, never>[],
+  labelOffsets: boolean,
+): SignatureInformation {
+  const { label, parts } = renderSignatureLabel(name, signature, params);
+  const rendered: ParameterInformation[] = parts.map(({ param, text, start, end, positional }) => {
     const documentation = positional
       ? `**${param.key}**\n\n${param.documentation}${signature.named?.[param.key] === undefined ? '' : `\n\nAccepted positionally or by \`${param.key}:\`.`}`
       : param.documentation;
     return {
-      label: positional && labelOffsets ? [start, label.length] : text,
+      label: positional && labelOffsets ? [start, end] : text,
       documentation: {
         kind: MarkupKind.Markdown,
         value: documentation,
@@ -122,7 +153,7 @@ function renderSignature(
     };
   });
   return {
-    label: `${label})`,
+    label,
     documentation: { kind: MarkupKind.Markdown, value: signature.documentation },
     parameters: rendered,
   };
