@@ -140,6 +140,7 @@ describe('qualified entity references', () => {
     ['nope.Account', 'Cannot find entity "nope.Account"'],
     ['auth.Ghost', 'Cannot find entity "auth.Ghost"'],
     ['Top.Account', '"Top" is a model, not a namespace'],
+    ['auth.', 'Cannot find entity "auth."'],
   ])('reports an unresolvable qualified reference at its span: %s', (reference, message) => {
     const result = bind(`policy P {\n target = ${reference}\n}`, modelRef);
     const value = entryValue(result, 'P');
