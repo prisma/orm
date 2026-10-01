@@ -22,7 +22,10 @@ function withNull(bsonTypes: readonly string[]): readonly string[] {
 }
 
 function anyValueSchema(field: ContractField): Record<string, unknown> {
-  return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
+  if ('many' in field && field.many) {
+    return { bsonType: field.nullable ? ['null', 'array'] : 'array', items: {} };
+  }
+  return {};
 }
 
 function fieldToBsonSchema(
@@ -49,7 +52,7 @@ function fieldToBsonSchema(
       if (enumValues) {
         items['enum'] = field.many.elementNullable ? [...enumValues, null] : enumValues;
       }
-      return { bsonType: 'array', items };
+      return { bsonType: field.nullable ? ['null', 'array'] : 'array', items };
     }
 
     if (field.nullable) {
@@ -69,7 +72,7 @@ function fieldToBsonSchema(
     const voSchema = deriveObjectSchema(vo.fields, valueObjects, codecLookup, valueSets);
     if (field.many) {
       return {
-        bsonType: 'array',
+        bsonType: field.nullable ? ['null', 'array'] : 'array',
         items: field.many.elementNullable ? { oneOf: [{ bsonType: 'null' }, voSchema] } : voSchema,
       };
     }

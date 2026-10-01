@@ -2241,9 +2241,12 @@ model Item {
         bsonType: 'array',
         items: { bsonType: ['null', 'string'] },
       });
-      expect(props['nullableList']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
+      expect(props['nullableList']).toEqual({
+        bsonType: ['null', 'array'],
+        items: { bsonType: 'string' },
+      });
       expect(props['fullyNullable']).toEqual({
-        bsonType: 'array',
+        bsonType: ['null', 'array'],
         items: { bsonType: ['null', 'string'] },
       });
     });
@@ -2333,7 +2336,7 @@ model Item {
             items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
           },
           optionalRoles: {
-            bsonType: 'array',
+            bsonType: ['null', 'array'],
             items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
           },
         },

@@ -21,8 +21,8 @@ The TypeScript authoring surface couples the element option to list construction
 const fields = {
   strict: field.text().many(),
   nullableElements: field.text().many({ elementsNullable: true }),
-  nullableList: field.text().many().nullable(),
-  fullyNullable: field.text().many({ elementsNullable: true }).nullable(),
+  nullableList: field.text().many().optional(),
+  fullyNullable: field.text().many({ elementsNullable: true }).optional(),
 };
 ```
 

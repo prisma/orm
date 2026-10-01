@@ -1474,7 +1474,10 @@
                       "bsonType": "string"
                     },
                     "embedding": {
-                      "bsonType": "array",
+                      "bsonType": [
+                        "null",
+                        "array"
+                      ],
                       "items": {
                         "bsonType": "double"
                       }
@@ -1638,7 +1641,7 @@
         "kind": "mongo-database"
       }
     },
-    "storageHash": "bd938b4f8a10c688bd32dc61ec1dd808dcf34e725f08505b39ce365a39c97e1b"
+    "storageHash": "41bd5540ea833c009b5eacf6db7d489e88bdd5062554398ba8aa2657fa19d27e"
   },
   "capabilities": {},
   "extensions": {},

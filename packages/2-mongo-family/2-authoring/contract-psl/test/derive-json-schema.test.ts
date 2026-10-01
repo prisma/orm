@@ -77,53 +77,81 @@ describe('deriveJsonSchema', () => {
   });
 
   it.each([
-    ['strict required', arrayField('mongo/string@1'), ['tags'], { bsonType: 'string' }],
+    ['strict required', arrayField('mongo/string@1'), ['tags'], 'array', { bsonType: 'string' }],
     [
       'nullable elements',
       arrayField('mongo/string@1', false, true),
       ['tags'],
+      'array',
       { bsonType: ['null', 'string'] },
     ],
-    ['nullable list', arrayField('mongo/string@1', true), undefined, { bsonType: 'string' }],
+    [
+      'nullable list',
+      arrayField('mongo/string@1', true),
+      undefined,
+      ['null', 'array'],
+      { bsonType: 'string' },
+    ],
     [
       'nullable list and elements',
       arrayField('mongo/string@1', true, true),
       undefined,
+      ['null', 'array'],
       { bsonType: ['null', 'string'] },
     ],
-  ])('derives %s independently', (_name, field, required, items) => {
+  ])('derives %s independently', (_name, field, required, bsonType, items) => {
     const result = deriveJsonSchema({ tags: field }, undefined, mongoCodecLookup);
     expect(result.jsonSchema).toEqual({
       bsonType: 'object',
       ...(required ? { required } : {}),
-      properties: { tags: { bsonType: 'array', items } },
+      properties: { tags: { bsonType, items } },
       additionalProperties: false,
     });
   });
 
   it.each([
-    ['nullable enum elements', arrayEnumField('mongo/string@1', 'Role', false, true), ['roles']],
+    ['strict enum list', false, false, 'array', { bsonType: 'string', enum: ['user', 'admin'] }],
+    [
+      'nullable enum elements',
+      false,
+      true,
+      'array',
+      { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
+    ],
+    [
+      'nullable enum list',
+      true,
+      false,
+      ['null', 'array'],
+      { bsonType: 'string', enum: ['user', 'admin'] },
+    ],
     [
       'nullable enum list and elements',
-      arrayEnumField('mongo/string@1', 'Role', true, true),
-      undefined,
+      true,
+      true,
+      ['null', 'array'],
+      { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
     ],
-  ])('derives exact %s BSON shape', (_name, field, required) => {
-    const result = deriveJsonSchema({ roles: field }, undefined, mongoCodecLookup, {
-      Role: { values: ['user', 'admin'] },
-    });
-    expect(result.jsonSchema).toEqual({
-      bsonType: 'object',
-      ...(required ? { required } : {}),
-      properties: {
-        roles: {
-          bsonType: 'array',
-          items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
+  ] as const)(
+    'derives exact %s BSON shape',
+    (_name, nullable, elementNullable, bsonType, items) => {
+      const field = arrayEnumField('mongo/string@1', 'Role', nullable, elementNullable);
+      const result = deriveJsonSchema({ roles: field }, undefined, mongoCodecLookup, {
+        Role: { values: ['user', 'admin'] },
+      });
+      expect(result.jsonSchema).toEqual({
+        bsonType: 'object',
+        ...(nullable ? {} : { required: ['roles'] }),
+        properties: {
+          roles: {
+            bsonType,
+            items,
+          },
         },
-      },
-      additionalProperties: false,
-    });
-  });
+        additionalProperties: false,
+      });
+    },
+  );
 
   it('handles value object field as a closed nested object', () => {
     const valueObjects: Record<string, ContractValueObject> = {
@@ -199,30 +227,29 @@ describe('deriveJsonSchema', () => {
   });
 
   it.each([
-    ['nullable value-object elements', voArrayField('Tag', false, true), ['tags']],
-    ['nullable value-object list and elements', voArrayField('Tag', true, true), undefined],
-  ])('derives exact %s BSON shape', (_name, field, required) => {
+    ['strict value-object list', false, false, 'array'],
+    ['nullable value-object elements', false, true, 'array'],
+    ['nullable value-object list', true, false, ['null', 'array']],
+    ['nullable value-object list and elements', true, true, ['null', 'array']],
+  ] as const)('derives exact %s BSON shape', (_name, nullable, elementNullable, bsonType) => {
+    const field = voArrayField('Tag', nullable, elementNullable);
     const valueObjects: Record<string, ContractValueObject> = {
       Tag: { fields: { label: scalarField('mongo/string@1') } },
     };
     const result = deriveJsonSchema({ tags: field }, valueObjects, mongoCodecLookup);
+    const objectSchema = {
+      bsonType: 'object',
+      required: ['label'],
+      properties: { label: { bsonType: 'string' } },
+      additionalProperties: false,
+    };
     expect(result.jsonSchema).toEqual({
       bsonType: 'object',
-      ...(required ? { required } : {}),
+      ...(nullable ? {} : { required: ['tags'] }),
       properties: {
         tags: {
-          bsonType: 'array',
-          items: {
-            oneOf: [
-              { bsonType: 'null' },
-              {
-                bsonType: 'object',
-                required: ['label'],
-                properties: { label: { bsonType: 'string' } },
-                additionalProperties: false,
-              },
-            ],
-          },
+          bsonType,
+          items: elementNullable ? { oneOf: [{ bsonType: 'null' }, objectSchema] } : objectSchema,
         },
       },
       additionalProperties: false,

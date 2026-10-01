@@ -31,7 +31,7 @@
                   "bsonType": "string"
                 },
                 "embedding": {
-                  "bsonType": "array",
+                  "bsonType": ["null", "array"],
                   "items": {
                     "bsonType": "double"
                   }
@@ -124,7 +124,7 @@
           },
           "meta": {
             "target": "mongo",
-            "storageHash": "9414a8f88a64f9decc0e019967459e49da083f011cf91898094b7bccab6c1810",
+            "storageHash": "9af6d90aaa4cd03bf7eb2040a1c1b5c1225a2b33883ea3d0552f312f4684f8dc",
             "lane": "mongo-pipeline"
           }
         },
@@ -155,7 +155,7 @@
         },
         "meta": {
           "target": "mongo",
-          "storageHash": "9414a8f88a64f9decc0e019967459e49da083f011cf91898094b7bccab6c1810",
+          "storageHash": "9af6d90aaa4cd03bf7eb2040a1c1b5c1225a2b33883ea3d0552f312f4684f8dc",
           "lane": "mongo-raw"
         }
       }
@@ -185,7 +185,7 @@
           },
           "meta": {
             "target": "mongo",
-            "storageHash": "9414a8f88a64f9decc0e019967459e49da083f011cf91898094b7bccab6c1810",
+            "storageHash": "9af6d90aaa4cd03bf7eb2040a1c1b5c1225a2b33883ea3d0552f312f4684f8dc",
             "lane": "mongo-pipeline"
           }
         },
