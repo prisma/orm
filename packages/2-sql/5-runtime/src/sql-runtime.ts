@@ -173,7 +173,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
   private readonly codecDescriptors: CodecDescriptorRegistry;
   private readonly sqlCtx: SqlMiddlewareContext;
   private readonly verifyMarkerOption: VerifyMarkerOption;
-  // Single-flight gate. Memoises the first verifyMarker() call so concurrent first-queries share one read + one log line. `null` until the first gate hit; pre-resolved when `verifyMarkerOption === false` so the gate becomes a no-op await.
+  // Single-flight gate. Memoises the first verifyMarker() call so concurrent first-queries share one read + one log line. `null` until the first gate hit, and again after a failed read so the next query retries; pre-resolved when `verifyMarkerOption === false` so the gate becomes a no-op await.
   private verifyMarkerPromise: Promise<void> | null;
   readonly #preparedStatementHandles = new WeakMap<object, unknown>();
   private codecRegistryValidated: boolean;
@@ -372,7 +372,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     this.familyAdapter.validatePlan(exec, this.contract);
     this._telemetry = null;
     if (this.verifyMarkerPromise === null) {
-      this.verifyMarkerPromise = this.verifyMarker();
+      this.verifyMarkerPromise = this.verifyMarker().catch((error: unknown) => {
+        this.verifyMarkerPromise = null;
+        throw error;
+      });
     }
     await this.verifyMarkerPromise;
   }

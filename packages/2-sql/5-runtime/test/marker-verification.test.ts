@@ -32,8 +32,9 @@ import { createTestRuntime as createRuntime, descriptorsFromCodecs } from './uti
  * Pins the per-result-kind branches of `verifyMarker` in `sql-runtime.ts`: absent marker
  * (warns CONTRACT.MARKER_MISSING), missing table (warns CONTRACT.MARKER_MISSING), storage-hash
  * mismatch (warns CONTRACT.MARKER_MISMATCH), profile-hash mismatch (warns CONTRACT.MARKER_MISMATCH),
- * matching marker (silent), verifyMarker: false (reader never called), and one-shot semantics
- * (at most one log per runtime lifetime).
+ * matching marker (silent), verifyMarker: false (reader never called), one-shot semantics
+ * (at most one log per runtime lifetime), and failed reads (not remembered; the next query reads
+ * again).
  *
  * Storage-hash mismatch ordering against middleware interceptQuerys is covered by
  * `marker-vs-interceptQuery-ordering.test.ts`.
@@ -374,5 +375,54 @@ describe('verifyMarker', () => {
 
     expect(readMarkerSpy).toHaveBeenCalledTimes(1);
     expect(log.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the marker again on the next query after a failed read', async () => {
+    const readFailure = new Error('connection timeout');
+    const readMarkerSpy = vi
+      .fn()
+      .mockRejectedValueOnce(readFailure)
+      .mockResolvedValue({ kind: 'present', record: markerRecord() });
+    const runtime = buildRuntime({
+      markerResult: { kind: 'present', record: markerRecord() },
+      readMarkerSpy,
+    });
+
+    await expect(runtime.query(createPlan()).toArray()).rejects.toBe(readFailure);
+    await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
+    await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
+
+    expect(readMarkerSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails every query waiting on a failed read, then reads again once', async () => {
+    let failMarker: (error: Error) => void = () => {};
+    const failedRead = new Promise<MarkerReadResult>((_resolve, reject) => {
+      failMarker = reject;
+    });
+    const readFailure = new Error('connection timeout');
+    const readMarkerSpy = vi
+      .fn()
+      .mockImplementationOnce(() => failedRead)
+      .mockResolvedValue({ kind: 'present', record: markerRecord() });
+    const runtime = buildRuntime({
+      markerResult: { kind: 'present', record: markerRecord() },
+      readMarkerSpy,
+    });
+
+    const inflight = [
+      runtime.query(createPlan()).toArray(),
+      runtime.query(createPlan()).toArray(),
+      runtime.query(createPlan()).toArray(),
+    ];
+    failMarker(readFailure);
+
+    for (const result of await Promise.allSettled(inflight)) {
+      expect(result).toEqual({ status: 'rejected', reason: readFailure });
+    }
+    expect(readMarkerSpy).toHaveBeenCalledTimes(1);
+
+    await expect(runtime.query(createPlan()).toArray()).resolves.toEqual([{}]);
+    expect(readMarkerSpy).toHaveBeenCalledTimes(2);
   });
 });

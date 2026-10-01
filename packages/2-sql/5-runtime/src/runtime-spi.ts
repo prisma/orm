@@ -28,7 +28,8 @@ export interface RuntimeFamilyAdapter<TContract = unknown> {
  * - `'onFirstUse'` (default when omitted): the marker is read once per runtime lifetime, on the
  *   first `execute()` call. Any hash mismatch or absent marker emits a structured `warn`-level log
  *   through the runtime's {@link RuntimeLog} and the query proceeds. Subsequent queries skip the
- *   marker reader entirely.
+ *   marker reader entirely. A read that throws fails the queries waiting on it and is not
+ *   remembered: the next query reads the marker again.
  * - `false`: the marker reader is never invoked. No log line is emitted. Use this to opt out of
  *   the diagnostic entirely (e.g. during a known deploy-skew window).
  *
