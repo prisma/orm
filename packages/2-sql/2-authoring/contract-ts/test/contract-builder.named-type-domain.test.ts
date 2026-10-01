@@ -68,8 +68,9 @@ describe('a field typed by a named storage type in the domain', () => {
       code: {
         type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
         nullable: false,
+        many: false,
       },
-      email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+      email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false, many: false },
     });
   });
 });

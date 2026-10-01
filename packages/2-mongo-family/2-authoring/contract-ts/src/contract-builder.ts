@@ -255,13 +255,31 @@ export interface FieldBuilder<
   readonly many: FilledOnWrite<ExecutionDefaults> extends true
     ? (this: 'A preset fills this field on write, so it cannot be a list') => never
     : {
-        (): FieldBuilder<Type, Nullable, { readonly elementNullable: false }, Handle, ExecutionDefaults>;
+        (): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: false },
+          Handle,
+          ExecutionDefaults
+        >;
         (options: {
           readonly elementsNullable: false;
-        }): FieldBuilder<Type, Nullable, { readonly elementNullable: false }, Handle, ExecutionDefaults>;
+        }): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: false },
+          Handle,
+          ExecutionDefaults
+        >;
         (options: {
           readonly elementsNullable: true;
-        }): FieldBuilder<Type, Nullable, { readonly elementNullable: true }, Handle, ExecutionDefaults>;
+        }): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: true },
+          Handle,
+          ExecutionDefaults
+        >;
       };
 }
 
@@ -1290,7 +1308,7 @@ function createFieldBuilder<
       ),
     ),
     many: blindCast<
-      FieldBuilder<Type, Nullable, Many, ElementsNullable, Handle, ExecutionDefaults>['many'],
+      FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults>['many'],
       'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
     >(many),
   };

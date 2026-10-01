@@ -423,7 +423,11 @@ describe('mongo contract builder', () => {
       raw: fields?.['raw'],
     }).toEqual({
       views: { many: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
-      hits: { type: { kind: 'scalar', codecId: 'mongo/int64Number@1' }, nullable: false },
+      hits: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/int64Number@1' },
+        nullable: false,
+      },
       price: {
         many: false,
         type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },

@@ -113,6 +113,27 @@ describe('a date or time default written by the planner', () => {
     },
   );
 
+  it('preserves a nullable list container default in CREATE TABLE and SET DEFAULT', () => {
+    const node = new SqlColumnIR({
+      name: 'v',
+      nativeType: 'timestamptz[]',
+      nullable: true,
+      many: true,
+      authoredDefault: { kind: 'literal', value: null },
+      resolvedDefault: { kind: 'literal', value: null },
+      codecRef: { codecId: 'pg/timestamptz-temporal@1', many: true },
+      codecBaseNativeType: 'timestamptz',
+      dataType: pgTimestamptz,
+    });
+    expect({
+      createTable: renderColumnDdl('v', node, noHooks).default,
+      setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks)?.default,
+    }).toEqual({
+      createTable: { kind: 'literal', value: null },
+      setDefault: { kind: 'literal', value: null },
+    });
+  });
+
   it('canonicalizes list defaults while preserving null elements', () => {
     const node = column('timestamptz', 'pg/timestamptz-temporal@1', pgTimestamptz, [
       '2024-01-01T00:00:00.000Z',

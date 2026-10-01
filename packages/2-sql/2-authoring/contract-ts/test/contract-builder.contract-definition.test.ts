@@ -323,7 +323,7 @@ describe('shared contract definition lowering', () => {
 
   it('encodes nullable list defaults without invoking the element codec for null', () => {
     const encoded: unknown[] = [];
-    const codecLookup: CodecLookup = {
+    const codecLookup: CodecLookupWithDescriptors = withDescriptors({
       get: (id) =>
         id === 'app/value@1'
           ? {
@@ -339,7 +339,7 @@ describe('shared contract definition lowering', () => {
           : undefined,
       targetTypesFor: () => ['text'],
       renderOutputTypeFor: () => undefined,
-    };
+    });
 
     const contract = buildSqlContractFromDefinition(
       {
@@ -356,7 +356,8 @@ describe('shared contract definition lowering', () => {
                 columnName: 'tags',
                 descriptor: { codecId: 'app/value@1', nativeType: 'text' },
                 nullable: false,
-                many: { elementNullable: true },
+                many: true,
+                elementNullable: true,
                 default: { kind: 'literal', value: ['value', null] },
               },
             ],
@@ -389,7 +390,8 @@ describe('shared contract definition lowering', () => {
                 columnName: 'tags',
                 descriptor: { codecId: 'app/value@1', nativeType: 'text' },
                 nullable: false,
-                many: { elementNullable: false },
+                many: true,
+                elementNullable: false,
                 default: { kind: 'literal', value: ['value', null] },
               },
             ],

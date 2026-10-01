@@ -79,7 +79,7 @@ function buildWithDefault(
               descriptor: { codecId: field.codecId, nativeType: 'int8' },
               nullable: false,
               default: { kind: 'literal', value: field.value },
-              ...(field.many === true ? { many: { elementNullable: false } } : {}),
+              ...(field.many === true ? { many: true, elementNullable: false } : {}),
             },
           ],
           id: { columns: ['id'] },

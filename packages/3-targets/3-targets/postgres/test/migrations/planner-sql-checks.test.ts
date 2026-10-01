@@ -46,10 +46,13 @@ describe('buildExpectedFormatType', () => {
   it('names a fixed-length type without a length as format_type does, with a length of 1', () => {
     expect([
       buildExpectedFormatType(
-        { nativeType: 'character', codecId: 'sql/char@1', nullable: false },
+        { many: false, nativeType: 'character', codecId: 'sql/char@1', nullable: false },
         noHooks,
       ),
-      buildExpectedFormatType({ nativeType: 'bit', codecId: 'pg/bit@1', nullable: false }, noHooks),
+      buildExpectedFormatType(
+        { many: false, nativeType: 'bit', codecId: 'pg/bit@1', nullable: false },
+        noHooks,
+      ),
     ]).toEqual(['character(1)', 'bit(1)']);
   });
 
@@ -60,7 +63,9 @@ describe('buildExpectedFormatType', () => {
         { nativeType: 'varchar', codecId: 'sql/varchar@1' },
         { nativeType: 'int', codecId: 'sql/int@1' },
         { nativeType: 'float', codecId: 'sql/float@1' },
-      ].map((column) => buildExpectedFormatType({ ...column, nullable: false }, noHooks)),
+      ].map((column) =>
+        buildExpectedFormatType({ ...column, many: false, nullable: false }, noHooks),
+      ),
     ).toEqual(['character(1)', 'character varying', 'integer', 'double precision']);
   });
 
@@ -87,7 +92,7 @@ describe('buildExpectedFormatType', () => {
         { nativeType: 'timetz', typeParams: { precision: 2 } },
       ].map((column) =>
         buildExpectedFormatType(
-          { ...column, codecId: 'pg/timestamptz-temporal@1', nullable: false },
+          { ...column, many: false, codecId: 'pg/timestamptz-temporal@1', nullable: false },
           withParams,
         ),
       ),

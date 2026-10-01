@@ -171,6 +171,5 @@ export function buildSetDefaultColumn(
   return contractFree.col(columnName, buildColumnTypeSql(typeLike, codecHooks, {}, false), {
     default: ddlDefault,
     ...ifDefined('codecRef', defaultNode.codecRef),
-    many: typeLike.many,
   });
 }

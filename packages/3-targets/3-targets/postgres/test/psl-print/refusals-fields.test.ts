@@ -82,7 +82,7 @@ describe('columns and fields', () => {
           columns: {
             priorities: {
               ...TEXT_COLUMN,
-              many: true,
+              many: { elementNullable: false },
               noCheck: ['elementNotNull', 'membership'],
               valueSet: {
                 plane: 'storage',
@@ -95,7 +95,7 @@ describe('columns and fields', () => {
           fields: {
             priorities: {
               ...TEXT_FIELD,
-              many: true,
+              many: { elementNullable: false },
               valueSet: {
                 plane: 'domain',
                 namespaceId: 'public',

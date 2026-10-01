@@ -59,11 +59,15 @@ model User {
   addresses Address[]
 }`;
 
-const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } };
-const idColumn = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
+const idField = { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false };
+const idColumn = { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false };
 const addressFields = {
-  home: { nullable: true, type: { kind: 'valueObject', name: 'Address' } },
-  addresses: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: true },
+  home: { nullable: true, type: { kind: 'valueObject', name: 'Address' }, many: false },
+  addresses: {
+    nullable: false,
+    type: { kind: 'valueObject', name: 'Address' },
+    many: { elementNullable: false },
+  },
 };
 
 describe('interpretPslDocumentToSqlContract value-object storage', () => {
@@ -77,8 +81,8 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         fields: { id: idField, ...addressFields },
         columns: {
           id: idColumn,
-          home: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: true },
-          addresses: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+          home: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: true },
+          addresses: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
         },
       });
     });
@@ -103,13 +107,17 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
       if (!result.ok) return;
       expect(userFieldsAndColumns(result.value)).toEqual({
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'sqlite/integer@1' } },
+          id: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'sqlite/integer@1' },
+            many: false,
+          },
           ...addressFields,
         },
         columns: {
-          id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-          home: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-          addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+          id: { many: false, nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+          home: { many: false, nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
+          addresses: { many: false, nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
         },
       });
     });
@@ -129,11 +137,12 @@ model User {
       expect(userFieldsAndColumns(result.value)).toEqual({
         fields: {
           id: idField,
-          home: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
+          home: { nullable: false, type: { kind: 'valueObject', name: 'Address' }, many: false },
         },
         columns: {
           id: idColumn,
           home: {
+            many: false,
             nativeType: 'jsonb',
             codecId: 'pg/jsonb@1',
             nullable: false,
@@ -160,6 +169,7 @@ model User {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([]);
     if (!result.ok) return;
     const jsonbWithDefault = (value: unknown) => ({
+      many: false,
       nativeType: 'jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
@@ -219,13 +229,13 @@ model Child {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.domain.namespaces['public']?.models['Child']?.fields).toEqual({
-      extra: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+      extra: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: false },
     });
     const tables = (result.value.storage as SqlStorage).namespaces['public']?.entries.table;
     expect(tables?.['child']).toEqual({
       columns: {
-        key: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
-        extra: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        key: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        extra: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['key'] },
       uniques: [],

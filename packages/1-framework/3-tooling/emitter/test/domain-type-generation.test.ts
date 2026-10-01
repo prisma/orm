@@ -865,7 +865,7 @@ describe('generateValueObjectType', () => {
         },
         codes: {
           nullable: false,
-          many: true,
+          many: { elementNullable: false },
           type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 10 } },
         },
       },
