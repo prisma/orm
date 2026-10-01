@@ -23,7 +23,7 @@ function enumBlock(
   };
 }
 
-/** Stores text in lower case, the way `pg/uuid@1` stores a uuid, and reads it back unchanged. */
+/** Reads any text unchanged and stores it in lower case, so two members can differ as read and store the same value. */
 const lowerCasingCodec: Codec = {
   id: 'test/lower-casing@1',
   encode: async (v: unknown) => v,

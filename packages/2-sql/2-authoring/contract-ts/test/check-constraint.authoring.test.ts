@@ -553,6 +553,66 @@ describe('check emission — guards', () => {
     },
   );
 
+  it.each([false, true])(
+    'accepts a member stored in another form that reads back as itself, and checks the stored form, with many=%s',
+    (many) => {
+      const Level = enumType(
+        'Level',
+        { codecId: 'pg/int8@1', nativeType: 'int8' },
+        member('Low', 1n),
+        member('High', 10n),
+      );
+      const codec: Codec = {
+        id: 'pg/int8@1',
+        encodeJson: ((value: unknown) => String(value)) as Codec['encodeJson'],
+        decodeJson: ((json: unknown) => BigInt(String(json))) as Codec['decodeJson'],
+        encode: (() => {
+          throw new Error('unused');
+        }) as Codec['encode'],
+        decode: (() => {
+          throw new Error('unused');
+        }) as Codec['decode'],
+      };
+      hookCalls.length = 0;
+      const contract = defineContract(
+        {
+          family: sqlFamilyPack,
+          target: postgresTargetPack,
+          createNamespace: createTestSqlNamespace,
+          enums: { Level },
+          codecLookup: withDescriptors({
+            ...emptyCodecLookup,
+            get: (id) => (id === codec.id ? codec : undefined),
+          }),
+        },
+        ({ field: f, model: m }) => ({
+          models: {
+            User: m('User', {
+              fields: {
+                id: f.text().id(),
+                level: many ? f.namedType(Level).many() : f.namedType(Level),
+              },
+            }),
+          },
+        }),
+      ) as Contract<SqlStorage>;
+      expect({
+        memberValues: hookCalls.at(-1)?.memberValues,
+        valueSet: contract.storage.namespaces['public']?.entries.valueSet?.['Level'],
+        checks: flatten(checksOf(contract)),
+      }).toEqual({
+        memberValues: ['1', '10'],
+        valueSet: { kind: 'valueSet', values: ['1', '10'] },
+        checks: many
+          ? [
+              wire('User_level_check', `"level"::text[] <@ ARRAY['1', '10']::text[]`),
+              wire('User_level_elem_not_null', `array_position("level", NULL) IS NULL`),
+            ]
+          : [wire('User_level_check', `"level" IN ('1', '10')`)],
+      });
+    },
+  );
+
   it('passes numeric member values to the check renderer', () => {
     const Level = enumType('Level', { codecId: 'pg/int4@1', nativeType: 'int4' }, member('One', 1));
     const contract = defineContract(
