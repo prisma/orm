@@ -64,6 +64,11 @@ const authoringContributions = assembleAuthoringContributions([
             args: [{ name: 'mode', kind: 'option', values: ['cascade', 'restrict'] }],
             output: { codecId: 'fixture/mode', nativeType: 'mode' },
           },
+          Flag: {
+            kind: 'typeConstructor',
+            documentation: '',
+            output: { codecId: 'fixture/flag', nativeType: 'flag' },
+          },
         },
       },
     },
@@ -256,6 +261,14 @@ describe('providePslHover', () => {
     });
   });
 
+  it('omits the doc section when the /// is bare', () => {
+    const result = hover('///\nmodel Us|er {\n  id Int\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nmodel User\n```' },
+      range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+    });
+  });
+
   it('returns null for an unresolved name', () => {
     const result = hover('model Post {\n  author Unkno|wn\n}');
     expect(result).toBeNull();
@@ -312,6 +325,14 @@ describe('providePslHover', () => {
     expect(result).toEqual({
       contents: { kind: 'markdown', value: '```prisma\npg.Text\n```' },
       range: { start: { line: 1, character: 11 }, end: { line: 1, character: 15 } },
+    });
+  });
+
+  it('omits the documentation section when descriptor.documentation is empty', () => {
+    const result = hover('model Product {\n  flag pg.Fl|ag\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\npg.Flag\n```' },
+      range: { start: { line: 1, character: 10 }, end: { line: 1, character: 14 } },
     });
   });
 
