@@ -63,7 +63,10 @@ describe('generic block value signature help', () => {
     expect(schedule('run = |')).toBeNull();
   });
 
-  it('returns null for a block value without a function call', () => {
-    expect(help(['policy_select read_own {', '  target = |', '}'].join('\n'))).toBeNull();
-  });
+  it.each(['target = |', 'roles = [admin, |', 'permissive = |', 'using = |'])(
+    'returns null for a block value without a function call: %s',
+    (entry) => {
+      expect(help(['policy_select read_own {', `  ${entry}`, '}'].join('\n'))).toBeNull();
+    },
+  );
 });
