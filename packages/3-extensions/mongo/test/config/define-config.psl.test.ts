@@ -49,7 +49,7 @@ describe('a Prisma 8 Mongo schema read through defineConfig', () => {
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        code: 'PSL_UNRESOLVED_REFERENCE',
         message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}" (stored as BSON ${bsonType}).`,
       }),
     ]);
