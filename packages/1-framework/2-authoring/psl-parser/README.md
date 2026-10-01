@@ -94,8 +94,6 @@ That third scope holds names nobody declared in a schema: the scalars, type cons
 
 For `ns.Name`, first resolve `ns` through the lexical scope chain and require a user or contributed namespace. Then look up `Name` only within that selected namespace. A user namespace hides a contributed namespace of the same name without fallthrough; a missing member never falls back to a top-level or contributed type.
 
-The binder uses one abstract `Scope` with contributed, document, and namespace implementations. An explicit `ScopeStack` tracks entry and exit during binding. One retained `WeakMap<SyntaxNode, Scope>` associates namespace declaration nodes with their scopes, including reopened declarations; `scopeAt` uses ancestor navigation and otherwise returns the document scope. There is no parallel symbol-to-scope index.
-
 Qualified references resolve at whole-`QualifiedName` granularity: in `app.Item`, the segments `app` and `Item` do not resolve separately — the one `QualifiedName` node carries the one resolution.
 
 ### Resolution kinds
@@ -132,7 +130,7 @@ Consumers construct parse-time contexts with the snapshot's `Binder`. Base `Attr
 - return the written name for a `crossSpace` reference, which is deferred by design;
 - **fail the argument, carrying no diagnostics of their own**, when the binder bound nothing or bound something that is not a field. An unresolved reference has already been reported by the binder; an absent binding can instead mean a non-reference alternative succeeded. A failed argument fails its attribute rather than quietly yielding a short list or a missing key.
 
-`entityRef` accepts bare identifiers only, reads the committed resolution, fails without diagnostics for absent or unresolved bindings, checks the declaration against its selector, and returns the matching declaration and namespace. Selectors accept a model, composite type, named type, or block with an exact keyword. Selector checks happen only during interpretation, not binding; a wrong-kind nearer declaration cannot be skipped to find an outer match.
+`entityRef` reads the committed resolution, fails without diagnostics for absent or unresolved bindings, checks the declaration against its selector, and returns the matching declaration and namespace. Selector checks happen only during interpretation, not binding.
 
 Shape and arity stay the combinator's voice — "Expected a field name", "Expected a list of field name", wrong argument counts. Only *existence* belongs to the binder. The split is the point: resolution is the binder's, shape is the spec's, and no schema error is ever reported twice.
 
@@ -146,7 +144,7 @@ The binder stores one final resolution per syntax node. `symbolForNode(node)` ex
 
 ### Snapshot lifetime
 
-The binder is snapshot-scoped: an edit produces new document-derived state, and the old symbol table, binder results, and retained scopes are dropped whole. There is no invalidation protocol. Binding eagerly records declarations and type references first, then attribute and registered-block references that can depend on those types. Full-document reparsing and complete diagnostic publication already require the full walk; laziness would add a second way to reconstruct reference context, and dependency tracking would add invalidation bookkeeping without avoiding that work. See [ADR 163](../../../../docs/architecture%20docs/adrs/ADR%20163%20-%20Provider-invoked%20source%20interpretation%20packages.md).
+The binder is snapshot-scoped: an edit produces a new document, symbol table, and binder, and the old set is dropped whole. There is no invalidation protocol.
 
 The contributed-type scope is the exception — it is configuration-derived, not document-derived, and is shared across snapshots. That sharing is keyed by the **object identity of the `typeConstructors` registry** the caller passes: pass the same registry object and two binders share one scope; rebuild the registry on every parse and sharing silently degrades to a per-snapshot scope. Resolution stays correct either way, but the guarantee is gone, so hold the registry alongside the configuration it came from.
 

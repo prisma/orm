@@ -46,19 +46,8 @@ The CLI / ControlClient remain source-agnostic and do not import PSL-specific pa
 ## Implementation notes (non-normative)
 
 - The interpretation package accepts parsed `documents`, their `sources`, and a **PSL symbol table**, alongside target composition inputs, and produces `Contract` (e.g. `interpretPslDocumentToSqlContract` in `@internal/sql-contract-psl`).
-- The provider owns parsing and declaration collection: it calls `parse(text, path)` for each source, merges the returned source registries, then calls `buildSymbolTable({ documents, sources })` (from `@internal/psl-parser`). The symbol table is family-blind: it collects declarations and reports duplicates without target types or block descriptors. The provider seeds the combined parse + symbol-table diagnostics and passes `documents`, `sources`, and `symbolTable` to the interpreter.
-- Reference binding is separate from declaration collection. The SQL interpreter uses `createSqlBinder`, which composes types and attribute specs and invokes the framework's `createBinder({ sources, symbolTable, typeConstructors, attributeSpecs, controlMutationDefaults, pslBlockDescriptors, describeUnsupportedAttribute })`. The binder resolves references against those injected contributions; the interpreter consumes its results and diagnostics before family-specific interpretation.
+- The provider owns parsing and declaration collection: it calls `parse(text, path)` for each source, then `buildSymbolTable({ documents, sources })` (from `@internal/psl-parser`), seeds the combined parse + symbol-table diagnostics, and passes the parsed documents, sources, and symbol table to the interpreter.
 - File paths belong in diagnostics only; canonical artifacts must not embed provenance.
-
-## Shared binding and snapshot lifetime
-
-Declaration collection remains eager and family-blind; the symbol table is data, not a resolver. A separate interface-and-factory service owns binding state. `createBinder` returns `{ binder, diagnostics }` after two eager phases: declaration and type-reference binding, then attribute and registered-block reference binding using those type results. `declaredSymbol(node)` and `symbolForNode(node)` read stable snapshot results; `scopeAt(node)` exposes the lexical scope for lookup and completion enumeration. Resolution diagnostics are returned by the factory rather than produced by queries, so diagnostic completeness does not depend on which editor feature ran.
-
-Unqualified lookup is kind-blind: declaring namespace → document top level → configured contributed types. The nearest declaration wins even if a reference site requires a different kind; kind and entity-selector validation happen after lookup. Sibling namespaces are never searched. For `ns.Name`, the qualifier follows that same lookup rule, then only the selected namespace's members are searched. A user namespace shadows a contributed namespace without member fallthrough, and a missing member never falls back to lexical lookup.
-
-Document changes discard the snapshot's symbol table, binder results, and retained lexical scopes together. The contributed-type scope is cached separately by type-constructor registry identity, so callers retain that registry with the configuration and replace it when configuration changes. Family knowledge enters through injected types, attribute factories, block descriptors, and diagnostic callbacks, not parser dependencies on targets.
-
-Eager binding fits full-document reparsing and consumers that need complete diagnostics after an edit. Lazy binding would require a second entry path reconstructing attribute context from a reference node, only for diagnostics to force the full walk anyway. Dependency-tracked invalidation adds revision and dependency bookkeeping without avoiding the existing full parse and collection work; abandoning snapshot state keeps ownership explicit. The query API does not promise eager execution, but the factory does promise complete binding diagnostics on return.
 
 ## Related
 

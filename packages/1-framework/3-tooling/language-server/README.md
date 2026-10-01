@@ -23,9 +23,7 @@ Equivalent file URIs share one document and one normalized URI for source filena
 
 Each immutable document snapshot parses lazily, at most once, and owns its AST, source registry, and raw parser diagnostics. Reading text alone does not parse. Projects reuse unchanged snapshots across configuration reloads while independently rebuilding combined sources, symbols, binding, and interpretation. `ProjectArtifacts.document(uri)` returns the snapshot itself without parsing. `ProjectArtifacts.diagnostics(uri)` combines mapped parse and symbol diagnostics with one semantic diagnostic source; whole-project reports supply precomputed symbol diagnostics so each report scans the project once for symbols. Interpretation is memoized per project revision, not attached to a document snapshot. Edits and disk invalidation produce new snapshots without changing previous parses.
 
-The semantic diagnostic source is the configured interpreter when available: its warnings and failures are published without appending editor-binder diagnostics. Only a configured project without an interpreter publishes binder diagnostics from the control stack. Interpreter exceptions retain `PRISMA_NEXT_INTERPRETATION_FAILED` and retry behavior, not binder fallback; cancellation propagates. A failed first config load does not create a standalone binder project.
-
-`ProjectArtifacts` memoizes a binder alongside the shared symbol table for the participating document snapshots. Snapshot or membership changes discard combined sources, symbols, binding, and interpretation together; configuration reloads replace those project artifacts. The binder is created on demand, but binding itself is eager. Its configuration-derived contributed types can be shared across document edits when the control stack retains the same type registry. No node-keyed binding result is reused across changed parse snapshots.
+Semantic diagnostics come from the configured interpreter when available, or from binding when no interpreter is configured. Interpreter failures do not switch diagnostic sources.
 
 ## Internal ownership
 
@@ -48,14 +46,6 @@ The registry allocates a member event's sequence before asynchronous config disc
 Attribute, argument, function, identifier-value, registered scalar, generic block, and block parameter completions use contribution documentation as their detail when available. Scalar constructors, generic block descriptors, and block parameter descriptors can supply this text through their optional `documentation` property. Undocumented descriptors retain their generic completion details.
 
 Required argument snippets use argument names as editable placeholders. Generic block snippets insert required parameters with named placeholders, omitting optional parameters and attributes. Blocks without required parameters include a comment hint describing their contents. Field-reference completions suggest scalar fields only, excluding relation and composite fields.
-
-Type and bare entity-reference completions enumerate `binder.scopeAt(node).entries()`, sharing the resolver's kind-blind nearest-name shadowing. Category and `EntitySelector` filters run afterward, so a nearer declaration of the wrong kind never exposes a hidden outer match. Entity selectors support models, composite types, named types, and blocks with an exact keyword; self references remain candidates. `entityRef` accepts bare identifiers only, so completion does not suggest qualified entity-reference syntax.
-
-Qualified type completion resolves the qualifier through the same lexical scope and enumerates only that user or contributed namespace's members. Missing members do not fall back to lexical names. Callable contributed types retain constructor snippets rather than being presented as plain types. Attribute and signature contexts find their declared owners through the binder; incomplete attribute names still use the contribution specs.
-
-## Semantic tokens
-
-Reference classification uses committed binder results, including named-type base annotations. Expressions without bindings use plain `type` tokens without declaration modifiers rather than guessing from spelling. Syntactic properties, decorators, and literals retain their presentation rules; highlighting does not create new resolution diagnostics.
 
 ## Signature help
 
