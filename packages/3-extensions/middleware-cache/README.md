@@ -58,7 +58,7 @@ The middleware caches a read that carries `cacheAnnotation`, runs in runtime sco
 | No `cacheAnnotation` on the plan | Pass through; never cached. |
 | `cacheAnnotation({})` | Cache lookup under the derived key; store on miss and success. |
 | `cacheAnnotation({ key })` | As above, under the supplied key, used verbatim. |
-| `cacheAnnotation({ meta })` | As above; `meta` is passed to `store.set` with the entry (see [meta](#meta)). |
+| `cacheAnnotation({ meta })` | As above; `meta` is passed to `store.get`, and to `store.set` on the entry `get` returned (see [meta](#meta)). |
 | `cacheAnnotation({ bypass: true })` | Pass through: neither read from nor write to the cache. |
 
 The annotation is **read-only**: it declares `applicableTo: ['read']`, so a write terminal rejects it both at compile time and at run time. The middleware itself has no way to cache a write.
@@ -116,14 +116,14 @@ const cache = createCacheMiddleware({
 The store is a cache of values. This middleware stores `CachedRows`, the raw rows of one read.
 
 ```typescript
-interface CacheEntry<TMeta = unknown, TValue = unknown> {
+interface CacheEntry<TMeta = unknown, TValue = CachedRows> {
   readonly key: string;
   readonly meta: TMeta | undefined;
   readonly version: number;
   readonly data: { readonly empty: true } | { readonly empty: false; readonly value: TValue };
 }
 
-interface CacheStore<TMeta = unknown, TValue = unknown> {
+interface CacheStore<TMeta = unknown, TValue = CachedRows> {
   get(target: {
     readonly key: string;
     readonly meta: TMeta | undefined;
@@ -154,7 +154,7 @@ The rules a store must follow:
 - **`unset` must not run a query through the runtime that uses the middleware.**
 - **Compare `meta` by value.** The `meta` passed to `unset` is a different object from the one passed to `get` and `set`. A store shared between processes must serialise `meta` itself.
 
-A store used with this middleware holds rows: `createCacheMiddleware` takes a `CacheStore<TMeta, CachedRows>`, and a store of any other value type, `unknown` included, is a type error. `TValue` exists so the same store type can serve other caches.
+A store used with this middleware holds rows: `createCacheMiddleware` takes a `CacheStore<TMeta, CachedRows>`, and a store of any other value type, `unknown` included, is a type error. `TValue` defaults to `CachedRows`, so `CacheStore<TMeta>` is a store of rows; it exists so the same store type can serve other caches.
 
 The default store lives in one process and is **not** shared across replicas. For shared caching, supply a custom store. The guard for overlapping reads then works across every process that uses the store, because the store owns the versions:
 
@@ -204,7 +204,7 @@ const cache = createCacheMiddleware({ store: redis });
 `createInMemoryCacheStore<TMeta, TValue>({ maxEntries?, ttlMs?, clock? })` is what `createCacheMiddleware()` uses when no `store` is given. It holds rows (`CachedRows`) unless you give it another value type.
 
 - **Size.** At most `maxEntries` values, a positive integer (default 1000). Reads and writes both count as a use; the least recently used value is evicted first.
-- **Lifetime.** Every value lives `ttlMs` after its `set`, a positive number of milliseconds (default 60 000). `ttlMs: Infinity` never expires. A key's version is kept for `ttlMs` after the `unset` that moved it, so a key invalidated and never stored again costs one number until then. Any other `maxEntries` or `ttlMs`, such as `0` or `NaN`, throws `RUNTIME.ARGUMENT_INVALID`. Expiry is measured with `clock` (default `Date.now`); an expired value reads as empty and is dropped.
+- **Lifetime.** Every value lives `ttlMs` after its `set`, a positive number of milliseconds (default 60 000). `ttlMs: Infinity` never expires. A key's version is kept for `ttlMs` after the `unset` that moved it. Versions are not bounded by `maxEntries`. A forgotten version reads as 0, so with a finite `ttlMs` a read that takes longer than `ttlMs` and overlaps an `invalidate` can store stale rows. With `ttlMs: Infinity`, the versions of invalidated keys are never forgotten and grow with the number of distinct keys invalidated. Any other `maxEntries` or `ttlMs`, such as `0` or `NaN`, throws `RUNTIME.ARGUMENT_INVALID`. Expiry is measured with `clock` (default `Date.now`); an expired value reads as empty and is dropped.
 - **`meta`.** `get` and `set` ignore it. `unset({ keys })` removes those keys; `unset` with any `meta` other than `undefined`, including `null`, throws `RUNTIME.CACHE_STORE_META_UNSUPPORTED` and removes nothing.
 
 To change the defaults, create the store yourself:
@@ -219,7 +219,7 @@ const cache = createCacheMiddleware({
 
 `cacheAnnotation({ meta })` hands any value to the store with the entry. The middleware never reads it. Stores use it to group entries, for example by tag, or to give an entry its own lifetime.
 
-- **Passed by reference.** The store's `set` receives the object you passed, after the read's rows have all arrived. Do not mutate it in between.
+- **Passed by reference.** The store's `get` receives the object you passed when the read starts, and its `set` receives it again on the entry, after the read's rows have all arrived. Do not mutate it in between.
 - **Visible to other middleware.** `meta` sits in `plan.meta.annotations`, so any middleware or telemetry that serialises annotations sees it. Keep secrets out.
 
 A tag-based policy lives in the store. `set` indexes `meta.tags`; `unset({ meta: { tags } })` removes every entry with one of those tags:
@@ -242,7 +242,7 @@ interface TagMeta {
   tags: string[];
 }
 
-class TagStore implements CacheStore<TagMeta, CachedRows> {
+class TagStore implements CacheStore<TagMeta> {
   // get({ key, meta }), set(entry, value) and unset({ keys, meta }), with meta: TagMeta | undefined
 }
 
@@ -292,7 +292,7 @@ The middleware bypasses the cache entirely when `RuntimeMiddlewareContext.scope`
 This package is a read-through cache with a control surface. It carries data between the annotations and the store and never interprets it. Its primitives are:
 
 - keys: the annotation `key`, and the `deriveKey` option with its default `deriveKeyFromContentHash`;
-- `meta` on the annotation, handed to the store's `set`;
+- `meta` on the annotation, handed to the store's `get` and `set`;
 - `invalidate({ keys, meta })`, handed to the store's `unset`;
 - `bypass` on the annotation;
 - the `CacheStore` interface, and the default in-memory store.

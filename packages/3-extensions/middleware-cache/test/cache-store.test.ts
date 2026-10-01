@@ -22,7 +22,7 @@ async function storedValue<TValue>(store: CacheStore<unknown, TValue>, key: stri
   return data.empty ? undefined : data.value;
 }
 
-async function versionOf(store: CacheStore, key: string) {
+async function versionOf<TValue>(store: CacheStore<unknown, TValue>, key: string) {
   return (await store.get({ key, meta: undefined })).version;
 }
 
@@ -180,6 +180,34 @@ describe('createInMemoryCacheStore', () => {
 
       time.advanceTo(100);
       expect(await versionOf(store, 'k')).toBe(0);
+    });
+
+    it('keeps the versions of other keys when one key is invalidated again', async () => {
+      const time = controlledClock();
+      const store = createInMemoryCacheStore<unknown, unknown>({ ttlMs: 100, clock: time.clock });
+      await store.unset({ keys: ['a'], meta: undefined });
+      time.advanceTo(50);
+      await store.unset({ keys: ['b'], meta: undefined });
+      time.advanceTo(60);
+      await store.unset({ keys: ['a'], meta: undefined });
+
+      time.advanceTo(150);
+
+      expect(await versionOf(store, 'b')).toBe(0);
+      expect(await versionOf(store, 'a')).toBe(2);
+    });
+
+    it('never forgets a version when ttlMs is Infinity', async () => {
+      const time = controlledClock();
+      const store = createInMemoryCacheStore<unknown, unknown>({
+        ttlMs: Number.POSITIVE_INFINITY,
+        clock: time.clock,
+      });
+      await store.unset({ keys: ['k'], meta: undefined });
+
+      time.advanceTo(Number.MAX_SAFE_INTEGER);
+
+      expect(await versionOf(store, 'k')).toBe(1);
     });
   });
 

@@ -204,6 +204,17 @@ describe('createCacheMiddleware — misses overlapping invalidate', () => {
     expect(store.inner.get('A')).toEqual([{ id: 1 }]);
   });
 
+  it('stores a miss with meta that started after an invalidate({ meta }) naming that meta', async () => {
+    const store = spyStore();
+    const mw = createCacheMiddleware({ store });
+    const ctx = makeCtx();
+
+    await mw.invalidate({ meta: { tags: ['users'] } });
+    await finishMiss(mw, await startMiss(mw, ctx, 'A', { tags: ['users'] }), ctx);
+
+    expect(store.inner.get('A')).toEqual([{ id: 1 }]);
+  });
+
   it('stores a miss that started after an invalidate', async () => {
     const store = spyStore();
     const mw = createCacheMiddleware({ store });

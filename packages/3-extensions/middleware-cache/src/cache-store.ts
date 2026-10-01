@@ -17,7 +17,7 @@ export type CachedRows = readonly Record<string, unknown>[];
  * - `data` — `{ empty: true }` when the store holds no live value for the key, otherwise that
  *   value.
  */
-export interface CacheEntry<TMeta = unknown, TValue = unknown> {
+export interface CacheEntry<TMeta = unknown, TValue = CachedRows> {
   readonly key: string;
   readonly meta: TMeta | undefined;
   readonly version: number;
@@ -53,7 +53,7 @@ export interface CacheEntry<TMeta = unknown, TValue = unknown> {
  * `TMeta` is the shape of `meta` the store understands. The middleware does not check that a read
  * annotation's `meta` has this shape; see `cacheAnnotation`.
  */
-export interface CacheStore<TMeta = unknown, TValue = unknown> {
+export interface CacheStore<TMeta = unknown, TValue = CachedRows> {
   get(target: {
     readonly key: string;
     readonly meta: TMeta | undefined;
@@ -71,8 +71,11 @@ export interface CacheStore<TMeta = unknown, TValue = unknown> {
  * - `maxEntries` — the most values kept, a positive integer; the least recently used is evicted
  *   first. Default 1000.
  * - `ttlMs` — how long a value lives after its `set`, and how long a key's version is kept after
- *   the `unset` that moved it, a positive number of milliseconds. `Infinity` never expires.
- *   Default 60 000.
+ *   the `unset` that moved it, a positive number of milliseconds. Default 60 000. Versions are not
+ *   bounded by `maxEntries`. A forgotten version reads as 0, so a read that takes longer than
+ *   `ttlMs` and overlaps an `invalidate` can store stale rows. `Infinity` never expires values or
+ *   versions: the versions of invalidated keys are never forgotten, and grow with the number of
+ *   distinct keys invalidated.
  * - `clock` — the time source for expiry. Default `Date.now`.
  */
 export interface InMemoryCacheStoreOptions {
@@ -112,11 +115,10 @@ function invalidOption(argument: 'maxEntries' | 'ttlMs', received: number, expec
 
 /**
  * The default cache store: a least-recently-used map with one lifetime for every value, local to
- * the process. A key's version is kept for `ttlMs` after the `unset` that moved it, so a key
- * invalidated and never stored again costs one number until then. It ignores `meta` in `get` and
- * `set`, and its `unset` rejects any `meta`, including `null`, before changing anything. It holds
- * `CachedRows` unless given another `TValue`. It throws
- * `RUNTIME.ARGUMENT_INVALID` for a `maxEntries` or `ttlMs` outside the ranges above.
+ * the process. It holds `CachedRows` unless given another `TValue`. A key's version is kept for
+ * `ttlMs` after the `unset` that moved it (see `InMemoryCacheStoreOptions`). It ignores `meta` in
+ * `get` and `set`, and its `unset` rejects any `meta`, including `null`, before changing anything.
+ * It throws `RUNTIME.ARGUMENT_INVALID` for a `maxEntries` or `ttlMs` outside the ranges above.
  */
 export function createInMemoryCacheStore<TMeta = unknown, TValue = CachedRows>(
   options?: InMemoryCacheStoreOptions,

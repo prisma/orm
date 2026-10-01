@@ -31,6 +31,35 @@ class TagStore implements CacheStore<TagMeta, CachedRows> {
   }): Promise<void> {}
 }
 
+class OneArgumentTagStore implements CacheStore<TagMeta> {
+  async get(target: {
+    readonly key: string;
+    readonly meta: TagMeta | undefined;
+  }): Promise<CacheEntry<TagMeta>> {
+    return { key: target.key, meta: target.meta, version: 0, data: { empty: true } };
+  }
+  async set(_entry: CacheEntry<TagMeta>, _value: CachedRows): Promise<boolean> {
+    return true;
+  }
+  async unset(_target: {
+    readonly keys: readonly string[] | undefined;
+    readonly meta: TagMeta | undefined;
+  }): Promise<void> {}
+}
+
+test('a store written as CacheStore<TagMeta> holds rows and fits the middleware', () => {
+  expectTypeOf<CacheStore<TagMeta>>().toEqualTypeOf<CacheStore<TagMeta, CachedRows>>();
+  expectTypeOf(createCacheMiddleware({ store: new OneArgumentTagStore() })).toEqualTypeOf<
+    CacheMiddleware<TagMeta>
+  >();
+});
+
+test('a bare CacheStore holds rows and fits the middleware', () => {
+  const store: CacheStore = createInMemoryCacheStore();
+
+  expectTypeOf(createCacheMiddleware({ store })).toEqualTypeOf<CacheMiddleware<unknown>>();
+});
+
 test('createCacheMiddleware infers TMeta from the store', () => {
   const cache = createCacheMiddleware({ store: new TagStore() });
 
