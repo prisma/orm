@@ -73,9 +73,12 @@ describe('renderDefaultLiteral array columns', () => {
       } as StorageColumn;
       const columnTypeSql = buildColumnTypeSql(enumList, new Map(), {}, false);
 
-      expect(renderDefaultLiteral(['asc'], { many: { elementNullable: false }, nativeType: columnTypeSql })).toBe(
-        `ARRAY['asc']::${cast}`,
-      );
+      expect(
+        renderDefaultLiteral(['asc'], {
+          many: { elementNullable: false },
+          nativeType: columnTypeSql,
+        }),
+      ).toBe(`ARRAY['asc']::${cast}`);
     },
   );
 

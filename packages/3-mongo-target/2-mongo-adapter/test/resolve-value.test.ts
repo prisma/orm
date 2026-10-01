@@ -119,6 +119,7 @@ describe('resolveValue', () => {
       mongoCodec({
         typeId: 'test/in-operand@1',
         decode: (wire: string) => wire,
+        decodeJson: (json) => decodeJsonString('test/in-operand@1', json),
         encode,
       }),
     );

@@ -616,7 +616,10 @@ describe('check emission — guards', () => {
         valueSet: { kind: 'valueSet', values: ['1', '10'] },
         checks: many
           ? [
-              wire('User_level_check', `array_remove("level"::text[], NULL) <@ ARRAY['1', '10']::text[]`),
+              wire(
+                'User_level_check',
+                `array_remove("level"::text[], NULL) <@ ARRAY['1', '10']::text[]`,
+              ),
               wire('User_level_elem_not_null', `array_position("level", NULL) IS NULL`),
             ]
           : [wire('User_level_check', `"level" IN ('1', '10')`)],

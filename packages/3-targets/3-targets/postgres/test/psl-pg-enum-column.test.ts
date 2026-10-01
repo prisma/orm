@@ -245,6 +245,7 @@ namespace auth {
     const fields = result.value.domain.namespaces['auth']?.models['AuthSession']?.fields;
     const aal = {
       nullable: false,
+      many: false,
       type: {
         kind: 'scalar',
         codecId: 'pg/enum@1',
@@ -253,7 +254,7 @@ namespace auth {
     };
     expect({ aal: fields?.['aal'], aals: fields?.['aals'] }).toEqual({
       aal,
-      aals: { ...aal, many: true },
+      aals: { ...aal, many: { elementNullable: false } },
     });
   });
 

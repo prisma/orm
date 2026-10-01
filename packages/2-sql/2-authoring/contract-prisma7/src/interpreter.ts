@@ -1194,8 +1194,8 @@ function readField(args: ReadFieldArgs): void {
     descriptor: resolved.descriptor,
     nullable: field.optional || field.list,
     // Prisma 7 creates no CHECK constraint on list columns; Prisma 8 would derive one.
-    many: field.list ? { elementNullable: false } : false,
-    ...(field.list ? { noCheck: ['elementNotNull' as const] } : {}),
+    many: field.list,
+    ...(field.list ? { elementNullable: false, noCheck: ['elementNotNull' as const] } : {}),
     ...ifDefined('default', lowered?.storage),
     ...ifDefined('executionDefaults', executionDefaults),
   });

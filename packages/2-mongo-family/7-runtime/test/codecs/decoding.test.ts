@@ -150,6 +150,7 @@ describe('decodeMongoRow', () => {
         typeId: 'test/nullable-array@1',
         encode: (value: string) => value,
         decode: decodeSpy,
+        decodeJson: (json) => decodeJsonString('test/nullable-array@1', json).toUpperCase(),
       }),
     );
     const shape: MongoResultShape = {

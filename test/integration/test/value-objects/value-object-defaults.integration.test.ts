@@ -79,17 +79,19 @@ model User {
 }`);
 
     expect(columns).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
       home: {
         nativeType: 'text',
         codecId: 'sqlite/json@1',
         nullable: false,
+        many: false,
         default: { kind: 'literal', value: { street: 'x' } },
       },
       homes: {
         nativeType: 'text',
         codecId: 'sqlite/json@1',
         nullable: false,
+        many: false,
         default: { kind: 'literal', value: [{ street: 'y' }] },
       },
     });
@@ -111,10 +113,11 @@ model User {
       nativeType: 'text',
       codecId: 'sqlite/json@1',
       nullable: false,
+      many: false,
       default: { kind: 'literal', value },
     });
     expect(columns).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
       emptyA: jsonWithDefault([]),
       emptyB: jsonWithDefault([]),
       filledA: jsonWithDefault([{ street: 'x' }]),
@@ -223,11 +226,12 @@ model User {
   home Address? @default(json\`null\`)
 }`),
     ).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false, many: false },
       home: {
         nativeType: 'text',
         codecId: 'sqlite/json@1',
         nullable: true,
+        many: false,
         default: { kind: 'literal', value: null },
       },
     });
