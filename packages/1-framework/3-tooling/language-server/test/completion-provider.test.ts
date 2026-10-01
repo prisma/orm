@@ -452,15 +452,15 @@ namespace app {
 }
 namespace other { model Hidden { id Int } }`,
     });
-    expect(items.map(({ label, detail }) => [label, detail])).toEqual([
+    expect(items.map(({ label, detail }) => [label, detail]).sort()).toEqual([
+      ['Address', 'Composite type'],
       ['Boolean', 'Configured scalar type'],
       ['DateTime', 'Configured scalar type'],
-      ['String', 'Configured scalar type'],
       ['Int', 'Model'],
       ['Local', 'Model'],
-      ['ZRoot', 'Model'],
-      ['Address', 'Composite type'],
+      ['String', 'Configured scalar type'],
       ['ZAddress', 'Composite type'],
+      ['ZRoot', 'Model'],
       ['app', 'Namespace'],
       ['other', 'Namespace'],
     ]);
@@ -1038,36 +1038,25 @@ namespace app {
     );
   }, 5_000);
 
-  it('returns stable bare model field type completion candidates', () => {
+  it('returns bare model field type completion candidates without custom ranking', () => {
     const { items, sourceFile, cursorOffset } = complete(
       ['model Post {', '  author |', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual([
-      'Boolean',
-      'DateTime',
-      'Int',
-      'String',
-      'Post',
-      'User',
-      'Address',
-      'Email',
-      'UserId',
-      'auth',
+    expect(items.map(({ label, detail }) => [label, detail]).sort()).toEqual([
+      ['Address', 'Composite type'],
+      ['Boolean', 'Configured scalar type'],
+      ['DateTime', 'Configured scalar type'],
+      ['Email', 'Scalar type'],
+      ['Int', 'Configured scalar type'],
+      ['Post', 'Model'],
+      ['String', 'Configured scalar type'],
+      ['User', 'Model'],
+      ['UserId', 'Type alias'],
+      ['auth', 'Namespace'],
     ]);
-    expect(items.map((item) => item.detail)).toEqual([
-      'Configured scalar type',
-      'Configured scalar type',
-      'Configured scalar type',
-      'Configured scalar type',
-      'Model',
-      'Model',
-      'Composite type',
-      'Scalar type',
-      'Type alias',
-      'Namespace',
-    ]);
-    expect(items[0]?.textEdit).toEqual({
+    for (const item of items) expect(item).not.toHaveProperty('sortText');
+    expect(completionItemByLabel(items, 'Boolean').textEdit).toEqual({
       range: {
         start: sourceFile.positionAt(cursorOffset),
         end: sourceFile.positionAt(cursorOffset),
@@ -1081,15 +1070,15 @@ namespace app {
       ['model Post {', '  reviewer U|', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual([
+    expect(items.map((item) => item.label).sort()).toEqual([
+      'Address',
       'Boolean',
       'DateTime',
-      'Int',
-      'String',
-      'Post',
-      'User',
-      'Address',
       'Email',
+      'Int',
+      'Post',
+      'String',
+      'User',
       'UserId',
       'auth',
     ]);
@@ -1110,15 +1099,15 @@ namespace app {
       ['model Post {', '  reviewer a|', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual([
+    expect(items.map((item) => item.label).sort()).toEqual([
+      'Address',
       'Boolean',
       'DateTime',
-      'Int',
-      'String',
-      'Post',
-      'User',
-      'Address',
       'Email',
+      'Int',
+      'Post',
+      'String',
+      'User',
       'UserId',
       'auth',
     ]);
@@ -1141,8 +1130,8 @@ namespace app {
       ['model Post {', '  owner auth.|', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual(['Account', 'User', 'Profile']);
-    expect(items[0]?.textEdit).toEqual({
+    expect(items.map((item) => item.label).sort()).toEqual(['Account', 'Profile', 'User']);
+    expect(completionItemByLabel(items, 'Account').textEdit).toEqual({
       range: {
         start: sourceFile.positionAt(cursorOffset),
         end: sourceFile.positionAt(cursorOffset),
@@ -1156,7 +1145,8 @@ namespace app {
       ['model Post {', '  owner auth.U|', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual(['Account', 'User', 'Profile']);
+    expect(items.map((item) => item.label).sort()).toEqual(['Account', 'Profile', 'User']);
+    for (const item of items) expect(item).not.toHaveProperty('sortText');
     expect(items.find((item) => item.label === 'User')).toMatchObject({
       filterText: 'User',
       detail: 'Model',
@@ -1356,7 +1346,7 @@ namespace app {
   });
 
   it(
-    'lists deprecated Mongo scalar names last, tagged deprecated, naming the replacement',
+    'lists deprecated Mongo scalar names tagged deprecated, naming the replacement',
     async () => {
       const { mongoScalarAuthoringTypes } = await importFromPackageRoot<{
         readonly mongoScalarAuthoringTypes: AuthoringTypeNamespace;
@@ -1370,9 +1360,7 @@ namespace app {
         ]),
         controlMutationDefaults,
       });
-      const scalars = [...items]
-        .filter((item) => item.kind === CompletionItemKind.Keyword)
-        .sort((a, b) => (a.sortText ?? '').localeCompare(b.sortText ?? ''));
+      const scalars = items.filter((item) => item.kind === CompletionItemKind.Keyword);
       const current = ['Int32', 'Double', 'Bool', 'Date'];
       const deprecated = [
         ['Int', 'Int32'],
@@ -1383,7 +1371,7 @@ namespace app {
 
       expect(
         scalars
-          .slice(-4)
+          .filter((item) => item.tags?.includes(CompletionItemTag.Deprecated))
           .map((item) => item.label)
           .sort(),
       ).toEqual(deprecated.map(([name]) => name).sort());

@@ -30,16 +30,11 @@ export type ScopeResolution =
   | { readonly kind: 'contributedNamespace'; readonly symbol: ContributedNamespaceSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol };
 
-export interface Scope {
-  lookup(name: string): ScopeResolution | undefined;
-  entries(): Iterable<readonly [string, ScopeResolution]>;
-}
-
 function* recordNames(...records: readonly Readonly<Record<string, unknown>>[]): Iterable<string> {
   for (const record of records) yield* Object.keys(record);
 }
 
-abstract class LexicalScope implements Scope {
+export abstract class Scope {
   constructor(protected readonly parent: Scope | undefined) {}
 
   abstract lookup(name: string): ScopeResolution | undefined;
@@ -76,10 +71,11 @@ function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolut
   return undefined;
 }
 
-class ContributedScope implements Scope {
+class ContributedScope extends Scope {
   readonly #registry: ContributedTypeScope;
 
   constructor(registry: ContributedTypeScope) {
+    super(undefined);
     this.#registry = registry;
   }
 
@@ -88,14 +84,12 @@ class ContributedScope implements Scope {
     return member === undefined ? undefined : contributedResolution(member);
   }
 
-  *entries(): Iterable<readonly [string, ScopeResolution]> {
-    for (const [name, member] of this.#registry.entries()) {
-      yield [name, contributedResolution(member)];
-    }
+  protected *ownNames(): Iterable<string> {
+    for (const [name] of this.#registry.entries()) yield name;
   }
 }
 
-class DocumentScope extends LexicalScope {
+class DocumentScope extends Scope {
   readonly #records: TopLevelRecords;
 
   constructor(records: TopLevelRecords, parent: Scope | undefined) {
@@ -130,7 +124,7 @@ class DocumentScope extends LexicalScope {
   }
 }
 
-class NamespaceScope extends LexicalScope {
+class NamespaceScope extends Scope {
   readonly #namespace: NamespaceSymbol;
 
   constructor(namespace: NamespaceSymbol, parent: Scope | undefined) {

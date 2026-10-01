@@ -1288,15 +1288,16 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     await harness.waitForDiagnostics(schemaUri);
 
     const items = completionItems(await requestCompletion(harness, schemaUri, position));
-    expect(items.map((item) => item.label)).toEqual([
+    expect(items.map((item) => item.label).sort()).toEqual([
+      'Address',
       'Boolean',
       'DateTime',
       'Int',
-      'String',
       'Post',
+      'String',
       'User',
-      'Address',
     ]);
+    for (const item of items) expect(item).not.toHaveProperty('sortText');
   });
 
   it('refreshes completion artifacts from the current buffer before classifying', async () => {
@@ -1325,12 +1326,12 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     });
 
     const items = completionItems(await requestCompletion(harness, schemaUri, updated.position));
-    expect(items.map((item) => item.label)).toEqual([
+    expect(items.map((item) => item.label).sort()).toEqual([
       'Boolean',
       'DateTime',
       'Int',
-      'String',
       'Post',
+      'String',
       'User',
     ]);
     await republished;
@@ -1389,12 +1390,12 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     });
 
     const items = completionItems(await requestCompletion(harness, schemaUri, updated.position));
-    expect(items.map((item) => item.label)).toEqual([
+    expect(items.map((item) => item.label).sort()).toEqual([
       'Boolean',
       'DateTime',
       'Int',
-      'String',
       'Post',
+      'String',
       'User',
     ]);
     await republished;

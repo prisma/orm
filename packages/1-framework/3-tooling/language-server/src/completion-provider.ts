@@ -51,15 +51,6 @@ export interface ProvidePslCompletionItemsInput {
 
 type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
 
-type ModelTypeCompletionCandidateCategory =
-  | 'configuredScalar'
-  | 'model'
-  | 'compositeType'
-  | 'scalar'
-  | 'typeAlias'
-  | 'namespace'
-  | 'deprecatedScalar';
-
 interface DeclarationKeywordCompletionCandidate {
   readonly category: DeclarationKeywordCompletionCandidateCategory;
   readonly label: string;
@@ -70,7 +61,6 @@ interface DeclarationKeywordCompletionCandidate {
 }
 
 interface ModelTypeCompletionCandidate {
-  readonly category: ModelTypeCompletionCandidateCategory;
   readonly label: string;
   readonly insertText: string;
   readonly filterText: string;
@@ -78,16 +68,6 @@ interface ModelTypeCompletionCandidate {
   readonly kind: CompletionItemKind;
   readonly deprecated?: boolean;
 }
-
-const categoryOrder: Record<ModelTypeCompletionCandidateCategory, number> = {
-  configuredScalar: 0,
-  model: 1,
-  compositeType: 2,
-  scalar: 3,
-  typeAlias: 4,
-  namespace: 5,
-  deprecatedScalar: 6,
-};
 
 const declarationKeywordCategoryOrder: Record<
   DeclarationKeywordCompletionCandidateCategory,
@@ -515,7 +495,6 @@ function modelTypeCompletionItems(
     label: candidate.label,
     kind: candidate.kind,
     detail: candidate.detail,
-    sortText: sortText(candidate),
     filterText: candidate.filterText,
     textEdit: {
       range: replacementRange,
@@ -539,7 +518,6 @@ function typeCandidates(
         const detail = model ? 'Model' : 'Composite type';
         candidates.push({
           ...base,
-          category: resolution.kind,
           detail,
           kind: model ? CompletionItemKind.Class : CompletionItemKind.Struct,
         });
@@ -549,7 +527,6 @@ function typeCandidates(
         const scalar = refinesScalarType(resolution.symbol, source.binder);
         candidates.push({
           ...base,
-          category: scalar ? 'scalar' : 'typeAlias',
           detail: scalar ? 'Scalar type' : 'Type alias',
           kind: scalar ? CompletionItemKind.Unit : CompletionItemKind.Reference,
         });
@@ -559,7 +536,6 @@ function typeCandidates(
       case 'contributedNamespace':
         candidates.push({
           ...base,
-          category: 'namespace',
           detail: 'Namespace',
           kind: CompletionItemKind.Module,
         });
@@ -568,7 +544,6 @@ function typeCandidates(
         const descriptor = resolution.symbol.descriptor;
         candidates.push({
           ...base,
-          category: descriptor.deprecated === undefined ? 'configuredScalar' : 'deprecatedScalar',
           detail:
             descriptor.deprecated === undefined
               ? descriptor.documentation || 'Configured scalar type'
@@ -582,15 +557,11 @@ function typeCandidates(
         break;
     }
   }
-  return candidates.sort((left, right) => compareNames(sortText(left), sortText(right)));
+  return candidates;
 }
 
 function sortedUnique(names: readonly string[]): readonly string[] {
   return [...new Set(names)].sort(compareNames);
-}
-
-function sortText(candidate: ModelTypeCompletionCandidate): string {
-  return `${categoryOrder[candidate.category]}:${candidate.label}`;
 }
 
 function genericBlockParameterSortText(index: number, label: string): string {
