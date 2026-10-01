@@ -1,5 +1,10 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import {
+  getAuthoringTypeConstructor,
+  instantiateAuthoringTypeConstructor,
+} from '@internal/framework-components/authoring';
 import { type Codec, materializeCodec } from '@internal/framework-components/codec';
+import { parsePslPositionalArgs } from '@internal/psl-parser/interpret';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { PG_TEXT_CODEC_ID } from '../src/core/codec-ids';
@@ -7,8 +12,11 @@ import { parsePostgresDefault, postgresResolveDefault } from '../src/core/defaul
 import { parsePostgresListText } from '../src/core/list-decoder';
 import { type CatalogColumnType, introspectedNativeType } from '../src/core/native-type-normalizer';
 import { createPostgresTypeMap } from '../src/core/psl-build/postgres-type-map';
-import { CODEC_ID_BY_INFERRED_TYPE } from '../src/core/psl-infer/infer-default-codec';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
+import {
+  postgresNativeAuthoringTypes,
+  postgresScalarAuthoringTypes,
+} from '../src/core/type-constructors';
 import { enumTypes, type FidelityRow, rows } from './default-fidelity.rows';
 
 type Compared = JsonValue | ColumnDefault | undefined;
@@ -33,21 +41,39 @@ interface CatalogColumn extends CatalogColumnType {
 
 const enumNames: ReadonlySet<string> = new Set(enumTypes.map((enumType) => enumType.name));
 const typeMap = createPostgresTypeMap(enumNames);
+const typeConstructors = {
+  type: { ...postgresScalarAuthoringTypes, ...postgresNativeAuthoringTypes },
+};
 
-/** The codec `contract infer` binds to the column, as `inferredDefaultReadsBack` chooses it. */
+/** The codec and type parameters the type constructor `contract infer` writes names, as `contract emit` reads it. */
+function inferredCodecRef(pslType: { readonly name: string; readonly args?: readonly string[] }) {
+  const descriptor = getAuthoringTypeConstructor(typeConstructors, [pslType.name]);
+  if (descriptor === undefined) return undefined;
+  const args = parsePslPositionalArgs(descriptor.args ?? [], pslType.args ?? []);
+  return args === undefined ? undefined : instantiateAuthoringTypeConstructor(descriptor, args);
+}
+
+/** The codec `contract infer` binds to the column, as `inferredColumnDefaults` chooses it. */
 function columnCodec(nativeType: string): Codec {
   const elementType = nativeType.endsWith('[]') ? nativeType.slice(0, -2) : nativeType;
   const resolution = typeMap.resolve(elementType, undefined);
   if ('unsupported' in resolution) throw new Error(`no PSL type for ${elementType}`);
-  const codecId = enumNames.has(elementType)
-    ? PG_TEXT_CODEC_ID
-    : CODEC_ID_BY_INFERRED_TYPE.get(resolution.pslType.name);
+  const ref = enumNames.has(elementType)
+    ? { codecId: PG_TEXT_CODEC_ID, typeParams: undefined }
+    : inferredCodecRef(resolution.pslType);
   const descriptor =
-    codecId === undefined ? undefined : postgresCodecDescriptorRegistry.descriptorFor(codecId);
-  if (codecId === undefined || descriptor === undefined) {
+    ref === undefined ? undefined : postgresCodecDescriptorRegistry.descriptorFor(ref.codecId);
+  if (ref === undefined || descriptor === undefined) {
     throw new Error(`no codec for ${elementType}`);
   }
-  return materializeCodec(descriptor, { codecId }, { name: `<fidelity:${codecId}>` });
+  return materializeCodec(
+    descriptor,
+    {
+      codecId: ref.codecId,
+      ...(ref.typeParams === undefined ? {} : { typeParams: ref.typeParams as JsonValue }),
+    },
+    { name: `<fidelity:${ref.codecId}>` },
+  );
 }
 type PgClient = Parameters<Parameters<typeof withClient>[1]>[0];
 
@@ -185,7 +211,7 @@ async function singleValue(oracle: Oracle, sql: string, parameter: string): Prom
 async function createOracle(client: PgClient): Promise<Oracle> {
   const elementTypes = new Set(
     rows
-      .filter((row) => row.expect === 'literal')
+      .filter((row) => row.expect === 'literal' || row.expect === 'refused-by-codec')
       .map((row) => elementTypeOf(row.storageType))
       .filter((elementType) => !JSON_ELEMENT_TYPES.has(elementType)),
   );
@@ -243,7 +269,7 @@ async function observe(): Promise<ReadonlyMap<string, Observation>> {
           nativeType,
         );
         let values: ComparedValues | undefined;
-        if (row.expect === 'literal') {
+        if (row.expect === 'literal' || row.expect === 'refused-by-codec') {
           const stored = await storedValue(oracle, storedText, row.storageType, nativeType);
           values = {
             live: await parsedValue(oracle, live, row.storageType, nativeType, stored),
@@ -283,6 +309,15 @@ describe('default parser against the value Postgres stores', () => {
         live: { kind: 'function', expression: columnDefault },
         contract: { kind: 'function', expression: row.written },
       });
+      return;
+    }
+    if (row.expect === 'refused-by-codec') {
+      if (values === undefined) throw new Error(`no compared values for ${row.name}`);
+      expect({ live: values.live, contract: values.contract }).toEqual({
+        live: { rejected: expect.any(String) },
+        contract: { rejected: expect.any(String) },
+      });
+      expect(values.stored).not.toHaveProperty('rejected');
       return;
     }
     if (row.expect !== 'literal') {

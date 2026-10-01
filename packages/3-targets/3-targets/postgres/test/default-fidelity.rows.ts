@@ -1,4 +1,11 @@
-export type FidelityExpectation = 'literal' | 'raw' | { readonly function: string };
+/**
+ * `refused-by-codec`: the parser reads a literal, but the column's codec refuses it because the column would round it on insert, so `contract infer` keeps the raw expression.
+ */
+export type FidelityExpectation =
+  | 'literal'
+  | 'raw'
+  | 'refused-by-codec'
+  | { readonly function: string };
 
 export interface FidelityRow {
   readonly name: string;
@@ -12,6 +19,13 @@ const literal = (name: string, storageType: string, written: string): FidelityRo
   storageType,
   written,
   expect: 'literal',
+});
+
+const refusedByCodec = (name: string, storageType: string, written: string): FidelityRow => ({
+  name,
+  storageType,
+  written,
+  expect: 'refused-by-codec',
 });
 
 const raw = (name: string, storageType: string, written: string): FidelityRow => ({
@@ -61,7 +75,7 @@ export const rows: readonly FidelityRow[] = [
   literal('int8_negative', 'int8', "'-1'::bigint"),
   literal('numeric_exact_scale', 'numeric(10,2)', '12.50'),
   literal('numeric_short_scale', 'numeric(10,2)', '12.5'),
-  literal('numeric_rounded', 'numeric(10,2)', '12.345'),
+  refusedByCodec('numeric_rounded', 'numeric(10,2)', '12.345'),
   literal('numeric_quoted', 'numeric(10,2)', "'-0.01'::numeric"),
   literal('float8_plain', 'float8', '1.5'),
   literal('float8_exponent', 'float8', "'1e300'::float8"),

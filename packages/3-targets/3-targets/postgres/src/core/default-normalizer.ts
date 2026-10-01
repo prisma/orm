@@ -1,5 +1,6 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
+import { canonicalUuid } from './codec-helpers';
 
 /**
  * Pre-compiled regex patterns for performance.
@@ -221,6 +222,11 @@ const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
  * Reads an unquoted, non-NULL array element by the column's element type. Only text Postgres itself
  * would print is read; anything else keeps the raw expression.
  */
+/** A text default as the column stores it: a uuid in the form PostgreSQL writes, which its codec reads. */
+function storedText(text: string, nativeType: string | undefined): string {
+  return nativeType === 'uuid' ? (canonicalUuid(text) ?? text) : text;
+}
+
 function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
   if (token === '') return undefined;
   if (BOOLEAN_TYPE_PATTERN.test(elementType)) {
@@ -235,7 +241,7 @@ function unquotedElementValue(token: string, elementType: string): JsonValue | u
     const document = readJsonDocument(token);
     return document.kind === 'json' ? document.value : undefined;
   }
-  return token;
+  return storedText(token, elementType);
 }
 
 /**
@@ -338,7 +344,7 @@ function isJsonElementType(elementType: string): boolean {
  * Undefined keeps the raw expression: the document holds a number a JavaScript number would change.
  */
 function textElementValue(text: string, elementType: string): JsonValue | undefined {
-  if (!isJsonElementType(elementType)) return text;
+  if (!isJsonElementType(elementType)) return storedText(text, elementType);
   const document = readJsonDocument(text);
   if (document.kind === 'inexact') return undefined;
   return document.kind === 'json' ? document.value : text;
@@ -494,7 +500,7 @@ export function parsePostgresDefault(
     if (document.kind === 'inexact') return { kind: 'function', expression: trimmed };
     if (document.kind === 'json') return { kind: 'literal', value: document.value };
   }
-  return { kind: 'literal', value: token.text };
+  return { kind: 'literal', value: storedText(token.text, normalizedType) };
 }
 
 /**
