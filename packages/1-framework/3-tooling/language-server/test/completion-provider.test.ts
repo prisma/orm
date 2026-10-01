@@ -1307,7 +1307,7 @@ namespace app {
         start: sourceFile.positionAt(cursorOffset),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'on',
+      newText: 'on = ',
     });
   });
 
@@ -1324,7 +1324,7 @@ namespace app {
           start: sourceFile.positionAt(cursorOffset - 'wh'.length),
           end: sourceFile.positionAt(cursorOffset),
         },
-        newText: 'where',
+        newText: 'where = ',
       },
     });
   });

@@ -206,7 +206,10 @@ export function providePslCompletionItems(
         input.clientSupportsSnippets,
       );
     case 'genericBlockKey':
-      return provideGenericBlockKeyCompletionItems(context, input.sourceFile, input.candidates);
+      return provideGenericBlockKeyCompletionItems(context, input.sourceFile, input.candidates, {
+        clientSupportsSnippets: input.clientSupportsSnippets,
+        clientSupportsTriggerSuggestCommand: input.clientSupportsTriggerSuggestCommand === true,
+      });
     case 'modelType':
       return provideModelTypeCompletionItems(context, input.sourceFile, input.candidates, input);
     case 'namespaceMember':
@@ -415,6 +418,7 @@ function provideGenericBlockKeyCompletionItems(
   context: GenericBlockKeyCompletionContext,
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
 ): readonly CompletionItem[] {
   const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
   if (descriptor === undefined) {
@@ -430,6 +434,7 @@ function provideGenericBlockKeyCompletionItems(
   }
 
   const existing = existingGenericBlockParameterNames(context.block, context.offset);
+  const hasEquals = editedKeyHasEquals(context.block, context.offset);
   const replacementRange = {
     start: sourceFile.positionAt(context.replacementStartOffset),
     end: sourceFile.positionAt(context.offset),
@@ -437,17 +442,39 @@ function provideGenericBlockKeyCompletionItems(
 
   return Object.entries(spec.parameters)
     .filter(([parameterName]) => !existing.has(parameterName))
-    .map(([parameterName, parameter], index) => ({
-      label: parameterName,
-      kind: CompletionItemKind.Property,
-      detail: parameter.documentation || 'Generic block parameter',
-      sortText: genericBlockParameterSortText(index, parameterName),
-      filterText: parameterName,
-      textEdit: {
-        range: replacementRange,
-        newText: parameterName,
-      },
-    }));
+    .map(([parameterName, parameter], index) => {
+      const snippet =
+        !hasEquals && capabilities.clientSupportsSnippets && parameter.type.kind === 'list';
+      const newText = hasEquals
+        ? parameterName
+        : snippet
+          ? `${parameterName} = [$1]`
+          : `${parameterName} = `;
+      return {
+        label: parameterName,
+        kind: CompletionItemKind.Property,
+        detail: parameter.documentation || 'Generic block parameter',
+        sortText: genericBlockParameterSortText(index, parameterName),
+        filterText: parameterName,
+        textEdit: { range: replacementRange, newText },
+        ...(snippet ? { insertTextFormat: InsertTextFormat.Snippet } : {}),
+        ...(!hasEquals && capabilities.clientSupportsTriggerSuggestCommand === true
+          ? {
+              command: {
+                title: 'Suggest argument values',
+                command: 'editor.action.triggerSuggest',
+              },
+            }
+          : {}),
+      };
+    });
+}
+
+function editedKeyHasEquals(block: GenericBlockDeclarationAst, cursorOffset: number): boolean {
+  for (const entry of block.entries()) {
+    if (!entry.syntax.isOutside(cursorOffset)) return entry.equals() !== undefined;
+  }
+  return false;
 }
 
 function existingGenericBlockParameterNames(

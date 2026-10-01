@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { InsertTextFormat } from 'vscode-languageserver';
-import { completeBlockValueSource } from './helpers/block-value-completion';
+import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type BlockValueCompletionOptions,
+  completeBlockValueSource,
+} from './helpers/block-value-completion';
 import { blockValueSource } from './helpers/block-value-descriptors';
 
 function complete(markedBlock: string, clientSupportsSnippets = false) {
@@ -77,5 +80,97 @@ describe('generic block value completion', () => {
 
   it('offers values for a named function-call argument', () => {
     expect(schedule('run = every(5, unit: |)').labels).toEqual(['seconds', 'minutes']);
+  });
+});
+
+describe('generic block key completion', () => {
+  function keys(entry: string, options: BlockValueCompletionOptions = {}) {
+    return completeBlockValueSource(
+      `${blockValueSource}\n${['policy_select read_own {', `  ${entry}`, '}'].join('\n')}`,
+      options,
+    );
+  }
+
+  function keyItem(
+    result: ReturnType<typeof keys>,
+    label: string,
+    detail: string,
+    sortText: string,
+    newText: string,
+    start = result.cursorOffset,
+  ) {
+    return {
+      label,
+      kind: CompletionItemKind.Property,
+      detail,
+      sortText,
+      filterText: label,
+      textEdit: {
+        range: {
+          start: result.sourceFile.positionAt(start),
+          end: result.sourceFile.positionAt(result.cursorOffset),
+        },
+        newText,
+      },
+    };
+  }
+
+  const suggest = { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' };
+
+  it('inserts the key with an equals sign', () => {
+    const result = keys('|');
+    expect(result.items).toEqual([
+      keyItem(result, 'target', 'The protected model.', '0000:target', 'target = '),
+      keyItem(result, 'roles', 'The roles the policy applies to.', '0001:roles', 'roles = '),
+      keyItem(result, 'using', 'The row predicate.', '0002:using', 'using = '),
+      keyItem(
+        result,
+        'permissive',
+        'Whether the policy is permissive.',
+        '0003:permissive',
+        'permissive = ',
+      ),
+    ]);
+  });
+
+  it('opens a list and suggests values when the client supports snippets and commands', () => {
+    const result = keys('|', {
+      clientSupportsSnippets: true,
+      clientSupportsTriggerSuggestCommand: true,
+    });
+    expect(result.items.slice(0, 2)).toEqual([
+      {
+        ...keyItem(result, 'target', 'The protected model.', '0000:target', 'target = '),
+        command: suggest,
+      },
+      {
+        ...keyItem(
+          result,
+          'roles',
+          'The roles the policy applies to.',
+          '0001:roles',
+          `roles = [${'$'}1]`,
+        ),
+        insertTextFormat: InsertTextFormat.Snippet,
+        command: suggest,
+      },
+    ]);
+  });
+
+  it('inserts only the key when an equals sign already follows it', () => {
+    const result = keys('ro| = [admin]', {
+      clientSupportsSnippets: true,
+      clientSupportsTriggerSuggestCommand: true,
+    });
+    expect(result.items.find((item) => item.label === 'roles')).toEqual(
+      keyItem(
+        result,
+        'roles',
+        'The roles the policy applies to.',
+        '0001:roles',
+        'roles',
+        result.cursorOffset - 2,
+      ),
+    );
   });
 });
