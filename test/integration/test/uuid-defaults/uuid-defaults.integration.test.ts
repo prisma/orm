@@ -379,7 +379,7 @@ describe(
     );
 
     it(
-      'in a PSL enum written in upper case and braces, emit and type the text Postgres stores, and the runtime enum accessor agrees with values read back',
+      'in a PSL enum written as Postgres stores it, emit and type the stored text, and the runtime enum accessor agrees with values read back',
       async () => {
         const emitted = await emitPsl(
           testDir,
@@ -387,8 +387,8 @@ describe(
 
 enum Key {
   @@type("pg/uuid@1")
-  A = "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"
-  B = "{B0EEBC99-9C0B4EF8-BB6D6BB9-BD380A11}"
+  A = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+  B = "b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
 }
 
 model T {
@@ -400,10 +400,10 @@ model T {
         if (!emitted.ok) throw new Error(JSON.stringify(emitted.failure, null, 2));
         const contractJson = JSON.parse(emitted.value.contractJson) as Record<string, unknown>;
         expect(emittedKeyEnum(contractJson)).toEqual(storedKeyEnum);
-        expect({
-          typesStoredValues: STORED_KEYS.map((key) => emitted.value.contractDts.includes(key)),
-          typesWrittenSpelling: /A0EEBC99|B0EEBC99/.test(emitted.value.contractDts),
-        }).toEqual({ typesStoredValues: [true, true], typesWrittenSpelling: false });
+        expect(STORED_KEYS.map((key) => emitted.value.contractDts.includes(key))).toEqual([
+          true,
+          true,
+        ]);
 
         const result = await initVerifyAndRead(
           contractJson,
@@ -424,15 +424,15 @@ model T {
       timeouts.spinUpPpgDev,
     );
 
-    it('in a PSL enum, refuse two members that store the same uuid, naming both', async () => {
+    it('in a PSL enum, refuse a member written in upper case or braces, because pg/uuid@1 reads only the stored form', async () => {
       const emitted = await emitPsl(
         testDir,
         `// use prisma-8
 
 enum Key {
   @@type("pg/uuid@1")
-  Upper = "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"
-  Lower = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
+  Upper  = "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11"
+  Braced = "{b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}"
 }
 
 model T {
@@ -441,11 +441,16 @@ model T {
 `,
       );
 
+      const reason =
+        'pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12';
       expect(emitted.ok ? [] : emitted.failure.diagnostics?.diagnostics).toEqual([
         expect.objectContaining({
-          code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
-          message:
-            'enum "Key": members "Upper" and "Lower" both store "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"',
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "Key" member "Upper" was rejected by codec "pg/uuid@1": ${reason}`,
+        }),
+        expect.objectContaining({
+          code: 'PSL_EXTENSION_INVALID_VALUE',
+          message: `enum "Key" member "Braced" was rejected by codec "pg/uuid@1": ${reason}`,
         }),
       ]);
     });

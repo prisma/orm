@@ -374,22 +374,6 @@ describe('mongoFamilyEnumEntityDescriptor: explicit @@type bypasses inference, n
     ]);
   });
 
-  it('holds each member as the value the codec stores', () => {
-    const handle = factory(
-      enumBlock({
-        name: 'Folded',
-        values: { first: 'Admin', second: 'Owner' },
-        typeCodecId: ENCODE_FOLDING_CODEC_ID,
-      }),
-      makeContext([]),
-    );
-
-    expect(handle?.enumMembers).toEqual([
-      { name: 'first', value: 'admin' },
-      { name: 'second', value: 'owner' },
-    ]);
-  });
-
   it('collides on the values the contract stores, naming both members', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(

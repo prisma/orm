@@ -11,11 +11,9 @@ export interface EnumBlockMember {
 }
 
 /**
- * Reads the members of an `enum` block through its codec. Each member's value is the one the codec
- * stores, read back through the codec, so an enum built from these members states what the
- * contract holds. A bare member is read from its own name. Pushes a diagnostic and returns
- * `undefined` when the codec refuses a member, when two members store the same value, or when the
- * block has no members. Shared by every family's enum factory.
+ * Reads the members of an `enum` block through its codec. A bare member is read from its own name.
+ * Pushes a diagnostic and returns `undefined` when the codec refuses a member, when two members
+ * store the same value, or when the block has no members. Shared by every family's enum factory.
  */
 export function readEnumBlockMembers(
   block: ParsedPslExtensionBlock<Readonly<Record<string, JsonValue | undefined>>>,
@@ -69,22 +67,8 @@ export function readEnumBlockMembers(
       memberError = true;
       continue;
     }
-    let storedValue: unknown;
-    try {
-      storedValue = codec.decodeJson(stored);
-    } catch (err) {
-      if (isInternalError(err)) throw err;
-      diagnostics?.push({
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-        message: `enum "${block.name}" member "${memberName}" is written ${JSON.stringify(written)}, which codec "${codecId}" stores as ${JSON.stringify(stored)} and cannot read back: ${err instanceof Error ? err.message : String(err)}`,
-        sourceId,
-        span,
-      });
-      memberError = true;
-      continue;
-    }
     memberByStoredValue.set(storedKey, memberName);
-    members.push({ name: memberName, value: storedValue });
+    members.push({ name: memberName, value: read });
   }
 
   if (memberError) return undefined;
