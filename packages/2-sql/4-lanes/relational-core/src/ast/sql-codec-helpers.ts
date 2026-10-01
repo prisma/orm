@@ -45,12 +45,10 @@ export const sqlVarcharRenderOutputType = (typeParams: { readonly length?: numbe
 };
 
 export const sqlIntEncode = (value: number): number => value;
+export const sqlIntDecode = (wire: number): number => wire;
 
 export const sqlFloatEncode = (value: number): number => value;
-
-/** A driver hands a number back as a number, or as its decimal text when it reads the text form, as for a list element. */
-export const sqlNumberDecode = (wire: number | string): number =>
-  typeof wire === 'string' ? Number(wire) : wire;
+export const sqlFloatDecode = (wire: number): number => wire;
 
 export const sqlTextEncode = (value: string): string => value;
 export const sqlTextDecode = (wire: string): string => wire;

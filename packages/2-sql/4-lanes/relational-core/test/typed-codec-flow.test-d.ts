@@ -98,8 +98,8 @@ test('wrong wire type breaks the round-trip equality', () => {
   type ExtractWire<C> =
     C extends Codec<string, readonly CodecTrait[], infer W, unknown> ? W : never;
   type ResolvedWire = ExtractWire<ResolvedCodec<typeof sqlIntDescriptor>>;
-  expectTypeOf<ResolvedWire>().toEqualTypeOf<number | string>();
-  // @ts-expect-error -- sqlInt wire is `number | string`, not `string`
+  expectTypeOf<ResolvedWire>().toEqualTypeOf<number>();
+  // @ts-expect-error -- sqlInt wire is `number`, not `string`
   expectTypeOf<ResolvedWire>().toEqualTypeOf<string>();
 });
 

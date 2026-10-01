@@ -54,11 +54,6 @@ describe('sql-codecs', () => {
       expect(await codec.decode(42, callCtx)).toBe(42);
     });
 
-    it('decodes the decimal text a driver hands back to a number', async () => {
-      expect(await codec.decode('42', callCtx)).toBe(42);
-      expect(await codec.decode('-7', callCtx)).toBe(-7);
-    });
-
     it('round-trips through JSON identity', () => {
       expect(codec.encodeJson(42)).toBe(42);
       expect(codec.decodeJson(42)).toBe(42);
@@ -75,11 +70,6 @@ describe('sql-codecs', () => {
     it('encodes and decodes number values', async () => {
       expect(await codec.encode(3.14, callCtx)).toBe(3.14);
       expect(await codec.decode(3.14, callCtx)).toBe(3.14);
-    });
-
-    it('decodes the decimal text a driver hands back to a number', async () => {
-      expect(await codec.decode('-2.5', callCtx)).toBe(-2.5);
-      expect(await codec.decode('1e300', callCtx)).toBe(1e300);
     });
 
     it('round-trips through JSON identity', () => {
