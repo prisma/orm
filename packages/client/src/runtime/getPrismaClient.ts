@@ -832,7 +832,6 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         }
 
         // Re-use the underlying transaction in the engine by reusing the same transaction id.
-        options.newTxId = itxContext.txId
       }
       scopeStack.push(scopeId)
 
@@ -842,7 +841,7 @@ Or read our docs at https://www.prisma.io/docs/concepts/components/prisma-client
         maxWait: options?.maxWait ?? this._engineConfig.transactionOptions.maxWait,
         timeout: options?.timeout ?? this._engineConfig.transactionOptions.timeout,
         isolationLevel: options?.isolationLevel ?? this._engineConfig.transactionOptions.isolationLevel,
-        newTxId: options.newTxId,
+        newTxId: isNested ? itxContext.txId : undefined,
       }
       let info: Transaction.InteractiveTransactionInfo<unknown>
       try {

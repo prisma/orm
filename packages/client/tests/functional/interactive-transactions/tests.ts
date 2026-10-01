@@ -469,6 +469,48 @@ testMatrix.setupTestSuite(
       })
       expect(users).toHaveLength(3)
     })
+        // Regression test for https://github.com/prisma/prisma/issues/30367.
+    testIf(provider !== Providers.MONGODB)(
+      'sql: nested transaction does not mutate caller options',
+      async () => {
+        const options = {
+          timeout: 30_000,
+          maxWait: 10_000,
+        }
+
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.$transaction(
+              async (tx2) => {
+                await tx2.user.create({
+                  data: {
+                    email: `user_${copycat.uuid(224)}@website.com`,
+                  },
+                })
+              },
+              options,
+            )
+          },
+          options,
+        )
+
+        expect(options).toEqual({
+          timeout: 30_000,
+          maxWait: 10_000,
+        })
+
+        await prisma.$transaction(
+          async (tx) => {
+            await tx.user.create({
+              data: {
+                email: `user_${copycat.uuid(225)}@website.com`,
+              },
+            })
+          },
+          options,
+        )
+      },
+    )
 
     testIf(provider !== Providers.MONGODB)('sql: deep nesting (3 levels) works', async () => {
       const email1 = `user_${copycat.uuid(231)}@website.com`
