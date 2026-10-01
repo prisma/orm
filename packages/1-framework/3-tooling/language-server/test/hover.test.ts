@@ -105,6 +105,40 @@ describe('providePslHover', () => {
     });
   });
 
+  it('excludes a comment that sits inside multi-line attribute arguments', () => {
+    const result = hover(
+      'model User {\n  au|thor User @relation(\n    // cascade rationale\n    fields: [authorId],\n    references: [id]\n  )\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nauthor User @relation( fields: [authorId], references: [id] )\n```',
+      },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
+    });
+  });
+
+  it('collapses a multi-line field declaration with no comment to one line', () => {
+    const result = hover(
+      'model User {\n  au|thor User @relation(\n    fields: [authorId],\n    references: [id]\n  )\n}',
+    );
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\nauthor User @relation( fields: [authorId], references: [id] )\n```',
+      },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
+    });
+  });
+
+  it('excludes a trailing same-line comment from the declaration line', () => {
+    const result = hover('model User {\n  i|d Int // note\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\nid Int\n```' },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 4 } },
+    });
+  });
+
   it('shows a named-type declaration line at a reference', () => {
     const result = hover(
       'types {\n  /// A short string.\n  Short = String\n}\nmodel Person {\n  name Sho|rt\n}',

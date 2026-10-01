@@ -14,7 +14,6 @@ import {
   GenericBlockDeclarationAst,
   ModelDeclarationAst,
   NamedTypeDeclarationAst,
-  printSyntax,
   type SyntaxNode,
   type SyntaxToken,
 } from '@internal/psl-parser/syntax';
@@ -117,9 +116,18 @@ function renderHoverContent(entity: HoverEntitySymbol): string {
 function renderDeclarationLine(entity: HoverEntitySymbol): string {
   if (entity.kind === 'block') return `${entity.keyword} ${entity.name}`;
   if (entity.kind === 'field' || entity.kind === 'namedType') {
-    return collapseWhitespace(printSyntax(entity.node.syntax));
+    return collapseWhitespace(printSyntaxWithoutComments(entity.node.syntax));
   }
   return `${entity.node.keyword()?.text ?? ''} ${entity.name}`;
+}
+
+function printSyntaxWithoutComments(node: SyntaxNode): string {
+  let text = '';
+  for (const token of node.tokens()) {
+    if (token.kind === 'Comment') continue;
+    text += token.text;
+  }
+  return text;
 }
 
 function collapseWhitespace(text: string): string {
