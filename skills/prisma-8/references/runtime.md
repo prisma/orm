@@ -236,29 +236,43 @@ For the full option surface, read the source: `packages/2-sql/5-runtime/src/midd
 
 ## Workflow — Cache middleware
 
-The concept: `@prisma/orm-extension-middleware-cache` ships an opt-in read cache built on the `interceptQuery` hook. On a hit the driver is never called; on a miss the rows are buffered and committed to the store when the query completes. Caching is strictly opt-in per query: only a plan annotated with `cacheAnnotation({ ttl })` is ever cached. Cache keys default to the runtime's content hash of the plan (`key` overrides), queries inside a transaction or pinned connection bypass the cache, and the default store is an in-memory LRU with TTL (`CacheStore` is the interface for a Redis-style backend).
+The concept: `@prisma/orm-extension-middleware-cache` ships an opt-in read cache built on the `interceptQuery` hook. On a hit the driver is never called; on a miss the rows are buffered and stored when the query completes. Only a plan carrying `cacheAnnotation` is cached; `cacheAnnotation({ bypass: true })` skips the cache for one call. Cache keys default to the runtime's content hash of the plan (`key` overrides), and queries inside a transaction or pinned connection bypass the cache. How long an entry lives is the store's policy: the default store keeps up to 1000 entries for 60 seconds each, and `createInMemoryCacheStore({ maxEntries, ttlMs })` changes that (`ttlMs: Infinity` never expires). `CacheStore` is the interface for a Redis-style backend. The cache never sees writes: after the write commits, call `cache.invalidate({ keys })` for reads annotated with a `key`. `cacheAnnotation({ meta })` hands any value to the store with the entry, and `cache.invalidate({ meta })` hands one to its `unset`; only a custom store that indexes `meta` can act on it, and the default store throws `RUNTIME.CACHE_STORE_META_UNSUPPORTED`.
 
 ```typescript
-import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
+import {
+  cacheAnnotation,
+  createCacheMiddleware,
+  createInMemoryCacheStore,
+} from '@prisma/orm-extension-middleware-cache';
 
+export const cache = createCacheMiddleware({
+  store: createInMemoryCacheStore({ maxEntries: 1_000, ttlMs: 60_000 }),
+});
 export const db = postgres<Contract>({
   contractJson,
   url: process.env['DATABASE_URL']!,
-  middleware: [createCacheMiddleware({ maxEntries: 1_000 }), lints(), budgets({ maxRows: 10_000 })],
+  middleware: [cache, lints(), budgets({ maxRows: 10_000 })],
 });
 
-// Cached for 60s; an identical plan within the TTL is served without a driver call.
-const user = await db.orm.public.User.first({ id: 1 }, (meta) => meta.annotate(cacheAnnotation({ ttl: 60_000 })));
+// Cached for the store's 60 s; an identical read in that window is served without a driver call.
+const user = await db.orm.public.User.first({ id: 1 }, (meta) =>
+  meta.annotate(cacheAnnotation({ key: 'user-1' })),
+);
 // Un-annotated queries always hit the database.
+
+// After a write to user 1 has committed (outside the transaction, never inside it):
+await cache.invalidate({ keys: ['user-1'] });
 ```
 
-**The cache key carries no identity.** The default key is the runtime's content hash of the plan — contract hash, SQL text, and bound parameters — so two callers issuing the same statement share one entry regardless of who they are. Never annotate a read whose rows depend on the caller (per-user, per-tenant, or RLS-filtered data) on the plain `postgres()` façade unless the identity is part of the key: `cacheAnnotation({ ttl, key: `user:${userId}:profile` })`, or a `where` clause that binds the identity as a parameter (the parameter is in the hash). Queries that run on a pinned connection or inside a transaction bypass the cache entirely (`ctx.scope !== 'runtime'`), which is why a Supabase `RoleBoundDb` read — executed on a connection with the role bound via `set_config` — is never served from cache; the plain façade has no such protection.
+**Invalidate after the commit, not inside the transaction.** A read from another request can refill the cache with the old rows before the commit lands. A read that missed before the `invalidate` and finishes after it does not store its rows: the store moves the key's version on `unset`, and the read's `set` is conditional on the version it saw. This holds across processes that share a store.
+
+**The cache key carries no identity.** The default key is the runtime's content hash of the plan — contract hash, SQL text, and bound parameters — so two callers issuing the same statement share one entry regardless of who they are. Never annotate a read whose rows depend on the caller (per-user, per-tenant, or RLS-filtered data) on the plain `postgres()` façade unless the identity is part of the key: `cacheAnnotation({ key: `user:${userId}:profile` })`, or a `where` clause that binds the identity as a parameter (the parameter is in the hash). Queries that run on a pinned connection or inside a transaction bypass the cache entirely (`ctx.scope !== 'runtime'`), which is why a Supabase `RoleBoundDb` read — executed on a connection with the role bound via `set_config` — is never served from cache; the plain façade has no such protection.
 
 ## Workflow — Compose multiple middleware
 
 ```typescript
 middleware: [
-  createCacheMiddleware({ maxEntries: 1_000 }), // first — gets first claim on an interceptQuery hit
+  createCacheMiddleware(),                      // first — gets first claim on an interceptQuery hit
   lints({ severities: { noLimit: 'error' } }),
   budgets({ maxLatencyMs: 5_000 }),
   slowQueryWarning({ thresholdMs: 250 }),       // afterQuery fires for cache hits too (source: 'middleware')

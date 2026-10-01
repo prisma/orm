@@ -303,6 +303,10 @@ describe('codecs-class', () => {
       expect(codec.encodeJson(SAMPLE_UUID)).toBe(SAMPLE_UUID);
       expect(codec.decodeJson(SAMPLE_UUID)).toBe(SAMPLE_UUID);
     });
+
+    it('writes a uuid into JSON as the text Postgres prints for it', () => {
+      expect(codec.encodeJson('{550E8400-E29B41D4-A716-446655440000}')).toBe(SAMPLE_UUID);
+    });
   });
 
   describe('pg/inet@1', () => {

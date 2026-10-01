@@ -409,7 +409,21 @@ An enum declares a `codecId` that no family, target, or extension pack in the co
 
 ### CONTRACT.ENUM_INVALID
 
-An enum declaration is malformed: it has no members, a duplicate member name or value, or the declaration key in `defineContract({ enums })` does not match the `enumType` name. Raised while authoring a contract (framework `enumType`, SQL and Mongo builders). Payload: `enumName`, `member`, `reason`. The SQL TypeScript builder also raises it for a member whose value the enum's codec refuses, such as a `pg/char@1` member longer than one character, since the enum's column is `character`: `enumType("<name>") member "<member>" has a value its codec <codecId> refuses: <codec message>`, with `codecId` in the payload and `reason: 'codec-refused-member'`. Give the member a value the codec takes.
+An enum declaration is malformed. Raised while authoring a contract. Payload: `enumName` and `reason`, plus `member` (a member's name; for `enumType()`'s `duplicate-member-value` and `nativeEnum()`'s `duplicate member value`, the repeated value), `members` (both names), `codecId` (the enum's codec, for `codec-refused-member`) or the declaration key (`declarationKey` in the SQL builder, `declaredKey` in the Mongo builder), depending on the case. The cases, by `reason`:
+
+- `enumType()` itself:
+  - `no-members`: the enum has no members;
+  - `duplicate-member-name`: two members have the same name;
+  - `duplicate-member-value`: two members have the same value as written.
+- The SQL contract builder (`defineContract` from the Postgres and SQLite packages):
+  - `key-name-mismatch`: the key in `defineContract({ enums })` differs from the `enumType` name;
+  - `codec-refused-member`: the enum's codec refuses a member's value, either when writing it or when reading back what it wrote, such as a `pg/char@1` member longer than one character, since the enum's column is `character`. The message is `enumType("<name>") member "<member>" has a value its codec <codecId> refuses: <codec message>`; give the member a value the codec takes;
+  - `member-not-stored-as-written`: the column's codec reads a member back as a different value from the one written. The check compares through the codec's JSON form: the member is encoded with `encodeJson`, and `decodeJson` of that must equal the member. An upper-case or braced uuid is refused because `pg/uuid@1` stores lower case. Only members with a literal type (strings, numbers, booleans, bigints, and arrays and plain objects of them) are checked, and the check is only as exact as the codec's JSON form: where that form is not the text Postgres returns, a member Postgres would print differently is accepted;
+  - `duplicate-member-value`: two members that the codec stores as the same value; `members` names both;
+  - `unsupported-member-value`: a member of an enum used by a column's membership CHECK encodes to something other than a string or a finite number;
+  - `mixed-member-types`: the members of such an enum encode to both strings and numbers.
+- The Mongo contract builder: `declaration-key-mismatch`, the key in `defineContract({ enums })` differs from the `enumType` name.
+- `nativeEnum()` from the Postgres package: `empty name` and `empty type name` (a blank enum name or Postgres type name), `zero members`, and `duplicate member value` (two members with the same label).
 
 ### CONTRACT.ENUM_UNKNOWN
 
@@ -1010,7 +1024,7 @@ A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annota
 
 ### RUNTIME.ARGUMENT_INVALID
 
-A built-in Postgres query operation or full-text helper received an argument it cannot use, or `postgres()` or `postgresServerless()` received a `cursor` option it cannot use. Three cases: (1) the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused, while the query is being built; (2) a literal part of a `tsquery` template has an invalid JavaScript escape, such as `\u`, so JavaScript gives the tag no text for that part and the tag refuses it rather than drop it, also while the query is being built; (3) the `cursor` option has a key other than `batchSize` (including the driver's own `disabled` setting) or a `batchSize` that is not a positive integer, raised at the factory call; leave `cursor` unset to read without a cursor. Payload: `helper` (the operation, or `postgres` / `postgresServerless` for the factory option), `argument`, `received`, plus `extension: 'postgres'` for the factory option.
+A built-in Postgres query operation or full-text helper received an argument it cannot use, `postgres()` or `postgresServerless()` received a `cursor` option it cannot use, or `createInMemoryCacheStore` received a size or lifetime it cannot use. Four cases: (1) the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused, while the query is being built; (2) a literal part of a `tsquery` template has an invalid JavaScript escape, such as `\u`, so JavaScript gives the tag no text for that part and the tag refuses it rather than drop it, also while the query is being built; (3) the `cursor` option has a key other than `batchSize` (including the driver's own `disabled` setting) or a `batchSize` that is not a positive integer, raised at the factory call; leave `cursor` unset to read without a cursor. (4) `createInMemoryCacheStore` from the cache middleware received a `maxEntries` that is not a positive integer, or a `ttlMs` that is not a positive number (`Infinity` means never expire), raised at the factory call. Payload: `helper` (the operation, or `postgres` / `postgresServerless` for the factory option, `createInMemoryCacheStore` for the cache store), `argument`, `received`, plus `extension: 'postgres'` for the factory option.
 
 ### RUNTIME.AST_INVALID
 
@@ -1027,6 +1041,10 @@ A client (`postgres()`, `sqlite()`, `mongo()`) received a connection binding who
 ### RUNTIME.BINDING_MISSING
 
 A client (`postgres()`, `sqlite()`, `mongo()`) was asked to connect with no binding at all (no connection string, no environment fallback). Payload: `expected`.
+
+### RUNTIME.CACHE_STORE_META_UNSUPPORTED
+
+The default in-memory cache store was asked to remove entries by `meta`, through `invalidate({ meta })` on a cache middleware that uses it. That store ignores `meta` when it stores an entry, so it cannot tell which entries match. The call removes nothing, including the keys passed with it. Invalidate by `keys`, or supply a `CacheStore` that indexes `meta` in `set` and honours it in `unset`.
 
 ### RUNTIME.CODEC_DESCRIPTOR_ARRAY_UNSUPPORTED
 

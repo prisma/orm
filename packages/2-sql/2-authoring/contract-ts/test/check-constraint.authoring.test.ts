@@ -506,7 +506,7 @@ describe('check emission — guards', () => {
   );
 
   it.each([false, true])(
-    'accepts mixed authored types normalized by a codec with many=%s',
+    'refuses a number member that a text codec stores as text, with many=%s',
     (many) => {
       const Normalized = enumType('Normalized', pgText, member('One', 1), member('Two', 'two'));
       const codec: Codec = {
@@ -520,13 +520,66 @@ describe('check emission — guards', () => {
           throw new Error('unused');
         }) as Codec['decode'],
       };
+      expect(() =>
+        defineContract(
+          {
+            family: sqlFamilyPack,
+            target: postgresTargetPack,
+            createNamespace: createTestSqlNamespace,
+            enums: { Normalized },
+            codecLookup: withDescriptors({
+              ...emptyCodecLookup,
+              get: (id) => (id === codec.id ? codec : undefined),
+            }),
+          },
+          ({ field: f, model: m }) => ({
+            models: {
+              User: m('User', {
+                fields: {
+                  id: f.text().id(),
+                  normalized: many ? f.namedType(Normalized).many() : f.namedType(Normalized),
+                },
+              }),
+            },
+          }),
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ENUM_INVALID',
+          message:
+            'enumType("Normalized"): member "One" is written 1, but the column stores "1". Write the member as "1".',
+        }),
+      );
+    },
+  );
+
+  it.each([false, true])(
+    'accepts a member stored in another form that reads back as itself, and checks the stored form, with many=%s',
+    (many) => {
+      const Level = enumType(
+        'Level',
+        { codecId: 'pg/int8@1', nativeType: 'int8' },
+        member('Low', 1n),
+        member('High', 10n),
+      );
+      const codec: Codec = {
+        id: 'pg/int8@1',
+        encodeJson: ((value: unknown) => String(value)) as Codec['encodeJson'],
+        decodeJson: ((json: unknown) => BigInt(String(json))) as Codec['decodeJson'],
+        encode: (() => {
+          throw new Error('unused');
+        }) as Codec['encode'],
+        decode: (() => {
+          throw new Error('unused');
+        }) as Codec['decode'],
+      };
       hookCalls.length = 0;
       const contract = defineContract(
         {
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
-          enums: { Normalized },
+          enums: { Level },
           codecLookup: withDescriptors({
             ...emptyCodecLookup,
             get: (id) => (id === codec.id ? codec : undefined),
@@ -537,26 +590,26 @@ describe('check emission — guards', () => {
             User: m('User', {
               fields: {
                 id: f.text().id(),
-                normalized: many ? f.namedType(Normalized).many() : f.namedType(Normalized),
+                level: many ? f.namedType(Level).many() : f.namedType(Level),
               },
             }),
           },
         }),
       ) as Contract<SqlStorage>;
-      expect(hookCalls.at(-1)).toEqual({
-        tableName: 'User',
-        columnName: 'normalized',
-        many,
-        memberValues: ['1', 'two'],
-      });
-      expect(flatten(checksOf(contract))).toEqual(
-        many
+      expect({
+        memberValues: hookCalls.at(-1)?.memberValues,
+        valueSet: contract.storage.namespaces['public']?.entries.valueSet?.['Level'],
+        checks: flatten(checksOf(contract)),
+      }).toEqual({
+        memberValues: ['1', '10'],
+        valueSet: { kind: 'valueSet', values: ['1', '10'] },
+        checks: many
           ? [
-              wire('User_normalized_check', `"normalized"::text[] <@ ARRAY['1', 'two']::text[]`),
-              wire('User_normalized_elem_not_null', `array_position("normalized", NULL) IS NULL`),
+              wire('User_level_check', `"level"::text[] <@ ARRAY['1', '10']::text[]`),
+              wire('User_level_elem_not_null', `array_position("level", NULL) IS NULL`),
             ]
-          : [wire('User_normalized_check', `"normalized" IN ('1', 'two')`)],
-      );
+          : [wire('User_level_check', `"level" IN ('1', '10')`)],
+      });
     },
   );
 

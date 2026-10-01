@@ -3077,6 +3077,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.14
