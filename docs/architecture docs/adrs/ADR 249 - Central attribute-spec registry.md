@@ -33,7 +33,10 @@ const spec = sqlAttributeSpecs.field.default(
     symbols: input.symbolTable,
     model,
     field,
-    controlMutationDefaults: input.defaultFunctionRegistry,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.defaultFunctionRegistry,
+      dataTypeEntries: input.dataTypeSupport.entries,
+    },
   }),
 );
 ```
@@ -45,7 +48,7 @@ const specs = assembleAttributeSpecs(interpretation.context.authoringContributio
 const spec = specs.model['rls']?.({
   symbols: pipeline.symbolTable,
   model,
-  controlMutationDefaults: interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+  controlMutationDefaults: interpretation.context.controlMutationDefaults,
 });
 ```
 
@@ -78,7 +81,7 @@ The registry is descriptive. It supplies the specs the interpreters run; it does
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
@@ -122,7 +125,7 @@ export interface FieldAttributeCtx extends ModelAttributeCtx {
 }
 ```
 
-The two serve different moments and carry different facts. The construction-time context answers "what grammar does this attribute accept here" and is consumed once, when the spec is built. The parse-time context answers "what can a combinator resolve against while reading this node" and is passed to `interpretAttribute` for every attribute occurrence; it carries `sources` for diagnostic locations, `symbols`, and the snapshot's `binder`. Reference combinators read committed binder resolutions rather than resolving names again. The binder owns unresolved-reference diagnostics; combinators own shape and entity-selector diagnostics.
+The two serve different moments and carry different facts. The construction-time context answers "what grammar does this attribute accept here" and is consumed once, when the spec is built. The parse-time context answers "what can a combinator resolve against while reading this node" and is passed to `interpretAttribute` for every attribute occurrence; it carries `sources` for diagnostic locations, `symbols`, and the snapshot's `binder`. Reference combinators read committed binder resolutions rather than resolving names again. The binder owns unresolved-reference diagnostics; combinators own shape and entity-selector diagnostics. A field-reference argument with an absent, unresolved, or non-field binding fails without adding diagnostics; cross-space references defer resolution. Argument, list, record, and alternative aggregation preserve failure independently of diagnostic count, so a diagnostic-free failure cannot become a successful truncated value. The binder and interpretation must use the same snapshot and registries.
 
 They are three separate types rather than one type with optional fields, so that a spec cannot demand a fact its level never carries. `fieldRef()` needs a model to validate a field name against, and is therefore usable at model and field level but not on a block; `referencedFieldRef()` needs a relation target, which only a field can resolve. A block attribute is parsed with only `AttributeCtx`, because a block has no model; it can still read entity references through the binder. Optional fields would push that to a runtime check in every combinator instead of the type system.
 
@@ -159,9 +162,10 @@ A parameter position makes `Out` contravariant. A concrete spec — the one `mod
 
 An attribute name the registry does not carry is reported, in both families and at both levels.
 
-- SQL model level: `buildModelNodeFromPsl` in `packages/2-sql/2-authoring/contract-psl/src/interpreter.ts` reports a name absent from both `sqlAttributeSpecs.model` and the target-contributed model attributes as `PSL_UNSUPPORTED_MODEL_ATTRIBUTE`.
-- SQL field level: `validateFieldAttributes` in `packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts` reports a name absent from `sqlAttributeSpecs.field` as `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`, after the `db.` prefix and removed-attribute paths have had their say. A module-level check refuses to load if a removed-attribute rule and a registered field attribute claim the same name, so the two name sets cannot overlap.
-- Mongo, both levels: `reportUnknownAttributes` in `packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts` walks every model and composite type and reports names absent from `mongoAttributeSpecs.model` / `.field` with the same two codes.
+`createBinder` receives the real attribute-spec namespaces and `controlMutationDefaults`, constructs the owner-aware factory contexts, and binds accepted attribute names to `AttributeSymbol` values (`kind: 'attribute'`). When a model or field attribute name is absent, it invokes the injected `describeUnsupportedAttribute` callback and emits the returned diagnostic, if any. The binder owns detection; the family owns diagnostic wording and configuration-specific hints. Consumers report this output rather than running another unknown-name loop.
+
+- SQL supplies `describeUnsupportedSqlAttribute` from `packages/2-sql/2-authoring/contract-psl/src/psl-field-resolution.ts`. It retains the `db.` migration messages, removed-attribute hints, uncomposed-extension namespace diagnostics, and `PSL_UNSUPPORTED_MODEL_ATTRIBUTE` / `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` errors. A module-level check prevents registered field attributes from overlapping removed-attribute rules. Composite-type attribute rejection remains family interpretation's responsibility.
+- Mongo supplies `describeUnsupportedMongoAttribute` from `packages/2-mongo-family/2-authoring/contract-psl/src/mongo-attribute-specs.ts`, preserving the same unsupported-attribute codes and Mongo-specific hints.
 - Block level: the block-spec interpreter (`interpretExtensionBlock` in `packages/1-framework/2-authoring/psl-parser/src/block-spec/interpret.ts`) reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
 
 This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — argument-less `fieldAttribute` specs with required documentation for the primary-key and uniqueness markers — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.

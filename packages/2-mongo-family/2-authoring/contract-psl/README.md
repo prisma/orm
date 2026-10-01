@@ -12,5 +12,6 @@ PSL-to-Mongo contract interpreter for Prisma 8. Transforms Prisma Schema Languag
 
 ## Known limitations
 
+- **Namespaces**: Every explicit `namespace` block is rejected with `PSL_UNSUPPORTED_NAMESPACE_BLOCK`, including `namespace unbound`. The database comes from the connection string; declare models at the document top level. Shared binder resolution does not add Mongo namespace support.
 - **Per-index `collation`**: PSL authoring does not support the `collation` index option. Users requiring per-index collation must use the TypeScript contract builder (`@internal/mongo-contract-ts`).
 - **`partialFilterExpression` / `wildcardProjection`**: These object-valued index options are not supported in PSL and require the TypeScript contract builder.
