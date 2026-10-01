@@ -11,7 +11,7 @@ import {
   resolveGrammar,
 } from './attribute-argument-grammar';
 import {
-  type AttributeArgumentOwner,
+  type ArgumentOwner,
   type AttributeSpecSource,
   argumentRootGrammar,
 } from './attribute-spec-resolution';
@@ -31,13 +31,15 @@ export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): Si
   return signatureHelp(context, root, input.clientSupportsLabelOffsets === true);
 }
 
-function rootSignatureName(owner: AttributeArgumentOwner): string {
+function rootSignatureName(owner: ArgumentOwner): string | undefined {
   switch (owner.ownerKind) {
     case 'field':
       return `@${owner.attributeName}`;
     case 'model':
     case 'block':
       return `@@${owner.attributeName}`;
+    case 'blockValue':
+      return undefined;
   }
 }
 
@@ -53,6 +55,7 @@ function signatureHelp(
   const call = context.path[callIndex];
   const signaturePath = context.path.slice(0, callIndex + 1);
   const name = call?.kind === 'functionCall' ? call.name : rootSignatureName(context);
+  if (name === undefined) return null;
   const signatures = resolveGrammar(root, signaturePath).flatMap((grammar) => {
     if ('kind' in grammar) return [];
     const active = context.path[callIndex + 1];
