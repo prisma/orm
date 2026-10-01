@@ -177,7 +177,7 @@ describe('Postgres planner table-name case guard', () => {
     ]);
     expect(result.conflicts[0]?.summary).toContain('MIGRATION.TABLE_NAME_CASE_CHANGED');
     expect(result.conflicts[0]?.why).toContain(
-      'in a project with migration history, make the rename its own schema change, create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration\'s operations, which renames the table and the objects named after it;',
+      'in a project with migration history, make the rename its own schema change, create its migration with prisma migration new --from <hash of the migration the database is at>, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration\'s operations, which renames the table and the objects named after it;',
     );
     expect(result.conflicts[0]?.why).not.toContain('--rename');
     expect(result.conflicts[0]?.why).toContain(

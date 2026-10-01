@@ -37,7 +37,7 @@ If you plan a migration (`prisma migration plan`, `prisma db update`, `prisma mi
 ```text
 ✘ [MIGRATION.PLANNING_FAILED] Migration planning failed
   why: MIGRATION.TABLE_NAME_CASE_CHANGED: table "UserProfile" would be created and table "userProfile" dropped. Prisma 8 changed the default table name: a model with no @@map now names its table verbatim, so model UserProfile points at "UserProfile" instead of "userProfile".
-→ To keep table "userProfile" and its rows, add @@map("userProfile") to model UserProfile (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, make the rename its own schema change, create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration's operations, which renames the table and the objects named after it; in a project that uses db update, rename it by hand with ALTER TABLE "public"."userProfile" RENAME TO "UserProfile", then run db update again.
+→ To keep table "userProfile" and its rows, add @@map("userProfile") to model UserProfile (or run the add-model-map codemod over the schema) and plan again. To rename the table and keep its rows instead: in a project with migration history, make the rename its own schema change, create its migration with prisma migration new --from <hash of the migration the database is at>, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" }) to the migration's operations, which renames the table and the objects named after it; in a project that uses db update, rename it by hand with ALTER TABLE "public"."userProfile" RENAME TO "UserProfile", then run db update again.
 ```
 
 That is the Postgres output for a model in the default `public` schema. On SQLite the last clause gives the two statements SQLite needs for a rename that only changes case: `in a project that uses db update, rename it by hand with ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"; ALTER TABLE "_prisma_rename_UserProfile" RENAME TO "UserProfile", then run db update again.`
@@ -49,8 +49,10 @@ To adopt the verbatim names on purpose instead of mapping, skip the codemod for 
 **Postgres or SQLite.** Make the rename its own schema change: remove the `@@map` from the models you rename, change nothing else, and run the package's contract-space build. From the extension package root, create a migration for the change:
 
 ```bash
-prisma migration new --name rename-user-profile
+prisma migration new --name rename-user-profile --from <hash of the package's newest migration>
 ```
+
+`migration new` takes its starting point from the `db` ref, and a package that has none must name one: pass the `to` hash of the newest migration in `migrations/app/`, which `prisma migration list` shows (a unique prefix is enough). Without it the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
 
 In the new `migration.ts`, spread one `renameTable` call per renamed table into the operations:
 
