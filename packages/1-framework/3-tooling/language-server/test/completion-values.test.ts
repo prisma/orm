@@ -488,6 +488,15 @@ namespace sibling { model Hidden {} }
     },
   );
 
+  it.each(['model: sibling.|', 'sibling.|', 'model: sibling.H|'])(
+    'offers matching members after a namespace qualifier in an attribute argument: %s',
+    (args) => {
+      expect(
+        complete(`model Example { value String @entity(${args}) }${declarations}`).labels,
+      ).toEqual(['Hidden']);
+    },
+  );
+
   it.each([
     ['model', 'Later', CompletionItemKind.Class],
     ['composite', 'Address', CompletionItemKind.Struct],

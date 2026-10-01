@@ -77,6 +77,35 @@ describe('generic block value completion across namespaces', () => {
     ]);
   });
 
+  it.each([
+    ['roles = [auth.|', ['auditor']],
+    ['roles = [auth.|]', ['auditor']],
+    ['roles = [admin, auth.|', ['auditor']],
+    ['target = auth.|', ['Account']],
+    ['target = reporting.|', ['Report']],
+  ])('offers matching members right after a namespace qualifier: %s', (entry, labels) => {
+    const result = topLevelPolicy(entry);
+    expect(result.items.map((item) => [item.label, item.textEdit])).toEqual(
+      labels.map((label) => [
+        label,
+        {
+          range: {
+            start: result.sourceFile.positionAt(result.cursorOffset),
+            end: result.sourceFile.positionAt(result.cursorOffset),
+          },
+          newText: label,
+        },
+      ]),
+    );
+  });
+
+  it('keeps offering members when the next entry follows on the next line', () => {
+    const result = complete(
+      ['policy_all everything {', '  roles = [auth.|', '  permissive = true', '}'].join('\n'),
+    );
+    expect(result.labels).toEqual(['auditor']);
+  });
+
   it('replaces a partially typed member after a namespace qualifier', () => {
     const result = topLevelPolicy('target = auth.Acc|');
     expect(result.edits).toEqual([
