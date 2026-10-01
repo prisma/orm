@@ -16,7 +16,6 @@ import {
   MongoStorage,
   MongoValidator,
 } from '@internal/mongo-contract';
-import { enumType } from '@internal/mongo-contract-ts/contract-builder';
 import { buildSymbolTable, jsonValue, mapBlock, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
@@ -189,11 +188,11 @@ model Item {
       },
     );
     expect(model(ir, 'Item').fields).toEqual({
-      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
       roles: {
         type: { kind: 'scalar', codecId: 'mongo/string@1' },
         nullable: false,
-        many: true,
+        many: { elementNullable: false },
         valueSet: {
           plane: 'domain',
           entityKind: 'enum',

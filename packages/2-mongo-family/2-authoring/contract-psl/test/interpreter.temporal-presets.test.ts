@@ -160,8 +160,12 @@ describe('Mongo PSL temporal presets', () => {
     );
     if (!result.ok) throw new Error(JSON.stringify(result.failure));
     expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Post']?.fields).toEqual({
-      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-      touchedAt: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false },
+      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
+      touchedAt: {
+        type: { kind: 'scalar', codecId: 'mongo/date@1' },
+        nullable: false,
+        many: false,
+      },
     });
   });
 
