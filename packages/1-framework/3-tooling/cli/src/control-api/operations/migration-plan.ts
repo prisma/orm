@@ -6,7 +6,10 @@ import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import {
+  type ConsumedHint,
+  type ControlFamilyInstance,
   createControlStack,
+  hasConsumedHintDescription,
   hasOperationPreview,
   type MigrationPlanOperation,
   type OperationPreview,
@@ -104,9 +107,32 @@ type PlannerSuccess = {
   readonly plannedOps: readonly MigrationPlanOperation[];
   readonly migrationTsContent: string;
   readonly hasPlaceholders: boolean;
+  readonly consumedHints: readonly ConsumedHint[];
+  /** The summaries of what the planner flagged without refusing to plan it. */
+  readonly warnings: readonly string[];
 };
 
 type TargetMigrationsApi = NonNullable<ReturnType<typeof getTargetMigrations>>;
+
+function describeHint(
+  familyInstance: ControlFamilyInstance<string, unknown>,
+  hint: ConsumedHint,
+): string {
+  if (hasConsumedHintDescription(familyInstance)) {
+    return familyInstance.describeConsumedHint(hint);
+  }
+  const { entityKind, entityName, namespaceId } = hint.coordinate;
+  return `hint applied: ${entityKind} "${entityName}" in namespace "${namespaceId}"`;
+}
+
+function consumedHintsField(
+  familyInstance: ControlFamilyInstance<string, unknown>,
+  hints: readonly ConsumedHint[],
+): Pick<MigrationPlanResult, 'consumedHints'> {
+  return hints.length === 0
+    ? {}
+    : { consumedHints: hints.map((hint) => ({ hint, text: describeHint(familyInstance, hint) })) };
+}
 
 async function runPlannerLeg(
   planner: ReturnType<TargetMigrationsApi['createPlanner']>,
@@ -187,6 +213,8 @@ async function runPlannerLeg(
     plannedOps,
     migrationTsContent: plannerResult.plan.renderTypeScript(resolveImportSpecifier),
     hasPlaceholders,
+    consumedHints: plannerResult.plan.consumedHints ?? [],
+    warnings: (plannerResult.warnings ?? []).map((warning) => warning.summary),
   });
 }
 
@@ -303,6 +331,11 @@ export interface MigrationPlanResult {
    * read `result.preview?.statements`.
    */
   readonly preview?: OperationPreview;
+  /**
+   * The planner hints the app-space plan acted on, each with the text the family describes it
+   * with. Absent when the plan consumed none.
+   */
+  readonly consumedHints?: readonly { readonly hint: ConsumedHint; readonly text: string }[];
   readonly summary: string;
   /**
    * Origin-resolution caveats the user must see, e.g. the default `db` ref
@@ -645,6 +678,7 @@ async function executeMigrationPlanCommandInner(
       if (!baselineLeg.ok) {
         return notOk(baselineLeg.failure);
       }
+      warnings.push(...baselineLeg.value.warnings);
 
       const consentFailure = refuseUnconsentedDestructiveBaseline(
         baselineLeg.value,
@@ -722,6 +756,8 @@ async function executeMigrationPlanCommandInner(
       if (!deltaLeg.ok) {
         return notOk(deltaLeg.failure);
       }
+      warnings.push(...deltaLeg.value.warnings);
+      const hintsApplied = consumedHintsField(familyInstance, deltaLeg.value.consumedHints);
 
       await writePlannedMigrationPackage(
         deltaPackageDir,
@@ -743,6 +779,7 @@ async function executeMigrationPlanCommandInner(
           dir: relative(cwd, deltaPackageDir),
           baselineDir: relative(cwd, baselinePackageDir),
           operations: [],
+          ...hintsApplied,
           emittedExtensionDirs,
           ...(warnings.length > 0 ? { warnings } : {}),
           pendingPlaceholders: true,
@@ -775,6 +812,7 @@ async function executeMigrationPlanCommandInner(
           label: op.label,
           operationClass: op.operationClass,
         })),
+        ...hintsApplied,
         emittedExtensionDirs,
         ...(preview !== undefined ? { preview } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),
@@ -807,6 +845,8 @@ async function executeMigrationPlanCommandInner(
     if (!deltaLeg.ok) {
       return notOk(deltaLeg.failure);
     }
+    warnings.push(...deltaLeg.value.warnings);
+    const hintsApplied = consumedHintsField(familyInstance, deltaLeg.value.consumedHints);
 
     await writePlannedMigrationPackage(
       packageDir,
@@ -825,6 +865,7 @@ async function executeMigrationPlanCommandInner(
         to: toStorageHash,
         dir: relative(cwd, packageDir),
         operations: [],
+        ...hintsApplied,
         emittedExtensionDirs,
         ...(warnings.length > 0 ? { warnings } : {}),
         pendingPlaceholders: true,
@@ -851,6 +892,7 @@ async function executeMigrationPlanCommandInner(
         label: op.label,
         operationClass: op.operationClass,
       })),
+      ...hintsApplied,
       emittedExtensionDirs,
       ...(preview !== undefined ? { preview } : {}),
       ...(fromDefaulted ? { fromDefaulted } : {}),

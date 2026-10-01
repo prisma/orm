@@ -26,6 +26,7 @@ const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable:
 function userWithAddresses(descriptor: ColumnTypeDescriptor): ContractDefinition {
   return {
     warnings: undefined,
+    hints: [],
     target: postgresTargetPack,
     createNamespace: createTestSqlNamespace,
     models: [
@@ -124,6 +125,7 @@ describe('value-object fields are stored in one column of the descriptor they ca
     const contract = buildSqlContractFromDefinition(
       {
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [

@@ -45,6 +45,7 @@ export function emptyContract(options: {
       load: async () => {
         const built = buildSqlContractFromDefinition({
           warnings: undefined,
+          hints: [],
           target: options.target,
           createNamespace: options.createNamespace,
           models: [],

@@ -1,0 +1,6 @@
+▸ Resolving contract source...
+✘ Resolving contract source...
+✘ [CONTRACT.SOURCE_LOAD_FAILED] Failed to resolve contract source
+  why: @@hint(was: "member") names the table's current name; the hint is spent, remove it.
+→ Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics.
+  docs: https://docs.prisma.io/docs/orm/v8/reference/error-reference/CONTRACT.SOURCE_LOAD_FAILED

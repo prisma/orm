@@ -1,39 +1,36 @@
 import type { Contract } from '@internal/contract/types';
-import { applyTableRename, type TableRename } from '@internal/family-sql/control';
+import type { ResolvedTableRename } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { buildSqlitePlanDiff, sqliteContractToSchema } from './diff-database-schema';
+import type { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { buildSqlitePlanDiff } from './diff-database-schema';
 import { pairIndexReplacements, renamedTableIndex } from './index-replacements';
 import { coalesceSubtreeIssues } from './issue-planner';
-import { RenameTableCall, type SqliteOpFactoryCall } from './op-factory-call';
+import { RenameTableCall } from './op-factory-call';
+import { renameTableInSqliteSchema } from './working-schema';
 
 /**
- * The calls a migration's `renameTable` emits: the table rename, then a drop of each wire-named index whose prefix derives from the old table name and a create of it under the new name, since SQLite cannot rename an index. SQLite names no primary key, unique constraint or foreign key the contract leaves unnamed, so those need nothing. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+ * The call that renames a table, carrying as companions a drop and a create under the new name of
+ * each index whose wire name derives from the old table name, since SQLite cannot rename an index.
+ * `previous` is the schema with the table under its old name; the renamed copy is diffed against
+ * `contract`. SQLite names no primary key, unique constraint or foreign key the contract leaves
+ * unnamed, so those need nothing.
  */
-export function sqliteTableRenameCalls(input: {
-  readonly startContract: Contract<SqlStorage> | null;
-  readonly endContract: Contract<SqlStorage>;
-  readonly rename: TableRename;
+export function sqliteTableRenameCall(input: {
+  readonly previous: SqlSchemaIR;
+  readonly contract: Contract<SqlStorage>;
+  readonly rename: ResolvedTableRename;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
-}): readonly SqliteOpFactoryCall[] {
-  const applied = applyTableRename({
-    startContract: input.startContract,
-    endContract: input.endContract,
-    rename: input.rename,
-    renameTableReferences: undefined,
-  });
-  if (!applied.ok) {
-    throw applied.failure;
-  }
-  const { rename } = applied.value;
+}): RenameTableCall {
+  const { from, to } = input.rename;
   const { issues } = buildSqlitePlanDiff({
-    contract: input.endContract,
-    actualSchema: sqliteContractToSchema(applied.value.contract),
+    contract: input.contract,
+    actualSchema: renameTableInSqliteSchema(input.previous, { from, to }),
     frameworkComponents: input.frameworkComponents,
   });
-  return [
-    new RenameTableCall(rename.from, rename.to),
-    ...pairIndexReplacements(coalesceSubtreeIssues(issues), renamedTableIndex(new Set([rename.to])))
-      .calls,
-  ];
+  const { replacements } = pairIndexReplacements(
+    coalesceSubtreeIssues(issues),
+    renamedTableIndex(new Set([to])),
+  );
+  return new RenameTableCall(from, to, replacements);
 }

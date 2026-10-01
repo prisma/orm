@@ -365,6 +365,8 @@ export class DropTableCall extends PostgresOpFactoryCallNode {
   }
 }
 
+export type RenameTableCompanionCall = RenameConstraintCall | RenameIndexCall;
+
 export class RenameTableCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'renameTable' as const;
   // `widening` for the same reason as `RenameConstraintCall`: a rename is
@@ -377,14 +379,29 @@ export class RenameTableCall extends PostgresOpFactoryCallNode {
   /** The new name: the table's contract-side identity after the rename. */
   readonly tableName: string;
   readonly label: string;
+  /**
+   * The renames of objects whose names derive from the table name. They run after the table rename
+   * and are never rendered on their own.
+   */
+  readonly companions: readonly RenameTableCompanionCall[];
 
-  constructor(schemaName: string, oldTableName: string, tableName: string) {
+  constructor(
+    schemaName: string,
+    oldTableName: string,
+    tableName: string,
+    companions: readonly RenameTableCompanionCall[],
+  ) {
     super();
     this.schemaName = schemaName;
     this.oldTableName = oldTableName;
     this.tableName = tableName;
     this.label = `Rename table "${oldTableName}" to "${tableName}"`;
+    this.companions = Object.freeze([...companions]);
     this.freeze();
+  }
+
+  toOps(lowerer?: ExecuteRequestLowerer): readonly (Op | Promise<Op>)[] {
+    return [this.toOp(lowerer), ...this.companions.map((companion) => companion.toOp(lowerer))];
   }
 
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
@@ -734,7 +751,7 @@ export class SetDefaultCall extends PostgresOpFactoryCallNode {
 
 export class DropDefaultCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropDefault' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
   readonly columnName: string;
@@ -1047,7 +1064,7 @@ export class AddForeignKeyCall extends PostgresOpFactoryCallNode {
 
 export class DropConstraintCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropConstraint' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
   readonly constraintName: string;
@@ -1207,7 +1224,7 @@ export class AddCheckConstraintCall extends PostgresOpFactoryCallNode {
 
 export class DropCheckConstraintCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropCheckConstraint' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
   readonly constraintName: string;
@@ -1406,7 +1423,7 @@ export class RenameIndexCall extends PostgresOpFactoryCallNode {
 
 export class DropIndexCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropIndex' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
   readonly indexName: string;
@@ -1611,7 +1628,7 @@ export class CreateNativeEnumTypeCall extends PostgresOpFactoryCallNode {
 
 export class DropNativeEnumTypeCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropNativeEnumType' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly typeName: string;
   readonly label: string;
@@ -1853,7 +1870,7 @@ export class CreatePostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
 
 export class DropPostgresRlsPolicyCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'dropRlsPolicy' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
   readonly policyName: string;
@@ -1925,7 +1942,7 @@ export class EnableRowLevelSecurityCall extends PostgresOpFactoryCallNode {
 
 export class DisableRowLevelSecurityCall extends PostgresOpFactoryCallNode {
   readonly factoryName = 'disableRowLevelSecurity' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly schemaName: string;
   readonly tableName: string;
   readonly label: string;

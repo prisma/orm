@@ -171,11 +171,35 @@ export interface OpFactoryCall {
    * the lowering requires async codec resolution (e.g. DDL with literal defaults).
    */
   toOp(): MigrationPlanOperation | Promise<MigrationPlanOperation>;
+  /**
+   * Lower this call to several runtime operations, in order, when one call stands for a change
+   * that takes more than one. Renderers use it instead of {@link toOp} when present, and pass it
+   * the same target lowerer.
+   */
+  toOps?(lowerer?: unknown): readonly (MigrationPlanOperation | Promise<MigrationPlanOperation>)[];
 }
 
 // ============================================================================
 // Plan Types (Display-Oriented)
 // ============================================================================
+
+/**
+ * A planner hint the plan acted on. `coordinate` is the entity the hint is on; `memberName` names
+ * a member of it, such as a column or a field, when the hint is on one; a rename carries the old
+ * name in `from`.
+ */
+export type ConsumedHint =
+  | {
+      readonly kind: 'renamed';
+      readonly coordinate: SchemaEntityCoordinate;
+      readonly memberName?: string;
+      readonly from: string;
+    }
+  | {
+      readonly kind: 'deleted';
+      readonly coordinate: SchemaEntityCoordinate;
+      readonly memberName?: string;
+    };
 
 /**
  * A migration plan for display purposes.
@@ -208,6 +232,8 @@ export interface MigrationPlan {
   };
   /** Ordered list of operations to execute. May contain Promises for ops that require async codec resolution. */
   readonly operations: readonly (MigrationPlanOperation | Promise<MigrationPlanOperation>)[];
+  /** The planner hints this plan acted on, for the command to report. */
+  readonly consumedHints?: readonly ConsumedHint[];
   /**
    * Sorted, deduplicated invariant ids declared by this plan's data-transform
    * ops. Authored migrations carry the canonical value from
@@ -420,6 +446,12 @@ export interface SchemaOwnership {
    * entity at this coordinate.
    */
   declaresEntity(coordinate: SchemaEntityCoordinate): boolean;
+  /**
+   * The id of the contract space that declares a storage entity at this coordinate, or
+   * `undefined` when none does. When several spaces declare it, the first in aggregate order, which
+   * puts the app space first and then the extension spaces by id.
+   */
+  ownerOf(coordinate: SchemaEntityCoordinate): string | undefined;
 }
 
 /**

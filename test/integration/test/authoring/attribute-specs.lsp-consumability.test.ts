@@ -135,6 +135,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       'control',
       'discriminator',
       'fullTextIndex',
+      'hint',
       'id',
       'index',
       'map',

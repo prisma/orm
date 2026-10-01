@@ -852,6 +852,37 @@
       "type": "object",
       "additionalProperties": {}
     },
+    "hints": {
+      "type": "object",
+      "properties": {
+        "namespaces": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "tables": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "was": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["was"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["tables"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["namespaces"],
+      "additionalProperties": false
+    },
     "meta": {
       "type": "object",
       "additionalProperties": {}

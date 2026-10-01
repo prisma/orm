@@ -16,7 +16,12 @@ import {
   buildIndexAttribute,
   buildModelConstraintAttribute,
 } from '../psl-build/index-attributes';
-import { buildAttribute, buildMapAttribute, positionalArg } from '../psl-build/psl-literals';
+import {
+  buildAttribute,
+  buildMapAttribute,
+  namedArg,
+  positionalArg,
+} from '../psl-build/psl-literals';
 import type { ModelWithTable, VariantInfo } from './contract-model-index';
 import { refuseUnwritableIndexOptions, refuseUnwritableObjectName } from './refusals';
 
@@ -107,7 +112,8 @@ function attributeNaming(input: {
 
 /**
  * The `@@` attributes of one model: its polymorphism, its keys, checks and indexes, its control
- * policy, `@@rls` and `@@map`. A table object several models share goes on the model that owns it.
+ * policy, `@@rls`, `@@map` and `@@hint`. A table object several models share goes on the model that
+ * owns it.
  */
 export function buildModelAttributes(input: {
   readonly entry: ModelWithTable;
@@ -115,6 +121,7 @@ export function buildModelAttributes(input: {
   readonly singleTableVariants: readonly ModelWithTable[];
   readonly derivedChecksByName: ReadonlyMap<string, DerivedCheck>;
   readonly rlsEnabled: boolean;
+  readonly was: string | undefined;
 }): readonly PslModelAttribute[] {
   const { entry, variant, singleTableVariants, derivedChecksByName } = input;
   const attributes: PslModelAttribute[] = [];
@@ -193,6 +200,11 @@ export function buildModelAttributes(input: {
   const mapName = pslModelMapName(entry.name, entry.tableName);
   if (mapName !== undefined && variant?.singleTable !== true) {
     attributes.push(buildMapAttribute('model', mapName));
+  }
+  if (input.was !== undefined) {
+    attributes.push(
+      buildAttribute('model', 'hint', [namedArg('was', `"${escapePslString(input.was)}"`)]),
+    );
   }
   return attributes;
 }

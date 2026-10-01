@@ -2,7 +2,11 @@ import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
 import { tableExistsAst } from '../../src/contract-free/checks';
-import { RenameTableCall } from '../../src/core/migrations/op-factory-call';
+import {
+  RenameConstraintCall,
+  RenameIndexCall,
+  RenameTableCall,
+} from '../../src/core/migrations/op-factory-call';
 import { renameTable } from '../../src/core/migrations/operations/tables';
 
 function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: unknown[] } {
@@ -83,7 +87,7 @@ describe('renameTable (postgres)', () => {
 
 describe('RenameTableCall (postgres)', () => {
   it('is a widening renameTable call whose contract-side identity is the new name', () => {
-    const call = new RenameTableCall('public', 'userProfile', 'UserProfile');
+    const call = new RenameTableCall('public', 'userProfile', 'UserProfile', []);
 
     expect(call).toMatchObject({
       factoryName: 'renameTable',
@@ -97,7 +101,7 @@ describe('RenameTableCall (postgres)', () => {
 
   it('toOp() delegates to renameTable', async () => {
     const { lowerer } = recordingCheckLowerer();
-    const op = await new RenameTableCall('auth', 'userProfile', 'UserProfile').toOp(lowerer);
+    const op = await new RenameTableCall('auth', 'userProfile', 'UserProfile', []).toOp(lowerer);
 
     expect(op.execute.map((step) => step.sql)).toEqual([
       'ALTER TABLE "auth"."userProfile" RENAME TO "UserProfile"',
@@ -105,7 +109,7 @@ describe('RenameTableCall (postgres)', () => {
   });
 
   it('toOp() without a lowerer reports MIGRATION.POSTGRES_CONTROL_STACK_MISSING', async () => {
-    const call = new RenameTableCall('public', 'userProfile', 'UserProfile');
+    const call = new RenameTableCall('public', 'userProfile', 'UserProfile', []);
     await expect(call.toOp()).rejects.toMatchObject({
       code: 'MIGRATION.POSTGRES_CONTROL_STACK_MISSING',
       meta: { factory: 'RenameTableCall' },
@@ -113,15 +117,61 @@ describe('RenameTableCall (postgres)', () => {
   });
 
   it('renderTypeScript() spreads the facade call, which returns every rename, schema-qualified only when bound', () => {
-    expect(new RenameTableCall('auth', 'userProfile', 'UserProfile').renderTypeScript()).toBe(
+    expect(new RenameTableCall('auth', 'userProfile', 'UserProfile', []).renderTypeScript()).toBe(
       '...this.renameTable({ schema: "auth", table: "userProfile", to: "UserProfile" })',
     );
     expect(
-      new RenameTableCall(UNBOUND_NAMESPACE_ID, 'userProfile', 'UserProfile').renderTypeScript(),
+      new RenameTableCall(
+        UNBOUND_NAMESPACE_ID,
+        'userProfile',
+        'UserProfile',
+        [],
+      ).renderTypeScript(),
     ).toBe('...this.renameTable({ table: "userProfile", to: "UserProfile" })');
   });
 
+  it('toOps() lowers the table rename, then each companion, with the same lowerer', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new RenameTableCall('auth', 'userProfile', 'UserProfile', [
+      new RenameConstraintCall(
+        'auth',
+        'UserProfile',
+        'primaryKey',
+        'userProfile_pkey',
+        'UserProfile_pkey',
+      ),
+      new RenameIndexCall(
+        'auth',
+        'UserProfile',
+        'userProfile_handle_idx',
+        'UserProfile_handle_idx',
+      ),
+    ]);
+
+    const ops = await Promise.all(call.toOps(lowerer));
+    expect(ops.map((op) => op.label)).toEqual([
+      'Rename table "userProfile" to "UserProfile"',
+      'Rename primary key "userProfile_pkey" to "UserProfile_pkey" on "UserProfile"',
+      'Rename index "userProfile_handle_idx" to "UserProfile_handle_idx" on "UserProfile"',
+    ]);
+  });
+
+  it('renders only the facade call, never its companions', () => {
+    const call = new RenameTableCall(UNBOUND_NAMESPACE_ID, 'userProfile', 'UserProfile', [
+      new RenameConstraintCall(
+        UNBOUND_NAMESPACE_ID,
+        'UserProfile',
+        'primaryKey',
+        'userProfile_pkey',
+        'UserProfile_pkey',
+      ),
+    ]);
+    expect(call.renderTypeScript()).toBe(
+      '...this.renameTable({ table: "userProfile", to: "UserProfile" })',
+    );
+  });
+
   it('needs no facade import because the call is a method on the migration', () => {
-    expect(new RenameTableCall('public', 'a', 'b').importRequirements()).toEqual([]);
+    expect(new RenameTableCall('public', 'a', 'b', []).importRequirements()).toEqual([]);
   });
 });

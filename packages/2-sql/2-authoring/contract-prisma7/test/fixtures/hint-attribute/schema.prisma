@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id Int @id
+
+  @@hint(was: "Profile")
+}

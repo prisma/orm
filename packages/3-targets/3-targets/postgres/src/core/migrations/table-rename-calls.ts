@@ -1,10 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import {
-  applyTableRename,
-  type MigrationOperationPolicy,
-  type ResolvedTableRename,
-  type TableRename,
-} from '@internal/family-sql/control';
+import type { MigrationOperationPolicy, ResolvedTableRename } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -13,11 +8,10 @@ import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { buildPostgresPlanDiff } from './diff-database-schema';
 import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
-import { type PostgresOpFactoryCall, RenameTableCall } from './op-factory-call';
-import { postgresContractToSchema } from './postgres-contract-to-schema';
-import { renameRlsReferences } from './rename-rls-references';
+import { RenameTableCall } from './op-factory-call';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
 import { constraintRenamesForTableRename } from './table-rename-constraint-renames';
+import { renameTableInPostgresSchema } from './working-schema';
 
 const RENAME_POLICY: MigrationOperationPolicy = { allowedOperationClasses: ['widening'] };
 
@@ -30,63 +24,52 @@ export function emissionSchemaForNamespace(
     : resolveDdlSchemaForNamespaceStorage(contract.storage, namespaceId);
 }
 
-function renamedTableNode(
+function tableNode(
   schema: PostgresDatabaseSchemaNode,
-  contract: Contract<SqlStorage>,
-  rename: ResolvedTableRename,
+  ddlSchema: string,
+  tableName: string,
 ): PostgresTableSchemaNode {
-  const ddlSchema = resolveDdlSchemaForNamespaceStorage(contract.storage, rename.namespaceId);
-  const table = Object.values(schema.namespaces).find(
-    (namespace) => namespace.schemaName === ddlSchema,
-  )?.tables[rename.to];
-  assertDefined(table, `a resolved rename names table "${rename.to}" in schema "${ddlSchema}"`);
+  const table = schema.namespaces[ddlSchema]?.tables[tableName];
+  assertDefined(table, `a resolved rename names table "${tableName}" in schema "${ddlSchema}"`);
   return table;
 }
 
 /**
- * The calls a migration's `renameTable` emits: the table rename, then a rename of each primary key, unique constraint and foreign key the start contract left unnamed, and of each wire-named index and check whose prefix derives from the table name. Only objects the end contract leaves otherwise unchanged are renamed; an unchanged constraint takes the end contract's explicit name if it has one. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+ * The call that renames a table, carrying as companions the renames of the objects on the table
+ * whose names derive from the table name: each primary key, unique constraint and foreign key the
+ * destination keeps, named as the destination names it, and each wire-named index and check whose
+ * prefix changes. `previous` is the schema before the rename; the renamed copy is diffed against
+ * the destination built from `contract`.
  */
-export function postgresTableRenameCalls(input: {
-  readonly startContract: Contract<SqlStorage> | null;
-  readonly endContract: Contract<SqlStorage>;
-  readonly rename: TableRename;
+export function postgresTableRenameCall(input: {
+  readonly previous: PostgresDatabaseSchemaNode;
+  readonly contract: Contract<SqlStorage>;
+  readonly rename: ResolvedTableRename;
   readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
-}): readonly PostgresOpFactoryCall[] {
-  const applied = applyTableRename({
-    startContract: input.startContract,
-    endContract: input.endContract,
-    rename: input.rename,
-    renameTableReferences: renameRlsReferences,
-  });
-  if (!applied.ok) {
-    throw applied.failure;
-  }
-  const { rename } = applied.value;
-  const contract = input.endContract;
+}): RenameTableCall {
+  const { contract, rename } = input;
   const schemaName = emissionSchemaForNamespace(contract, rename.namespaceId);
-  const previousSchema = postgresContractToSchema(
-    applied.value.contract,
-    input.frameworkComponents,
-  );
-  const nextSchema = postgresContractToSchema(contract, input.frameworkComponents);
-  const { issues } = buildPostgresPlanDiff({
+  const ddlSchema = resolveDdlSchemaForNamespaceStorage(contract.storage, rename.namespaceId);
+  const renamed = renameTableInPostgresSchema(input.previous, {
+    schemaName: ddlSchema,
+    from: rename.from,
+    to: rename.to,
+  });
+  const { expected, issues } = buildPostgresPlanDiff({
     contract,
-    actualSchema: previousSchema,
+    actualSchema: renamed,
     frameworkComponents: input.frameworkComponents,
   });
   const onRenamedTable = (call: { readonly schemaName: string; readonly tableName: string }) =>
     call.schemaName === schemaName && call.tableName === rename.to;
   const pairing = { contract, policy: RENAME_POLICY };
-  return [
-    new RenameTableCall(schemaName, rename.from, rename.to),
+  return new RenameTableCall(schemaName, rename.from, rename.to, [
     ...constraintRenamesForTableRename({
       schemaName,
-      from: rename.from,
-      to: rename.to,
-      previous: renamedTableNode(previousSchema, contract, rename),
-      next: renamedTableNode(nextSchema, contract, rename),
+      previous: tableNode(renamed, ddlSchema, rename.to),
+      next: tableNode(expected, ddlSchema, rename.to),
     }),
     ...pairIndexRenames(pairing, issues).calls.filter(onRenamedTable),
     ...pairCheckRenames(pairing, issues).calls.filter(onRenamedTable),
-  ];
+  ]);
 }

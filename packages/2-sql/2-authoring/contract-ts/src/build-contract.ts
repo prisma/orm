@@ -48,6 +48,7 @@ import {
   type ForeignKeyAuthoringInput,
   materializeForeignKeysAndIndexes,
 } from '@internal/sql-contract/foreign-key-materialization';
+import type { SqlContractHints, SqlTableHints } from '@internal/sql-contract/hints';
 import { type AuthoredIndexInput, lowerAuthoredIndex } from '@internal/sql-contract/index-naming';
 import { validateIndexTypes } from '@internal/sql-contract/index-type-validation';
 import {
@@ -87,6 +88,7 @@ import {
   type AuthoredColumnDefault,
   type ContractDefinition,
   type FieldNode,
+  type HintEntry,
   isValueObjectMember,
   type ModelNode,
   type RelationNode,
@@ -1164,6 +1166,27 @@ function columnsProducingCheckPrefix(
   );
 }
 
+function buildContractHints(
+  entries: readonly HintEntry[],
+  defaultNamespaceId: string,
+): SqlContractHints | undefined {
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const tablesByNamespace: Record<string, Record<string, SqlTableHints>> = {};
+  for (const entry of entries) {
+    const namespaceId = entry.namespaceId ?? defaultNamespaceId;
+    const tables = tablesByNamespace[namespaceId] ?? {};
+    tablesByNamespace[namespaceId] = tables;
+    tables[entry.table] = { was: entry.hint.was };
+  }
+  return {
+    namespaces: Object.fromEntries(
+      Object.entries(tablesByNamespace).map(([namespaceId, tables]) => [namespaceId, { tables }]),
+    ),
+  };
+}
+
 export function buildSqlContractFromDefinition(
   definition: ContractDefinition,
   codecLookup?: CodecLookupWithDescriptors,
@@ -1867,6 +1890,7 @@ export function buildSqlContractFromDefinition(
     target,
     targetFamily,
     ...ifDefined('defaultControlPolicy', definition.defaultControlPolicy),
+    ...ifDefined('hints', buildContractHints(definition.hints, defaultNamespaceId)),
     domain: { namespaces: domainNamespaces },
     roots,
     storage,

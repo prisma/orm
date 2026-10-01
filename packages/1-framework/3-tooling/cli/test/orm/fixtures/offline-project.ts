@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type { MigrationPlanOperation } from '@internal/framework-components/control';
+import type { ConsumedHint, MigrationPlanOperation } from '@internal/framework-components/control';
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { deriveProvidedInvariants } from '@internal/migration-tools/invariants';
@@ -148,6 +148,8 @@ export interface FakePlannerScript {
   readonly conflicts?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
   readonly throwOnOperations?: unknown;
   readonly throwOnPlan?: unknown;
+  readonly consumedHints?: readonly ConsumedHint[];
+  readonly warnings?: ReadonlyArray<{ readonly kind: string; readonly summary: string }>;
 }
 
 function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
@@ -168,7 +170,11 @@ function fakePlanner(script: FakePlannerScript): Record<string, unknown> {
                       Promise.reject(script.throwOnOperations),
                     ],
               renderTypeScript: () => '// planned migration\n',
+              ...(script.consumedHints === undefined
+                ? {}
+                : { consumedHints: script.consumedHints }),
             },
+            ...(script.warnings === undefined ? {} : { warnings: script.warnings }),
           }
         : { kind: 'failure', conflicts: script.conflicts };
     },
@@ -182,6 +188,7 @@ export function offlineConfig(options: {
   readonly project: OfflineProject;
   readonly script?: FakePlannerScript;
   readonly targetSupportsMigrations?: boolean;
+  readonly describeConsumedHint?: (hint: ConsumedHint) => string;
 }): Record<string, unknown> {
   const migrations = {
     contractToSchema: () => ({}),
@@ -193,7 +200,12 @@ export function offlineConfig(options: {
       kind: 'family',
       id: 'sql',
       emission: {},
-      create: () => ({ deserializeContract: (json: unknown) => json }),
+      create: () => ({
+        deserializeContract: (json: unknown) => json,
+        ...(options.describeConsumedHint === undefined
+          ? {}
+          : { describeConsumedHint: options.describeConsumedHint }),
+      }),
     },
     target: {
       ...SQL_POSTGRES,

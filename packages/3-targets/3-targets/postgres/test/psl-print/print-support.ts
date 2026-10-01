@@ -92,6 +92,7 @@ export function buildModels(input: {
   readonly execution?: {
     readonly mutations: { readonly defaults: readonly ExecutionMutationDefault[] };
   };
+  readonly hints?: unknown;
 }): readonly PslModel[] {
   const domainNamespace: ApplicationDomainNamespace = {
     models: Object.fromEntries(
@@ -119,7 +120,9 @@ export function buildModels(input: {
     input.execution === undefined
       ? createSqlContract(overrides)
       : createSqlContract({ ...overrides, execution: input.execution });
-  const contract = new PostgresContractSerializer().deserializeContract(json);
+  const contract = new PostgresContractSerializer().deserializeContract(
+    input.hints === undefined ? json : { ...json, hints: input.hints },
+  );
   const ast = buildPostgresPslContract(
     blindCast<Contract<SqlStorage>, 'the Postgres serializer yields a SQL contract'>(contract),
     testBuildContext(),

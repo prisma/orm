@@ -179,6 +179,7 @@ describe('sqlAttributeSpecs', () => {
       'check',
       'control',
       'discriminator',
+      'hint',
       'id',
       'index',
       'map',
@@ -192,6 +193,27 @@ describe('sqlAttributeSpecs', () => {
       'relation',
       'unique',
     ]);
+  });
+
+  it('exposes the @@hint named arguments in order with their documentation', () => {
+    const spec = sqlAttributeSpecs.model.hint();
+    expect(spec.documentation).toBe(
+      "Tells the migration planner the intent behind a change to this model's table that a diff cannot infer.",
+    );
+    expect(
+      Object.entries(spec.named).map(([name, param]) => ({
+        name,
+        documentation: param.documentation,
+      })),
+    ).toEqual([
+      {
+        name: 'was',
+        documentation:
+          'The storage name this table had before it was renamed, as @@map would have spelled it.',
+      },
+      { name: 'deprecated', documentation: 'Reserved. Not yet supported.' },
+    ]);
+    expect(spec.positional).toEqual([]);
   });
 
   it('exposes the @relation named arguments through the spec', () => {

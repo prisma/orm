@@ -185,6 +185,16 @@ describe('Postgres planner table-name case guard', () => {
     );
   });
 
+  it('offers a rename hint as the first remedy, then keeping the table with @@map', () => {
+    const result = planFromLive(['userProfile'], 'UserProfile')();
+
+    expect(result.kind).toBe('failure');
+    if (result.kind !== 'failure') return;
+    expect(result.conflicts[0]?.why).toMatch(
+      /^To rename the table and keep its rows, add a rename hint to model UserProfile \(@@hint\(was: "userProfile"\) in PSL, sql\(\{ hint: \{ was: "userProfile" \} \}\) in TypeScript\) and plan again; the planner renames the table and the objects named after it\. Or, to keep table "userProfile" and its rows, add @@map\("userProfile"\) to model UserProfile /,
+    );
+  });
+
   it('still refuses when UserProfile also gained a column', () => {
     const result = planFromLive(['userProfile'], 'UserProfile', { extraColumn: 'nickname' })();
 
@@ -361,7 +371,12 @@ describe('the renameTable call the Postgres case guard suggests', () => {
 
     expect(result).toEqual({
       call: '...this.renameTable({ schema: "public", table: "userProfile", to: "UserProfile" })',
-      statements: [['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"']],
+      statements: [
+        ['ALTER TABLE "public"."userProfile" RENAME TO "UserProfile"'],
+        [
+          'ALTER TABLE "public"."UserProfile" RENAME CONSTRAINT "userProfile_pkey" TO "UserProfile_pkey"',
+        ],
+      ],
     });
   });
 

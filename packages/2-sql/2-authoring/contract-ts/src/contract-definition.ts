@@ -284,6 +284,15 @@ export interface ModelNode {
   readonly sharesBaseTable?: boolean;
 }
 
+export type TableHint = { readonly was: string; readonly deleted?: never };
+
+export type HintEntry = {
+  readonly namespaceId: string | undefined;
+  readonly table: string;
+  readonly column?: undefined;
+  readonly hint: TableHint;
+};
+
 export interface ContractDefinition {
   readonly target: TargetPackRef<'sql', string>;
   readonly defaultControlPolicy?: ControlPolicy;
@@ -332,4 +341,5 @@ export interface ContractDefinition {
    * author input.
    */
   readonly attachedEntities?: AttachedEntities;
+  readonly hints: readonly HintEntry[];
 }

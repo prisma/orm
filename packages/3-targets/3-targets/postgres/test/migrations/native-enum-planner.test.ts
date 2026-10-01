@@ -213,6 +213,8 @@ function twoSpaceOwnership(...storages: readonly SqlStorage[]): SchemaOwnership 
   }
   return {
     declaresEntity: (coordinate) => ownedCoordinates.has(coordinateKey(coordinate)),
+    ownerOf: (coordinate) =>
+      ownedCoordinates.has(coordinateKey(coordinate)) ? 'sibling' : undefined,
   };
 }
 
@@ -356,7 +358,7 @@ describe('op building (typed DDL node)', () => {
     const node = received.find((n): n is PostgresDropType => n instanceof PostgresDropType);
     expect(node?.schema).toBe('sales');
     expect(node?.name).toBe('order_status');
-    expect(op.operationClass).toBe('destructive');
+    expect(op.operationClass).toBe('widening');
   });
 
   it('an unbound-namespace create builds a node with no schema so search_path resolves it', async () => {
@@ -371,7 +373,10 @@ describe('op building (typed DDL node)', () => {
 describe('planner ownership + policy for enum extras', () => {
   const ownsOnly = (...coordinates: readonly SchemaEntityCoordinate[]): SchemaOwnership => {
     const owned = new Set(coordinates.map(coordinateKey));
-    return { declaresEntity: (coordinate) => owned.has(coordinateKey(coordinate)) };
+    return {
+      declaresEntity: (coordinate) => owned.has(coordinateKey(coordinate)),
+      ownerOf: (coordinate) => (owned.has(coordinateKey(coordinate)) ? 'sibling' : undefined),
+    };
   };
 
   function planLive(

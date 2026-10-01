@@ -4,6 +4,8 @@ import type {
   TargetDescriptor,
 } from '@internal/framework-components/components';
 import type {
+  AuthoredContractValidationCapable,
+  ConsumedHintDescriptionCapable,
   ControlFamilyInstance,
   ControlStack,
   CoreSchemaView,
@@ -32,6 +34,7 @@ import { isPlainRecord } from '@internal/framework-components/ir';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { assertDescriptorSelfConsistency } from '@internal/migration-tools/spaces';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
+import { assertContractHintsConsistent } from '@internal/sql-contract/hints';
 import { assertNothingCastsFromSqlExpression } from '@internal/sql-contract/sql-expression';
 import type { SqlControlDriverInstance, SqlStorage } from '@internal/sql-contract/types';
 import type {
@@ -59,6 +62,7 @@ import {
 } from './diff/schema-verify';
 import { sqlFamilyError } from './errors';
 import { SqlContractSerializer } from './ir/sql-contract-serializer';
+import { describeConsumedHint } from './migrations/hint-advice';
 import type { SqlSchemaDiffFn } from './migrations/schema-differ';
 import type {
   SqlControlAdapterDescriptor,
@@ -212,6 +216,8 @@ export interface SqlControlFamilyInstance
     SchemaViewCapable<SqlSchemaIRNode>,
     PslContractInferCapable<SqlSchemaIRNode>,
     PslContractBuildCapable<Contract<SqlStorage>>,
+    AuthoredContractValidationCapable<Contract<SqlStorage>>,
+    ConsumedHintDescriptionCapable,
     OperationPreviewCapable,
     SqlFamilyInstanceState {
   /**
@@ -1066,6 +1072,12 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     toOperationPreview(operations: readonly MigrationPlanOperation[]): OperationPreview {
       return sqlOperationsToPreview(operations);
     },
+
+    validateAuthoredContract(contract: Contract<SqlStorage>): void {
+      assertContractHintsConsistent(contract);
+    },
+
+    describeConsumedHint,
 
     toSchemaView(schema: SqlSchemaIRNode): CoreSchemaView {
       // Walk the schema-IR tree's own structure (root → namespaces → tables)

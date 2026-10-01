@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { stripContractHints } from '@internal/contract/strip-hints';
 import { CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex } from '@internal/framework-components/control';
 import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
@@ -124,7 +125,7 @@ export async function writeContractSnapshot(
   );
   await mkdir(tmpDir, { recursive: true });
 
-  const jsonContent = `${canonicalizeJson(input.contractJson)}\n`;
+  const jsonContent = `${canonicalizeJson(stripContractHints(input.contractJson))}\n`;
   const dtsContent = input.contractDts.endsWith('\n')
     ? input.contractDts
     : `${input.contractDts}\n`;

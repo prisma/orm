@@ -17,6 +17,7 @@ import {
   makePslNamespaceEntries,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
+import { sqlContractHints } from '@internal/sql-contract/hints';
 import type { ForeignKey, SqlModelStorage, SqlStorage } from '@internal/sql-contract/types';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -193,6 +194,11 @@ function buildModel(
       singleTableVariants,
       derivedChecksByName: checks,
       rlsEnabled: rlsTables.has(entry.tableName),
+      was:
+        variant?.singleTable === true
+          ? undefined
+          : sqlContractHints(all.contract)?.namespaces[entry.namespaceId]?.tables[entry.tableName]
+              ?.was,
     }),
     span: SYNTHETIC_SPAN,
   };

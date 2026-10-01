@@ -7,6 +7,8 @@ export {
   storageHashHex,
 } from '../control/contract-snapshot-layout';
 export type {
+  AuthoredContractValidationCapable,
+  ConsumedHintDescriptionCapable,
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
   OperationPreviewCapable,
@@ -18,6 +20,8 @@ export type {
   SchemaViewCapable,
 } from '../control/control-capabilities';
 export {
+  hasAuthoredContractValidation,
+  hasConsumedHintDescription,
   hasMigrations,
   hasOperationPreview,
   hasPslContractBuild,
@@ -40,6 +44,7 @@ export type {
   ControlTargetInstance,
 } from '../control/control-instances';
 export type {
+  ConsumedHint,
   MigrationMetadata,
   MigrationOperationClass,
   MigrationOperationPolicy,

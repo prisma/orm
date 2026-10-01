@@ -28,6 +28,7 @@ describe('value-object members and value-object fields in the domain', () => {
     const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: [
@@ -94,6 +95,7 @@ describe('value-object members and value-object fields in the domain', () => {
     ] as const;
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       enums: { Country },
@@ -178,6 +180,7 @@ describe('value-object members and value-object fields in the domain', () => {
   it('types a member by a nested value object, and keeps the members of the nested value object', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: [
@@ -214,6 +217,7 @@ describe('value-object members and value-object fields in the domain', () => {
   it('omits valueObjects from the contract when none are defined', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: [

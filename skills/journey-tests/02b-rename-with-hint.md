@@ -1,23 +1,25 @@
-# Journey 02b — Rename a column (capability gap: no in-contract hint)
+# Journey 02b — Rename a model with a rename hint
 
-**Skills under test:** `prisma-8-contract`, `prisma-8-migrations`, `prisma-8-feedback`.
+**Skills under test:** `prisma-8-contract`, `prisma-8-migrations`.
+
+**Example app:** A Postgres or SQLite project with a `Profile` model whose table holds rows, and at least one applied migration.
 
 ## Prompt
 
-> Rename the `email` column on User to `emailAddress`.
+> Rename the `Profile` model to `Member`. Keep the existing rows.
 
 ## Expected agent behavior
 
-- [ ] Names the capability gap explicitly: PN has no in-contract rename hint today; the planner sees a destructive drop+add.
-- [ ] Edits the contract to rename the field (no fabricated `@hint(...)` syntax).
+- [ ] Renames the model and adds `@@hint(was: "Profile")` to it (the old table name, as `@@map` would spell it), or `.sql({ hint: { was: 'Profile' } })` in the TS builder.
 - [ ] Runs `contract emit`.
-- [ ] Runs `migration plan --name rename-user-email`.
-- [ ] Runs `migration show <slug>` and confirms the plan is a `DROP COLUMN` + `ADD COLUMN` — the destructive shape the user was warned about.
-- [ ] Walks the user through hand-editing `migration.ts` to rewrite the destructive op as a `RENAME COLUMN`, then `node migrations/app/<dir>/migration.ts` to self-emit and `db migrate`.
-- [ ] Offers to route a feature request for a first-class rename hint via `prisma-8-feedback`.
+- [ ] Runs `migration plan --name rename-profile-to-member`.
+- [ ] Confirms the plan renames the table (`Rename table ...` in the operation list, `...this.renameTable({ table: "Profile", to: "Member" })` in `migration.ts`) instead of dropping and creating it, and that `Hints applied` lists the hint.
+- [ ] Runs `db migrate`.
+- [ ] Tells the user the hint can be removed once the migration is applied.
 
 ## Success criteria
 
-- [ ] Migration that actually applies uses RENAME (because the agent hand-edited it), not DROP+ADD.
-- [ ] No data lost.
-- [ ] Agent did NOT confabulate `@hint(was: "...")` or any other unimplemented hint syntax.
+- [ ] The applied migration renames the table; no `DROP TABLE`.
+- [ ] No rows lost.
+- [ ] The agent did not hand-edit `migration.ts` to get the rename.
+- [ ] The agent did not invent a field-level hint: a field rename still has no hint, and asking for one routes to `references/feedback.md`.

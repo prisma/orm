@@ -144,7 +144,7 @@ describe('check planning is diff-driven', () => {
       toContract: contractWith([UNBOUND_NAMESPACE_ID], []),
       fromContract: null,
       schema: schemaWith([live]),
-      policy: { allowedOperationClasses: ['additive', 'destructive'] },
+      policy: { allowedOperationClasses: ['additive', 'widening'] },
     });
 
     expect(result.ok).toBe(true);
@@ -216,7 +216,7 @@ describe('a prefix-only change reaches the mapper as a missing/extra pair', () =
       ),
       fromContract: null,
       schema: schemaWith([actual]),
-      policy: { allowedOperationClasses: ['additive', 'destructive'] },
+      policy: { allowedOperationClasses: ['additive', 'widening'] },
     });
 
     expect(result.ok).toBe(true);

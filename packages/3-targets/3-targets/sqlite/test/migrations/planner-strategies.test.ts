@@ -6,7 +6,16 @@ import {
   recreateTableStrategy,
   type StrategyContext,
 } from '../../src/core/migrations/planner-strategies';
-import { actualColumn, expectedColumn, issue, primaryKey, table } from './node-issue-helpers';
+import {
+  actualColumn,
+  columnDefault,
+  expectedColumn,
+  foreignKey,
+  issue,
+  primaryKey,
+  table,
+  unique,
+} from './node-issue-helpers';
 
 function makeContext(overrides: Partial<StrategyContext> = {}): StrategyContext {
   return {
@@ -83,25 +92,67 @@ describe('recreateTableStrategy', () => {
   });
 
   it('destructive wins over widening when both occur on the same table', () => {
-    const defaultDrift = issue({
-      path: ['database', 'user', 'column:email', 'default'],
-      expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
-      actual: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
-    });
     const pkDrift = issue({
       path: ['database', 'user', 'primary-key'],
       expected: primaryKey(['id']),
       actual: primaryKey(['id', 'email']),
     });
+    const typeDrift = issue({
+      path: ['database', 'user', 'column:email'],
+      expected: expectedColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
+      actual: actualColumn({ name: 'email', nativeType: 'INTEGER', nullable: true }),
+    });
     const ctx = makeContext({
       expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
       actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
     });
-    const result = recreateTableStrategy([defaultDrift, pkDrift], ctx);
+    const result = recreateTableStrategy([pkDrift, typeDrift], ctx);
     expect(result.kind).toBe('match');
     if (result.kind !== 'match') return;
     expect((result.calls[0] as RecreateTableCall).operationClass).toBe('destructive');
     expect(result.issues).toHaveLength(0);
+  });
+
+  it.each([
+    [
+      'a changed primary key',
+      issue({
+        path: ['database', 'user', 'primary-key'],
+        expected: primaryKey(['id']),
+        actual: primaryKey(['id', 'email']),
+      }),
+    ],
+    [
+      'a dropped unique constraint',
+      issue({ path: ['database', 'user', 'unique:email'], actual: unique(['email']) }),
+    ],
+    [
+      'a dropped foreign key',
+      issue({
+        path: ['database', 'user', 'foreign-key:org_id'],
+        actual: foreignKey({
+          columns: ['email'],
+          referencedTable: 'org',
+          referencedColumns: ['id'],
+        }),
+      }),
+    ],
+    [
+      'a removed column default',
+      issue({
+        path: ['database', 'user', 'column:email', 'default'],
+        actual: columnDefault({ raw: "'x'" }),
+      }),
+    ],
+  ])('classifies a recreate for %s alone as widening', (_label, constraintIssue) => {
+    const ctx = makeContext({
+      expected: new SqlSchemaIR({ tables: { user: expectedUserTable } }),
+      actual: new SqlSchemaIR({ tables: { user: actualUserTable } }),
+    });
+    const result = recreateTableStrategy([constraintIssue], ctx);
+    expect(result.kind).toBe('match');
+    if (result.kind !== 'match') return;
+    expect((result.calls[0] as RecreateTableCall).operationClass).toBe('widening');
   });
 
   it('relaxing nullability (NOT NULL → nullable) is widening, tightening is destructive', () => {

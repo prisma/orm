@@ -1,0 +1,114 @@
+// use prisma-8
+// Printed from src/prisma/contract.prisma by `prisma contract print`.
+
+types {
+  Embedding1536 = pgvector.Vector(1536)
+}
+
+enum user_type {
+  admin = "admin"
+  user = "user"
+  @@type("pg/text@1")
+}
+
+enum Priority {
+  Low = 0
+  High = 1
+  Urgent = 2
+  @@type("pg/int4@1")
+}
+
+namespace public {
+  type Address {
+    street  String
+    city    String
+    zip     String?
+    country String
+  }
+
+  model Bug {
+    severity     String
+    stepsToRepro String?
+
+    @@base(Task, "bug")
+    @@map("bug")
+  }
+
+  model Feature {
+    priority      String
+    targetRelease String?
+
+    @@base(Task, "feature")
+    @@map("feature")
+  }
+
+  model Label {
+    id    Uuid   @id @default(uuid())
+    label String
+    posts Post[]
+
+    @@unique([label])
+    @@index([label], name: "label_label_idx")
+    @@hint(was: "tag")
+    @@map("label")
+  }
+
+  model User {
+    id          Uuid        @id @default(uuid())
+    email       String
+    displayName String
+    createdAt   Timestamptz @default(now())
+    kind        user_type
+    address     Address?
+    posts       Post[]
+    tasks       Task[]
+
+    @@map("user")
+  }
+
+  model Post {
+    id              Uuid           @id @default(uuid())
+    title           String
+    userId          Uuid
+    priority        Priority       @default(Low)
+    createdAt       Timestamptz    @default(now())
+    expiresAt       Timestamptz    @default(sql`(now() + '7 days'::interval)`)
+    embedding       Embedding1536?
+    viewCount       BigIntNumber?
+    impressionCount BigInt?
+    reachScore      UnboundedInt?
+    tags            Label[]
+    user            User           @relation(fields: [userId], references: [id], index: false)
+
+    @@index(expression: "to_tsvector('english', \"title\")", name: "post_title_search", type: "gin")
+    @@index([userId], name: "post_userId_idx")
+    @@map("post")
+  }
+
+  model PostTag {
+    postId Uuid
+    tagId  Uuid
+    post   Post  @relation(fields: [postId], references: [id], index: false)
+    tag    Label @relation(fields: [tagId], references: [id], index: false)
+
+    @@id([postId, tagId])
+    @@index([postId], name: "post_tag_postId_idx")
+    @@index([tagId], name: "post_tag_tagId_idx")
+    @@map("post_tag")
+  }
+
+  model Task {
+    id          Uuid        @id @default(uuid())
+    title       String
+    description String?
+    status      String      @default("open")
+    type        String
+    userId      Uuid
+    createdAt   Timestamptz @default(now())
+    user        User        @relation(fields: [userId], references: [id], index: false)
+
+    @@discriminator(type)
+    @@index([userId], name: "task_userId_idx")
+    @@map("task")
+  }
+}

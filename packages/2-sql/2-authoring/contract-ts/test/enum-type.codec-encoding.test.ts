@@ -49,6 +49,7 @@ function definitionWith(enumHandle: ReturnType<typeof enumType>): ContractDefini
     createNamespace: createTestSqlNamespace,
     storageTypes: {},
     warnings: undefined,
+    hints: [],
     models: [],
     enums: { [enumHandle.enumName]: enumHandle },
   } as ContractDefinition;

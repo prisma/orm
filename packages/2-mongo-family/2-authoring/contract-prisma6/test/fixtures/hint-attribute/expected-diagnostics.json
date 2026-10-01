@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Model \"Post\": attribute \"@@hint\" is not supported by the Prisma 6 MongoDB contract source."
+  }
+]

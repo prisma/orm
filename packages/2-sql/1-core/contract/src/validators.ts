@@ -414,6 +414,20 @@ const ContractMetaSchema = type({
 });
 
 /**
+ * The contract's `hints` section. It accepts only the entries a planner acts on, a table's `was`,
+ * so an entry nothing would act on fails validation instead of being ignored.
+ */
+export const sqlContractHintsSchema = type({
+  '+': 'reject',
+  namespaces: type({
+    '[string]': type({
+      '+': 'reject',
+      tables: type({ '[string]': type({ '+': 'reject', was: 'string > 0' }) }),
+    }),
+  }),
+});
+
+/**
  * Builds the full SQL contract schema. The storage subtree threads
  * pack contributions through {@link createSqlStorageSchema}; the rest
  * of the contract envelope is family-shared.
@@ -432,6 +446,7 @@ export function createSqlContractSchema(
     'extensions?': 'Record<string, unknown>',
     'meta?': ContractMetaSchema,
     'defaultControlPolicy?': ControlPolicySchema,
+    'hints?': sqlContractHintsSchema,
     'roots?': type({ '[string]': CrossReferenceSchema }),
     domain: type({
       namespaces: type({

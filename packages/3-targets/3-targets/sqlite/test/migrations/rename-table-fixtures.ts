@@ -35,6 +35,7 @@ export function contractOf(
   profileTableName: string,
   spec: ProfileSpec,
   hashSeed: string,
+  extraTables: Readonly<Record<string, StorageTable>> = {},
 ): Contract<SqlStorage> {
   return {
     target: 'sqlite',
@@ -73,6 +74,7 @@ export function contractOf(
                   },
                 ],
               }),
+              ...extraTables,
             },
           },
         }),
@@ -97,4 +99,14 @@ export function handleIndex(tableName: string): IndexInput {
     type: undefined,
     options: undefined,
   };
+}
+
+export function plainTable(): StorageTable {
+  return new StorageTable({
+    columns: { id: integer },
+    primaryKey: { columns: ['id'] },
+    uniques: [],
+    indexes: [],
+    foreignKeys: [],
+  });
 }

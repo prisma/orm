@@ -441,6 +441,10 @@ An index or column mapping references a field the model does not declare (unknow
 
 A foreign key's target refs are empty or inconsistent: no target ref given, refs point at different models, or compound refs disagree on `spaceId`, `namespaceId`, or `tableName`. Raised by the SQL contract DSL while declaring the FK. Payload: `mismatch`, `first`, `second`.
 
+### CONTRACT.HINT_INVALID
+
+The contract's `hints` section disagrees with the contract it belongs to: a hint names a namespace or table the contract does not declare, a rename hint's old name is still declared by the contract, or two entries claim the same old name. The message names the table and the rule it breaks, for example `Contract hints: table "User" claims it was "Post", which the contract also declares.` Raised when the hints of an emitted contract are checked before they are used. An entry the planner cannot act on, such as a `deleted` or `columns` entry written by hand, fails the contract's structural validation instead. Payload: `namespaceId`, `table`; `was` when it applies.
+
 ### CONTRACT.IDENTITY_INVALID
 
 A model's identity is wrong: multiple fields marked `.id()`, identity declared both inline and in `.attributes(...)`, an empty identity, a model with non-owning relations but no id to anchor them, or an M:N target with no primary/unique key to derive junction columns from. Raised while lowering/building a SQL contract. Payload: `modelName`, `reason`.
@@ -583,7 +587,7 @@ One finding a contract source reported with a code that is not yet dotted, such 
 
 ### CONTRACT.SOURCE_LOAD_FAILED
 
-Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit` or `contract print`, or `contract format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
+Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit` or `contract print`, or `contract format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. A `CONTRACT.*` error the source provider throws while it builds the contract, such as `CONTRACT.HINT_INVALID` for a spent rename hint, is reported under its own code and message instead. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
 
 ### CONTRACT.TABLE_AMBIGUOUS
 
@@ -1432,6 +1436,14 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `migration ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
 
+### MIGRATION.HINT_CONTRADICTED
+
+A table rename hint (`@@hint(was: "<old>")`) cannot apply because the schema the plan starts from already has both the old table and the new one. A rename applies only while the old name exists and the new one does not. Raised by the planner before it diffs anything, as a `hintRejected` conflict that fails the plan. Remove the hint if the old table was already renamed; if the old table should stay, remove the hint and give the model another table name. Payload: `code`, `from`, `to`.
+
+### MIGRATION.HINT_FOREIGN_TABLE
+
+A table rename hint names, as the old table, a table another contract space declares. A hint may rename only tables of the contract space being planned. Raised by the planner before it diffs anything, as a `hintRejected` conflict that fails the plan. Remove the hint, or move the table into this space first. Payload: `code`, `from`, `to`.
+
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
 The `migration.ts` in a package directory does not default-export a valid migration: it must export a `Migration` subclass or a factory function returning a plan-shaped object (`operations` array plus `targetId` and `destination`). Payload: `dir`, `actualExport` (when known).
@@ -1626,7 +1638,7 @@ The planner would drop table `X` and create table `Y` in the same namespace, whe
 
 ### MIGRATION.TABLE_RENAME_UNMATCHED
 
-`this.renameTable({ table, to })` in a hand-written migration does not match the migration's contracts: the migration has no start contract, the start contract has no table `table` (or, with no `schema`, declares it in more than one namespace), the start contract already has a table `to`, or the end contract has no table `to`. Raised when the migration's operations are built, so `migration.ts` writes no `ops.json`. Make the rename its own schema change, so the migration's start contract is the schema before the rename and its end contract the schema after it, and check the table names and the `schema`. Payload: `from`, `to`.
+`this.renameTable({ table, to })` in a hand-written migration does not match the migration's contracts: the migration has no start contract, the table `table` does not exist at that point of the migration (or, with no `schema`, exists in more than one namespace), a table `to` already exists at that point of the migration, or the end contract has no table `to`. "At that point of the migration" means the start contract after the migration's earlier rename calls (`renameTable`, and on Postgres `renameIndex`, `renameConstraint` and `renameRlsPolicy`; other operations, such as drops and creates, are not tracked), so a migration may rename `A` to `B` and then `B` to `C` when the end contract declares each new name, and a second `renameTable` of `A` is refused because `A` no longer exists. Raised when the migration's operations are built, so `migration.ts` writes no `ops.json`. Check the table names, the `schema`, and the order of the `renameTable` calls, and check that the end contract declares the new name. Payload: `from`, `to`.
 
 ### MIGRATION.TARGET_MISMATCH
 

@@ -12,5 +12,6 @@ export default defineConfig({
     'src/exports/hashing.ts',
     'src/exports/hashing-utils.ts',
     'src/exports/is-plain-record.ts',
+    'src/exports/strip-hints.ts',
   ],
 });

@@ -34,7 +34,7 @@ describe('SqliteMigrationRunner - renameTable', { timeout: timeouts.databaseOper
       spaceId: APP_SPACE_ID,
       origin: null,
       destination: toPlanContractInfo(contract),
-      operations: [await new RenameTableCall('profile', 'account').toOp(controlAdapter)],
+      operations: [await new RenameTableCall('profile', 'account', []).toOp(controlAdapter)],
       providedInvariants: [],
     });
 

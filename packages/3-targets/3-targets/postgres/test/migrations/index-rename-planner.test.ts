@@ -345,7 +345,7 @@ describe('content pairing (exact→wire convergence)', () => {
     ]);
   });
 
-  it('an unmatched extra stays a destructive drop leftover', async () => {
+  it('an unmatched extra stays a drop', async () => {
     const contract = buildContract([wireNamedIndex('items_email_idx', 'ab12cd34')]);
     const schema = actualSchema([
       { name: 'items_email_idx_ab12cd34', prefix: 'items_email_idx', columns: ['email'] },

@@ -1,0 +1,7 @@
+▸ Introspecting database schema
+✔ Introspecting database schema
+▸ Planning migration
+✔ Planning migration
+✘ [CLI.CONSENT_REQUIRED] "Apply 1 destructive operation(s) to template1? Data they remove cannot be recovered:
+  - Drop column "description" from "task"" requires explicit consent, and the session is not interactive. Grant it by passing --confirm template1.
+→ Run the command interactively and type template1, or pass --confirm template1.

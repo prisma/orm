@@ -26,6 +26,7 @@
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type {
+  ConsumedHint,
   MigrationPlanWithAuthoringSurface,
   OpFactoryCall,
 } from '@internal/framework-components/control';
@@ -45,6 +46,8 @@ export class TypeScriptRenderablePostgresMigration
   readonly #spaceId: string;
   readonly #snapshotsImportPath: string;
   readonly #lowerer: ExecuteRequestLowerer | undefined;
+  /** The planner hints this plan acted on. */
+  readonly consumedHints: readonly ConsumedHint[];
   #operationsCache:
     | readonly (
         | SqlMigrationPlanOperation<PostgresPlanTargetDetails>
@@ -58,8 +61,10 @@ export class TypeScriptRenderablePostgresMigration
     spaceId: string,
     snapshotsImportPath: string,
     lowerer?: ExecuteRequestLowerer,
+    consumedHints: readonly ConsumedHint[] = [],
   ) {
     super();
+    this.consumedHints = consumedHints;
     this.#calls = calls;
     this.#meta = meta;
     this.#spaceId = spaceId;

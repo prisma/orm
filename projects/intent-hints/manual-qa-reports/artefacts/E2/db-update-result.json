@@ -1,0 +1,28 @@
+{
+  "kind": "result",
+  "envelope": {
+    "ok": false,
+    "commandId": "db.update",
+    "error": {
+      "code": "CLI.CONSENT_REQUIRED",
+      "severity": "error",
+      "summary": "\"Apply 1 destructive operation(s) to template1? Data they remove cannot be recovered:\n  - Drop column \"description\" from \"task\"\" requires explicit consent, and the session is not interactive. Grant it by passing --confirm template1.",
+      "nextActions": [
+        {
+          "kind": "user-choice",
+          "label": "Run the command interactively and type template1, or pass --confirm template1."
+        }
+      ],
+      "meta": { "consentToken": "template1" }
+    },
+    "diagnostics": [],
+    "nextActions": [
+      {
+        "kind": "user-choice",
+        "label": "Run the command interactively and type template1, or pass --confirm template1."
+      }
+    ]
+  },
+  "commandId": "db.update",
+  "timestamp": "2026-10-01T19:04:07.377Z"
+}

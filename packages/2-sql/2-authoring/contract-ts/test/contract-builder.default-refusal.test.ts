@@ -58,6 +58,7 @@ function buildWithDefault(
   return buildSqlContractFromDefinition(
     {
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: [
@@ -165,6 +166,7 @@ describe('a literal default the codec refuses', () => {
       buildSqlContractFromDefinition(
         {
           warnings: undefined,
+          hints: [],
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
           models: [

@@ -281,7 +281,8 @@ export type SqlPlannerConflictKind =
   | 'missingButNonAdditive'
   | 'unsupportedOperation'
   | 'controlPolicySuppressedCall'
-  | 'tableNameCaseChanged';
+  | 'tableNameCaseChanged'
+  | 'hintRejected';
 
 export interface SqlPlannerConflictLocation {
   readonly namespaceId?: string;

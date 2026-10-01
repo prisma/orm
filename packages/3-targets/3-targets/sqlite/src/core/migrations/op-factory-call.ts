@@ -269,6 +269,19 @@ export class DropTableCall extends SqliteOpFactoryCallNode {
   }
 }
 
+/** An index SQLite cannot rename, dropped and created again under its new name. */
+export interface IndexReplacement {
+  readonly drop: DropIndexCall;
+  readonly create: CreateIndexCall;
+}
+
+/** The replaced indexes' drops, then their creates, since a create may take a dropped name. */
+export function indexReplacementCalls(
+  replacements: readonly IndexReplacement[],
+): (DropIndexCall | CreateIndexCall)[] {
+  return [...replacements.map(({ drop }) => drop), ...replacements.map(({ create }) => create)];
+}
+
 export class RenameTableCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'renameTable' as const;
   // `widening`: a rename is neither additive creation nor destructive, and the
@@ -279,13 +292,30 @@ export class RenameTableCall extends SqliteOpFactoryCallNode {
   /** The new name: the table's contract-side identity after the rename. */
   readonly tableName: string;
   readonly label: string;
+  /** The indexes named after the old table, which SQLite cannot rename, so it replaces them. */
+  readonly indexReplacements: readonly IndexReplacement[];
+  /**
+   * The replacements' drops, then their creates. They run after the table rename and are never
+   * rendered on their own.
+   */
+  readonly companions: readonly (DropIndexCall | CreateIndexCall)[];
 
-  constructor(oldTableName: string, tableName: string) {
+  constructor(
+    oldTableName: string,
+    tableName: string,
+    indexReplacements: readonly IndexReplacement[],
+  ) {
     super();
     this.oldTableName = oldTableName;
     this.tableName = tableName;
     this.label = `Rename table ${oldTableName} to ${tableName}`;
+    this.indexReplacements = Object.freeze([...indexReplacements]);
+    this.companions = Object.freeze(indexReplacementCalls(indexReplacements));
     this.freeze();
+  }
+
+  toOps(lowerer?: ExecuteRequestLowerer): readonly Promise<Op>[] {
+    return [this.toOp(lowerer), ...this.companions.map((companion) => companion.toOp(lowerer))];
   }
 
   async toOp(lowerer?: ExecuteRequestLowerer): Promise<Op> {
@@ -606,7 +636,7 @@ export class CreateIndexCall extends SqliteOpFactoryCallNode {
 
 export class DropIndexCall extends SqliteOpFactoryCallNode {
   readonly factoryName = 'dropIndex' as const;
-  readonly operationClass = 'destructive' as const;
+  readonly operationClass = 'widening' as const;
   readonly tableName: string;
   readonly indexName: string;
   readonly label: string;
@@ -636,7 +666,7 @@ export class DropIndexCall extends SqliteOpFactoryCallNode {
       id: `dropIndex.${this.tableName}.${this.indexName}`,
       label: `Drop index ${this.indexName} on ${this.tableName}`,
       summary: `Drops index ${this.indexName} on ${this.tableName} which is not in the contract`,
-      operationClass: 'destructive',
+      operationClass: 'widening',
       target: {
         id: 'sqlite',
         details: buildTargetDetails('index', this.indexName, this.tableName),

@@ -6,7 +6,11 @@ import type {
   ControlTargetDescriptor,
   SchemaDiffIssue,
 } from '@internal/framework-components/control';
-import { createControlStack } from '@internal/framework-components/control';
+import {
+  createControlStack,
+  hasAuthoredContractValidation,
+  hasConsumedHintDescription,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
@@ -174,5 +178,50 @@ describe('sql family instance structured error codes', () => {
       code: 'MIGRATION.MARKER_CAS_FAILURE',
       message: 'CAS conflict: marker was modified by another process during sign',
     });
+  });
+});
+
+describe('sql family instance authored-contract validation', () => {
+  const hintsOn = (table: string) => ({
+    namespaces: { [UNBOUND_NAMESPACE_ID]: { tables: { [table]: { was: 'old_box' } } } },
+  });
+
+  it('declares the capability', () => {
+    expect(hasAuthoredContractValidation(createSqlFamilyInstance(makeStack()))).toBe(true);
+  });
+
+  it('accepts hints consistent with the contract', () => {
+    const instance = createSqlFamilyInstance(makeStack());
+    expect(() =>
+      instance.validateAuthoredContract({ ...buildContract(), hints: hintsOn('fixture_box') }),
+    ).not.toThrow();
+  });
+
+  it('raises CONTRACT.HINT_INVALID for a hint on a table the contract does not declare', () => {
+    const instance = createSqlFamilyInstance(makeStack());
+    const error = captureError(() =>
+      instance.validateAuthoredContract({ ...buildContract(), hints: hintsOn('ghost') }),
+    );
+    expect(error).toMatchObject({
+      code: 'CONTRACT.HINT_INVALID',
+      message: 'Contract hints: table "ghost" carries a hint but the contract does not declare it.',
+    });
+  });
+});
+
+describe('sql family instance consumed-hint description', () => {
+  it('declares the capability and describes the hint', () => {
+    const instance = createSqlFamilyInstance(makeStack());
+
+    expect(hasConsumedHintDescription(instance)).toBe(true);
+    expect(
+      instance.describeConsumedHint({
+        kind: 'renamed',
+        coordinate: { namespaceId: UNBOUND_NAMESPACE_ID, entityKind: 'table', entityName: 'User' },
+        from: 'Person',
+      }),
+    ).toBe(
+      'rename hint on table "User" (was "Person"): renamed and recorded in this migration; you can remove the hint.',
+    );
   });
 });

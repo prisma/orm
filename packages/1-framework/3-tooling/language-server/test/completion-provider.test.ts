@@ -785,7 +785,23 @@ describe('providePslCompletionItems', () => {
         ['model Post {', '  id Int', '  @@|', '}'].join('\n'),
         stack,
       ).items.map((item) => item.label),
-    ).toEqual(['base', 'check', 'control', 'discriminator', 'id', 'index', 'map', 'unique']);
+    ).toEqual([
+      'base',
+      'check',
+      'control',
+      'discriminator',
+      'hint',
+      'id',
+      'index',
+      'map',
+      'unique',
+    ]);
+    expect(
+      completeWithActualStack(
+        ['model Post {', '  id Int', '  @@hint(|)', '}'].join('\n'),
+        stack,
+      ).items.map((item) => item.label),
+    ).toEqual(['was', 'deprecated']);
     expect(
       completeWithActualStack(['enum Role {', '  Admin', '  @@|', '}'].join('\n'), stack).items.map(
         (item) => item.label,

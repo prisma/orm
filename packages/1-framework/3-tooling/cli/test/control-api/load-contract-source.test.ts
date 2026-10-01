@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type * as configLoader from '@internal/config-loader';
+import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { executeContractEmit } from '../../src/control-api/operations/contract-emit';
@@ -75,6 +76,33 @@ describe('loadContractSource', () => {
 
     expect(result.assertOk()).toBe(contract);
     expect(existsSync(join(tmpDir, 'src'))).toBe(false);
+  });
+
+  it('reports a contract error the source throws under its own code and message', async () => {
+    const spentHint =
+      '@@hint(was: "member") names the table\'s current name; the hint is spent, remove it.';
+    const config = configWithSource(join(tmpDir, 'contract.json'), async () => {
+      throw structuredError('CONTRACT.HINT_INVALID', spentHint, {
+        meta: { model: 'Member', was: 'member' },
+      });
+    });
+
+    await expect(loadContractSource(config)).rejects.toMatchObject({
+      code: 'CONTRACT.HINT_INVALID',
+      message: spentHint,
+      meta: { model: 'Member', was: 'member' },
+    });
+  });
+
+  it('reports any other error the source throws as a source load failure', async () => {
+    const config = configWithSource(join(tmpDir, 'contract.json'), async () => {
+      throw new Error('cannot read the contract module');
+    });
+
+    await expect(loadContractSource(config)).rejects.toMatchObject({
+      code: 'CONTRACT.SOURCE_LOAD_FAILED',
+      why: 'cannot read the contract module',
+    });
   });
 
   it('throws the emit error for a malformed source result', async () => {

@@ -493,6 +493,7 @@ export function interpretPrisma7Documents(
       {
         target: binding.target,
         warnings: undefined,
+        hints: [],
         createNamespace,
         ...(namespaceEntities.size > 0 ? { namespaces: [...namespaceEntities.keys()] } : {}),
         models: modelNodes,

@@ -1,7 +1,11 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { describe, expect, it } from 'vitest';
 import { tableExistsAst } from '../../src/contract-free/checks';
-import { RenameTableCall } from '../../src/core/migrations/op-factory-call';
+import {
+  CreateIndexCall,
+  DropIndexCall,
+  RenameTableCall,
+} from '../../src/core/migrations/op-factory-call';
 
 function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: unknown[] } {
   const received: unknown[] = [];
@@ -21,7 +25,7 @@ function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: un
 
 describe('RenameTableCall (sqlite)', () => {
   it('is a widening renameTable call whose contract-side identity is the new name', () => {
-    const call = new RenameTableCall('userProfile', 'UserProfile');
+    const call = new RenameTableCall('userProfile', 'UserProfile', []);
 
     expect(call).toMatchObject({
       factoryName: 'renameTable',
@@ -34,7 +38,7 @@ describe('RenameTableCall (sqlite)', () => {
 
   it('renders ALTER TABLE ... RENAME TO with existence prechecks and a postcheck', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const op = await new RenameTableCall('profile', 'account').toOp(lowerer);
+    const op = await new RenameTableCall('profile', 'account', []).toOp(lowerer);
 
     expect(received).toEqual([
       tableExistsAst('profile').tablePresent(),
@@ -71,7 +75,7 @@ describe('RenameTableCall (sqlite)', () => {
 
   it('renames through a temporary name when only the case changes, which SQLite would otherwise refuse', async () => {
     const { lowerer } = recordingCheckLowerer();
-    const op = await new RenameTableCall('userProfile', 'UserProfile').toOp(lowerer);
+    const op = await new RenameTableCall('userProfile', 'UserProfile', []).toOp(lowerer);
 
     expect(op.execute.map((step) => step.sql)).toEqual([
       'ALTER TABLE "userProfile" RENAME TO "_prisma_rename_UserProfile"',
@@ -81,7 +85,7 @@ describe('RenameTableCall (sqlite)', () => {
 
   it('renames in one statement when only a non-ASCII letter changes case, since SQLite folds only ASCII letters', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const op = await new RenameTableCall('Äpfel', 'äpfel').toOp(lowerer);
+    const op = await new RenameTableCall('Äpfel', 'äpfel', []).toOp(lowerer);
 
     expect(op.execute.map((step) => step.sql)).toEqual(['ALTER TABLE "Äpfel" RENAME TO "äpfel"']);
     expect(received).not.toContainEqual(tableExistsAst('_prisma_rename_äpfel').tableAbsent());
@@ -89,7 +93,7 @@ describe('RenameTableCall (sqlite)', () => {
 
   it('prechecks that the temporary name is free on a case-only rename, saying why it is needed', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const op = await new RenameTableCall('userProfile', 'UserProfile').toOp(lowerer);
+    const op = await new RenameTableCall('userProfile', 'UserProfile', []).toOp(lowerer);
 
     expect(received).toEqual([
       tableExistsAst('userProfile').tablePresent(),
@@ -115,7 +119,7 @@ describe('RenameTableCall (sqlite)', () => {
   });
 
   it('toOp() without a lowerer reports MIGRATION.SQLITE_CONTROL_STACK_MISSING', async () => {
-    const call = new RenameTableCall('userProfile', 'UserProfile');
+    const call = new RenameTableCall('userProfile', 'UserProfile', []);
     await expect(call.toOp()).rejects.toMatchObject({
       code: 'MIGRATION.SQLITE_CONTROL_STACK_MISSING',
       meta: { factory: 'renameTable' },
@@ -123,12 +127,48 @@ describe('RenameTableCall (sqlite)', () => {
   });
 
   it('renderTypeScript() spreads the facade call, which returns every rename', () => {
-    expect(new RenameTableCall('userProfile', 'UserProfile').renderTypeScript()).toBe(
+    expect(new RenameTableCall('userProfile', 'UserProfile', []).renderTypeScript()).toBe(
       '...this.renameTable({ table: "userProfile", to: "UserProfile" })',
     );
   });
 
   it('needs no facade import because the call is a method on the migration', () => {
-    expect(new RenameTableCall('a', 'b').importRequirements()).toEqual([]);
+    expect(new RenameTableCall('a', 'b', []).importRequirements()).toEqual([]);
+  });
+
+  it('toOps() lowers the table rename, then each index drop, then each index create', async () => {
+    const { lowerer } = recordingCheckLowerer();
+    const call = new RenameTableCall('userProfile', 'UserProfile', [
+      {
+        drop: new DropIndexCall('UserProfile', 'userProfile_handle_idx_ab12cd34'),
+        create: new CreateIndexCall('UserProfile', 'UserProfile_handle_idx_ab12cd34', ['handle']),
+      },
+      {
+        drop: new DropIndexCall('UserProfile', 'userProfile_email_idx_ef56ab78'),
+        create: new CreateIndexCall('UserProfile', 'UserProfile_email_idx_ef56ab78', ['email']),
+      },
+    ]);
+    const ops = await Promise.all(call.toOps(lowerer));
+
+    expect(ops.map((op) => op.label)).toEqual([
+      'Rename table userProfile to UserProfile',
+      'Drop index userProfile_handle_idx_ab12cd34 on UserProfile',
+      'Drop index userProfile_email_idx_ef56ab78 on UserProfile',
+      'Create index UserProfile_handle_idx_ab12cd34 on UserProfile',
+      'Create index UserProfile_email_idx_ef56ab78 on UserProfile',
+    ]);
+  });
+
+  it('renders only the facade call, never its companions', () => {
+    const call = new RenameTableCall('userProfile', 'UserProfile', [
+      {
+        drop: new DropIndexCall('UserProfile', 'userProfile_handle_idx_ab12cd34'),
+        create: new CreateIndexCall('UserProfile', 'UserProfile_handle_idx_ab12cd34', ['handle']),
+      },
+    ]);
+
+    expect(call.renderTypeScript()).toBe(
+      '...this.renameTable({ table: "userProfile", to: "UserProfile" })',
+    );
   });
 });

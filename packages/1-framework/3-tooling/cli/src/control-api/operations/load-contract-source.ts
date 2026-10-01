@@ -13,9 +13,10 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Result } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
 import type { Diagnostic } from '@internal/utils/structured-error';
-import { isStructuredErrorCode } from '@internal/utils/structured-error';
+import { isStructuredError, isStructuredErrorCode } from '@internal/utils/structured-error';
 import { isAbsolute, relative } from 'pathe';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
+import { errorFromCaught } from './caught-errors';
 
 /**
  * Why the configured source produced no contract: the error to report, and
@@ -252,7 +253,9 @@ function validateProviderResult(
 
 /**
  * Asks the configured contract source for the contract, with a source context
- * built from `stack`, and turns every failure into `CONTRACT.SOURCE_LOAD_FAILED`.
+ * built from `stack`, and turns every failure into `CONTRACT.SOURCE_LOAD_FAILED`, except a
+ * `CONTRACT.*` error the source throws, such as `CONTRACT.HINT_INVALID`, which is reported under
+ * its own code because it already says what is wrong with the contract.
  * Every command that loads a contract source goes through here, so each
  * reports a bad source the same way.
  *
@@ -288,6 +291,9 @@ export async function loadContractSourceWithStack(inputs: {
   } catch (error) {
     if (signal.aborted || (isRecord(error) && error['name'] === 'AbortError')) {
       throw error;
+    }
+    if (isStructuredError(error) && error.code.startsWith('CONTRACT.')) {
+      return failedWith(errorFromCaught(error, (message) => message));
     }
     return failedWith(
       failedToResolveContractSource(

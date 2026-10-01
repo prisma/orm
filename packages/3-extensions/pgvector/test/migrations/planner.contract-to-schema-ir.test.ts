@@ -15,7 +15,11 @@ import {
   extractCodecControlHooks,
 } from '@internal/family-sql/control';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
-import { APP_SPACE_ID, type SchemaOwnership } from '@internal/framework-components/control';
+import {
+  APP_SPACE_ID,
+  type SchemaEntityCoordinate,
+  type SchemaOwnership,
+} from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   SqlStorage,
@@ -922,9 +926,11 @@ function createDemoContract(
 // space's own codec hook is actively managing. This oracle declares it owned,
 // matching how a real `ContractSpaceAggregate` would answer once a pack
 // declares the coordinate.
+const declaresUserTypeEnum = (coordinate: SchemaEntityCoordinate): boolean =>
+  coordinate.entityKind === 'native_enum' && coordinate.entityName === 'user_type';
 const ownsUserTypeEnum: SchemaOwnership = {
-  declaresEntity: (coordinate) =>
-    coordinate.entityKind === 'native_enum' && coordinate.entityName === 'user_type',
+  declaresEntity: declaresUserTypeEnum,
+  ownerOf: (coordinate) => (declaresUserTypeEnum(coordinate) ? 'pgvector' : undefined),
 };
 
 describe('incremental migration with full contract surface (enums, FKs)', () => {

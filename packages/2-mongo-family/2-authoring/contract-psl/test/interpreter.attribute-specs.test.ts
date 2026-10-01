@@ -144,6 +144,24 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
+  it('reports @@hint, which the Mongo family does not register', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id ObjectId @id @map("_id")
+          @@hint(was: "Product")
+        }
+      `),
+    ).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: 'Model "Item" uses unsupported attribute "@@hint"',
+        sourceId: 'schema.prisma',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 4 }) }),
+      },
+    ]);
+  });
+
   it('reports an unregistered field attribute with its span', () => {
     expect(
       diagnosticsOf(`

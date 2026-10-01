@@ -58,6 +58,7 @@ describe('Prisma 7 fixtures', () => {
       'explicit-relations',
       'generator-optional',
       'generators',
+      'hint-attribute',
       'ignore',
       'ignored-field-in-key',
       'ignored-field-in-references',

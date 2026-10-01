@@ -150,6 +150,48 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     );
   });
 
+  it('provides signature help with documented parameters from the SQL @@hint spec', async () => {
+    const authoringContributions = assembleAuthoringContributions([
+      {
+        id: 'actual-family',
+        authoring: {
+          attributeSpecs: await importAttributeSpecs(
+            '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+            'sqlAttributeSpecs',
+          ),
+        },
+      },
+    ]);
+    const source = 'model User {\n id Int @id\n @@hint(was: "Profile")\n}';
+    const pipeline = pipelineWithSymbolTable('schema.prisma', source);
+    const signature = providePslSignatureHelp({
+      document: pipeline.document,
+      sourceFile: pipeline.sourceFile,
+      position: pipeline.sourceFile.positionAt(source.indexOf('"Profile"')),
+      clientSupportsLabelOffsets: false,
+      candidates: {
+        symbolTable: pipeline.symbolTable,
+        pslBlockDescriptors: {},
+        authoringContributions,
+        controlMutationDefaults: assembleControlMutationDefaults([]),
+      },
+    });
+    const markdown = (value: string) => ({ kind: 'markdown', value });
+    expect(signature?.signatures[0]).toMatchObject({
+      documentation: markdown(
+        "Tells the migration planner the intent behind a change to this model's table that a diff cannot infer.",
+      ),
+    });
+    expect(
+      signature?.signatures[0]?.parameters?.map((parameter) => parameter.documentation),
+    ).toEqual([
+      markdown(
+        'The storage name this table had before it was renamed, as @@map would have spelled it.',
+      ),
+      markdown('Reserved. Not yet supported.'),
+    ]);
+  });
+
   it('provides signature help from the Mongo @@base spec factory', async () => {
     expectBaseSpecSignatureHelp(
       await importAttributeSpecs(

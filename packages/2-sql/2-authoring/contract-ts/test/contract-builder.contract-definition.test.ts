@@ -24,6 +24,7 @@ describe('shared contract definition lowering', () => {
   it('builds SQL contract IR from contract model nodes', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       storageTypes: {
@@ -213,6 +214,7 @@ describe('shared contract definition lowering', () => {
     const contract = buildSqlContractFromDefinition(
       {
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -284,6 +286,7 @@ describe('shared contract definition lowering', () => {
     const contract = buildSqlContractFromDefinition(
       {
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -318,6 +321,7 @@ describe('shared contract definition lowering', () => {
   it('builds phase-specific execution defaults', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: [
@@ -356,6 +360,7 @@ describe('shared contract definition lowering', () => {
     expect(() =>
       buildSqlContractFromDefinition({
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -393,6 +398,7 @@ describe('shared contract definition lowering', () => {
     expect(() =>
       buildSqlContractFromDefinition({
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -430,6 +436,7 @@ describe('shared contract definition lowering', () => {
     const build = () =>
       buildSqlContractFromDefinition({
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -497,6 +504,7 @@ describe('shared contract definition lowering', () => {
     expect(() =>
       buildSqlContractFromDefinition({
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -532,6 +540,7 @@ describe('shared contract definition lowering', () => {
     expect(() =>
       buildSqlContractFromDefinition({
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -564,6 +573,7 @@ describe('shared contract definition lowering', () => {
     expect(() =>
       buildSqlContractFromDefinition({
         warnings: undefined,
+        hints: [],
         target: postgresTargetPack,
         createNamespace: createTestSqlNamespace,
         models: [
@@ -621,6 +631,7 @@ describe('M:N through descriptor lowering', () => {
   const buildWithTag = (target: Parameters<typeof tagModel>[0]) =>
     buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       models: [

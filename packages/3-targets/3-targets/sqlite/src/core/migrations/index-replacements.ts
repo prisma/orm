@@ -4,7 +4,13 @@ import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { SqlIndexIR } from '@internal/sql-schema-ir/types';
 import { sqliteIdentifiersCollide } from './identifier-case';
 import { issueNode } from './issue-planner';
-import { CreateIndexCall, DropIndexCall, type SqliteOpFactoryCall } from './op-factory-call';
+import {
+  CreateIndexCall,
+  DropIndexCall,
+  type IndexReplacement,
+  indexReplacementCalls,
+  type SqliteOpFactoryCall,
+} from './op-factory-call';
 
 export interface IndexFinding {
   readonly issue: SchemaDiffIssue;
@@ -59,6 +65,7 @@ export function pairIndexReplacements(
   issues: readonly SchemaDiffIssue[],
   matches: IndexReplacementMatch,
 ): {
+  readonly replacements: readonly IndexReplacement[];
   readonly calls: readonly SqliteOpFactoryCall[];
   readonly consumed: ReadonlySet<SchemaDiffIssue>;
 } {
@@ -69,18 +76,17 @@ export function pairIndexReplacements(
     missing.splice(missing.indexOf(replacement), 1);
     return [{ old, replacement }];
   });
+  const replacements = pairs.map(({ old, replacement }) => ({
+    drop: new DropIndexCall(old.tableName, old.index.name),
+    create: new CreateIndexCall(
+      replacement.tableName,
+      replacement.index.name,
+      replacement.index.columns ?? [],
+    ),
+  }));
   return {
-    calls: [
-      ...pairs.map(({ old }) => new DropIndexCall(old.tableName, old.index.name)),
-      ...pairs.map(
-        ({ replacement }) =>
-          new CreateIndexCall(
-            replacement.tableName,
-            replacement.index.name,
-            replacement.index.columns ?? [],
-          ),
-      ),
-    ],
+    replacements,
+    calls: indexReplacementCalls(replacements),
     consumed: new Set(pairs.flatMap(({ old, replacement }) => [old.issue, replacement.issue])),
   };
 }

@@ -14,6 +14,7 @@ const CASES: readonly string[] = [
   'enums',
   'fulltext',
   'generator-ignored',
+  'hint-attribute',
   'id-not-objectid',
   'ignore',
   'ignored-field-referenced',

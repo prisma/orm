@@ -490,6 +490,13 @@ describe('emitter', () => {
     );
   });
 
+  it('declares no hints member for a contract carrying hints', async () => {
+    const hints = { namespaces: { public: { tables: { User: { was: 'Profile' } } } } };
+    const result = await emit({ ...createTestContract(), hints }, {}, mockSqlHook);
+    expect(JSON.parse(result.contractJson).hints).toEqual(hints);
+    expect(result.contractDts).not.toContain('hints');
+  });
+
   it('emits successfully when domain has more than one namespace', () => {
     const contract = {
       ...createTestContract(),

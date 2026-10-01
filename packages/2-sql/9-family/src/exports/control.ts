@@ -21,14 +21,6 @@ export type {
   SqlPslBuildContext,
 } from '../core/control-target-descriptor';
 export type {
-  AppliedTableRename,
-  ApplyTableRenameInput,
-  RenameTableReferences,
-  ResolvedTableRename,
-  TableRename,
-} from '../core/migrations/apply-table-rename';
-export { applyTableRename } from '../core/migrations/apply-table-rename';
-export type {
   ContractToSchemaIROptions,
   DefaultRenderer,
   DefaultResolver,
@@ -51,6 +43,18 @@ export type { DataTypeResolver } from '../core/migrations/data-type-resolver';
 export { buildDataTypeResolver } from '../core/migrations/data-type-resolver';
 export type { PlanFieldEventOperationsOptions } from '../core/migrations/field-event-planner';
 export { planFieldEventOperations } from '../core/migrations/field-event-planner';
+export type {
+  ResolvedColumnRename,
+  ResolvedHints,
+  ResolveHintsInput,
+  StatedColumnDrop,
+  StatedTableDrop,
+} from '../core/migrations/hints';
+export {
+  HINT_CONTRADICTED_CODE,
+  HINT_FOREIGN_TABLE_CODE,
+  resolveHints,
+} from '../core/migrations/hints';
 export { buildNativeTypeExpander } from '../core/migrations/native-type-expander';
 export {
   createMigrationPlan,
@@ -61,10 +65,19 @@ export {
 } from '../core/migrations/plan-helpers';
 export { INIT_ADDITIVE_POLICY } from '../core/migrations/policies';
 export type {
+  ResolvedTableRename,
+  TableRename,
+} from '../core/migrations/resolve-table-rename';
+export {
+  resolveTableRenameAgainst,
+  unmatchedTableRename,
+} from '../core/migrations/resolve-table-rename';
+export type {
   SqlSchemaDiffFn,
   SqlSchemaDiffInput,
   SqlSchemaDiffResult,
 } from '../core/migrations/schema-differ';
+export type { SchemaTables } from '../core/migrations/schema-tables';
 export type {
   TableNameCaseGuardTable,
   TableRenameByHand,

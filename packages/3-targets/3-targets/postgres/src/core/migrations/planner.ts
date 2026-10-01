@@ -14,6 +14,7 @@ import {
   partitionIssuesByControlPolicy,
   planFieldEventOperations,
   plannerFailure,
+  resolveHints,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -47,6 +48,7 @@ import {
   resolvePostgresNodeIssueCreationFactoryName,
 } from './control-policy';
 import { buildPostgresPlanDiff } from './diff-database-schema';
+import { planHintRenames } from './hint-renames';
 import { pairCheckRenames, pairIndexRenames } from './index-and-check-renames';
 import {
   coalesceSubtreeIssues,
@@ -71,6 +73,7 @@ import { renameTableStatement } from './operations/tables';
 import { TypeScriptRenderablePostgresMigration } from './planner-produced-postgres-migration';
 import { postgresPlannerStrategies } from './planner-strategies';
 import { resolveDdlSchemaForNamespaceStorage } from './resolve-ddl-schema';
+import { postgresSchemaTables } from './schema-tables';
 import { emissionSchemaForNamespace } from './table-rename-calls';
 import { verifyPostgresNamespacePresence } from './verify-postgres-namespaces';
 
@@ -215,16 +218,34 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       return policyResult;
     }
 
+    PostgresDatabaseSchemaNode.assert(options.schema);
+    const hints = resolveHints({
+      contract: options.contract,
+      origin: postgresSchemaTables(options.schema, options.contract),
+      policy: options.policy,
+      ownership: options.ownership,
+      spaceId: options.spaceId,
+    });
+    if (hints.conflicts.length > 0) {
+      return plannerFailure(hints.conflicts);
+    }
+    const hintRenames = planHintRenames({
+      origin: options.schema,
+      contract: options.contract,
+      hints,
+      frameworkComponents: options.frameworkComponents,
+    });
+    const planOptions = { ...options, schema: hintRenames.adjustedOrigin };
+
     // The one combined tree diff drives the whole plan: relational findings
     // become structural DDL via `planIssues`, policy findings become RLS ops
     // via `planPostgresSchemaDiff`. Verify runs its own full-tree node diff
     // (`diffSchema`) over the same schema and rejects on a
     // surviving failure.
-    PostgresDatabaseSchemaNode.assert(options.schema);
     const { issues: rawIssues } = buildPostgresPlanDiff({
-      contract: options.contract,
-      actualSchema: options.schema,
-      frameworkComponents: options.frameworkComponents,
+      contract: planOptions.contract,
+      actualSchema: planOptions.schema,
+      frameworkComponents: planOptions.frameworkComponents,
     });
     const policyDiffIssues = rawIssues.filter((issue) => isPolicyDiffIssue(issue));
     // Role diff issues resolve to the `external` control policy (see
@@ -253,10 +274,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // run before this so a sibling-owned table's child issues have already
     // collapsed into the one table-level issue that carries the table name.
     const strict =
-      options.policy.allowedOperationClasses.includes('widening') ||
-      options.policy.allowedOperationClasses.includes('destructive');
+      planOptions.policy.allowedOperationClasses.includes('widening') ||
+      planOptions.policy.allowedOperationClasses.includes('destructive');
     const coalesced = coalesceSubtreeIssues(relationalDiffIssues);
-    const owned = retainUnownedExtras(coalesced, options.ownership, options.contract);
+    const owned = retainUnownedExtras(coalesced, planOptions.ownership, planOptions.contract);
     const gated = strict ? owned : owned.filter((issue) => issueOutcome(issue) !== 'not-expected');
 
     // Namespace presence (`CREATE SCHEMA`) is a planner-only op-generation
@@ -269,8 +290,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // `not-found` issues that drive `CREATE TABLE`) and are NOT subject to
     // sibling-space scoping, matching the retired coordinate walk exactly.
     const namespaceIssues = verifyPostgresNamespacePresence({
-      contract: options.contract,
-      schema: options.schema,
+      contract: planOptions.contract,
+      schema: planOptions.schema,
     });
     const schemaIssues = [...namespaceIssues, ...gated];
 
@@ -280,22 +301,22 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // mapping turns them into create + drop. Consumed issues never reach
     // `planIssues`; the rename calls go through the same call-side
     // control-policy partition the policy ops use.
-    const indexRenames = pairIndexRenames(options, schemaIssues);
-    const checkRenames = pairCheckRenames(options, schemaIssues);
+    const indexRenames = pairIndexRenames(planOptions, schemaIssues);
+    const checkRenames = pairCheckRenames(planOptions, schemaIssues);
     const renameConsumed = new Set([...indexRenames.consumed, ...checkRenames.consumed]);
     const plannableIssues =
       renameConsumed.size === 0
         ? schemaIssues
         : schemaIssues.filter((issue) => !renameConsumed.has(issue));
 
-    const codecHooks = extractCodecControlHooks(options.frameworkComponents);
-    const storageTypes = options.contract.storage.types ?? {};
+    const codecHooks = extractCodecControlHooks(planOptions.frameworkComponents);
+    const storageTypes = planOptions.contract.storage.types ?? {};
     // The strategy layer reads the live schema by bare table name for existence
     // checks (shared-temp-default safety, FK/unique probes), so it takes one
     // per-schema namespace node — never the whole tree root, and never a flat
     // merge of every namespace (which would collide same-named tables across
     // schemas). Probing more than one namespace at once is future work.
-    const relationalSchema = relationalNamespaceNode(options.schema, schemaName);
+    const relationalSchema = relationalNamespaceNode(planOptions.schema, schemaName);
 
     // Input-side control-policy partition. `external` / `observed` subjects
     // — and non-creation issues for `tolerated` subjects — are dropped from
@@ -306,9 +327,9 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // to model the subject's live shape.
     const issuePartition = partitionIssuesByControlPolicy({
       issues: plannableIssues,
-      contract: options.contract,
+      contract: planOptions.contract,
       resolveControlPolicySubject: (issue) =>
-        resolvePostgresNodeIssueControlPolicySubject(issue, options.contract),
+        resolvePostgresNodeIssueControlPolicySubject(issue, planOptions.contract),
       resolveCreationFactoryName: resolvePostgresNodeIssueCreationFactoryName,
     });
 
@@ -322,10 +343,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         return node !== undefined && PostgresTableSchemaNode.is(node) ? node : undefined;
       },
       namespaceIdOf: (issue) =>
-        resolveNamespaceIdForDdlSchema(options.contract, issueSchemaName(issue) ?? schemaName),
+        resolveNamespaceIdForDdlSchema(planOptions.contract, issueSchemaName(issue) ?? schemaName),
       renameByHandStatements: (rename) => [
         renameTableStatement(
-          emissionSchemaForNamespace(options.contract, rename.namespaceId),
+          emissionSchemaForNamespace(planOptions.contract, rename.namespaceId),
           rename.from,
           rename.to,
         ),
@@ -335,8 +356,9 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
           rename.namespaceId ?? UNBOUND_NAMESPACE_ID,
           rename.from,
           rename.to,
+          [],
         ).renderTypeScript(),
-      contract: options.contract,
+      contract: planOptions.contract,
       defaultNamespaceId: DEFAULT_NAMESPACE_ID,
     });
     if (caseChangeConflicts.length > 0) {
@@ -345,37 +367,37 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
 
     const result = planIssues({
       issues: issuePartition.plannable,
-      toContract: options.contract,
+      toContract: planOptions.contract,
       // `fromContract` is only supplied by `migration plan`. It is `null` for
       // `db update` / `db init`, which means data-safety strategies needing
       // from/to comparisons (unsafe type change, nullable tightening) are
       // inapplicable there — reconciliation falls through to
       // `mapNodeIssueToCall`'s direct destructive handlers.
-      fromContract: options.fromContract,
+      fromContract: planOptions.fromContract,
       schemaName,
       codecHooks,
       storageTypes,
       ...ifDefined('schema', relationalSchema),
-      policy: options.policy,
-      frameworkComponents: options.frameworkComponents,
+      policy: planOptions.policy,
+      frameworkComponents: planOptions.frameworkComponents,
       strategies: postgresPlannerStrategies,
     });
 
     // Relational conflicts and policy-drift conflicts compose into ONE
     // failure so the user sees the complete set in a single round.
-    const schemaDiff = this.planPostgresSchemaDiff(options, policyDiffIssues);
+    const schemaDiff = this.planPostgresSchemaDiff(planOptions, policyDiffIssues);
     if (!result.ok || schemaDiff.conflicts.length > 0) {
       return plannerFailure([...(result.ok ? [] : result.failure), ...schemaDiff.conflicts]);
     }
 
     const indexRenamePartition = partitionPostgresCallsByControlPolicy(
       [...indexRenames.calls, ...checkRenames.calls],
-      options.contract,
+      planOptions.contract,
     );
 
     const schemaDiffPartition = partitionPostgresCallsByControlPolicy(
       schemaDiff.calls,
-      options.contract,
+      planOptions.contract,
     );
 
     // Inline `onFieldEvent`-emitted ops after structural DDL. The fixed
@@ -384,9 +406,10 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // byte-stable. The hook fires only at the application emitter —
     // extension-space planning never reaches this helper.
     const fieldEventOps = planFieldEventOperations({
-      priorContract: options.fromContract,
-      newContract: options.contract,
+      priorContract: planOptions.fromContract,
+      newContract: planOptions.contract,
       codecHooks,
+      renames: hintRenames.renames,
     });
     // Codec hook ops are target-agnostic `OpFactoryCall`; Postgres planning
     // lifts them at this integration boundary (see field-event-planner JSDoc).
@@ -396,10 +419,11 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     >(fieldEventOps);
     const fieldEventPartition = partitionPostgresCallsByControlPolicy(
       fieldEventPostgresCalls,
-      options.contract,
+      planOptions.contract,
     );
     const ordered = movePolicyDropsBeforeBlockedDdl(result.value.calls, schemaDiffPartition.kept);
     const calls = [
+      ...hintRenames.calls,
       ...ordered.structural,
       ...indexRenamePartition.kept,
       ...ordered.policyCalls,
@@ -411,13 +435,14 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     // rlsPolicy — stay separate.
     const seenWarnings = new Set<string>();
     const warnings: SqlPlannerConflict[] = [
+      ...hintRenames.warnings,
       ...issuePartition.suppressions,
       ...indexRenamePartition.suppressions,
       ...schemaDiff.suppressions,
       ...schemaDiffPartition.suppressions,
       ...fieldEventPartition.suppressions,
     ]
-      .map((record) => renderPostgresSuppression(record, options.contract))
+      .map((record) => renderPostgresSuppression(record, planOptions.contract))
       .filter((warning) => {
         const key = JSON.stringify(warning);
         if (seenWarnings.has(key)) return false;
@@ -430,12 +455,13 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       plan: new TypeScriptRenderablePostgresMigration(
         calls,
         {
-          from: options.fromContract?.storage.storageHash ?? null,
-          to: options.contract.storage.storageHash,
+          from: planOptions.fromContract?.storage.storageHash ?? null,
+          to: planOptions.contract.storage.storageHash,
         },
-        options.spaceId,
-        options.snapshotsImportPath,
+        planOptions.spaceId,
+        planOptions.snapshotsImportPath,
         this.#lowerer,
+        hintRenames.consumed,
       ),
       ...(warnings.length > 0 ? { warnings: Object.freeze(warnings) } : {}),
     });
@@ -477,7 +503,6 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
     readonly conflicts: readonly SqlPlannerConflict[];
     readonly suppressions: readonly SuppressionRecord[];
   } {
-    const allowsDestructive = options.policy.allowedOperationClasses.includes('destructive');
     const allowsWidening = options.policy.allowedOperationClasses.includes('widening');
 
     interface PolicyFinding {
@@ -652,7 +677,7 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         ),
       );
     }
-    if (allowsDestructive) {
+    if (allowsWidening) {
       for (const finding of extra) {
         if (renamedExtras.has(finding)) continue;
         calls.push(
@@ -856,7 +881,7 @@ function gradePolicyReplacement(
       },
     };
   }
-  if (!allowedOperationClasses.includes('destructive')) {
+  if (!allowedOperationClasses.includes('widening')) {
     return {
       disposition: 'conflict',
       conflict: conflictForDisallowedCall(replacement.drop, allowedOperationClasses),

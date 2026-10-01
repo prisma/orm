@@ -330,6 +330,7 @@ export function createContractSpaceAggregate(args: {
     space: (id) => byId.get(id),
     spaces: () => ordered,
     declaresEntity: (coordinate) => ordered.some((space) => spaceDeclares(space, coordinate)),
+    ownerOf: (coordinate) => ordered.find((space) => spaceDeclares(space, coordinate))?.spaceId,
     declaringSpaces: (coordinate) =>
       ordered.filter((space) => spaceDeclares(space, coordinate)).map((s) => s.spaceId),
     checkIntegrity,

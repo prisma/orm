@@ -1,3 +1,4 @@
+import { stripContractHints } from '@internal/contract/strip-hints';
 import type {
   ColumnDefault,
   ColumnDefaultLiteralInputValue,
@@ -551,7 +552,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         lower,
         driver,
         ledgerContract
-          .upsert({ core_hash: entry.to, contract_json: entry.destinationContractJson })
+          .upsert({
+            core_hash: entry.to,
+            contract_json: stripContractHints(entry.destinationContractJson),
+          })
           .onConflict(ledgerContract.core_hash)
           .doNothing()
           .build(),

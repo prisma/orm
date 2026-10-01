@@ -112,6 +112,7 @@ import { contractError } from './contract-errors';
 import type { DataTypeSupport } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import {
+  duplicateModelAttributeDiagnostic,
   getAttribute,
   getNamedArgument,
   mapFieldNamesToColumns,
@@ -130,6 +131,7 @@ import {
   modelCoordinateKey,
   type ResolvedField,
 } from './psl-field-resolution';
+import { collectHints } from './psl-hint-resolution';
 import { resolveNamedTypeDeclarations } from './psl-named-type-resolution';
 import {
   applyBackrelationCandidates,
@@ -364,25 +366,6 @@ export function buildEntityTypesByDiscriminator(
   };
   walk(namespace);
   return result;
-}
-
-/**
- * The `PSL_DUPLICATE_ATTRIBUTE` diagnostic for a model attribute declared
- * more than once on one model. Shared by the built-in `@@control` path and
- * the contributed-model-attribute path so the code and wording stay in one
- * place. `name` is the bare attribute name (`control`, `rls`, …).
- */
-function duplicateModelAttributeDiagnostic(input: {
-  readonly name: string;
-  readonly modelName: string;
-  readonly source: DiagnosticSource;
-  readonly span: ContractSourceDiagnostic['span'];
-}): PslDiagnostic {
-  return {
-    code: 'PSL_DUPLICATE_ATTRIBUTE',
-    message: `\`@@${input.name}\` declared more than once on model "${input.modelName}".`,
-    ...input.source.at(input.span),
-  };
 }
 
 function isResolvedModelReference(value: unknown): value is ResolvedEntityReference<ModelSymbol> {
@@ -838,7 +821,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     ) {
       continue;
     }
-    if (modelAttribute.name === 'map') {
+    if (modelAttribute.name === 'map' || modelAttribute.name === 'hint') {
       continue;
     }
     if (modelAttribute.name === 'discriminator' || modelAttribute.name === 'base') {
@@ -2183,6 +2166,15 @@ export function interpretPslDocumentToSqlContract(
     }
   }
   const defaultNamespaceId = input.target.defaultNamespaceId;
+  const { hints } = collectHints({
+    modelEntries,
+    physicalNames,
+    defaultNamespaceId,
+    symbols: input.symbolTable,
+    sources: input.sources,
+    binder,
+    diagnostics,
+  });
 
   const composedExtensions = new Set(input.composedExtensions ?? []);
   const composedExtensionContracts: ReadonlyMap<string, Contract> =
@@ -2729,6 +2721,7 @@ export function interpretPslDocumentToSqlContract(
         ? { namespaces: [...namespaceExtensionEntities.keys()] }
         : {}),
       createNamespace: createNamespaceWithExtensions,
+      hints,
       ...ifDefined('valueObjects', valueObjects.length > 0 ? valueObjects : undefined),
       models: stiColumnModelNodes,
     },

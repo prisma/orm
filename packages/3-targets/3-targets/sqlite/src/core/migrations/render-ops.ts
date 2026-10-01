@@ -22,22 +22,34 @@ function assertSqliteOp(op: MigrationPlanOperation, callFactoryName: string): as
   }
 }
 
+function checkedOp(
+  opOrPromise: MigrationPlanOperation | Promise<MigrationPlanOperation>,
+  callFactoryName: string,
+): Op | Promise<Op> {
+  if (isThenable(opOrPromise)) {
+    return opOrPromise.then((op) => {
+      assertSqliteOp(op, callFactoryName);
+      return op;
+    });
+  }
+  assertSqliteOp(opOrPromise, callFactoryName);
+  return opOrPromise;
+}
+
 export function renderOps(
   calls: readonly OpFactoryCall[],
   lowerer?: ExecuteRequestLowerer,
 ): (Op | Promise<Op>)[] {
-  return calls.map((c) => {
-    const opOrPromise = blindCast<
-      { toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op> },
-      'SQLite OpFactoryCall.toOp accepts an optional ExecuteRequestLowerer; the framework interface omits it because not all targets need a lowerer — the SQLite target overrides with this extended signature'
-    >(c).toOp(lowerer);
-    if (isThenable(opOrPromise)) {
-      return opOrPromise.then((op) => {
-        assertSqliteOp(op, c.factoryName);
-        return op;
-      });
-    }
-    assertSqliteOp(opOrPromise, c.factoryName);
-    return opOrPromise;
+  return calls.flatMap((c) => {
+    const lowered =
+      c.toOps === undefined
+        ? [
+            blindCast<
+              { toOp(lowerer?: ExecuteRequestLowerer): Op | Promise<Op> },
+              'SQLite OpFactoryCall.toOp accepts an optional ExecuteRequestLowerer; the framework interface omits it because not all targets need a lowerer — the SQLite target overrides with this extended signature'
+            >(c).toOp(lowerer),
+          ]
+        : c.toOps(lowerer);
+    return lowered.map((opOrPromise) => checkedOp(opOrPromise, c.factoryName));
   });
 }

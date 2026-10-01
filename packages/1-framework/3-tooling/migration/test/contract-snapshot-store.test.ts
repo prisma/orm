@@ -48,6 +48,21 @@ describe('writeContractSnapshot', () => {
     expect(dts).toBe('export type Contract = {};\n');
   });
 
+  it('writes the snapshot without the contract hints section', async () => {
+    const result = await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
+      contractJson: {
+        ...contractFixture(STORAGE_HASH),
+        hints: { namespaces: { public: { tables: { User: { was: 'Profile' } } } } },
+      },
+      contractDts: 'export type Contract = {};',
+    });
+
+    expect(await readContractSnapshotJson(migrationsDir, STORAGE_HASH)).toEqual(
+      contractFixture(STORAGE_HASH),
+    );
+    expect(await readFile(join(result.dir, 'contract.json'), 'utf-8')).not.toContain('hints');
+  });
+
   it('does not append a second trailing newline when contractDts already ends with one', async () => {
     const result = await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
       contractJson: contractFixture(STORAGE_HASH),

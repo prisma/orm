@@ -14,7 +14,7 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 ## Responsibilities
 
 - Interpret a PSL `SymbolTable` into SQL `Contract`
-- Interpret generic PSL attributes into SQL contract semantics (`@id`, `@unique`, `@default`, `@relation`, `@map`, `@@map`, `@@control`)
+- Interpret generic PSL attributes into SQL contract semantics (`@id`, `@unique`, `@default`, `@relation`, `@map`, `@@map`, `@@control`, `@@hint`)
 - Interpret SQL timestamp semantics: `DateTime @default(now())` as a storage default, and `temporal.createdAt()` / `temporal.updatedAt()` as client-side execution mutation defaults
 - Lower shared constructor expressions in both `types {}` blocks and inline field positions (for example `ShortName = sql.String(length: 35)` and `embedding pgvector.Vector(length: 1536)?`)
 - Lower supported default functions through composed registry inputs
@@ -108,6 +108,12 @@ Integer representation authoring surface:
 Model-level control policy:
 
 - `@@control(<policy>)` lowers to the storage table's `control` field. The argument is one positional lowercase literal: `managed`, `tolerated`, `external`, or `observed`. Omit `@@control` to leave per-table control unset (the framework default applies at runtime).
+
+Model rename hint:
+
+- `@@hint(was: "<old table name>")` tells the migration planner that the model's table was renamed from that name. It lowers to the contract's `hints` section, keyed by the table's current storage name, and changes no hash. `was` is the bare storage name as `@@map` would spell it, matched verbatim in the model's own namespace; a dot in it is part of the name.
+- `migration plan` and `db update` act on the hint when the plan's origin has the old table and not the new one: the planner renames the table, and the indexes and constraints named after it, keeping its rows, and records the rename in the plan. Once the rename is applied the hint does nothing, and you can remove it. When both tables exist, planning fails with `MIGRATION.HINT_CONTRADICTED`. `db init`, which plans additive operations only, ignores hints.
+- `PSL_HINT_INVALID` reports a `@@hint` the planner cannot use: no argument, an empty `was`, the reserved `deprecated` argument, a `was` on a single-table-inheritance child (it belongs on the model that owns the table), a `was` equal to the model's current table name (the hint is spent), a `was` naming a table another model in the namespace declares, and two models in one namespace claiming the same `was`. A second `@@hint` on one model is `PSL_DUPLICATE_ATTRIBUTE`.
 
 Contract-level default (specifier options bag):
 

@@ -155,4 +155,22 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
     expect(ledgerInsert.sql).toContain('INSERT INTO "prisma_contract"."ledger"');
     expect(ledgerInsert.sql).not.toContain('RETURNING');
   });
+
+  it('writeLedgerEntry stores the destination contract without its hints', async () => {
+    const driver = createCapturingDriver();
+    await adapter.writeLedgerEntry(driver, 'app', {
+      edgeId: 'edge-1',
+      from: 'from',
+      to: 'to',
+      migrationName: '003_rename_profile',
+      migrationHash: 'mig',
+      operations: [],
+      destinationContractJson: {
+        models: ['user'],
+        hints: { namespaces: { public: { tables: { user: { was: 'profile' } } } } },
+      },
+    });
+
+    expect(driver.calls[0]!.params[1]).toBe(JSON.stringify({ models: ['user'] }));
+  });
 });

@@ -66,6 +66,7 @@
     "./contract/hashing-utils": "./dist/contract__hashing-utils.mjs",
     "./contract/is-plain-record": "./dist/contract__is-plain-record.mjs",
     "./contract/resolve-domain-model": "./dist/contract__resolve-domain-model.mjs",
+    "./contract/strip-hints": "./dist/contract__strip-hints.mjs",
     "./contract/types": "./dist/contract__types.mjs",
     "./contract/validate-domain": "./dist/contract__validate-domain.mjs",
     "./contract-builder": "./dist/contract-builder.mjs",

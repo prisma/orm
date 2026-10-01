@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
+import type { ConsumedHint } from '@internal/framework-components/control';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
@@ -40,13 +41,20 @@ function harness(
   options: {
     readonly script?: FakePlannerScript;
     readonly overrides?: Record<string, unknown>;
+    readonly describeConsumedHint?: (hint: ConsumedHint) => string;
   } = {},
 ) {
   return createOrmTestCli({
     commands: OFFLINE_COMMANDS,
     groups: BIN_GROUPS,
     orm: {
-      ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
+      ...offlineConfig({
+        project,
+        ...(options.script ? { script: options.script } : {}),
+        ...(options.describeConsumedHint
+          ? { describeConsumedHint: options.describeConsumedHint }
+          : {}),
+      }),
       ...options.overrides,
     },
   });
@@ -884,5 +892,102 @@ describe('migration plan destination snapshot', () => {
     });
     expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
     expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
+  });
+});
+
+describe('migration plan hints and planner warnings', () => {
+  const renamed: ConsumedHint = {
+    kind: 'renamed',
+    coordinate: { namespaceId: 'public', entityKind: 'table', entityName: 'UserProfile' },
+    from: 'userProfile',
+  };
+  const described = (hint: ConsumedHint) =>
+    hint.kind === 'renamed'
+      ? `rename hint on table "${hint.coordinate.entityName}" (was "${hint.from}")`
+      : `deleted hint on table "${hint.coordinate.entityName}"`;
+
+  it('reports each consumed hint with the text the family gives it', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project, {
+      script: { consumedHints: [renamed] },
+      describeConsumedHint: described,
+    }).run(['migration', 'plan'], { cwd: project.dir });
+
+    expect(run.presented?.data).toMatchObject({
+      consumedHints: [
+        { hint: renamed, text: 'rename hint on table "UserProfile" (was "userProfile")' },
+      ],
+    });
+  });
+
+  it('leaves consumedHints out when the plan consumed no hint', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project, { describeConsumedHint: described }).run(
+      ['migration', 'plan'],
+      { cwd: project.dir },
+    );
+
+    expect(run.presented?.data).not.toHaveProperty('consumedHints');
+  });
+
+  it('prints the consumed hints under Hints applied, after the operations', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project, {
+      script: { consumedHints: [renamed] },
+      describeConsumedHint: described,
+    }).run(['migration', 'plan'], { cwd: project.dir, isTty: { stdout: true } });
+    const blocks = run.presented?.presentation.human ?? [];
+    const title = blocks.findIndex(
+      (block) => block.kind === 'summary' && block.text === 'Hints applied',
+    );
+
+    expect(blocks[title - 1]).toMatchObject({ kind: 'tree' });
+    expect(blocks.slice(title, title + 2)).toEqual([
+      { kind: 'summary', status: 'info', text: 'Hints applied' },
+      { kind: 'list', items: ['rename hint on table "UserProfile" (was "userProfile")'] },
+    ]);
+  });
+
+  it('prints no Hints applied block when the plan consumed no hint', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project).run(['migration', 'plan'], {
+      cwd: project.dir,
+      isTty: { stdout: true },
+    });
+
+    expect(run.presented?.presentation.human).not.toContainEqual(
+      expect.objectContaining({ text: 'Hints applied' }),
+    );
+  });
+
+  it('names the hint in framework terms when the family cannot describe it', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project, { script: { consumedHints: [renamed] } }).run(
+      ['migration', 'plan'],
+      { cwd: project.dir },
+    );
+
+    expect(run.presented?.data).toMatchObject({
+      consumedHints: [
+        { hint: renamed, text: 'hint applied: table "UserProfile" in namespace "public"' },
+      ],
+    });
+  });
+
+  it('forwards the planner warnings into the result', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project, {
+      script: {
+        warnings: [{ kind: 'controlPolicySuppressedCall', summary: 'control policy suppressed' }],
+      },
+    }).run(['migration', 'plan'], { cwd: project.dir });
+
+    expect(run.presented?.data).toMatchObject({ warnings: ['control policy suppressed'] });
   });
 });

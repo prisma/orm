@@ -140,14 +140,14 @@ export function buildModel(
     }
   }
 
-  if (mapName) {
-    modelAttributes.push(buildMapAttribute('model', mapName));
-  }
-
-  // `@@rls` records the live `ENABLE ROW LEVEL SECURITY` state; it goes last
-  // so the emitted line position matches the previous out-of-band appender.
+  // `@@rls` records the live `ENABLE ROW LEVEL SECURITY` state; it goes just before `@@map`, which
+  // closes the model's attributes.
   if (rlsEnabled) {
     modelAttributes.push(buildAttribute('model', 'rls', []));
+  }
+
+  if (mapName) {
+    modelAttributes.push(buildMapAttribute('model', mapName));
   }
 
   // Surface introspection advisories the user would otherwise have no way to

@@ -148,6 +148,17 @@ function originNoticeBlocks(result: MigrationPlanResult): readonly Block[] {
   ];
 }
 
+function hintsAppliedBlocks(result: MigrationPlanResult): readonly Block[] {
+  const consumed = result.consumedHints ?? [];
+  if (consumed.length === 0) {
+    return [];
+  }
+  return [
+    { kind: 'summary', status: 'info', text: 'Hints applied' },
+    { kind: 'list', items: consumed.map((entry) => entry.text) },
+  ];
+}
+
 function warningBlocks(result: MigrationPlanResult): readonly Block[] {
   return (result.warnings ?? []).map((text): Block => ({ kind: 'summary', status: 'warn', text }));
 }
@@ -174,6 +185,7 @@ function planBlocks(result: MigrationPlanResult, migrationsRelative: string): re
     { kind: 'summary', status: 'ok', text: result.summary },
     ...originNoticeBlocks(result),
     ...operationBlocks(result),
+    ...hintsAppliedBlocks(result),
     outcome,
     ...previewBlocks(result),
   ];

@@ -295,7 +295,7 @@ export async function dropDefault(
   return {
     id: `dropDefault.${tableName}.${columnName}`,
     label: `Drop default on "${tableName}"."${columnName}"`,
-    operationClass: 'destructive',
+    operationClass: 'widening',
     target: targetDetails('column', columnName, schemaName, tableName),
     precheck: [step(`ensure column "${columnName}" exists`, present.sql, present.params)],
     execute: [step(`drop default on "${columnName}"`, dropDefaultExec.sql)],

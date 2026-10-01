@@ -1,7 +1,11 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { ControlTargetDescriptor } from './control-descriptors';
 import type { ControlFamilyInstance } from './control-instances';
-import type { MigrationPlanOperation, TargetMigrationsCapability } from './control-migration-types';
+import type {
+  ConsumedHint,
+  MigrationPlanOperation,
+  TargetMigrationsCapability,
+} from './control-migration-types';
 import type { OperationPreview } from './control-operation-preview';
 import type { CoreSchemaView } from './control-schema-view';
 import type { PslDocumentAst } from './psl-ast';
@@ -82,6 +86,41 @@ export function hasPslContractBuild<TFamilyId extends string, TSchemaIR>(
   return (
     'buildPslContract' in instance &&
     typeof Reflect.get(instance, 'buildPslContract') === 'function'
+  );
+}
+
+/**
+ * Capability declaring that a family checks rules of an authored contract that the contract
+ * serializer does not, because the application runtime must still load a contract that breaks
+ * them. `contract emit` and `contract print` call it on the contract the serializer returns.
+ */
+export interface AuthoredContractValidationCapable<TContract = Contract> {
+  validateAuthoredContract(contract: TContract): void;
+}
+
+export function hasAuthoredContractValidation<TFamilyId extends string, TSchemaIR>(
+  instance: ControlFamilyInstance<TFamilyId, TSchemaIR>,
+): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & AuthoredContractValidationCapable {
+  return (
+    'validateAuthoredContract' in instance &&
+    typeof Reflect.get(instance, 'validateAuthoredContract') === 'function'
+  );
+}
+
+/**
+ * Capability declaring that a family can describe a planner hint a plan acted on, in its own
+ * vocabulary. `migration plan` prints the text under `Hints applied`.
+ */
+export interface ConsumedHintDescriptionCapable {
+  describeConsumedHint(hint: ConsumedHint): string;
+}
+
+export function hasConsumedHintDescription<TFamilyId extends string, TSchemaIR>(
+  instance: ControlFamilyInstance<TFamilyId, TSchemaIR>,
+): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & ConsumedHintDescriptionCapable {
+  return (
+    'describeConsumedHint' in instance &&
+    typeof Reflect.get(instance, 'describeConsumedHint') === 'function'
   );
 }
 

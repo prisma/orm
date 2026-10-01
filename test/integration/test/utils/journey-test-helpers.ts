@@ -231,6 +231,21 @@ export const pslContractFixtures = {
     JOURNEY_FIXTURES_DIR,
     'contract-rename-table-objects-dropped.prisma',
   ),
+  'contract-hint-rename-from': join(JOURNEY_FIXTURES_DIR, 'contract-hint-rename-from.prisma'),
+  'contract-hint-rename-to': join(JOURNEY_FIXTURES_DIR, 'contract-hint-rename-to.prisma'),
+  'contract-hint-rename-both': join(JOURNEY_FIXTURES_DIR, 'contract-hint-rename-both.prisma'),
+  'contract-hint-rename-sqlite-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-hint-rename-sqlite-from.prisma',
+  ),
+  'contract-hint-rename-sqlite-to': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-hint-rename-sqlite-to.prisma',
+  ),
+  'contract-hint-rename-sqlite-both': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-hint-rename-sqlite-both.prisma',
+  ),
 } as const;
 
 export type PslContractVariant = keyof typeof pslContractFixtures;

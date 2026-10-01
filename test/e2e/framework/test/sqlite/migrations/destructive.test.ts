@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { applyMigration, int, text } from './harness';
 
 // ---------------------------------------------------------------------------
-// Destructive operations (drop table / drop index / replace index)
+// Drops: a table drop is destructive; an index drop, alone or in a replacement, is widening
 // ---------------------------------------------------------------------------
 
-describe('SQLite Migration E2E - Destructive operations', () => {
+describe('SQLite Migration E2E - Drops', () => {
   const DESTRUCTIVE = { allowedOperationClasses: ['additive', 'destructive'] } as const;
+  const WIDENING = { allowedOperationClasses: ['additive', 'widening'] } as const;
 
   it('drops a table removed from the contract', async () => {
     await applyMigration(
@@ -43,7 +44,7 @@ describe('SQLite Migration E2E - Destructive operations', () => {
         destination: defineContract({
           models: { User: model('User', { fields: { id: int.id(), email: text } }) },
         }),
-        policy: DESTRUCTIVE,
+        policy: WIDENING,
       },
       async ({ schema }) => {
         expect(schema.tables['User']!.indexes).toHaveLength(0);
@@ -72,7 +73,7 @@ describe('SQLite Migration E2E - Destructive operations', () => {
             ),
           },
         }),
-        policy: DESTRUCTIVE,
+        policy: WIDENING,
       },
       async ({ schema }) => {
         const cols = schema.tables['User']!.indexes.map((i) => [...(i.columns ?? [])]);

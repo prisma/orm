@@ -10,6 +10,7 @@ import {
   extractCodecControlHooks,
   planFieldEventOperations,
   plannerFailure,
+  resolveHints,
 } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
@@ -26,7 +27,8 @@ import {
   type SqlSchemaIR,
   SqlTableIR,
 } from '@internal/sql-schema-ir/types';
-import { buildSqlitePlanDiff } from './diff-database-schema';
+import { buildSqlitePlanDiff, sqliteSchemaIRFromNode } from './diff-database-schema';
+import { type HintRenames, planHintRenames } from './hint-renames';
 import { indexNameCaseChange, pairIndexReplacements } from './index-replacements';
 import {
   coalesceSubtreeIssues,
@@ -42,6 +44,7 @@ import {
 } from './planner-produced-sqlite-migration';
 import { sqlitePlannerStrategies } from './planner-strategies';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
+import { sqliteSchemaTables } from './schema-tables';
 
 export function createSqliteMigrationPlanner(
   lowerer: ExecuteRequestLowerer,
@@ -136,6 +139,30 @@ export class SqliteMigrationPlanner
     const policyResult = this.ensureAdditivePolicy(options.policy);
     if (policyResult) return policyResult;
 
+    const origin = sqliteSchemaIRFromNode(options.schema);
+    const hints = resolveHints({
+      contract: options.contract,
+      origin: sqliteSchemaTables(origin),
+      policy: options.policy,
+      ownership: options.ownership,
+      spaceId: options.spaceId,
+    });
+    if (hints.conflicts.length > 0) {
+      return plannerFailure(hints.conflicts);
+    }
+    const hintRenames = planHintRenames({
+      origin,
+      contract: options.contract,
+      hints,
+      frameworkComponents: options.frameworkComponents,
+    });
+    return this.planFromOrigin({ ...options, schema: hintRenames.adjustedOrigin }, hintRenames);
+  }
+
+  private planFromOrigin(
+    options: SqlMigrationPlannerPlanOptions,
+    hintRenames: HintRenames,
+  ): SqlitePlanResult {
     const { expected, actual, issues: diffIssues } = this.collectSchemaIssues(options);
     const replacedIndexes = pairIndexReplacements(diffIssues, indexNameCaseChange);
     const disallowedIndexCalls = replacedIndexes.calls.filter(
@@ -158,7 +185,8 @@ export class SqliteMigrationPlanner
       namespaceIdOf: () => UNBOUND_NAMESPACE_ID,
       renameByHandStatements: (rename) =>
         renameTableSteps(rename.from, rename.to).map((renameStep) => renameStep.sql),
-      renameTableCall: (rename) => new RenameTableCall(rename.from, rename.to).renderTypeScript(),
+      renameTableCall: (rename) =>
+        new RenameTableCall(rename.from, rename.to, []).renderTypeScript(),
       contract: options.contract,
       defaultNamespaceId: UNBOUND_NAMESPACE_ID,
     });
@@ -190,11 +218,17 @@ export class SqliteMigrationPlanner
       priorContract: options.fromContract,
       newContract: options.contract,
       codecHooks,
+      renames: hintRenames.renames,
     });
     // Codec-emitted calls already conform to `OpFactoryCall` — render +
     // toOp + importRequirements ride directly through the same emit path
     // as structural ops, no `RawSqlCall` wrap.
-    const calls = [...replacedIndexes.calls, ...result.value.calls, ...fieldEventOps];
+    const calls = [
+      ...hintRenames.calls,
+      ...replacedIndexes.calls,
+      ...result.value.calls,
+      ...fieldEventOps,
+    ];
 
     const destination: SqliteMigrationDestinationInfo = {
       storageHash: options.contract.storage.storageHash,
@@ -215,6 +249,7 @@ export class SqliteMigrationPlanner
         options.snapshotsImportPath,
         destination,
         this.#lowerer,
+        hintRenames.consumed,
       ),
     };
   }

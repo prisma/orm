@@ -128,7 +128,7 @@ export async function dropIndex(
   return {
     id: `dropIndex.${tableName}.${indexName}`,
     label: `Drop index "${indexName}"`,
-    operationClass: 'destructive',
+    operationClass: 'widening',
     target: targetDetails('index', indexName, schemaName, tableName),
     precheck: [step(`ensure index "${indexName}" exists`, present.sql, present.params)],
     execute: [step(`drop index "${indexName}"`, execute.sql, execute.params)],

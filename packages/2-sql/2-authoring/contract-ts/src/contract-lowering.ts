@@ -21,6 +21,7 @@ import type {
   ContractDefinition,
   FieldNode,
   ForeignKeyNode,
+  HintEntry,
   IndexNode,
   ModelNode,
   PrimaryKeyNode,
@@ -1049,6 +1050,59 @@ function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection 
   };
 }
 
+function hintInvalid(message: string, model: string, was: string): never {
+  throw contractError('CONTRACT.HINT_INVALID', message, { meta: { model, was } });
+}
+
+function collectModelHints(
+  modelSpecs: ReadonlyMap<string, RuntimeModelSpec>,
+  defaultNamespaceId: string,
+): readonly HintEntry[] {
+  const namespaceOf = (spec: RuntimeModelSpec) => spec.namespace ?? defaultNamespaceId;
+  const tableDeclarers = new Map<string, string>();
+  for (const spec of modelSpecs.values()) {
+    tableDeclarers.set(JSON.stringify([namespaceOf(spec), spec.tableName]), spec.modelName);
+  }
+  const claimants = new Map<string, string>();
+  const hints: HintEntry[] = [];
+  for (const spec of modelSpecs.values()) {
+    const hint = spec.sqlSpec?.hint;
+    if (hint === undefined) continue;
+    const { modelName, tableName } = spec;
+    const { was } = hint;
+    if (was === '') {
+      hintInvalid('@@hint(was:) must name the previous storage name.', modelName, was);
+    }
+    if (was === tableName) {
+      hintInvalid(
+        `@@hint(was: "${was}") names the table's current name; the hint is spent, remove it.`,
+        modelName,
+        was,
+      );
+    }
+    const wasKey = JSON.stringify([namespaceOf(spec), was]);
+    const declarer = tableDeclarers.get(wasKey);
+    if (declarer !== undefined) {
+      hintInvalid(
+        `@@hint(was: "${was}") on model ${modelName} names a table this contract also declares through model ${declarer}; a rename cannot apply while both exist.`,
+        modelName,
+        was,
+      );
+    }
+    const earlier = claimants.get(wasKey);
+    if (earlier !== undefined) {
+      hintInvalid(
+        `Models ${earlier} and ${modelName} both claim to have been "${was}".`,
+        modelName,
+        was,
+      );
+    }
+    claimants.set(wasKey, modelName);
+    hints.push({ namespaceId: spec.namespace, table: tableName, hint: { was } });
+  }
+  return hints;
+}
+
 function lowerModels(
   collection: RuntimeCollection,
   extensions?: Record<string, ExtensionPackRef<'sql', string>>,
@@ -1229,6 +1283,7 @@ export function buildContractDefinition(definition: LoweringInput): ContractDefi
       : {}),
     ...(definition.namespaces ? { namespaces: definition.namespaces } : {}),
     warnings: undefined,
+    hints: collectModelHints(collection.modelSpecs, definition.target.defaultNamespaceId),
     createNamespace: definition.createNamespace,
     ...(definition.enums && Object.keys(definition.enums).length > 0
       ? { enums: definition.enums }

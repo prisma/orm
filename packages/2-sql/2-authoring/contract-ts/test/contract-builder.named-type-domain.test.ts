@@ -18,6 +18,7 @@ describe('a field typed by a named storage type in the domain', () => {
   it('takes the named type parameters inline, and reads a named type without parameters as none', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
+      hints: [],
       target: postgresTargetPack,
       createNamespace: createTestSqlNamespace,
       storageTypes: {

@@ -610,6 +610,58 @@ model Post {
     expect(tsIndexes).toEqual(pslIndexes);
   });
 
+  it('PSL @@hint and the TS sql hint lower the same hints section', () => {
+    const pslContract = interpretPslDocumentToSqlContract({
+      ...symbolTableInputFromParseArgs({
+        schema: `model User {
+  id Int @id
+  @@map("users")
+  @@hint(was: "profiles")
+}
+
+model Post {
+  id Int @id
+  @@hint(was: "Article")
+}
+`,
+        sourceId: 'schema.prisma',
+      }),
+      target: portablePostgresTargetPack,
+      scalarColumnDescriptors,
+      composedExtensionContracts: new Map(),
+      controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+      authoringContributions,
+      createNamespace: createTestSqlNamespace,
+      capabilities: { sql: { scalarList: true } },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
+    });
+    expect(pslContract.ok).toBe(true);
+    if (!pslContract.ok) return;
+
+    const tsContract = defineContract({
+      family: sqlFamilyPack,
+      target: portablePostgresTargetPack,
+      models: {
+        User: model('User', { fields: { id: field.column(int4Column).id() } }).sql({
+          table: 'users',
+          hint: { was: 'profiles' },
+        }),
+        Post: model('Post', { fields: { id: field.column(int4Column).id() } }).sql({
+          hint: { was: 'Article' },
+        }),
+      },
+      createNamespace: createTestSqlNamespace,
+    });
+
+    const hintsOf = (contract: unknown) => JSON.parse(JSON.stringify(contract)).hints;
+    expect(hintsOf(pslContract.value)).toEqual({
+      namespaces: {
+        public: { tables: { Post: { was: 'Article' }, users: { was: 'profiles' } } },
+      },
+    });
+    expect(hintsOf(tsContract)).toEqual(hintsOf(pslContract.value));
+  });
+
   it('PSL map: and TS map: lower the same exact fields index', () => {
     const pslDocument = symbolTableInputFromParseArgs({
       schema: `model User {

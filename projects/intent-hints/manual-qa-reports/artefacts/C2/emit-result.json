@@ -1,0 +1,29 @@
+{
+  "kind": "result",
+  "envelope": {
+    "ok": false,
+    "commandId": "contract.emit",
+    "error": {
+      "code": "CONTRACT.SOURCE_LOAD_FAILED",
+      "severity": "error",
+      "summary": "Failed to resolve contract source",
+      "why": "@@hint(was: \"member\") names the table's current name; the hint is spent, remove it.",
+      "nextActions": [
+        {
+          "kind": "user-choice",
+          "label": "Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics."
+        }
+      ],
+      "docsUrl": "https://docs.prisma.io/docs/orm/v8/reference/error-reference/CONTRACT.SOURCE_LOAD_FAILED"
+    },
+    "diagnostics": [],
+    "nextActions": [
+      {
+        "kind": "user-choice",
+        "label": "Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics."
+      }
+    ]
+  },
+  "commandId": "contract.emit",
+  "timestamp": "2026-10-01T19:02:31.176Z"
+}

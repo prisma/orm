@@ -221,7 +221,10 @@ function buildLiveSchemaWithCrossNamespaceOrphan(): PostgresDatabaseSchemaNode {
 // declared `public.cipher_state` (a sibling's table).
 const ownsOnly = (...coordinates: readonly SchemaEntityCoordinate[]): SchemaOwnership => {
   const owned = new Set(coordinates.map(coordinateKey));
-  return { declaresEntity: (coordinate) => owned.has(coordinateKey(coordinate)) };
+  return {
+    declaresEntity: (coordinate) => owned.has(coordinateKey(coordinate)),
+    ownerOf: (coordinate) => (owned.has(coordinateKey(coordinate)) ? 'sibling' : undefined),
+  };
 };
 
 /**

@@ -1,3 +1,4 @@
+import type { JsonObject } from '@internal/utils/json';
 import type { ControlPolicy } from './control-policy';
 import type { CrossReference } from './cross-reference';
 import type { ApplicationDomain } from './domain-envelope';
@@ -53,6 +54,11 @@ export interface Contract<TStorage extends StorageBase = StorageBase> {
   readonly profileHash: ProfileHashBase<string>;
   readonly meta: Record<string, unknown>;
   readonly defaultControlPolicy?: ControlPolicy;
+  /**
+   * Planner hints from the authoring layer. Family-defined shape; never hashed; stripped from
+   * snapshots.
+   */
+  readonly hints?: JsonObject;
 }
 
 type ExactlyOneNamespace<T extends Record<string, unknown>> = keyof T extends infer Only extends

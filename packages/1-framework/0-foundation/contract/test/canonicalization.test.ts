@@ -271,6 +271,45 @@ describe('canonicalizeContractToObject', () => {
     expect(keys.indexOf('defaultControlPolicy')).toBeLessThan(keys.indexOf('meta'));
   });
 
+  it('includes hints when set on the contract, with keys sorted', () => {
+    const hints = {
+      namespaces: {
+        public: {
+          tables: {
+            User: { was: 'Profile', columns: { firstName: { was: 'first_name' } } },
+            Legacy: { deleted: true },
+          },
+        },
+      },
+    };
+    const result = canonicalizeContractToObject(minimal({ hints }));
+    expect(JSON.stringify(result['hints'])).toBe(
+      JSON.stringify({
+        namespaces: {
+          public: {
+            tables: {
+              Legacy: { deleted: true },
+              User: { columns: { firstName: { was: 'first_name' } }, was: 'Profile' },
+            },
+          },
+        },
+      }),
+    );
+  });
+
+  it('omits hints when not set', () => {
+    const result = canonicalizeContractToObject(minimal());
+    expect(result).not.toHaveProperty('hints');
+  });
+
+  it('places hints after defaultControlPolicy and before meta', () => {
+    const hints = { namespaces: { public: { tables: { User: { was: 'Profile' } } } } };
+    const result = canonicalizeContractToObject(
+      minimal({ hints, defaultControlPolicy: 'tolerated' }),
+    );
+    expect(Object.keys(result).slice(-3)).toEqual(['defaultControlPolicy', 'hints', 'meta']);
+  });
+
   it('sorts object keys recursively', () => {
     const result = canonicalizeContractToObject(
       minimal({

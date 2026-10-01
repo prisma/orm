@@ -49,6 +49,7 @@
     "./hashing-utils": "./dist/hashing-utils.mjs",
     "./is-plain-record": "./dist/is-plain-record.mjs",
     "./resolve-domain-model": "./dist/resolve-domain-model.mjs",
+    "./strip-hints": "./dist/strip-hints.mjs",
     "./types": "./dist/types.mjs",
     "./validate-domain": "./dist/validate-domain.mjs",
     "./package.json": "./package.json"

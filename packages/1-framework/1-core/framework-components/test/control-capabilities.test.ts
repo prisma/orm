@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  hasAuthoredContractValidation,
+  hasConsumedHintDescription,
   hasOperationPreview,
   hasPslContractBuild,
   hasPslContractInfer,
@@ -79,6 +81,30 @@ describe('hasSchemaView', () => {
   });
 });
 
+describe('hasAuthoredContractValidation', () => {
+  it('returns true when instance exposes validateAuthoredContract function', () => {
+    const instance = {
+      ...baseInstance,
+      validateAuthoredContract: () => {},
+    } as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasAuthoredContractValidation(instance)).toBe(true);
+  });
+
+  it('returns false when instance does not declare validateAuthoredContract', () => {
+    expect(hasAuthoredContractValidation(baseInstance)).toBe(false);
+  });
+
+  it('returns false when validateAuthoredContract is present but not a function', () => {
+    const instance = {
+      ...baseInstance,
+      validateAuthoredContract: true,
+    } as unknown as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasAuthoredContractValidation(instance)).toBe(false);
+  });
+});
+
 describe('hasOperationPreview', () => {
   const SYNTHETIC_PREVIEW: OperationPreview = {
     statements: [{ text: 'CREATE TABLE x (id int)', language: 'sql' }],
@@ -104,5 +130,29 @@ describe('hasOperationPreview', () => {
     } as unknown as ControlFamilyInstance<'sql', unknown>;
 
     expect(hasOperationPreview(instance)).toBe(false);
+  });
+});
+
+describe('hasConsumedHintDescription', () => {
+  it('returns true when instance exposes describeConsumedHint function', () => {
+    const instance = {
+      ...baseInstance,
+      describeConsumedHint: () => 'described',
+    } as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasConsumedHintDescription(instance)).toBe(true);
+  });
+
+  it('returns false when instance does not declare describeConsumedHint', () => {
+    expect(hasConsumedHintDescription(baseInstance)).toBe(false);
+  });
+
+  it('returns false when describeConsumedHint is present but not a function', () => {
+    const instance = {
+      ...baseInstance,
+      describeConsumedHint: 'described',
+    } as unknown as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasConsumedHintDescription(instance)).toBe(false);
   });
 });

@@ -29,7 +29,7 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { NamedConstraintSpec } from './authoring-type-utils';
-import type { AuthoredColumnDefault } from './contract-definition';
+import type { AuthoredColumnDefault, TableHint } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
 import { isEnumTypeHandle } from './enum-type';
@@ -1333,6 +1333,7 @@ export type SqlStageSpec = {
   readonly indexes?: readonly IndexConstraint[];
   readonly checks?: readonly AuthoredCheckConstraint[];
   readonly foreignKeys?: readonly ForeignKeyConstraint[];
+  readonly hint?: TableHint;
 };
 
 type FieldRefs<Fields extends Record<string, ScalarFieldBuilder>> = {

@@ -1,6 +1,7 @@
 import type { SqlMigrationPlanOperation } from '@internal/family-sql/control';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import type {
+  ConsumedHint,
   MigrationPlanWithAuthoringSurface,
   OpFactoryCall,
 } from '@internal/framework-components/control';
@@ -28,6 +29,7 @@ export class TypeScriptRenderableSqliteMigration
   readonly #spaceId: string;
   readonly #snapshotsImportPath: string;
   readonly #lowerer: ExecuteRequestLowerer | undefined;
+  readonly consumedHints: readonly ConsumedHint[];
   #operationsCache: readonly (Op | Promise<Op>)[] | undefined;
 
   constructor(
@@ -37,6 +39,7 @@ export class TypeScriptRenderableSqliteMigration
     snapshotsImportPath: string,
     destination?: SqliteMigrationDestinationInfo,
     lowerer?: ExecuteRequestLowerer,
+    consumedHints: readonly ConsumedHint[] = [],
   ) {
     super();
     this.#calls = calls;
@@ -45,6 +48,7 @@ export class TypeScriptRenderableSqliteMigration
     this.#snapshotsImportPath = snapshotsImportPath;
     this.#destination = destination ?? { storageHash: meta.to };
     this.#lowerer = lowerer;
+    this.consumedHints = consumedHints;
   }
 
   override get operations(): readonly (Op | Promise<Op>)[] {

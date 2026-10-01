@@ -67,6 +67,7 @@ import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
 import { getAttribute } from './psl-attribute-parsing';
+import { deletedHintsShipped } from './release-switches';
 
 function buildModelAttributeCtx(input: {
   readonly symbols: SymbolTable;
@@ -626,6 +627,48 @@ const controlModelSpec = modelAttribute('control', {
   ],
 });
 
+export const PSL_HINT_INVALID: ContributedPslDiagnosticCode = 'PSL_HINT_INVALID';
+
+const hintModelSpec = modelAttribute('hint', {
+  documentation:
+    "Tells the migration planner the intent behind a change to this model's table that a diff cannot infer.",
+  named: {
+    was: {
+      type: optional(str()),
+      documentation:
+        'The storage name this table had before it was renamed, as @@map would have spelled it.',
+    },
+    deprecated: { type: optional(bool()), documentation: 'Reserved. Not yet supported.' },
+  },
+  refine: (value, ctx, attributeNode) => {
+    const reject = (message: string) =>
+      leafDiagnostic(ctx, attributeNode, message, PSL_HINT_INVALID);
+    if (value.was === undefined && value.deprecated === undefined) {
+      return [
+        reject(
+          deletedHintsShipped
+            ? '@@hint needs one of was, deleted or deprecated.'
+            : '@@hint needs was.',
+        ),
+      ];
+    }
+    const diagnostics: PslDiagnostic[] = [];
+    if (value.was === '') {
+      diagnostics.push(reject('@@hint(was:) must name the previous storage name.'));
+    }
+    if (value.deprecated !== undefined) {
+      diagnostics.push(
+        reject(
+          deletedHintsShipped
+            ? '@@hint(deprecated:) is reserved and not yet supported. Remove the model from the schema and run db update, or mark it deleted once no application version reads it.'
+            : '@@hint(deprecated:) is reserved and not yet supported. Remove the model from the schema and run db update.',
+        ),
+      );
+    }
+    return diagnostics;
+  },
+});
+
 const discriminatorModelSpec = modelAttribute('discriminator', {
   documentation: 'Selects the field that identifies inheritance variants of this model.',
   positional: [
@@ -779,6 +822,7 @@ export const sqlAttributeSpecs = {
     index: () => indexModelSpec,
     check: () => checkModelSpec,
     control: () => controlModelSpec,
+    hint: () => hintModelSpec,
     discriminator: () => discriminatorModelSpec,
     base: baseModelSpec,
   },

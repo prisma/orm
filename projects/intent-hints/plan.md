@@ -10,7 +10,7 @@
 - **Builds on:** prisma/orm#30331 merged.
 - **Hands to:** the contract section and its validation, the planner's hint input and resolution helper, the consumed-hints report.
 - **Linear:** TML-3422.
-- **Branch:** cut from `main` after prisma/orm#30331 merges.
+- **PR:** https://github.com/prisma/orm/pull/30570, stacked on the shaping PR prisma/orm#30557; retarget to `main` once that merges.
 
 ### Slice 2 — Field renames
 
@@ -31,6 +31,8 @@
 - **Outcome:** `@@hint(deleted: true)` on a model and `@hint(deleted: true)` on a field make the block a tombstone: excluded from domain, storage and generated types, present only in the hints section; the planners drop the named table or column when the origin has it and do nothing when it does not, with no consent prompt; both targets.
 - **Builds on:** slice 3.
 - **Hands to:** the tombstone lowering, which the `deprecated` follow-on extends.
+- **Note from slice 1 QA:** the release switch `deletedHintsShipped` exists in two unexported modules (`contract-psl/src/release-switches.ts`, `family-sql/src/core/release-switches.ts`); slice 4 flips both and restores the final texts of R1.6, R1.10 and the contradicted `why`.
+- **Note from slice 1 review:** `resolveHints` returns early when the policy lacks `widening`; slice 4 must move that check into the rename branches, because the `deleted` rules act under `destructive` alone.
 - **Linear:** TML-3432.
 
 ## Sequencing

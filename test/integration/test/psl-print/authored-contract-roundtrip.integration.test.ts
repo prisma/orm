@@ -430,3 +430,39 @@ describe('a printed emitted contract reads back as the same contract', () => {
     timeouts.pslRoundTrip,
   );
 });
+
+describe('model rename hints', () => {
+  it(
+    'print as @@hint and read back to the same hints section',
+    async () => {
+      const authored = await readPsl(`// use prisma-8
+model Account {
+  id Int @id
+
+  @@map("accounts")
+  @@hint(was: "customers")
+}
+
+model Ledger {
+  id Int @id
+
+  @@hint(was: "Journal \\"v1\\" \\\\ old")
+}
+`);
+      expect(authored.hints).toEqual({
+        namespaces: {
+          public: {
+            tables: { Ledger: { was: 'Journal "v1" \\ old' }, accounts: { was: 'customers' } },
+          },
+        },
+      });
+      const { text } = printContract(authored);
+      expect(text).toContain('@@hint(was: "customers")');
+      const printed = await printAndReadBack(authored);
+      expect(serializedWithoutCapabilities(printed)).toEqual(
+        serializedWithoutCapabilities(authored),
+      );
+    },
+    timeouts.pslRoundTrip,
+  );
+});

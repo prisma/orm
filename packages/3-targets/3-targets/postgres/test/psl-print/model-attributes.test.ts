@@ -18,6 +18,27 @@ describe('names the PSL source cannot derive', () => {
     expect(model?.attributes.map(attributeText)).toEqual(['@@map("widgets")']);
   });
 
+  it('prints a rename hint after @@map', () => {
+    const [model] = buildModels({
+      models: { Widget: { table: 'widgets', fields: { id: { column: 'id' } } } },
+      tables: { widgets: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }) },
+      hints: { namespaces: { public: { tables: { widgets: { was: 'gadgets' } } } } },
+    });
+    expect(model?.attributes.map(attributeText)).toEqual([
+      '@@map("widgets")',
+      '@@hint(was: "gadgets")',
+    ]);
+  });
+
+  it('prints a rename hint on a model whose table is the model name', () => {
+    const [model] = buildModels({
+      models: { Widget: { table: 'Widget', fields: { id: { column: 'id' } } } },
+      tables: { Widget: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }) },
+      hints: { namespaces: { public: { tables: { Widget: { was: 'Gadget "old"' } } } } },
+    });
+    expect(model?.attributes.map(attributeText)).toEqual(['@@hint(was: "Gadget \\"old\\"")']);
+  });
+
   it('leaves a model whose table is the model name unmapped', () => {
     const [model] = buildModels({
       models: { Widget: { table: 'Widget', fields: { id: { column: 'id' } } } },

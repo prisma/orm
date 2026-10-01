@@ -365,6 +365,26 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
     expect(opIds).toContain(`rlsPolicy.public.${TABLE_NAME}.p_read_00000000.drop`);
   });
 
+  it('drops the extra policy under a policy that allows widening but not destructive', async () => {
+    const contract = buildContractWith([makePolicy('p_read_11111111')]);
+    const oldPolicy = makeActualPolicy('p_read_00000000', TABLE_NAME, '(auth.uid() = old_user_id)');
+
+    const result = createPostgresMigrationPlanner(stubLowerer).plan({
+      contract,
+      schema: schemaWith([oldPolicy]),
+      policy: { allowedOperationClasses: ['additive', 'widening'] },
+      fromContract: null,
+      frameworkComponents: [],
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+    const opIds = (await Promise.all(result.plan.operations)).map((op) => op.id);
+    expect(opIds).toContain(`rlsPolicy.public.${TABLE_NAME}.p_read_00000000.drop`);
+  });
+
   it('additive-only policy passes create/enable but filters the extra-policy drop', async () => {
     const newPolicy = makePolicy('p_read_11111111');
     const contract = buildContractWith([newPolicy]);

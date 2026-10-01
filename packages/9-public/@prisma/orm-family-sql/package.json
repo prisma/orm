@@ -62,6 +62,7 @@
     "./contract/entity-kinds": "./dist/contract__entity-kinds.mjs",
     "./contract/factories": "./dist/contract__factories.mjs",
     "./contract/foreign-key-materialization": "./dist/contract__foreign-key-materialization.mjs",
+    "./contract/hints": "./dist/contract__hints.mjs",
     "./contract/index-naming": "./dist/contract__index-naming.mjs",
     "./contract/index-type-validation": "./dist/contract__index-type-validation.mjs",
     "./contract/index-types": "./dist/contract__index-types.mjs",

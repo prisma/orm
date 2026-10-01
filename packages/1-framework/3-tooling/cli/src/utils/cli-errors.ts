@@ -520,8 +520,8 @@ export function errorMarkerMismatch(
 
 const ROLLBACK_IS_DESTRUCTIVE =
   'A rollback (reverse) plan is expected to contain destructive (DROP) operations — review them before applying';
-const NARROWER_CASES_NEED_A_HINT =
-  'Narrower cases (rename inference, re-adding a required field without a safe default, or a type change that needs data) may additionally need a hint in the planned migration';
+const RENAMES_AND_DATA_CHANGES =
+  'A rename that must keep its data is stated in the schema, with a rename hint where the schema language has one, and planned with migration plan; re-adding a required field without a safe default, or a type change that needs data, may leave a placeholder in the planned migration.ts to fill in';
 
 export function errorPathUnreachable(failure: MigrateFailure): ActionableCliError {
   const meta = failure.meta ?? {};
@@ -578,14 +578,14 @@ export function errorPathUnreachable(failure: MigrateFailure): ActionableCliErro
       `  1. ${planCommand}`,
       `  2. ${applyCommand}`,
       `${ROLLBACK_IS_DESTRUCTIVE}.`,
-      `${NARROWER_CASES_NEED_A_HINT}.`,
+      `${RENAMES_AND_DATA_CHANGES}.`,
       'Inspect the on-disk graph with `{bin} migration list`, or `{bin} migration show <bundle>` for any bundle in the path you expected.',
     ].join('\n'),
     nextActions: [
       runCommandAction('Plan the missing edge', planCommand),
       runCommandAction('Apply it', applyCommand),
       chooseAction(ROLLBACK_IS_DESTRUCTIVE),
-      chooseAction(NARROWER_CASES_NEED_A_HINT),
+      chooseAction(RENAMES_AND_DATA_CHANGES),
       runCommandAction('Inspect the on-disk graph', '{bin} migration list'),
       runCommandAction(
         'Inspect a bundle in the path you expected',

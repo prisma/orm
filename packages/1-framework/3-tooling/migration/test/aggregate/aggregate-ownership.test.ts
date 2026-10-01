@@ -74,6 +74,16 @@ describe('ContractSpaceAggregate ownership queries', () => {
     expect(aggregate.declaresEntity(inPublic('cipher_state'))).toBe(false);
   });
 
+  it('ownerOf names the space that declares the coordinate, and nothing for an undeclared one', () => {
+    const app = makeSpace('app', { public: { table: { app_user: {} } } });
+    const cipher = makeSpace('cipherstash', { public: { table: { cipher_state: {} } } });
+    const aggregate = makeAggregate(app, [cipher]);
+
+    expect(aggregate.ownerOf(inPublic('app_user'))).toBe('app');
+    expect(aggregate.ownerOf(inPublic('cipher_state'))).toBe('cipherstash');
+    expect(aggregate.ownerOf(inPublic('orphan_table'))).toBeUndefined();
+  });
+
   it('declaringSpaces returns every space declaring the coordinate', () => {
     const app = makeSpace('app', { public: { table: { app_user: {} } } });
     const cipher = makeSpace('cipherstash', { public: { table: { cipher_state: {} } } });

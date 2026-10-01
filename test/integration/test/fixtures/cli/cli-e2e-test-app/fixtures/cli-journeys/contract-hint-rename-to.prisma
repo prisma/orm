@@ -1,0 +1,35 @@
+// use prisma-8
+
+namespace public {
+  model Account {
+    id      Int      @id
+    members Member[]
+  }
+
+  model Member {
+    id        Int     @id
+    email     String  @unique
+    handle    String
+    tenantId  Int     @map("tenant_id")
+    accountId Int
+    account   Account @relation(fields: [accountId], references: [id])
+    posts     Post[]
+
+    @@index([handle])
+    @@check(expression: "tenant_id > 0", name: "profile_tenant_positive")
+    @@rls
+    @@hint(was: "Profile")
+  }
+
+  model Post {
+    id        Int    @id
+    profileId Int
+    profile   Member @relation(fields: [profileId], references: [id])
+  }
+
+  policy_select tenant_read {
+    target = Member
+    roles  = [app_user]
+    using  = "(tenant_id = 1)"
+  }
+}

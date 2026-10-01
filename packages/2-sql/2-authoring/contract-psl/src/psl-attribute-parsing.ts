@@ -1,4 +1,10 @@
-import type { FieldSymbol, ModelSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
+import type {
+  FieldSymbol,
+  ModelSymbol,
+  PslDiagnostic,
+  PslSpan,
+  ResolvedAttribute,
+} from '@internal/psl-parser';
 import {
   type DiagnosticSource,
   type PslDiagnosticCollector,
@@ -90,4 +96,23 @@ export function mapFieldNamesToColumns(input: {
     columns.push(storageName(field, input.physicalNames));
   }
   return columns;
+}
+
+/**
+ * The `PSL_DUPLICATE_ATTRIBUTE` diagnostic for a model attribute declared more than once on one
+ * model. Shared by the built-in `@@control` and `@@hint` paths and the contributed-model-attribute
+ * path so the code and wording stay in one place. `name` is the bare attribute name (`control`,
+ * `rls`, …).
+ */
+export function duplicateModelAttributeDiagnostic(input: {
+  readonly name: string;
+  readonly modelName: string;
+  readonly source: DiagnosticSource;
+  readonly span: PslSpan;
+}): PslDiagnostic {
+  return {
+    code: 'PSL_DUPLICATE_ATTRIBUTE',
+    message: `\`@@${input.name}\` declared more than once on model "${input.modelName}".`,
+    ...input.source.at(input.span),
+  };
 }

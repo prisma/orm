@@ -1,0 +1,27 @@
+// use prisma-8
+
+model Account {
+  id       Int       @id
+  profiles Profile[]
+}
+
+model Profile {
+  id        Int     @id
+  email     String  @unique
+  handle    String
+  accountId Int
+  account   Account @relation(fields: [accountId], references: [id])
+  posts     Post[]
+
+  @@index([handle])
+}
+
+model Member {
+  id Int @id
+}
+
+model Post {
+  id        Int     @id
+  profileId Int
+  profile   Profile @relation(fields: [profileId], references: [id])
+}

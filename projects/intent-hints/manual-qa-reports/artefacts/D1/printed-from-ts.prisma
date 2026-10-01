@@ -1,0 +1,50 @@
+// use prisma-8
+// Printed from prisma/contract.ts by `prisma contract print`.
+
+types {
+  Embedding1536 = pgvector.Vector(1536)
+}
+
+enum Priority {
+  Low = 0
+  High = 1
+  Urgent = 2
+  @@type("pg/int4@1")
+}
+
+enum user_type {
+  admin = "admin"
+  user = "user"
+  @@type("pg/text@1")
+}
+
+namespace public {
+  model Member {
+    id        Char(36)                                           @id @default(uuid())
+    email     String
+    createdAt temporal.timestamptz(onCreate: now)
+    updatedAt temporal.timestamptz(onCreate: now, onUpdate: now)
+    kind      user_type
+    address   Jsonb?
+    posts     Post[]
+
+    @@hint(was: "user")
+    @@map("member")
+  }
+
+  model Post {
+    id        Char(36)                                           @id @default(uuid())
+    title     String
+    userId    Char(36)
+    priority  Priority                                           @default(Low)
+    createdAt temporal.timestamptz(onCreate: now)
+    expiresAt Timestamptz                                        @default(sql`(now() + '7 days'::interval)`)
+    updatedAt temporal.timestamptz(onCreate: now, onUpdate: now)
+    embedding Embedding1536?
+    user      Member                                             @relation(fields: [userId], references: [id], map: "post_userId_fkey", index: false)
+
+    @@index(expression: "to_tsvector('english', \"title\")", name: "post_title_search", type: "gin")
+    @@index([userId], name: "post_userId_idx")
+    @@map("post")
+  }
+}

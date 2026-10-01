@@ -156,7 +156,7 @@ describe('renderOps', () => {
       },
       {
         id: 'dropDefault.user.updated_at',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('column', 'updated_at', 'user'),
       },
       {
@@ -176,7 +176,7 @@ describe('renderOps', () => {
       },
       {
         id: 'dropConstraint.user.user_email_key',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('unique', 'user_email_key', 'user'),
       },
       {
@@ -186,7 +186,7 @@ describe('renderOps', () => {
       },
       {
         id: 'dropIndex.user.stale_idx',
-        operationClass: 'destructive',
+        operationClass: 'widening',
         details: schemaObject('index', 'stale_idx', 'user'),
       },
       { id: 'custom.op.1', operationClass: 'additive', details: undefined },

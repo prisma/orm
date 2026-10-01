@@ -81,6 +81,11 @@ describe('@@rls emission', () => {
     expect(psl).toContain('@@rls');
   });
 
+  it('prints @@rls before @@map on a mapped table', () => {
+    const psl = pslWithPolicies([]);
+    expect(psl).toContain('  @@rls\n  @@map("profile")\n');
+  });
+
   it('an RLS-disabled table emits no @@rls', () => {
     const psl = pslWithPolicies([], false);
     expect(psl).not.toContain('@@rls');

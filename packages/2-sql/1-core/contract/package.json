@@ -50,6 +50,7 @@
     "./entity-kinds": "./dist/entity-kinds.mjs",
     "./factories": "./dist/factories.mjs",
     "./foreign-key-materialization": "./dist/foreign-key-materialization.mjs",
+    "./hints": "./dist/hints.mjs",
     "./index-naming": "./dist/index-naming.mjs",
     "./index-type-validation": "./dist/index-type-validation.mjs",
     "./index-types": "./dist/index-types.mjs",

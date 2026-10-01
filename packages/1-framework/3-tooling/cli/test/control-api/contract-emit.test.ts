@@ -432,6 +432,39 @@ describe('executeContractEmit', () => {
     expect(emitContract).not.toBe(plainEnvelope);
   });
 
+  it('validates the deserialized contract through the family capability before emitting', async () => {
+    const outputJsonPath = join(tmpDir, 'src/prisma/contract.json');
+    const hydratedContract = {
+      ...createMockContract(),
+      storageHydrated: true,
+    } as unknown as Contract;
+    const hintInvalid = Object.assign(
+      new Error(
+        'Contract hints: table "ghost" carries a hint but the contract does not declare it.',
+      ),
+      { code: 'CONTRACT.HINT_INVALID' },
+    );
+    const validateAuthoredContract = vi.fn(() => {
+      throw hintInvalid;
+    });
+    const config = createSuccessfulConfig(outputJsonPath);
+    const family = {
+      ...config.family,
+      create: () => ({ deserializeContract: () => hydratedContract, validateAuthoredContract }),
+    };
+
+    await expect(
+      executeContractEmitWithMock(
+        emitOptions(
+          { ...config, family: family as unknown as typeof config.family },
+          join(tmpDir, 'prisma.config.ts'),
+        ),
+      ),
+    ).rejects.toMatchObject({ code: 'CONTRACT.HINT_INVALID' });
+    expect(validateAuthoredContract).toHaveBeenCalledWith(hydratedContract);
+    expect(mockedEmit).not.toHaveBeenCalled();
+  });
+
   it('threads the target supportsNamespaces declaration into emit', async () => {
     const outputJsonPath = join(tmpDir, 'generated/contract.json');
     const config = createSuccessfulConfig(outputJsonPath);

@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Model \"User\": attribute \"@@hint\" is not supported yet by the Prisma 7 contract source."
+  }
+]

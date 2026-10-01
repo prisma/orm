@@ -46,6 +46,7 @@ model User {
 
   @@map("users")
   @@control(managed)
+  @@hint(was: "accounts")
 }
 
 model Post {
