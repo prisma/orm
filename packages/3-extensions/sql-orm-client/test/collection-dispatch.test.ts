@@ -1,7 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/ast';
-import { describe, expect, it, vi } from 'vitest';
+import { InternalError } from '@internal/utils/internal-error';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import { dispatchCollectionRows } from '../src/collection-dispatch';
 import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
@@ -223,6 +224,30 @@ describe('collection-dispatch', () => {
       cause,
     });
     expect(decodeJson.mock.calls).toEqual([[1], [2]]);
+  });
+
+  it('rethrows an InternalError from decoding an included value unchanged', async () => {
+    const contract = withEmittedSqlCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('views'));
+    const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
+    if (!codec) throw new Error('Missing views codec');
+    const original = new InternalError('codec invariant broke');
+    const decodeJson = vi.spyOn(codec, 'decodeJson').mockImplementation(() => {
+      throw original;
+    });
+    onTestFinished(() => decodeJson.mockRestore());
+    runtime.setNextResults([[{ name: 'Alice', posts: [{ views: 1 }] }]]);
+    await expect(
+      dispatchCollectionRows<Record<string, unknown>>({
+        context: collection.ctx.context,
+        runtime,
+        state: scoped.state,
+        tableName: scoped.tableName,
+        namespaceId: 'public',
+        modelName: scoped.modelName,
+      }).toArray(),
+    ).rejects.toBe(original);
   });
 
   it('dispatchCollectionRows() depth-2 nested include with emitted-shape capabilities fires a single SQL execution', async () => {

@@ -1,6 +1,6 @@
 import type { AstNode } from '../ast-helpers';
 import { findChildToken, findFirstChild } from '../ast-helpers';
-import type { SyntaxNode, SyntaxToken } from '../red';
+import { SyntaxNode, type SyntaxToken } from '../red';
 import { AttributeArgListAst } from './attributes';
 import { QualifiedNameAst } from './qualified-name';
 
@@ -41,8 +41,37 @@ export class TypeAnnotationAst implements AstNode {
     return this.lbracket() !== undefined;
   }
 
+  /**
+   * The list/field axis: a `?` after `]` (list nullable) or, when this is not a
+   * list, the sole field-level `?`. A `?` before `[` is the element axis and
+   * does not count here.
+   */
   isOptional(): boolean {
-    return this.questionMark() !== undefined;
+    const lbracket = this.lbracket();
+    if (lbracket === undefined) {
+      return this.questionMark() !== undefined;
+    }
+    const anchor = this.rbracket() ?? lbracket;
+    return this.#questionTokens().some((question) => question.index > anchor.index);
+  }
+
+  /** The element axis: a `?` positioned before `[`, meaningful only for lists. */
+  isElementOptional(): boolean {
+    const lbracket = this.lbracket();
+    if (lbracket === undefined) {
+      return false;
+    }
+    return this.#questionTokens().some((question) => question.index < lbracket.index);
+  }
+
+  #questionTokens(): SyntaxToken[] {
+    const result: SyntaxToken[] = [];
+    for (const child of this.syntax.children()) {
+      if (!(child instanceof SyntaxNode) && child.kind === 'Question') {
+        result.push(child);
+      }
+    }
+    return result;
   }
 
   static cast(node: SyntaxNode): TypeAnnotationAst | undefined {

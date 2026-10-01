@@ -3,23 +3,7 @@
 // To regenerate, run: prisma contract emit
 import type { CodecTypes as PgVectorTypes, Vector } from '@internal/extension-pgvector/codec-types';
 import type { QueryOperationTypes as PgVectorQueryOperationTypes } from '@internal/extension-pgvector/operation-types';
-import type {
-  Bit,
-  Char,
-  CodecTypes as PgTypes,
-  Interval,
-  JsonValue,
-  Numeric,
-  Time,
-  TimeString,
-  Timestamp,
-  TimestampString,
-  Timestamptz,
-  TimestamptzString,
-  Timetz,
-  VarBit,
-  Varchar,
-} from '@internal/target-postgres/codec-types';
+import type { Char, CodecTypes as PgTypes, Varchar } from '@internal/target-postgres/codec-types';
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 import type {
@@ -451,11 +435,13 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly title: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -469,22 +455,26 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly post_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly subject: {
                   readonly nativeType: 'character varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 200 };
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -522,26 +512,31 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/vector@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly length: 3 };
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly title: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly user_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly views: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -555,16 +550,19 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly user_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -578,21 +576,25 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly invited_by_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

@@ -23,7 +23,9 @@
                 }
               },
               "bInt_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -31,7 +33,9 @@
                 }
               },
               "bInt_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int8@1",
@@ -46,7 +50,9 @@
                 }
               },
               "bool_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -54,7 +60,9 @@
                 }
               },
               "bool_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bool@1",
@@ -69,7 +77,9 @@
                 }
               },
               "bytes_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -77,7 +87,9 @@
                 }
               },
               "bytes_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/bytea@1",
@@ -92,7 +104,9 @@
                 }
               },
               "dt_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -100,7 +114,9 @@
                 }
               },
               "dt_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -115,7 +131,9 @@
                 }
               },
               "float_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -123,7 +141,9 @@
                 }
               },
               "float_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/float8@1",
@@ -145,7 +165,9 @@
                 }
               },
               "int_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -153,7 +175,9 @@
                 }
               },
               "int_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -168,7 +192,9 @@
                 }
               },
               "string_list": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -176,7 +202,9 @@
                 }
               },
               "string_list2": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -348,13 +376,17 @@
                 },
                 "bInt_list": {
                   "codecId": "pg/int8@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int8",
                   "nullable": false
                 },
                 "bInt_list2": {
                   "codecId": "pg/int8@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int8",
                   "nullable": false
                 },
@@ -365,13 +397,17 @@
                 },
                 "bool_list": {
                   "codecId": "pg/bool@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bool",
                   "nullable": false
                 },
                 "bool_list2": {
                   "codecId": "pg/bool@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bool",
                   "nullable": false
                 },
@@ -382,13 +418,17 @@
                 },
                 "bytes_list": {
                   "codecId": "pg/bytea@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bytea",
                   "nullable": false
                 },
                 "bytes_list2": {
                   "codecId": "pg/bytea@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "bytea",
                   "nullable": false
                 },
@@ -399,13 +439,17 @@
                 },
                 "dt_list": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "dt_list2": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
@@ -416,13 +460,17 @@
                 },
                 "float_list": {
                   "codecId": "pg/float8@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "float8",
                   "nullable": false
                 },
                 "float_list2": {
                   "codecId": "pg/float8@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "float8",
                   "nullable": false
                 },
@@ -438,13 +486,17 @@
                 },
                 "int_list": {
                   "codecId": "pg/int4@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int4",
                   "nullable": false
                 },
                 "int_list2": {
                   "codecId": "pg/int4@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "int4",
                   "nullable": false
                 },
@@ -455,13 +507,17 @@
                 },
                 "string_list": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 },
                 "string_list2": {
                   "codecId": "pg/text@1",
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "text",
                   "nullable": false
                 }
@@ -481,7 +537,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "dd7e98992d0dcff2bb6543085f7a7deccda88c497a467d34b26c67f7636de3e6"
+    "storageHash": "0385e83a3bd0eae5cec7562a2473ce7bfbb8bac50f867423a39b898d83cbe7c2"
   },
   "capabilities": {
     "postgres": {

@@ -18,14 +18,16 @@
                   "kind": "scalar",
                   "codecId": "mongo/objectId@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "title": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "mongo/string@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {},

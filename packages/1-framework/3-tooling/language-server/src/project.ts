@@ -94,7 +94,7 @@ export class Project {
     const data = await this.#resolveMember(uri);
     if (data === undefined) return undefined;
     try {
-      return renameLegacyDirective(format(source, data.formatter));
+      return renameLegacyDirective(format(source, data.formatter, data.parserOptions));
     } catch {
       return undefined;
     }
@@ -108,8 +108,7 @@ export class Project {
       {
         document: document.parse().document,
         sourceFile: document.sourceFile,
-        symbolTable: data.artifacts.symbolTable(),
-        scalarTypes: data.controlStack.scalarTypes,
+        binder: data.artifacts.binder(),
       },
       range,
     );
@@ -140,6 +139,7 @@ export class Project {
           candidates: {
             ...data.controlStack,
             symbolTable: data.artifacts.symbolTable(),
+            binder: data.artifacts.binder(),
           },
           clientSupportsSnippets: capabilities.completionSnippets,
           clientSupportsTriggerSuggestCommand: capabilities.completionTriggerSuggestCommand,
@@ -169,6 +169,7 @@ export class Project {
         candidates: {
           ...data.controlStack,
           symbolTable: data.artifacts.symbolTable(),
+          binder: data.artifacts.binder(),
         },
       });
     } catch {
@@ -330,6 +331,7 @@ export class Project {
       this.#options.documents.text(uri),
     );
     const artifacts = new ProjectArtifacts({
+      controlStack: resolution.controlStack,
       inputs: resolution.inputs,
       readSnapshot: this.#options.documents.readSnapshot,
       onInterpretationError: (uri, error) => {
@@ -339,6 +341,9 @@ export class Project {
       ...(resolution.interpretation === undefined
         ? {}
         : { interpretation: resolution.interpretation }),
+      ...(resolution.parserOptions === undefined
+        ? {}
+        : { parserOptions: resolution.parserOptions }),
     });
     return { ...resolution, artifacts };
   }

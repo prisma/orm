@@ -122,6 +122,7 @@
     "./utils/simplify-deep": "./dist/utils__simplify-deep.mjs",
     "./utils/structured-error": "./dist/utils__structured-error.mjs",
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
+    "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
     "./value": "./dist/value.mjs",
     "./value/mongodb-types": "./dist/value__mongodb-types.mjs",

@@ -74,6 +74,7 @@ describe('runtime verify-marker: missing marker table', {
     await driver.connect({ kind: 'pgClient', client });
 
     const runtime = new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,

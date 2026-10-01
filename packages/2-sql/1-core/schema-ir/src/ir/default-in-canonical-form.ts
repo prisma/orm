@@ -41,6 +41,7 @@ function inCanonicalForm(
   value: JsonValue,
   toCanonicalForm: ToCanonicalForm,
 ): { readonly value: JsonValue; readonly refusal: string | undefined } {
+  if (value === null) return { value, refusal: undefined };
   try {
     return { value: toCanonicalForm(value), refusal: undefined };
   } catch (error) {

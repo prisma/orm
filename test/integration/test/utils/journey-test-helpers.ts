@@ -219,9 +219,23 @@ export const pslContractFixtures = {
   ),
   'contract-rls-adopted': join(JOURNEY_FIXTURES_DIR, 'contract-rls-adopted.prisma'),
   'contract-rls-wire': join(JOURNEY_FIXTURES_DIR, 'contract-rls-wire.prisma'),
+  'contract-rename-table-objects-from': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-from.prisma',
+  ),
+  'contract-rename-table-objects-to': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-to.prisma',
+  ),
+  'contract-rename-table-objects-dropped': join(
+    JOURNEY_FIXTURES_DIR,
+    'contract-rename-table-objects-dropped.prisma',
+  ),
 } as const;
 
 export type PslContractVariant = keyof typeof pslContractFixtures;
+
+export const sqlitePslConfigFixture = join(JOURNEY_FIXTURES_DIR, 'prisma.config.sqlite.psl.ts');
 
 /**
  * Swaps the active contract in the test directory to a different variant.
@@ -370,6 +384,34 @@ export async function runMigrationNew(
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
   return runOnEngine(ctx, ['migration', 'new', ...extraArgs], options);
+}
+
+/**
+ * Authors a migration by hand: `migration new` scaffolds `migration.ts`, the given source replaces the body of its `operations` array, and `migration.ts` is run to write `ops.json` and `migration.json`. `origin` is the target hash of the migration the new one chains from, which `migration new` needs whenever migrations exist and no `db` ref names the origin. Returns the directory name and the self-emit result, which carries the error when building the operations fails.
+ */
+export async function authorMigration(
+  ctx: JourneyContext,
+  name: string,
+  operationsSource: string,
+  origin: string,
+): Promise<{ readonly dirName: string; readonly emit: CommandResult }> {
+  const scaffold = await runMigrationNew(ctx, ['--name', name, '--from', origin]);
+  if (scaffold.exitCode !== 0) {
+    throw new Error(`authorMigration: migration new failed: ${scaffold.stderr}`);
+  }
+  const dirName = latestMigrationDirName(ctx);
+  const migrationTsPath = join(appMigrationsDir(ctx), dirName, 'migration.ts');
+  const scaffolded = readFileSync(migrationTsPath, 'utf-8');
+  const authored = scaffolded.replace(
+    /return \[[\s\S]*?\];/,
+    () => `return [\n      ${operationsSource},\n    ];`,
+  );
+  if (authored === scaffolded) {
+    throw new Error('authorMigration: the scaffold has no operations array to fill');
+  }
+  writeFileSync(migrationTsPath, authored, 'utf-8');
+  const emit = await selfEmitMigration(ctx, ['--dir', `migrations/app/${dirName}`]);
+  return { dirName, emit };
 }
 
 export async function runMigrate(

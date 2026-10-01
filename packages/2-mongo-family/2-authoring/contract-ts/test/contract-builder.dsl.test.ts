@@ -25,6 +25,29 @@ const mongoTargetPack = {
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
 describe('mongo contract builder', () => {
+  it('authors scalar-list element nullability through many options', () => {
+    const Lists = model('Lists', {
+      collection: 'lists',
+      fields: {
+        strict: field.string().many(),
+        explicitlyStrict: field.string().many({ elementsNullable: false }),
+        nullableElements: field.string().many({ elementsNullable: true }),
+        fullyNullable: field.string().optional().many({ elementsNullable: true }),
+      },
+    });
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { Lists },
+    });
+    expect(domainModelsAtDefaultNamespace(contract.domain)['Lists']?.fields).toMatchObject({
+      strict: { nullable: false, many: { elementNullable: false } },
+      explicitlyStrict: { nullable: false, many: { elementNullable: false } },
+      nullableElements: { nullable: false, many: { elementNullable: true } },
+      fullyNullable: { nullable: true, many: { elementNullable: true } },
+    });
+  });
+
   it('builds a canonical contract for referenced models', () => {
     const User = model('User', {
       collection: 'users',
@@ -72,9 +95,21 @@ describe('mongo contract builder', () => {
         collection: 'posts',
       },
       fields: {
-        _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-        authorId: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-        title: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        authorId: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        title: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
       },
       relations: {
         author: {
@@ -274,8 +309,12 @@ describe('mongo contract builder', () => {
     expect(domainValueObjectsAtDefaultNamespace(contract.domain)).toEqual({
       Address: {
         fields: {
-          street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-          zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
+          street: {
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            nullable: false,
+            many: false,
+          },
+          zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true, many: false },
         },
       },
     });
@@ -350,15 +389,17 @@ describe('mongo contract builder', () => {
     expect(domainModelsAtDefaultNamespace(contract.domain)['Metric']?.fields['value']).toEqual({
       type: { kind: 'scalar', codecId: 'mongo/double@1' },
       nullable: false,
+      many: false,
     });
   });
 
-  it('supports the int64, decimal128, binary, json and bson scalar helpers', () => {
+  it('supports the int64, int64Number, decimal128, binary, json and bson scalar helpers', () => {
     const Post = model('Post', {
       collection: 'posts',
       fields: {
         _id: field.objectId(),
         views: field.int64(),
+        hits: field.int64Number(),
         price: field.decimal128(),
         thumbnail: field.binary(),
         meta: field.json(),
@@ -375,16 +416,30 @@ describe('mongo contract builder', () => {
     const fields = domainModelsAtDefaultNamespace(contract.domain)['Post']?.fields;
     expect({
       views: fields?.['views'],
+      hits: fields?.['hits'],
       price: fields?.['price'],
       thumbnail: fields?.['thumbnail'],
       meta: fields?.['meta'],
       raw: fields?.['raw'],
     }).toEqual({
-      views: { type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
-      price: { type: { kind: 'scalar', codecId: 'mongo/decimal128@1' }, nullable: false },
-      thumbnail: { type: { kind: 'scalar', codecId: 'mongo/binary@1' }, nullable: false },
-      meta: { type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
-      raw: { type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
+      views: { many: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' }, nullable: false },
+      hits: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/int64Number@1' },
+        nullable: false,
+      },
+      price: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },
+        nullable: false,
+      },
+      thumbnail: {
+        many: false,
+        type: { kind: 'scalar', codecId: 'mongo/binary@1' },
+        nullable: false,
+      },
+      meta: { many: false, type: { kind: 'scalar', codecId: 'mongo/json@1' }, nullable: false },
+      raw: { many: false, type: { kind: 'scalar', codecId: 'mongo/bson@1' }, nullable: false },
     });
   });
 

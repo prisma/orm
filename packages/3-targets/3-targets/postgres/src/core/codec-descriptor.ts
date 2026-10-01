@@ -107,12 +107,30 @@ export abstract class PostgresCodecDescriptor<P = void>
 type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
   D extends CodecDescriptorTemplate<infer P> ? P : never;
 
-export interface PostgresCodecOptions<P> {
+/** The codec the family descriptor's factory builds, which a `factory` option's codec extends. */
+type DescriptorCodec<D extends AnyCodecDescriptorTemplate> = ReturnType<ReturnType<D['factory']>>;
+
+export interface PostgresCodecOptions<
+  P,
+  C extends Codec<string, readonly CodecTrait[], unknown, unknown> = Codec<
+    string,
+    readonly CodecTrait[],
+    unknown,
+    unknown
+  >,
+> {
   /** The data type the adapted codec represents here. A template names none; this target does. */
   readonly dataType: DataTypeId;
   readonly nativeType: (params: P) => string;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   readonly jsonArrayProjection?: (expression: ProjectionExpr, params: P) => ProjectionExpr;
+  /**
+   * Builds the codec in place of the adapted one, where PostgreSQL stores fewer values than the family codec reads: a subclass of the family codec whose `decodeJson` adds PostgreSQL's own rule.
+   */
+  readonly factory?: (
+    descriptor: PostgresCodecDescriptor<P>,
+    params: P,
+  ) => (ctx: CodecInstanceContext) => C;
 }
 
 export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
@@ -150,7 +168,11 @@ class PostgresCodecDescriptorAdapter<
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
     this.paramsSchema = descriptor.paramsSchema;
-    this.factory = (params) => descriptor.factory(params);
+    const factory = options.factory;
+    this.factory =
+      factory === undefined
+        ? (params) => descriptor.factory(params)
+        : (params) => factory(this, params);
 
     const renderOutputType = descriptor.renderOutputType;
     if (renderOutputType !== undefined) {
@@ -195,7 +217,7 @@ class PostgresCodecDescriptorAdapter<
 
 export function postgresCodec<D extends AnyCodecDescriptorTemplate>(
   descriptor: D,
-  options: PostgresCodecOptions<DescriptorParams<D>>,
+  options: PostgresCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>,
 ): AdaptedPostgresCodecDescriptor<D> {
   return blindCast<
     AdaptedPostgresCodecDescriptor<D>,

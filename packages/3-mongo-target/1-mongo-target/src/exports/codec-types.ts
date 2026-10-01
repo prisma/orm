@@ -48,6 +48,11 @@ export type CodecTypes = {
     readonly output: bigint;
     readonly traits: 'equality' | 'order' | 'numeric';
   };
+  readonly 'mongo/int64Number@1': {
+    readonly input: number;
+    readonly output: number;
+    readonly traits: 'equality' | 'order' | 'numeric';
+  };
   readonly 'mongo/decimal128@1': {
     readonly input: string;
     readonly output: string;

@@ -26,7 +26,7 @@ import {
 } from '@internal/psl-parser';
 import { parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
-import { InsertTextFormat } from 'vscode-languageserver';
+import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 import {
@@ -34,7 +34,16 @@ import {
   provideAttributeNamedKeyCompletionItems,
   provideAttributeValueCompletionItems,
 } from '../src/completion-values';
+import { testBinder } from './helpers/binder';
 
+const emptyDocument = parse('', 'empty.psl');
+const emptyBinder = testBinder({
+  sources: emptyDocument.sources,
+  symbolTable: buildSymbolTable({
+    documents: [emptyDocument.document],
+    sources: emptyDocument.sources,
+  }).symbolTable,
+});
 const emptyTabStop1 = '$' + '{1:}';
 const namedTabStop = (index: number, name: string) => `\${${index}:${name}}`;
 const rejectedParse = vi.fn(() => {
@@ -179,6 +188,41 @@ const signature = {
     },
   },
 };
+const entitySignature = {
+  documentation: 'Entity references.',
+  positional: [{ key: 'target', type: checked, documentation: 'Target model.' }],
+  named: {
+    model: { type: checked, documentation: 'Target model.' },
+    composite: { type: entityRef({ kind: 'compositeType' }), documentation: 'Target type.' },
+    named: { type: entityRef({ kind: 'namedType' }), documentation: 'Target alias.' },
+    enumeration: {
+      type: entityRef({ kind: 'block', keyword: 'enum' }),
+      documentation: 'Target enumeration.',
+    },
+    block: {
+      type: entityRef({ kind: 'block', keyword: 'policy' }),
+      documentation: 'Target policy.',
+    },
+    nested: {
+      type: optional(
+        record(
+          list(
+            funcCall('ref', {
+              documentation: 'Reference wrapper.',
+              positional: [
+                { key: 'target', type: oneOf(checked, checked), documentation: 'Target model.' },
+              ],
+            }),
+          ),
+        ),
+      ),
+      documentation: 'Nested references.',
+    },
+  },
+};
+const entityFieldSpec = fieldAttribute('entity', entitySignature);
+const entityModelSpec = modelAttribute('entity', entitySignature);
+const entityBlockSpec = blockAttribute('entity', entitySignature);
 const fieldSpec = fieldAttribute('probe', signature);
 const modelSpec = modelAttribute('probe', signature);
 const blockSpec = blockAttribute('probe', signature);
@@ -186,7 +230,18 @@ const authoringContributions = assembleAuthoringContributions([
   {
     id: 'completion-fixture',
     authoring: {
-      attributeSpecs: { field: { probe: () => fieldSpec }, model: { probe: () => modelSpec } },
+      attributeSpecs: {
+        field: { probe: () => fieldSpec, entity: () => entityFieldSpec },
+        model: { probe: () => modelSpec, entity: () => entityModelSpec },
+      },
+      type: {
+        vendor: {
+          Text: {
+            kind: 'typeConstructor',
+            output: { codecId: 'fixture/text', nativeType: 'text' },
+          },
+        },
+      },
     },
   },
 ]);
@@ -197,7 +252,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     discriminator: 'completion-policy',
     name: { required: true },
     spec: () => structBlock({ parameters: {} }),
-    attributes: { probe: () => blockSpec },
+    attributes: { probe: () => blockSpec, entity: () => entityBlockSpec },
   },
 };
 
@@ -216,6 +271,13 @@ function complete(markedSource: string, snippets = false, parameterHints = false
     }),
     sourceFile,
     candidates: {
+      binder: testBinder({
+        sources,
+        symbolTable,
+        scalarTypes: ['String'],
+        authoringContributions,
+        pslBlockDescriptors,
+      }),
       scalarTypes: ['String'],
       pslBlockDescriptors,
       symbolTable,
@@ -324,6 +386,8 @@ describe('classified positions without cursor AST', () => {
           positionalIndex: 0,
         },
         sourceFile: new SourceFile('language-server-test.psl', ''),
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -356,6 +420,8 @@ describe('classified positions without cursor AST', () => {
           syntax: 'functionName',
         },
         sourceFile: new SourceFile('language-server-test.psl', 'f()'),
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: true,
         fieldNames: () => [],
       },
@@ -383,6 +449,8 @@ describe('classified positions without cursor AST', () => {
           syntax: 'scalar',
         },
         sourceFile,
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -395,6 +463,138 @@ describe('classified positions without cursor AST', () => {
       })),
     );
   });
+});
+
+describe('entity references', () => {
+  const declarations = `
+model Later {}
+type Address {}
+types { Alias = String }
+policy Rules {}
+enum Choice { One Two }
+other Wrong {}
+namespace sibling { model Hidden {} }
+`;
+
+  it.each([
+    ['model', ['Example', 'Later']],
+    ['composite', ['Address']],
+    ['named', ['Alias']],
+    ['block', ['Rules']],
+    ['enumeration', ['Choice']],
+  ])('filters the %s selector without offering namespaces or contributed types', (key, labels) => {
+    expect(
+      complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
+    ).toEqual(labels);
+  });
+
+  it.each([
+    ['model', 'Later', CompletionItemKind.Class],
+    ['composite', 'Address', CompletionItemKind.Struct],
+    ['named', 'Alias', CompletionItemKind.Unit],
+    ['named', 'Related', CompletionItemKind.Reference],
+    ['named', 'Constructed', CompletionItemKind.Reference],
+  ] as const)('shares type-position metadata for %s references to %s', (selector, label, kind) => {
+    const suffix = `${declarations}\ntypes { Related = Later\n Constructed = vendor.Text() }`;
+    const typeItems = complete(`model Example { value | }${suffix}`).items;
+    const entityItems = complete(
+      `model Example { value String @entity(${selector}: |) }${suffix}`,
+    ).items;
+    const typeItem = typeItems.find((item) => item.label === label);
+    const entityItem = entityItems.find((item) => item.label === label);
+    expect(typeItem).toMatchObject({ label, kind });
+    expect(entityItem).toBeDefined();
+    const { textEdit: typeEdit, ...typeMetadata } = typeItem!;
+    const { textEdit: entityEdit, sortText, ...entityMetadata } = entityItem!;
+    expect(entityMetadata).toEqual(typeMetadata);
+    expect(entityEdit?.newText).toBe(typeEdit?.newText);
+  });
+
+  it('keeps blocks out of type positions and renders selected block references as keywords', () => {
+    expect(complete(`model Example { value | }${declarations}`).labels).not.toContain('Rules');
+    expect(
+      complete(`model Example { value String @entity(block: |) }${declarations}`).items,
+    ).toEqual([
+      expect.objectContaining({
+        label: 'Rules',
+        kind: CompletionItemKind.Keyword,
+        detail: 'policy',
+        filterText: 'Rules',
+      }),
+    ]);
+  });
+
+  it('uses an enum icon for enum references without changing custom block icons', () => {
+    const result = complete(
+      `model Example { value String @entity(enumeration: |) }${declarations}`,
+    );
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        label: 'Choice',
+        kind: CompletionItemKind.Enum,
+        detail: 'enum',
+        filterText: 'Choice',
+      }),
+    ]);
+    expect(result.apply('Choice')).toContain('@entity(enumeration: Choice)');
+    expect(result.items[0]?.insertTextFormat).toBeUndefined();
+    expect(result.items[0]?.command).toBeUndefined();
+  });
+
+  it('preserves the type-position cursor endpoint inside identifiers', () => {
+    const result = complete(`model Example { value Ex|ample }${declarations}`);
+    expect(result.apply('Later')).toBe(`model Example { value Laterample }${declarations}`);
+  });
+
+  it.each([
+    'model Example { value String @entity(|) }',
+    'model Example { @@entity(|) }',
+    'policy Rules { @@entity(|) }',
+  ])('uses the attribute owner scope for positional slots: %s', (source) => {
+    const result = complete(`${source}\nmodel Later {}`);
+    expect(result.labels).toEqual([
+      ...(source.startsWith('model') ? ['Example'] : []),
+      'Later',
+      ...Object.keys(entitySignature.named),
+    ]);
+  });
+
+  it.each(['|', 'model: |', 'nested: { targets: [ref(|)] }'])(
+    'respects namespace visibility before selector filtering: %s',
+    (args) => {
+      const result = complete(`
+model Global {}
+model Shadowed {}
+namespace local {
+  policy Shadowed {}
+  model Self { value String @entity(${args}) }
+  model Forward {}
+}
+namespace sibling { model Hidden {} }
+`);
+      expect(result.labels).toEqual([
+        'Self',
+        'Forward',
+        'Global',
+        ...(args === '|' ? Object.keys(entitySignature.named) : []),
+      ]);
+      expect(rejectedParse).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['Ex|ample', 'model: Ex|ample'])('replaces the whole bare identifier: %s', (args) => {
+    const result = complete(`model Example { value String @entity(${args}) }\nmodel Later {}`);
+    expect(result.apply('Later')).toBe(
+      `model Example { value String @entity(${args.replace('Ex|ample', 'Later')}) }\nmodel Later {}`,
+    );
+  });
+
+  it.each(['model: Ex|ample()', 'model: Example // |\n', 'nested: { targets: [ref(Example)] }|'])(
+    'excludes function names, comments, and closed delimiters: %s',
+    (args) => {
+      expect(complete(`model Example { value String @entity(${args}) }`).items).toEqual([]);
+    },
+  );
 });
 
 describe('completion details', () => {
@@ -461,12 +661,12 @@ describe('recursive attribute values', () => {
     ['records: { "key": [true, |] }', ['true', 'false']],
     ['records: { | }', []],
     ['records: { ke|y: [] }', []],
-    ['all: |', ['Alpha', 'true', 'false']],
-    ['none: |', []],
+    ['all: |', ['Example', 'Alpha', 'true', 'false']],
+    ['none: |', ['Example']],
     ['rejected: |', []],
     ['recordValues: { enabled: | }', ['true', 'false']],
     ['recordValues: { enabled: true, next: | }', ['true', 'false']],
-    ['unionLists: [|]', ['A', 'B']],
+    ['unionLists: [|]', ['Example', 'A', 'B']],
     ['flags: [|false]', ['true', 'false']],
   ])('completes %s', (args, expected) => {
     expect(field(args).labels).toEqual(expected);
@@ -482,14 +682,26 @@ describe('recursive attribute values', () => {
     );
   });
 
-  it('offers only pinned names when unchecked names and checked references are nested alternatives', () => {
-    expect(field('none: |').items).toEqual([]);
-    expect(field('unionLists: [|]').items.map((item) => item.label)).toEqual(['A', 'B']);
+  it('offers visible entities and pinned names in nested alternatives', () => {
+    expect(field('none: |').items).toEqual([
+      {
+        label: 'Example',
+        kind: CompletionItemKind.Class,
+        detail: 'Model',
+        filterText: 'Example',
+        textEdit: {
+          range: { start: { line: 1, character: 28 }, end: { line: 1, character: 28 } },
+          newText: 'Example',
+        },
+        sortText: '0000',
+      },
+    ]);
+    expect(field('unionLists: [|]').labels).toEqual(['Example', 'A', 'B']);
     expect(rejectedParse).not.toHaveBeenCalled();
   });
 
   it('never invokes combinator parsing to select alternatives', () => {
-    expect(field('none: |').items).toEqual([]);
+    expect(field('none: |').labels).toEqual(['Example']);
     expect(rejectedParse).not.toHaveBeenCalled();
   });
 
@@ -663,6 +875,8 @@ describe('recursive function arguments', () => {
           positionalIndex: 0,
         },
         sourceFile: new SourceFile('language-server-test.psl', ''),
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: true,
         clientSupportsTriggerParameterHintsCommand: true,
         fieldNames: () => [],

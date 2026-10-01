@@ -7,12 +7,15 @@ import { blindCast } from '@internal/utils/casts';
 import { tableExistsAst } from '../../../contract-free/checks';
 import { stripOuterParens } from '../../default-normalizer';
 import { escapeLiteral, quoteIdentifier } from '../../sql-utils';
+import { sqliteIdentifiersCollide } from '../identifier-case';
 import { buildCreateIndexSql } from '../planner-ddl-builders';
 import { buildTargetDetails } from '../planner-target-details';
 import {
   type Op,
+  refuseEarlierColumnSpecs,
   renderColumnDefinition,
   renderForeignKeyClause,
+  renderSpecDefault,
   type SqliteIndexSpec,
   type SqliteTableSpec,
   step,
@@ -36,8 +39,14 @@ async function tableExistsSteps(
  * inline on the column; the table-level PRIMARY KEY clause is emitted only
  * when no column carries `inlineAutoincrementPrimaryKey`.
  */
-function renderCreateTableSql(tableName: string, spec: SqliteTableSpec): string {
-  const columnDefs = spec.columns.map(renderColumnDefinition);
+function renderCreateTableSql(
+  tableName: string,
+  spec: SqliteTableSpec,
+  defaultClauses: readonly string[],
+): string {
+  const columnDefs = spec.columns.map((column, index) =>
+    renderColumnDefinition(column, defaultClauses[index] ?? ''),
+  );
 
   const constraintDefs: string[] = [];
   const hasInlinePk = spec.columns.some((c) => c.inlineAutoincrementPrimaryKey);
@@ -64,6 +73,7 @@ export async function createTable(
   spec: SqliteTableSpec,
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
+  const defaultClauses = await renderSpecDefaults(spec, tableName, lowerer);
   const { present, absent } = await tableExistsSteps(lowerer, tableName);
   return {
     id: `table.${tableName}`,
@@ -72,9 +82,43 @@ export async function createTable(
     operationClass: 'additive',
     target: { id: 'sqlite', details: buildTargetDetails('table', tableName) },
     precheck: [step(`ensure table "${tableName}" does not exist`, absent.sql, absent.params)],
-    execute: [step(`create table "${tableName}"`, renderCreateTableSql(tableName, spec))],
+    execute: [
+      step(`create table "${tableName}"`, renderCreateTableSql(tableName, spec, defaultClauses)),
+    ],
     postcheck: [step(`verify table "${tableName}" exists`, present.sql, present.params)],
   };
+}
+
+export function renameTableViaName(toName: string): string {
+  return `_prisma_rename_${toName}`;
+}
+
+export function renameChangesOnlyCase(fromName: string, toName: string): boolean {
+  return sqliteIdentifiersCollide(fromName, toName);
+}
+
+/**
+ * SQLite takes names that differ only in the case of ASCII letters for the
+ * same name, so such a rename (`userProfile` to `UserProfile`) is refused as
+ * "already exists" when done in one statement. It goes through a temporary name.
+ */
+export function renameTableSteps(fromName: string, toName: string): Op['execute'] {
+  const from = quoteIdentifier(fromName);
+  const to = quoteIdentifier(toName);
+  if (!renameChangesOnlyCase(fromName, toName)) {
+    return [
+      step(`rename table "${fromName}" to "${toName}"`, `ALTER TABLE ${from} RENAME TO ${to}`),
+    ];
+  }
+  const viaName = renameTableViaName(toName);
+  const via = quoteIdentifier(viaName);
+  return [
+    step(
+      `rename table "${fromName}" to "${viaName}" (SQLite table names are case-insensitive)`,
+      `ALTER TABLE ${from} RENAME TO ${via}`,
+    ),
+    step(`rename table "${viaName}" to "${toName}"`, `ALTER TABLE ${via} RENAME TO ${to}`),
+  ];
 }
 
 export async function dropTable(tableName: string, lowerer: ExecuteRequestLowerer): Promise<Op> {
@@ -114,7 +158,7 @@ export interface RecreateTableArgs {
    * planner pre-builds these via `buildRecreatePostchecks` so the call IR
    * carries flat, serializable data only — no `SchemaDiffIssue` references.
    */
-  readonly postchecks: readonly { readonly description: string; readonly sql: string }[];
+  readonly postchecks: readonly RecreatePostcheck[];
   readonly operationClass: MigrationOperationClass;
 }
 
@@ -131,6 +175,7 @@ export async function recreateTable(
     postchecks,
     operationClass,
   } = args;
+  refuseEarlierColumnSpecs('recreateTable', tableName, contractTable.columns);
   const tempName = `_prisma_new_${tableName}`;
   const liveSet = new Set(schemaColumnNames);
   const sharedColumns = contractTable.columns.filter((c) => liveSet.has(c.name)).map((c) => c.name);
@@ -155,6 +200,10 @@ export async function recreateTable(
         ]
       : [];
 
+  const defaultClauses = await renderSpecDefaults(contractTable, tableName, lowerer);
+  const clauseByColumn = new Map(
+    contractTable.columns.map((column, index) => [column.name, defaultClauses[index] ?? '']),
+  );
   const tableSteps = await tableExistsSteps(lowerer, tableName);
   const tempSteps = await tableExistsSteps(lowerer, tempName);
 
@@ -175,7 +224,7 @@ export async function recreateTable(
     execute: [
       step(
         `create new table "${tempName}" with desired schema`,
-        renderCreateTableSql(tempName, contractTable),
+        renderCreateTableSql(tempName, contractTable, defaultClauses),
       ),
       ...copyStep,
       step(`drop old table "${tableName}"`, `DROP TABLE ${quoteIdentifier(tableName)}`),
@@ -192,9 +241,50 @@ export async function recreateTable(
         tempSteps.absent.sql,
         tempSteps.absent.params,
       ),
-      ...postchecks,
+      ...postchecks.flatMap((check) =>
+        'sql' in check
+          ? [check]
+          : defaultPostcheck(tableName, check, clauseByColumn.get(check.columnDefault)),
+      ),
     ],
   };
+}
+
+/**
+ * A recreate postcheck: SQL, or the name of a column whose default the recreated table must carry,
+ * which becomes SQL once the adapter has written the column's `DEFAULT …` clause.
+ */
+export type RecreatePostcheck =
+  | { readonly description: string; readonly sql: string }
+  | { readonly description: string; readonly columnDefault: string };
+
+function renderSpecDefaults(
+  spec: SqliteTableSpec,
+  tableName: string,
+  lowerer: ExecuteRequestLowerer,
+): Promise<readonly string[]> {
+  return Promise.all(spec.columns.map((column) => renderSpecDefault(column, tableName, lowerer)));
+}
+
+/**
+ * Checks the column's default is the text of its `DEFAULT …` clause. SQLite's
+ * `pragma_table_info.dflt_value` strips the outer parentheses of an expression
+ * default, so `(datetime('now'))` is stored as `datetime('now')`; they are
+ * stripped here too.
+ */
+function defaultPostcheck(
+  tableName: string,
+  check: { readonly description: string; readonly columnDefault: string },
+  clause: string | undefined,
+): { description: string; sql: string }[] {
+  if (clause === undefined || !clause.startsWith('DEFAULT ')) return [];
+  const expectedRaw = stripOuterParens(clause.slice('DEFAULT '.length));
+  return [
+    {
+      description: check.description,
+      sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('${escapeLiteral(tableName)}') WHERE name = '${escapeLiteral(check.columnDefault)}' AND dflt_value = '${escapeLiteral(expectedRaw)}'`,
+    },
+  ];
 }
 
 /**
@@ -245,6 +335,16 @@ function quoteSqlList(values: readonly string[]): string {
   return values.map((v) => `'${escapeLiteral(v)}'`).join(', ');
 }
 
+/**
+ * A condition on the index aliased `l`: it covers exactly these columns. Order is not checked, because SQLite identifies a unique index by its column set.
+ */
+function indexCoversExactly(columns: readonly string[]): string {
+  return (
+    `(SELECT COUNT(*) FROM pragma_index_info(l.name)) = ${columns.length}` +
+    ` AND (SELECT COUNT(*) FROM pragma_index_info(l.name) WHERE name IN (${quoteSqlList(columns)})) = ${columns.length}`
+  );
+}
+
 function columnNameFromNode(issue: SchemaDiffIssue): string | undefined {
   const node = issue.expected ?? issue.actual;
   if (node === undefined) return undefined;
@@ -284,8 +384,8 @@ export function buildRecreatePostchecks(
   tableName: string,
   issues: readonly SchemaDiffIssue[],
   spec: SqliteTableSpec,
-): Array<{ description: string; sql: string }> {
-  const checks: Array<{ description: string; sql: string }> = [];
+): RecreatePostcheck[] {
+  const checks: RecreatePostcheck[] = [];
   const t = escapeLiteral(tableName);
   const byName = new Map(spec.columns.map((c) => [c.name, c]));
 
@@ -334,19 +434,11 @@ export function buildRecreatePostchecks(
         continue;
       }
       // not-found (missing) or not-equal (drift) — both want the expected
-      // default SQL present on the live column.
-      const colSpec = byName.get(columnName);
-      const expectedRaw = colSpec?.defaultSql.startsWith('DEFAULT ')
-        ? // SQLite's pragma_table_info.dflt_value strips outer parens for
-          // expression defaults (per the SQLite docs), so `(datetime('now'))`
-          // is stored as `datetime('now')`. Strip them here so the postcheck
-          // matches.
-          stripOuterParens(colSpec.defaultSql.slice('DEFAULT '.length))
-        : null;
-      if (expectedRaw) {
+      // default present on the live column, as the adapter writes it.
+      if (byName.get(columnName)?.default !== undefined) {
         checks.push({
           description: `verify "${columnName}" default on "${tableName}"`,
-          sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('${t}') WHERE name = '${c}' AND dflt_value = '${escapeLiteral(expectedRaw)}'`,
+          columnDefault: columnName,
         });
       }
       continue;
@@ -382,22 +474,31 @@ export function buildRecreatePostchecks(
 
   if (hasUniqueIssue) {
     for (const u of spec.uniques ?? []) {
-      const colCount = u.columns.length;
       const description = u.name
         ? `verify unique constraint "${u.name}" on "${tableName}"`
         : `verify unique constraint (${u.columns.join(', ')}) on "${tableName}"`;
-      // Match any unique index whose covered columns are exactly the expected
-      // set. Order is intentionally not checked — SQLite's unique-index
-      // identity is column-set, not column-sequence.
       checks.push({
         description,
         sql:
           `SELECT EXISTS (SELECT 1 FROM pragma_index_list('${t}') l` +
-          ` WHERE l."unique" = 1` +
-          ` AND (SELECT COUNT(*) FROM pragma_index_info(l.name)) = ${colCount}` +
-          ` AND (SELECT COUNT(*) FROM pragma_index_info(l.name) WHERE name IN (${quoteSqlList(u.columns)})) = ${colCount})`,
+          ` WHERE l."unique" = 1 AND ${indexCoversExactly(u.columns)})`,
       });
     }
+  }
+
+  // The checks above only prove expected uniques exist, so removing one would
+  // leave the postcheck already true and the runner would skip the recreate.
+  // This check fails while a UNIQUE constraint index (`origin = 'u'`) matches
+  // no expected unique. It does not count indexes: SQLite folds a unique that
+  // repeats a non-integer primary key into the primary key's index.
+  if (hasUniqueIssue) {
+    const expected = (spec.uniques ?? []).map((u) => `(${indexCoversExactly(u.columns)})`);
+    checks.push({
+      description: `verify "${tableName}" has no unique constraint besides the expected ones`,
+      sql:
+        `SELECT NOT EXISTS (SELECT 1 FROM pragma_index_list('${t}') l` +
+        ` WHERE l.origin = 'u' AND NOT (${expected.length === 0 ? '0' : expected.join(' OR ')}))`,
+    });
   }
 
   if (hasFkIssue) {
@@ -424,6 +525,11 @@ export function buildRecreatePostchecks(
           ` AND SUM(CASE WHEN (f."from", f."to") IN (${tuples}) THEN 1 ELSE 0 END) = ${colCount})`,
       });
     }
+    const expected = spec.foreignKeys?.length ?? 0;
+    checks.push({
+      description: `verify "${tableName}" has exactly ${expected} foreign keys`,
+      sql: `SELECT (SELECT COUNT(DISTINCT id) FROM pragma_foreign_key_list('${t}')) = ${expected}`,
+    });
   }
 
   return checks;

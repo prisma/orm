@@ -31,8 +31,16 @@ function contractWithNonIdentifierNames() {
                 fields: { id: { column: 'id' }, spacedValue: { column: SPACED_COLUMN } },
               },
               fields: {
-                id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-                spacedValue: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+                id: {
+                  nullable: false,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/int4@1' },
+                },
+                spacedValue: {
+                  nullable: true,
+                  many: false,
+                  type: { kind: 'scalar', codecId: 'pg/text@1' },
+                },
               },
               relations: {},
             },
@@ -48,8 +56,18 @@ function contractWithNonIdentifierNames() {
             table: {
               [SPACED_TABLE]: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  [SPACED_COLUMN]: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+                  id: {
+                    nativeType: 'int4',
+                    codecId: 'pg/int4@1',
+                    nullable: false,
+                    many: false,
+                  },
+                  [SPACED_COLUMN]: {
+                    nativeType: 'text',
+                    codecId: 'pg/text@1',
+                    nullable: true,
+                    many: false,
+                  },
                 },
                 uniques: [],
                 indexes: [],
@@ -110,7 +128,7 @@ describe('non-identifier physical names', () => {
 
   it('quotes a column name that is not a bare identifier', () => {
     expect(emitDts()).toContain(
-      'readonly "has space": { readonly nativeType: "text"; readonly codecId: "pg/text@1"; readonly nullable: true }',
+      'readonly "has space": { readonly nativeType: "text"; readonly codecId: "pg/text@1"; readonly nullable: true; readonly many: false }',
     );
   });
 

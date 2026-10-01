@@ -20,7 +20,7 @@ import supabasePack from '../src/exports/pack';
 import supabase from '../src/runtime/supabase';
 import { setUpSupabaseMockSchema } from './fixtures/supabase-reference/set-up-mock-schema';
 
-const pgUuid = { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false } as const;
+const pgUuid = { many: false, codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false } as const;
 const fixtureJwt = 'fixture-jwt-signing-input-not-a-real-credential';
 
 function buildAppContract() {

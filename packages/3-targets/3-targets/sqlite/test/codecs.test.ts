@@ -13,7 +13,7 @@ describe('SQLite codec JSON representations', () => {
 
   it('rejects a JSON number, which has already lost digits', () => {
     expect(() => bigintCodec.decodeJson(42)).toThrow(
-      'sqlite/bigint@1 database JSON value must be a decimal string',
+      'sqlite/bigint@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
     );
   });
 

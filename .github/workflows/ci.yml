@@ -393,7 +393,10 @@ jobs:
   # alone let fidelity bugs ship (TML-3035 findings §5/§6/§8). Skips its
   # steps only on inert (docs-only) diffs; any change under packages/** or
   # examples/** is non-inert, so extension-supabase, examples/supabase, and
-  # postgres target/adapter changes always run it.
+  # postgres target/adapter changes always run it. The stack's Docker images
+  # are loaded from a cache that supabase-images.yml writes on main, because
+  # public.ecr.aws rate-limits anonymous pulls; on a cache miss
+  # `supabase start` pulls them from the registry.
   supabase-acceptance:
     name: Supabase Acceptance
     needs: [build, changes]
@@ -406,24 +409,25 @@ jobs:
         with:
           persist-credentials: false
       - uses: ./.github/actions/setup
-      # Installed from the pinned release binary rather than
-      # supabase/setup-cli: the org allowlists actions, and only the
-      # repositories already used by this workflow are on it. Bumping the
-      # CLI is a two-line change (version + sha, both from the release's
-      # supabase_<version>_checksums.txt).
-      - name: Install Supabase CLI (pinned release binary)
+      - name: Install Supabase CLI
+        id: supabase-cli
         if: needs.changes.outputs.inert != 'true'
+        uses: ./.github/actions/supabase-cli
+      - name: Restore Supabase Docker images
+        id: supabase-images
+        if: needs.changes.outputs.inert != 'true'
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.supabase-cli.outputs.images-archive }}
+          key: ${{ steps.supabase-cli.outputs.images-cache-key }}
+      # Deleting the archive after loading frees its disk space for the build.
+      - name: Load Supabase Docker images
+        if: needs.changes.outputs.inert != 'true' && steps.supabase-images.outputs.cache-hit == 'true'
         env:
-          SUPABASE_CLI_VERSION: 2.95.4
-          SUPABASE_CLI_SHA256: 01a3b8f5861d108a934937cae88e8d503093c3f7d3aa32d959f69b099b4f9ef3
+          ARCHIVE: ${{ steps.supabase-cli.outputs.images-archive }}
         run: |
-          set -euo pipefail
-          curl -fsSL -o "$RUNNER_TEMP/supabase.tar.gz" \
-            "https://github.com/supabase/cli/releases/download/v${SUPABASE_CLI_VERSION}/supabase_linux_amd64.tar.gz"
-          echo "$SUPABASE_CLI_SHA256  $RUNNER_TEMP/supabase.tar.gz" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/bin"
-          tar -xzf "$RUNNER_TEMP/supabase.tar.gz" -C "$RUNNER_TEMP/bin" supabase
-          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          docker load --input "$ARCHIVE"
+          rm "$ARCHIVE"
       - name: Install dependencies
         if: needs.changes.outputs.inert != 'true'
         run: pnpm install --frozen-lockfile

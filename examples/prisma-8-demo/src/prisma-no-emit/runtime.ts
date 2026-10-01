@@ -7,7 +7,7 @@ import { contract } from '../../prisma/contract';
 export async function getRuntime(
   databaseUrl: string,
   middleware: readonly SqlMiddleware[] = [
-    createCacheMiddleware({ maxEntries: 1_000 }),
+    createCacheMiddleware(),
     budgets({
       maxRows: 10_000,
       defaultTableRows: 10_000,

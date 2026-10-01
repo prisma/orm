@@ -3,6 +3,7 @@ import {
   errorDataTransformContractMismatch,
   errorMigrationFileMissing,
   errorMigrationInvalidDefaultExport,
+  errorMigrationOperationOptionRemoved,
   errorMigrationPlanNotArray,
   errorMigrationTargetMismatch,
   errorUnfilledPlaceholder,
@@ -106,6 +107,30 @@ describe('Migration Errors', () => {
     expect(error.why).toContain('bbb');
     expect(error.fix).toContain('createExecutionContext');
     expect(error.toEnvelope().code).toBe('MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH');
+  });
+
+  it('errorMigrationOperationOptionRemoved names the operation and the option, and says how to rewrite the call', () => {
+    const error = errorMigrationOperationOptionRemoved({
+      operation: 'setThing',
+      option: 'thingText',
+      subject: 'item "a"',
+      rewrite: 'Pass the item as a value.',
+      upgradeEntry: 'thing-values',
+    });
+    expect({
+      code: error.code,
+      message: error.message,
+      why: error.why,
+      fix: error.fix,
+      meta: error.meta,
+    }).toEqual({
+      code: 'MIGRATION.OPERATION_OPTION_REMOVED',
+      message:
+        '`setThing` in migration.ts passes `thingText`, which this version no longer reads, for item "a"',
+      why: 'An earlier version wrote this migration.ts. `node migration.ts` does not check its types, so the file runs, and this version would leave out what the option carries.',
+      fix: 'Pass the item as a value. Or, if the migration is not applied, delete its package and run `migration plan` again. The upgrade entry `thing-values` shows the new shape: https://github.com/prisma/orm/tree/main/skills/prisma-8/upgrading',
+      meta: { operation: 'setThing', option: 'thingText', upgradeEntry: 'thing-values' },
+    });
   });
 
   it('errorMigrationTargetMismatch names both target ids', () => {

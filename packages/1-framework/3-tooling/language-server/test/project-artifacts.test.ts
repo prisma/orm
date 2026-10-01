@@ -3,6 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
+import {
+  assembleAuthoringContributions,
+  assembleControlMutationDefaults,
+} from '@internal/framework-components/control';
+import { fieldAttribute } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
@@ -12,6 +17,7 @@ import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import { DocumentSnapshot } from '../src/document-snapshot';
 import { DocumentStore } from '../src/document-store';
+import type { LspControlStack } from '../src/lsp-control-stack';
 import { ProjectArtifacts } from '../src/project-artifacts';
 import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
 
@@ -40,6 +46,25 @@ const bothInputs = await resolveSchemaInputs(
 );
 
 const interpretContext = { composedExtensions: [] } as unknown as ContractSourceContext;
+const controlStack = {
+  scalarTypes: ['Int'],
+  pslBlockDescriptors: {},
+  authoringContributions: assembleAuthoringContributions([
+    {
+      id: 'fixture',
+      authoring: {
+        type: {
+          Int: { kind: 'typeConstructor', output: { codecId: 'int', nativeType: 'integer' } },
+        },
+        attributeSpecs: {
+          model: {},
+          field: { id: () => fieldAttribute('id', { documentation: '' }) },
+        },
+      },
+    },
+  ]),
+  controlMutationDefaults: assembleControlMutationDefaults([]),
+};
 
 function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
   readonly interpretation: ProjectInterpretation;
@@ -54,7 +79,11 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
   return { interpretation: { source, context: interpretContext }, spy };
 }
 
-function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = false) {
+function projectWithSnapshots(
+  interpretation?: ProjectInterpretation,
+  multi = false,
+  stack: LspControlStack = controlStack,
+) {
   const snapshots = new Map<string, DocumentSnapshot>();
   const set = (uri: string, text: string) => {
     const snapshot = new DocumentSnapshot(uri, text);
@@ -64,6 +93,7 @@ function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = fa
   const readSnapshot = vi.fn((uri: string) => snapshots.get(canonicalFileIdentity(uri)));
   const onInterpretationError = vi.fn();
   const project = new ProjectArtifacts({
+    controlStack: stack,
     inputs: multi ? bothInputs : inputs,
     readSnapshot,
     onInterpretationError,
@@ -71,6 +101,89 @@ function projectWithSnapshots(interpretation?: ProjectInterpretation, multi = fa
   });
   return { project, snapshots, set, readSnapshot, onInterpretationError };
 }
+
+describe('ProjectArtifacts binder', () => {
+  it('preserves contributed identity across edits and replaces it with the configuration', () => {
+    const first = projectWithSnapshots();
+    const snapshot = first.set(schemaUri, cleanSource);
+    const initial = first.project.binder();
+    const contributed = initial.scopeAt(snapshot.parse().document.syntax).lookup('Int');
+    const edited = first.set(schemaUri, siblingSource);
+    first.project.documentChanged(schemaUri);
+    const refreshed = first.project.binder();
+    expect(refreshed).not.toBe(initial);
+    expect(refreshed.scopeAt(edited.parse().document.syntax).lookup('Int')?.symbol).toBe(
+      contributed?.symbol,
+    );
+    const next = projectWithSnapshots(undefined, false, {
+      ...controlStack,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'replacement',
+          authoring: {
+            type: {
+              Int: { kind: 'typeConstructor', output: { codecId: 'other', nativeType: 'bigint' } },
+            },
+          },
+        },
+      ]),
+    });
+    const nextSnapshot = next.set(schemaUri, cleanSource);
+    expect(
+      next.project.binder().scopeAt(nextSnapshot.parse().document.syntax).lookup('Int')?.symbol,
+    ).not.toBe(contributed?.symbol);
+  });
+
+  it('shares a binder for a snapshot and replaces it on edits, membership and close', () => {
+    const { project, set } = projectWithSnapshots(undefined, true);
+    set(schemaUri, cleanSource);
+    set(siblingUri, siblingSource);
+    const first = project.binder();
+    const user = project.symbolTable().topLevel.models['User']!;
+    expect(first.declaredSymbol(user.node.syntax)).toBe(user);
+    expect(project.binder()).toBe(first);
+    project.updateInputs(inputs);
+    const second = project.binder();
+    expect(second).not.toBe(first);
+    expect(second.scopeAt(user.node.syntax).lookup('Post')).toBeUndefined();
+    set(schemaUri, `${directive}model Changed { id Int }`);
+    project.documentChanged(schemaUri);
+    const third = project.binder();
+    expect(third).not.toBe(second);
+    expect(third.declaredSymbol(user.node.syntax)).toBeUndefined();
+    const changed = project.symbolTable().topLevel.models['Changed']!;
+    expect(third.scopeAt(changed.node.syntax).lookup('Changed')?.symbol).toBe(changed);
+    expect(third.scopeAt(changed.node.syntax).lookup('User')).toBeUndefined();
+    project.documentClosed(schemaUri);
+    expect(project.binder()).not.toBe(third);
+  });
+
+  it('uses binder diagnostics only when no interpreter is available', () => {
+    const missing = `${directive}model User { id Missing }`;
+    const fallback = projectWithSnapshots();
+    fallback.set(schemaUri, missing);
+    expect(fallback.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_UNRESOLVED_REFERENCE',
+    ]);
+    const successful = projectWithSnapshots(
+      interpretationDouble(() => ok({} as never)).interpretation,
+    );
+    successful.set(schemaUri, missing);
+    expect(successful.project.diagnostics(schemaUri)).toEqual([]);
+    const failed = projectWithSnapshots(
+      interpretationDouble(() =>
+        notOk({
+          summary: 'preset',
+          diagnostics: [{ sourceId: schemaUri, code: 'UNKNOWN_PRESET', message: 'preset' }],
+        }),
+      ).interpretation,
+    );
+    failed.set(schemaUri, missing);
+    expect(failed.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'UNKNOWN_PRESET',
+    ]);
+  });
+});
 
 describe('ProjectArtifacts snapshots', () => {
   it('returns the actual snapshot lazily and preserves normalized identity', () => {
@@ -146,6 +259,7 @@ describe('ProjectArtifacts snapshots', () => {
     );
     const create = (interpretation: ProjectInterpretation) =>
       new ProjectArtifacts({
+        controlStack,
         inputs,
         readSnapshot: documents.readSnapshot,
         onInterpretationError: vi.fn(),
@@ -162,6 +276,36 @@ describe('ProjectArtifacts snapshots', () => {
     expect(nextInterpretation.spy).toHaveBeenCalledTimes(1);
     expect(second.symbolTable()).not.toBe(first.symbolTable());
     expect(parse).toHaveBeenCalledTimes(1);
+  });
+
+  it('parses with the parser options the project declares, once per stored snapshot', () => {
+    const documents = new DocumentStore();
+    const view = `${directive}view ActiveUsers {\n  id Int @unique\n}\n`;
+    documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: view });
+    const parserOptions = { grammar: 'prisma-7' } as const;
+    const withOptions = new ProjectArtifacts({
+      controlStack,
+      inputs,
+      readSnapshot: documents.readSnapshot,
+      onInterpretationError: vi.fn(),
+      parserOptions,
+    });
+    const withoutOptions = new ProjectArtifacts({
+      controlStack,
+      inputs,
+      readSnapshot: documents.readSnapshot,
+      onInterpretationError: vi.fn(),
+    });
+
+    expect(withOptions.document(schemaUri)).toBe(withOptions.document(schemaUri));
+    expect(withOptions.diagnostics(schemaUri)).toEqual([]);
+    expect(withoutOptions.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+    ]);
+    expect(vi.mocked(parse).mock.calls).toEqual([
+      [view, schemaUri, parserOptions],
+      [view, schemaUri, {}],
+    ]);
   });
 
   it('keeps immutable source registries across edits, membership changes and closes', () => {
@@ -212,6 +356,7 @@ describe('ProjectArtifacts snapshots', () => {
       text: cleanSource,
     });
     const project = new ProjectArtifacts({
+      controlStack,
       inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: vi.fn(),
@@ -241,6 +386,7 @@ describe('ProjectArtifacts snapshots', () => {
       const documents = new DocumentStore();
       if (watched) documents.setWatchCoverage('project', [uri]);
       const project = new ProjectArtifacts({
+        controlStack,
         inputs: await resolveSchemaInputs(
           { contract: { source: { format: 'psl', inputs: [path] } } },
           (uri) => documents.text(uri),

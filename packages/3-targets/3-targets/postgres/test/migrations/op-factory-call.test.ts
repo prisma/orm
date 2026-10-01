@@ -22,6 +22,7 @@ function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: un
   const received: unknown[] = [];
   const lowerer: ExecuteRequestLowerer = {
     lower: () => Object.freeze({ sql: 'UNUSED', params: Object.freeze([]) }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async (ast) => {
       received.push(ast);
       return Object.freeze({
@@ -263,7 +264,12 @@ describe('AddNotNullColumnDirectCall', () => {
 describe('AddNotNullColumnWithTempDefaultCall', () => {
   it('lowers a typed AlterTable DDL node for the ADD COLUMN execute step', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const storageColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+    const storageColumn = {
+      many: false,
+      nativeType: 'text',
+      codecId: 'pg/text@1',
+      nullable: false,
+    } as const;
     const call = new AddNotNullColumnWithTempDefaultCall({
       schemaName: 'public',
       tableName: 'user',
@@ -291,7 +297,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       schemaName: 'public',
       tableName: 'user',
       columnName: 'name',
-      column: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      column: { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
       codecHooks: new Map(),
       storageTypes: {},
       temporaryDefault: "''",

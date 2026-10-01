@@ -1,0 +1,22 @@
+name: Supabase CLI
+description: >
+  Install the pinned Supabase CLI and name the Actions cache entry that holds
+  the Docker images `supabase start` pulls for examples/supabase. The
+  supabase-acceptance job in ci.yml restores the entry; the
+  supabase-images.yml workflow writes it. The CLI version lives in install.sh.
+
+outputs:
+  images-cache-key:
+    description: "Cache key for the Supabase Docker images archive."
+    value: ${{ steps.install.outputs.images-cache-key }}
+  images-archive:
+    description: "Path of the `docker save` archive stored under that key."
+    value: ${{ steps.install.outputs.images-archive }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install Supabase CLI (pinned release binary)
+      id: install
+      shell: bash
+      run: "$GITHUB_ACTION_PATH/install.sh"

@@ -13,16 +13,17 @@ import {
   type Cast,
   type DataType,
   dataType,
+  isNonFiniteText,
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
 import {
   type CanonicalDateTimeOptions,
   canonicalDateTime,
-  isNonFiniteText,
+  integerTextCanonicalForm,
   numeralText,
 } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
-import { pgIntervalCanonical } from './codec-helpers';
+import { canonicalUuid, fitsFloat4, pgIntervalCanonical } from './codec-helpers';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
@@ -75,6 +76,7 @@ export const pgTsquery: DataType = dataType('pg/tsquery', {});
 export const pgInt4: DataType = dataType('pg/int4', { casts: { [pgInt2.id]: unchanged } });
 
 export const pgInt8: DataType = dataType('pg/int8', {
+  toCanonicalForm: integerTextCanonicalForm,
   casts: { [pgInt2.id]: asNumeralText, [pgInt4.id]: asNumeralText },
 });
 
@@ -86,15 +88,15 @@ export const pgNumeric: DataType = dataType('pg/numeric', {
   },
 });
 
-/** `float4` stores a single-precision float, so a magnitude past about 3.4e38 does not fit. */
+/** `float4` stores a single-precision float, so a magnitude past about 3.4e38, or one it would round to 0, does not fit. */
 const asFloat4: Cast = (value) => {
   const converted = asFloat(value);
-  if (typeof converted !== 'number' || Number.isFinite(Math.fround(converted))) return converted;
+  if (typeof converted !== 'number' || fitsFloat4(converted)) return converted;
   throw structuredError(
     'CONTRACT.CAST_REFUSED',
-    `${converted} is out of range: no float4 holds a number that large.`,
+    `${converted} is out of range: float4 holds a nonzero magnitude from about 1.4e-45 to 3.4e38.`,
     {
-      why: 'float4 stores a single-precision float, which holds magnitudes up to about 3.4e38.',
+      why: 'float4 stores a single-precision float, which overflows past about 3.4e38 and rounds a magnitude below about 1.4e-45 to 0.',
       fix: 'Use a number float4 holds, or a float8 or numeric column.',
     },
   );
@@ -116,7 +118,22 @@ const fromText: Readonly<Record<string, Cast>> = { [pgText.id]: unchanged };
 
 export const pgChar: DataType = dataType('pg/char', { casts: fromText });
 export const pgVarchar: DataType = dataType('pg/varchar', { casts: fromText });
-export const pgUuid: DataType = dataType('pg/uuid', { casts: fromText });
+/** Text in any form PostgreSQL reads as a UUID, written the way PostgreSQL writes it, so the contract holds the value the database reports. */
+const asUuid: Cast = (value) => {
+  if (typeof value !== 'string') return wrongShape(value, 'text');
+  const uuid = canonicalUuid(value);
+  if (uuid !== undefined) return uuid;
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `${JSON.stringify(value)} is not a UUID: PostgreSQL reads 32 hexadecimal digits, with a hyphen after any group of four and optionally in braces.`,
+    {
+      why: 'A uuid column takes only text PostgreSQL reads as a UUID.',
+      fix: 'Write a UUID such as a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11.',
+    },
+  );
+};
+
+export const pgUuid: DataType = dataType('pg/uuid', { casts: { [pgText.id]: asUuid } });
 export const pgInet: DataType = dataType('pg/inet', { casts: fromText });
 export const pgBit: DataType = dataType('pg/bit', { casts: fromText });
 export const pgVarbit: DataType = dataType('pg/varbit', { casts: fromText });

@@ -6,23 +6,7 @@ import type {
   Geometry,
 } from '@prisma/orm-extension-postgis/codec-types';
 import type { QueryOperationTypes as PostgisQueryOperationTypes } from '@prisma/orm-extension-postgis/operation-types';
-import type {
-  Bit,
-  Char,
-  CodecTypes as PgTypes,
-  Interval,
-  JsonValue,
-  Numeric,
-  Time,
-  TimeString,
-  Timestamp,
-  TimestampString,
-  Timestamptz,
-  TimestamptzString,
-  Timetz,
-  VarBit,
-  Varchar,
-} from '@prisma/orm-postgres/target/codec-types';
+import type { Char, CodecTypes as PgTypes } from '@prisma/orm-postgres/target/codec-types';
 import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgres/target/operation-types';
 
 import type {
@@ -385,17 +369,20 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly location: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -410,17 +397,20 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
                 readonly id: {
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -435,17 +425,20 @@ type ContractBase = Omit<
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly path: {
                   readonly nativeType: 'geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeRef: 'WgsGeometry';
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -495,7 +488,11 @@ type ContractBase = Omit<
               };
               readonly location: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/geometry@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/geometry@1';
+                  readonly typeParams: { readonly srid: 4326 };
+                };
               };
               readonly name: {
                 readonly nullable: false;
@@ -517,7 +514,11 @@ type ContractBase = Omit<
             readonly fields: {
               readonly boundary: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/geometry@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/geometry@1';
+                  readonly typeParams: { readonly srid: 4326 };
+                };
               };
               readonly id: {
                 readonly nullable: false;
@@ -559,7 +560,11 @@ type ContractBase = Omit<
               };
               readonly path: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/geometry@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/geometry@1';
+                  readonly typeParams: { readonly srid: 4326 };
+                };
               };
             };
             readonly relations: Record<string, never>;

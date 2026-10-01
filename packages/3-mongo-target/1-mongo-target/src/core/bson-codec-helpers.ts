@@ -1,4 +1,6 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { JsonValue } from '@internal/contract/types';
+import { INT32_RANGE, refuseJsonValue } from '@internal/framework-components/codec';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { Binary, Code, type Document, Double, EJSON } from 'bson';
@@ -145,12 +147,9 @@ export function decodeBsonValue(wire: unknown): BsonValue {
   >(decodeValue(wire));
 }
 
-const INT32_MIN = -(2 ** 31);
-const INT32_MAX = 2 ** 31 - 1;
-
 function asDriverWrites(value: unknown): unknown {
   if (typeof value === 'number') {
-    return Number.isInteger(value) && (value < INT32_MIN || value > INT32_MAX)
+    return Number.isInteger(value) && (value < INT32_RANGE.min || value > INT32_RANGE.max)
       ? new Double(value)
       : value;
   }
@@ -181,8 +180,24 @@ export function encodeBsonJson(value: BsonInputValue): JsonValue {
   );
 }
 
+/**
+ * Reads the canonical Extended JSON `encodeBsonJson` writes. The `bson` reader also takes forms that are not canonical, some of them silently wrong (`{ "$numberInt": "abc" }` reads as 0), so a value that does not write back to the same JSON is refused.
+ */
 export function decodeBsonJson(json: JsonValue): BsonInputValue {
-  return EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
-    relaxed: false,
-  });
+  let value: BsonInputValue;
+  try {
+    value = EJSON.deserialize(
+      blindCast<
+        Document,
+        'EJSON.deserialize reads any JSON value; its parameter type names only a document'
+      >(json),
+      { relaxed: false },
+    );
+  } catch {
+    return refuseJsonValue(MONGO_BSON_CODEC_ID, 'canonical Extended JSON', json);
+  }
+  if (!isDeepStrictEqual(EJSON.serialize(value, { relaxed: false }), json)) {
+    return refuseJsonValue(MONGO_BSON_CODEC_ID, 'canonical Extended JSON', json);
+  }
+  return value;
 }

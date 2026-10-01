@@ -148,6 +148,23 @@ describe('adapter-postgres codecs', () => {
       expect(await codec.decode(value, {})).toBe(value);
     });
 
+    it.each([
+      'sql/int@1',
+      'sql/float@1',
+      'pg/int@1',
+      'pg/float@1',
+      'pg/int2@1',
+      'pg/int4@1',
+      'pg/float4@1',
+      'pg/float8@1',
+    ])('%s reads the decimal text of a list element as a number', async (codecId) => {
+      const descriptor = postgresCodecRegistry.descriptorFor(codecId);
+      const codec = descriptor?.factory(undefined as never)(SYNTH_CTX) as {
+        decode: (input: string, ctx: SqlCodecCallContext) => Promise<unknown>;
+      };
+      expect(await codec.decode('-7', {})).toBe(-7);
+    });
+
     it('keeps boolean values unchanged', async () => {
       const boolCodec = codecForScalar('bool') as {
         encode: (input: boolean, ctx: SqlCodecCallContext) => Promise<boolean>;
@@ -310,10 +327,10 @@ describe('adapter-postgres codecs', () => {
 
     it('rejects JSON that is not base64 text', () => {
       expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
       expect(() => byteaCodec.decodeJson('not base64!')).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
     });
 
@@ -331,7 +348,7 @@ describe('adapter-postgres codecs', () => {
 
     it('throws on non-string input to decodeJson', () => {
       expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
     });
   });
@@ -398,7 +415,7 @@ describe('adapter-postgres codecs', () => {
 
       it('rejects a JSON number, which has already lost digits', () => {
         expect(() => codec.decodeJson(42)).toThrow(
-          'pg/int8@1 database JSON value must be a decimal string',
+          'pg/int8@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
         );
       });
 

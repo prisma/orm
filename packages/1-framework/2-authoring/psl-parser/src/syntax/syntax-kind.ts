@@ -19,6 +19,8 @@ export type SyntaxKind =
   // A namespace-qualified name `[space ':']? Ident ('.' Ident)*`.
   | 'QualifiedName'
   | 'FunctionCall'
+  // A member path `Ident ('.' Ident)+` in expression position, e.g. `address.city`.
+  | 'PathExpr'
   | 'ArrayLiteral'
   | 'StringLiteralExpr'
   // `` tag`body` ``, `tag"body"`, or `tag'body'`: a QualifiedName, then a StringLiteralExpr.

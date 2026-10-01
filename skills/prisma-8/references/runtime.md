@@ -130,7 +130,7 @@ Servers (HTTP handlers, workers in a request loop) **do not call `db.close()`** 
 
 - **`close()` is idempotent.** Calling it twice is a no-op.
 - **`close()` is terminal.** There is no reconnect on a closed `db` — construct a new client if you need to reach the database again. After close, `db.runtime()`, `db.connect(...)`, `db.transaction(...)`, and `db.prepare(...)` reject with `Error('<target> client is closed')` (e.g. `'Postgres client is closed'`, `'SQLite client is closed'`, `'Mongo client is closed'`).
-- **`close()` does not abort in-flight queries.** `await` outstanding work before calling `close()`. Async iterators from `db.runtime().query(plan)` and `PreparedStatement` handles held after `close()` fail on their next call.
+- **`close()` waits for work already running and refuses new work.** On a Postgres client built from `{ url }`, `close()` refuses every new call at once with `DRIVER.NOT_CONNECTED` ("Postgres client is closed"), and a runtime captured with `db.runtime()` before `close()` is refused at once with "Runtime is closed"; it waits for the queries and transactions already in flight, then ends the pool. Await an ORM write such as `include(...).create()` or a nested create before `close()`, because its reload is a new call. On a serverless connection, `close()` waits until the runtime has been idle for one turn of the event loop, so a chain of queries that keeps it busy from the close onward completes, then ends the `pg.Client`; work that starts after that rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"). A lazy result such as `db.orm...all()` or `db.runtime().query(plan)` starts when it is awaited or iterated, not when it is built. A Postgres client given a caller's `pg.Pool` or `pg.Client` does not close its runtime, so work through a runtime taken before `close()` keeps running on the caller's pool. `await` outstanding work before calling `close()`.
 - **Ownership.** `close()` releases only what the façade constructed (`pg.Pool` from `{ url }`, `MongoClient` from `{ url }` / `{ uri, dbName }`, SQLite handle from `{ path }`). If you supplied your own `pg.Pool` / `pg.Client` (Postgres `pg:` option), `mongodb.MongoClient` (Mongo `mongoClient:` option), or a pre-built `binding`, `db.close()` does **not** touch those — you own their lifecycle.
 
 **`db.end()` does not exist.** The universal `node-postgres` name is `pool.end()` on a `pg.Pool`; the Prisma 8 runtime client is not a `pg.Pool`. The right call is `await db.close()`.
@@ -159,14 +159,14 @@ export default {
 };
 ```
 
-The rule to remember: inside a request, `db` does everything the `db` from `postgres()` does, so any documented `db.orm...`, `db.sql...`, `db.raw...`, `db.transaction(...)`, `db.prepare(...)` or `db.runtime().query(...)` snippet works unchanged. Await every query before the `await using` scope ends: the connection closes when the scope ends, so a query returned from the scope without `await` (`return db.orm...` instead of `return await db.orm...`) fails when its rows are read, with `CONTRACT.MARKER_READ_FAILED` (whose cause is `DRIVER.NOT_CONNECTED`) under the default options, or `DRIVER.NOT_CONNECTED` after an earlier awaited query or with `verifyMarker: false`.
+The rule to remember: inside a request, `db` does everything the `db` from `postgres()` does, so any documented `db.orm...`, `db.sql...`, `db.raw...`, `db.transaction(...)`, `db.prepare(...)` or `db.runtime().query(...)` snippet works unchanged. Await every query before the `await using` scope ends. The connection's `close()` waits until the runtime has been idle for one turn of the event loop (a `setTimeout(0)`), then refuses new work. A lazy ORM read such as `db.orm.public.User.all()`, or `db.runtime().query(plan)`, returned from the scope without `await` starts only when the caller awaits it, after the scope has closed, so it rejects with `DRIVER.NOT_CONNECTED` ("Runtime is closed"), whose `fix` names the missing `await`. Work that keeps the runtime busy from the close onward completes: a `first()`, `execute()` or `transaction()`, an ORM write and its reload, including `include(...).create()` and a nested `create()`, and an async helper whose steps go through `db.orm`, `db.transaction()` or `db.prepare()`; a transaction commits. Such work is never refused because of the close; if it fails for its own reason, it rejects like any unawaited promise. A helper that calls `db.runtime()` after the scope has ended throws "Postgres connection is closed" at that call. Work that starts after the runtime was idle for a turn is refused. Whether a query sent after waiting on something other than the database counts as idle depends on when that callback runs relative to the timer, so do not rely on it. An unawaited promise that fails then, or fails for its own reason, rejects like any unawaited promise, and Node reports it as unhandled. Write `return await db.orm...`, not `return db.orm...`.
 
 - **`connect` connects before it returns.** When the database refuses the connection, rejects the credentials, or does not answer within 20 seconds, `postgres.connect({ url })` rejects with `DRIVER.CONNECTION_FAILED` and leaves nothing open; an empty URL, a string that is not a URL, or a scheme other than `postgres://` or `postgresql://` rejects with `RUNTIME.BINDING_INVALID`. Handle an unreachable database at the `connect` call, not at the first query. Answer a request that needs no query, such as an unknown route, before `connect`, because `connect` opens a database connection whether or not a query follows.
 - **Never call `connect` at module scope.** A connection opened there is shared by every request in the isolate, and fails in four ways: its database connection goes stale after the isolate idles, concurrent requests queue behind each other on one `pg.Client`, nothing closes it when a request ends, and Cloudflare Workers reject a socket used across requests.
 - **`db.orm` is the default way to use the ORM.** Build `orm({ runtime: db.runtime(), context: db.context, collections })` only for custom collection classes, and build it inside the request.
 - **Anything that takes a runtime gets `db.runtime()`.** That includes `orm({ runtime, ... })`, `withTransaction(runtime, fn)` and a prepared statement's `query(runtime, params)`. Do not pass `db` itself to `orm()`.
 - **Inside `db.transaction(async (tx) => ...)`, run every query through `tx`.** A connection has one database connection, so inside `db.transaction(async (tx) => ...)` a query through `db` is not independent of the transaction; run every query through `tx`. A query that uses the connection's database connection directly, such as a `db.orm` read, a `db.orm` create of one row, an `updateAll(...)` or `deleteAll()`, or `db.runtime().query(...)`, runs inside the open transaction without saying so. An operation that asks for a database connection of its own, such as a `db.orm` `update(...)` or `delete()` of one row, `db.runtime().connection()`, a `db.orm` create that also writes related rows, or a nested `db.transaction(...)`, waits for the database connection the transaction holds, and the request hangs.
-- **After `db.close()`** (or the end of the `await using` scope), `db.runtime()`, ORM queries, `db.transaction(...)` and `db.prepare(...)` fail with `DRIVER.NOT_CONNECTED`. Call `postgres.connect({ url })` again for a new connection.
+- **After `db.close()`** (or the end of the `await using` scope), `db.runtime()` throws `DRIVER.NOT_CONNECTED` ("Postgres connection is closed"), and ORM queries, `db.transaction(...)` and prepared statements that start after the runtime was idle for a turn reject with `DRIVER.NOT_CONNECTED` ("Runtime is closed"). Call `postgres.connect({ url })` again for a new connection.
 
 How connections read rows, and the `cursor` option on the serverless client (with the Hyperdrive caveat), is in `references/queries.md` § *Streaming*.
 
@@ -236,29 +236,43 @@ For the full option surface, read the source: `packages/2-sql/5-runtime/src/midd
 
 ## Workflow — Cache middleware
 
-The concept: `@prisma/orm-extension-middleware-cache` ships an opt-in read cache built on the `interceptQuery` hook. On a hit the driver is never called; on a miss the rows are buffered and committed to the store when the query completes. Caching is strictly opt-in per query: only a plan annotated with `cacheAnnotation({ ttl })` is ever cached. Cache keys default to the runtime's content hash of the plan (`key` overrides), queries inside a transaction or pinned connection bypass the cache, and the default store is an in-memory LRU with TTL (`CacheStore` is the interface for a Redis-style backend).
+The concept: `@prisma/orm-extension-middleware-cache` ships an opt-in read cache built on the `interceptQuery` hook. On a hit the driver is never called; on a miss the rows are buffered and stored when the query completes. Only a plan carrying `cacheAnnotation` is cached; `cacheAnnotation({ bypass: true })` skips the cache for one call. Cache keys default to the runtime's content hash of the plan (`key` overrides), and queries inside a transaction or pinned connection bypass the cache. How long an entry lives is the store's policy: the default store keeps up to 1000 entries for 60 seconds each, and `createInMemoryCacheStore({ maxEntries, ttlMs })` changes that (`ttlMs: Infinity` never expires). `CacheStore` is the interface for a Redis-style backend. The cache never sees writes: after the write commits, call `cache.invalidate({ keys })` for reads annotated with a `key`. `cacheAnnotation({ meta })` hands any value to the store with the entry, and `cache.invalidate({ meta })` hands one to its `unset`; only a custom store that indexes `meta` can act on it, and the default store throws `RUNTIME.CACHE_STORE_META_UNSUPPORTED`.
 
 ```typescript
-import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
+import {
+  cacheAnnotation,
+  createCacheMiddleware,
+  createInMemoryCacheStore,
+} from '@prisma/orm-extension-middleware-cache';
 
+export const cache = createCacheMiddleware({
+  store: createInMemoryCacheStore({ maxEntries: 1_000, ttlMs: 60_000 }),
+});
 export const db = postgres<Contract>({
   contractJson,
   url: process.env['DATABASE_URL']!,
-  middleware: [createCacheMiddleware({ maxEntries: 1_000 }), lints(), budgets({ maxRows: 10_000 })],
+  middleware: [cache, lints(), budgets({ maxRows: 10_000 })],
 });
 
-// Cached for 60s; an identical plan within the TTL is served without a driver call.
-const user = await db.orm.public.User.first({ id: 1 }, (meta) => meta.annotate(cacheAnnotation({ ttl: 60_000 })));
+// Cached for the store's 60 s; an identical read in that window is served without a driver call.
+const user = await db.orm.public.User.first({ id: 1 }, (meta) =>
+  meta.annotate(cacheAnnotation({ key: 'user-1' })),
+);
 // Un-annotated queries always hit the database.
+
+// After a write to user 1 has committed (outside the transaction, never inside it):
+await cache.invalidate({ keys: ['user-1'] });
 ```
 
-**The cache key carries no identity.** The default key is the runtime's content hash of the plan — contract hash, SQL text, and bound parameters — so two callers issuing the same statement share one entry regardless of who they are. Never annotate a read whose rows depend on the caller (per-user, per-tenant, or RLS-filtered data) on the plain `postgres()` façade unless the identity is part of the key: `cacheAnnotation({ ttl, key: `user:${userId}:profile` })`, or a `where` clause that binds the identity as a parameter (the parameter is in the hash). Queries that run on a pinned connection or inside a transaction bypass the cache entirely (`ctx.scope !== 'runtime'`), which is why a Supabase `RoleBoundDb` read — executed on a connection with the role bound via `set_config` — is never served from cache; the plain façade has no such protection.
+**Invalidate after the commit, not inside the transaction.** A read from another request can refill the cache with the old rows before the commit lands. A read that missed before the `invalidate` and finishes after it does not store its rows: the store moves the key's version on `unset`, and the read's `set` is conditional on the version it saw. This holds across processes that share a store.
+
+**The cache key carries no identity.** The default key is the runtime's content hash of the plan — contract hash, SQL text, and bound parameters — so two callers issuing the same statement share one entry regardless of who they are. Never annotate a read whose rows depend on the caller (per-user, per-tenant, or RLS-filtered data) on the plain `postgres()` façade unless the identity is part of the key: `cacheAnnotation({ key: `user:${userId}:profile` })`, or a `where` clause that binds the identity as a parameter (the parameter is in the hash). Queries that run on a pinned connection or inside a transaction bypass the cache entirely (`ctx.scope !== 'runtime'`), which is why a Supabase `RoleBoundDb` read — executed on a connection with the role bound via `set_config` — is never served from cache; the plain façade has no such protection.
 
 ## Workflow — Compose multiple middleware
 
 ```typescript
 middleware: [
-  createCacheMiddleware({ maxEntries: 1_000 }), // first — gets first claim on an interceptQuery hit
+  createCacheMiddleware(),                      // first — gets first claim on an interceptQuery hit
   lints({ severities: { noLimit: 'error' } }),
   budgets({ maxLatencyMs: 5_000 }),
   slowQueryWarning({ thresholdMs: 250 }),       // afterQuery fires for cache hits too (source: 'middleware')

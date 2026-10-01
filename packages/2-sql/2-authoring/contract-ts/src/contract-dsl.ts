@@ -12,7 +12,10 @@ import type {
 } from '@internal/contract-authoring';
 import type { AuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import { instantiateAuthoringFieldPreset } from '@internal/framework-components/authoring';
-import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  ColumnTypeDescriptor,
+} from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -55,7 +58,7 @@ export type ScalarFieldState<
   ColumnName extends string | undefined = string | undefined,
   IdSpec extends NamedConstraintSpec | undefined = undefined,
   UniqueSpec extends NamedConstraintSpec | undefined = undefined,
-  Many extends boolean = false,
+  Many extends false | { readonly elementNullable: boolean } = false,
 > = {
   readonly kind: 'scalar';
   readonly descriptor?: Descriptor | undefined;
@@ -64,7 +67,7 @@ export type ScalarFieldState<
   readonly columnName?: ColumnName | undefined;
   readonly default?: AuthoredColumnDefault | undefined;
   readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
-  readonly many?: Many extends true ? true : undefined;
+  readonly many: Many;
   readonly noCheck?: readonly CheckKind[] | undefined;
 } & (IdSpec extends NamedConstraintSpec ? { readonly id: IdSpec } : { readonly id?: undefined }) &
   (UniqueSpec extends NamedConstraintSpec
@@ -79,7 +82,7 @@ type AnyScalarFieldState = {
   readonly columnName?: string | undefined;
   readonly default?: AuthoredColumnDefault | undefined;
   readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
-  readonly many?: boolean | undefined;
+  readonly many: false | { readonly elementNullable: boolean };
   readonly noCheck?: readonly CheckKind[] | undefined;
   readonly id?: NamedConstraintSpec | undefined;
   readonly unique?: NamedConstraintSpec | undefined;
@@ -93,7 +96,7 @@ type HasNamedConstraintId<State extends AnyScalarFieldState> =
     string | undefined,
     infer IdSpec,
     NamedConstraintSpec | undefined,
-    boolean
+    false | { readonly elementNullable: boolean }
   >
     ? IdSpec extends NamedConstraintSpec
       ? true
@@ -108,7 +111,7 @@ type HasNamedConstraintUnique<State extends AnyScalarFieldState> =
     string | undefined,
     NamedConstraintSpec | undefined,
     infer UniqueSpec,
-    boolean
+    false | { readonly elementNullable: boolean }
   >
     ? UniqueSpec extends NamedConstraintSpec
       ? true
@@ -175,17 +178,19 @@ type DefaultInputOf<State> = State extends { readonly descriptor?: infer Descrip
     : unknown
   : unknown;
 
-type IsList<State> = State extends { readonly many?: infer Many }
-  ? true extends Many
-    ? true
-    : false
+type IsList<State> = State extends { readonly many: { readonly elementNullable: boolean } }
+  ? true
   : false;
+
+type NullElementOf<State> = State extends { readonly many: { readonly elementNullable: true } }
+  ? null
+  : never;
 
 type DefaultLiteralOf<State> =
   unknown extends DefaultInputOf<State>
     ? unknown
     : IsList<State> extends true
-      ? readonly DefaultInputOf<State>[]
+      ? readonly (DefaultInputOf<State> | NullElementOf<State>)[]
       : DefaultInputOf<State>;
 
 type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
@@ -194,11 +199,13 @@ type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
     : Extract<TypeRef, EnumTypeHandle>
   : never;
 
-type DefaultArgumentOf<State> = [EnumHandleOf<State>] extends [never]
-  ? DefaultLiteralOf<State> | ColumnDefault
-  : IsList<State> extends true
-    ? readonly EnumHandleOf<State>['values'][number][]
-    : EnumHandleOf<State>['values'][number];
+type DefaultArgumentOf<State> =
+  | ([EnumHandleOf<State>] extends [never]
+      ? DefaultLiteralOf<State> | ColumnDefault
+      : IsList<State> extends true
+        ? readonly (EnumHandleOf<State>['values'][number] | NullElementOf<State>)[]
+        : EnumHandleOf<State>['values'][number])
+  | (State extends { readonly nullable: true } ? null : never);
 
 function toColumnDefault(value: unknown): AuthoredColumnDefault {
   if (isColumnDefault(value)) {
@@ -206,6 +213,31 @@ function toColumnDefault(value: unknown): AuthoredColumnDefault {
   }
   return { kind: 'literal', value };
 }
+
+type ApplyMany<State extends AnyScalarFieldState, ElementsNullable extends boolean> =
+  State extends ScalarFieldState<
+    infer Descriptor,
+    infer TypeRef,
+    infer Nullable,
+    infer ColumnName,
+    infer IdSpec,
+    infer UniqueSpec,
+    false | { readonly elementNullable: boolean }
+  >
+    ? ScalarFieldState<
+        Descriptor,
+        TypeRef,
+        Nullable,
+        ColumnName,
+        IdSpec,
+        UniqueSpec,
+        { readonly elementNullable: ElementsNullable }
+      >
+    : AnyScalarFieldState;
+
+export type ManyOptions =
+  | { readonly elementsNullable: true }
+  | { readonly elementsNullable: false };
 
 export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFieldState> {
   declare readonly __state: State;
@@ -292,36 +324,17 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
     );
   }
 
-  many(): ScalarFieldBuilder<
-    State extends ScalarFieldState<
-      infer Descriptor,
-      infer TypeRef,
-      infer Nullable,
-      infer ColumnName,
-      infer IdSpec,
-      infer UniqueSpec,
-      boolean
-    >
-      ? ScalarFieldState<Descriptor, TypeRef, Nullable, ColumnName, IdSpec, UniqueSpec, true>
-      : AnyScalarFieldState
-  > {
+  many(): ScalarFieldBuilder<ApplyMany<State, false>>;
+  many(options: { readonly elementsNullable: true }): ScalarFieldBuilder<ApplyMany<State, true>>;
+  many(options: { readonly elementsNullable: false }): ScalarFieldBuilder<ApplyMany<State, false>>;
+  many(options?: ManyOptions): ScalarFieldBuilder<AnyScalarFieldState> {
     return new ScalarFieldBuilder(
       blindCast<
-        State extends ScalarFieldState<
-          infer Descriptor,
-          infer TypeRef,
-          infer Nullable,
-          infer ColumnName,
-          infer IdSpec,
-          infer UniqueSpec,
-          boolean
-        >
-          ? ScalarFieldState<Descriptor, TypeRef, Nullable, ColumnName, IdSpec, UniqueSpec, true>
-          : AnyScalarFieldState,
+        AnyScalarFieldState,
         'object spread does not narrow the generic State conditional; runtime shape is correct'
       >({
         ...this.state,
-        many: true,
+        many: { elementNullable: options?.elementsNullable === true },
       }),
     );
   }
@@ -592,6 +605,7 @@ const columnField: ColumnFieldHelper = (descriptor) =>
     kind: 'scalar',
     descriptor,
     nullable: false,
+    many: false,
   });
 
 function generatedField<Descriptor extends ColumnTypeDescriptor>(
@@ -604,6 +618,7 @@ function generatedField<Descriptor extends ColumnTypeDescriptor>(
       ...(spec.typeParams ? { typeParams: spec.typeParams } : {}),
     },
     nullable: false,
+    many: false,
     executionDefaults: { onCreate: spec.generated },
   });
 }
@@ -618,6 +633,7 @@ function untypedNamedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder
         kind: 'scalar',
         typeRef,
         nullable: false,
+        many: false,
       }),
       typeRef,
     );
@@ -626,6 +642,7 @@ function untypedNamedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder
     kind: 'scalar',
     typeRef,
     nullable: false,
+    many: false,
   });
 }
 
@@ -645,6 +662,7 @@ export function buildFieldPreset(
     kind: 'scalar',
     descriptor: preset.descriptor,
     nullable: preset.nullable,
+    many: false,
     ...ifDefined('default', preset.default),
     ...ifDefined('executionDefaults', preset.executionDefaults),
     ...(preset.id
@@ -1975,7 +1993,7 @@ export type ContractInput<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: Types;
   readonly models?: Models;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   /**
    * Domain enum handles authored via `enumType()`. Each handle lowers to a
    * domain `enum` entry and a storage `valueSet` entry in the target's

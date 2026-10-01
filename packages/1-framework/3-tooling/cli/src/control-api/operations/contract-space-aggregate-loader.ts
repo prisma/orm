@@ -12,14 +12,14 @@ import type {
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
-import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { CliStructuredError, errorUnexpected } from '../../utils/cli-errors';
+import { CliStructuredError } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 
 const CONTRACT_SPACES_DOCS_URL = 'https://pris.ly/contract-spaces';
 
@@ -408,13 +408,8 @@ export async function buildReadAggregate(
     }
     return ok({ aggregate: loaded.value, contractHash });
   } catch (error) {
-    if (MigrationToolsError.is(error)) {
-      return notOk(error);
-    }
     return notOk(
-      errorUnexpected(error instanceof Error ? error.message : String(error), {
-        why: `Failed to read migrations directory: ${error instanceof Error ? error.message : String(error)}`,
-      }),
+      errorFromCaught(error, (message) => `Failed to read migrations directory: ${message}`),
     );
   }
 }

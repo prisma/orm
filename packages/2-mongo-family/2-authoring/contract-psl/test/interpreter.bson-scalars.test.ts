@@ -68,12 +68,20 @@ describe('BSON scalar field types', () => {
   it('emits the codec id of each type', () => {
     const contract = interpretPost();
     expect(contract.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Post']?.fields).toEqual({
-      _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-      views: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
-      price: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/decimal128@1' } },
-      thumbnail: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/binary@1' } },
-      meta: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
-      notes: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+      _id: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+      views: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/int64@1' } },
+      price: {
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'mongo/decimal128@1' },
+      },
+      thumbnail: {
+        many: false,
+        nullable: false,
+        type: { kind: 'scalar', codecId: 'mongo/binary@1' },
+      },
+      meta: { many: false, nullable: false, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
+      notes: { many: false, nullable: true, type: { kind: 'scalar', codecId: 'mongo/json@1' } },
     });
   });
 });

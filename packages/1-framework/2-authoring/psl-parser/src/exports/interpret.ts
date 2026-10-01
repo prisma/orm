@@ -1,4 +1,4 @@
-export { mapPslHelperArgs } from '../authoring-arguments';
+export { mapPslHelperArgs, parsePslPositionalArgs } from '../authoring-arguments';
 export { enumMemberAttributeDiagnostics } from '../enum-member-attributes';
 export {
   instantiatePslFieldPreset,

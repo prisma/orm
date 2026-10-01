@@ -160,6 +160,50 @@ describe('SqliteBoundDriver', () => {
   });
 });
 
+describe('a NaN parameter', () => {
+  const refusal = expect.objectContaining({
+    code: 'RUNTIME.ENCODE_FAILED',
+    message:
+      'Parameter 2 is NaN, which SQLite cannot store: it would bind it as NULL. Pass null to store no value.',
+    meta: { paramIndex: 1, received: 'NaN' },
+  });
+
+  it('is refused on a write, a read and an explain, rather than bound as NULL', async () => {
+    const driver = createDriver();
+    await executeSql(driver, 'CREATE TABLE t(id INTEGER PRIMARY KEY, value REAL)');
+    await expect(
+      executeSql(driver, 'INSERT INTO t VALUES (?, ?)', [1, Number.NaN]),
+    ).rejects.toThrow(refusal);
+    await expect(
+      queryRows(driver, 'SELECT * FROM t WHERE id = ? AND value = ?', [1, Number.NaN]),
+    ).rejects.toThrow(refusal);
+    await expect(
+      driver.explain({
+        sql: 'SELECT * FROM t WHERE id = ? AND value = ?',
+        params: [1, Number.NaN],
+      }),
+    ).rejects.toThrow(refusal);
+    expect(await queryRows(driver, 'SELECT * FROM t')).toEqual([]);
+    await driver.close();
+  });
+
+  it('leaves an infinity to be stored and read back', async () => {
+    const driver = createDriver();
+    await executeSql(driver, 'CREATE TABLE t(id INTEGER PRIMARY KEY, value REAL)');
+    await executeSql(driver, 'INSERT INTO t VALUES (?, ?), (?, ?)', [
+      1,
+      Number.POSITIVE_INFINITY,
+      2,
+      Number.NEGATIVE_INFINITY,
+    ]);
+    expect(await queryRows(driver, 'SELECT * FROM t ORDER BY id')).toEqual([
+      { id: 1, value: Number.POSITIVE_INFINITY },
+      { id: 2, value: Number.NEGATIVE_INFINITY },
+    ]);
+    await driver.close();
+  });
+});
+
 describe('SqliteConnection', () => {
   it('acquireConnection returns a connection that shares database state', async () => {
     const driver = createDriver();

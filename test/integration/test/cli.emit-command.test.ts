@@ -702,10 +702,12 @@ model Post {
                     _id: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
+                      many: false,
                     },
                     name: {
                       type: { kind: 'scalar', codecId: 'mongo/string@1' },
                       nullable: false,
+                      many: false,
                     },
                   }),
                 }),

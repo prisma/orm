@@ -316,6 +316,7 @@ function createTestSetup(options?: {
     driver: driver as unknown as SqlDriver,
     verifyMarker: false,
     middleware: options?.middleware ?? [],
+    closeRefusal: undefined,
   };
 
   const runtime = new SupabaseRuntimeImpl(runtimeOptions);

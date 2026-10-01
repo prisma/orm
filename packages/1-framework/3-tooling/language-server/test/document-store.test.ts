@@ -24,7 +24,7 @@ describe('document store', () => {
     const document = open(store);
     const first = store.readSnapshot(uri)!;
     expect(store.readSnapshot(alias)).toBe(first);
-    expect(first).toEqual({ uri, text: 'first' });
+    expect(first).toEqual({ uri, text: 'first', parserOptions: {} });
     expect(Object.isFrozen(first)).toBe(true);
     expect(store.change({ uri, version: 2 }, [])).toBeUndefined();
     expect(store.readSnapshot(uri)).toBe(first);
@@ -48,7 +48,7 @@ describe('document store', () => {
     open(store, uri, 'first');
     const reopened = store.readSnapshot(alias)!;
     expect(reopened).not.toBe(first);
-    expect(reopened).toEqual({ uri, text: 'first' });
+    expect(reopened).toEqual({ uri, text: 'first', parserOptions: {} });
     expect(reopened.sourceFile.text).toBe('first');
     expect(reopened.parse()).not.toBe(first.parse());
   });
@@ -56,7 +56,7 @@ describe('document store', () => {
     const store = new DocumentStore();
     const uri = 'untitled:Schema.psl';
     expect(open(store, uri).uri).toBe(uri);
-    expect(store.readSnapshot(uri)).toEqual({ uri, text: 'first' });
+    expect(store.readSnapshot(uri)).toEqual({ uri, text: 'first', parserOptions: {} });
     expect(store.change({ uri, version: 2 }, [{ text: 'updated' }])?.uri).toBe(uri);
     expect(store.close(uri)?.uri).toBe(uri);
   });
@@ -195,10 +195,14 @@ describe('document store', () => {
       const alias = file.uri.replace('member.prisma', '%6dember.prisma');
       const store = new DocumentStore();
       const first = store.readSnapshot(alias);
-      expect(first).toEqual({ uri: file.uri, text: 'disk' });
+      expect(first).toEqual({ uri: file.uri, text: 'disk', parserOptions: {} });
       expect(store.readSnapshot(file.uri)).toBe(first);
       open(store, alias, 'overlay');
-      expect(store.readSnapshot(file.uri)).toEqual({ uri: file.uri, text: 'overlay' });
+      expect(store.readSnapshot(file.uri)).toEqual({
+        uri: file.uri,
+        text: 'overlay',
+        parserOptions: {},
+      });
       store.close(alias);
       expect(store.readSnapshot(alias)).toEqual(first);
     });

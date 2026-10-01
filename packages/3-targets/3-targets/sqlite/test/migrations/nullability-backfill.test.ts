@@ -12,11 +12,13 @@ import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => ({ sql: '', params: [] }),
+  renderColumnDefault: async () => '',
   lowerToExecuteRequest: async () => ({ sql: '', params: [] }),
 };
 
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
+    many: false,
     nativeType: 'text',
     nullable: true,
     codecId: 'sqlite/text@1',

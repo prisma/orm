@@ -173,7 +173,7 @@ describe('postgis codecs', () => {
 
     it('decodeJson rejects malformed HEXEWKB', () => {
       const c = asAsyncCodec();
-      expect(() => c.decodeJson('zz')).toThrow(/invalid hex byte/);
+      expect(() => c.decodeJson('zz')).toThrow('pg/geometry@1 JSON value must be a HEXEWKB string');
     });
   });
 

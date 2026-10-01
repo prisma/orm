@@ -4,6 +4,7 @@ import type {
   CodecRef,
 } from '@internal/framework-components/codec';
 import {
+  BinaryExpr,
   CaseExpr,
   CastExpr,
   ColumnRef,
@@ -77,7 +78,17 @@ describe('SQLite built-in codec descriptors', () => {
     }
   });
 
-  it('adapts every generic SQL descriptor with identity projection and scalar-only semantics', () => {
+  it('projects sql/char@1 without trailing spaces, as its decode reads a flat value', () => {
+    const expression = ColumnRef.of('records', 'value');
+    expect(
+      sqliteSqlCharDescriptor.projectJson(
+        expression,
+        refFor(sqliteSqlCharDescriptor, { length: 12 }),
+      ),
+    ).toEqual(FunctionCallExpr.of('rtrim', [expression, LiteralExpr.of(' ')]));
+  });
+
+  it('adapts the other generic SQL descriptors with identity projection and scalar-only semantics', () => {
     const expression = ColumnRef.of('records', 'value');
     const cases: ReadonlyArray<{
       descriptor: AnySqliteCodecDescriptor;
@@ -85,17 +96,11 @@ describe('SQLite built-in codec descriptors', () => {
       typeParams?: CodecRef['typeParams'];
     }> = [
       {
-        descriptor: sqliteSqlCharDescriptor,
-        rawDescriptor: sqlCharDescriptor,
-        typeParams: { length: 12 },
-      },
-      {
         descriptor: sqliteSqlVarcharDescriptor,
         rawDescriptor: sqlVarcharDescriptor,
         typeParams: { length: 120 },
       },
       { descriptor: sqliteSqlIntDescriptor, rawDescriptor: sqlIntDescriptor },
-      { descriptor: sqliteSqlFloatDescriptor, rawDescriptor: sqlFloatDescriptor },
     ];
 
     for (const { descriptor, rawDescriptor, typeParams } of cases) {
@@ -114,12 +119,7 @@ describe('SQLite built-in codec descriptors', () => {
 
   it("projects identity where SQLite's own JSON conversion is already canonical", () => {
     const expression = ColumnRef.of('records', 'value');
-    const descriptors = [
-      sqliteTextDescriptor,
-      sqliteIntegerDescriptor,
-      sqliteRealDescriptor,
-      sqliteDatetimeDescriptor,
-    ];
+    const descriptors = [sqliteTextDescriptor, sqliteIntegerDescriptor, sqliteDatetimeDescriptor];
 
     for (const descriptor of descriptors) {
       expect(descriptor.projectJson(expression, refFor(descriptor))).toBe(expression);
@@ -139,6 +139,25 @@ describe('SQLite built-in codec descriptors', () => {
         FunctionCallExpr.of('hex', [expression]),
       ),
     );
+    // SQLite writes an infinity in JSON as 9.0e+999; both float codecs write the text their encodeJson writes.
+    const infinityAsText = CaseExpr.of(
+      [
+        {
+          condition: BinaryExpr.eq(expression, LiteralExpr.of(Number.POSITIVE_INFINITY)),
+          value: LiteralExpr.of('Infinity'),
+        },
+        {
+          condition: BinaryExpr.eq(expression, LiteralExpr.of(Number.NEGATIVE_INFINITY)),
+          value: LiteralExpr.of('-Infinity'),
+        },
+      ],
+      expression,
+    );
+    expect({
+      real: sqliteRealDescriptor.projectJson(expression, refFor(sqliteRealDescriptor)),
+      sqlFloat: sqliteSqlFloatDescriptor.projectJson(expression, refFor(sqliteSqlFloatDescriptor)),
+    }).toEqual({ real: infinityAsText, sqlFloat: infinityAsText });
+    expect(sqliteSqlFloatDescriptor.paramsSchema).toBe(sqlFloatDescriptor.paramsSchema);
     // An INTEGER reaching JSON as a number does not survive the int64 range.
     expect(sqliteBigintDescriptor.projectJson(expression, refFor(sqliteBigintDescriptor))).toEqual(
       CastExpr.as(expression, 'TEXT'),

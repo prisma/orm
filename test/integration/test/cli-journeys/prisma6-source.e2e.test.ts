@@ -66,6 +66,17 @@ function output(run: { readonly stdout: string; readonly stderr: string }): stri
 }
 
 interface EmittedContract {
+  readonly domain: {
+    readonly namespaces: Record<
+      string,
+      {
+        readonly models: Record<
+          string,
+          { readonly fields: Record<string, { readonly type: { readonly codecId?: string } }> }
+        >;
+      }
+    >;
+  };
   readonly storage: {
     readonly namespaces: Record<
       string,
@@ -141,6 +152,12 @@ withTempDir(({ createTempDir }) => {
           indexes: [expect.objectContaining({ keys: [{ field: 'authorId', direction: 1 }] })],
         },
       });
+      const postFields = contract.domain.namespaces['__unbound__']?.models['Post']?.fields;
+      expect({
+        views: postFields?.['views']?.type.codecId,
+        likes: postFields?.['likes']?.type.codecId,
+        rank: postFields?.['rank']?.type.codecId,
+      }).toEqual({ views: 'mongo/int64@1', likes: 'mongo/int64Number@1', rank: 'mongo/int32@1' });
       expect(
         contract.execution.mutations.defaults.map(({ ref, onCreate, onUpdate }) => ({
           field: `${ref.entry}.${ref.field}`,

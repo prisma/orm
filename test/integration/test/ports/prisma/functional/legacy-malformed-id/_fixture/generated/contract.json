@@ -23,7 +23,9 @@
                 }
               },
               "ids": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "mongo/objectId@1",

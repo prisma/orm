@@ -24,6 +24,7 @@ import {
   mapRefResolutionError,
 } from '../../utils/cli-errors';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -125,12 +126,7 @@ export async function resolveContractRefToSnapshot(
           }),
         );
       }
-      return notOk(
-        errorUnexpected(error instanceof Error ? error.message : String(error), {
-          why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-          cause: error,
-        }),
-      );
+      return notOk(errorFromCaught(error, (message) => `Failed to read contract file: ${message}`));
     }
     let parsed: unknown;
     try {

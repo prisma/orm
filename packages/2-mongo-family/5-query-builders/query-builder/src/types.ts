@@ -87,7 +87,7 @@ type ResolveFields<
  *     placed by `ModelToDocShape`. When present (and the contract has
  *     type maps), the row is resolved via `InferModelRow<TC, M>` from
  *     `@internal/mongo-contract`, which walks scalar / valueObject /
- *     union field kinds (handling nested value-objects and `many: true`).
+ *     union field kinds (handling nested value-objects and list fields).
  *     This makes entry-point reads (`q.from('users').build()`) and
  *     shape-extending stages (`match`, `addFields`) resolve value-object
  *     fields to their concrete nested types instead of `unknown`.

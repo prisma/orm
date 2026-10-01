@@ -1,6 +1,6 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { SqlSchemaDiffResult } from '@internal/family-sql/control';
-import { buildDataTypeResolver, buildNativeTypeExpander } from '@internal/family-sql/control';
+import { buildDataTypeResolver } from '@internal/family-sql/control';
 import { classifyDiffSubjectGranularity } from '@internal/family-sql/diff';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { DiffableNode, SchemaDiffIssue } from '@internal/framework-components/control';
@@ -20,6 +20,7 @@ import {
 } from '../schema-ir/schema-node-kinds';
 import { contractToPostgresDatabaseSchemaNode } from './contract-to-postgres-database-schema-node';
 import { resolvePostgresNodeIssueControlPolicySubject } from './control-policy';
+import { buildPostgresNativeTypeExpander } from './native-type-expander';
 
 /**
  * Whether a diff issue's subject node is cluster-scoped — it carries its own
@@ -132,10 +133,10 @@ export function diffPostgresSchema(input: {
   >(input.contract);
   PostgresDatabaseSchemaNode.assert(input.schema);
   const actual = input.schema;
-  const expandNativeType = buildNativeTypeExpander(input.frameworkComponents);
+  const expandNativeType = buildPostgresNativeTypeExpander(input.frameworkComponents);
   const fullExpected = contractToPostgresDatabaseSchemaNode(postgresContract, {
     annotationNamespace: 'pg',
-    ...ifDefined('expandNativeType', expandNativeType),
+    expandNativeType,
     resolveDefault: postgresResolveDefault,
     ...ifDefined('dataTypeOf', buildDataTypeResolver(input.frameworkComponents)),
   });
@@ -229,10 +230,10 @@ export function buildPostgresPlanDiff(input: {
   >(input.contract);
   PostgresDatabaseSchemaNode.assert(input.actualSchema);
   const actual = input.actualSchema;
-  const expandNativeType = buildNativeTypeExpander(input.frameworkComponents);
+  const expandNativeType = buildPostgresNativeTypeExpander(input.frameworkComponents);
   const projectionOptions = {
     annotationNamespace: 'pg',
-    ...ifDefined('expandNativeType', expandNativeType),
+    expandNativeType,
     resolveDefault: postgresResolveDefault,
     ...ifDefined('dataTypeOf', buildDataTypeResolver(input.frameworkComponents)),
   };

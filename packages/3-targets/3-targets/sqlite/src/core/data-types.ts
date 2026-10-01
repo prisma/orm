@@ -16,7 +16,11 @@ import {
   dataType,
   type ToCanonicalForm,
 } from '@internal/framework-components/codec';
-import { canonicalDateTime, numeralText } from '@internal/sql-relational-core/ast';
+import {
+  canonicalDateTime,
+  integerTextCanonicalForm,
+  numeralText,
+} from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
 
 const unchanged: Cast = (value) => value;
@@ -83,6 +87,7 @@ export const sqliteBlob: DataType = dataType('sqlite/blob', {
 });
 
 export const sqliteBigint: DataType = dataType('sqlite/bigint', {
+  toCanonicalForm: integerTextCanonicalForm,
   casts: { [sqliteInteger.id]: asNumeralText },
 });
 

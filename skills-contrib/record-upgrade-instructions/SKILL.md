@@ -39,6 +39,8 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
 2. **Choose a descriptive pending name.** Add `upgrade-instructions/pending/<descriptive-name>/<audience>/instructions.md` for each affected audience. Avoid collisions with pending work; no random suffix, global registry, historical-name reservation, or shared index is required. Never append to another PR's fragment. A release landing during your PR does not change this unversioned destination.
 3. **Write the instructions.** Retain the existing YAML frontmatter `changes[]` and Markdown prose format. Each change has a kebab-case `id` unique within the guide, a one-line `summary`, optional `detection` (glob and content predicate), and an optional `script` path relative to `instructions.md`. Prose-only transformations omit `script`; the consumer's agent follows the body.
 
+   **Write detection patterns for whole-file matching.** The upgrade flows test each `matches` pattern as `new RegExp(pattern)`, with no flags, against the whole content of a file ([upgrade-app.md](../../skills/prisma-8/references/upgrade-app.md), step 4). A pattern may span lines. To exclude a file by something elsewhere in it, anchor a lookahead at the start of the input with `(?<![\s\S])`, not `^`, which the `m` flag turns into a line start.
+
    **Make detection predicates token-precise.** Test against both a true positive and the nearest false positive. A moved tag must not match an unchanged tag; excluding an unchanged spelling needs a token boundary:
 
    ```text

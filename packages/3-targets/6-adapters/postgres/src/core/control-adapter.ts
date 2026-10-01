@@ -1,5 +1,6 @@
 import type {
   ColumnDefault,
+  ColumnDefaultLiteralInputValue,
   ContractMarkerRecord,
   LedgerEntryRecord,
 } from '@internal/contract/types';
@@ -8,10 +9,10 @@ import {
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
 } from '@internal/errors/execution';
+import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
-import type { CodecLookup } from '@internal/framework-components/codec';
-import { materializeCodec } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { APP_SPACE_ID, type SchemaNodeRef } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
@@ -31,7 +32,13 @@ import type {
   MarkerReadResult,
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
-import { isDdlNode } from '@internal/sql-relational-core/ast';
+import {
+  type EncodedLiteralDefault,
+  encodeListLiteralDefault,
+  encodeLiteralDefault,
+  isDdlNode,
+  type LiteralDefaultColumn,
+} from '@internal/sql-relational-core/ast';
 import type { ColumnDescriptor, ExcludedProxy } from '@internal/sql-relational-core/contract-free';
 import { namingOfLiveName } from '@internal/sql-schema-ir/naming';
 import type {
@@ -74,11 +81,13 @@ import type {
 } from '@internal/target-postgres/ddl';
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
-import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
+import {
+  introspectedNativeType,
+  normalizeSchemaNativeType,
+} from '@internal/target-postgres/native-type-normalizer';
 import {
   isPostgresDateTimeDataType,
   postgresDateTimeDdlText,
-  renderDefaultLiteral,
 } from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
@@ -207,6 +216,20 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         context.contract,
       ),
       this.codecRegistry,
+    );
+  }
+
+  async renderColumnDefault(column: DdlColumn, table: string): Promise<string> {
+    if (column.default === undefined) return '';
+    return pgRenderDdlColumnDefault(
+      column.default,
+      column.type,
+      this.codecRegistry,
+      column.codecRef,
+      {
+        table,
+        column: column.name,
+      },
     );
   }
 
@@ -1055,46 +1078,14 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       // Process columns for this table
       const columns: Record<string, SqlColumnIRInput> = {};
       for (const colRow of columnsByTable.get(tableName) ?? []) {
-        let nativeType = colRow.udt_name;
-        const formattedType = colRow.formatted_type
-          ? normalizeFormattedType(colRow.formatted_type, colRow.data_type, colRow.udt_name)
-          : null;
-        if (formattedType) {
-          nativeType = formattedType;
-        } else if (colRow.data_type === 'character varying' || colRow.data_type === 'character') {
-          if (colRow.character_maximum_length) {
-            nativeType = `${colRow.data_type}(${colRow.character_maximum_length})`;
-          } else {
-            nativeType = colRow.data_type;
-          }
-        } else if (colRow.data_type === 'numeric' || colRow.data_type === 'decimal') {
-          if (colRow.numeric_precision && colRow.numeric_scale !== null) {
-            nativeType = `${colRow.data_type}(${colRow.numeric_precision},${colRow.numeric_scale})`;
-          } else if (colRow.numeric_precision) {
-            nativeType = `${colRow.data_type}(${colRow.numeric_precision})`;
-          } else {
-            nativeType = colRow.data_type;
-          }
-        } else {
-          nativeType = colRow.udt_name || colRow.data_type;
-        }
-
-        // Postgres reports array columns as data_type='ARRAY'; the element type
-        // is the `nativeType` string minus the trailing `[]`. Strip the suffix,
-        // normalize the element type to the canonical form (e.g. `integer` →
-        // `int4`), and record `many: true` so introspection consumers (verifier,
-        // psl-contract-infer) can reconstruct the full array type as needed.
-        const many = nativeType.endsWith('[]') ? true : undefined;
-        if (many) {
-          nativeType = normalizeSchemaNativeType(nativeType.slice(0, -2));
-        }
-
-        // Resolved values comparable against the contract-derived expected
-        // side: the normalized full native type (`[]` appended for arrays)
-        // and the structured parse of the raw default. Raw fields stay
-        // untouched alongside — the relational walk still reads and
-        // normalizes them itself.
-        const resolvedNativeType = `${normalizeSchemaNativeType(nativeType)}${many ? '[]' : ''}`;
+        const { nativeType, many, resolvedNativeType } = introspectedNativeType({
+          formattedType: colRow.formatted_type,
+          dataType: colRow.data_type,
+          udtName: colRow.udt_name,
+          characterMaximumLength: colRow.character_maximum_length,
+          numericPrecision: colRow.numeric_precision,
+          numericScale: colRow.numeric_scale,
+        });
         const rawDefault = colRow.column_default ?? undefined;
         // `GENERATED ALWAYS AS IDENTITY` ('a') and `GENERATED BY DEFAULT AS
         // IDENTITY` ('d') both report a NULL column_default — Postgres tracks
@@ -1485,81 +1476,6 @@ function extractContractNamespaceIds(contract: unknown): readonly string[] {
   return Object.keys(namespaces);
 }
 
-function normalizeFormattedType(formattedType: string, dataType: string, udtName: string): string {
-  if (formattedType.endsWith('[]')) {
-    return `${normalizeFormattedType(formattedType.slice(0, -2), dataType, udtName)}[]`;
-  }
-  if (formattedType === 'integer') {
-    return 'int4';
-  }
-  if (formattedType === 'smallint') {
-    return 'int2';
-  }
-  if (formattedType === 'bigint') {
-    return 'int8';
-  }
-  if (formattedType === 'real') {
-    return 'float4';
-  }
-  if (formattedType === 'double precision') {
-    return 'float8';
-  }
-  if (formattedType === 'boolean') {
-    return 'bool';
-  }
-  if (formattedType.startsWith('varchar')) {
-    return formattedType.replace('varchar', 'character varying');
-  }
-  if (formattedType.startsWith('bpchar')) {
-    return formattedType.replace('bpchar', 'character');
-  }
-  if (formattedType.startsWith('varbit')) {
-    return formattedType.replace('varbit', 'bit varying');
-  }
-  if (dataType === 'timestamp with time zone' || udtName === 'timestamptz') {
-    return formattedType.replace('timestamp', 'timestamptz').replace(' with time zone', '').trim();
-  }
-  if (dataType === 'timestamp without time zone' || udtName === 'timestamp') {
-    return formattedType.replace(' without time zone', '').trim();
-  }
-  if (dataType === 'time with time zone' || udtName === 'timetz') {
-    return formattedType.replace('time', 'timetz').replace(' with time zone', '').trim();
-  }
-  if (dataType === 'time without time zone' || udtName === 'time') {
-    return formattedType.replace(' without time zone', '').trim();
-  }
-  // `format_type` quotes a user-defined type name that needs it (mixed case,
-  // reserved word, a dot) and schema-qualifies one outside the search path,
-  // so a mixed-case enum in another schema arrives as `audit."AuditAction"`.
-  // The contract side spells every type name unquoted (`audit.AuditAction`),
-  // so strip the quotes from each identifier segment, splitting only on dots
-  // that sit outside the quotes.
-  return splitQualifiedName(formattedType).map(unquoteIdentifier).join('.');
-}
-
-function splitQualifiedName(name: string): string[] {
-  const segments: string[] = [];
-  let current = '';
-  let quoted = false;
-  for (const char of name) {
-    if (char === '"') quoted = !quoted;
-    if (char === '.' && !quoted) {
-      segments.push(current);
-      current = '';
-      continue;
-    }
-    current += char;
-  }
-  segments.push(current);
-  return segments;
-}
-
-function unquoteIdentifier(segment: string): string {
-  return segment.length >= 2 && segment.startsWith('"') && segment.endsWith('"')
-    ? segment.slice(1, -1).replaceAll('""', '"')
-    : segment;
-}
-
 /**
  * The five standard PostgreSQL referential action rules as returned by
  * `information_schema.referential_constraints.delete_rule` / `update_rule`.
@@ -1791,49 +1707,52 @@ async function readWithDefaultOutputSettings<T>(
   return result;
 }
 
-function pgInlineLiteral(wire: unknown, nativeType: string): string {
+/**
+ * A value as DDL writes it: `ARRAY[...]` of each element's literal, cast to the list type, for a list written to a list type, and otherwise the value's literal, cast to the column type where PostgreSQL would read it as another type.
+ */
+function pgInlineLiteral(wire: unknown, nativeType: string, where: LiteralDefaultColumn): string {
+  if (Array.isArray(wire) && nativeType.endsWith('[]')) {
+    if (wire.length === 0) return "'{}'";
+    return `ARRAY[${wire.map((element) => pgLiteralText(element, where)).join(', ')}]::${nativeType}`;
+  }
+  const text = pgLiteralText(wire, where);
+  return pgLiteralNeedsCast(wire, nativeType) ? `${text}::${nativeType}` : text;
+}
+
+function pgLiteralNeedsCast(wire: unknown, nativeType: string): boolean {
+  if (typeof wire === 'number') return !Number.isFinite(wire);
+  if (typeof wire === 'string' || wire instanceof Date) return !pgIsTextLikeNativeType(nativeType);
+  return typeof wire === 'object' && wire !== null;
+}
+
+/** A value's literal without a cast: SQL NULL, a bare number or boolean, or quoted text. */
+function pgLiteralText(wire: unknown, where: LiteralDefaultColumn): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? 'true' : 'false';
-  if (typeof wire === 'number') {
-    if (!Number.isFinite(wire)) {
-      throw adapterError(
-        'CONTRACT.DEFAULT_INVALID',
-        `pgRenderDdlExecuteRequest: non-finite number wire value ${String(wire)} cannot be emitted as a DEFAULT literal for native type "${nativeType}"`,
-        { meta: { nativeType } },
-      );
-    }
-    return String(wire);
-  }
+  if (typeof wire === 'number') return Number.isFinite(wire) ? String(wire) : `'${String(wire)}'`;
   if (typeof wire === 'bigint') return String(wire);
   if (wire instanceof Date) {
     if (Number.isNaN(wire.getTime())) {
       throw adapterError(
         'CONTRACT.DEFAULT_INVALID',
-        `pgRenderDdlExecuteRequest: invalid Date value cannot be emitted as a DEFAULT literal for native type "${nativeType}"`,
-        { meta: { nativeType } },
+        `Column "${where.table}"."${where.column}" has an invalid Date default`,
+        { meta: { table: where.table, column: where.column, reason: 'invalid-date-default' } },
       );
     }
-    const quoted = `'${escapeLiteral(wire.toISOString())}'`;
-    return pgIsTextLikeNativeType(nativeType) ? quoted : `${quoted}::${nativeType}`;
+    return `'${escapeLiteral(wire.toISOString())}'`;
   }
-  if (typeof wire === 'string') {
-    const quoted = `'${escapeLiteral(wire)}'`;
-    return pgIsTextLikeNativeType(nativeType) ? quoted : `${quoted}::${nativeType}`;
-  }
+  if (typeof wire === 'string') return `'${escapeLiteral(wire)}'`;
   if (wire instanceof Uint8Array) {
     const hex = Array.from(wire)
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    return `'\\x${hex}'::${nativeType}`;
+    return `'\\x${hex}'`;
   }
-  if (typeof wire === 'object') {
-    const quoted = `'${escapeLiteral(JSON.stringify(wire))}'`;
-    return `${quoted}::${nativeType}`;
-  }
+  if (typeof wire === 'object') return `'${escapeLiteral(JSON.stringify(wire))}'`;
   throw adapterError(
     'CONTRACT.PACK_CONTRIBUTION_INVALID',
-    `pgRenderDdlExecuteRequest: unexpected wire type "${typeof wire}" for native type "${nativeType}"`,
-    { meta: { wireType: typeof wire, nativeType } },
+    `pgRenderDdlExecuteRequest: unexpected wire type "${typeof wire}"`,
+    { meta: { wireType: typeof wire } },
   );
 }
 
@@ -1849,8 +1768,9 @@ const SERIAL_FAMILY_TYPES = new Set([
 async function pgRenderDdlColumnDefault(
   def: LiteralColumnDefault | FunctionColumnDefault,
   nativeType: string,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
   codecRef: CodecRef | undefined,
+  where: LiteralDefaultColumn,
 ): Promise<string> {
   if (def.kind === 'function') {
     if (def.expression === 'autoincrement()') {
@@ -1865,42 +1785,72 @@ async function pgRenderDdlColumnDefault(
       }
       return '';
     }
+    if (checkSqlDefaultBody(def.expression) !== undefined) {
+      throw postgresError(
+        'CONTRACT.DEFAULT_INVALID',
+        `Unsafe default expression in contract: "${def.expression}". ` +
+          'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
+        { meta: { expression: def.expression } },
+      );
+    }
     return `DEFAULT (${def.expression})`;
   }
   const dataTypeId =
-    codecRef === undefined ? undefined : codecLookup.descriptorFor?.(codecRef.codecId)?.dataType;
-  if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
-    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType, dataTypeId })}`;
-  }
-  if (typeof def.value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
-    return `DEFAULT ${pgInlineLiteral(postgresDateTimeDdlText(def.value, dataTypeId), nativeType)}`;
-  }
-  if (codecRef !== undefined) {
-    // Built with the column's own `typeParams`: a parameterized codec answers for them when it
-    // reads a default back — `pg/vector@1` checks the length its column declares — and the lookup's
-    // representative instance carries none.
-    const descriptor = codecLookup.descriptorFor?.(codecRef.codecId);
-    const codec =
-      descriptor === undefined
-        ? codecLookup.get(codecRef.codecId)
-        : materializeCodec(descriptor, codecRef, { name: codecRef.codecId });
-    if (codec !== undefined) {
-      // A literal default reaches here either as the canonical JSON a
-      // contract stores or as the value an authoring surface built, and only
-      // the first needs reading back: `pg/int8@1` stores decimal text for a
-      // `bigint`, which `encode` does not take. A `Date` is the one authored
-      // value JSON has no notation for, so it is the one that arrives as
-      // itself.
-      const value = def.value instanceof Date ? def.value : codec.decodeJson(def.value);
-      const wire = await codec.encode(value, {});
-      return `DEFAULT ${pgInlineLiteral(wire, nativeType)}`;
-    }
-  }
-  // Fallback: codec-less literal defaults follow RawSqlLiteral wire-scalar semantics.
-  return `DEFAULT ${pgInlineLiteral(def.value, nativeType)}`;
+    codecRef === undefined ? undefined : codecLookup.descriptorFor(codecRef.codecId)?.dataType;
+  const written = await pgWrittenDefault(
+    def.value,
+    nativeType,
+    dataTypeId,
+    codecLookup,
+    codecRef,
+    where,
+  );
+  return `DEFAULT ${pgInlineLiteral(written, nativeType, where)}`;
 }
 
-async function pgRenderDdlColumn(column: DdlColumn, codecLookup: CodecLookup): Promise<string> {
+/**
+ * The value DDL writes for a literal default, and for each element of a list default: a date or time value as the text PostgreSQL reads for its type, a value the codec reads as SQL NULL as `null`, and anything else as the codec's wire value. Without a codec, the value as written.
+ */
+async function pgWrittenDefault(
+  value: ColumnDefaultLiteralInputValue,
+  nativeType: string,
+  dataTypeId: string | undefined,
+  codecLookup: CodecLookupWithDescriptors,
+  codecRef: CodecRef | undefined,
+  where: LiteralDefaultColumn,
+): Promise<unknown> {
+  if (value === null && nativeType.endsWith('[]')) return null;
+  if (Array.isArray(value) && nativeType.endsWith('[]')) {
+    const encoded =
+      codecRef === undefined
+        ? undefined
+        : await encodeListLiteralDefault(codecLookup, codecRef, value, where);
+    return value.map((element, index) => pgWrittenValue(element, encoded?.[index], dataTypeId));
+  }
+  const encoded =
+    codecRef === undefined
+      ? undefined
+      : await encodeLiteralDefault(codecLookup, codecRef, value, where);
+  return pgWrittenValue(value, encoded, dataTypeId);
+}
+
+function pgWrittenValue(
+  value: ColumnDefaultLiteralInputValue,
+  encoded: EncodedLiteralDefault | undefined,
+  dataTypeId: string | undefined,
+): unknown {
+  if (typeof value === 'string' && isPostgresDateTimeDataType(dataTypeId)) {
+    return postgresDateTimeDdlText(value, dataTypeId);
+  }
+  if (encoded === undefined) return value;
+  return encoded.kind === 'sql-null' ? null : encoded.wire;
+}
+
+async function pgRenderDdlColumn(
+  column: DdlColumn,
+  codecLookup: CodecLookupWithDescriptors,
+  table: string,
+): Promise<string> {
   const parts = [quoteIdentifier(column.name), column.type];
   if (column.default) {
     const clause = await pgRenderDdlColumnDefault(
@@ -1908,6 +1858,7 @@ async function pgRenderDdlColumn(column: DdlColumn, codecLookup: CodecLookup): P
       column.type,
       codecLookup,
       column.codecRef,
+      { table, column: column.name },
     );
     if (clause.length > 0) parts.push(clause);
   }
@@ -1952,14 +1903,14 @@ function pgRenderDdlConstraint(constraint: DdlTableConstraint): string {
 
 async function pgRenderCreateTable(
   node: PostgresCreateTable,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const ifNotExists = node.ifNotExists ? 'IF NOT EXISTS ' : '';
   const tableRef = node.schema
     ? `${quoteIdentifier(node.schema)}.${quoteIdentifier(node.table)}`
     : quoteIdentifier(node.table);
   const columnDefs = await Promise.all(
-    node.columns.map((col: DdlColumn) => pgRenderDdlColumn(col, codecLookup)),
+    node.columns.map((col: DdlColumn) => pgRenderDdlColumn(col, codecLookup, node.table)),
   );
   const constraintDefs =
     node.constraints !== undefined ? node.constraints.map(pgRenderDdlConstraint) : [];
@@ -2001,14 +1952,14 @@ function pgRenderDropType(node: PostgresDropType): SqlExecuteRequest {
 
 async function pgRenderAlterTable(
   node: PostgresAlterTable,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const tableRef = node.schema
     ? `${quoteIdentifier(node.schema)}.${quoteIdentifier(node.table)}`
     : quoteIdentifier(node.table);
   const actionVisitor: AlterTableActionVisitor<Promise<string>> = {
     async addColumn(action: AddColumnAction): Promise<string> {
-      const colFragment = await pgRenderDdlColumn(action.column, codecLookup);
+      const colFragment = await pgRenderDdlColumn(action.column, codecLookup, node.table);
       return `ADD COLUMN ${colFragment}`;
     },
     dropDefault(action: DropDefaultAction): Promise<string> {
@@ -2144,7 +2095,7 @@ function pgRenderDisableRowLevelSecurity(node: PostgresDisableRowLevelSecurity):
 
 async function pgRenderDdlExecuteRequest(
   ast: PostgresDdlNode,
-  codecLookup: CodecLookup,
+  codecLookup: CodecLookupWithDescriptors,
 ): Promise<SqlExecuteRequest> {
   const visitor = {
     createTable: (node: PostgresCreateTable) => pgRenderCreateTable(node, codecLookup),

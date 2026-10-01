@@ -48,6 +48,7 @@
     "./simplify-deep": "./dist/simplify-deep.mjs",
     "./structured-error": "./dist/structured-error.mjs",
     "./suppress-idle-connection-errors": "./dist/suppress-idle-connection-errors.mjs",
+    "./text": "./dist/text.mjs",
     "./types": "./dist/types.mjs",
     "./package.json": "./package.json"
   },

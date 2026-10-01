@@ -1,4 +1,5 @@
 import 'temporal-polyfill/full/global';
+import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
   defineContract,
@@ -100,6 +101,45 @@ describe('postgres defineContract encodes literal defaults through the column co
     );
   });
 
+  it('stores a uuid default in the form PostgreSQL writes', () => {
+    expect(
+      storedDefault((field) =>
+        field.uuidNative().default('{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}'),
+      ),
+    ).toEqual({ kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' });
+  });
+
+  it('refuses an enum member its codec refuses, naming the enum, the member and the codec', () => {
+    const Code = enumType(
+      'Code',
+      { codecId: 'pg/char@1' as const, nativeType: 'character' },
+      member('Short', 'a'),
+      member('Long', 'abc'),
+    );
+    expect(() =>
+      defineContract({ enums: { Code } }, ({ field, model }) => ({
+        models: {
+          Event: model('Event', {
+            fields: { id: field.id.uuidv4String(), code: field.namedType(Code) },
+          }),
+        },
+      })),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ENUM_INVALID',
+        message:
+          'enumType("Code") member "Long" has a value its codec pg/char@1 refuses: pg/char@1 JSON value must be a string of at most 1 character before any trailing spaces',
+        fix: 'Give the member a value the codec takes, or type the enum with a codec that takes it.',
+        meta: {
+          enumName: 'Code',
+          member: 'Long',
+          codecId: 'pg/char@1',
+          reason: 'codec-refused-member',
+        },
+      }),
+    );
+  });
+
   it('stores an enum member default in the form the enum codec produces', () => {
     const Level = enumType(
       'Level',
@@ -145,16 +185,23 @@ describe('postgres defineContract encodes literal defaults through the column co
   });
 
   it('keeps a caller-supplied codecLookup', () => {
+    const callerCodec = (id: string): Codec => ({
+      id,
+      encode: async (value: unknown) => value,
+      decode: async (wire: unknown) => wire,
+      encodeJson: () => 'encoded by the caller lookup',
+      decodeJson: (json: unknown) => json,
+    });
     const contract = defineContract(
       {
         codecLookup: {
-          get: (id) => ({
-            id,
-            encode: async (value: unknown) => value,
-            decode: async (wire: unknown) => wire,
-            encodeJson: () => 'encoded by the caller lookup',
-            decodeJson: (json: unknown) => json,
-          }),
+          get: callerCodec,
+          descriptorFor: (id) =>
+            ({
+              codecId: id,
+              paramsSchema: undefined,
+              factory: () => () => callerCodec(id),
+            }) as unknown as AnyCodecDescriptor,
           targetTypesFor: () => undefined,
           renderOutputTypeFor: () => undefined,
         },

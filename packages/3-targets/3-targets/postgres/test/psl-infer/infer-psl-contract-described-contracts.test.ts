@@ -19,6 +19,7 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 import postgresTargetDescriptor from '../../src/exports/control';
+import { inferBuildContext } from './fixtures';
 
 const TARGET = 'postgres' as const;
 const TARGET_FAMILY = 'sql' as const;
@@ -162,7 +163,9 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const ast = inferPostgresPslContract(database, [describedContract({ public: ['t_owned'] })]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [
+      describedContract({ public: ['t_owned'] }),
+    ]);
     const modelNames = flatPslModels(ast).map((m) => m.name);
 
     expect(modelNames).toContain('AppTable');
@@ -177,8 +180,8 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const withoutArgument = printPsl(inferPostgresPslContract(database));
-    const withEmptyList = printPsl(inferPostgresPslContract(database, []));
+    const withoutArgument = printPsl(inferPostgresPslContract(database, inferBuildContext));
+    const withEmptyList = printPsl(inferPostgresPslContract(database, inferBuildContext, []));
 
     expect(withEmptyList).toBe(withoutArgument);
   });
@@ -188,7 +191,9 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       public: namespaceNode('public', { users: idColumnTable('users') }),
     });
 
-    const ast = inferPostgresPslContract(database, [describedContract({ auth: ['users'] })]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [
+      describedContract({ auth: ['users'] }),
+    ]);
 
     expect(flatPslModels(ast).map((m) => m.name)).toContain('Users');
   });
@@ -218,7 +223,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       },
     };
 
-    const ast = inferPostgresPslContract(database, [contractWithNonTableEntity]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [contractWithNonTableEntity]);
 
     expect(flatPslModels(ast).map((m) => m.name)).toContain('Widgets');
   });
@@ -248,7 +253,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       },
     };
 
-    const ast = inferPostgresPslContract(database, [contractWithRlsMarker]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [contractWithRlsMarker]);
 
     expect(flatPslModels(ast).map((m) => m.name)).toContain('Profile');
   });
@@ -288,7 +293,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       fields: { id: 'id', email: 'email' },
     });
 
-    const ast = inferPostgresPslContract(database, [pack]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [pack]);
     const modelNames = flatPslModels(ast).map((m) => m.name);
     const profileModel = flatPslModels(ast).find((m) => m.name === 'Profile');
 
@@ -348,7 +353,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       fields: { id: 'id', email: 'email' },
     });
 
-    const ast = inferPostgresPslContract(database, [pack]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [pack]);
     const models = flatPslModels(ast);
     const modelNames = models.map((m) => m.name);
     const profileModel = models.find((m) => m.name === 'Profile');
@@ -395,7 +400,9 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     });
 
     expect(() =>
-      inferPostgresPslContract(database, [describedContract({ auth: ['users'] })]),
+      inferPostgresPslContract(database, inferBuildContext, [
+        describedContract({ auth: ['users'] }),
+      ]),
     ).toThrow(/owns storage coordinate "auth\.users" but declares no domain model/);
   });
 
@@ -425,7 +432,7 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const ast = inferPostgresPslContract(database, []);
+    const ast = inferPostgresPslContract(database, inferBuildContext, []);
     const modelNames = flatPslModels(ast).map((m) => m.name);
     const postsModel = flatPslModels(ast).find((m) => m.name === 'Posts');
 
@@ -466,7 +473,9 @@ describe('inferPostgresPslContract — described-contract omission', () => {
       }),
     });
 
-    const ast = inferPostgresPslContract(database, [describedContract({ auth: ['users'] })]);
+    const ast = inferPostgresPslContract(database, inferBuildContext, [
+      describedContract({ auth: ['users'] }),
+    ]);
     const modelNames = flatPslModels(ast).map((m) => m.name);
     const postsModel = flatPslModels(ast).find((m) => m.name === 'Posts');
 
@@ -487,8 +496,10 @@ describe('inferPostgresPslContract — described-contract omission', () => {
     });
     const describedContracts = [describedContract({ other: ['t_owned'] })];
 
-    expect(() => inferPostgresPslContract(database, describedContracts)).not.toThrow();
-    const ast = inferPostgresPslContract(database, describedContracts);
+    expect(() =>
+      inferPostgresPslContract(database, inferBuildContext, describedContracts),
+    ).not.toThrow();
+    const ast = inferPostgresPslContract(database, inferBuildContext, describedContracts);
     expect(flatPslModels(ast).map((m) => m.name)).toContain('TOwned');
   });
 });

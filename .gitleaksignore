@@ -4,3 +4,9 @@
 # The value never existed in a real secret; these commits never reach main (squash-merge PR).
 841c301b6872ba949d081fcaa4450d08d212627b:packages/3-extensions/supabase/test/supabase-facade.test.ts:generic-api-key:49
 580534eb8f69b7da2d69828e2da8bb291df5002f:packages/3-extensions/supabase/test/supabase-facade.test.ts:generic-api-key:81
+
+# A uuid enum test in uuid-defaults.integration.test.ts asserted rows shaped `{ key: '<uuid>' }`; the
+# generic-api-key rule matches the word "key" next to a uuid. The values are fixed test uuids, not
+# secrets, and a later commit in the same PR replaced those lines (squash-merge PR).
+f86694b619c360078040116a01fc8826d7e7dfcc:test/integration/test/uuid-defaults/uuid-defaults.integration.test.ts:generic-api-key:348
+f86694b619c360078040116a01fc8826d7e7dfcc:test/integration/test/uuid-defaults/uuid-defaults.integration.test.ts:generic-api-key:349

@@ -43,6 +43,7 @@ export interface ClassifyPslCompletionContextInput {
 }
 
 export interface ModelTypeCompletionContext {
+  readonly field: FieldDeclarationAst;
   readonly kind: 'modelType';
   readonly offset: number;
   readonly fieldName: string;
@@ -58,6 +59,7 @@ export interface SpaceMemberCompletionContext {
 }
 
 export interface NamespaceMemberCompletionContext {
+  readonly field: FieldDeclarationAst;
   readonly kind: 'namespaceMember';
   readonly offset: number;
   readonly fieldName: string;
@@ -360,6 +362,7 @@ function classifyModelFieldType(input: {
     ) {
       return {
         kind: 'modelType',
+        field: input.field,
         offset: input.offset,
         fieldName: fieldNameText,
         replacementStartOffset: input.offset,
@@ -388,7 +391,13 @@ function classifyModelFieldType(input: {
     return UNSUPPORTED;
   }
 
-  return classifyTypePosition(name, input.offset, fieldNameText, input.replacementStartOffset);
+  return classifyTypePosition(
+    name,
+    input.field,
+    input.offset,
+    fieldNameText,
+    input.replacementStartOffset,
+  );
 }
 
 /**
@@ -405,6 +414,7 @@ function classifyModelFieldType(input: {
  */
 function classifyTypePosition(
   name: QualifiedNameAst,
+  field: FieldDeclarationAst,
   offset: number,
   fieldName: string,
   replacementStartOffset: number,
@@ -414,6 +424,7 @@ function classifyTypePosition(
     const namespaceSpace = name.space()?.name();
     return {
       kind: 'namespaceMember',
+      field,
       offset,
       fieldName,
       replacementStartOffset,
@@ -427,7 +438,7 @@ function classifyTypePosition(
   if (space !== undefined && space.length > 0) {
     return { kind: 'spaceMember', offset, fieldName, replacementStartOffset, space };
   }
-  return { kind: 'modelType', offset, fieldName, replacementStartOffset };
+  return { kind: 'modelType', field, offset, fieldName, replacementStartOffset };
 }
 
 const declarationCast = any(

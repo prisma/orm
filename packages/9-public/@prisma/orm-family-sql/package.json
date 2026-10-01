@@ -68,6 +68,7 @@
     "./contract/pack-types": "./dist/contract__pack-types.mjs",
     "./contract/referential-action-sql": "./dist/contract__referential-action-sql.mjs",
     "./contract/resolve-storage-table": "./dist/contract__resolve-storage-table.mjs",
+    "./contract/sql-expression": "./dist/contract__sql-expression.mjs",
     "./contract/types": "./dist/contract__types.mjs",
     "./contract/validators": "./dist/contract__validators.mjs",
     "./contract/value-set-derivation-hook": "./dist/contract__value-set-derivation-hook.mjs",

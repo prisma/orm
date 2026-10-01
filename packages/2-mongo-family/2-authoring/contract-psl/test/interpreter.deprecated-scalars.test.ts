@@ -133,22 +133,23 @@ describe('deprecated Mongo PSL scalar names', () => {
     if (result.ok) return;
     expect(result.failure.diagnostics).toContainEqual(
       expect.objectContaining({
-        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        code: 'PSL_UNRESOLVED_REFERENCE',
         message:
           'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. No Mongo scalar types are registered.',
       }),
     );
   });
 
-  it('refuses a type that was never a Mongo scalar at the type, listing the scalar types', () => {
+  it('reports an unresolved type at the type, listing the scalar types', () => {
     const { result } = interpret(schemaWith('Money'));
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        code: 'PSL_UNRESOLVED_REFERENCE',
         message:
           'Field "Post.value" has type "Money", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are ObjectId, Int64, Binary, Int32, Double, Bool and Date.',
+        sourceId: 'schema.prisma',
         span: expect.objectContaining({
           start: expect.objectContaining({ line: 3, column: 9 }),
           end: expect.objectContaining({ line: 3, column: 14 }),
@@ -168,7 +169,7 @@ describe('deprecated Mongo PSL scalar names', () => {
       if (result.ok) return;
       expect(result.failure.diagnostics).toEqual([
         expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          code: 'PSL_UNRESOLVED_REFERENCE',
           message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}" (stored as BSON ${bsonType}).`,
           span: expect.objectContaining({
             start: expect.objectContaining({ line: 3, column: 9 }),

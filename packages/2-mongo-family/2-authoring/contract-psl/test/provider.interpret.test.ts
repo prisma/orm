@@ -37,7 +37,7 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       attributeSpecs: { model: {}, field: {} },
     },
     dataTypeLookup: createDataTypeLookup([]),
-    codecLookup: emptyCodecLookup,
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
@@ -106,17 +106,17 @@ model User {
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
     expect(interpretResult.failure.diagnostics).toEqual(loadResult.failure.diagnostics);
-    expect(interpretResult.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          sourceId: schemaPath,
-          span: expect.objectContaining({
-            start: expect.objectContaining({ line: 4 }),
-          }),
+    expect(interpretResult.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'Field "User.bad" has type "Mystery", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String and ObjectId.',
+        sourceId: schemaPath,
+        span: expect.objectContaining({
+          start: expect.objectContaining({ line: 4 }),
         }),
-      ]),
-    );
+      }),
+    ]);
   });
 
   it('returns the same contract load returns for a clean schema', async () => {
@@ -171,11 +171,14 @@ model Other {
     if (result === undefined || result.ok) {
       throw new Error('expected interpret to report diagnostics');
     }
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ code: 'PSL_UNSUPPORTED_FIELD_TYPE', sourceId: SOURCE_ID }),
-      ]),
-    );
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'Field "Other.bad" has type "Mystery", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String and ObjectId.',
+        sourceId: SOURCE_ID,
+      }),
+    ]);
   });
 
   it('does not throw on a recovered CST from a syntax-broken schema', () => {
@@ -200,7 +203,7 @@ model Other {
     const context = createMongoTestContext();
     const cases = [
       {
-        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        code: 'PSL_UNRESOLVED_REFERENCE',
         line: 3,
         schema: `model User {
   id ObjectId @id @map("_id")

@@ -49,7 +49,7 @@ describe('a Prisma 8 Mongo schema read through defineConfig', () => {
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        code: 'PSL_UNRESOLVED_REFERENCE',
         message: `Field "Post.value" has type "${oldName}", which is not a Mongo scalar type; use "${newName}" (stored as BSON ${bsonType}).`,
       }),
     ]);
@@ -64,7 +64,7 @@ describe('a Prisma 8 Mongo schema read through defineConfig', () => {
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
         message:
-          'Field "Post.value" has type "Int23", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId, Double, Int64, Decimal128, Binary, Json and Bson.',
+          'Field "Post.value" has type "Int23", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId, Double, Int64, Int64Number, Decimal128, Binary, Json and Bson.',
       }),
     ]);
   });

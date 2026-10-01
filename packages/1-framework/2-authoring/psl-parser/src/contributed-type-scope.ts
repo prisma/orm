@@ -22,6 +22,7 @@ export type ContributedMember = ContributedTypeSymbol | ContributedNamespaceSymb
 
 export interface ContributedTypeScope {
   lookup(name: string): ContributedMember | undefined;
+  entries(): Iterable<readonly [string, ContributedMember]>;
 }
 
 const scopes = new WeakMap<AuthoringTypeNamespace, ContributedTypeScope>();
@@ -35,6 +36,9 @@ export function contributedTypeScope(
   const created: ContributedTypeScope = {
     lookup(name) {
       return members.get(name);
+    },
+    entries() {
+      return members.entries();
     },
   };
   scopes.set(typeConstructors, created);

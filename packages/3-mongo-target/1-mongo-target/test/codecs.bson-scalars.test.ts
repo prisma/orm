@@ -57,6 +57,12 @@ describe('mongoInt64Codec', () => {
     await expect(mongoInt64Codec.decode(2 ** 60, {})).rejects.toThrow(decodeFailed);
   });
 
+  it('says a fractional double on the wire is no whole number, and points at the repair', async () => {
+    await expect(mongoInt64Codec.decode(2.5, {})).rejects.toThrow(
+      'mongo/int64@1 wire value is the fractional double 2.5, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-written-as-long has the queries for a plain field, a list and a list of composite values.',
+    );
+  });
+
   it('refuses an application value that is not a bigint', async () => {
     await expect(mongoInt64Codec.encode(wrongWire<bigint>(42), {})).rejects.toThrow(encodeFailed);
   });

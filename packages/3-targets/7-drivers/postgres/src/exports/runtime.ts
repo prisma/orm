@@ -22,27 +22,38 @@ export type PostgresRuntimeDriver = RuntimeDriverInstance<'sql', 'postgres'> &
 
 const USE_BEFORE_CONNECT_MESSAGE =
   'Postgres driver not connected. Call connect(binding) before acquireConnection or execute.';
+const CLOSED_MESSAGE = 'Postgres driver is closed. Call connect(binding) to reconnect.';
+const CONNECTION_LOST_MESSAGE =
+  'Postgres connection lost or closed. Call connect(binding) to reconnect.';
 const ALREADY_CONNECTED_MESSAGE =
   'Postgres driver already connected. Call close() before reconnecting with a new binding.';
 
-function unboundQuery<Row>(): AsyncIterable<Row> {
+function unboundQuery<Row>(notConnected: () => Error): AsyncIterable<Row> {
   return {
     [Symbol.asyncIterator]() {
       return {
         async next() {
-          throw driverError('DRIVER.NOT_CONNECTED', USE_BEFORE_CONNECT_MESSAGE);
+          throw notConnected();
         },
       };
     },
   };
 }
 
+type DisconnectedState = 'unbound' | 'closed' | 'connectionLost';
+
+const notConnectedMessages: Record<DisconnectedState, string> = {
+  unbound: USE_BEFORE_CONNECT_MESSAGE,
+  closed: CLOSED_MESSAGE,
+  connectionLost: CONNECTION_LOST_MESSAGE,
+};
+
 class PostgresUnboundDriverImpl implements PostgresRuntimeDriver {
   readonly familyId = 'sql' as const;
   readonly targetId = 'postgres' as const;
 
   #delegate: SqlDriver<PostgresBinding> | null = null;
-  #closed = false;
+  #disconnectedState: DisconnectedState = 'unbound';
   #cursorOpts: PostgresDriverCreateOptions['cursor'];
   #preparedStatements: PostgresDriverCreateOptions['preparedStatements'];
 
@@ -55,16 +66,17 @@ class PostgresUnboundDriverImpl implements PostgresRuntimeDriver {
     if (this.#delegate !== null) {
       return 'connected';
     }
-    if (this.#closed) {
-      return 'closed';
-    }
-    return 'unbound';
+    return this.#disconnectedState === 'unbound' ? 'unbound' : 'closed';
+  }
+
+  #notConnectedError(): Error {
+    return driverError('DRIVER.NOT_CONNECTED', notConnectedMessages[this.#disconnectedState]);
   }
 
   #requireDelegate(): SqlDriver<PostgresBinding> {
     const delegate = this.#delegate;
     if (delegate === null) {
-      throw driverError('DRIVER.NOT_CONNECTED', USE_BEFORE_CONNECT_MESSAGE);
+      throw this.#notConnectedError();
     }
     return delegate;
   }
@@ -78,7 +90,7 @@ class PostgresUnboundDriverImpl implements PostgresRuntimeDriver {
     this.#delegate = createBoundDriverFromBinding(binding, this.#cursorOpts, {
       preparedStatements: this.#preparedStatements,
     });
-    this.#closed = false;
+    this.#disconnectedState = 'unbound';
   }
 
   async acquireConnection(): Promise<SqlConnection> {
@@ -99,7 +111,7 @@ class PostgresUnboundDriverImpl implements PostgresRuntimeDriver {
     const syncDelegateState = (): void => {
       if (this.#delegate === delegate && delegate.state === 'closed') {
         this.#delegate = null;
-        this.#closed = true;
+        this.#disconnectedState = 'connectionLost';
       }
     };
     const wrapped: SqlConnection = {
@@ -129,24 +141,20 @@ class PostgresUnboundDriverImpl implements PostgresRuntimeDriver {
 
   async close(): Promise<void> {
     const delegate = this.#delegate;
-    if (delegate !== null) {
-      this.#delegate = null;
-      await delegate.close();
-    }
-    this.#closed = true;
+    this.#delegate = null;
+    this.#disconnectedState = 'closed';
+    await delegate?.close();
   }
 
   query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
     const delegate = this.#delegate;
-    return delegate === null ? unboundQuery<Row>() : delegate.query<Row>(request);
+    return delegate === null
+      ? unboundQuery<Row>(() => this.#notConnectedError())
+      : delegate.query<Row>(request);
   }
 
   async execute(request: SqlExecuteRequest): Promise<SqlStatementStats> {
-    const delegate = this.#delegate;
-    if (delegate === null) {
-      throw driverError('DRIVER.NOT_CONNECTED', USE_BEFORE_CONNECT_MESSAGE);
-    }
-    return delegate.execute(request);
+    return this.#requireDelegate().execute(request);
   }
 
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {

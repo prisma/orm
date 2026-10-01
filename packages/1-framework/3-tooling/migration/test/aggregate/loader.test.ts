@@ -264,7 +264,11 @@ describe('loadContractSpaceAggregate', () => {
 
     /** An rc.9 snapshot: the to-one relation has no `nullable` key. */
     function oldFormatContract(): Contract {
-      const int = { nullable: false, type: { kind: 'scalar' as const, codecId: 'pg/int4@1' } };
+      const int = {
+        many: false as const,
+        nullable: false,
+        type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+      };
       const author = blindCast<
         ContractRelation,
         'an rc.9 contract.json relation has no nullable key'

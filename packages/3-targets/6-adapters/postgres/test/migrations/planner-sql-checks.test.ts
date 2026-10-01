@@ -25,7 +25,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int2 to smallint', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
+          { many: false, nativeType: 'int2', codecId: 'pg/int2@1', nullable: false },
           noHooks,
         ),
       ).toBe('smallint');
@@ -34,7 +34,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int4 to integer', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+          { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
           noHooks,
         ),
       ).toBe('integer');
@@ -43,7 +43,7 @@ describe('buildExpectedFormatType', () => {
     it('maps int8 to bigint', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
+          { many: false, nativeType: 'int8', codecId: 'pg/int8@1', nullable: false },
           noHooks,
         ),
       ).toBe('bigint');
@@ -52,7 +52,7 @@ describe('buildExpectedFormatType', () => {
     it('maps float4 to real', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'float4', codecId: 'pg/float4@1', nullable: false },
+          { many: false, nativeType: 'float4', codecId: 'pg/float4@1', nullable: false },
           noHooks,
         ),
       ).toBe('real');
@@ -61,7 +61,7 @@ describe('buildExpectedFormatType', () => {
     it('maps float8 to double precision', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'float8', codecId: 'pg/float8@1', nullable: false },
+          { many: false, nativeType: 'float8', codecId: 'pg/float8@1', nullable: false },
           noHooks,
         ),
       ).toBe('double precision');
@@ -70,7 +70,7 @@ describe('buildExpectedFormatType', () => {
     it('maps bool to boolean', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'bool', codecId: 'pg/bool@1', nullable: false },
+          { many: false, nativeType: 'bool', codecId: 'pg/bool@1', nullable: false },
           noHooks,
         ),
       ).toBe('boolean');
@@ -81,7 +81,7 @@ describe('buildExpectedFormatType', () => {
     it('returns nativeType as-is for text', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          { many: false, nativeType: 'text', codecId: 'pg/text@1', nullable: false },
           noHooks,
         ),
       ).toBe('text');
@@ -90,7 +90,7 @@ describe('buildExpectedFormatType', () => {
     it('returns nativeType as-is for uuid', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          { many: false, nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
           noHooks,
         ),
       ).toBe('uuid');
@@ -101,7 +101,13 @@ describe('buildExpectedFormatType', () => {
     it('returns simple lowercase UDT name unquoted', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'my_status', codecId: 'app/udt@1', nullable: false, typeRef: 'MyStatus' },
+          {
+            many: false,
+            nativeType: 'my_status',
+            codecId: 'app/udt@1',
+            nullable: false,
+            typeRef: 'MyStatus',
+          },
           noHooks,
         ),
       ).toBe('my_status');
@@ -110,7 +116,13 @@ describe('buildExpectedFormatType', () => {
     it('quotes reserved word used as UDT name', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'user', codecId: 'app/udt@1', nullable: false, typeRef: 'User' },
+          {
+            many: false,
+            nativeType: 'user',
+            codecId: 'app/udt@1',
+            nullable: false,
+            typeRef: 'User',
+          },
           noHooks,
         ),
       ).toBe('"user"');
@@ -119,7 +131,13 @@ describe('buildExpectedFormatType', () => {
     it('quotes another reserved word (select)', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'select', codecId: 'app/udt@1', nullable: false, typeRef: 'Select' },
+          {
+            many: false,
+            nativeType: 'select',
+            codecId: 'app/udt@1',
+            nullable: false,
+            typeRef: 'Select',
+          },
           noHooks,
         ),
       ).toBe('"select"');
@@ -129,6 +147,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'OrderStatus',
             codecId: 'app/udt@1',
             nullable: false,
@@ -143,6 +162,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'order-status',
             codecId: 'app/udt@1',
             nullable: false,
@@ -157,6 +177,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'order status',
             codecId: 'app/udt@1',
             nullable: false,
@@ -170,7 +191,13 @@ describe('buildExpectedFormatType', () => {
     it('quotes identifier starting with digit', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: '2fa_type', codecId: 'app/udt@1', nullable: false, typeRef: 'TwoFaType' },
+          {
+            many: false,
+            nativeType: '2fa_type',
+            codecId: 'app/udt@1',
+            nullable: false,
+            typeRef: 'TwoFaType',
+          },
           noHooks,
         ),
       ).toBe('"2fa_type"');
@@ -196,6 +223,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'numeric',
             codecId: 'pg/decimal@1',
             nullable: false,
@@ -210,6 +238,7 @@ describe('buildExpectedFormatType', () => {
       expect(
         buildExpectedFormatType(
           {
+            many: false,
             nativeType: 'int4',
             codecId: 'pg/int4@1',
             nullable: false,

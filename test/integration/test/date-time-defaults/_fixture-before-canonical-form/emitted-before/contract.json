@@ -16,6 +16,7 @@
           "Event": {
             "fields": {
               "a": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -23,6 +24,7 @@
                 }
               },
               "b": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -30,6 +32,7 @@
                 }
               },
               "c": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -37,6 +40,7 @@
                 }
               },
               "clock": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/time-temporal@1",
@@ -44,6 +48,7 @@
                 }
               },
               "day": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/date-temporal@1",
@@ -51,7 +56,9 @@
                 }
               },
               "history": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -59,6 +66,7 @@
                 }
               },
               "id": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/int4@1",
@@ -66,6 +74,7 @@
                 }
               },
               "localAt": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -76,6 +85,7 @@
                 }
               },
               "zoned": {
+                "many": false,
                 "nullable": false,
                 "type": {
                   "codecId": "pg/timetz@1",
@@ -190,7 +200,9 @@
                       "2024-06-30 12:34:56+00"
                     ]
                   },
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
@@ -236,7 +248,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0f28546e6ad3f33dc5a0d89abe4880dfe29558d040ba7b4dfeeae63d860266b1"
+    "storageHash": "3832e6fcf4cc9407bd905e7776deacd356fb5c63ecdcf0c70ffa1813398a6511"
   },
   "capabilities": {
     "postgres": {

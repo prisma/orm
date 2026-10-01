@@ -3,6 +3,7 @@ import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { timeouts } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,7 @@ import { DocumentStore } from '../src/document-store';
 import * as schemaInputs from '../src/schema-inputs';
 import { resolveSchemaInputs } from '../src/schema-inputs';
 import { createServer } from '../src/server';
+import { testTypeConstructors } from './helpers/binder';
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs')>();
@@ -55,7 +57,13 @@ vi.mock('../src/config-resolution', async (importOriginal) => {
       return {
         schemaInputConfig,
         inputs: await resolveSchemaInputs(schemaInputConfig, readText),
-        controlStack: { scalarTypes: ['Int'], pslBlockDescriptors: {} },
+        controlStack: {
+          scalarTypes: ['Int'],
+          pslBlockDescriptors: {},
+          authoringContributions: assembleAuthoringContributions([
+            { id: 'scalars', authoring: { type: testTypeConstructors(['Int']) } },
+          ]),
+        },
       };
     },
   };

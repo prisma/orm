@@ -24,7 +24,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "action": {
                 "type": {
@@ -34,7 +35,8 @@
                     "typeName": "audit.AuditAction"
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -68,7 +70,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "role": {
                 "type": {
@@ -78,7 +81,8 @@
                     "typeName": "user_role"
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "roleOpt": {
                 "type": {
@@ -88,7 +92,8 @@
                     "typeName": "user_role"
                   }
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               },
               "roleList": {
                 "type": {
@@ -99,7 +104,9 @@
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {}
@@ -123,7 +130,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e9e8943dccdeb6d3d102d35a84b8fdf0aefdeebd6e81c6f34b45aea056f4132c",
+    "storageHash": "138a75c2df3f51eaddecdedfad02e94b5017227d7c47848335018ff185cb9433",
     "namespaces": {
       "audit": {
         "id": "audit",
@@ -135,12 +142,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "action": {
                   "nativeType": "audit.AuditAction",
                   "codecId": "pg/enum@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "typeName": "audit.AuditAction"
                   },
@@ -185,12 +194,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "role": {
                   "nativeType": "user_role",
                   "codecId": "pg/enum@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "typeName": "user_role"
                   },
@@ -205,6 +216,7 @@
                   "nativeType": "user_role",
                   "codecId": "pg/enum@1",
                   "nullable": true,
+                  "many": false,
                   "typeParams": {
                     "typeName": "user_role"
                   },
@@ -219,7 +231,9 @@
                   "nativeType": "user_role",
                   "codecId": "pg/enum@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "typeName": "user_role"

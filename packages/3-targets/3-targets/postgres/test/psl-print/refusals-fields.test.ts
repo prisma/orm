@@ -1,7 +1,17 @@
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
+import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { testBuildContext } from './build-context';
-import { INT_FIELD, printingWidget, refusal, TEXT_COLUMN, TEXT_FIELD } from './refusal-support';
+import { fieldText } from './print-support';
+import {
+  deserialize,
+  INT_FIELD,
+  printingWidget,
+  refusal,
+  TEXT_COLUMN,
+  TEXT_FIELD,
+  widgetContract,
+} from './refusal-support';
 
 it('prints the widget the refusal tests start from', () => {
   expect(printingWidget()).not.toThrow();
@@ -27,7 +37,7 @@ describe('columns and fields', () => {
     expect(
       printingWidget({
         columns: { tags: TEXT_COLUMN },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."tags"' }));
   });
@@ -61,12 +71,62 @@ describe('columns and fields', () => {
     ).toThrow(refusal({ coordinate: '"public"."Widget"."priority"' }));
   });
 
+  it('prints a list field typed by a domain enum, which names the enum like a field that is not a list', () => {
+    const document = buildPostgresPslContract(
+      deserialize(
+        widgetContract({
+          domain: {
+            enum: { Priority: { codecId: 'pg/text@1', members: [{ name: 'Low', value: 'low' }] } },
+          },
+          entries: { valueSet: { Priority: { kind: 'valueSet', values: ['low'] } } },
+          columns: {
+            priorities: {
+              ...TEXT_COLUMN,
+              many: { elementNullable: false },
+              noCheck: ['elementNotNull', 'membership'],
+              valueSet: {
+                plane: 'storage',
+                namespaceId: 'public',
+                entityKind: 'valueSet',
+                entityName: 'Priority',
+              },
+            },
+          },
+          fields: {
+            priorities: {
+              ...TEXT_FIELD,
+              many: { elementNullable: false },
+              valueSet: {
+                plane: 'domain',
+                namespaceId: 'public',
+                entityKind: 'enum',
+                entityName: 'Priority',
+              },
+            },
+          },
+        }),
+      ),
+      testBuildContext(),
+    );
+
+    expect(
+      document.namespaces
+        .flatMap((namespace) => namespace.models)
+        .flatMap((model) => model.fields)
+        .filter((field) => field.name === 'priorities')
+        .map(fieldText),
+    ).toEqual(['priorities Priority[] @noCheck(elementNotNull) @noCheck(membership)']);
+  });
+
   it('refuses a model field whose type is a union of types', () => {
     expect(
       printingWidget({
-        columns: { payload: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: {
+          payload: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
         fields: {
           payload: {
+            many: false,
             nullable: false,
             type: {
               kind: 'union',
@@ -84,9 +144,16 @@ describe('columns and fields', () => {
   it('refuses a model field that is a dictionary', () => {
     expect(
       printingWidget({
-        columns: { counts: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: {
+          counts: { many: false, nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+        },
         fields: {
-          counts: { nullable: false, dict: true, type: { kind: 'scalar', codecId: 'pg/jsonb@1' } },
+          counts: {
+            many: false,
+            nullable: false,
+            dict: true,
+            type: { kind: 'scalar', codecId: 'pg/jsonb@1' },
+          },
         },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."counts"' }));
@@ -122,10 +189,17 @@ describe('columns and fields', () => {
       return printingWidget(
         {
           columns: {
-            area: { nativeType: 'geometry', codecId: 'pg/geometry@1', nullable: false, typeParams },
+            area: {
+              many: false,
+              nativeType: 'geometry',
+              codecId: 'pg/geometry@1',
+              nullable: false,
+              typeParams,
+            },
           },
           fields: {
             area: {
+              many: false,
               nullable: false,
               type: { kind: 'scalar', codecId: 'pg/geometry@1', typeParams },
             },
@@ -142,6 +216,7 @@ describe('columns and fields', () => {
           columns: { v: { ...vector, nullable: false } },
           fields: {
             v: {
+              many: false,
               nullable: false,
               type: { kind: 'scalar', codecId: vector.codecId, typeParams: vector.typeParams },
             },
@@ -305,8 +380,8 @@ describe('checks and indexes', () => {
   it('refuses a managed list column without the element check the PSL source derives', () => {
     expect(
       printingWidget({
-        columns: { tags: { ...TEXT_COLUMN, many: true } },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        columns: { tags: { ...TEXT_COLUMN, many: { elementNullable: false } } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
       }),
     ).toThrow(
       refusal({
@@ -320,8 +395,8 @@ describe('checks and indexes', () => {
   it('prints a list column of a table that is not managed without derived checks', () => {
     expect(
       printingWidget({
-        columns: { tags: { ...TEXT_COLUMN, many: true } },
-        fields: { tags: { ...TEXT_FIELD, many: true } },
+        columns: { tags: { ...TEXT_COLUMN, many: { elementNullable: false } } },
+        fields: { tags: { ...TEXT_FIELD, many: { elementNullable: false } } },
         table: { control: 'external' },
       }),
     ).not.toThrow();

@@ -75,17 +75,20 @@ type ContractBase = Omit<
             readonly account: {
               columns: {
                 readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly name: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;

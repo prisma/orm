@@ -707,6 +707,10 @@ model User {
     const result = interpretPslDocumentToSqlContract({
       ...baseInput,
       ...document,
+      authoringContributions: {
+        ...baseInput.authoringContributions,
+        valueObjectStorageType: 'Jsonb',
+      },
       composedExtensions: [],
       controlMutationDefaults: builtinControlMutationDefaults,
     });
@@ -1438,7 +1442,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
           tags: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
+            many: { elementNullable: false },
           },
         },
       },
@@ -1490,7 +1494,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       nativeType: 'text',
       codecId: 'pg/text@1',
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: [] },
     });
   });
@@ -1516,8 +1520,127 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: ['a', 'b'] },
+    });
+  });
+
+  it('lowers null as the literal default for a nullable scalar', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Post {
+  id Int @id
+  title String? @default(null)
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['title']).toMatchObject({
+      nullable: true,
+      default: { kind: 'literal', value: null },
+    });
+  });
+
+  it('rejects null as the literal default for a non-nullable scalar', () => {
+    expectDiagnosticForSchema(
+      `model Post {
+  id Int @id
+  title String @default(null)
+}
+`,
+      {
+        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      },
+    );
+  });
+
+  it('lowers a null-containing literal default for nullable list elements', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Post {
+  id Int @id
+  tags String?[] @default(["a", null])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
+      many: { elementNullable: true },
+      default: { kind: 'literal', value: ['a', null] },
+    });
+  });
+
+  it('preserves quoted null as a string beside a bare null in a nullable string-list default', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Post {
+  id Int @id
+  tags String?[] @default(["null", null])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toEqual({
+      nativeType: 'text',
+      codecId: 'pg/text@1',
+      nullable: false,
+      many: { elementNullable: true },
+      default: { kind: 'literal', value: ['null', null] },
+    });
+  });
+
+  it('rejects a null-containing literal default for strict list elements at the null span', () => {
+    const schema = `model Post {
+  id Int @id
+  tags String[] @default(["a", null])
+}
+`;
+    const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find(
+      (candidate) => candidate.code === 'PSL_INVALID_DEFAULT_APPLICABILITY',
+    );
+    const nullOffset = schema.indexOf('null');
+    expect(diagnostic?.span).toEqual({
+      start: { offset: nullOffset, line: 3, column: 32 },
+      end: { offset: nullOffset + 4, line: 3, column: 36 },
     });
   });
 
@@ -1542,7 +1665,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['scores']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: [1, 2] },
     });
   });
@@ -1568,7 +1691,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['flags']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: [true, false] },
     });
   });
@@ -1594,7 +1717,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       default: { kind: 'literal', value: ['a,b', 'c'] },
     });
   });

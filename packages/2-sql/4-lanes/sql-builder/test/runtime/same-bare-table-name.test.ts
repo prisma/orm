@@ -17,7 +17,7 @@ const emptyAggregateRegistry = {
 };
 
 function column(codecId: string) {
-  return { codecId, nativeType: codecId, nullable: false } as const;
+  return { many: false, codecId, nativeType: codecId, nullable: false } as const;
 }
 
 function table(columns: Record<string, ReturnType<typeof column>>) {

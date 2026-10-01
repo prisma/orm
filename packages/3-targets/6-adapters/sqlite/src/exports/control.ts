@@ -1,20 +1,20 @@
 import type { SqlControlAdapterDescriptor } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { assembleSqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { sqliteDataTypeEntries } from '@internal/target-sqlite/data-types';
 import { SqliteControlAdapter } from '../core/control-adapter';
 import {
   createSqliteDefaultFunctionRegistry,
   createSqliteMutationDefaultGeneratorDescriptors,
   sqliteScalarAuthoringTypes,
 } from '../core/control-mutation-defaults';
-import { createSqliteDataTypeEntries } from '../core/data-type-authoring';
 import { sqliteAdapterDescriptorMeta } from '../core/descriptor-meta';
 
 const sqliteAdapterDescriptor: SqlControlAdapterDescriptor<'sqlite'> = {
   ...sqliteAdapterDescriptorMeta,
   authoring: {
     type: sqliteScalarAuthoringTypes,
-    dataTypes: createSqliteDataTypeEntries(),
+    dataTypes: sqliteDataTypeEntries(),
     valueObjectStorageType: 'Json',
   },
   controlMutationDefaults: {

@@ -78,7 +78,9 @@ export function generateRootsType(roots: Record<string, CrossReference> | undefi
 }
 
 function contractFieldModifierSuffix(field: ContractField): string {
-  const many = field.many === true ? '; readonly many: true' : '';
+  const many = field.many
+    ? `; readonly many: { readonly elementNullable: ${field.many.elementNullable} }`
+    : '';
   const dict = field.dict === true ? '; readonly dict: true' : '';
   return many + dict;
 }
@@ -112,7 +114,10 @@ export function generateModelRelationsType(relations: Record<string, unknown>): 
 
   for (const [relName, rel] of Object.entries(relations)) {
     if (typeof rel !== 'object' || rel === null) continue;
-    const relObj = rel as Record<string, unknown>;
+    const relObj = blindCast<
+      Record<string, unknown>,
+      'relation narrowed to a non-null object above'
+    >(rel);
 
     // Option B: cross-space relations are declared but non-navigable.
     // A relation whose `to.space` is set lives in a foreign contract space;
@@ -144,7 +149,10 @@ export function generateModelRelationsType(relations: Record<string, unknown>): 
     if (typeof relObj['nullable'] === 'boolean')
       parts.push(`readonly nullable: ${relObj['nullable']}`);
 
-    const on = relObj['on'] as { localFields?: string[]; targetFields?: string[] } | undefined;
+    const on = blindCast<
+      { localFields?: string[]; targetFields?: string[] } | undefined,
+      'contract relation on block is validated before type generation'
+    >(relObj['on']);
     if (on && (!on.localFields || !on.targetFields)) {
       throw emitterError(
         'CONTRACT.RELATION_INVALID',
@@ -290,17 +298,14 @@ export type ResolvedFieldType = { readonly input: string; readonly output: strin
 
 function applyModifiers(base: string, field: ContractField): string {
   let result = base;
-  if (field.many === true) result = `ReadonlyArray<${result}>`;
+  if (field.many) {
+    if (field.many.elementNullable) result = `${result} | null`;
+    result = `ReadonlyArray<${result}>`;
+  }
   if (field.dict === true) result = `Readonly<Record<string, ${result}>>`;
   if (field.nullable) result = `${result} | null`;
   return result;
 }
-
-export type FieldTypeParamsResolver = (
-  modelName: string,
-  fieldName: string,
-  model: ContractModelBase,
-) => Record<string, unknown> | undefined;
 
 /**
  * A field's permitted values (codec-encoded) plus the codec that types them, as supplied by the
@@ -347,7 +352,6 @@ export function renderValueSetType(
 export function resolveFieldType(
   field: ContractField,
   codecLookup?: CodecLookup,
-  resolvedTypeParams?: Record<string, unknown>,
   resolvedValueSet?: ResolvedFieldValueSet,
 ): ResolvedFieldType {
   const { type } = field;
@@ -376,15 +380,14 @@ export function resolveFieldType(
       }
       let outputResolved: string | undefined;
       let inputResolved: string | undefined;
-      const inlineTypeParams =
+      const typeParams =
         type.typeParams && Object.keys(type.typeParams).length > 0 ? type.typeParams : undefined;
-      const effectiveTypeParams = inlineTypeParams ?? resolvedTypeParams;
-      if (codecLookup && effectiveTypeParams && Object.keys(effectiveTypeParams).length > 0) {
-        const rendered = codecLookup.renderOutputTypeFor(type.codecId, effectiveTypeParams);
+      if (codecLookup && typeParams) {
+        const rendered = codecLookup.renderOutputTypeFor(type.codecId, typeParams);
         if (rendered && isSafeTypeExpression(rendered)) {
           outputResolved = rendered;
         }
-        const renderedInput = codecLookup.renderInputTypeFor?.(type.codecId, effectiveTypeParams);
+        const renderedInput = codecLookup.renderInputTypeFor?.(type.codecId, typeParams);
         if (renderedInput && isSafeTypeExpression(renderedInput)) {
           inputResolved = renderedInput;
         }
@@ -434,13 +437,12 @@ export function generateFieldResolvedType(
 
 export type ModelFieldTypeResolvers = {
   readonly codecLookup: CodecLookup | undefined;
-  readonly resolveFieldTypeParams: FieldTypeParamsResolver | undefined;
   readonly resolveFieldValueSet: FieldValueSetResolver | undefined;
 };
 
 /**
  * Resolves one model field's input and output types the way `FieldOutputTypes` /
- * `FieldInputTypes` do: inline type params win over the family resolver, and a family-resolved
+ * `FieldInputTypes` do: the field's type parameters refine its codec's type, and a family-resolved
  * value set renders as a literal union.
  */
 export function resolveModelFieldType(
@@ -450,33 +452,20 @@ export function resolveModelFieldType(
   model: ContractModelBase,
   resolvers: ModelFieldTypeResolvers,
 ): ResolvedFieldType {
-  const inlineTypeParams =
-    field.type.kind === 'scalar' &&
-    field.type.typeParams &&
-    Object.keys(field.type.typeParams).length > 0
-      ? field.type.typeParams
-      : undefined;
-  const resolvedTypeParams =
-    inlineTypeParams ?? resolvers.resolveFieldTypeParams?.(modelName, fieldName, model);
   const resolvedValueSet = resolvers.resolveFieldValueSet?.(modelName, fieldName, model);
-  return resolveFieldType(field, resolvers.codecLookup, resolvedTypeParams, resolvedValueSet);
+  return resolveFieldType(field, resolvers.codecLookup, resolvedValueSet);
 }
 
 export function generateBothFieldTypesMaps(
   models: Record<string, ContractModelBase> | undefined,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
   resolveFieldValueSet?: FieldValueSetResolver,
 ): ResolvedFieldType {
   if (!models || Object.keys(models).length === 0) {
     return { output: 'Record<string, never>', input: 'Record<string, never>' };
   }
 
-  const resolvers: ModelFieldTypeResolvers = {
-    codecLookup,
-    resolveFieldTypeParams,
-    resolveFieldValueSet,
-  };
+  const resolvers: ModelFieldTypeResolvers = { codecLookup, resolveFieldValueSet };
   const outputModelEntries: string[] = [];
   const inputModelEntries: string[] = [];
   for (const [modelName, model] of Object.entries(models).sort(([a], [b]) => a.localeCompare(b))) {
@@ -511,7 +500,6 @@ export function generateBothFieldTypesMaps(
 export function generateFieldTypesMapsByNamespace(
   namespaceModels: ReadonlyArray<readonly [string, Record<string, ContractModelBase>]>,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
   resolveFieldValueSet?: FieldValueSetResolver,
 ): ResolvedFieldType {
   if (namespaceModels.length === 0) {
@@ -521,12 +509,7 @@ export function generateFieldTypesMapsByNamespace(
   const outputNamespaceEntries: string[] = [];
   const inputNamespaceEntries: string[] = [];
   for (const [nsId, models] of namespaceModels) {
-    const inner = generateBothFieldTypesMaps(
-      models,
-      codecLookup,
-      resolveFieldTypeParams,
-      resolveFieldValueSet,
-    );
+    const inner = generateBothFieldTypesMaps(models, codecLookup, resolveFieldValueSet);
     const nsKey = `readonly ${serializeObjectKey(nsId)}`;
     outputNamespaceEntries.push(`${nsKey}: ${inner.output}`);
     inputNamespaceEntries.push(`${nsKey}: ${inner.input}`);
@@ -541,17 +524,15 @@ export function generateFieldTypesMapsByNamespace(
 export function generateFieldOutputTypesMap(
   models: Record<string, ContractModelBase> | undefined,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
 ): string {
-  return generateBothFieldTypesMaps(models, codecLookup, resolveFieldTypeParams).output;
+  return generateBothFieldTypesMaps(models, codecLookup).output;
 }
 
 export function generateFieldInputTypesMap(
   models: Record<string, ContractModelBase> | undefined,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
 ): string {
-  return generateBothFieldTypesMaps(models, codecLookup, resolveFieldTypeParams).input;
+  return generateBothFieldTypesMaps(models, codecLookup).input;
 }
 
 export function generateValueObjectType(
@@ -586,11 +567,7 @@ export function resolveValueObjectType(
 }
 
 export function generateContractFieldDescriptor(fieldName: string, field: ContractField): string {
-  const mods: string[] = [];
-  if (field.many === true) mods.push('; readonly many: true');
-  if (field.dict === true) mods.push('; readonly dict: true');
-  const modStr = mods.join('');
-
+  const modStr = contractFieldModifierSuffix(field);
   const { type } = field;
   if (type.kind === 'scalar') {
     const typeParamsSpec =

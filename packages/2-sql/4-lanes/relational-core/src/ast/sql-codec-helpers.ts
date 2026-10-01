@@ -4,8 +4,8 @@
  * The codec implementations live in `sql-codecs.ts` (TML-2357). This module retains only the conversion helpers + emit-path renderers the codec methods compose with — keeping a single source of truth for non-trivial conversions while the codec methods provide the framework-required `Promise<…>` boundary.
  */
 
-import type { JsonValue } from '@internal/contract/types';
 import { structuredError } from '@internal/utils/structured-error';
+import { withoutTrailing } from '@internal/utils/text';
 
 export const SQL_CHAR_CODEC_ID = 'sql/char@1' as const;
 export const SQL_VARCHAR_CODEC_ID = 'sql/varchar@1' as const;
@@ -14,7 +14,8 @@ export const SQL_FLOAT_CODEC_ID = 'sql/float@1' as const;
 export const SQL_TEXT_CODEC_ID = 'sql/text@1' as const;
 
 export const sqlCharEncode = (value: string): string => value;
-export const sqlCharDecode = (wire: string): string => wire.trimEnd();
+/** A `character` value as the database returns it, without the spaces that pad it to its length. Only spaces pad it, so a trailing tab or newline is part of the value. */
+export const sqlCharDecode = (wire: string): string => withoutTrailing(wire, ' ');
 export const sqlCharRenderOutputType = (typeParams: { readonly length?: number }) => {
   const length = typeParams.length;
   if (length === undefined) return undefined;
@@ -48,34 +49,6 @@ export const sqlIntDecode = (wire: number): number => wire;
 
 export const sqlFloatEncode = (value: number): number => value;
 export const sqlFloatDecode = (wire: number): number => wire;
-
-/**
- * JSON has no spelling for a non-finite number, and a database that holds one
- * emits it as a string — PostgreSQL writes `"NaN"` and `"Infinity"`. This
- * codec's application type is `number`, so both directions reject rather than
- * carry a value that type cannot hold.
- */
-export const sqlFloatEncodeJson = (value: number): JsonValue => {
-  if (!Number.isFinite(value)) {
-    throw structuredError(
-      'RUNTIME.ENCODE_FAILED',
-      `${SQL_FLOAT_CODEC_ID} application value must be a finite number, got ${value}`,
-      { meta: { codec: SQL_FLOAT_CODEC_ID } },
-    );
-  }
-  return value;
-};
-
-export const sqlFloatDecodeJson = (json: JsonValue): number => {
-  if (typeof json !== 'number' || !Number.isFinite(json)) {
-    throw structuredError(
-      'RUNTIME.DECODE_FAILED',
-      `Expected a finite number for ${SQL_FLOAT_CODEC_ID}, got ${JSON.stringify(json)}`,
-      { meta: { codec: SQL_FLOAT_CODEC_ID } },
-    );
-  }
-  return json;
-};
 
 export const sqlTextEncode = (value: string): string => value;
 export const sqlTextDecode = (wire: string): string => wire;

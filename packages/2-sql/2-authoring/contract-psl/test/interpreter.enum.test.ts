@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -10,6 +10,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withDescriptors } from '../../contract-ts/test/with-descriptors';
 import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
@@ -31,60 +32,43 @@ import {
   testRenderCheckExpressions,
 } from './fixtures';
 
-// ---------------------------------------------------------------------------
-// Minimal test codecs for enum validation
-// ---------------------------------------------------------------------------
+// The PostgreSQL codecs come from the fixture descriptors; SQLite's are minimal stubs.
 
-const textCodec: Codec = {
-  id: 'pg/text@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
+function stubCodec(id: string, jsonType: 'string' | 'number'): Codec {
+  return {
+    id,
+    encode: async (v: unknown) => v,
+    decode: async (w: unknown) => w,
+    encodeJson: (value) => value as never,
+    decodeJson(json) {
+      if (typeof json !== jsonType) throw new Error(`expected ${jsonType}, got ${typeof json}`);
+      return json;
+    },
+  };
+}
+
+const sqliteCodecsById: Record<string, Codec> = {
+  'sqlite/text@1': stubCodec('sqlite/text@1', 'string'),
+  'sqlite/integer@1': stubCodec('sqlite/integer@1', 'number'),
 };
 
-const int4Codec: Codec = {
-  id: 'pg/int4@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
-    return json;
-  },
-};
-
-const pgIntCodec: Codec = { ...int4Codec, id: 'pg/int@1' };
-const sqliteTextCodec: Codec = { ...textCodec, id: 'sqlite/text@1' };
-const sqliteIntegerCodec: Codec = { ...int4Codec, id: 'sqlite/integer@1' };
-
-const codecsById: Record<string, Codec> = {
-  'pg/text@1': textCodec,
-  'pg/int4@1': int4Codec,
-  'pg/int@1': pgIntCodec,
-  'sqlite/text@1': sqliteTextCodec,
-  'sqlite/integer@1': sqliteIntegerCodec,
-};
-
-const targetTypesById: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int4@1': ['int4'],
-  'pg/int@1': ['int4'],
+const sqliteTargetTypesById: Record<string, readonly string[]> = {
   'sqlite/text@1': ['text'],
   'sqlite/integer@1': ['integer'],
 };
 
-const testCodecLookup: CodecLookup = {
-  get(id: string): Codec | undefined {
-    return codecsById[id];
-  },
-  descriptorFor: (id: string) => postgresCodecLookup.descriptorFor?.(id),
-  targetTypesFor(id: string): readonly string[] | undefined {
-    return targetTypesById[id];
-  },
+const sqliteCodecLookup = withDescriptors({
+  get: (id) => sqliteCodecsById[id],
+  targetTypesFor: (id) => sqliteTargetTypesById[id],
+  renderOutputTypeFor: () => undefined,
+});
+
+const testCodecLookup: CodecLookupWithDescriptors = {
+  get: (id) => postgresCodecLookup.get(id) ?? sqliteCodecLookup.get(id),
+  descriptorFor: (id) =>
+    postgresCodecLookup.descriptorFor(id) ?? sqliteCodecLookup.descriptorFor(id),
+  targetTypesFor: (id) =>
+    postgresCodecLookup.targetTypesFor(id) ?? sqliteCodecLookup.targetTypesFor(id),
   renderOutputTypeFor: () => undefined,
 };
 
@@ -1043,6 +1027,96 @@ model Post {
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_SYNTAX' })]),
+    );
+  });
+
+  it('lowers nullable enum-list defaults through member values and preserves value-set semantics', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+model Post {
+  id         Int         @id
+  priorities Priority?[] @default([Low, null])
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
+    expect(ns?.entries.table?.['Post']?.columns?.['priorities']).toEqual({
+      nativeType: 'text',
+      codecId: 'pg/text@1',
+      nullable: false,
+      many: { elementNullable: true },
+      valueSet: {
+        plane: 'storage',
+        namespaceId: 'public',
+        entityKind: 'valueSet',
+        entityName: 'Priority',
+      },
+      default: { kind: 'literal', value: ['low', null] },
+    });
+    expect(ns?.entries.valueSet?.['Priority']).toEqual({
+      kind: 'valueSet',
+      values: ['low', 'high'],
+    });
+  });
+
+  it('rejects null in a strict enum-list default at the null expression span', () => {
+    const schema = `
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+model Post {
+  id         Int        @id
+  priorities Priority[] @default([Low, null])
+}
+`;
+    const result = interpret(schema);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find(
+      (candidate) => candidate.code === 'PSL_INVALID_DEFAULT_APPLICABILITY',
+    );
+    const nullOffset = schema.indexOf('null');
+    expect(diagnostic).toEqual(
+      expect.objectContaining({
+        span: {
+          start: { offset: nullOffset, line: 10, column: 40 },
+          end: { offset: nullOffset + 4, line: 10, column: 44 },
+        },
+      }),
+    );
+  });
+
+  it('rejects an unknown enum member in a list with the enum-member diagnostic', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+
+model Post {
+  id         Int        @id
+  priorities Priority[] @default([Low, Critical])
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected one of: Low | High | null',
+        }),
+      ]),
     );
   });
 

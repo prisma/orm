@@ -2,6 +2,7 @@ import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { MongoIndex } from '@internal/mongo-contract';
 
 function modelsOf(ir: Contract): Record<string, unknown> {
   return ir.domain.namespaces[UNBOUND_NAMESPACE_ID]!.models;
@@ -106,18 +107,48 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
     }`;
     const forward = interpretOk(`${variant}\n${base}`);
     expect(forward).toEqual(interpretOk(`${base}\n${variant}`));
-    expect(modelsOf(forward)['Bug']).toMatchObject({
+    expect(modelsOf(forward)['Bug']).toEqual({
+      fields: {
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        level: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
+      },
+      relations: {},
       base: crossRef('Task', UNBOUND_NAMESPACE_ID),
       storage: { collection: 'tasks' },
     });
-    expect(modelsOf(forward)['Task']).toMatchObject({
+    expect(modelsOf(forward)['Task']).toEqual({
+      fields: {
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        task_kind: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
+      },
+      relations: {},
+      storage: { collection: 'tasks' },
       discriminator: { field: 'task_kind' },
       variants: { Bug: { value: 'bug' } },
     });
     expect(forward.roots).toEqual({ tasks: crossRef('Task', UNBOUND_NAMESPACE_ID) });
-    expect(mongoCollectionsOf(forward)['tasks']).toMatchObject({
-      indexes: [expect.objectContaining({ partialFilterExpression: { task_kind: 'bug' } })],
-    });
+    expect((mongoCollectionsOf(forward)['tasks'] as { indexes: unknown }).indexes).toEqual([
+      new MongoIndex({
+        keys: [{ field: 'level', direction: 1 }],
+        partialFilterExpression: { task_kind: 'bug' },
+      }),
+    ]);
   });
 
   it('reports a wrong-kind base at the reference expression', () => {
@@ -474,7 +505,12 @@ namespace scoped {
         }
       `);
 
-      expectInvalidAttributeSyntax(result, /Expected a string literal/);
+      const diagnostic = expectInvalidAttributeSyntax(result, /Expected a string literal/);
+      if (result.ok) throw new Error('Expected interpretation to fail');
+      expect(result.failure.diagnostics).toEqual([
+        diagnostic,
+        expect.objectContaining({ code: 'PSL_MONGO_VARIANT_SEPARATE_COLLECTION' }),
+      ]);
     });
 
     it('diagnoses variant with @@map to different collection', () => {

@@ -185,6 +185,7 @@ export function resolveFieldPreset(input: {
         ...ifDefined('typeParams', instantiated.descriptor.typeParams),
       },
       nullable: instantiated.nullable,
+      many: false,
     },
     ...ifDefined('executionDefaults', instantiated.executionDefaults),
   };

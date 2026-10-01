@@ -1,5 +1,6 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
+import { canonicalUuid } from './codec-helpers';
 
 /**
  * Pre-compiled regex patterns for performance.
@@ -25,19 +26,30 @@ const NUMERAL = String.raw`[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`;
 const NUMERIC_PATTERN = new RegExp(`^${NUMERAL}$`);
 
 /**
+ * A type modifier: `(3)`, `(65,30)`, or a numeric type's negative scale, `(5,-2)`, which PostgreSQL
+ * 15 and later accept.
+ */
+const TYPE_MODIFIER = String.raw`\(\d+(?:,\s*-?\d+)?\)`;
+
+/**
  * A cast target type: a builtin of one or more words, where any word may carry a modifier
  * (`timestamp(3) without time zone`, `numeric(65,30)`), or a quoted identifier (`"AuditAction"`);
  * either may be qualified by a possibly quoted schema (`audit."AuditAction"`, `"my schema".t`).
  */
-const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:\(\d+(?:,\s*\d+)?\))?(?:\s+\w+(?:\(\d+(?:,\s*\d+)?\))?)*)`;
+const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:${TYPE_MODIFIER})?(?:\s+\w+(?:${TYPE_MODIFIER})?)*)`;
 const QUOTED_LITERAL_PATTERN = new RegExp(`^'((?:[^']|'')*)'(?:::(${TYPE_NAME}))?$`);
 const NUMBER_LITERAL_PATTERN = new RegExp(`^(${NUMERAL})(?:::(${TYPE_NAME}))?$`);
 const PARENTHESISED_CAST_PATTERN = new RegExp(String.raw`^\((.+)\)::(${TYPE_NAME})$`, 's');
 const INTEGER_PATTERN = /^-?\d+$/;
 const INTEGER_TYPE_PATTERN = /^(?:smallint|integer|bigint|int2|int4|int8)$/i;
-const NUMBER_TYPE_PATTERN =
-  /^(?:smallint|integer|bigint|int2|int4|int8|real|double precision|float4|float8|numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i;
-const DECIMAL_TEXT_TYPE_PATTERN = /^(?:bigint|int8|numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i;
+const NUMBER_TYPE_PATTERN = new RegExp(
+  `^(?:smallint|integer|bigint|int2|int4|int8|real|double precision|float4|float8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
+  'i',
+);
+const DECIMAL_TEXT_TYPE_PATTERN = new RegExp(
+  `^(?:bigint|int8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
+  'i',
+);
 
 /**
  * Matches a Postgres array literal default of the form `'{...}'::elemtype[]`.
@@ -210,6 +222,11 @@ const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
  * Reads an unquoted, non-NULL array element by the column's element type. Only text Postgres itself
  * would print is read; anything else keeps the raw expression.
  */
+/** A text default as the column stores it: a uuid in the form PostgreSQL writes, which its codec reads. */
+function storedText(text: string, nativeType: string | undefined): string {
+  return nativeType === 'uuid' ? (canonicalUuid(text) ?? text) : text;
+}
+
 function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
   if (token === '') return undefined;
   if (BOOLEAN_TYPE_PATTERN.test(elementType)) {
@@ -221,11 +238,10 @@ function unquotedElementValue(token: string, elementType: string): JsonValue | u
     return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
   }
   if (isJsonElementType(elementType)) {
-    if (token === 'true') return true;
-    if (token === 'false') return false;
-    return NUMERIC_PATTERN.test(token) ? textElementValue(token, elementType) : undefined;
+    const document = readJsonDocument(token);
+    return document.kind === 'json' ? document.value : undefined;
   }
-  return token;
+  return storedText(token, elementType);
 }
 
 /**
@@ -251,7 +267,9 @@ function parseArrayLiteralBody(
     if (token.quoted) {
       // A quoted token is always a string — `"NULL"`, `"true"`, `"1"` are the
       // literal text, never the keyword/number.
-      result.push(textElementValue(token.value, elementType));
+      const value = textElementValue(token.value, elementType);
+      if (value === undefined) return undefined;
+      result.push(value);
       continue;
     }
     const el = token.value.trim();
@@ -321,14 +339,62 @@ function isJsonElementType(elementType: string): boolean {
   return elementType === 'json' || elementType === 'jsonb';
 }
 
-/** A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type. */
-function textElementValue(text: string, elementType: string): JsonValue {
-  if (!isJsonElementType(elementType)) return text;
+/**
+ * A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type.
+ * Undefined keeps the raw expression: the document holds a number a JavaScript number would change.
+ */
+function textElementValue(text: string, elementType: string): JsonValue | undefined {
+  if (!isJsonElementType(elementType)) return storedText(text, elementType);
+  const document = readJsonDocument(text);
+  if (document.kind === 'inexact') return undefined;
+  return document.kind === 'json' ? document.value : text;
+}
+
+type JsonDocument =
+  | { readonly kind: 'json'; readonly value: JsonValue }
+  | { readonly kind: 'inexact' }
+  | { readonly kind: 'invalid' };
+
+type JsonReviver = (key: string, value: unknown, context?: { readonly source?: string }) => unknown;
+
+/**
+ * Parses JSON text. Postgres keeps every digit of a json number, so a document holding a number that
+ * would not print back as the same value once read into a JavaScript number, such as
+ * `12345678901234567890` or `1e400`, is `inexact`. `1.0` prints back as `1`, the same value.
+ */
+function readJsonDocument(text: string): JsonDocument {
+  let exact = true;
+  const reviver: JsonReviver = (_key, value, context) => {
+    if (typeof value === 'number' && !keepsJsonNumber(value, context?.source)) exact = false;
+    return value;
+  };
+  let value: JsonValue;
   try {
-    return blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text));
+    value = blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text, reviver));
   } catch {
-    return text;
+    return { kind: 'invalid' };
   }
+  return exact ? { kind: 'json', value } : { kind: 'inexact' };
+}
+
+function keepsJsonNumber(value: number, source: string | undefined): boolean {
+  if (!Number.isFinite(value) || source === undefined) return false;
+  const written = decimalValue(source);
+  return written !== undefined && written === decimalValue(String(value));
+}
+
+const DECIMAL_PARTS_PATTERN = /^(-?)(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/;
+
+/** A numeral's value as `<sign><digits>e<exponent>`, with no leading or trailing zero digits. */
+function decimalValue(numeral: string): string | undefined {
+  const parts = DECIMAL_PARTS_PATTERN.exec(numeral);
+  if (parts === null) return undefined;
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] = parts;
+  const digits = `${whole}${fraction}`.replace(/^0+/, '');
+  if (digits === '') return '0';
+  const significant = digits.replace(/0+$/, '');
+  const shift = Number(exponent) - fraction.length + digits.length - significant.length;
+  return `${sign}${significant}e${shift}`;
 }
 
 function parseArrayConstructor(
@@ -391,6 +457,8 @@ export function parsePostgresDefault(
         return { kind: 'literal', value: parsed };
       }
     }
+    if (NULL_PATTERN.test(trimmed)) return { kind: 'literal', value: null };
+    return { kind: 'function', expression: trimmed };
   }
 
   const canonicalTimestamp = canonicalizeTimestampDefault(trimmed);
@@ -427,14 +495,12 @@ export function parsePostgresDefault(
     return value === undefined ? undefined : { kind: 'literal', value };
   }
 
-  if (normalizedType === 'json' || normalizedType === 'jsonb') {
-    try {
-      return { kind: 'literal', value: JSON.parse(token.text) };
-    } catch {
-      // Keep legacy behavior for malformed/non-JSON string content.
-    }
+  if (normalizedType !== undefined && isJsonElementType(normalizedType)) {
+    const document = readJsonDocument(token.text);
+    if (document.kind === 'inexact') return { kind: 'function', expression: trimmed };
+    if (document.kind === 'json') return { kind: 'literal', value: document.value };
   }
-  return { kind: 'literal', value: token.text };
+  return { kind: 'literal', value: storedText(token.text, normalizedType) };
 }
 
 /**

@@ -37,6 +37,7 @@ const stubLowerer: ExecuteRequestLowerer = {
   lower(_ast, _ctx) {
     return { sql: 'CREATE TABLE stub', params: [] };
   },
+  renderColumnDefault: async () => '',
   async lowerToExecuteRequest(_ast, _ctx) {
     return { sql: 'CREATE TABLE stub', params: [] };
   },
@@ -255,6 +256,7 @@ describe('RLS planner diff-wiring', () => {
     const received: unknown[] = [];
     const recordingLowerer: ExecuteRequestLowerer = {
       lower: stubLowerer.lower,
+      renderColumnDefault: async () => '',
       lowerToExecuteRequest: async (ast) => {
         received.push(ast);
         return { sql: 'stub', params: [] };

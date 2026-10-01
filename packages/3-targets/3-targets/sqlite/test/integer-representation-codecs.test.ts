@@ -186,22 +186,22 @@ describe('sqlite/bigintnumber@1', () => {
 
     it('rejects decimal text past the safe integer range', () => {
       expect(() => codec.decodeJson('9007199254740992')).toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
       expect(() => codec.decodeJson('-9007199254740992')).toThrow(
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+        'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     });
 
     it('rejects a JSON string that is not a decimal integer', () => {
       expect(() => codec.decodeJson('1.5')).toThrow(
-        'sqlite/bigintnumber@1 database JSON value must be decimal text',
+        'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     });
 
     it('rejects a JSON number, whose digits a wide value has already lost', () => {
       expect(() => codec.decodeJson(42)).toThrow(
-        'sqlite/bigintnumber@1 database JSON value must be decimal text',
+        'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     });
 

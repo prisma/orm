@@ -2,6 +2,7 @@ export type {
   ComposedAuthoringHelpers,
   ContractInput,
   ContractModelBuilder,
+  ManyOptions,
   MergeEnums,
   ModelLike,
   ScalarFieldBuilder,
@@ -28,8 +29,13 @@ export type {
   ModelNode,
   PrimaryKeyNode,
   RelationNode,
+  ScalarMemberNode,
   UniqueConstraintNode,
+  ValueObjectFieldNode,
+  ValueObjectMemberNode,
+  ValueObjectNode,
 } from '../contract-definition';
+export { isValueObjectMember, storedAsListColumn } from '../contract-definition';
 export type {
   CheckKind,
   ColumnRef,

@@ -89,6 +89,11 @@ describe('parsePostgresDefault ARRAY[...] elements Postgres prints with a cast',
     },
     { raw: 'ARRAY[(2)::numeric(10,2)]', nativeType: 'numeric(10,2)[]', value: ['2'] },
     {
+      raw: "ARRAY['100'::numeric(5,-2), '-9999900'::numeric(5,-2)]",
+      nativeType: 'numeric(5,-2)[]',
+      value: ['100', '-9999900'],
+    },
+    {
       raw: "ARRAY[('-1'::integer)::smallint, (2)::smallint]",
       nativeType: 'int2[]',
       value: [-1, 2],
@@ -127,6 +132,20 @@ describe('parsePostgresDefault ARRAY[...] elements Postgres prints with a cast',
     expect(parsePostgresDefault('ARRAY[]::character varying[]', 'character varying[]')).toEqual({
       kind: 'literal',
       value: [],
+    });
+  });
+});
+
+describe('parsePostgresDefault uuid ARRAY[...] elements', () => {
+  it('reads each element as the text Postgres prints', () => {
+    expect(
+      parsePostgresDefault(
+        "ARRAY['A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid, '{B0EEBC99-9C0B4EF8-BB6D6BB9-BD380A11}'::uuid]",
+        'uuid[]',
+      ),
+    ).toEqual({
+      kind: 'literal',
+      value: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'],
     });
   });
 });

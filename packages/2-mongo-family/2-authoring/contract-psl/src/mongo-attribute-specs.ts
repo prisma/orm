@@ -46,26 +46,6 @@ import {
 } from '@internal/psl-parser';
 import type { FieldAttributeAst, ModelAttributeAst, PslSources } from '@internal/psl-parser/syntax';
 
-export function findModelAttributeNode(
-  model: ModelSymbol,
-  name: string,
-): ModelAttributeAst | undefined {
-  for (const attribute of model.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
-export function findFieldAttributeNode(
-  field: FieldSymbol,
-  name: string,
-): FieldAttributeAst | undefined {
-  for (const attribute of field.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
 function buildModelAttributeCtx(input: {
   readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;

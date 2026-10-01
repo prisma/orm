@@ -17,6 +17,7 @@ const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false 
 
 const INT_FIELD: ContractField = {
   nullable: false,
+  many: false,
   type: { kind: 'scalar', codecId: 'pg/int4@1' },
 };
 
@@ -40,7 +41,11 @@ interface TableShape {
 /** The domain field the PSL source derives for a scalar column. */
 function domainFieldOf(column: ColumnShape | undefined): ContractField {
   if (column === undefined) return INT_FIELD;
-  return { nullable: column.nullable, type: { kind: 'scalar', codecId: column.codecId } };
+  return {
+    nullable: column.nullable,
+    many: false,
+    type: { kind: 'scalar', codecId: column.codecId },
+  };
 }
 
 function contractOf(input: {

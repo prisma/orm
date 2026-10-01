@@ -1,4 +1,5 @@
 import mongoRuntimeAdapter from '@internal/adapter-mongo/runtime';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
@@ -19,6 +20,7 @@ const STANDARD_CODEC_IDS = [
   'mongo/date@1',
   'mongo/vector@1',
   'mongo/int64@1',
+  'mongo/int64Number@1',
   'mongo/decimal128@1',
   'mongo/binary@1',
   'mongo/json@1',
@@ -73,6 +75,7 @@ describe('createMongoExecutionContext', () => {
       typeId: 'test/custom@1',
       decode: (wire: string) => `decoded:${wire}`,
       encode: (value: string) => value,
+      decodeJson: (json) => decodeJsonString('test/custom@1', json),
     });
     const pack: MongoRuntimeExtensionDescriptor<'mongo'> = {
       kind: 'extension',
@@ -102,6 +105,7 @@ describe('createMongoExecutionContext', () => {
       typeId: 'mongo/string@1',
       decode: (wire: string) => wire,
       encode: (value: string) => value,
+      decodeJson: (json) => decodeJsonString('mongo/string@1', json),
     });
     const conflictingPack: MongoRuntimeExtensionDescriptor<'mongo'> = {
       kind: 'extension',

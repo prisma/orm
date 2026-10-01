@@ -104,7 +104,7 @@ test('a preset field still satisfies the widest FieldBuilder constraint', () => 
   type WideFieldBuilder = FieldBuilder<
     ContractFieldType,
     boolean,
-    boolean,
+    false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >;

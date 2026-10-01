@@ -45,6 +45,44 @@ describe('parsePostgresDefault numeric literals', () => {
   });
 });
 
+describe('parsePostgresDefault uuid literals', () => {
+  it('reads a uuid in the form PostgreSQL stores, whatever spelling it was written in', () => {
+    expect(
+      [
+        "'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::uuid",
+        "'{a0eebc99-9c0b4ef8-bb6d6bb9bd380a11}'::uuid",
+        "'a0eebc999c0b4ef8bb6d6bb9bd380a11'",
+        "'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid",
+      ].map((raw) => parsePostgresDefault(raw, 'uuid')),
+    ).toEqual(
+      Array.from({ length: 4 }, () => ({
+        kind: 'literal',
+        value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
+      })),
+    );
+  });
+
+  it('reads each element of a uuid list the same way', () => {
+    expect(
+      parsePostgresDefault("'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11,NULL}'::uuid[]", 'uuid[]'),
+    ).toEqual({ kind: 'literal', value: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', null] });
+  });
+
+  it('keeps text that is not a uuid as written on a uuid column', () => {
+    expect(parsePostgresDefault("'Not-A-Uuid'::uuid", 'uuid')).toEqual({
+      kind: 'literal',
+      value: 'Not-A-Uuid',
+    });
+  });
+
+  it('keeps the case of uuid-shaped text on a text column', () => {
+    expect(parsePostgresDefault("'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'::text", 'text')).toEqual({
+      kind: 'literal',
+      value: 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
+    });
+  });
+});
+
 describe('parsePostgresDefault string literals', () => {
   it('parses a plain string literal', () => {
     expect(parsePostgresDefault("'hello'")).toEqual({ kind: 'literal', value: 'hello' });
@@ -86,6 +124,23 @@ describe('parsePostgresDefault string literals', () => {
     expect(parsePostgresDefault("'[1,2,3]'", 'jsonb')).toEqual({
       kind: 'literal',
       value: [1, 2, 3],
+    });
+  });
+
+  it.each([
+    { raw: "'12345678901234567890'::jsonb", nativeType: 'jsonb' },
+    { raw: `'{"a": 1e400}'::json`, nativeType: 'json' },
+  ])(
+    'keeps the raw expression when a JavaScript number would change a json number in $raw',
+    ({ raw, nativeType }) => {
+      expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'function', expression: raw });
+    },
+  );
+
+  it('reads a json number with trailing zeros as the same number', () => {
+    expect(parsePostgresDefault("'[1.0]'::jsonb", 'jsonb')).toEqual({
+      kind: 'literal',
+      value: [1],
     });
   });
 
@@ -209,6 +264,9 @@ describe('parsePostgresDefault numeric columns', () => {
     },
     { raw: '1.5::numeric(10,2)', nativeType: 'numeric(10,2)', value: '1.5' },
     { raw: "'NaN'::numeric", nativeType: 'numeric', value: 'NaN' },
+    { raw: "'12300'::numeric(5,-2)", nativeType: 'numeric(5,-2)', value: '12300' },
+    { raw: "'-500'::numeric(5,-2)", nativeType: 'numeric(5,-2)', value: '-500' },
+    { raw: '0.00123::numeric(3,5)', nativeType: 'numeric(3,5)', value: '0.00123' },
   ])('reads $raw as the decimal text $value for $nativeType', ({ raw, nativeType, value }) => {
     expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
   });

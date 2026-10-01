@@ -131,13 +131,14 @@ function build(...texts: string[]) {
     documents,
     sources,
   });
-  return { sources, symbolTable };
+  return { sources, symbolTable, documents };
 }
 
 function bind(...texts: string[]) {
-  const { sources, symbolTable } = build(...texts);
+  const { sources, symbolTable, documents } = build(...texts);
   return {
     symbolTable,
+    documents,
     ...createBinder({
       sources,
       symbolTable,
@@ -147,6 +148,106 @@ function bind(...texts: string[]) {
     }),
   };
 }
+
+describe('named-type base references', () => {
+  it('binds definition-site bases without adding diagnostics or following aliases', () => {
+    const { binder, symbolTable, diagnostics } = bind(`model String { id Int }
+namespace app { model Item { id Int } }
+types {
+  Shadowed = String
+  Scalar = Int
+  Constructed = pgvector.Vector(3)
+  PlainQualified = pgvector.Vector
+  Missing = Unknown
+  QualifiedMiss = app.String
+  Indirect = Scalar
+}`);
+    const expected = {
+      Shadowed: 'model',
+      Scalar: 'contributedType',
+      Constructed: 'contributedType',
+      PlainQualified: 'contributedType',
+      Missing: 'unresolved',
+      QualifiedMiss: 'unresolved',
+      Indirect: 'namedType',
+    };
+    expect(
+      Object.fromEntries(
+        Object.values(symbolTable.topLevel.namedTypes).map((symbol) => [
+          symbol.name,
+          binder.symbolForNode(symbol.node.typeAnnotation()!.name()!.syntax)?.kind,
+        ]),
+      ),
+    ).toEqual(expected);
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('lexical scope retrieval', () => {
+  it('retains one namespace scope across reopened declarations and files', () => {
+    const { binder, symbolTable, documents, diagnostics } = bind(
+      'model Root {\n id Int\n}\nmodel Item {}\nnamespace app {}\nnamespace app {\n model Item {\n id Int\n}\n}\nnamespace app {\n model Cart {\n item Item @relation(references: [id])\n @@base(Item)\n}\n}',
+      'namespace app {\n model Order {\n item Item @relation(references: [id])\n @@base(Item)\n}\n}\nnamespace other {\n model Hidden {\n id Int\n}\n}',
+    );
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const item = app.models['Item']!;
+    const scope = binder.scopeAt(item.node.syntax);
+    expect(diagnostics).toEqual([]);
+    for (const name of ['Cart', 'Order']) {
+      const entity = app.models[name]!;
+      const field = entity.fields['item']!;
+      expect(binder.symbolForNode(typeReferenceNode(field)!)).toEqual(scope.lookup('Item'));
+      expect(binder.symbolForNode(attributeNodes(entity, 'base')[0]!)).toEqual(
+        scope.lookup('Item'),
+      );
+      expect(binder.symbolForNode(attributeNodes(field, 'relation', 'references')[0]!)).toEqual({
+        kind: 'field',
+        symbol: item.fields['id'],
+      });
+    }
+    expect(scope.lookup('Item')?.symbol).toBe(item);
+    expect(scope.lookup('Hidden')).toBeUndefined();
+    for (const declaration of app.declarations) {
+      expect(binder.scopeAt(declaration.node.syntax)).toBe(scope);
+    }
+    for (const entity of Object.values(app.models)) {
+      expect(binder.scopeAt(entity.node.syntax)).toBe(scope);
+      for (const field of entity.node.fields()) {
+        expect(binder.scopeAt(field.syntax)).toBe(scope);
+        expect(binder.scopeAt(field.typeAnnotation()!.name()!.syntax)).toBe(scope);
+      }
+    }
+    const docScope = binder.scopeAt(documents[0]!.syntax);
+    expect(binder.scopeAt(documents[1]!.syntax)).toBe(docScope);
+    expect(binder.scopeAt(symbolTable.topLevel.models['Root']!.node.syntax)).toBe(docScope);
+    expect(scope).not.toBe(docScope);
+    expect(
+      binder.scopeAt(symbolTable.topLevel.namespaces['other']!.models['Hidden']!.node.syntax),
+    ).not.toBe(scope);
+    expect(binder.scopeAt(item.node.syntax)).toBe(scope);
+  });
+
+  it('finds scopes for recovered typeless fields and documents without symbols', () => {
+    const { binder, documents, symbolTable } = bind('model User {\n unfinished\n}', '');
+    const document = documents[0]!;
+    const model = symbolTable.topLevel.models['User']!.node;
+    const field = model.fields()[Symbol.iterator]().next().value;
+    if (field === undefined) throw new Error('missing recovered field');
+    expect(field.typeAnnotation()).toBeUndefined();
+    expect(binder.scopeAt(field.syntax)).toBe(binder.scopeAt(document.syntax));
+    expect(binder.scopeAt(documents[1]!.syntax)).toBe(binder.scopeAt(document.syntax));
+  });
+
+  it('retains distinct scopes for snapshots with identical filenames, text and ranges', () => {
+    const text = 'model User {\n id Int\n}';
+    const first = bind(text);
+    const foreign = bind(text);
+    const field = fieldOf(foreign.symbolTable, 'User', 'id');
+    expect(foreign.binder.scopeAt(field.node.syntax)).not.toBe(
+      first.binder.scopeAt(first.documents[0]!.syntax),
+    );
+  });
+});
 
 function bindWithUnsupportedDescriber(
   describeUnsupportedAttribute: DescribeUnsupportedAttribute,

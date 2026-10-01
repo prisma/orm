@@ -1,6 +1,6 @@
 # Scalar types
 
-Each target names its scalar types after what the database stores. This page lists every scalar type per target, then maps the types across targets by concept, with the Prisma 6/7 name for readers migrating a schema. Other docs link here rather than repeat the lists.
+Each target names its scalar types after what the database stores ([ADR 257](../architecture%20docs/adrs/ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md)). This page lists every scalar type per target, then maps the types across targets by concept, with the Prisma 6/7 name for readers migrating a schema. Other docs link here rather than repeat the lists.
 
 Columns: the PSL name, the TypeScript builder helper (inside the `defineContract` callback), the codec id recorded in `contract.json`, the storage type, and the application type a query reads and writes.
 
@@ -11,8 +11,9 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 | `String` | `field.string()` | `mongo/string@1` | `string` | `string` |
 | `Int32` | `field.int32()` | `mongo/int32@1` | `int` | `number` |
 | `Int64` | `field.int64()` | `mongo/int64@1` | `long` | `bigint` |
+| `Int64Number` | `field.int64Number()` | `mongo/int64Number@1` | `long` | `number` (safe-integer range) |
 | `Double` | `field.double()` | `mongo/double@1` | `double` | `number` |
-| `Decimal128` | `field.decimal128()` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent) |
+| `Decimal128` | `field.decimal128()` | `mongo/decimal128@1` | `decimal` | `string` (decimal text without an exponent; a stored value with an extreme exponent such as `1E-6176` reads back as a digit string of about 6,100 characters) |
 | `Bool` | `field.bool()` | `mongo/bool@1` | `bool` | `boolean` |
 | `Date` | `field.date()` | `mongo/date@1` | `date` | `Date` |
 | `ObjectId` | `field.objectId()` | `mongo/objectId@1` | `objectId` | `string` (hex) |
@@ -23,9 +24,32 @@ Columns: the PSL name, the TypeScript builder helper (inside the `defineContract
 
 `Json` holds a JSON value and nothing else: writing or reading a `Date`, `ObjectId`, `Decimal128`, `Binary` or other non-JSON BSON value inside it fails with the path of the value. `Bson` holds any BSON value, `Code`, `MinKey`, `MaxKey` and `BSONSymbol` included, and reads it back as the driver produces it: a stored regex as a native `RegExp` (a `BSONRegExp` appears only with a driver configured with `bsonRegExp: true`), and a `{ $ref, $id }` subdocument, which the driver reads as a `DBRef`, as that document. A write also accepts a `Uint8Array` or `Buffer`, stored as binData and read back as `Binary`, and refuses anything else outside `BsonValue` (a `Map`, `Set`, class instance, other typed array, or sparse-array hole) with its path. `BsonValue` and the write type `BsonInputValue` are exported from `@prisma/orm-mongo/target/codec-types`. `Bson` returns numbers as the driver reads them: a stored `long` in the safe-integer range and an integral `double` read back as a JavaScript `number`, and writing that `number` back stores a BSON `int` when it fits in 32 bits. Wrap a value in `Long` or `Double` to keep its BSON type across a read and a write.
 
+To find documents whose `Json` field holds a value `Json` refuses, before declaring the field `Json` on existing data or after other code has written to it, query the collection:
+
+```js
+db.<collection>.find({
+  $or: [
+    { <field>: { $exists: true, $not: { $type: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'] } } },
+    { <field>: { $elemMatch: { $not: { $type: ['object', 'array', 'string', 'double', 'int', 'long', 'bool', 'null'] } } } },
+    { <field>: { $type: 'long', $gt: 9007199254740991 } },
+    { <field>: { $type: 'long', $lt: -9007199254740991 } },
+    { <field>: { $in: [NaN, Infinity, -Infinity] } },
+  ],
+})
+```
+
+The first clause checks the field's own value, and the second checks each element of the field when the value is an array. The last three clauses, for a `long` outside the safe-integer range and for `NaN` or an infinite `double`, match at both of those levels. The query misses exactly the values nested deeper: inside an object, inside an array of objects, or inside an array of arrays. Reading every document through the ORM finds those too, because the read fails with the path of the first such value. Change a field whose documents hold such values to `Bson`.
+
+A `temporal.*` preset field added to a collection that already has documents needs a backfill; see [Execution defaults](../architecture%20docs/subsystems/10.%20MongoDB%20Family.md#execution-defaults).
+
 The collection validator is derived from the contract only when the contract is written in Prisma 8 PSL. A contract built with the TypeScript builder or read from a Prisma 6 schema (`prisma6Schema`) gets no validator, so there the codecs' checks on read and write are the only ones.
 
 The PSL names `Int`, `Float`, `Boolean` and `DateTime` are deprecated aliases of `Int32`, `Double`, `Bool` and `Date`; they report `PSL_DEPRECATED_SCALAR_NAME` as a warning and will be removed.
+
+Two limitations to know about:
+
+- `Binary` reads every binData subtype back as its bytes and writes subtype 0, so a UUID stored as subtype 4 round-trips as subtype 0. Use `Bson` to keep the subtype.
+- `field.temporal.timestamp(undefined, 'now')` sets an update default only, and TypeScript infers both phases as optional, so its update default is typed as possibly absent. `field.temporal.timestamp()` and `field.temporal.timestamp('now', 'now')` are typed exactly.
 
 ### Values through the Mongo ORM
 
@@ -99,8 +123,9 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 
 | Concept | Prisma 6/7 name | PostgreSQL | SQLite | MongoDB |
 | --- | --- | --- | --- | --- |
-| 32-bit integer | `Int` | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
+| 32-bit integer | `Int` (on MongoDB, `Int @db.Int`) | `Int` | — (`Int` stores a 64-bit `integer`) | `Int32` |
 | 64-bit integer | `BigInt` | `BigInt` | `BigInt` | `Int64` |
+| 64-bit integer read as a `number` | `Int` on MongoDB, which Prisma 6 stores as a BSON long | `BigIntNumber` | `BigIntNumber` | `Int64Number` |
 | double | `Float` | `Float` | `Float` | `Double` |
 | decimal | `Decimal` | `Decimal`, `Numeric(p?, s?)` | `Decimal` (stored as text) | `Decimal128` |
 | boolean | `Boolean` | `Boolean` | — | `Bool` |
@@ -110,3 +135,5 @@ The PSL name on each target for a concept, and the Prisma 6/7 name a migrating s
 | JSON | `Json` | `Json`, `Jsonb` | `Json` | `Json` |
 | any value | — | — | — | `Bson` |
 | ObjectId | `String @db.ObjectId` (MongoDB) | — | — | `ObjectId` |
+
+A Prisma 6 MongoDB schema read with `prisma6Schema` may keep its native types. Each native type Prisma 6.19 accepts gives the field the MongoDB type of what Prisma 6 stores: `Int @db.Int` is `Int32`, `Int @db.Long` is `Int64Number` like a plain `Int`, `BigInt @db.Long` is `Int64`, `Bytes @db.ObjectId` is `ObjectId`, and `@db.String`, `@db.Bool`, `@db.Double`, `@db.Date`, `@db.BinData` and `@db.Json` are the same type as the plain field. `DateTime @db.Timestamp` stores a BSON timestamp, which no MongoDB scalar type holds, so `prisma6Schema` refuses it.

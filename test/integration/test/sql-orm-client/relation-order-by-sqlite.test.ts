@@ -88,7 +88,7 @@ async function withUsers(
     throw new InternalError('SQLite execution stack is missing its adapter or driver');
   }
   await driver.connect({ kind: 'path', path });
-  const runtime = new SqliteRuntimeImpl({ context, adapter, driver });
+  const runtime = new SqliteRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
   try {
     await fn(
       new Collection({ runtime, context }, 'User', {

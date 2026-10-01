@@ -1951,6 +1951,9 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
     devDependencies:
+      '@internal/mongo-contract-ts':
+        specifier: workspace:8.0.0-rc.13
+        version: link:../contract-ts
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
@@ -3077,6 +3080,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.14
         version: link:../../1-framework/1-core/framework-components
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.14
+        version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.14
@@ -5812,6 +5818,8 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+
+  test/integration/test/fixtures/cli/cli-e2e-test-app/test-1786116311962-dcaev7r38rc: {}
 
   test/integration/test/fixtures/cli/cli-integration-test-app:
     dependencies:

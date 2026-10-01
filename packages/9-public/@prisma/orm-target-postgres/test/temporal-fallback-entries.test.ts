@@ -145,8 +145,10 @@ describe('which published Postgres entries load temporal-polyfill', () => {
     expect(
       ENTRIES_THAT_LOAD_THE_POLYFILL.map((entry) => `${entry.label} ${entry.subpath}`),
     ).toEqual([
+      '@prisma/orm-target-postgres ./adapter/control',
       '@prisma/orm-target-postgres ./target',
       '@prisma/orm-target-postgres ./target/control',
+      '@prisma/orm-postgres ./adapter/control',
       '@prisma/orm-postgres ./config',
       '@prisma/orm-postgres ./control',
       '@prisma/orm-postgres ./target/control',
