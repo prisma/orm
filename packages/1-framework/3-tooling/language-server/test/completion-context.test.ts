@@ -436,24 +436,115 @@ describe('classifyPslCompletionContext', () => {
     expect([...context.block.entries()].map((entry) => entry.key()?.name())).toEqual(['on', 'wh']);
   });
 
-  it('classifies generic block value positions after the equals sign', () => {
-    expect(classify(['datasource db {', '  provider = |', '}'].join('\n'))).toMatchObject({
-      kind: 'genericBlockValue',
+  function blockValueAt(marked: string) {
+    const offset = marked.indexOf('|');
+    return {
+      ownerKind: 'blockValue',
+      block: expect.any(GenericBlockDeclarationAst),
+      offset,
+      replacementStartOffset: offset,
+      replacementEndOffset: offset,
+    };
+  }
+
+  it.each([
+    ['provider = |', 'provider'],
+    ['provider =|', 'provider'],
+  ])('classifies an empty generic block value position: %s', (entry, key) => {
+    const marked = ['datasource db {', `  ${entry}`, '}'].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
       blockKeyword: 'datasource',
+      key,
+      path: [],
+      syntax: 'scalar',
     });
   });
 
-  it('classifies a generic block value position flush against the equals sign', () => {
-    expect(classify(['datasource db {', '  provider =|', '}'].join('\n'))).toMatchObject({
-      kind: 'genericBlockValue',
+  it('replaces a partially typed generic block value identifier', () => {
+    const marked = ['datasource db {', '  provider = fo|', '}'].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
       blockKeyword: 'datasource',
+      key: 'provider',
+      path: [],
+      syntax: 'scalar',
+      replacementStartOffset: marked.indexOf('fo|'),
     });
   });
 
-  it('classifies a partial generic block value prefix', () => {
-    expect(classify(['datasource db {', '  provider = fo|', '}'].join('\n'))).toMatchObject({
-      kind: 'genericBlockValue',
-      blockKeyword: 'datasource',
+  it.each([
+    ['roles = [|', [{ kind: 'listElement' }]],
+    ['roles = [admin, |]', [{ kind: 'listElement' }]],
+    ['options = { mode: | }', [{ kind: 'recordValue' }]],
+  ])('classifies nested generic block value positions: %s', (entry, path) => {
+    const marked = ['policy_select read_own {', `  ${entry}`, '}'].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
+      blockKeyword: 'policy_select',
+      key: entry.slice(0, entry.indexOf(' ')),
+      path,
+      syntax: 'scalar',
+    });
+  });
+
+  it('classifies an unclosed list followed by the next entry as a list element slot', () => {
+    const marked = [
+      'policy_select read_own {',
+      '  roles = [admin, |',
+      '  permissive = true',
+      '}',
+    ].join('\n');
+    expect(classify(marked)).toEqual({
+      ...blockValueAt(marked),
+      kind: 'blockValue',
+      blockKeyword: 'policy_select',
+      key: 'roles',
+      path: [{ kind: 'listElement' }],
+      syntax: 'scalar',
+    });
+  });
+
+  it('classifies function-call argument slots and named keys inside a generic block value', () => {
+    const slot = ['schedule nightly {', '  run = every(|)', '}'].join('\n');
+    expect(classify(slot)).toEqual({
+      ...blockValueAt(slot),
+      kind: 'blockValueArgumentSlot',
+      blockKeyword: 'schedule',
+      key: 'run',
+      path: [{ kind: 'functionCall', name: 'every' }],
+      positionalIndex: 0,
+      existingNamedKeys: [],
+      hasColon: false,
+    });
+
+    const namedKey = ['schedule nightly {', '  run = every(5, un|: seconds)', '}'].join('\n');
+    expect(classify(namedKey)).toEqual({
+      ...blockValueAt(namedKey),
+      kind: 'blockValueNamedKey',
+      blockKeyword: 'schedule',
+      key: 'run',
+      path: [{ kind: 'functionCall', name: 'every' }],
+      existingNamedKeys: [],
+      hasColon: true,
+      replacementStartOffset: namedKey.indexOf('un|'),
+      replacementEndOffset: namedKey.indexOf('|'),
+    });
+
+    const named = ['schedule nightly {', '  run = every(5, unit: |)', '}'].join('\n');
+    expect(classify(named)).toEqual({
+      ...blockValueAt(named),
+      kind: 'blockValue',
+      blockKeyword: 'schedule',
+      key: 'run',
+      path: [
+        { kind: 'functionCall', name: 'every' },
+        { kind: 'namedArgument', name: 'unit' },
+      ],
+      syntax: 'scalar',
     });
   });
 

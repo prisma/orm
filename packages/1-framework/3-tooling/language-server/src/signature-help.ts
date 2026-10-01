@@ -11,7 +11,7 @@ import {
   resolveGrammar,
 } from './attribute-argument-grammar';
 import {
-  type ArgumentOwner,
+  type AttributeArgumentOwner,
   type AttributeSpecSource,
   argumentRootGrammar,
 } from './attribute-spec-resolution';
@@ -31,7 +31,7 @@ export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): Si
   return signatureHelp(context, root, input.clientSupportsLabelOffsets === true);
 }
 
-function rootSignatureName(owner: ArgumentOwner): string {
+function rootSignatureName(owner: AttributeArgumentOwner): string {
   switch (owner.ownerKind) {
     case 'field':
       return `@${owner.attributeName}`;

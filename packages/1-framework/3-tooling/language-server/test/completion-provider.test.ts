@@ -1286,10 +1286,10 @@ namespace app {
     expect(items).toEqual([]);
   });
 
-  it('returns no completions for a generic block value position', () => {
+  it('completes a generic block value from the block spec', () => {
     const { items } = complete(['policy Rule {', '  on = |', '}'].join('\n'));
 
-    expect(items).toEqual([]);
+    expect(items.map((item) => item.label)).toEqual(['User']);
   });
 
   it('returns descriptor-backed generic block parameter completions', () => {

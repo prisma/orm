@@ -116,10 +116,6 @@ export function providePslCompletionItems(
     // contract-space registry exists today, so this position yields nothing yet.
     case 'spaceMember':
       return [];
-    // Parameter-value completion (option allowed-values / ref scopes) is future
-    // work.
-    case 'genericBlockValue':
-      return [];
     case 'fieldAttributeName':
     case 'modelAttributeName':
     case 'blockAttributeName':
@@ -132,7 +128,8 @@ export function providePslCompletionItems(
       );
     case 'fieldAttributeNamedKey':
     case 'modelAttributeNamedKey':
-    case 'blockAttributeNamedKey': {
+    case 'blockAttributeNamedKey':
+    case 'blockValueNamedKey': {
       const root = argumentRootGrammar(context, input.candidates);
       return root === undefined
         ? []
@@ -149,7 +146,8 @@ export function providePslCompletionItems(
     }
     case 'fieldAttributeArgumentSlot':
     case 'modelAttributeArgumentSlot':
-    case 'blockAttributeArgumentSlot': {
+    case 'blockAttributeArgumentSlot':
+    case 'blockValueArgumentSlot': {
       const root = argumentRootGrammar(context, input.candidates);
       return root === undefined
         ? []
@@ -174,7 +172,8 @@ export function providePslCompletionItems(
     }
     case 'fieldAttributeValue':
     case 'modelAttributeValue':
-    case 'blockAttributeValue': {
+    case 'blockAttributeValue':
+    case 'blockValue': {
       const root = argumentRootGrammar(context, input.candidates);
       return root === undefined
         ? []
@@ -223,6 +222,7 @@ function ownerSyntax(owner: ArgumentOwner): SyntaxNode {
     case 'model':
       return owner.model.syntax;
     case 'block':
+    case 'blockValue':
       return owner.block.syntax;
   }
 }

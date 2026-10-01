@@ -27,6 +27,7 @@ import {
 } from '@internal/psl-parser/syntax';
 import type {
   BlockAttributeOwner,
+  BlockValueOwner,
   FieldAttributeOwner,
   ModelAttributeOwner,
   NamedAttribute,
@@ -80,13 +81,6 @@ export interface GenericBlockKeyCompletionContext {
   readonly blockKeyword: string;
   readonly replacementStartOffset: number;
   readonly block: GenericBlockDeclarationAst;
-}
-
-export interface GenericBlockValueCompletionContext {
-  readonly kind: 'genericBlockValue';
-  readonly offset: number;
-  readonly blockKeyword: string;
-  readonly replacementStartOffset: number;
 }
 
 interface CompletionReplacement {
@@ -181,15 +175,33 @@ export interface BlockAttributeArgumentSlotCompletionContext
   readonly kind: 'blockAttributeArgumentSlot';
 }
 
+export interface BlockValueNamedKeyCompletionContext
+  extends BlockValueOwner,
+    AttributeNamedKeyPosition {
+  readonly kind: 'blockValueNamedKey';
+}
+
+export interface BlockValueArgumentSlotCompletionContext
+  extends BlockValueOwner,
+    AttributeArgumentSlotPosition {
+  readonly kind: 'blockValueArgumentSlot';
+}
+
+export interface BlockValueCompletionContext extends BlockValueOwner, AttributeValuePosition {
+  readonly kind: 'blockValue';
+}
+
 export type AttributeArgumentSlotCompletionContext =
   | FieldAttributeArgumentSlotCompletionContext
   | ModelAttributeArgumentSlotCompletionContext
-  | BlockAttributeArgumentSlotCompletionContext;
+  | BlockAttributeArgumentSlotCompletionContext
+  | BlockValueArgumentSlotCompletionContext;
 
 export type AttributeNamedKeyCompletionContext =
   | BlockAttributeNamedKeyCompletionContext
   | FieldAttributeNamedKeyCompletionContext
-  | ModelAttributeNamedKeyCompletionContext;
+  | ModelAttributeNamedKeyCompletionContext
+  | BlockValueNamedKeyCompletionContext;
 
 export interface FieldAttributeValueCompletionContext
   extends FieldAttributeOwner,
@@ -215,7 +227,8 @@ export interface BlockAttributeValueCompletionContext
 export type AttributeValueCompletionContext =
   | FieldAttributeValueCompletionContext
   | ModelAttributeValueCompletionContext
-  | BlockAttributeValueCompletionContext;
+  | BlockAttributeValueCompletionContext
+  | BlockValueCompletionContext;
 
 export type AttributeArgumentCompletionContext =
   | AttributeNamedKeyCompletionContext
@@ -240,7 +253,6 @@ export type PslCompletionContext =
   | AttributeArgumentCompletionContext
   | DeclarationKeywordCompletionContext
   | GenericBlockKeyCompletionContext
-  | GenericBlockValueCompletionContext
   | ModelTypeCompletionContext
   | NamespaceMemberCompletionContext
   | SpaceMemberCompletionContext
@@ -656,21 +668,26 @@ function classifyAttributePosition(
   }
   const attributeName = attribute.name()?.identifier()?.name();
   if (attributeName === undefined) return UNSUPPORTED;
-  const at = attribute.syntax.tokenAtOffset(input.offset);
-  const right = at.rightBiased();
-  const token = isValueToken(right) ? right : at.leftBiased();
-  const replaceToken = isValueToken(token);
   return classifyAttributeArguments(
     {
-      offset: input.offset,
-      replacementStartOffset: replaceToken ? token.offset : input.offset,
-      replacementEndOffset: replaceToken ? token.endOffset : input.offset,
+      ...valueReplacement(attribute.syntax.tokenAtOffset(input.offset), input.offset),
       preceding: attributeCursor(attribute, input.offset).preceding,
       factory: factory.arguments(attributeName),
     },
     args,
     [],
   );
+}
+
+function valueReplacement(at: TokenAtOffset, offset: number): CompletionReplacement {
+  const right = at.rightBiased();
+  const token = isValueToken(right) ? right : at.leftBiased();
+  const replaceToken = isValueToken(token);
+  return {
+    offset,
+    replacementStartOffset: replaceToken ? token.offset : offset,
+    replacementEndOffset: replaceToken ? token.endOffset : offset,
+  };
 }
 
 function argumentPosition(
@@ -823,20 +840,9 @@ function classifyGenericBlockParameter(input: {
     return UNSUPPORTED;
   }
 
-  // Value position: the cursor follows a `=`. The position is now classified
-  // distinctly from keys; populating value candidates is the provider's concern.
-  if (input.precedingToken?.kind === 'Equals') {
-    return {
-      kind: 'genericBlockValue',
-      offset: input.offset,
-      blockKeyword: keyword,
-      replacementStartOffset: input.replacementStartOffset,
-    };
-  }
-
-  const activePair = activeKeyValuePair(node, input.offset);
-  if (activePair !== undefined && isAfterEquals(activePair, input.offset)) {
-    return UNSUPPORTED;
+  const valuePair = valuePairAtCursor(node, input.precedingToken, input.offset);
+  if (valuePair !== undefined) {
+    return classifyBlockValue(valuePair, block, keyword, input);
   }
 
   return {
@@ -846,6 +852,41 @@ function classifyGenericBlockParameter(input: {
     replacementStartOffset: input.replacementStartOffset,
     block,
   };
+}
+
+function valuePairAtCursor(
+  node: SyntaxNode | undefined,
+  preceding: SyntaxToken | undefined,
+  offset: number,
+): KeyValuePairAst | undefined {
+  if (preceding?.kind === 'Equals') return preceding.parent.findAncestor(KeyValuePairAst.cast);
+  const pair = activeKeyValuePair(node, offset);
+  return pair !== undefined && isAfterEquals(pair, offset) ? pair : undefined;
+}
+
+function classifyBlockValue(
+  pair: KeyValuePairAst,
+  block: GenericBlockDeclarationAst,
+  blockKeyword: string,
+  input: { readonly offset: number; readonly at: TokenAtOffset },
+): PslCompletionContext {
+  const key = pair.key()?.name();
+  if (key === undefined) return UNSUPPORTED;
+  const owner: BlockValueOwner = { ownerKind: 'blockValue', block, blockKeyword, key };
+  const anchor = input.at.leftBiased();
+  return classifyAttributeExpression(
+    {
+      ...valueReplacement(input.at, input.offset),
+      preceding: anchor === undefined ? undefined : skipTriviaToken(anchor, 'prev'),
+      factory: {
+        namedKey: (position) => ({ kind: 'blockValueNamedKey', ...position, ...owner }),
+        argumentSlot: (position) => ({ kind: 'blockValueArgumentSlot', ...position, ...owner }),
+        value: (position) => ({ kind: 'blockValue', ...position, ...owner }),
+      },
+    },
+    pair.value(),
+    [],
+  );
 }
 
 function activeKeyValuePair(

@@ -8,6 +8,7 @@ import {
   assembleAttributeSpecs,
   type Binder,
   type BlockAttributeSpecFactory,
+  blockSpecFactoryOf,
   findBlockDescriptor,
   type SymbolTable,
   typeReferenceNode,
@@ -51,7 +52,16 @@ export interface NamedAttribute {
   readonly attributeName: string;
 }
 
-export type ArgumentOwner = AttributeOwner & NamedAttribute;
+export type AttributeArgumentOwner = AttributeOwner & NamedAttribute;
+
+export interface BlockValueOwner {
+  readonly ownerKind: 'blockValue';
+  readonly block: GenericBlockDeclarationAst;
+  readonly blockKeyword: string;
+  readonly key: string;
+}
+
+export type ArgumentOwner = AttributeArgumentOwner | BlockValueOwner;
 
 export function argumentRootGrammar(
   owner: ArgumentOwner,
@@ -62,7 +72,21 @@ export function argumentRootGrammar(
     case 'model':
     case 'block':
       return attributeSpecResolver(owner, source)(owner.attributeName);
+    case 'blockValue':
+      return blockValueGrammar(owner, source);
   }
+}
+
+function blockValueGrammar(
+  owner: BlockValueOwner,
+  source: AttributeSpecSource,
+): ArgumentGrammar | undefined {
+  const descriptor = findBlockDescriptor(source.pslBlockDescriptors, owner.blockKeyword);
+  const block = source.binder.declaredSymbol(owner.block.syntax);
+  if (descriptor === undefined || block?.kind !== 'block') return undefined;
+  const spec = blockSpecFactoryOf(descriptor)({ symbols: source.symbolTable, block });
+  if (spec.mode === 'map') return spec.value.type;
+  return Object.hasOwn(spec.parameters, owner.key) ? spec.parameters[owner.key]?.type : undefined;
 }
 
 export function attributeSpecResolver(

@@ -14,7 +14,7 @@ import {
   ObjectLiteralExprAst,
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
-import type { ArgumentOwner, AttributeOwner } from './attribute-spec-resolution';
+import type { AttributeArgumentOwner, AttributeOwner } from './attribute-spec-resolution';
 import {
   type AttributeArgumentPathStep,
   argumentAtCursor,
@@ -38,7 +38,7 @@ interface SignaturePosition {
     | undefined;
 }
 
-export type SignatureContext = ArgumentOwner & SignaturePosition;
+export type SignatureContext = AttributeArgumentOwner & SignaturePosition;
 
 export function classifyPslSignatureContext(input: PslCursorInput): SignatureContext | undefined {
   const syntax = locateAttributeSyntax(input);
