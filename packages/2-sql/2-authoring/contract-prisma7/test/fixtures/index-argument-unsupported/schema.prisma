@@ -11,4 +11,6 @@ model Post {
   @@index([body(length: 10)])
   @@index([title], ops: raw("text_pattern_ops"))
   @@index([body], type: constructor)
+  @@index([title.length])
+  @@unique([body.length(sort: Desc)])
 }

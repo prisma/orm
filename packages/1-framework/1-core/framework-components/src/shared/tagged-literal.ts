@@ -139,3 +139,23 @@ function utf8Length(codePoint: number): number {
   if (codePoint < 0x10000) return 3;
   return 4;
 }
+
+function escapeQuotedText(text: string): string {
+  return text
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
+/**
+ * The PSL text of a tagged literal whose canonical text is `text`: the backtick form, or the double-quote form when the
+ * text holds a backtick, which reads better than escaping each backtick. A multi-line text starts on the line after
+ * the opening backtick, so indentation a printer adds to an enclosing block is common to every line and the
+ * canonicalization removes it. ADR 129.
+ */
+export function printTaggedLiteral(tag: string, text: string): string {
+  if (text.includes('`')) return `${tag}"${escapeQuotedText(text)}"`;
+  const fenced = text.replace(/\\/g, '\\\\');
+  return text.includes('\n') ? `${tag}\`\n${fenced}\n\`` : `${tag}\`${fenced}\``;
+}

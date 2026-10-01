@@ -12,6 +12,7 @@ function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: un
   const received: unknown[] = [];
   const lowerer: ExecuteRequestLowerer = {
     lower: () => Object.freeze({ sql: 'UNUSED', params: Object.freeze([]) }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async (ast) => {
       received.push(ast);
       return Object.freeze({

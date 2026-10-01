@@ -6,6 +6,7 @@ import type {
 import {
   buildRecreatePostchecks,
   buildRecreateSummary,
+  type RecreatePostcheck,
 } from '../../src/core/migrations/operations/tables';
 import {
   actualColumn,
@@ -21,10 +22,15 @@ function colSpec(overrides: Partial<SqliteColumnSpec> = {}): SqliteColumnSpec {
   return {
     name: 'col',
     typeSql: 'TEXT',
-    defaultSql: '',
     nullable: true,
     ...overrides,
   };
+}
+
+function withSql(
+  checks: readonly RecreatePostcheck[],
+): { readonly description: string; readonly sql: string }[] {
+  return checks.flatMap((check) => ('sql' in check ? [check] : []));
 }
 
 function tableSpec(overrides: Partial<SqliteTableSpec> = {}): SqliteTableSpec {
@@ -58,7 +64,7 @@ describe('buildRecreatePostchecks — column-level', () => {
         actual: actualColumn({ name: 'email', nativeType: 'TEXT', nullable: true }),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('users', issues, spec));
     const check = checks.find((c) => c.description.includes('nullability'));
     expect(check).toBeDefined();
     expect(check!.sql).toContain('"notnull" = 1');
@@ -73,7 +79,7 @@ describe('buildRecreatePostchecks — column-level', () => {
         actual: actualColumn({ name: 'email', nativeType: 'INTEGER', nullable: true }),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('users', issues, spec));
     const check = checks.find((c) => c.description.includes('type'));
     expect(check).toBeDefined();
     expect(check!.sql).toContain("LOWER(type) = 'text'");
@@ -88,25 +94,26 @@ describe('buildRecreatePostchecks — column-level', () => {
         actual: actualColumn({ name: 'email', nativeType: 'INTEGER', nullable: true }),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('users', issues, spec));
     expect(checks.filter((c) => c.description.includes('nullability'))).toHaveLength(1);
     expect(checks.filter((c) => c.description.includes('type'))).toHaveLength(1);
   });
 });
 
 describe('buildRecreatePostchecks — column-default', () => {
-  it('emits a default-present postcheck for not-found (missing default)', () => {
-    const spec = tableSpec({ columns: [colSpec({ name: 'email', defaultSql: 'DEFAULT 5' })] });
+  it('asks for the default the adapter writes for not-found (missing default)', () => {
+    const spec = tableSpec({
+      columns: [colSpec({ name: 'email', default: { kind: 'literal', value: 5 } })],
+    });
     const issues = [
       issue({
         path: ['database', 'users', 'column:email', 'default'],
         expected: columnDefault({ resolved: { kind: 'literal', value: 5 } }),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
-    const check = checks.find((c) => c.description.includes('default'));
-    expect(check).toBeDefined();
-    expect(check!.sql).toContain("dflt_value = '5'");
+    expect(buildRecreatePostchecks('users', issues, spec)).toEqual([
+      { description: 'verify "email" default on "users"', columnDefault: 'email' },
+    ]);
   });
 
   it('emits a no-default postcheck for not-expected (extra live default)', () => {
@@ -117,15 +124,15 @@ describe('buildRecreatePostchecks — column-default', () => {
         actual: columnDefault({ raw: "'stale'" }),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('users', issues, spec));
     const check = checks.find((c) => c.description.includes('has no default'));
     expect(check).toBeDefined();
     expect(check!.sql).toContain('dflt_value IS NULL');
   });
 
-  it('emits a default-present postcheck for not-equal (default drift)', () => {
+  it('asks for the default the adapter writes for not-equal (default drift)', () => {
     const spec = tableSpec({
-      columns: [colSpec({ name: 'email', defaultSql: 'DEFAULT 7' })],
+      columns: [colSpec({ name: 'email', default: { kind: 'literal', value: 7 } })],
     });
     const issues = [
       issue({
@@ -134,10 +141,9 @@ describe('buildRecreatePostchecks — column-default', () => {
         actual: columnDefault({ raw: '3' }),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
-    const check = checks.find((c) => c.description.includes('default'));
-    expect(check).toBeDefined();
-    expect(check!.sql).toContain("dflt_value = '7'");
+    expect(buildRecreatePostchecks('users', issues, spec)).toEqual([
+      { description: 'verify "email" default on "users"', columnDefault: 'email' },
+    ]);
   });
 });
 
@@ -154,7 +160,7 @@ describe('buildRecreatePostchecks — constraints', () => {
         actual: primaryKey(['a']),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('users', issues, spec));
     const pkCheck = checks.find((c) => c.description.includes('primary key'));
     expect(pkCheck).toBeDefined();
     expect(pkCheck!.sql).toContain("pragma_table_info('users')");
@@ -173,7 +179,7 @@ describe('buildRecreatePostchecks — constraints', () => {
         expected: primaryKey(['id']),
       }),
     ];
-    const checks = buildRecreatePostchecks('t', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('t', issues, spec));
     const pkCheck = checks.find((c) => c.description.includes('primary key'));
     expect(pkCheck).toBeDefined();
     expect(pkCheck!.sql).toContain("'id'");
@@ -187,7 +193,7 @@ describe('buildRecreatePostchecks — constraints', () => {
         actual: primaryKey(['x']),
       }),
     ];
-    const checks = buildRecreatePostchecks('t', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('t', issues, spec));
     const pkCheck = checks.find((c) => c.description.includes('no primary key'));
     expect(pkCheck).toBeDefined();
     expect(pkCheck!.sql).toContain('pk > 0) = 0');
@@ -204,7 +210,7 @@ describe('buildRecreatePostchecks — constraints', () => {
         expected: unique(['email']),
       }),
     ];
-    const checks = buildRecreatePostchecks('users', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('users', issues, spec));
     const uniqueChecks = checks.filter((c) => c.description.includes('unique constraint'));
     expect(uniqueChecks).toHaveLength(2);
     expect(uniqueChecks[0]!.sql).toContain("pragma_index_list('users')");
@@ -235,7 +241,7 @@ describe('buildRecreatePostchecks — constraints', () => {
         }),
       }),
     ];
-    const checks = buildRecreatePostchecks('posts', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('posts', issues, spec));
     const fkChecks = checks.filter((c) => c.description.includes('foreign key'));
     expect(fkChecks).toHaveLength(2);
 
@@ -262,7 +268,7 @@ describe('buildRecreatePostchecks — constraints', () => {
         actual: actualColumn({ name: 'a', nativeType: 'INTEGER', nullable: true }),
       }),
     ];
-    const checks = buildRecreatePostchecks('t', issues, spec);
+    const checks = withSql(buildRecreatePostchecks('t', issues, spec));
     expect(checks.some((c) => c.description.includes('primary key'))).toBe(false);
     expect(checks.some((c) => c.description.includes('unique constraint'))).toBe(false);
     expect(checks.some((c) => c.description.includes('foreign key'))).toBe(false);

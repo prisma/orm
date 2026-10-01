@@ -4,7 +4,7 @@ import type {
 } from '@internal/contract/types';
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import { checkUncomposedNamespace } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
   ControlMutationDefaultRegistry,
@@ -25,9 +25,10 @@ import {
 } from '@internal/psl-parser';
 import { uncomposedNamespaceDiagnostic } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
-import type {
-  AuthoredColumnDefault,
-  EnumTypeHandle,
+import {
+  type AuthoredColumnDefault,
+  type EnumTypeHandle,
+  storedAsListColumn,
 } from '@internal/sql-contract-ts/contract-builder';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
@@ -46,6 +47,7 @@ import {
   interpretFieldAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
+import type { ValueObjectTypes } from './value-object-default';
 
 type LoweredFieldDefault = {
   readonly defaultValue?: AuthoredColumnDefault;
@@ -127,7 +129,6 @@ export type ResolvedField = {
   // @internal/sql-schema-ir; the canonical alias is `CheckKind` there.
   readonly noCheck?: readonly ('membership' | 'elementNotNull')[];
   readonly valueObjectTypeName?: string;
-  readonly scalarCodecId?: string;
 };
 
 /**
@@ -154,6 +155,8 @@ export interface CollectResolvedFieldsInput {
   readonly symbolTable: SymbolTable;
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
+  /** The value objects the composite types declare, by name. */
+  readonly valueObjectTypes: ValueObjectTypes;
   readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly familyId: string;
@@ -172,7 +175,7 @@ export interface CollectResolvedFieldsInput {
   /** Extension entities already lowered for this namespace — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly namespaceExtensionEntities?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /** Codec-id-keyed descriptor lookup — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
 }
 
 /**
@@ -226,6 +229,8 @@ export function describeUnsupportedSqlAttribute(input: {
     authoringContributions: input.authoringContributions,
   };
   return ({ attribute, level, owner, field }) => {
+    // A composite type takes no attributes at all; `buildValueObjectNodes` refuses each one once.
+    if (owner.kind === 'compositeType') return undefined;
     if (level === 'model') {
       const source = diagnosticSource(input.sources, owner.node.syntax);
       const uncomposedNamespace = checkUncomposedNamespace(
@@ -351,7 +356,7 @@ function lowerNoCheckForField(input: {
   readonly field: FieldSymbol;
   readonly sources: PslSources;
   readonly binder: Binder;
-  readonly isListField: boolean;
+  readonly isListColumn: boolean;
   readonly isDomainEnum: boolean;
   readonly diagnostics: PslDiagnosticCollector;
 }): readonly NoCheckKind[] | undefined {
@@ -372,7 +377,7 @@ function lowerNoCheckForField(input: {
   const span = getAttribute(input.field.attributes, 'noCheck')?.span ?? input.field.span;
   const subject = `Field "${input.model.name}.${input.field.name}"`;
   const derivable: NoCheckKind[] = [];
-  if (input.isListField) derivable.push('elementNotNull');
+  if (input.isListColumn) derivable.push('elementNotNull');
   if (input.isDomainEnum) derivable.push('membership');
 
   const authored = [interpreted.first, interpreted.second].filter(
@@ -412,6 +417,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     symbolTable,
     enumTypeDescriptors,
     namedTypeDescriptors,
+    valueObjectTypes,
     composedExtensions,
     authoringContributions,
     binder,
@@ -477,11 +483,16 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       continue;
     }
 
-    const isValueObjectField = fieldTypeResolution?.kind === 'compositeType';
+    const valueObjectName =
+      fieldTypeResolution?.kind === 'compositeType' ? fieldTypeResolution.symbol.name : undefined;
+    const isValueObjectField = valueObjectName !== undefined;
     const isListField = field.list;
+    const isListColumn = storedAsListColumn({
+      list: isListField,
+      typedByValueObject: isValueObjectField,
+    });
 
     let descriptor: ColumnDescriptor | undefined;
-    let scalarCodecId: string | undefined;
     let presetContributions: FieldPresetContributions | undefined;
     const resolveInput = {
       field,
@@ -502,12 +513,20 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     };
 
     if (isValueObjectField) {
-      // A stack that declares no valueObjectStorageType has no value-object
-      // storage — the field is skipped.
-      descriptor =
-        valueObjectStorageTypeName !== undefined
-          ? scalarColumnDescriptors.get(valueObjectStorageTypeName)
-          : undefined;
+      if (valueObjectStorageTypeName === undefined) {
+        diagnostics.push({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: `Field "${model.name}.${field.name}" is typed by the composite type "${field.typeName}", but the adapter of the stack declares no storage type for value objects, so the field has no column to be stored in.`,
+          ...source.at(field.span),
+        });
+        continue;
+      }
+      descriptor = scalarColumnDescriptors.get(valueObjectStorageTypeName);
+      if (descriptor === undefined) {
+        throw new InternalError(
+          `The stack declares "${valueObjectStorageTypeName}" as its value-object storage type, but it is not one of the stack's scalar types; the control stack checks this when it is assembled.`,
+        );
+      }
     } else if (isListField) {
       if (capabilities['sql']?.['scalarList'] !== true) {
         diagnostics.push({
@@ -538,7 +557,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
         });
         continue;
       }
-      scalarCodecId = resolved.descriptor.codecId;
       descriptor = resolved.descriptor;
     } else {
       const resolved = resolveFieldTypeDescriptor(resolveInput);
@@ -607,6 +625,11 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             sources: input.sources,
             binder: input.binder,
             columnDescriptor: descriptor,
+            isListColumn,
+            valueObjectDefault:
+              valueObjectName === undefined
+                ? undefined
+                : { valueObjectName, types: valueObjectTypes },
             generatorDescriptorById,
             defaultFunctionRegistry,
             dataTypeSupport,
@@ -702,11 +725,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           field,
           sources: input.sources,
           binder: input.binder,
-          // The storage shape decides, not the PSL shape: a value-object list
-          // lands in one JSONB column, which derives no generated checks, so
-          // any waiver on it waives nothing and must be rejected here rather
-          // than persisted as an inert flag.
-          isListField: isListField && !isValueObjectField,
+          isListColumn,
           isDomainEnum: enumHandle !== undefined,
           diagnostics,
         })
@@ -724,8 +743,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       ...ifDefined('uniqueName', uniqueName),
       ...ifDefined('many', isListField ? (true as const) : undefined),
       ...ifDefined('noCheck', noCheckKinds),
-      ...ifDefined('valueObjectTypeName', isValueObjectField ? field.typeName : undefined),
-      ...ifDefined('scalarCodecId', scalarCodecId),
+      ...ifDefined('valueObjectTypeName', valueObjectName),
     });
   }
 

@@ -1,5 +1,8 @@
 import type { Contract } from '@internal/contract/types';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
@@ -44,7 +47,7 @@ export interface ContractSourceContext {
   /** Extension contracts keyed by space ID, required for cross-space FK resolution. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly authoringContributions: AssembledAuthoringContributions;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
   /** The stack's data types, so a written default can be cast into a column's type. ADR 254. */
   readonly dataTypeLookup: DataTypeLookup;
   readonly controlMutationDefaults: ControlMutationDefaults;
@@ -81,8 +84,19 @@ export interface ContractSourceProviderBase {
   ) => Promise<Result<Contract, ContractSourceDiagnostics>>;
 }
 
+/** The PSL grammar versions the parser knows. `prisma-7` reads the lines of a `view` block as model fields; Prisma 6 schemas use the same grammar. */
+// biome-ignore lint/plugin/no-family-vocabulary: the parser names the grammar versions it parses
+export type PslGrammar = 'prisma-7' | 'prisma-8';
+
+/** What a PSL source tells the parser about its files. Every tool that parses the source's files passes these to the parser. */
+export interface PslParserOptions {
+  /** The grammar the files are written in. Defaults to `prisma-8`. */
+  readonly grammar?: PslGrammar;
+}
+
 export interface PslContractSourceProvider extends ContractSourceProviderBase {
   readonly format: 'psl';
+  readonly parserOptions?: PslParserOptions;
 }
 
 export interface TypeScriptContractSourceProvider extends ContractSourceProviderBase {

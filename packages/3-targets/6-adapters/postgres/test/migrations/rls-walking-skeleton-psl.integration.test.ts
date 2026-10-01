@@ -10,6 +10,7 @@ import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresRlsPolicy,
@@ -17,7 +18,6 @@ import {
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { postgresScalarAuthoringTypes } from '../../src/core/control-mutation-defaults';
 import {
   controlAdapter,
   createDriver,

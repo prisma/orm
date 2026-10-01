@@ -1,3 +1,4 @@
+import { SQL_EXPRESSION_DATA_TYPE_ID } from '@internal/sql-contract/sql-expression';
 import { describe, expect, it } from 'vitest';
 import {
   sqliteBigint,
@@ -37,6 +38,16 @@ describe('the data types this target registers', () => {
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
   });
+
+  it('declares no type that takes a sql/expression value through a cast or a list cast', () => {
+    expect(
+      sqliteDataTypes.filter(
+        (type) =>
+          'sql/expression' in type.casts ||
+          type.listCast?.of.includes(SQL_EXPRESSION_DATA_TYPE_ID) === true,
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe('what each cast converts', () => {
@@ -60,5 +71,26 @@ describe('what each cast converts', () => {
     ['sqlite/text to sqlite/blob, the text unchanged', sqliteBlob, sqliteText.id, 'AA==', 'AA=='],
   ])('%s', (_name, type, source, value, converted) => {
     expect(type.casts[source]?.(value)).toEqual(converted);
+  });
+});
+
+describe('the canonical form of sqlite/bigint', () => {
+  it.each([
+    ['digit text', '9007199254740993', '9007199254740993'],
+    ['digit text with leading zeros', '-007', '-7'],
+    ['a safe integer, as SQLite reads back an INTEGER default', 42, '42'],
+    ['a negative safe integer', -1, '-1'],
+  ])('reads %s as its digit text', (_name, value, canonical) => {
+    expect(sqliteBigint.toCanonicalForm?.(value)).toBe(canonical);
+  });
+
+  it.each([
+    ['a number past the safe integer range', Number.MAX_SAFE_INTEGER + 2],
+    ['a fraction', 1.5],
+    ['text that is not an integer', '1.5'],
+  ])('refuses %s with a cast-level code', (_name, value) => {
+    expect(() => sqliteBigint.toCanonicalForm?.(value)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
+    );
   });
 });

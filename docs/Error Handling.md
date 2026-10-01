@@ -121,13 +121,15 @@ See:
 
 ### CLI boundary: structured errors + Result conversion
 
-CLI commands use structured errors and convert them to a `Result` at the command boundary. Non-structured errors propagate (fail fast) to preserve stack traces.
+A CLI command's handler returns `ok(...)` or `notOk(error)`. A catch reports what it caught through `errorFromCaught`: a structured error as itself, anything else as `CLI.UNEXPECTED`. An `InternalError` is thrown again, so the engine reports it as a bug at exit 1.
 
 `CliStructuredError` implements the structural `StructuredError` interface from `@internal/utils/structured-error` (ADR 239), so it's recognizable by `isStructuredError` across the control/execution plane split, not just by its own class.
 
 See:
 - `packages/1-framework/1-core/errors/src/control.ts` (`CliStructuredError`)
-- `packages/1-framework/3-tooling/cli/src/utils/result.ts` (`performAction`)
+- `packages/1-framework/3-tooling/cli/src/orm/define-command.ts` (`defineOrmCommand`, the command boundary)
+- `packages/1-framework/3-tooling/cli/src/control-api/operations/caught-errors.ts` (`errorFromCaught`)
+- `.agents/rules/cli-error-handling.mdc`
 - `docs/CLI Style Guide.md` ("Errors", exit codes)
 
 ### Plan/build-time failures: stable RuntimeError codes

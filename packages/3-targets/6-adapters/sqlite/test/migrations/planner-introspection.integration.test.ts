@@ -112,6 +112,7 @@ describe('SQLite planner + introspection round-trip', () => {
             email: makeColumn({ nativeType: 'text', nullable: false }),
             active: makeColumn({
               nativeType: 'integer',
+              codecId: 'sqlite/integer@1',
               nullable: false,
               default: { kind: 'literal', value: 1 },
             }),

@@ -46,7 +46,7 @@ import {
   SYNTHETIC_SPAN,
 } from '../psl-build/psl-literals';
 import { createUniqueFieldName } from '../psl-build/unique-name';
-import { dataTypeForInferredType, inferredDefaultReadsBack } from './infer-default-codec';
+import type { InferredColumnDefaults } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import { resolveColumnFieldName, type TableColumnFieldNameMap } from './infer-names';
 
@@ -57,6 +57,7 @@ export function buildModel(
   fieldNamesByTable: ReadonlyMap<string, TableColumnFieldNameMap>,
   defaultMapping: DefaultMappingOptions | undefined,
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
+  columnDefaults: InferredColumnDefaults,
   relationFields: readonly RelationField[],
   danglingForeignKeys: readonly DanglingForeignKeyInfo[],
   rlsEnabled = false,
@@ -93,6 +94,7 @@ export function buildModel(
         fieldNameMap,
         defaultMapping,
         rawDefaultParser,
+        columnDefaults,
         pkColumns,
         isSinglePk,
         singlePkConstraintName,
@@ -224,6 +226,7 @@ function buildScalarField(
   fieldNameMap: TableColumnFieldNameMap | undefined,
   defaultMapping: DefaultMappingOptions | undefined,
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
+  columnDefaults: InferredColumnDefaults,
   pkColumns: ReadonlySet<string>,
   isSinglePk: boolean,
   singlePkConstraintName: string | undefined,
@@ -288,14 +291,11 @@ function buildScalarField(
     rawDefaultParser,
     {
       ...defaultMapping,
-      ...ifDefined(
-        'columnDataType',
-        dataTypeForInferredType(resolution.pslType.name, isEnumColumn),
-      ),
+      ...ifDefined('columnDataType', columnDefaults.dataTypeOf(resolution.pslType, isEnumColumn)),
       list: column.many === true,
     },
     (value) =>
-      inferredDefaultReadsBack(value, resolution.pslType.name, isEnumColumn, column.many === true),
+      columnDefaults.readsBack(value, resolution.pslType, isEnumColumn, column.many === true),
   );
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));

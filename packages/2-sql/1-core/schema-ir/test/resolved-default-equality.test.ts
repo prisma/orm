@@ -173,50 +173,6 @@ describe('resolvedDefaultsEqual', () => {
     });
   });
 
-  describe('int64 literals', () => {
-    it('matches a safe-integer number against the decimal text it denotes, under int8', () => {
-      expect({
-        numberFirst: resolvedDefaultsEqual(literal(0), literal('0'), 'int8'),
-        textFirst: resolvedDefaultsEqual(literal('0'), literal(0), 'int8'),
-      }).toEqual({ numberFirst: true, textFirst: true });
-    });
-
-    it('matches a safe-integer number against the decimal text it denotes, under bigint', () => {
-      expect(resolvedDefaultsEqual(literal(42), literal('42'), 'bigint')).toBe(true);
-    });
-
-    it('matches a negative safe integer against its decimal text', () => {
-      expect(resolvedDefaultsEqual(literal(-7), literal('-7'), 'int8')).toBe(true);
-    });
-
-    it('fires when the decimal text denotes a different number', () => {
-      expect(resolvedDefaultsEqual(literal(1), literal('2'), 'int8')).toBe(false);
-    });
-
-    it('leaves a number against its decimal text alone without an int8/bigint native type', () => {
-      expect(resolvedDefaultsEqual(literal(0), literal('0'), 'int4')).toBe(false);
-      expect(resolvedDefaultsEqual(literal(0), literal('0'))).toBe(false);
-    });
-
-    it('declines to match a rounded number against the exact decimal text it lost', () => {
-      expect(
-        resolvedDefaultsEqual(literal('9007199254740993'), literal(9007199254740992), 'int8'),
-      ).toBe(false);
-    });
-
-    it('declines to match outside the safe-integer range, even when the text is exact', () => {
-      expect(resolvedDefaultsEqual(literal(1e17), literal('100000000000000000'), 'int8')).toBe(
-        false,
-      );
-    });
-
-    it('still compares two decimal-text strings by identity past the safe integer range', () => {
-      expect(
-        resolvedDefaultsEqual(literal('9007199254740993'), literal('9007199254740993'), 'int8'),
-      ).toBe(true);
-    });
-  });
-
   describe('numeric literals', () => {
     const nativeType = 'numeric(65,30)';
 
@@ -234,12 +190,14 @@ describe('resolvedDefaultsEqual', () => {
         leading: resolvedDefaultsEqual(literal('0.5'), literal('00.5'), nativeType),
         negativeZero: resolvedDefaultsEqual(literal('0'), literal('-0.0'), nativeType),
         scaleZero: resolvedDefaultsEqual(literal('2'), literal('2.0'), 'numeric(10,0)'),
+        negativeScale: resolvedDefaultsEqual(literal(12300), literal('12300.0'), 'numeric(5,-2)'),
       }).toEqual({
         trailing: true,
         whole: true,
         leading: true,
         negativeZero: true,
         scaleZero: true,
+        negativeScale: true,
       });
     });
 
@@ -307,10 +265,9 @@ describe('resolvedDefaultsEqual', () => {
 
   describe('list literals', () => {
     it('normalizes each element under the element type', () => {
-      expect({
-        int8: resolvedDefaultsEqual(literal([1, -2]), literal(['1', '-2']), 'int8[]'),
-        numeric: resolvedDefaultsEqual(literal([12.5]), literal(['12.50']), 'numeric(10,2)[]'),
-      }).toEqual({ int8: true, numeric: true });
+      expect(resolvedDefaultsEqual(literal([12.5]), literal(['12.50']), 'numeric(10,2)[]')).toBe(
+        true,
+      );
     });
 
     it('fires when an element or the length differs', () => {

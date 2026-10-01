@@ -25,7 +25,10 @@ import type {
   AuthoringTypeNamespace,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  CodecLookupWithDescriptors,
+} from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
 import {
   buildSymbolTable,
@@ -170,7 +173,7 @@ const codecsById = new Map<string, AnyCodecDescriptor>([
   [rejectsCodec.codecId, rejectsCodec],
 ]);
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,

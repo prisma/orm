@@ -64,6 +64,10 @@ async function listSchemaFiles(absolutePath: string, displayPath: string): Promi
   return files;
 }
 
+function isMissingPath(error: unknown): boolean {
+  return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
+}
+
 function readFailure(schemaPath: string, message: string, meta: Record<string, unknown>) {
   return notOk({
     summary: `Failed to read Prisma 6 schema at "${schemaPath}"`,
@@ -81,10 +85,12 @@ export function prisma6Contract(
   schemaPath: string,
   options: Prisma6ContractOptions,
 ): ContractConfig {
+  const parserOptions = { grammar: 'prisma-7' } as const;
   return {
     source: {
       format: 'psl',
       inputs: [schemaPath],
+      parserOptions,
       async load(context) {
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {
@@ -96,8 +102,11 @@ export function prisma6Contract(
         try {
           files = await listSchemaFiles(absolutePath, schemaPath);
         } catch (error) {
-          const message = String(error);
-          return readFailure(schemaPath, message, { schemaPath, absolutePath, cause: message });
+          const cause = String(error);
+          const message = isMissingPath(error)
+            ? `There is no file or directory at "${schemaPath}". Fix the path passed to prisma6Schema() in prisma.config.ts.`
+            : cause;
+          return readFailure(schemaPath, message, { schemaPath, absolutePath, cause });
         }
         if (files.length === 0) {
           return readFailure(
@@ -120,7 +129,7 @@ export function prisma6Contract(
               cause: message,
             });
           }
-          const { document, sources, diagnostics } = parse(schema, file.sourceId);
+          const { document, sources, diagnostics } = parse(schema, file.sourceId, parserOptions);
           const sourceFile = sources.sourceFileFor(document.syntax);
           seedDiagnostics.push(...mapParseDiagnostics(diagnostics, sourceFile, file.sourceId));
           documents.push({ document, sources, sourceFile, sourceId: file.sourceId });

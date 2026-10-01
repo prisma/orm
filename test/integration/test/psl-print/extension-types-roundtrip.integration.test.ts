@@ -33,7 +33,7 @@ model Document {
     expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });
 
-  it('refuses an extension type on a value-object field, whose type parameters the PSL source drops', async () => {
+  it('writes an extension type with type parameters on a value-object member and reads back as the same contract', async () => {
     const authored = await readPsl(
       `// use prisma-8
 type Point {
@@ -47,13 +47,12 @@ model Place {
 `,
       { stack },
     );
+    const { text, sourceSettings } = printContract(authored, stack);
 
-    expect(() => printContract(authored, stack)).toThrow(
-      expect.objectContaining({
-        code: 'CONTRACT.PRINT_UNSUPPORTED',
-        meta: { coordinate: '"public".Point.at', codecId: 'pg/vector@1' },
-      }),
-    );
+    expect(text).toContain('at pgvector.Vector(3)');
+    const printed = await readPsl(text, { stack, sourceSettings });
+    expect(serializedWithoutCapabilities(printed)).toEqual(serializedWithoutCapabilities(authored));
+    expect(printed.storage.storageHash).toBe(authored.storage.storageHash);
   });
 
   it('writes a literal default on an extension-typed column and reads back as the same contract', async () => {

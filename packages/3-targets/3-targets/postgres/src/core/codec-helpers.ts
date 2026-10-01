@@ -9,11 +9,49 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
+import {
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  SAFE_INTEGER_BIGINT_RANGE,
+} from '@internal/framework-components/codec';
+import { numeralText } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
+import { withoutTrailing } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
+
+/**
+ * Whether text fits `length` characters, counted as PostgreSQL counts them: code points. A `character` value is padded with spaces, and spaces past its length are dropped, so they do not count.
+ */
+export function fitsCharacterLength(text: string, length: number, blankPadded: boolean): boolean {
+  const significant = blankPadded ? withoutTrailing(text, ' ') : text;
+  return significant.length <= length || [...significant].length <= length;
+}
+
+/** The uuid input PostgreSQL reads: 32 hex digits in either case, a hyphen allowed after any group of four but the last, and the whole optionally in braces. */
+const UUID_INPUT = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
+
+/** A UUID as PostgreSQL writes it: lower case, hyphenated 8-4-4-4-12. */
+export const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Text in any form PostgreSQL reads as a UUID (either case, a hyphen after any group of four digits, optionally in braces), written the way PostgreSQL writes it; `undefined` for text it does not read as one.
+ */
+export function canonicalUuid(text: string): string | undefined {
+  if (!UUID_INPUT.test(text)) return undefined;
+  const hex = text.replace(/[{}-]/g, '').toLowerCase();
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** The largest finite float4. */
+export const FLOAT4_MAX = 3.4028234663852886e38;
+
+/** Whether float4 holds a finite number: it neither overflows to an infinity nor rounds to 0, both of which PostgreSQL refuses. */
+export function fitsFloat4(value: number): boolean {
+  const single = Math.fround(value);
+  return Number.isFinite(single) && (value === 0 || single !== 0);
+}
 
 export type PrecisionParams = { readonly precision?: number };
 
@@ -155,27 +193,12 @@ export const pgUnboundedIntDecode = (wire: string | number | bigint): bigint =>
   decimalIntegerDecode('pg/unboundedint@1', wire);
 
 /**
- * Neither JSON nor a SQL number literal has a form for `NaN` or the infinities; PostgreSQL reads
- * and writes them as the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as
- * that text on the wire and in JSON.
+ * A SQL number literal has no form for `NaN` or the infinities; PostgreSQL reads and writes them as
+ * the text `NaN`, `Infinity`, `-Infinity`, so the float codecs carry them as that text on the wire,
+ * as `encodeJsonFloat` does in JSON.
  */
 export const pgFloatEncode = (value: number): string | number =>
   Number.isFinite(value) ? value : String(value);
-
-export const pgFloatEncodeJson = (value: number): JsonValue => pgFloatEncode(value);
-
-export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
-  if (typeof json === 'number') return json;
-  if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
-  throw postgresError(
-    'RUNTIME.DECODE_FAILED',
-    `${codecId} database JSON value must be a number or the text NaN, Infinity or -Infinity`,
-    { meta: { codecId, received: typeof json } },
-  );
-};
-
-const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
-const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 
 /**
  * Requires an integer within ±(2^53 − 1), the range a JS `number` holds
@@ -211,7 +234,7 @@ export const pgInt8NumberEncodeJson = (value: number): string => pgInt8NumberEnc
 export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   if (typeof wire === 'number') return pgInt8NumberGuard('RUNTIME.DECODE_FAILED', wire);
   const value = decimalIntegerDecode('pg/int8number@1', wire);
-  if (value < MIN_SAFE_INTEGER_BIGINT || value > MAX_SAFE_INTEGER_BIGINT) {
+  if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
     throw postgresError(
       'RUNTIME.DECODE_FAILED',
       `pg/int8number@1 value must be an integer within the safe integer range, got ${value}`,
@@ -221,16 +244,8 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   return Number(value);
 };
 
-export const pgInt8NumberDecodeJson = (json: JsonValue): number => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/int8number@1 database JSON value must be decimal text',
-      { meta: { codecId: 'pg/int8number@1', received: typeof json } },
-    );
-  }
-  return pgInt8NumberDecode(json);
-};
+export const pgInt8NumberDecodeJson = (json: JsonValue): number =>
+  Number(decodeJsonIntegerText('pg/int8number@1', json, SAFE_INTEGER_BIGINT_RANGE));
 
 /**
  * Renders a decimal-text default as a `bigint` literal, for the codecs whose
@@ -452,16 +467,8 @@ export const pgIntervalToIso = (value: PgInterval): string => formatIsoDuration(
 
 export const pgIntervalEncodeJson = (value: PgInterval): JsonValue => formatIsoDuration(value);
 
-export const pgIntervalDecodeJson = (json: JsonValue): PgInterval => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/interval@1 database JSON value must be an ISO-8601 duration string',
-      { meta: { codecId: 'pg/interval@1', received: typeof json } },
-    );
-  }
-  return intervalFieldsOf(json);
-};
+export const pgIntervalDecodeJson = (json: JsonValue): PgInterval =>
+  intervalFieldsOf(decodeJsonMatching('pg/interval@1', json, ISO_DURATION, 'an ISO-8601 duration'));
 
 /**
  * Reads the driver's wire value into the application value. `pg` parses an
@@ -491,16 +498,10 @@ const BASE64_TEXT = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3
 export const pgByteaEncodeJson = (value: Uint8Array): JsonValue =>
   Buffer.from(value).toString('base64');
 
-export const pgByteaDecodeJson = (value: JsonValue): Uint8Array => {
-  if (typeof value !== 'string' || !BASE64_TEXT.test(value)) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      'pg/bytea@1 database JSON value must be a base64 string',
-      { meta: { codecId: 'pg/bytea@1' } },
-    );
-  }
-  return new Uint8Array(Buffer.from(value, 'base64'));
-};
+export const pgByteaDecodeJson = (json: JsonValue): Uint8Array =>
+  new Uint8Array(
+    Buffer.from(decodeJsonMatching('pg/bytea@1', json, BASE64_TEXT, 'a base64 string'), 'base64'),
+  );
 
 const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
 

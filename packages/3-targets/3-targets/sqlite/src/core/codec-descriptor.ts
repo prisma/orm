@@ -58,10 +58,28 @@ export abstract class SqliteCodecDescriptor<P = void>
 type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
   D extends CodecDescriptorTemplate<infer P> ? P : never;
 
-export interface SqliteCodecOptions<P> {
+/** The codec the family descriptor's factory builds, which a `factory` option's codec extends. */
+type DescriptorCodec<D extends AnyCodecDescriptorTemplate> = ReturnType<ReturnType<D['factory']>>;
+
+export interface SqliteCodecOptions<
+  P,
+  C extends Codec<string, readonly CodecTrait[], unknown, unknown> = Codec<
+    string,
+    readonly CodecTrait[],
+    unknown,
+    unknown
+  >,
+> {
   /** The data type the adapted codec represents here. A template names none; this target does. */
   readonly dataType: DataTypeId;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
+  /**
+   * Builds the codec in place of the adapted one, where SQLite stores fewer values than the family codec reads: a subclass of the family codec that adds SQLite's own rule.
+   */
+  readonly factory?: (
+    descriptor: SqliteCodecDescriptor<P>,
+    params: P,
+  ) => (ctx: CodecInstanceContext) => C;
 }
 
 export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
@@ -120,7 +138,9 @@ class SqliteCodecDescriptorAdapter<
   override readonly factory = (
     params: DescriptorParams<D>,
   ): ((ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>) =>
-    this.descriptor.factory(params);
+    this.options.factory === undefined
+      ? this.descriptor.factory(params)
+      : this.options.factory(this, params);
 
   protected override jsonProjection(
     expression: ProjectionExpr,
@@ -132,7 +152,7 @@ class SqliteCodecDescriptorAdapter<
 
 export function sqliteCodec<D extends AnyCodecDescriptorTemplate>(
   descriptor: D,
-  options: SqliteCodecOptions<DescriptorParams<D>>,
+  options: SqliteCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>,
 ): AdaptedSqliteCodecDescriptor<D> {
   return blindCast<
     AdaptedSqliteCodecDescriptor<D>,

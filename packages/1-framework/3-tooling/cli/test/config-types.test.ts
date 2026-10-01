@@ -188,6 +188,7 @@ describe('defineConfig', () => {
         get: () => undefined,
         targetTypesFor: () => undefined,
         renderOutputTypeFor: () => undefined,
+        descriptorFor: () => undefined,
       },
       controlMutationDefaults: {
         defaultFunctionRegistry: new Map(),

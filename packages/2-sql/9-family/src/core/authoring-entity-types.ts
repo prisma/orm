@@ -9,6 +9,7 @@ import {
 import type { InferBlock, PslBlockSpecDescriptor } from '@internal/psl-parser';
 import { blockAttribute, jsonValue, mapBlock, str } from '@internal/psl-parser';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
+import { isInternalError } from '@internal/utils/internal-error';
 
 export function sqlFamilyEnumSpec() {
   return mapBlock({
@@ -71,7 +72,8 @@ export const sqlFamilyEnumEntityDescriptor = {
         if (memberValue === undefined) {
           try {
             value = codec.decodeJson(memberName);
-          } catch {
+          } catch (error) {
+            if (isInternalError(error)) throw error;
             diagnostics?.push({
               code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC',
               message: `enum "${block.name}" member "${memberName}" has no value and codec "${codecId}" does not accept a bare name as input`,
@@ -85,6 +87,7 @@ export const sqlFamilyEnumEntityDescriptor = {
           try {
             value = codec.decodeJson(memberValue);
           } catch (err) {
+            if (isInternalError(err)) throw err;
             const reason = err instanceof Error ? err.message : String(err);
             diagnostics?.push({
               code: 'PSL_EXTENSION_INVALID_VALUE',

@@ -240,6 +240,7 @@ describe('AddNativeEnumValueCall op', () => {
         lower(_ast, _ctx) {
           return { sql: 'stub', params: [] };
         },
+        renderColumnDefault: async () => '',
         async lowerToExecuteRequest(_ast, _ctx) {
           sqlCalls.push('lowered-check');
           return { sql: 'stub-check-sql', params: [] };

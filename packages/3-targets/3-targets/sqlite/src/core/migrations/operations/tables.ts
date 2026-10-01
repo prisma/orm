@@ -11,8 +11,10 @@ import { buildCreateIndexSql } from '../planner-ddl-builders';
 import { buildTargetDetails } from '../planner-target-details';
 import {
   type Op,
+  refuseEarlierColumnSpecs,
   renderColumnDefinition,
   renderForeignKeyClause,
+  renderSpecDefault,
   type SqliteIndexSpec,
   type SqliteTableSpec,
   step,
@@ -36,8 +38,14 @@ async function tableExistsSteps(
  * inline on the column; the table-level PRIMARY KEY clause is emitted only
  * when no column carries `inlineAutoincrementPrimaryKey`.
  */
-function renderCreateTableSql(tableName: string, spec: SqliteTableSpec): string {
-  const columnDefs = spec.columns.map(renderColumnDefinition);
+function renderCreateTableSql(
+  tableName: string,
+  spec: SqliteTableSpec,
+  defaultClauses: readonly string[],
+): string {
+  const columnDefs = spec.columns.map((column, index) =>
+    renderColumnDefinition(column, defaultClauses[index] ?? ''),
+  );
 
   const constraintDefs: string[] = [];
   const hasInlinePk = spec.columns.some((c) => c.inlineAutoincrementPrimaryKey);
@@ -64,6 +72,7 @@ export async function createTable(
   spec: SqliteTableSpec,
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
+  const defaultClauses = await renderSpecDefaults(spec, tableName, lowerer);
   const { present, absent } = await tableExistsSteps(lowerer, tableName);
   return {
     id: `table.${tableName}`,
@@ -72,7 +81,9 @@ export async function createTable(
     operationClass: 'additive',
     target: { id: 'sqlite', details: buildTargetDetails('table', tableName) },
     precheck: [step(`ensure table "${tableName}" does not exist`, absent.sql, absent.params)],
-    execute: [step(`create table "${tableName}"`, renderCreateTableSql(tableName, spec))],
+    execute: [
+      step(`create table "${tableName}"`, renderCreateTableSql(tableName, spec, defaultClauses)),
+    ],
     postcheck: [step(`verify table "${tableName}" exists`, present.sql, present.params)],
   };
 }
@@ -114,7 +125,7 @@ export interface RecreateTableArgs {
    * planner pre-builds these via `buildRecreatePostchecks` so the call IR
    * carries flat, serializable data only — no `SchemaDiffIssue` references.
    */
-  readonly postchecks: readonly { readonly description: string; readonly sql: string }[];
+  readonly postchecks: readonly RecreatePostcheck[];
   readonly operationClass: MigrationOperationClass;
 }
 
@@ -131,6 +142,7 @@ export async function recreateTable(
     postchecks,
     operationClass,
   } = args;
+  refuseEarlierColumnSpecs('recreateTable', tableName, contractTable.columns);
   const tempName = `_prisma_new_${tableName}`;
   const liveSet = new Set(schemaColumnNames);
   const sharedColumns = contractTable.columns.filter((c) => liveSet.has(c.name)).map((c) => c.name);
@@ -155,6 +167,10 @@ export async function recreateTable(
         ]
       : [];
 
+  const defaultClauses = await renderSpecDefaults(contractTable, tableName, lowerer);
+  const clauseByColumn = new Map(
+    contractTable.columns.map((column, index) => [column.name, defaultClauses[index] ?? '']),
+  );
   const tableSteps = await tableExistsSteps(lowerer, tableName);
   const tempSteps = await tableExistsSteps(lowerer, tempName);
 
@@ -175,7 +191,7 @@ export async function recreateTable(
     execute: [
       step(
         `create new table "${tempName}" with desired schema`,
-        renderCreateTableSql(tempName, contractTable),
+        renderCreateTableSql(tempName, contractTable, defaultClauses),
       ),
       ...copyStep,
       step(`drop old table "${tableName}"`, `DROP TABLE ${quoteIdentifier(tableName)}`),
@@ -192,9 +208,50 @@ export async function recreateTable(
         tempSteps.absent.sql,
         tempSteps.absent.params,
       ),
-      ...postchecks,
+      ...postchecks.flatMap((check) =>
+        'sql' in check
+          ? [check]
+          : defaultPostcheck(tableName, check, clauseByColumn.get(check.columnDefault)),
+      ),
     ],
   };
+}
+
+/**
+ * A recreate postcheck: SQL, or the name of a column whose default the recreated table must carry,
+ * which becomes SQL once the adapter has written the column's `DEFAULT …` clause.
+ */
+export type RecreatePostcheck =
+  | { readonly description: string; readonly sql: string }
+  | { readonly description: string; readonly columnDefault: string };
+
+function renderSpecDefaults(
+  spec: SqliteTableSpec,
+  tableName: string,
+  lowerer: ExecuteRequestLowerer,
+): Promise<readonly string[]> {
+  return Promise.all(spec.columns.map((column) => renderSpecDefault(column, tableName, lowerer)));
+}
+
+/**
+ * Checks the column's default is the text of its `DEFAULT …` clause. SQLite's
+ * `pragma_table_info.dflt_value` strips the outer parentheses of an expression
+ * default, so `(datetime('now'))` is stored as `datetime('now')`; they are
+ * stripped here too.
+ */
+function defaultPostcheck(
+  tableName: string,
+  check: { readonly description: string; readonly columnDefault: string },
+  clause: string | undefined,
+): { description: string; sql: string }[] {
+  if (clause === undefined || !clause.startsWith('DEFAULT ')) return [];
+  const expectedRaw = stripOuterParens(clause.slice('DEFAULT '.length));
+  return [
+    {
+      description: check.description,
+      sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('${escapeLiteral(tableName)}') WHERE name = '${escapeLiteral(check.columnDefault)}' AND dflt_value = '${escapeLiteral(expectedRaw)}'`,
+    },
+  ];
 }
 
 /**
@@ -284,8 +341,8 @@ export function buildRecreatePostchecks(
   tableName: string,
   issues: readonly SchemaDiffIssue[],
   spec: SqliteTableSpec,
-): Array<{ description: string; sql: string }> {
-  const checks: Array<{ description: string; sql: string }> = [];
+): RecreatePostcheck[] {
+  const checks: RecreatePostcheck[] = [];
   const t = escapeLiteral(tableName);
   const byName = new Map(spec.columns.map((c) => [c.name, c]));
 
@@ -334,19 +391,11 @@ export function buildRecreatePostchecks(
         continue;
       }
       // not-found (missing) or not-equal (drift) — both want the expected
-      // default SQL present on the live column.
-      const colSpec = byName.get(columnName);
-      const expectedRaw = colSpec?.defaultSql.startsWith('DEFAULT ')
-        ? // SQLite's pragma_table_info.dflt_value strips outer parens for
-          // expression defaults (per the SQLite docs), so `(datetime('now'))`
-          // is stored as `datetime('now')`. Strip them here so the postcheck
-          // matches.
-          stripOuterParens(colSpec.defaultSql.slice('DEFAULT '.length))
-        : null;
-      if (expectedRaw) {
+      // default present on the live column, as the adapter writes it.
+      if (byName.get(columnName)?.default !== undefined) {
         checks.push({
           description: `verify "${columnName}" default on "${tableName}"`,
-          sql: `SELECT COUNT(*) > 0 FROM pragma_table_info('${t}') WHERE name = '${c}' AND dflt_value = '${escapeLiteral(expectedRaw)}'`,
+          columnDefault: columnName,
         });
       }
       continue;

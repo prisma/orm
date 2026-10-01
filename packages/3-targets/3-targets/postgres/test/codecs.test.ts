@@ -310,10 +310,10 @@ describe('adapter-postgres codecs', () => {
 
     it('rejects JSON that is not base64 text', () => {
       expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
       expect(() => byteaCodec.decodeJson('not base64!')).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
     });
 
@@ -331,7 +331,7 @@ describe('adapter-postgres codecs', () => {
 
     it('throws on non-string input to decodeJson', () => {
       expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
     });
   });
@@ -398,7 +398,7 @@ describe('adapter-postgres codecs', () => {
 
       it('rejects a JSON number, which has already lost digits', () => {
         expect(() => codec.decodeJson(42)).toThrow(
-          'pg/int8@1 database JSON value must be a decimal string',
+          'pg/int8@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
         );
       });
 

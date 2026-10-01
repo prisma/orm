@@ -1,6 +1,12 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { PslSpan, ResolvedAttribute } from '@internal/psl-parser';
-import { ArrayLiteralAst, IdentifierAst, StringLiteralExprAst } from '@internal/psl-parser/syntax';
+import {
+  ArrayLiteralAst,
+  FunctionCallAst,
+  IdentifierAst,
+  PathExprAst,
+  StringLiteralExprAst,
+} from '@internal/psl-parser/syntax';
 import type { IndexNode } from '@internal/sql-contract-ts/contract-builder';
 import { prisma7Diagnostic } from './diagnostics';
 
@@ -43,6 +49,14 @@ export function parseIndexAttribute(
         if (array === undefined) return unsupported('expects a list of field names.', arg.span);
         const names: string[] = [];
         for (const element of array.elements()) {
+          const path =
+            PathExprAst.cast(element.syntax) ?? FunctionCallAst.cast(element.syntax)?.memberPath();
+          if (path !== undefined) {
+            return unsupported(
+              `lists the dotted path "${path.path().join('.')}"; an index lists fields of its model by name, and Prisma 7 refuses the path as an unknown field.`,
+              arg.span,
+            );
+          }
           const name = IdentifierAst.cast(element.syntax)?.name();
           if (name === undefined) {
             return unsupported(

@@ -246,6 +246,13 @@ const expectedRefusals: ReadonlyMap<string, ExpectedRefusal> = new Map<string, E
     },
   ],
   [
+    'test/integration/test/fixtures/contract-format/supabase-before-dbgenerated-removal.contract.json',
+    {
+      reason: 'has a different codec or type parameters from its column',
+      meta: { coordinate: '"auth"."audit_log_entries"."ip_address"' },
+    },
+  ],
+  [
     'test/integration/test/namespaced-accessors/fixtures/generated/contract.json',
     {
       reason: 'is declared in more than one namespace',

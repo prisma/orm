@@ -5,10 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { sqliteBigintDescriptor, sqliteRealDescriptor } from '../src/core/codecs';
 import sqliteControlTargetDescriptor from '../src/core/control-target';
 import { CreateTableCall, DropTableCall } from '../src/core/migrations/op-factory-call';
-import {
-  buildColumnDefaultSql,
-  buildColumnTypeSql,
-} from '../src/core/migrations/planner-ddl-builders';
+import { buildColumnTypeSql } from '../src/core/migrations/planner-ddl-builders';
 import { renderOps } from '../src/core/migrations/render-ops';
 import { createSqliteMigrationRunner } from '../src/core/migrations/runner';
 import { escapeLiteral, quoteIdentifier } from '../src/core/sql-utils';
@@ -57,17 +54,18 @@ describe('structured error codes', () => {
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/bigint@1 database JSON value must be a decimal string',
+      message:
+        'sqlite/bigint@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
     });
   });
 
-  it('real codec encodeJson of a non-finite value raises RUNTIME.ENCODE_FAILED', () => {
+  it('real codec encodeJson of NaN raises RUNTIME.ENCODE_FAILED', () => {
     const realCodec = sqliteRealDescriptor.factory()({ name: 'test' });
-    const error = capture(() => realCodec.encodeJson(Number.POSITIVE_INFINITY));
+    const error = capture(() => realCodec.encodeJson(Number.NaN));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.ENCODE_FAILED',
-      message: 'sqlite/real@1 value must be a finite number',
+      message: 'sqlite/real@1 value must be a number other than NaN, which SQLite cannot store',
     });
   });
 
@@ -97,14 +95,6 @@ describe('structured error codes', () => {
       code: 'CONTRACT.NATIVE_TYPE_INVALID',
       meta: { nativeType: 'TEXT; DROP' },
     });
-  });
-
-  it('unsafe default expression raises CONTRACT.DEFAULT_INVALID', () => {
-    const error = capture(() =>
-      buildColumnDefaultSql({ kind: 'function', expression: "eek(); DROP TABLE 'x'" }),
-    );
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({ code: 'CONTRACT.DEFAULT_INVALID' });
   });
 
   it('unknown typeRef raises CONTRACT.TYPE_UNKNOWN', () => {

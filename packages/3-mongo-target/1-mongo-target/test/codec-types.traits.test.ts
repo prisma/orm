@@ -11,6 +11,7 @@ const traitsByCodec = {
   'mongo/date@1': ['equality', 'order'],
   'mongo/vector@1': ['equality'],
   'mongo/int64@1': ['equality', 'order', 'numeric'],
+  'mongo/int64Number@1': ['equality', 'order', 'numeric'],
   'mongo/decimal128@1': ['equality', 'order', 'numeric'],
   'mongo/binary@1': ['equality'],
   'mongo/json@1': [],

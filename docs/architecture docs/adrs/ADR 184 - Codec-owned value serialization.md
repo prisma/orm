@@ -1,6 +1,6 @@
 # ADR 184 — Codec-owned value serialization
 
-> **Retrospective note.** This ADR's examples use the `defineCodec({...})` factory. That factory was the canonical codec-author surface at the time; it was later retired in favor of class-based authoring: concrete codecs extend `CodecImpl`, descriptors extend `CodecDescriptorImpl`, and per-codec column helpers tie helpers to descriptors with `satisfies`. The ADR's *decision* — that codecs own both wire and JSON-safe representations through `encode` / `decode` + `encodeJson` / `decodeJson` — is unchanged; only the authoring shape has moved on. See [ADR 208 — Higher-order codecs for parameterized types](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) and the [Codec authoring guide](../../reference/codec-authoring-guide.md) for the current shape.
+> **Retrospective note.** This ADR's examples use the `defineCodec({...})` factory. That factory was the canonical codec-author surface at the time; it was later retired in favor of class-based authoring: concrete codecs extend `CodecImpl`, descriptors extend `CodecDescriptorImpl`, and per-codec column helpers tie helpers to descriptors with `satisfies`. The ADR's *decision* — that codecs own both wire and JSON-safe representations through `encode` / `decode` + `encodeJson` / `decodeJson` — is unchanged; only the authoring shape has moved on. See [ADR 208 — Higher-order codecs for parameterized types](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) and the [Codec authoring guide](../../reference/codec-authoring-guide.md) for the current shape. The example `decodeJson` below casts its input without checking it; see the rule on [`Codec.decodeJson`](../../../packages/1-framework/1-core/framework-components/src/shared/codec.ts).
 
 > **PSL half: see [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md).** The `PslLiteralCodec` interface sketched below is replaced there: codec descriptors name the literal types they are compatible with, codecs gain no methods, and codecs never receive PSL syntax. The JSON half of this ADR is unaffected.
 
@@ -48,7 +48,7 @@ The resulting contract JSON is plain — no tags, no wrappers:
 
 The consumer reads `"2024-01-15T00:00:00.000Z"`, looks up `pg/timestamptz@1`, calls `decodeJson(...)`, gets a `Date` object.
 
-Every codec has `encodeJson` and `decodeJson`. For JSON-safe types (strings, numbers, booleans, null), they are identity functions — the `defineCodec()` factory provides these defaults. Only codecs for types that JSON can't represent (`Date`, binary data, etc.) override them.
+Every codec has `encodeJson` and `decodeJson`. For JSON-safe types (strings, numbers, booleans, null), they are identity functions — the `defineCodec()` factory provides these defaults. Only codecs for types that JSON can't represent (`Date`, binary data, etc.) override them. (Later: `decodeJson` is never an identity function. It follows the rule on [`Codec.decodeJson`](../../../packages/1-framework/1-core/framework-components/src/shared/codec.ts); see [Required methods with identity defaults](#required-methods-with-identity-defaults).)
 
 The same typed value crosses other boundaries too. The migration planner renders it into DDL (`DEFAULT '2024-01-15T00:00:00.000Z'`). The PSL printer renders it into schema source (`@default("2024-01-15T00:00:00.000Z")`). Migration operations carry it in `ops.json`. These are the same problem for different media, but they live at different layers:
 
@@ -126,6 +126,8 @@ Both SQL and Mongo families define structurally identical codec interfaces (`Cod
 `encodeJson` and `decodeJson` are required on the `Codec` interface, not optional. Any type that can appear in the contract may need a literal value serialized for it (column defaults, discriminator values, type parameters, migration temporary defaults). Making the methods required eliminates null checks at every dispatch site.
 
 For JSON-safe types (strings, numbers, booleans, null), the methods are identity functions. The `defineCodec()` factory provides these defaults when not explicitly supplied, so codecs for JSON-safe types need no additional boilerplate.
+
+> **Later change.** An identity `decodeJson` returns any JSON value as the codec's type, so a string codec handed a number returns the number. `decodeJson` now follows the rule on [`Codec.decodeJson`](../../../packages/1-framework/1-core/framework-components/src/shared/codec.ts): it reads a stored JSON form of the codec's type and throws on anything else. SQL codecs extend `CodecImpl`, where it is abstract; `defineCodec()` is retired. `mongoCodec()` defaults `decodeJson` to identity only when the application type is exactly `JsonValue`, and does not compile without one for a narrower type. An identity `encodeJson` stays the default for any JSON type.
 
 ### Contract loading integrates decoding
 

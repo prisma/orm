@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL_INVALID_EXTENSION_BLOCK_MEMBER",
+    "file": "schema.prisma",
+    "line": 2,
+    "message": "generator \"client\": the value of \"provider\" holds the dotted path prisma.client.js, which Prisma 6 does not accept in a generator block."
+  },
+  {
+    "code": "PSL_INVALID_EXTENSION_BLOCK_MEMBER",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "datasource \"db\": the value of \"url\" holds the dotted path env.DATABASE_URL, which Prisma 6 does not accept in a datasource block."
+  }
+]

@@ -117,7 +117,7 @@ describe('the Prisma 7 result document', () => {
           '7. Open prisma-8.md for a quick reference on the transition loop and your first typed query.',
           '8. Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
         ],
-        warnings: [],
+        warnings: [expect.stringContaining('package.json declares no "type"')],
       });
     },
     timeouts.coldTransformImport,

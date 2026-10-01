@@ -35,6 +35,7 @@ import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => ({ sql: 'stub', params: [] }),
+  renderColumnDefault: async () => '',
   lowerToExecuteRequest: async () => ({ sql: 'stub', params: [] }),
 };
 

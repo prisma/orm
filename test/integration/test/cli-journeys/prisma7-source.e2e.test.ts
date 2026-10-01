@@ -20,6 +20,7 @@ import {
   runContractEmit,
   runDbSign,
   runDbVerify,
+  runFormat,
   timeouts,
   useDevDatabase,
 } from '../utils/journey-test-helpers';
@@ -204,6 +205,29 @@ withTempDir(({ createTempDir }) => {
           ],
           unclaimed: ['LegacyThing'],
         });
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'contract format aligns the fields of a view, attributes included',
+      async () => {
+        const schema = (view: string) =>
+          `datasource db {\n  provider = "postgresql"\n}\n\nmodel User {\n  id Int @id\n}\n\n${view}`;
+        const ctx = setupPrisma7Project(createTempDir, db.connectionString, {
+          text: schema(
+            'view ActiveUsers {\nid Int @unique\nemail   String @map("user_email")\n}\n',
+          ),
+        });
+
+        const format = await runFormat(ctx);
+
+        expect(format.exitCode, `contract format\n${output(format)}`).toBe(0);
+        expect(readFileSync(join(ctx.testDir, 'schema.prisma'), 'utf-8')).toBe(
+          schema(
+            'view ActiveUsers {\n  id    Int    @unique\n  email String @map("user_email")\n}\n',
+          ),
+        );
       },
       timeouts.spinUpPpgDev,
     );

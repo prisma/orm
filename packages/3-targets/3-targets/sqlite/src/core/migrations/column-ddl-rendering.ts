@@ -3,8 +3,6 @@ import {
   DdlColumn,
   type DdlTableConstraint,
   ForeignKeyConstraint,
-  FunctionColumnDefault,
-  LiteralColumnDefault,
   PrimaryKeyConstraint,
   UniqueConstraint,
 } from '@internal/sql-relational-core/ast';
@@ -15,14 +13,14 @@ import {
 } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { assertNever, InternalError } from '@internal/utils/internal-error';
+import { InternalError } from '@internal/utils/internal-error';
 import { sqliteError } from '../errors';
-import type { SqliteColumnSpec } from './operations/shared';
-import { buildColumnDefaultSql, buildColumnTypeSql } from './planner-ddl-builders';
+import { type SqliteColumnSpec, sqliteDefaultToDdlColumnDefault } from './operations/shared';
+import { buildColumnTypeSql } from './planner-ddl-builders';
 
 /**
- * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql` /
- * `buildColumnDefaultSql` expect, from a column node's own stamped codec
+ * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql`
+ * expects, from a column node's own stamped codec
  * identity (`codecRef` / `codecBaseNativeType`, Decision 5) — never the
  * contract. SQLite's type renderer only uppercases the resolved base type
  * (no parameterized expansion, no named-type quoting), so `typeRef` is
@@ -81,29 +79,6 @@ function plannableDefault(column: SqlColumnIR): StorageColumn['default'] {
   return columnDefault;
 }
 
-function sqliteDefaultToDdlColumnDefault(
-  columnDefault: StorageColumn['default'],
-): DdlColumn['default'] {
-  if (!columnDefault) return undefined;
-  switch (columnDefault.kind) {
-    case 'literal':
-      return new LiteralColumnDefault(columnDefault.value);
-    case 'function':
-      // `autoincrement()` is not a DEFAULT clause — SQLite encodes it as
-      // `INTEGER PRIMARY KEY AUTOINCREMENT` inline on the column. Skip it
-      // here; the renderer also has a defensive guard for the same case.
-      if (columnDefault.expression === 'autoincrement()') return undefined;
-      return new FunctionColumnDefault(columnDefault.expression);
-    default: {
-      const exhaustive: never = columnDefault;
-      return assertNever(
-        exhaustive,
-        `sqliteDefaultToDdlColumnDefault: unhandled kind "${blindCast<{ kind: string }, 'exhaustiveness: surface the unhandled default kind'>(exhaustive).kind}"`,
-      );
-    }
-  }
-}
-
 /**
  * True when the column is rendered inline as `INTEGER PRIMARY KEY
  * AUTOINCREMENT` — the sole member of the table's primary key with an
@@ -132,11 +107,12 @@ export function isInlineAutoincrementPrimaryKeyNode(
 export function columnSpecFromNode(column: SqlColumnIR, inline: boolean): SqliteColumnSpec {
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, {});
-  const defaultSql = buildColumnDefaultSql(like.default, like.codecId);
   return {
     name: column.name,
     typeSql,
-    defaultSql,
+    ...(inline
+      ? {}
+      : { ...ifDefined('default', like.default), ...ifDefined('codecRef', column.codecRef) }),
     nullable: column.nullable,
     ...(inline ? { inlineAutoincrementPrimaryKey: true } : {}),
   };

@@ -1,12 +1,10 @@
 import type { CodecControlHooks } from '@internal/family-sql/control';
-import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { isPgEnumParams } from '../codecs';
 import { postgresDateTimeDdlText } from '../date-time-ddl-text';
 import { postgresError } from '../errors';
-import { escapeLiteral, quoteIdentifier, quoteQualifiedName } from '../sql-utils';
-import type { PostgresColumnDefault } from '../types';
+import { escapeLiteral, quoteQualifiedName } from '../sql-utils';
 import { resolveColumnTypeMetadata } from './planner-type-resolution';
 
 /**
@@ -23,22 +21,6 @@ function assertSafeNativeType(nativeType: string): void {
       `Unsafe native type name in contract: "${nativeType}". ` +
         'Native type names must match /^[a-zA-Z][a-zA-Z0-9_ ]*(\\[\\])?$/',
       { meta: { nativeType } },
-    );
-  }
-}
-
-/**
- * Sanity check against accidental SQL injection from malformed contract files.
- * Rejects semicolons, SQL comment tokens, and dollar-quoting.
- * Not a comprehensive security boundary — the contract is developer-authored.
- */
-function assertSafeDefaultExpression(expression: string): void {
-  if (checkSqlDefaultBody(expression) !== undefined) {
-    throw postgresError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Unsafe default expression in contract: "${expression}". ` +
-        'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-      { meta: { expression } },
     );
   }
 }
@@ -147,30 +129,6 @@ function expandParameterizedTypeSql(
 type DefaultColumn = Pick<StorageColumn, 'many' | 'nativeType'> & {
   readonly dataTypeId?: string | undefined;
 };
-
-/** Autoincrement columns use SERIAL types, so this returns empty for them. */
-export function buildColumnDefaultSql(
-  columnDefault: PostgresColumnDefault | undefined,
-  column?: DefaultColumn,
-): string {
-  if (!columnDefault) {
-    return '';
-  }
-
-  switch (columnDefault.kind) {
-    case 'literal':
-      return `DEFAULT ${renderDefaultLiteral(columnDefault.value, column)}`;
-    case 'function': {
-      if (columnDefault.expression === 'autoincrement()') {
-        return '';
-      }
-      assertSafeDefaultExpression(columnDefault.expression);
-      return `DEFAULT (${columnDefault.expression})`;
-    }
-    case 'sequence':
-      return `DEFAULT nextval('${escapeLiteral(quoteIdentifier(columnDefault.name))}'::regclass)`;
-  }
-}
 
 export function renderDefaultLiteral(value: unknown, column?: DefaultColumn): string {
   if (column?.many && Array.isArray(value)) {

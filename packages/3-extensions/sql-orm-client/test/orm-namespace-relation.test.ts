@@ -134,14 +134,14 @@ describe('namespaced orm cross-namespace relation', () => {
     const { db, runtime } = setup();
 
     runtime.setNextResults([
-      [{ id: 1, bio_col: 'hi', user_id: 9, user: '[{"id":9,"token_col":"tok"}]' }],
+      [{ id: 1, bio_col: 'hi', user_id: 9, user: '[{"id":"9","token_col":"tok"}]' }],
     ]);
     const profile = await db.public.Profile.include('user').first();
     expect(profile).toEqual({
       id: 1,
       bio: 'hi',
       userId: 9,
-      user: { id: 9, token: 'tok' },
+      user: { id: '9', token: 'tok' },
     });
   });
 });

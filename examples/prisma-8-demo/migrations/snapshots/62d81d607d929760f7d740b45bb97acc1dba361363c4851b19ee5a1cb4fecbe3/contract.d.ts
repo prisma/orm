@@ -6,23 +6,7 @@ import type {
   Vector,
 } from '@prisma/orm-extension-pgvector/codec-types';
 import type { QueryOperationTypes as PgVectorQueryOperationTypes } from '@prisma/orm-extension-pgvector/operation-types';
-import type {
-  Bit,
-  Char,
-  CodecTypes as PgTypes,
-  Interval,
-  JsonValue,
-  Numeric,
-  Time,
-  TimeString,
-  Timestamp,
-  TimestampString,
-  Timestamptz,
-  TimestamptzString,
-  Timetz,
-  VarBit,
-  Varchar,
-} from '@prisma/orm-postgres/target/codec-types';
+import type { CodecTypes as PgTypes } from '@prisma/orm-postgres/target/codec-types';
 import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgres/target/operation-types';
 
 import type {
@@ -1025,7 +1009,11 @@ type ContractBase = Omit<
               };
               readonly embedding: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/vector@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/vector@1';
+                  readonly typeParams: { readonly length: 1536 };
+                };
               };
               readonly expiresAt: {
                 readonly nullable: false;

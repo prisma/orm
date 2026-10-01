@@ -1,7 +1,17 @@
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
+import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { testBuildContext } from './build-context';
-import { INT_FIELD, printingWidget, refusal, TEXT_COLUMN, TEXT_FIELD } from './refusal-support';
+import { fieldText } from './print-support';
+import {
+  deserialize,
+  INT_FIELD,
+  printingWidget,
+  refusal,
+  TEXT_COLUMN,
+  TEXT_FIELD,
+  widgetContract,
+} from './refusal-support';
 
 it('prints the widget the refusal tests start from', () => {
   expect(printingWidget()).not.toThrow();
@@ -59,6 +69,53 @@ describe('columns and fields', () => {
         fields: { priority: TEXT_FIELD },
       }),
     ).toThrow(refusal({ coordinate: '"public"."Widget"."priority"' }));
+  });
+
+  it('prints a list field typed by a domain enum, which names the enum like a field that is not a list', () => {
+    const document = buildPostgresPslContract(
+      deserialize(
+        widgetContract({
+          domain: {
+            enum: { Priority: { codecId: 'pg/text@1', members: [{ name: 'Low', value: 'low' }] } },
+          },
+          entries: { valueSet: { Priority: { kind: 'valueSet', values: ['low'] } } },
+          columns: {
+            priorities: {
+              ...TEXT_COLUMN,
+              many: true,
+              noCheck: ['elementNotNull', 'membership'],
+              valueSet: {
+                plane: 'storage',
+                namespaceId: 'public',
+                entityKind: 'valueSet',
+                entityName: 'Priority',
+              },
+            },
+          },
+          fields: {
+            priorities: {
+              ...TEXT_FIELD,
+              many: true,
+              valueSet: {
+                plane: 'domain',
+                namespaceId: 'public',
+                entityKind: 'enum',
+                entityName: 'Priority',
+              },
+            },
+          },
+        }),
+      ),
+      testBuildContext(),
+    );
+
+    expect(
+      document.namespaces
+        .flatMap((namespace) => namespace.models)
+        .flatMap((model) => model.fields)
+        .filter((field) => field.name === 'priorities')
+        .map(fieldText),
+    ).toEqual(['priorities Priority[] @noCheck(elementNotNull) @noCheck(membership)']);
   });
 
   it('refuses a model field whose type is a union of types', () => {

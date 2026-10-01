@@ -1,4 +1,15 @@
 import type { JsonValue } from '@internal/contract/types';
+import {
+  decodeJsonInteger,
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  INT32_RANGE,
+  INT64_RANGE,
+  isIntegerIn,
+  refuseJsonValue,
+  SAFE_INTEGER_BIGINT_RANGE,
+  SAFE_INTEGER_RANGE,
+} from '@internal/framework-components/codec';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
 
@@ -46,7 +57,8 @@ function encodeFailed(codecId: string, message: string, received: unknown): neve
 }
 
 function describeReceived(value: unknown): string {
-  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'bigint') return `${value}n`;
   if (typeof value === 'string') {
     return `string ${JSON.stringify(value.slice(0, RECEIVED_PREVIEW_LIMIT))}`;
   }
@@ -85,13 +97,13 @@ export function dateEncode(codecId: string, value: Date): Date {
   return value;
 }
 
-const OBJECT_ID_HEX = /^[0-9a-f]{24}$/i;
+const OBJECT_ID_TEXT = /^[0-9a-fA-F]{24}$/;
 
 function hexStringOf(value: object): string | undefined {
   const toHexString: unknown = Reflect.get(value, 'toHexString');
   if (typeof toHexString !== 'function') return undefined;
   const hex: unknown = Reflect.apply(toHexString, value, []);
-  return typeof hex === 'string' && OBJECT_ID_HEX.test(hex) ? hex : undefined;
+  return typeof hex === 'string' && OBJECT_ID_TEXT.test(hex) ? hex : undefined;
 }
 
 /**
@@ -138,33 +150,77 @@ export function doubleEncode(codecId: string, value: number): Double {
   return new Double(value);
 }
 
-const INT32_MIN = -(2 ** 31);
-const INT32_MAX = 2 ** 31 - 1;
-
 export function int32Encode(codecId: string, value: number): number {
-  if (
-    typeof value !== 'number' ||
-    !Number.isInteger(value) ||
-    value < INT32_MIN ||
-    value > INT32_MAX
-  ) {
+  if (!isIntegerIn(value, INT32_RANGE)) {
     encodeFailed(
       codecId,
-      `value must be an integer from ${INT32_MIN} to ${INT32_MAX}; received ${describeReceived(value)}`,
+      `value must be an integer from ${INT32_RANGE.min} to ${INT32_RANGE.max}; received ${describeReceived(value)}`,
       value,
     );
   }
   return value;
 }
 
-const INT64_MIN = -(2n ** 63n);
-const INT64_MAX = 2n ** 63n - 1n;
+export function objectIdEncodeJson(codecId: string, value: string): string {
+  if (typeof value !== 'string' || !OBJECT_ID_TEXT.test(value)) {
+    encodeFailed(codecId, 'value must be 24 hexadecimal digits', value);
+  }
+  return value;
+}
+
+export function objectIdDecodeJson(codecId: string, json: JsonValue): string {
+  return decodeJsonMatching(codecId, json, OBJECT_ID_TEXT, '24 hexadecimal digits');
+}
+
+export function int32EncodeJson(codecId: string, value: number): number {
+  if (!isIntegerIn(value, INT32_RANGE)) {
+    encodeFailed(
+      codecId,
+      `value must be an integer from ${INT32_RANGE.min} to ${INT32_RANGE.max}`,
+      value,
+    );
+  }
+  return value;
+}
+
+export function int32DecodeJson(codecId: string, json: JsonValue): number {
+  return decodeJsonInteger(codecId, json, INT32_RANGE);
+}
+
+export function dateEncodeJson(codecId: string, value: Date): string {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    encodeFailed(codecId, 'value must be a valid Date', value);
+  }
+  return value.toISOString();
+}
+
+/**
+ * The JSON form is the text `Date.toISOString()` writes, so a string that does not read back to that same text is refused.
+ */
+export function dateDecodeJson(codecId: string, json: JsonValue): Date {
+  const date = typeof json === 'string' ? new Date(json) : undefined;
+  if (date === undefined || Number.isNaN(date.getTime()) || date.toISOString() !== json) {
+    return refuseJsonValue(codecId, 'a date and time in UTC as Date.toISOString writes it', json);
+  }
+  return date;
+}
+
+export function vectorDecodeJson(codecId: string, json: JsonValue): number[] {
+  if (!Array.isArray(json)) return refuseJsonValue(codecId, 'an array of numbers', json);
+  const numbers: number[] = [];
+  for (const element of json) {
+    if (typeof element !== 'number')
+      return refuseJsonValue(codecId, 'an array of numbers', element);
+    numbers.push(element);
+  }
+  return numbers;
+}
 
 /**
  * `Long.fromBigInt` keeps the low 64 bits of any bigint, so an out-of-range value would be stored as a different number without error.
  */
 function isInt64(value: bigint): boolean {
-  return value >= INT64_MIN && value <= INT64_MAX;
+  return value >= INT64_RANGE.min && value <= INT64_RANGE.max;
 }
 
 function requireInt64(codecId: string, value: bigint): bigint {
@@ -178,12 +234,26 @@ export function int64Encode(codecId: string, value: bigint): Long {
 }
 
 /**
+ * A stored double with a fraction, which a 64-bit integer codec cannot read. Such values were written through a Prisma 6 `Int` while its contract used the 32-bit codec, which took any number.
+ */
+function refuseFractionalDouble(codecId: string, wire: number): never {
+  return decodeFailed(
+    codecId,
+    `wire value is the fractional double ${wire}, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-written-as-long has the queries for a plain field, a list and a list of composite values.`,
+    wire,
+  );
+}
+
+/**
  * The driver promotes a stored `long` that fits in 53 bits to a `number`, and hands larger ones over as `Long`, so both arrive here.
  */
 export function int64Decode(codecId: string, wire: Long | number | bigint): bigint {
   if (typeof wire === 'bigint') return wire;
   if (isLong(wire)) return wire.toBigInt();
   if (typeof wire === 'number' && Number.isSafeInteger(wire)) return BigInt(wire);
+  if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
+    return refuseFractionalDouble(codecId, wire);
+  }
   return decodeFailed(codecId, 'wire value must be a Long or a safe integer', wire);
 }
 
@@ -197,14 +267,60 @@ export function int64EncodeJson(codecId: string, value: bigint | number): string
 }
 
 export function int64DecodeJson(codecId: string, json: JsonValue): bigint {
-  if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
-    return decodeFailed(codecId, 'JSON value must be decimal integer text', json);
+  return decodeJsonIntegerText(codecId, json, INT64_RANGE);
+}
+
+const SAFE_INTEGERS = `from ${SAFE_INTEGER_RANGE.min} to ${SAFE_INTEGER_RANGE.max}`;
+
+export function int64NumberEncode(codecId: string, value: number): Long {
+  if (!isIntegerIn(value, SAFE_INTEGER_RANGE)) {
+    encodeFailed(
+      codecId,
+      `value must be an integer ${SAFE_INTEGERS}; received ${describeReceived(value)}`,
+      value,
+    );
   }
-  const value = BigInt(json);
-  if (!isInt64(value)) {
-    return decodeFailed(codecId, 'JSON value is outside the signed 64-bit range', json);
+  return Long.fromNumber(value);
+}
+
+function safeIntegerOf(codecId: string, value: bigint): number {
+  if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
+    decodeFailed(
+      codecId,
+      `wire value must be a whole number ${SAFE_INTEGERS}; received ${value}`,
+      value,
+    );
   }
-  return value;
+  return Number(value);
+}
+
+/**
+ * The driver hands a stored `long` over as a `number` when it fits in 53 bits (the default `promoteLongs`), as a `Long` otherwise or with `promoteLongs: false`, and as a `bigint` with `useBigInt64`.
+ */
+export function int64NumberDecode(codecId: string, wire: Long | number | bigint): number {
+  if (typeof wire === 'bigint') return safeIntegerOf(codecId, wire);
+  if (isLong(wire)) return safeIntegerOf(codecId, wire.toBigInt());
+  if (isIntegerIn(wire, SAFE_INTEGER_RANGE)) return wire;
+  if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
+    return refuseFractionalDouble(codecId, wire);
+  }
+  return decodeFailed(
+    codecId,
+    `wire value must be a whole number ${SAFE_INTEGERS}; received ${describeReceived(wire)}`,
+    wire,
+  );
+}
+
+export function int64NumberEncodeJson(codecId: string, value: number): string {
+  return int64NumberEncode(codecId, value).toString();
+}
+
+export function int64NumberDecodeJson(codecId: string, json: JsonValue): number {
+  return Number(decodeJsonIntegerText(codecId, json, SAFE_INTEGER_BIGINT_RANGE));
+}
+
+export function decimalTextNumberLiteral(value: JsonValue): string | undefined {
+  return typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 }
 
 export function decimalTextBigintLiteral(value: JsonValue): string | undefined {
@@ -279,19 +395,15 @@ export function decimal128EncodeJson(codecId: string, value: string): string {
  * The JSON form is what `encodeJson` writes, so it follows the encode rule: canonical decimal text (no exponent), or `NaN`, `Infinity` or `-Infinity`, that a Decimal128 holds exactly.
  */
 export function decimal128DecodeJson(codecId: string, json: JsonValue): string {
-  if (typeof json !== 'string' || !CANONICAL_DECIMAL_TEXT.test(json)) {
-    return decodeFailed(
-      codecId,
-      'JSON value must be decimal text without an exponent, or NaN, Infinity or -Infinity',
-      json,
-    );
-  }
+  const expected =
+    'decimal text without an exponent that a Decimal128 holds exactly, or NaN, Infinity or -Infinity';
+  const text = decodeJsonMatching(codecId, json, CANONICAL_DECIMAL_TEXT, expected);
   try {
-    Decimal128.fromString(json);
+    Decimal128.fromString(text);
   } catch {
-    return decodeFailed(codecId, 'JSON value cannot be stored as a Decimal128 exactly', json);
+    return refuseJsonValue(codecId, expected, json);
   }
-  return json;
+  return text;
 }
 
 export function binaryEncode(codecId: string, value: Uint8Array): Binary {
@@ -315,8 +427,7 @@ export function binaryEncodeJson(value: Uint8Array): string {
 }
 
 export function binaryDecodeJson(codecId: string, json: JsonValue): Uint8Array {
-  if (typeof json !== 'string' || !BASE64_TEXT.test(json)) {
-    return decodeFailed(codecId, 'JSON value must be base64 text', json);
-  }
-  return new Uint8Array(Buffer.from(json, 'base64'));
+  return new Uint8Array(
+    Buffer.from(decodeJsonMatching(codecId, json, BASE64_TEXT, 'base64 text'), 'base64'),
+  );
 }

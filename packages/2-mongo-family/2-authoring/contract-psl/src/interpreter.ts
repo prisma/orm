@@ -71,7 +71,15 @@ import {
   type InvalidFkPairing,
   unsupportedBlockDiagnostic,
 } from '@internal/psl-parser/interpret';
-import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
+import {
+  ArrayLiteralAst,
+  type DocumentAst,
+  FunctionCallAst,
+  type ModelAttributeAst,
+  PathExprAst,
+  type PslSources,
+  type SyntaxNode,
+} from '@internal/psl-parser/syntax';
 import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -938,11 +946,44 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
   });
 }
 
+/** The first field-list element that is a dotted path, such as `address.city` or `address.city(sort: Desc)`. */
+function nestedIndexPath(
+  node: ModelAttributeAst,
+): { readonly path: readonly string[]; readonly syntax: SyntaxNode } | undefined {
+  for (const arg of node.argList()?.args() ?? []) {
+    const name = arg.name()?.name();
+    const list = arg.value();
+    if ((name !== undefined && name !== 'fields') || !(list instanceof ArrayLiteralAst)) continue;
+    for (const element of list.elements()) {
+      const path =
+        element instanceof PathExprAst || element instanceof FunctionCallAst ? element.path() : [];
+      if (path.length > 1) return { path, syntax: element.syntax };
+    }
+  }
+  return undefined;
+}
+
+function nestedIndexPathMessage(
+  path: readonly string[],
+  pslModel: ModelSymbol,
+  compositeTypeNames: ReadonlySet<string>,
+): string {
+  const [root = ''] = path;
+  const label = `Index field "${path.join('.')}" on model "${pslModel.name}"`;
+  const rootType = Object.hasOwn(pslModel.fields, root)
+    ? pslModel.fields[root]?.typeName
+    : undefined;
+  return rootType !== undefined && compositeTypeNames.has(rootType)
+    ? `${label} is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "${pslModel.name}" or remove the index.`
+    : `${label} is a dotted path, but "${root}" is not a field of "${pslModel.name}" whose type is a composite type, so the path names no field. List fields of "${pslModel.name}" by name.`;
+}
+
 function collectIndexes(
   pslModel: ModelSymbol,
   specContext: AttributeSpecContext,
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
+  compositeTypeNames: ReadonlySet<string>,
   sources: PslSources,
   binder: Binder,
   diagnostics: PslDiagnosticCollector,
@@ -995,6 +1036,16 @@ function collectIndexes(
       span: attr.span,
       diagnostics,
     };
+
+    const nested = nestedIndexPath(node);
+    if (nested !== undefined) {
+      diagnostics.push({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedIndexPathMessage(nested.path, pslModel, compositeTypeNames),
+        ...source.at(nodePslSpan(nested.syntax, sources)),
+      });
+      continue;
+    }
 
     let index: MongoIndex | undefined;
     if (attr.name === 'textIndex') {
@@ -1561,6 +1612,7 @@ export function interpretPslDocumentToMongoContract(
       specContext,
       fieldMappings,
       modelNames,
+      compositeTypeNames,
       sources,
       binder,
       diagnostics,

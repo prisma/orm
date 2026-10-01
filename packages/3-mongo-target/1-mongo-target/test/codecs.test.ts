@@ -279,7 +279,7 @@ describe('mongoDateCodec', () => {
 
   it('decodeJson throws on non-string input', () => {
     expect(() => mongoDateCodec.decodeJson(123 as unknown as string)).toThrow(
-      'expected ISO date string',
+      'mongo/date@1 JSON value must be a date and time in UTC as Date.toISOString writes it',
     );
   });
 

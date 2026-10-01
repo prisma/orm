@@ -1,5 +1,5 @@
 ---
-description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and, outside the CLI, no name of a Prisma version before 8. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
+description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and, outside the CLI and the PSL parser's grammar names, no Prisma version name before 8. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
 globs: ["packages/1-framework/**"]
 alwaysApply: false
 ---
@@ -10,7 +10,7 @@ alwaysApply: false
 
 **The test for every new framework export, field, hook, or member:** *would Mongo populate or consume this meaningfully?* If not, it belongs in the family layer (e.g. `@internal/sql-contract`), behind a structural interface + type predicate at the boundary.
 
-The framework also must not know which Prisma version wrote a document: code for an earlier version's schema belongs in the package that reads it (e.g. `@internal/sql-contract-prisma7`). The CLI (`packages/1-framework/3-tooling/cli`) may name such a version, because it talks to users about their projects.
+The framework also must not know which Prisma version wrote a document: code for an earlier version's schema belongs in the package that reads it (e.g. `@internal/sql-contract-prisma7`). The CLI (`packages/1-framework/3-tooling/cli`) may name such a version, because it talks to users about their projects. The PSL parser owns its grammar, so its grammar names (`PslGrammar` and its readers) may name the version; suppress each site with that reason.
 
 ## How it is enforced
 

@@ -14,6 +14,7 @@ import { flag } from '@prisma/cli-engine';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative, resolve } from 'pathe';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   type ContractPrintResult,
   executeContractPrint,
@@ -330,7 +331,14 @@ export function createContractPrintCommand({ printPsl }: ContractPrintCommandDep
           { printPsl },
         );
       } catch (error) {
-        return notOk(normalizeError(error));
+        return notOk(
+          normalizeError(
+            errorFromCaught(
+              error,
+              (message) => `Unexpected error during contract print: ${message}`,
+            ),
+          ),
+        );
       }
       ctx.signal.throwIfAborted();
 

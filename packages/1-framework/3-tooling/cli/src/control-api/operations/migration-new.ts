@@ -20,10 +20,9 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import {
-  CliStructuredError,
+  type CliStructuredError,
   errorRuntime,
   errorTargetMigrationNotSupported,
-  errorUnexpected,
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
@@ -34,6 +33,7 @@ import { assertFrameworkComponentsCompatible } from '../../utils/framework-compo
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
+import { errorFromCaught } from './caught-errors';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
 import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
@@ -270,13 +270,6 @@ export async function executeMigrationNewCommand(
       summary: `Scaffolded migration at ${relative(cwd, packageDir)}`,
     });
   } catch (error) {
-    if (CliStructuredError.is(error)) {
-      return notOk(error);
-    }
-    return notOk(
-      errorUnexpected(error instanceof Error ? error.message : String(error), {
-        why: `Failed to scaffold migration: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-    );
+    return notOk(errorFromCaught(error, (message) => `Failed to scaffold migration: ${message}`));
   }
 }

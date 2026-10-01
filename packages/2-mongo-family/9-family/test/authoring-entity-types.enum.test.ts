@@ -5,6 +5,7 @@ import type {
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { mongoFamilyEnumEntityDescriptor } from '../src/core/authoring-entity-types';
 
@@ -36,6 +37,7 @@ const TEXT_CODEC_ID = 'mongo/string@1';
 const INT_CODEC_ID = 'mongo/int32@1';
 const JSON_CODEC_ID = 'test/json@1';
 const FOLDING_CODEC_ID = 'test/folding-text@1';
+const BROKEN_CODEC_ID = 'test/broken@1';
 
 const textCodec: Codec = {
   id: TEXT_CODEC_ID,
@@ -81,12 +83,21 @@ const foldingCodec: Codec = {
   },
 };
 
+const brokenCodec: Codec = {
+  ...textCodec,
+  id: BROKEN_CODEC_ID,
+  decodeJson() {
+    throw new InternalError('a codec broke an invariant');
+  },
+};
+
 const testCodecLookup: CodecLookup = {
   get(id: string): Codec | undefined {
     if (id === TEXT_CODEC_ID) return textCodec;
     if (id === INT_CODEC_ID) return intCodec;
     if (id === JSON_CODEC_ID) return jsonCodec;
     if (id === FOLDING_CODEC_ID) return foldingCodec;
+    if (id === BROKEN_CODEC_ID) return brokenCodec;
     return undefined;
   },
   targetTypesFor(id: string): readonly string[] | undefined {
@@ -98,6 +109,7 @@ const testCodecLookup: CodecLookup = {
     if (id === 'mongo/bson@1') return [];
     if (id === JSON_CODEC_ID) return ['json'];
     if (id === FOLDING_CODEC_ID) return ['text'];
+    if (id === BROKEN_CODEC_ID) return ['text'];
     return undefined;
   },
   renderOutputTypeFor: () => undefined,
@@ -378,5 +390,21 @@ describe('mongoFamilyEnumEntityDescriptor: a codec without exactly one storage t
         span: SPAN,
       }),
     ]);
+  });
+});
+
+describe('mongoFamilyEnumEntityDescriptor: a codec internal error', () => {
+  it.each([
+    ['a member with a value', { low: 'low' }],
+    ['a bare member', { low: undefined }],
+  ])('passes through for %s, instead of becoming a diagnostic', (_label, values) => {
+    const diagnostics: unknown[] = [];
+    expect(() =>
+      factory(
+        enumBlock({ name: 'Level', values, typeCodecId: BROKEN_CODEC_ID }),
+        makeContext(diagnostics),
+      ),
+    ).toThrow(InternalError);
+    expect(diagnostics).toEqual([]);
   });
 });

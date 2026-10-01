@@ -64,7 +64,8 @@ For each `(from, to)` step in the chain:
 4. **Read the upgrade instructions.** Re-sync the skills (`prisma skills sync`) so the tree matches the version just installed, then load `../upgrading/extension/upgrades/<from>-to-<to>/instructions.md`. Parse the YAML frontmatter and pay particular attention to its `changes[]` array.
 
 5. **Apply each change.** For each entry in `changes[]`:
-   - If the entry has a `detection` block (a glob + content predicate), run it. If no files match, skip this change.
+   - If the entry has a `detection` block (a glob + content predicate), run it. If no files match, skip this change. Run the glob over the project's own files: skip `node_modules`, and build output such as `dist`, `build`, `.next` or `out` (whatever directories the project's build writes). A match there is generated code, which the next build rewrites; editing it changes nothing. Migration snapshots under `migrations/snapshots/` are committed files, not build output, so keep them.
+   - How a `detection` block runs: `glob` selects files relative to the project root. Each `matches` entry, once read from the YAML, is a JavaScript regular expression, built as `new RegExp(pattern)` with no flags and tested against the whole content of one file at a time; each `contains` entry is a plain substring. A file is a hit when any entry matches it. Patterns may span lines, and some look at the whole file (for example, to skip a file that declares something elsewhere in it), so a line-by-line search such as `grep` or `rg` without `-U` is not the same test and can report files the pattern excludes. From a shell, `rg -U --pcre2 -l -e '<pattern>' <files>` tests whole files and gives the same hits.
    - If the entry has no `detection`, apply unconditionally.
    - If the entry names a `script:` (a relative path next to `instructions.md`), invoke it from the project root:
      - `*.ts` → `pnpm exec tsx <skill>/upgrading/extension/upgrades/<from>-to-<to>/<script>`

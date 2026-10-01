@@ -123,6 +123,26 @@ describe('printPsl literal defaults', () => {
     });
   });
 
+  describe('given character columns with a length', () => {
+    it('prints a default the column holds as a quoted string, read by the codec built with that length', () => {
+      const output = printTable('char_defaults', [
+        introspected('code', 'character(10)', "'abc'::bpchar"),
+        introspected('one', 'character(1)', "'a'::bpchar"),
+        introspected('name', 'character varying(10)', "'abc'::character varying"),
+      ]);
+
+      expect(output).toContain(
+        [
+          'model CharDefaults {',
+          '  id   Int         @id',
+          '  code Char(10)    @default("abc")',
+          '  one  Char(1)     @default("a")',
+          '  name VarChar(10) @default("abc")',
+        ].join('\n'),
+      );
+    });
+  });
+
   describe('given special values and a time with time zone, written in SQL', () => {
     it('prints each default as the quoted text its codec accepts', () => {
       const output = printTable('special_value_defaults', [

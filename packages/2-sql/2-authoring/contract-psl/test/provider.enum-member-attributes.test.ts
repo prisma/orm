@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { JsonValue } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -28,7 +28,7 @@ async function loadWithEnumSupport(schemaPath: string) {
     createNamespace: createTestSqlNamespace,
   });
   const baseContext = createPostgresTestContext();
-  const codecLookup: CodecLookup = {
+  const codecLookup: CodecLookupWithDescriptors = {
     ...postgresCodecLookup,
     get: (id) => (id === textCodec.id ? textCodec : postgresCodecLookup.get(id)),
   };

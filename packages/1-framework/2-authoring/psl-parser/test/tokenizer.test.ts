@@ -352,7 +352,7 @@ describe('backtick strings', () => {
   });
 
   it('is lossless with a dotted tag, whitespace before the string, and a double-quoted string', () => {
-    assertLossless('pg.sql `a` sql"b"');
+    assertLossless('postgis.geometry `a` sql"b"');
   });
 });
 

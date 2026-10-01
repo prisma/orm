@@ -214,13 +214,17 @@ describe('pg/text-array@1 codec', () => {
     expect(json).not.toBe(input);
   });
 
-  it('decodeJson stringifies non-string array entries', () => {
-    expect(codec.decodeJson(['a', 1, true])).toEqual(['a', '1', 'true']);
-  });
-
-  it('decodeJson returns an empty array for a non-array JSON value', () => {
-    expect(codec.decodeJson('not-an-array')).toEqual([]);
-    expect(codec.decodeJson(null)).toEqual([]);
+  it.each([
+    ['an array holding a number or a boolean', ['a', 1, true]],
+    ['a string', 'not-an-array'],
+    ['null', null],
+  ])('decodeJson refuses %s', (_name, json) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        meta: expect.objectContaining({ codecId: 'pg/text-array@1' }),
+      }),
+    );
   });
 });
 

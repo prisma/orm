@@ -21,7 +21,7 @@ import type { CodecControlHooks } from '@internal/family-sql/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { StorageColumn } from '@internal/sql-contract/types';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { col, fn } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
   AddColumnCall,
@@ -82,7 +82,11 @@ describe('renderOps', () => {
       }),
       new SetNotNullCall('public', 'user', 'email'),
       new DropNotNullCall('public', 'user', 'nickname'),
-      new SetDefaultCall('public', 'user', 'created_at', 'DEFAULT now()'),
+      new SetDefaultCall(
+        'public',
+        'user',
+        col('created_at', 'timestamptz', { default: fn('now()') }),
+      ),
       new DropDefaultCall('public', 'user', 'updated_at'),
       new AddPrimaryKeyCall('public', 'user', 'user_pkey', ['id']),
       new AddUniqueCall('public', 'user', 'user_email_key', ['email']),

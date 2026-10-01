@@ -1,4 +1,4 @@
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -9,6 +9,7 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withDescriptors } from '../../contract-ts/test/with-descriptors';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
@@ -45,7 +46,7 @@ const targetTypesById: Record<string, readonly string[]> = {
   'pg/int4@1': ['int4'],
 };
 
-const testCodecLookup: CodecLookup = {
+const testCodecLookup: CodecLookupWithDescriptors = withDescriptors({
   get(id: string): Codec | undefined {
     return codecsById[id];
   },
@@ -53,7 +54,7 @@ const testCodecLookup: CodecLookup = {
     return targetTypesById[id];
   },
   renderOutputTypeFor: () => undefined,
-};
+});
 
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,

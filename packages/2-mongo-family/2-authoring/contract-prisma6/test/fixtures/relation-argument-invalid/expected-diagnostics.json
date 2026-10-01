@@ -14,6 +14,12 @@
   {
     "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
     "file": "schema.prisma",
+    "line": 23,
+    "message": "Relation field \"Comment.author\": @relation references must be a list of field names."
+  },
+  {
+    "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+    "file": "schema.prisma",
     "line": 29,
     "message": "Relation field \"Like.user\": @relation argument \"relationMode\" is not supported."
   }

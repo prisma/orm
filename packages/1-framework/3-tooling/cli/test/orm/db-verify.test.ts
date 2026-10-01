@@ -17,6 +17,12 @@ import { createDbVerifyCommand } from '../../src/orm/db/verify';
 import { CliStructuredError } from '../../src/utils/cli-errors';
 import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
+import {
+  refusedConnection,
+  refusedWithDiagnostics,
+  reportedDiagnostics,
+  reportedRefusedConnection,
+} from './unreachable-database';
 
 const HASH_A = `4cb4256${'0'.repeat(57)}`;
 const HASH_B = `9d0f118${'2'.repeat(57)}`;
@@ -783,6 +789,30 @@ describe('db verify', () => {
 
       expect(settled).not.toContain('secret');
       expect(settled).toContain(MASKED_CONNECTION);
+    });
+
+    it('reports a refused connection as every command does, with its driver code', async () => {
+      const dir = await projectDir();
+      mocks.verify.mockRejectedValue(refusedConnection());
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)?.error).toEqual(reportedRefusedConnection('db verify'));
+    });
+
+    it('keeps the diagnostics of a structured driver error, without the connection string', async () => {
+      const dir = await projectDir();
+      mocks.verify.mockRejectedValue(refusedWithDiagnostics());
+
+      const run = await harness(ormConfig()).run(['db', 'verify', '--json'], { cwd: dir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: { code: 'DRIVER.CONNECTION_FAILED' },
+        diagnostics: reportedDiagnostics,
+      });
+      expect(JSON.stringify(run.json.at(-1))).not.toContain('secret');
     });
 
     it('keeps the connection string out of a structured driver error too', async () => {

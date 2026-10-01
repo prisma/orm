@@ -22,6 +22,7 @@ import {
   RecreateTableCall,
 } from './op-factory-call';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
+import type { RecreatePostcheck } from './operations/tables';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
 
 type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
@@ -162,7 +163,7 @@ export abstract class SqliteMigration<
     readonly schemaColumnNames: readonly string[];
     readonly indexes: readonly SqliteIndexSpec[];
     readonly summary: string;
-    readonly postchecks: readonly { readonly description: string; readonly sql: string }[];
+    readonly postchecks: readonly RecreatePostcheck[];
     readonly operationClass: MigrationOperationClass;
   }): Promise<Op> {
     return new RecreateTableCall(options).toOp(this.controlAdapterFor('recreateTable'));

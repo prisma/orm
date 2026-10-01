@@ -707,6 +707,10 @@ model User {
     const result = interpretPslDocumentToSqlContract({
       ...baseInput,
       ...document,
+      authoringContributions: {
+        ...baseInput.authoringContributions,
+        valueObjectStorageType: 'Jsonb',
+      },
       composedExtensions: [],
       controlMutationDefaults: builtinControlMutationDefaults,
     });

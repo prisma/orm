@@ -73,7 +73,8 @@ describe('pgvector structured error codes', () => {
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'Vector database JSON value must be an array',
+      message: 'pg/vector@1 JSON value must be an array of 3 finite numbers',
+      meta: { codecId: 'pg/vector@1', received: '123' },
     });
   });
 

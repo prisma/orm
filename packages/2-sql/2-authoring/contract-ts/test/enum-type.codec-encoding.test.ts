@@ -1,7 +1,7 @@
 import type { Contract, JsonValue } from '@internal/contract/types';
 import {
   type Codec,
-  type CodecLookup,
+  type CodecLookupWithDescriptors,
   emptyCodecLookup,
 } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
@@ -11,6 +11,7 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { buildSqlContractFromDefinition } from '../src/build-contract';
 import type { ContractDefinition } from '../src/contract-definition';
 import { enumType, member } from '../src/enum-type';
+import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -34,8 +35,8 @@ function stubCodec(id: string, encodeJson: (value: unknown) => JsonValue): Codec
   };
 }
 
-function codecLookupOf(codecs: Record<string, Codec>): CodecLookup {
-  return { ...emptyCodecLookup, get: (id: string) => codecs[id] };
+function codecLookupOf(codecs: Record<string, Codec>): CodecLookupWithDescriptors {
+  return withDescriptors({ ...emptyCodecLookup, get: (id: string) => codecs[id] });
 }
 
 function definitionWith(enumHandle: ReturnType<typeof enumType>): ContractDefinition {
