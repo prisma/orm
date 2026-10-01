@@ -1,0 +1,15 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const path = process.argv[2];
+const source = readFileSync(path, 'utf8');
+const anchor = /(\n\s+readonly Post: \{\n)(\s+)(readonly fields: \{)/;
+if (!anchor.test(source)) throw new Error('Post model not found in the domain plane');
+const patched = source.replace(
+  anchor,
+  (_, open, indent, fields) =>
+    `${open}${indent}readonly scopes: {\n` +
+    `${indent}  readonly titleSearch: { readonly type: 'postgres/fulltext'; readonly params: { readonly index: 'post_title_search' } };\n` +
+    `${indent}  readonly titlePrefix: { readonly type: 'pgvector/spike'; readonly params: { readonly index: 'post_title_search' } };\n` +
+    `${indent}};\n${indent}${fields}`,
+);
+writeFileSync(path, patched);

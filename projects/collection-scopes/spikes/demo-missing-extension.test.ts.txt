@@ -1,0 +1,11 @@
+import postgres from '@prisma/orm-postgres/runtime';
+import { expect, test } from 'vitest';
+import { engagementStatsRuntime } from '../src/extensions/engagement-stats';
+import type { Contract } from '../src/prisma/contract.d';
+import contractJson from '../src/prisma/contract.json' with { type: 'json' };
+
+test('a client built without an extension the contract lists fails at construction', () => {
+  expect(() => postgres<Contract>({ contractJson, extensions: [engagementStatsRuntime] })).toThrow(
+    /Contract requires extension pack\(s\) 'pgvector'/,
+  );
+});

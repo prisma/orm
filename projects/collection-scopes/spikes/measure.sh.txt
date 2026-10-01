@@ -1,0 +1,36 @@
+#!/bin/zsh
+# usage: measure.sh <label> [probe-file]   (run from repo root, on the working tree state to measure)
+set -u
+export PATH=/Users/wmadden/.local/share/mise/installs/node/24.13.0/bin:$PATH
+setopt null_glob
+ROOT=$(pwd)
+LABEL=$1
+PROBE=${2:-}
+OUT=$ROOT/wip/spike/out/$LABEL
+mkdir -p $OUT
+PKG=$ROOT/packages/3-extensions/sql-orm-client
+DEMO=$ROOT/examples/prisma-8-demo
+
+pnpm --filter @internal/sql-orm-client build > $OUT/build.log 2>&1 \
+ && pnpm --filter @internal/postgres build >> $OUT/build.log 2>&1 \
+ && pnpm --filter @prisma/orm-family-sql build >> $OUT/build.log 2>&1 \
+ && pnpm --filter @prisma/orm-postgres build >> $OUT/build.log 2>&1 || { echo "BUILD FAILED"; tail -20 $OUT/build.log; exit 1; }
+
+cat > $PKG/tsconfig.noscopes.json <<EOT
+{ "extends": "./tsconfig.json", "exclude": ["dist","dist-tsc","dist-tsc-prod","node_modules","test/scopes*"] }
+EOT
+(cd $PKG && pnpm typecheck -p tsconfig.noscopes.json --extendedDiagnostics > $OUT/pkg-noscopes.txt 2>&1; echo "exit $?" >> $OUT/pkg-noscopes.txt)
+(cd $PKG && pnpm typecheck --extendedDiagnostics > $OUT/pkg-withscopes.txt 2>&1; echo "exit $?" >> $OUT/pkg-withscopes.txt)
+rm $PKG/tsconfig.noscopes.json
+
+rm -f $DEMO/test/zz-*.test-d.ts
+(cd $DEMO && pnpm typecheck --extendedDiagnostics > $OUT/demo-noscopes.txt 2>&1; echo "exit $?" >> $OUT/demo-noscopes.txt)
+cp $ROOT/wip/spike/notany-probe.ts $DEMO/test/zz-notany.test-d.ts
+(cd $DEMO && pnpm typecheck > $OUT/demo-notany.txt 2>&1; echo "exit $?" >> $OUT/demo-notany.txt)
+rm -f $DEMO/test/zz-notany.test-d.ts
+if [ -n "$PROBE" ]; then
+  cp $PROBE $DEMO/test/zz-probe.test-d.ts
+  (cd $DEMO && pnpm typecheck --extendedDiagnostics > $OUT/demo-withscopes.txt 2>&1; echo "exit $?" >> $OUT/demo-withscopes.txt)
+  rm -f $DEMO/test/zz-probe.test-d.ts
+fi
+for f in $OUT/pkg-*.txt $OUT/demo-*.txt; do echo "== $f"; grep -E '^(Instantiations|Types|exit)|error TS' $f | head -12; done
