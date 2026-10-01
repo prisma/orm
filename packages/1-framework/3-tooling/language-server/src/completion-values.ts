@@ -161,12 +161,14 @@ function valueItems(
     case 'referencedFieldRef':
       return scalarItems(input, input.fieldNames(type.kind));
     case 'entityRef': {
-      const names: string[] = [];
+      const items: CompletionItem[] = [];
       for (const [name, resolution] of input.scope.entries()) {
         const reference = entityReference(resolution);
-        if (reference !== undefined && matchesSelector(reference, type.expected)) names.push(name);
+        if (reference !== undefined && matchesSelector(reference, type.expected)) {
+          items.push(completionItem(input, name, name, CompletionItemKind.Reference, false));
+        }
       }
-      return scalarItems(input, names);
+      return items;
     }
     case 'list':
     case 'record':

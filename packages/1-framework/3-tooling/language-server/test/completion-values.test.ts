@@ -26,7 +26,7 @@ import {
 } from '@internal/psl-parser';
 import { parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it, vi } from 'vitest';
-import { InsertTextFormat } from 'vscode-languageserver';
+import { CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 import {
@@ -619,7 +619,7 @@ describe('recursive attribute values', () => {
     expect(field('none: |').items).toEqual([
       {
         label: 'Example',
-        kind: 12,
+        kind: CompletionItemKind.Reference,
         detail: 'PSL argument value',
         filterText: 'Example',
         textEdit: {
