@@ -109,12 +109,22 @@ describe('conversion', () => {
   describe('normalize_timez', () => {
     const parse = getParser(ScalarColumnType.TIMETZ)
 
-    test('strips timezone offset', () => {
-      expect(parse('16:39:57+05:30')).toBe('16:39:57')
+    test('applies positive offset', () => {
+      expect(parse('16:39:57+05:30')).toBe('11:09:57')
     })
 
-    test('strips negative offset', () => {
-      expect(parse('08:30:00-08:00')).toBe('08:30:00')
+    test('applies negative offset', () => {
+      expect(parse('08:30:00-08:00')).toBe('16:30:00')
+    })
+
+    test('keeps fractional seconds and handles hour-only offsets', () => {
+      expect(parse('10:30:00.123456+02')).toBe('08:30:00.123456')
+      expect(parse('10:30:00+00')).toBe('10:30:00')
+    })
+
+    test('wraps across midnight', () => {
+      expect(parse('01:00:00+02')).toBe('23:00:00')
+      expect(parse('23:00:00-02')).toBe('01:00:00')
     })
   })
 
