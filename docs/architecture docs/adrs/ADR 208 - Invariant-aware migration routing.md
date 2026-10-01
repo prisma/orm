@@ -6,7 +6,7 @@ A team member adds a `phone` column to `users`, wants to enforce `NOT NULL`, and
 
 ```ts
 // migrations/20260424T1030_add_phone_notnull/migration.ts (schematic; query bodies elided)
-import { addColumn, Migration, MigrationCLI, setNotNull } from '@internal/postgres/migration';
+import { col, Migration, MigrationCLI } from '@internal/postgres/migration';
 import endContract from './end-contract.json' with { type: 'json' };
 
 export default class AddPhoneNotNull extends Migration {
@@ -16,9 +16,7 @@ export default class AddPhoneNotNull extends Migration {
 
   override get operations() {
     return [
-      addColumn('public', 'users', {
-        name: 'phone', typeSql: 'text', defaultSql: '', nullable: true,
-      }),
+      this.addColumn({ schema: 'public', table: 'users', column: col('phone', 'text') }),
 
       // Routing-visible — refs can require this invariant.
       this.dataTransform(endContract, 'Backfill users.phone', {
@@ -33,7 +31,7 @@ export default class AddPhoneNotNull extends Migration {
         run:   () => /* … */,
       }),
 
-      setNotNull('public', 'users', 'phone'),
+      this.setNotNull({ schema: 'public', table: 'users', column: 'phone' }),
     ];
   }
 }

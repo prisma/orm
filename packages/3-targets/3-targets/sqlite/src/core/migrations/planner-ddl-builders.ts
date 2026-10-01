@@ -8,7 +8,6 @@
  * see `StorageColumn` or `storageTypes`.
  */
 
-import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type {
   StorageColumn,
   StorageTable,
@@ -19,8 +18,6 @@ import { decodeSqliteDatetime, encodeSqliteDatetime } from '../codecs';
 import { sqliteError } from '../errors';
 import { escapeLiteral, quoteIdentifier } from '../sql-utils';
 
-type SqliteColumnDefault = StorageColumn['default'];
-
 const SAFE_NATIVE_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_ ]*$/;
 
 function assertSafeNativeType(nativeType: string): void {
@@ -30,17 +27,6 @@ function assertSafeNativeType(nativeType: string): void {
       `Unsafe native type name in contract: "${nativeType}". ` +
         'Native type names must match /^[a-zA-Z][a-zA-Z0-9_ ]*$/',
       { meta: { nativeType } },
-    );
-  }
-}
-
-function assertSafeDefaultExpression(expression: string): void {
-  if (checkSqlDefaultBody(expression) !== undefined) {
-    throw sqliteError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Unsafe default expression in contract: "${expression}". ` +
-        'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-      { meta: { expression } },
     );
   }
 }
@@ -57,30 +43,6 @@ export function buildColumnTypeSql(
   const resolved = resolveColumnTypeMetadata(column, storageTypes);
   assertSafeNativeType(resolved.nativeType);
   return resolved.nativeType.toUpperCase();
-}
-
-/**
- * Renders the column's `DEFAULT …` clause. Returns the empty string when
- * there is no default, and also when the default is `autoincrement()` —
- * SQLite encodes that as `INTEGER PRIMARY KEY AUTOINCREMENT` inline on the
- * column definition, not as a separate DEFAULT.
- */
-export function buildColumnDefaultSql(
-  columnDefault: SqliteColumnDefault | undefined,
-  codecId?: string,
-): string {
-  if (!columnDefault) return '';
-
-  switch (columnDefault.kind) {
-    case 'literal':
-      return `DEFAULT ${renderDefaultLiteral(columnDefault.value, codecId)}`;
-    case 'function': {
-      if (columnDefault.expression === 'autoincrement()') return '';
-      if (columnDefault.expression === 'now()') return "DEFAULT (datetime('now'))";
-      assertSafeDefaultExpression(columnDefault.expression);
-      return `DEFAULT (${columnDefault.expression})`;
-    }
-  }
 }
 
 /**

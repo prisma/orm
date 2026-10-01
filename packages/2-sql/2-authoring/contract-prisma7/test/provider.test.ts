@@ -1,7 +1,12 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { expandContractInputs } from '@internal/config-loader';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
+import type {
+  CodecInstanceContext,
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import { dataType, dataTypeId } from '@internal/framework-components/codec';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { structuredError } from '@internal/utils/structured-error';
@@ -13,22 +18,27 @@ import { postgresSourceContext } from './support';
 const postgres = { binding: prisma7PostgresBinding };
 
 /**
- * A lookup whose text codec encodes every default as JSON null, so the contract the reader builds
- * fails the checks `contract emit` runs. The column's codec is built from its descriptor, so the
- * descriptor's factory is what has to hand back the broken codec.
- */
-/**
  * A stack whose text columns store a null default: their descriptor names a data type whose cast
- * from the written text returns null, which gives a contract the emit checks refuse.
+ * from the written text returns null, and hands back a codec that reads null, so the reader builds
+ * a contract the emit checks refuse. The column's codec is built from its descriptor, so the
+ * descriptor's factory is what has to hand back the broken codec.
  */
 const BROKEN_TEXT = dataTypeId('demo/broken-text');
 
-function withTextDefaultsCastToNull(lookup: CodecLookup): CodecLookup {
+function withTextDefaultsCastToNull(
+  lookup: CodecLookupWithDescriptors,
+): CodecLookupWithDescriptors {
   const descriptorFor = (id: string) => {
-    const descriptor = lookup.descriptorFor?.(id);
+    const descriptor = lookup.descriptorFor(id);
     if (id !== 'pg/text@1' || descriptor === undefined) return descriptor;
     return Object.assign(Object.create(Object.getPrototypeOf(descriptor)), descriptor, {
       dataType: BROKEN_TEXT,
+      factory: (params: unknown) => (ctx: CodecInstanceContext) => {
+        const codec = descriptor.factory(params)(ctx);
+        return Object.assign(Object.create(Object.getPrototypeOf(codec)), codec, {
+          decodeJson: (json: JsonValue) => json,
+        });
+      },
     });
   };
   return Object.assign(Object.create(Object.getPrototypeOf(lookup)), lookup, { descriptorFor });

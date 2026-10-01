@@ -6,46 +6,55 @@
  * native-type strings to the same canonical form for comparison.
  */
 
-/**
- * Lookup map for simple prefix-based type normalization.
- *
- * Using a Map for O(1) lookup instead of multiple startsWith checks.
- */
-const TYPE_PREFIX_MAP: ReadonlyMap<string, string> = new Map([
-  ['varchar', 'character varying'],
+/** PostgreSQL's other names for a type, each with the name introspection reports it under. */
+const TYPE_NAME_ALIASES: ReadonlyMap<string, string> = new Map([
+  ['char', 'character'],
   ['bpchar', 'character'],
+  ['varchar', 'character varying'],
   ['varbit', 'bit varying'],
+  ['int', 'int4'],
+  ['integer', 'int4'],
+  ['smallint', 'int2'],
+  ['bigint', 'int8'],
+  ['real', 'float4'],
+  ['double precision', 'float8'],
+  ['float', 'float8'],
+  ['boolean', 'bool'],
+  ['decimal', 'numeric'],
 ]);
 
+/** The types that take ` with time zone`, each with the name it has with one. */
+const WITH_TIME_ZONE: ReadonlyMap<string, string> = new Map([
+  ['timestamp', 'timestamptz'],
+  ['time', 'timetz'],
+]);
+
+const NATIVE_TYPE_PARTS = /^([a-z][a-z ]*?)(\([^)]*\))?( with time zone| without time zone)?$/;
+
 /**
- * Normalizes a Postgres schema native type to its canonical form for comparison.
- *
- * Uses a pre-computed lookup map for simple prefix replacements (O(1))
- * and handles complex temporal type normalization separately.
+ * `nativeType` named as introspection reports it, on the contract side and the introspected side alike: an alias under PostgreSQL's canonical name (`char(3)` is `character(3)`, `int` is `int4`), `timestamp(3) with time zone` as `timestamptz(3)`, `time without time zone` as `time`, and a list type's element the same way. A `float` with a precision is `real` or `double precision` depending on it, so it is left as written, and so is a name this does not describe, such as a user-defined type.
  */
 export function normalizeSchemaNativeType(nativeType: string): string {
   const trimmed = nativeType.trim();
-
-  for (const [prefix, replacement] of TYPE_PREFIX_MAP) {
-    if (trimmed.startsWith(prefix)) {
-      return replacement + trimmed.slice(prefix.length);
-    }
+  if (trimmed.endsWith('[]')) return `${normalizeSchemaNativeType(trimmed.slice(0, -2))}[]`;
+  const parts = NATIVE_TYPE_PARTS.exec(trimmed);
+  if (parts === null) return trimmed;
+  const [, base = '', modifier = '', zone = ''] = parts;
+  if (zone !== '') {
+    const zoned = WITH_TIME_ZONE.get(base);
+    if (zoned === undefined) return trimmed;
+    return `${zone === ' with time zone' ? zoned : base}${modifier}`;
   }
+  if (base === 'float' && modifier !== '') return trimmed;
+  return `${TYPE_NAME_ALIASES.get(base) ?? base}${modifier}`;
+}
 
-  if (trimmed.includes(' with time zone')) {
-    if (trimmed.startsWith('timestamp')) {
-      return `timestamptz${trimmed.slice(9).replace(' with time zone', '')}`;
-    }
-    if (trimmed.startsWith('time')) {
-      return `timetz${trimmed.slice(4).replace(' with time zone', '')}`;
-    }
-  }
+/** The types PostgreSQL stores with a length of 1 when none is written, and reports that way. */
+const LENGTH_ONE_WHEN_BARE: ReadonlySet<string> = new Set(['character', 'bit']);
 
-  if (trimmed.includes(' without time zone')) {
-    return trimmed.replace(' without time zone', '');
-  }
-
-  return trimmed;
+/** A normalized type name with the length PostgreSQL gives `character` and `bit` when none is written. */
+export function withLengthOneWhenBare(typeName: string): string {
+  return LENGTH_ONE_WHEN_BARE.has(typeName) ? `${typeName}(1)` : typeName;
 }
 
 /**
@@ -83,7 +92,7 @@ export function introspectedNativeType(column: CatalogColumnType): IntrospectedN
 
 function reportedNativeType(column: CatalogColumnType): string {
   if (column.formattedType) {
-    return normalizeFormattedType(column.formattedType, column.dataType, column.udtName);
+    return normalizeFormattedType(column.formattedType);
   }
   if (column.dataType === 'character varying' || column.dataType === 'character') {
     return column.characterMaximumLength
@@ -101,55 +110,15 @@ function reportedNativeType(column: CatalogColumnType): string {
   return column.udtName || column.dataType;
 }
 
-function normalizeFormattedType(formattedType: string, dataType: string, udtName: string): string {
+/**
+ * `format_type`'s name for a column type, named as the contract names it: a built-in type through {@link normalizeSchemaNativeType}, and a user-defined type, which `format_type` quotes where it needs to (mixed case, a reserved word, a dot) and schema-qualifies outside the search path, with each identifier unquoted.
+ */
+function normalizeFormattedType(formattedType: string): string {
   if (formattedType.endsWith('[]')) {
-    return `${normalizeFormattedType(formattedType.slice(0, -2), dataType, udtName)}[]`;
+    return `${normalizeFormattedType(formattedType.slice(0, -2))}[]`;
   }
-  if (formattedType === 'integer') {
-    return 'int4';
-  }
-  if (formattedType === 'smallint') {
-    return 'int2';
-  }
-  if (formattedType === 'bigint') {
-    return 'int8';
-  }
-  if (formattedType === 'real') {
-    return 'float4';
-  }
-  if (formattedType === 'double precision') {
-    return 'float8';
-  }
-  if (formattedType === 'boolean') {
-    return 'bool';
-  }
-  if (formattedType.startsWith('varchar')) {
-    return formattedType.replace('varchar', 'character varying');
-  }
-  if (formattedType.startsWith('bpchar')) {
-    return formattedType.replace('bpchar', 'character');
-  }
-  if (formattedType.startsWith('varbit')) {
-    return formattedType.replace('varbit', 'bit varying');
-  }
-  if (dataType === 'timestamp with time zone' || udtName === 'timestamptz') {
-    return formattedType.replace('timestamp', 'timestamptz').replace(' with time zone', '').trim();
-  }
-  if (dataType === 'timestamp without time zone' || udtName === 'timestamp') {
-    return formattedType.replace(' without time zone', '').trim();
-  }
-  if (dataType === 'time with time zone' || udtName === 'timetz') {
-    return formattedType.replace('time', 'timetz').replace(' with time zone', '').trim();
-  }
-  if (dataType === 'time without time zone' || udtName === 'time') {
-    return formattedType.replace(' without time zone', '').trim();
-  }
-  // `format_type` quotes a user-defined type name that needs it (mixed case,
-  // reserved word, a dot) and schema-qualifies one outside the search path,
-  // so a mixed-case enum in another schema arrives as `audit."AuditAction"`.
-  // The contract side spells every type name unquoted (`audit.AuditAction`),
-  // so strip the quotes from each identifier segment, splitting only on dots
-  // that sit outside the quotes.
+  const normalized = normalizeSchemaNativeType(formattedType);
+  if (normalized !== formattedType) return normalized;
   return splitQualifiedName(formattedType).map(unquoteIdentifier).join('.');
 }
 

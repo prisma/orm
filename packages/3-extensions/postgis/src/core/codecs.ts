@@ -40,6 +40,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  decodeJsonMatching,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
@@ -53,6 +54,8 @@ import { postgisGeometry } from './data-types';
 import { postgisError } from './errors';
 import { decodeEWKBHex, encodeEWKBHex, encodeEWKT } from './ewkb';
 import type { Geometry } from './geojson';
+
+const HEX_TEXT = /^(?:[0-9A-Fa-f]{2})*$/;
 
 type GeometryParams = { readonly srid?: number };
 
@@ -134,14 +137,9 @@ export class PostgisGeometryCodec extends CodecImpl<
   }
 
   decodeJson(json: JsonValue): Geometry {
-    if (typeof json !== 'string') {
-      throw postgisError(
-        'RUNTIME.DECODE_FAILED',
-        'Geometry database JSON value must be a HEXEWKB string',
-        { meta: { codecId: POSTGIS_GEOMETRY_CODEC_ID } },
-      );
-    }
-    return decodeEWKBHex(json);
+    return decodeEWKBHex(
+      decodeJsonMatching(POSTGIS_GEOMETRY_CODEC_ID, json, HEX_TEXT, 'a HEXEWKB string'),
+    );
   }
 }
 

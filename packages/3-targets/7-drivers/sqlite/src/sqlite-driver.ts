@@ -1,4 +1,3 @@
-import type { SQLInputValue } from 'node:sqlite';
 import { DatabaseSync } from 'node:sqlite';
 import type { RuntimeDriverInstance } from '@internal/framework-components/execution';
 import type {
@@ -13,6 +12,7 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { InternalError } from '@internal/utils/internal-error';
 import { normalizeSqliteError } from './normalize-error';
+import { sqliteParams } from './sqlite-params';
 
 export type SqliteBinding = { readonly kind: 'path'; readonly path: string };
 
@@ -49,10 +49,6 @@ const NOT_CONNECTED_MESSAGE =
 const ALREADY_CONNECTED_MESSAGE =
   'SQLite driver already connected. Call close() before reconnecting with a new binding.';
 
-function toSqliteParams(params: readonly unknown[] | undefined): SQLInputValue[] {
-  return (params ?? []) as SQLInputValue[];
-}
-
 function openConnection(path: string): DatabaseSync {
   try {
     const db = new DatabaseSync(path);
@@ -74,7 +70,7 @@ abstract class SqliteQueryable implements SqlQueryable {
   async *query<Row = Record<string, unknown>>(request: SqlExecuteRequest): AsyncIterable<Row> {
     try {
       const stmt = this.db.prepare(request.sql);
-      for (const row of stmt.iterate(...toSqliteParams(request.params))) {
+      for (const row of stmt.iterate(...sqliteParams(request.params))) {
         yield row as Row;
       }
     } catch (error) {
@@ -88,7 +84,7 @@ abstract class SqliteQueryable implements SqlQueryable {
       if (stmt.columns().length !== 0) {
         throw new InternalError('SQLite cannot execute statements that return rows.');
       }
-      return { affectedRows: Number(stmt.run(...toSqliteParams(request.params)).changes) };
+      return { affectedRows: Number(stmt.run(...sqliteParams(request.params)).changes) };
     } catch (error) {
       throw normalizeSqliteError(error);
     }
@@ -97,7 +93,7 @@ abstract class SqliteQueryable implements SqlQueryable {
   async explain(request: SqlExecuteRequest): Promise<SqlExplainResult> {
     try {
       const stmt = this.db.prepare(`EXPLAIN QUERY PLAN ${request.sql}`);
-      const rows = stmt.all(...toSqliteParams(request.params)) as ReadonlyArray<
+      const rows = stmt.all(...sqliteParams(request.params)) as ReadonlyArray<
         Record<string, unknown>
       >;
       return { rows };

@@ -186,6 +186,40 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/bool@1', label: 'true', value: true },
   { codecId: 'pg/bit@1', label: 'single bit', value: '1' },
+  // Values at the limit their type parameters set, which decodeJson checks. The harness stores a value in a
+  // column of the codec's native type without its type parameters, and a bare char or bit holds one character
+  // or bit, so type-params.integration.test.ts covers those two.
+  {
+    codecId: 'sql/varchar@1',
+    label: 'text at its declared length',
+    value: 'abc',
+    typeParams: { length: 3 },
+  },
+  {
+    codecId: 'sql/varchar@1',
+    label: 'characters beyond the basic plane at its declared length',
+    value: '\u{1F600}\u{1F600}\u{1F600}',
+    typeParams: { length: 3 },
+  },
+  {
+    codecId: 'pg/varchar@1',
+    label: 'text at its declared length',
+    value: 'ab',
+    typeParams: { length: 2 },
+  },
+  {
+    codecId: 'pg/varbit@1',
+    label: 'bits under their declared length',
+    value: '101',
+    typeParams: { length: 4 },
+  },
+  {
+    codecId: 'pg/numeric@1',
+    label: 'decimal at its declared precision and scale',
+    value: '-999.99',
+    typeParams: { precision: 5, scale: 2 },
+  },
+  { codecId: 'pg/int@1', label: 'int4 upper bound', value: 2147483647 },
   { codecId: 'pg/varbit@1', label: 'bit string', value: '1010' },
   { codecId: 'pg/bytea@1', label: 'byte string', value: new Uint8Array([0, 1, 255]) },
   // RFC 2045 base64 breaks every 76 characters, which is 57 bytes in. A value
@@ -268,6 +302,35 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '03:04:05+00',
     setupSql: HOSTILE_TEMPORAL_SESSION,
   },
+  // Text PostgreSQL writes with ` BC`, with an offset that has seconds, and to a precision below six digits, read back
+  // as PostgreSQL wrote it.
+  { codecId: 'pg/date-string@1', label: 'a year before Christ', value: '0044-03-15 BC' },
+  {
+    codecId: 'pg/timestamp-string@1',
+    label: 'a year before Christ',
+    value: '0044-03-15 12:00:00 BC',
+    typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'a year before Christ at UTC',
+    value: '0044-03-15 12:00:00+00 BC',
+    typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'an offset with seconds, in the local mean time of Amsterdam',
+    value: '1800-01-01 00:17:30+00:17:30',
+    typeParams: { precision: 6 },
+    setupSql: ["SET TimeZone = 'Europe/Amsterdam'"],
+  },
+  {
+    codecId: 'pg/time-string@1',
+    label: 'millisecond precision',
+    value: '12:34:56.123',
+    typeParams: { precision: 3 },
+  },
+  { codecId: 'pg/timetz@1', label: 'an offset with seconds', value: '12:00:00+01:30:15' },
   // An interval's application value is its three stored fields. A month has no
   // fixed length, so `{ months: 1 }` and `{ days: 30 }` stay distinct rather than
   // collapsing through a common epoch; the ISO string is the JSON side only.
@@ -343,6 +406,30 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   { codecId: 'pg/float4@1', label: 'float not exactly representable', value: 0.1 },
   { codecId: 'pg/int2@1', label: 'int2 upper bound', value: 32767 },
   { codecId: 'pg/int2@1', label: 'int2 lower bound', value: -32768 },
+  { codecId: 'pg/float8@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'pg/float8@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'pg/float8@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'pg/float4@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'pg/float4@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'pg/float4@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'pg/float@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'pg/float@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'pg/float@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'sql/float@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'sql/float@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'sql/float@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'pg/int4@1', label: 'int4 upper bound', value: 2147483647 },
+  { codecId: 'pg/int4@1', label: 'int4 lower bound', value: -2147483648 },
+  { codecId: 'sql/int@1', label: 'int4 lower bound', value: -2147483648 },
+  { codecId: 'pg/bool@1', label: 'false', value: false },
+  { codecId: 'pg/inet@1', label: 'ipv6 address', value: '::1' },
+  { codecId: 'pg/inet@1', label: 'network with a prefix length', value: '10.0.0.0/8' },
+  { codecId: 'pg/varbit@1', label: 'empty bit string', value: '' },
+  { codecId: 'pg/text-array@1', label: 'empty array', value: [] },
+  { codecId: 'pg/text-array@1', label: 'NULL element', value: ['a', null] },
+  { codecId: 'pg/text@1', label: 'empty text', value: '' },
+  { codecId: 'pg/date-string@1', label: 'infinity', value: 'infinity' },
+  { codecId: 'pg/timestamptz-string@1', label: 'negative infinity', value: '-infinity' },
   {
     codecId: 'pg/jsonb@1',
     label: 'document whose keys jsonb reorders',

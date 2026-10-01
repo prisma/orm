@@ -34,6 +34,7 @@ const everyCodecHolds: Readonly<Record<string, readonly string[]>> = {
   'pg/time': ['12:34:56.123456', '00:00:00'],
   'pg/timetz': ['12:34:56+02:00', '12:34:56Z'],
   'pg/interval': ['P1Y2M3DT4H5M6.5S', 'PT0S'],
+  'pg/int8': ['0', '-1', '9007199254740991'],
 };
 
 /** Values in canonical form that only some codecs of the type hold. */
@@ -50,8 +51,17 @@ const holdsInfinity: ReadonlySet<string> = new Set([
   'pg/timestamptz-string@1',
 ]);
 
-/** The codecs whose value cannot carry a digit below one microsecond, so they refuse to read one. */
-const refusesToReadBelowMicroseconds: ReadonlySet<string> = new Set(['pg/timestamptz-date@1']);
+/**
+ * The codecs that refuse to read a value with a digit below one microsecond: one whose value cannot
+ * carry it, and those whose value is PostgreSQL's own text, which PostgreSQL never writes with one.
+ */
+const refusesToReadBelowMicroseconds: ReadonlySet<string> = new Set([
+  'pg/timestamptz-date@1',
+  'pg/timestamp-string@1',
+  'pg/timestamptz-string@1',
+  'pg/time-string@1',
+  'pg/timetz@1',
+]);
 
 /** Text with a digit below one microsecond, which no type holds. */
 const belowMicroseconds: Readonly<Record<string, string>> = {
@@ -69,7 +79,7 @@ function decoded(codec: Codec, json: JsonValue): { readonly value: unknown } | u
   }
 }
 
-describe('every codec of a date or time type writes the canonical form', () => {
+describe('every codec of a type with a canonical form writes it', () => {
   it('finds a codec for every type the tables cover, and a table for every such type', () => {
     expect(new Set(codecsWithCanonicalForm.map(({ dataType }) => dataType))).toEqual(
       new Set(Object.keys(everyCodecHolds)),

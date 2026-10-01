@@ -151,11 +151,6 @@ export function generateContractDts(
       ? `\n  readonly execution: ${serializeExecutionType(contract.execution)};`
       : '';
 
-  const resolveFieldTypeParams = emitter.resolveFieldTypeParams
-    ? (modelName: string, fieldName: string, model: ContractModelBase) =>
-        emitter.resolveFieldTypeParams?.(modelName, fieldName, model, contract)
-    : undefined;
-
   const resolveFieldValueSet = emitter.resolveFieldValueSet
     ? (modelName: string, fieldName: string, model: ContractModelBase) =>
         emitter.resolveFieldValueSet?.(modelName, fieldName, model, contract)
@@ -168,7 +163,6 @@ export function generateContractDts(
   const fieldTypesMaps = generateFieldTypesMapsByNamespace(
     namespaceModelsForFieldTypes,
     codecLookup,
-    resolveFieldTypeParams,
     resolveFieldValueSet,
   );
 
@@ -178,7 +172,7 @@ export function generateContractDts(
 
   const modelTypesBlock = generateModelTypesBlock(
     contract,
-    { codecLookup, resolveFieldTypeParams, resolveFieldValueSet },
+    { codecLookup, resolveFieldValueSet },
     options?.supportsNamespaces ?? true,
   );
 

@@ -12,7 +12,7 @@
  *  3. Nullable variant (`pg.enum(E)?`).
  */
 
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -49,7 +49,7 @@ const pgEnumCodec = {
   decodeJson: (json) => json,
 } as Codec;
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumCodec : undefined),
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
@@ -221,6 +221,42 @@ namespace auth {
     expect(aalsColumn?.many).toBe(true);
   });
 
+  it('keeps typeParams.typeName on a pg.enum(E)[] domain field, like the single field', () => {
+    const source = `
+namespace auth {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+    @@map("aal_level")
+  }
+
+  model AuthSession {
+    id   Int                 @id
+    aal  pg.enum(AalLevel)
+    aals pg.enum(AalLevel)[]
+  }
+}
+`;
+    const result = interpret(source, { sql: { scalarList: true } });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const fields = result.value.domain.namespaces['auth']?.models['AuthSession']?.fields;
+    const aal = {
+      nullable: false,
+      type: {
+        kind: 'scalar',
+        codecId: 'pg/enum@1',
+        typeParams: { typeName: 'auth.aal_level' },
+      },
+    };
+    expect({ aal: fields?.['aal'], aals: fields?.['aals'] }).toEqual({
+      aal,
+      aals: { ...aal, many: true },
+    });
+  });
+
   it('stores a list of member names written as a default on a pg.enum(E)[] field', () => {
     const source = `
 namespace auth {
@@ -388,6 +424,34 @@ namespace auth {
     expect(result.failure.diagnostics).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'PSL_UNKNOWN_ENTITY_REF' })]),
     );
+  });
+
+  it('refuses pg.enum(E) on a composite type member, which has no column to store the enum in', () => {
+    const source = `
+native_enum Level {
+  low = "low"
+  @@map("level")
+}
+
+type Session {
+  level pg.enum(Level)
+}
+
+model User {
+  id Int @id
+}
+`;
+    const result = interpret(source);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message:
+          'Field "Session.level" is typed by the storage enum "Level", which a composite type member cannot use: a member has no column to store it in. Use a PSL enum instead.',
+      },
+    ]);
   });
 
   it('a pg.enum() call with no arguments is a diagnostic', () => {

@@ -296,12 +296,6 @@ function applyModifiers(base: string, field: ContractField): string {
   return result;
 }
 
-export type FieldTypeParamsResolver = (
-  modelName: string,
-  fieldName: string,
-  model: ContractModelBase,
-) => Record<string, unknown> | undefined;
-
 /**
  * A field's permitted values (codec-encoded) plus the codec that types them, as supplied by the
  * family-specific {@link EmissionSpi.resolveFieldValueSet}. The framework renders these into a TS
@@ -347,7 +341,6 @@ export function renderValueSetType(
 export function resolveFieldType(
   field: ContractField,
   codecLookup?: CodecLookup,
-  resolvedTypeParams?: Record<string, unknown>,
   resolvedValueSet?: ResolvedFieldValueSet,
 ): ResolvedFieldType {
   const { type } = field;
@@ -376,15 +369,14 @@ export function resolveFieldType(
       }
       let outputResolved: string | undefined;
       let inputResolved: string | undefined;
-      const inlineTypeParams =
+      const typeParams =
         type.typeParams && Object.keys(type.typeParams).length > 0 ? type.typeParams : undefined;
-      const effectiveTypeParams = inlineTypeParams ?? resolvedTypeParams;
-      if (codecLookup && effectiveTypeParams && Object.keys(effectiveTypeParams).length > 0) {
-        const rendered = codecLookup.renderOutputTypeFor(type.codecId, effectiveTypeParams);
+      if (codecLookup && typeParams) {
+        const rendered = codecLookup.renderOutputTypeFor(type.codecId, typeParams);
         if (rendered && isSafeTypeExpression(rendered)) {
           outputResolved = rendered;
         }
-        const renderedInput = codecLookup.renderInputTypeFor?.(type.codecId, effectiveTypeParams);
+        const renderedInput = codecLookup.renderInputTypeFor?.(type.codecId, typeParams);
         if (renderedInput && isSafeTypeExpression(renderedInput)) {
           inputResolved = renderedInput;
         }
@@ -434,13 +426,12 @@ export function generateFieldResolvedType(
 
 export type ModelFieldTypeResolvers = {
   readonly codecLookup: CodecLookup | undefined;
-  readonly resolveFieldTypeParams: FieldTypeParamsResolver | undefined;
   readonly resolveFieldValueSet: FieldValueSetResolver | undefined;
 };
 
 /**
  * Resolves one model field's input and output types the way `FieldOutputTypes` /
- * `FieldInputTypes` do: inline type params win over the family resolver, and a family-resolved
+ * `FieldInputTypes` do: the field's type parameters refine its codec's type, and a family-resolved
  * value set renders as a literal union.
  */
 export function resolveModelFieldType(
@@ -450,33 +441,20 @@ export function resolveModelFieldType(
   model: ContractModelBase,
   resolvers: ModelFieldTypeResolvers,
 ): ResolvedFieldType {
-  const inlineTypeParams =
-    field.type.kind === 'scalar' &&
-    field.type.typeParams &&
-    Object.keys(field.type.typeParams).length > 0
-      ? field.type.typeParams
-      : undefined;
-  const resolvedTypeParams =
-    inlineTypeParams ?? resolvers.resolveFieldTypeParams?.(modelName, fieldName, model);
   const resolvedValueSet = resolvers.resolveFieldValueSet?.(modelName, fieldName, model);
-  return resolveFieldType(field, resolvers.codecLookup, resolvedTypeParams, resolvedValueSet);
+  return resolveFieldType(field, resolvers.codecLookup, resolvedValueSet);
 }
 
 export function generateBothFieldTypesMaps(
   models: Record<string, ContractModelBase> | undefined,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
   resolveFieldValueSet?: FieldValueSetResolver,
 ): ResolvedFieldType {
   if (!models || Object.keys(models).length === 0) {
     return { output: 'Record<string, never>', input: 'Record<string, never>' };
   }
 
-  const resolvers: ModelFieldTypeResolvers = {
-    codecLookup,
-    resolveFieldTypeParams,
-    resolveFieldValueSet,
-  };
+  const resolvers: ModelFieldTypeResolvers = { codecLookup, resolveFieldValueSet };
   const outputModelEntries: string[] = [];
   const inputModelEntries: string[] = [];
   for (const [modelName, model] of Object.entries(models).sort(([a], [b]) => a.localeCompare(b))) {
@@ -511,7 +489,6 @@ export function generateBothFieldTypesMaps(
 export function generateFieldTypesMapsByNamespace(
   namespaceModels: ReadonlyArray<readonly [string, Record<string, ContractModelBase>]>,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
   resolveFieldValueSet?: FieldValueSetResolver,
 ): ResolvedFieldType {
   if (namespaceModels.length === 0) {
@@ -521,12 +498,7 @@ export function generateFieldTypesMapsByNamespace(
   const outputNamespaceEntries: string[] = [];
   const inputNamespaceEntries: string[] = [];
   for (const [nsId, models] of namespaceModels) {
-    const inner = generateBothFieldTypesMaps(
-      models,
-      codecLookup,
-      resolveFieldTypeParams,
-      resolveFieldValueSet,
-    );
+    const inner = generateBothFieldTypesMaps(models, codecLookup, resolveFieldValueSet);
     const nsKey = `readonly ${serializeObjectKey(nsId)}`;
     outputNamespaceEntries.push(`${nsKey}: ${inner.output}`);
     inputNamespaceEntries.push(`${nsKey}: ${inner.input}`);
@@ -541,17 +513,15 @@ export function generateFieldTypesMapsByNamespace(
 export function generateFieldOutputTypesMap(
   models: Record<string, ContractModelBase> | undefined,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
 ): string {
-  return generateBothFieldTypesMaps(models, codecLookup, resolveFieldTypeParams).output;
+  return generateBothFieldTypesMaps(models, codecLookup).output;
 }
 
 export function generateFieldInputTypesMap(
   models: Record<string, ContractModelBase> | undefined,
   codecLookup?: CodecLookup,
-  resolveFieldTypeParams?: FieldTypeParamsResolver,
 ): string {
-  return generateBothFieldTypesMaps(models, codecLookup, resolveFieldTypeParams).input;
+  return generateBothFieldTypesMaps(models, codecLookup).input;
 }
 
 export function generateValueObjectType(

@@ -1,13 +1,11 @@
 import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { INFERRED_PSL_TYPE_NAMES } from '../../../src/core/psl-build/postgres-type-map';
-import {
-  CODEC_ID_BY_INFERRED_TYPE,
-  dataTypeForInferredType,
-} from '../../../src/core/psl-infer/infer-default-codec';
-import { printPslFromFlat } from '../fixtures';
+import { inferredColumnDefaults } from '../../../src/core/psl-infer/infer-default-codec';
+import { inferBuildContext, printPslFromFlat } from '../fixtures';
 
 /** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */
 const BACKTICK = '\u0060';
@@ -205,27 +203,54 @@ describe('printPsl writes each default as the literal the column data type takes
   });
 });
 
-describe('the codec bound to each inferred type name', () => {
-  it('covers every PSL type name the type map prints', () => {
+describe('the data type of each inferred type name, from the stack', () => {
+  const { dataTypeOf } = inferredColumnDefaults(inferBuildContext);
+
+  it('names one for every PSL type name the type map prints', () => {
     expect(INFERRED_PSL_TYPE_NAMES.size).toBeGreaterThan(0);
     expect(
-      [...INFERRED_PSL_TYPE_NAMES].filter((name) => !CODEC_ID_BY_INFERRED_TYPE.has(name)),
-    ).toEqual([]);
-  });
-
-  it('names a registered codec that represents a data type for every inferred type', () => {
-    expect(
-      [...CODEC_ID_BY_INFERRED_TYPE.keys()].filter(
-        (typeName) => dataTypeForInferredType(typeName, false) === undefined,
-      ),
+      [...INFERRED_PSL_TYPE_NAMES].filter((name) => dataTypeOf({ name }, false) === undefined),
     ).toEqual([]);
   });
 
   it('reads an enum column through the text codec, whose members are text', () => {
-    expect(dataTypeForInferredType('SomeEnum', true)).toBe('pg/text');
+    expect(dataTypeOf({ name: 'SomeEnum' }, true)).toBe('pg/text');
   });
 
-  it('names nothing for a type no codec is bound to', () => {
-    expect(dataTypeForInferredType('Unsupported', false)).toBeUndefined();
+  it('names nothing for a type no type constructor has', () => {
+    expect(dataTypeOf({ name: 'Unsupported' }, false)).toBeUndefined();
+  });
+});
+
+describe('a failure the default checks do not expect', () => {
+  const codecId = 'pg/text@1';
+  const textDescriptor = inferBuildContext.codecLookup.descriptorFor(codecId);
+  const brokenContext = {
+    ...inferBuildContext,
+    codecLookup: {
+      ...inferBuildContext.codecLookup,
+      descriptorFor: (id: string) =>
+        id === codecId && textDescriptor !== undefined
+          ? {
+              ...textDescriptor,
+              factory: () => () => {
+                throw new InternalError('a codec pack broke an invariant');
+              },
+            }
+          : inferBuildContext.codecLookup.descriptorFor(id),
+    },
+  };
+  const { readsBack } = inferredColumnDefaults(brokenContext);
+
+  it('passes an internal error through instead of printing the default as raw SQL', () => {
+    expect(() => readsBack('abc', { name: 'String' }, false, false)).toThrow(
+      'a codec pack broke an invariant',
+    );
+  });
+
+  it('still reads a structured refusal as a default the codec does not take', () => {
+    expect(
+      inferredColumnDefaults(inferBuildContext).readsBack(1, { name: 'String' }, false, false),
+    ).toBe(false);
   });
 });

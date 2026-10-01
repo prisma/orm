@@ -7,8 +7,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { type DataType, dataType } from '@internal/framework-components/codec';
-import { isNonFiniteText } from '@internal/sql-relational-core/ast';
+import { type DataType, dataType, isNonFiniteText } from '@internal/framework-components/codec';
 import { pgInt2, pgInt4, pgInt8, pgNumeric } from '@internal/target-postgres/data-types';
 import { structuredError } from '@internal/utils/structured-error';
 

@@ -1,4 +1,5 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { InternalError } from '@internal/utils/internal-error';
 import { ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -516,5 +517,17 @@ describe('contract print', () => {
       meta: { coordinate: '"public".Shop.location', kind: 'union' },
     });
     expect(await readdir(dir)).not.toContain('generated');
+  });
+
+  it('lets an internal error from the target reach the engine as a bug at exit 1', async () => {
+    const dir = await projectDir();
+    mocks.buildPslContract.mockImplementation(() => {
+      throw new InternalError('a codec broke an invariant');
+    });
+
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    expect(run.exitCode).toBe(1);
+    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CLI.INTERNAL_ERROR' });
   });
 });

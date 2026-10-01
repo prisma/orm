@@ -362,6 +362,25 @@ function pushInvalidPslHelperArgument(input: {
   return undefined;
 }
 
+/**
+ * The values of positional PSL arguments, each written as its PSL text in `rawArgs`, read as `descriptors` say, as the PSL reader reads a type constructor call. `undefined` when there are more arguments than descriptors or one does not parse.
+ */
+export function parsePslPositionalArgs(
+  descriptors: readonly AuthoringArgumentDescriptor[],
+  rawArgs: readonly string[],
+): readonly unknown[] | undefined {
+  if (rawArgs.length > descriptors.length) return undefined;
+  const values: unknown[] = [];
+  for (const [index, rawArg] of rawArgs.entries()) {
+    const descriptor = descriptors[index];
+    if (descriptor === undefined) return undefined;
+    const value = parsePslAuthoringArgumentValue(descriptor, rawArg);
+    if (value === INVALID_AUTHORING_ARGUMENT) return undefined;
+    values.push(value);
+  }
+  return values;
+}
+
 export function mapPslHelperArgs(input: {
   readonly args: readonly ResolvedAttributeArg[];
   readonly descriptors: readonly AuthoringArgumentDescriptor[];

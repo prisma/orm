@@ -1,4 +1,5 @@
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { mongoCodec } from '@internal/mongo-codec';
 import type { MongoResultShape } from '@internal/mongo-query-ast/execution';
@@ -64,6 +65,7 @@ describe('Mongo runtime decode integration', { timeout: timeouts.spinUpMongoMemo
         decode: () => {
           throw new Error('decode explosion');
         },
+        decodeJson: (json) => decodeJsonString('test/throws-on-decode@1', json),
       });
       ctx.codecs.register(failing);
 

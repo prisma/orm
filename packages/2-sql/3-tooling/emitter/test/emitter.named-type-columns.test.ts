@@ -4,8 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { sqlEmission } from '../src/index';
 import { createEmitterTestContract as createContract } from './create-emitter-test-contract';
 
-// Integration test for the typeRef-resolver path: exercise the real SQL emitter walk end-to-end. Confirms that `sqlEmission.resolveFieldTypeParams` walks `storage.fields → namespace tables → columns → storage.types[ref] or namespace.types[ref]` and that the framework emit path (`generateContractDts`) consults the resolver via the `EmissionSpi.resolveFieldTypeParams` hook.
-
 const testHashes = { storageHash: 'test', profileHash: 'test' };
 
 function vectorCodecLookup(): CodecLookup {
@@ -24,9 +22,8 @@ function vectorCodecLookup(): CodecLookup {
   };
 }
 
-describe('sqlEmission.resolveFieldTypeParams (integration via generateContractDts)', () => {
-  it('renders typeRef-shaped parameterized columns via the codec descriptor', () => {
-    // Two columns share a named storage.types entry. The SQL emitter's resolveFieldTypeParams walk finds `Embedding1536`'s typeParams via `storage.fields[embedding].column → namespace tables → post.columns.embedding.typeRef → storage.types.Embedding1536.typeParams`, then the framework emit path renders the codec's output expression.
+describe('contract.d.ts types of a column typed by a named type', () => {
+  it('types the field by its domain type parameters and the column by its named type', () => {
     const contract = createContract({
       models: {
         Post: {
@@ -41,7 +38,7 @@ describe('sqlEmission.resolveFieldTypeParams (integration via generateContractDt
             id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
             embedding: {
               nullable: true,
-              type: { kind: 'scalar', codecId: 'pg/vector@1' },
+              type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 1536 } },
             },
           },
           relations: {},
@@ -85,19 +82,16 @@ describe('sqlEmission.resolveFieldTypeParams (integration via generateContractDt
     );
 
     expect(dts).toContain('readonly embedding: Vector<1536> | null');
-    // FieldOutputTypes must use the rendered Vector<1536> type, not the raw codec accessor.
     const fieldOutputMatch = dts.match(/export type FieldOutputTypes = ({.+?});/s);
     expect(fieldOutputMatch).not.toBeNull();
     expect(fieldOutputMatch![0]).not.toContain('CodecTypes["pg/vector@1"]["output"]');
-    // StorageColumnTypes is now param-refined too (it carries the full column type).
     const storageColumnMatch = dts.match(/export type StorageColumnTypes = ({.+?});/s);
     expect(storageColumnMatch).not.toBeNull();
     expect(storageColumnMatch![0]).toContain('Vector<1536>');
     expect(storageColumnMatch![0]).not.toContain('CodecTypes["pg/vector@1"]["output"]');
   });
 
-  it('inline column typeParams continue to win over the resolver', () => {
-    // Inline `field.type.typeParams` takes precedence: even though the SQL resolver could find `Embedding1536`, the inline 768 wins.
+  it('types the field by its domain type and the column by its named type when the two differ', () => {
     const contract = createContract({
       models: {
         Post: {
@@ -154,7 +148,6 @@ describe('sqlEmission.resolveFieldTypeParams (integration via generateContractDt
       vectorCodecLookup(),
     );
 
-    // Inline 768 wins in the FIELD maps; the storage column keeps its own 1536.
     const fieldOutputMatch = dts.match(/export type FieldOutputTypes = ({.+?});/s);
     expect(fieldOutputMatch).not.toBeNull();
     expect(fieldOutputMatch![0]).toContain('readonly embedding: Vector<768>');
@@ -162,7 +155,6 @@ describe('sqlEmission.resolveFieldTypeParams (integration via generateContractDt
     const fieldInputMatch = dts.match(/export type FieldInputTypes = ({.+?});/s);
     expect(fieldInputMatch).not.toBeNull();
     expect(fieldInputMatch![0]).not.toContain('Vector<1536>');
-    // StorageColumnTypes reflects the column's storage type (typeRef 1536).
     const storageColumnMatch = dts.match(/export type StorageColumnTypes = ({.+?});/s);
     expect(storageColumnMatch).not.toBeNull();
     expect(storageColumnMatch![0]).toContain('Vector<1536>');

@@ -1,4 +1,4 @@
-import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
+import type { SqlDescribedContractSpace, SqlPslBuildContext } from '@internal/family-sql/control';
 import type { EnumInfo, PslPrinterOptions } from '@internal/family-sql/psl-infer';
 import { inferRelations, toModelName } from '@internal/family-sql/psl-infer';
 import { coordinateKey } from '@internal/framework-components/ir';
@@ -20,6 +20,7 @@ import { createPostgresTypeMap } from '../psl-build/postgres-type-map';
 import { SYNTHETIC_SPAN } from '../psl-build/psl-literals';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
+import { type InferredColumnDefaults, inferredColumnDefaults } from './infer-default-codec';
 import { buildNativeEnumBlocks, PSL_SCALAR_TYPE_NAMES } from './infer-enum-blocks';
 import {
   describedContractOwners,
@@ -62,6 +63,7 @@ import { createPostgresDefaultMapping } from './postgres-default-mapping';
  */
 export function inferPostgresPslContract(
   tree: PostgresDatabaseSchemaNode,
+  context: SqlPslBuildContext,
   describedContracts?: readonly SqlDescribedContractSpace[],
 ): PslDocumentAst {
   const namespaces = Object.values(tree.namespaces);
@@ -216,10 +218,11 @@ export function inferPostgresPslContract(
     typeNames: enumTypeNames,
     definitions: enumDefinitions,
   };
-  const options: PslPrinterOptions = {
+  const options: PostgresPslInferOptions = {
     typeMap: createPostgresTypeMap(enumInfo.typeNames),
     defaultMapping: createPostgresDefaultMapping(),
     parseRawDefault: parsePostgresDefault,
+    columnDefaults: inferredColumnDefaults(context),
     ...(enumDefinitions.size > 0 ? { enumInfo } : {}),
   };
 
@@ -242,6 +245,11 @@ export interface RlsEmissionExtras {
   readonly policiesByTable: ReadonlyMap<string, readonly PostgresPolicySchemaNode[]>;
 }
 
+/** The printer options, and how a column's literal default is checked to read back. */
+export type PostgresPslInferOptions = PslPrinterOptions & {
+  readonly columnDefaults: InferredColumnDefaults;
+};
+
 /**
  * Builds the PSL document for one introspected schema.
  *
@@ -261,7 +269,7 @@ export interface RlsEmissionExtras {
  */
 export function buildPslDocumentAst(
   schemaIR: SqlSchemaIR,
-  options: PslPrinterOptions,
+  options: PostgresPslInferOptions,
   foreignKeyExtras: Pick<
     ForeignKeyResolution,
     'extraRelationsByTable' | 'crossSpaceFieldNamesByTable' | 'danglingForeignKeysByTable'
@@ -357,6 +365,7 @@ export function buildPslDocumentAst(
         fieldNamesByTable,
         defaultMapping,
         rawDefaultParser,
+        options.columnDefaults,
         [
           ...(relationsByTable.get(table.name) ?? []),
           ...(extraRelationsByTable.get(table.name) ?? []),

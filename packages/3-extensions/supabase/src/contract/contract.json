@@ -168,7 +168,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 64
+                  }
                 }
               },
               "payload": {
@@ -553,7 +556,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "bannedUntil": {
@@ -574,7 +580,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "confirmedAt": {
@@ -602,14 +611,20 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "emailChange": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "emailChangeConfirmStatus": {
@@ -630,14 +645,20 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "emailChangeTokenNew": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "emailConfirmedAt": {
@@ -651,7 +672,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "id": {
@@ -728,7 +752,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "phoneConfirmedAt": {
@@ -763,7 +790,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "recoverySentAt": {
@@ -777,14 +807,20 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "role": {
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "updatedAt": {
@@ -2597,7 +2633,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "revoked": {
@@ -2618,7 +2657,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               },
               "updatedAt": {
@@ -2632,7 +2674,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               }
             },
@@ -2936,7 +2981,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 255
+                  }
                 }
               }
             },
@@ -3861,7 +3909,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 40
+                  }
                 }
               },
               "id": {
@@ -3875,7 +3926,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "sql/varchar@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 100
+                  }
                 }
               }
             },

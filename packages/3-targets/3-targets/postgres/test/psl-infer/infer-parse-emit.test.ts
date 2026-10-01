@@ -2,7 +2,7 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -42,7 +42,14 @@ const authoringTypes = {
     kind: 'typeConstructor',
     args: [
       { kind: 'number', name: 'precision', integer: true, minimum: 1, optional: true },
-      { kind: 'number', name: 'scale', integer: true, minimum: 0, optional: true },
+      {
+        kind: 'number',
+        name: 'scale',
+        integer: true,
+        minimum: -1000,
+        maximum: 1000,
+        optional: true,
+      },
     ],
     output: {
       codecId: 'pg/numeric@1',
@@ -78,7 +85,7 @@ const target = {
   authoring: { type: authoringTypes },
 };
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,

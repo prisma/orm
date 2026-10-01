@@ -10,8 +10,8 @@ import {
   pgTimetz,
 } from '../../src/core/data-types';
 import {
+  buildSetDefaultColumn,
   renderColumnDdl,
-  renderColumnDefaultSql,
 } from '../../src/core/migrations/column-ddl-rendering';
 
 const noHooks = new Map();
@@ -52,7 +52,6 @@ describe('a date or time default written by the planner', () => {
       pgTimestamptz,
       '2024-01-01T00:00:00Z',
       '2024-01-01T00:00:00Z',
-      "'2024-01-01T00:00:00Z'",
     ],
     [
       'timestamptz',
@@ -60,7 +59,6 @@ describe('a date or time default written by the planner', () => {
       pgTimestamptz,
       '2024-01-01T00:00:00.000Z',
       '2024-01-01T00:00:00Z',
-      "'2024-01-01T00:00:00Z'",
     ],
     [
       'timestamptz',
@@ -68,7 +66,6 @@ describe('a date or time default written by the planner', () => {
       pgTimestamptz,
       '2024-01-01 01:00:00+01',
       '2024-01-01T00:00:00Z',
-      "'2024-01-01T00:00:00Z'",
     ],
     [
       'timestamptz',
@@ -76,7 +73,6 @@ describe('a date or time default written by the planner', () => {
       pgTimestamptz,
       '0044-03-15 00:00:00+00 BC',
       '-000043-03-15T00:00:00Z',
-      "'0044-03-15T00:00:00Z BC'",
     ],
     [
       'timestamptz',
@@ -84,7 +80,6 @@ describe('a date or time default written by the planner', () => {
       pgTimestamptz,
       '0000-06-15T00:00:00Z',
       '0000-06-15T00:00:00Z',
-      "'0001-06-15T00:00:00Z BC'",
     ],
     [
       'timestamptz',
@@ -92,7 +87,6 @@ describe('a date or time default written by the planner', () => {
       pgTimestamptz,
       '12026-01-02 03:04:05+00',
       '+012026-01-02T03:04:05Z',
-      "'12026-01-02T03:04:05Z'",
     ],
     [
       'timestamp',
@@ -100,22 +94,21 @@ describe('a date or time default written by the planner', () => {
       pgTimestamp,
       '2024-01-01 12:00:00',
       '2024-01-01T12:00:00',
-      "'2024-01-01T12:00:00'",
     ],
-    ['date', 'pg/date-temporal@1', pgDate, '0044-03-15 BC', '-000043-03-15', "'0044-03-15 BC'"],
-    ['time', 'pg/time-temporal@1', pgTime, '12:34:56.500', '12:34:56.5', "'12:34:56.5'"],
-    ['timetz', 'pg/timetz@1', pgTimetz, '12:34:56+02', '12:34:56+02:00', "'12:34:56+02:00'"],
-    ['interval', 'pg/interval@1', pgInterval, 'P13M', 'P1Y1M', "'P1Y1M'"],
+    ['date', 'pg/date-temporal@1', pgDate, '0044-03-15 BC', '-000043-03-15'],
+    ['time', 'pg/time-temporal@1', pgTime, '12:34:56.500', '12:34:56.5'],
+    ['timetz', 'pg/timetz@1', pgTimetz, '12:34:56+02', '12:34:56+02:00'],
+    ['interval', 'pg/interval@1', pgInterval, 'P13M', 'P1Y1M'],
   ])(
-    'writes a %s default through %s, given %s, as %s, with the SQL literal %s',
-    (nativeType, codecId, dataType, written, canonical, literal) => {
+    'hands DDL a %s default through %s, given %s, as %s, in CREATE TABLE and SET DEFAULT alike',
+    (nativeType, codecId, dataType, written, canonical) => {
       const node = column(nativeType, codecId, dataType, written);
       expect({
         createTable: renderColumnDdl('v', node, noHooks).default,
-        setDefault: renderColumnDefaultSql('v', defaultNode(node), noHooks),
+        setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks)?.default,
       }).toEqual({
         createTable: { kind: 'literal', value: canonical },
-        setDefault: `DEFAULT ${literal}`,
+        setDefault: { kind: 'literal', value: canonical },
       });
     },
   );
@@ -125,15 +118,16 @@ describe('a date or time default written by the planner', () => {
       '2024-01-01T00:00:00.000Z',
       '0044-03-15 00:00:00+00 BC',
     ]);
+    const canonical = {
+      kind: 'literal',
+      value: ['2024-01-01T00:00:00Z', '-000043-03-15T00:00:00Z'],
+    };
     expect({
       createTable: renderColumnDdl('v', node, noHooks).default,
-      setDefault: renderColumnDefaultSql('v', defaultNode(node), noHooks),
+      setDefault: buildSetDefaultColumn('v', defaultNode(node), noHooks),
     }).toEqual({
-      createTable: {
-        kind: 'literal',
-        value: ['2024-01-01T00:00:00Z', '-000043-03-15T00:00:00Z'],
-      },
-      setDefault: "DEFAULT ARRAY['2024-01-01T00:00:00Z', '0044-03-15T00:00:00Z BC']::timestamptz[]",
+      createTable: canonical,
+      setDefault: expect.objectContaining({ type: 'timestamptz[]', default: canonical }),
     });
   });
 
@@ -150,6 +144,6 @@ describe('a date or time default written by the planner', () => {
         'Column "v": The contract holds this default in a form its data type does not store: pg/timestamptz needs a UTC offset, but "2024-01-01 00:00:00" has none. Add Z for UTC or an offset such as +02:00, as in "2024-01-01T12:34:56Z". Re-emit the contract, then try again.',
     });
     expect(() => renderColumnDdl('v', node, noHooks)).toThrow(refusal);
-    expect(() => renderColumnDefaultSql('v', defaultNode(node), noHooks)).toThrow(refusal);
+    expect(() => buildSetDefaultColumn('v', defaultNode(node), noHooks)).toThrow(refusal);
   });
 });

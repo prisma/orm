@@ -1,6 +1,12 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
-import { renderTsLiteral } from '@internal/framework-components/codec';
+import {
+  decodeJsonBoolean,
+  decodeJsonFloat,
+  decodeJsonString,
+  encodeJsonFloat,
+  renderTsLiteral,
+} from '@internal/framework-components/codec';
 import {
   type MongoCodec,
   type MongoCodecRegistry,
@@ -23,7 +29,9 @@ import {
   binaryEncode,
   binaryEncodeJson,
   booleanEncode,
+  dateDecodeJson,
   dateEncode,
+  dateEncodeJson,
   decimal128Decode,
   decimal128DecodeJson,
   decimal128Encode,
@@ -31,7 +39,9 @@ import {
   decimalTextBigintLiteral,
   decimalTextNumberLiteral,
   doubleEncode,
+  int32DecodeJson,
   int32Encode,
+  int32EncodeJson,
   int64Decode,
   int64DecodeJson,
   int64Encode,
@@ -40,8 +50,11 @@ import {
   int64NumberDecodeJson,
   int64NumberEncode,
   int64NumberEncodeJson,
+  objectIdDecodeJson,
   objectIdEncode,
+  objectIdEncodeJson,
   stringEncode,
+  vectorDecodeJson,
   vectorEncode,
 } from './bson-scalar-helpers';
 import {
@@ -80,51 +93,53 @@ export const mongoObjectIdCodec = mongoCodec({
   typeId: MONGO_OBJECTID_CODEC_ID,
   decode: (wire: ObjectId) => wire.toHexString(),
   encode: (value: string) => objectIdEncode(MONGO_OBJECTID_CODEC_ID, value),
+  encodeJson: (value: string) => objectIdEncodeJson(MONGO_OBJECTID_CODEC_ID, value),
+  decodeJson: (json) => objectIdDecodeJson(MONGO_OBJECTID_CODEC_ID, json),
 });
 
 export const mongoStringCodec = mongoCodec({
   typeId: MONGO_STRING_CODEC_ID,
   decode: (wire: string) => wire,
   encode: (value: string) => stringEncode(MONGO_STRING_CODEC_ID, value),
+  decodeJson: (json) => decodeJsonString(MONGO_STRING_CODEC_ID, json),
 });
 
 export const mongoDoubleCodec = mongoCodec({
   typeId: MONGO_DOUBLE_CODEC_ID,
   decode: (wire: number | Double) => Number(wire),
   encode: (value: number): number | Double => doubleEncode(MONGO_DOUBLE_CODEC_ID, value),
+  encodeJson: encodeJsonFloat,
+  decodeJson: (json) => decodeJsonFloat(MONGO_DOUBLE_CODEC_ID, json),
 });
 
 export const mongoInt32Codec = mongoCodec({
   typeId: MONGO_INT32_CODEC_ID,
   decode: (wire: number) => wire,
   encode: (value: number) => int32Encode(MONGO_INT32_CODEC_ID, value),
+  encodeJson: (value: number) => int32EncodeJson(MONGO_INT32_CODEC_ID, value),
+  decodeJson: (json) => int32DecodeJson(MONGO_INT32_CODEC_ID, json),
 });
 
 export const mongoBooleanCodec = mongoCodec({
   typeId: MONGO_BOOLEAN_CODEC_ID,
   decode: (wire: boolean) => wire,
   encode: (value: boolean) => booleanEncode(MONGO_BOOLEAN_CODEC_ID, value),
+  decodeJson: (json) => decodeJsonBoolean(MONGO_BOOLEAN_CODEC_ID, json),
 });
 
 export const mongoDateCodec = mongoCodec({
   typeId: MONGO_DATE_CODEC_ID,
   decode: (wire: Date) => wire,
   encode: (value: Date) => dateEncode(MONGO_DATE_CODEC_ID, value),
-  encodeJson: (value: Date) => value.toISOString(),
-  decodeJson: (json) => {
-    if (typeof json !== 'string') {
-      throw mongoTargetError('RUNTIME.DECODE_FAILED', 'expected ISO date string', {
-        meta: { codecId: MONGO_DATE_CODEC_ID, received: typeof json },
-      });
-    }
-    return new Date(json);
-  },
+  encodeJson: (value: Date) => dateEncodeJson(MONGO_DATE_CODEC_ID, value),
+  decodeJson: (json) => dateDecodeJson(MONGO_DATE_CODEC_ID, json),
 });
 
 export const mongoVectorCodec = mongoCodec({
   typeId: MONGO_VECTOR_CODEC_ID,
   decode: (wire: readonly number[]) => wire,
   encode: (value: readonly number[]) => vectorEncode(MONGO_VECTOR_CODEC_ID, value),
+  decodeJson: (json) => vectorDecodeJson(MONGO_VECTOR_CODEC_ID, json),
 });
 
 /**
@@ -294,7 +309,7 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
     dataType: mongoDouble.id,
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['double'],
-    renderValueLiteral: renderTsLiteral,
+    renderValueLiteral: (value) => (typeof value === 'number' ? String(value) : undefined),
   }),
   descriptorFor(mongoInt32Codec, {
     dataType: mongoInt32.id,

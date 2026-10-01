@@ -479,7 +479,11 @@ type ContractBase = Omit<
               };
               readonly location: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/geometry@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/geometry@1';
+                  readonly typeParams: { readonly srid: 4326 };
+                };
               };
               readonly name: {
                 readonly nullable: false;
@@ -501,7 +505,11 @@ type ContractBase = Omit<
             readonly fields: {
               readonly boundary: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/geometry@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/geometry@1';
+                  readonly typeParams: { readonly srid: 4326 };
+                };
               };
               readonly id: {
                 readonly nullable: false;
@@ -543,7 +551,11 @@ type ContractBase = Omit<
               };
               readonly path: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/geometry@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/geometry@1';
+                  readonly typeParams: { readonly srid: 4326 };
+                };
               };
             };
             readonly relations: Record<string, never>;

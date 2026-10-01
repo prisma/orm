@@ -9,13 +9,14 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
-import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
+import { type CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import type {
   MigrationStatusResult,
   MigrationStatusSpace,
   StatusDiagnosticJson,
 } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildReadAggregate,
   loadContractRawSafely,
@@ -39,7 +40,7 @@ import {
 } from '../../control-api/operations/migration-status-overlay';
 import { resolveContractRef } from '../../control-api/operations/ref-resolution';
 import { readMigrationRefs } from '../../control-api/operations/refs';
-import { errorUnexpected, requireLiveDatabase } from '../../utils/cli-errors';
+import { requireLiveDatabase } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
 import { renderMigrationGraphLegend } from '../../utils/formatters/migration-graph-labels';
 import { TONE_MIGRATION_GRAPH_PALETTE } from '../../utils/formatters/migration-graph-palette';
@@ -101,11 +102,9 @@ async function readDatabaseState(inputs: {
   } catch (error) {
     return notOk(
       normalizeError(
-        CliStructuredError.is(error)
-          ? error
-          : errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read database state: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+        errorFromCaught(error, (message) => `Failed to read database state: ${message}`, {
+          connection: typeof inputs.connection === 'string' ? inputs.connection : undefined,
+        }),
       ),
     );
   } finally {

@@ -89,6 +89,11 @@ describe('parsePostgresDefault ARRAY[...] elements Postgres prints with a cast',
     },
     { raw: 'ARRAY[(2)::numeric(10,2)]', nativeType: 'numeric(10,2)[]', value: ['2'] },
     {
+      raw: "ARRAY['100'::numeric(5,-2), '-9999900'::numeric(5,-2)]",
+      nativeType: 'numeric(5,-2)[]',
+      value: ['100', '-9999900'],
+    },
+    {
       raw: "ARRAY[('-1'::integer)::smallint, (2)::smallint]",
       nativeType: 'int2[]',
       value: [-1, 2],

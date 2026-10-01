@@ -165,12 +165,12 @@ describe('codec decode raises RUNTIME.DECODE_FAILED', () => {
     });
   });
 
-  it('non-string database JSON value', () => {
+  it('non-string JSON value', () => {
     const error = capture(() => codec().decodeJson(42));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'Geometry database JSON value must be a HEXEWKB string',
+      message: 'pg/geometry@1 JSON value must be a HEXEWKB string',
     });
   });
 });

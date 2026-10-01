@@ -3,6 +3,7 @@ import { runtimeError } from '@internal/framework-components/runtime';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { MongoCodecLookup } from '../mongo-execution-stack';
 
@@ -39,7 +40,7 @@ function describeDocumentId(id: unknown): string | undefined {
 }
 
 /**
- * Every decode failure names the collection and field, and the `_id` of the document when the row carries one; inside a document shape marked `row`, that document's `_id` and the field's path from it. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) passes through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
+ * Every decode failure names the collection and field, and the `_id` of the document when the row carries one; inside a document shape marked `row`, that document's `_id` and the field's path from it. A codec's own `RUNTIME.DECODE_FAILED` keeps its code and details, with the location added; any other structured envelope (a dotted `code`, per `isStructuredError`) and an `InternalError` pass through unchanged; everything else is wrapped in a `RUNTIME.DECODE_FAILED` envelope. The original error is the `cause`.
  */
 function wrapDecodeFailure(
   error: unknown,
@@ -51,6 +52,7 @@ function wrapDecodeFailure(
   codecId: string,
   wireValue: unknown,
 ): never {
+  if (isInternalError(error)) throw error;
   const codecDetails = isStructuredError(error) ? error.meta : undefined;
   if (isStructuredError(error) && error.code !== 'RUNTIME.DECODE_FAILED') {
     throw error;

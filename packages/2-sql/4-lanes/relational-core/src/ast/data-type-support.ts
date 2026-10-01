@@ -10,22 +10,20 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { DataTypeId } from '@internal/framework-components/codec';
+import {
+  type DataTypeId,
+  isNonFiniteText,
+  type ToCanonicalForm,
+} from '@internal/framework-components/codec';
 import { structuredError } from '@internal/utils/structured-error';
 
 const INTEGER_TEXT = /^-?\d+$/;
 const DECIMAL_TEXT = /^-?\d+\.\d+$/;
-const NON_FINITE_WORDS: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
 const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
 
 /** Whether `text` is a whole number or a decimal as a contract source writes one. */
 export function isNumeralText(text: string): boolean {
   return INTEGER_TEXT.test(text) || DECIMAL_TEXT.test(text);
-}
-
-/** Whether `text` is one of the three words a floating-point value is written as. */
-export function isNonFiniteText(text: string): boolean {
-  return NON_FINITE_WORDS.has(text);
 }
 
 /**
@@ -55,6 +53,22 @@ export function numeralText(value: number): string {
   if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
   return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 }
+
+/**
+ * The canonical form of a 64-bit integer type: digit text. A database reads an integer default back as a number when it is a safe integer, so a safe integer reads as its digit text too; any other number may already have lost digits and is refused.
+ */
+export const integerTextCanonicalForm: ToCanonicalForm = (value) => {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) return numeralText(value);
+  if (typeof value === 'string' && INTEGER_TEXT.test(value)) return BigInt(value).toString();
+  throw structuredError(
+    'CONTRACT.CAST_REFUSED',
+    `Expected digit text or a safe integer, got ${JSON.stringify(value)}.`,
+    {
+      why: 'A 64-bit integer type stores its value as digit text, and a number past the safe integer range may already have lost digits.',
+      fix: 'Write the value as digit text.',
+    },
+  );
+};
 
 /** A string as a contract source writes it, with the escapes its string reader resolves. */
 export function escapePslString(value: string): string {
@@ -109,7 +123,7 @@ export function createNumberClassifier(
     classification === undefined ? undefined : { type: classification.type, value };
 
   return (text) => {
-    if (NON_FINITE_WORDS.has(text)) {
+    if (isNonFiniteText(text)) {
       return as(spec.words, spec.words?.form === 'number' ? Number(text) : text);
     }
     if (DECIMAL_TEXT.test(text)) {

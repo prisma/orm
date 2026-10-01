@@ -23,6 +23,7 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { check, defineContract } from '../src/contract-builder';
 import { stripDerivedChecksFromNonManagedTables } from '../src/derived-checks';
 import { enumType, member } from '../src/enum-type';
+import { withDescriptors } from './with-descriptors';
 
 const sqlFamilyPack = {
   kind: 'family',
@@ -526,10 +527,10 @@ describe('check emission — guards', () => {
             target: postgresTargetPack,
             createNamespace: createTestSqlNamespace,
             enums: { Normalized },
-            codecLookup: {
+            codecLookup: withDescriptors({
               ...emptyCodecLookup,
               get: (id) => (id === codec.id ? codec : undefined),
-            },
+            }),
           },
           ({ field: f, model: m }) => ({
             models: {

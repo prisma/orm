@@ -18,6 +18,7 @@ import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-n
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
 import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
+import { inferBuildContext } from './fixtures';
 
 interface PolicyFixture {
   readonly name: string;
@@ -69,7 +70,7 @@ function pslWithPolicies(policies: readonly PostgresPolicySchemaNode[], rlsEnabl
     existingSchemas: ['public'],
     pgVersion: '',
   });
-  return printPsl(inferPostgresPslContract(tree), {
+  return printPsl(inferPostgresPslContract(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
 }
@@ -216,7 +217,7 @@ function pslFromTables(
     existingSchemas: ['public'],
     pgVersion: '',
   });
-  return printPsl(inferPostgresPslContract(tree), {
+  return printPsl(inferPostgresPslContract(tree, inferBuildContext), {
     pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
   });
 }

@@ -2,13 +2,23 @@ import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter
 import { columnExistsAst } from '../../../contract-free/checks';
 import { quoteIdentifier } from '../../sql-utils';
 import { buildTargetDetails } from '../planner-target-details';
-import { type Op, type SqliteColumnSpec, step } from './shared';
+import {
+  type Op,
+  refuseEarlierColumnSpecs,
+  renderSpecDefault,
+  type SqliteColumnSpec,
+  step,
+} from './shared';
 
-export function addColumnExecuteSql(tableName: string, column: SqliteColumnSpec): string {
+export function addColumnExecuteSql(
+  tableName: string,
+  column: SqliteColumnSpec,
+  defaultClause: string,
+): string {
   const parts = [
     `ALTER TABLE ${quoteIdentifier(tableName)}`,
     `ADD COLUMN ${quoteIdentifier(column.name)} ${column.typeSql}`,
-    column.defaultSql,
+    defaultClause,
     column.nullable ? '' : 'NOT NULL',
   ].filter(Boolean);
   return parts.join(' ');
@@ -23,6 +33,8 @@ export async function addColumn(
   column: SqliteColumnSpec,
   lowerer: ExecuteRequestLowerer,
 ): Promise<Op> {
+  refuseEarlierColumnSpecs('addColumn', tableName, [column]);
+  const defaultClause = await renderSpecDefault(column, tableName, lowerer);
   const checks = columnExistsAst(tableName, column.name);
   const absent = await lowerer.lowerToExecuteRequest(checks.columnAbsent());
   const present = await lowerer.lowerToExecuteRequest(checks.columnPresent());
@@ -33,7 +45,9 @@ export async function addColumn(
     operationClass: 'additive',
     target: { id: 'sqlite', details: buildTargetDetails('column', column.name, tableName) },
     precheck: [step(`ensure column "${column.name}" is missing`, absent.sql, absent.params)],
-    execute: [step(`add column "${column.name}"`, addColumnExecuteSql(tableName, column))],
+    execute: [
+      step(`add column "${column.name}"`, addColumnExecuteSql(tableName, column, defaultClause)),
+    ],
     postcheck: [step(`verify column "${column.name}" exists`, present.sql, present.params)],
   };
 }

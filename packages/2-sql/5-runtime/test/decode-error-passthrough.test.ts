@@ -7,6 +7,7 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
@@ -135,6 +136,48 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
+  });
+
+  describe('rethrows an InternalError from a codec unchanged', () => {
+    const original = new InternalError('codec invariant broke');
+    const registry = [
+      defineTestCodec({
+        typeId: 'test/passthrough@1',
+        targetTypes: ['text'],
+        encode: (v: string) => v,
+        decode: () => {
+          throw original;
+        },
+      }),
+    ];
+
+    it('for one value', async () => {
+      await expect(
+        decodeRow(
+          { value: 'wire' },
+          buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
+          {},
+          sqlNativeArrayListDecoder,
+        ),
+      ).rejects.toBe(original);
+    });
+
+    it('for an element of a many-typed column', async () => {
+      const ast = SelectAst.from(TableSource.named('users')).withProjection([
+        ProjectionItem.of('value', ColumnRef.of('users', 'value'), {
+          codecId: 'test/passthrough@1',
+          many: true,
+        }),
+      ]);
+      await expect(
+        decodeRow(
+          { value: ['wire'] },
+          buildDecodeContext(ast, buildTestContractCodecs(registry)),
+          {},
+          sqlNativeArrayListDecoder,
+        ),
+      ).rejects.toBe(original);
+    });
   });
 
   it('wraps a foreign Error into RUNTIME.DECODE_FAILED with the original on cause', async () => {

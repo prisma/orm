@@ -17,6 +17,7 @@ const baseInput = {
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },
+  authoringContributions: { valueObjectStorageType: 'Jsonb' },
 } as const;
 
 function refusalFor(schema: string): readonly { code: string; message: string }[] {

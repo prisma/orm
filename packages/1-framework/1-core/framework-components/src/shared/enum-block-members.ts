@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
-import { InternalError } from '@internal/utils/internal-error';
+import { isInternalError } from '@internal/utils/internal-error';
 import type { Codec } from './codec';
 import type { AuthoringEntityContext } from './framework-authoring';
 import type { ParsedPslExtensionBlock } from './psl-extension-block';
@@ -36,6 +36,7 @@ export function readEnumBlockMembers(
     try {
       read = codec.decodeJson(written);
     } catch (err) {
+      if (isInternalError(err)) throw err;
       diagnostics?.push(
         memberValue === undefined
           ? {
@@ -72,7 +73,7 @@ export function readEnumBlockMembers(
     try {
       storedValue = codec.decodeJson(stored);
     } catch (err) {
-      if (err instanceof InternalError) throw err;
+      if (isInternalError(err)) throw err;
       diagnostics?.push({
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message: `enum "${block.name}" member "${memberName}" is written ${JSON.stringify(written)}, which codec "${codecId}" stores as ${JSON.stringify(stored)} and cannot read back: ${err instanceof Error ? err.message : String(err)}`,

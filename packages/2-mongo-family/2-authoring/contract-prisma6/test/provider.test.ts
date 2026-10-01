@@ -1,5 +1,5 @@
 import { computeExecutionHash } from '@internal/contract/hashing';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -9,7 +9,7 @@ import { fixturesDir, mongoSourceContext, mongoStack } from './support';
 
 const enumSchema = join(fixturesDir, 'enums', 'schema.prisma');
 
-function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookup {
+function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookupWithDescriptors {
   const base = mongoStack.codecLookup;
   return {
     ...base,
@@ -27,7 +27,7 @@ function lookupWithFailingEncode(codecId: string, failure: Error): CodecLookup {
   };
 }
 
-function loadEnumSchema(codecLookup: CodecLookup) {
+function loadEnumSchema(codecLookup: CodecLookupWithDescriptors) {
   return prisma6Contract('enums/schema.prisma', { binding: prisma6MongoBinding }).source.load({
     ...mongoSourceContext([enumSchema]),
     codecLookup,

@@ -7,6 +7,7 @@
 
 import type { JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
+import { SAFE_INTEGER_BIGINT_RANGE } from '@internal/framework-components/codec';
 import {
   createNumberClassifier,
   numeralText,
@@ -16,8 +17,6 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { sqliteBigint, sqliteInteger, sqliteJson, sqliteReal, sqliteText } from './data-types';
 
-const SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
-
 /**
  * A whole number within the range a double holds exactly is an `integer`, a wider one up to 64 bits
  * is a `bigint`, and a number with a fraction is a `real`. Anything else — a whole number past 64
@@ -25,7 +24,7 @@ const SAFE_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
  */
 const classifySqliteNumber = createNumberClassifier({
   integers: [
-    { type: sqliteInteger.id, form: 'number', min: -SAFE_INTEGER, max: SAFE_INTEGER },
+    { type: sqliteInteger.id, form: 'number', ...SAFE_INTEGER_BIGINT_RANGE },
     { type: sqliteBigint.id, form: 'text', ...signedRange(64) },
   ],
   fraction: { type: sqliteReal.id, form: 'number' },

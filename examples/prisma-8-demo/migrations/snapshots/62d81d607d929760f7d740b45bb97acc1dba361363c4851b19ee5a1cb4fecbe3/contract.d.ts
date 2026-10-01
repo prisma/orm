@@ -1009,7 +1009,11 @@ type ContractBase = Omit<
               };
               readonly embedding: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/vector@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/vector@1';
+                  readonly typeParams: { readonly length: 1536 };
+                };
               };
               readonly expiresAt: {
                 readonly nullable: false;

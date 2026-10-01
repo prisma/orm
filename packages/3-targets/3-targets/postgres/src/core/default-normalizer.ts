@@ -1,6 +1,6 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
 import { blindCast } from '@internal/utils/casts';
-import { canonicalUuidText } from './uuid-text';
+import { canonicalUuid } from './codec-helpers';
 
 /**
  * Pre-compiled regex patterns for performance.
@@ -26,19 +26,30 @@ const NUMERAL = String.raw`[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`;
 const NUMERIC_PATTERN = new RegExp(`^${NUMERAL}$`);
 
 /**
+ * A type modifier: `(3)`, `(65,30)`, or a numeric type's negative scale, `(5,-2)`, which PostgreSQL
+ * 15 and later accept.
+ */
+const TYPE_MODIFIER = String.raw`\(\d+(?:,\s*-?\d+)?\)`;
+
+/**
  * A cast target type: a builtin of one or more words, where any word may carry a modifier
  * (`timestamp(3) without time zone`, `numeric(65,30)`), or a quoted identifier (`"AuditAction"`);
  * either may be qualified by a possibly quoted schema (`audit."AuditAction"`, `"my schema".t`).
  */
-const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:\(\d+(?:,\s*\d+)?\))?(?:\s+\w+(?:\(\d+(?:,\s*\d+)?\))?)*)`;
+const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:${TYPE_MODIFIER})?(?:\s+\w+(?:${TYPE_MODIFIER})?)*)`;
 const QUOTED_LITERAL_PATTERN = new RegExp(`^'((?:[^']|'')*)'(?:::(${TYPE_NAME}))?$`);
 const NUMBER_LITERAL_PATTERN = new RegExp(`^(${NUMERAL})(?:::(${TYPE_NAME}))?$`);
 const PARENTHESISED_CAST_PATTERN = new RegExp(String.raw`^\((.+)\)::(${TYPE_NAME})$`, 's');
 const INTEGER_PATTERN = /^-?\d+$/;
 const INTEGER_TYPE_PATTERN = /^(?:smallint|integer|bigint|int2|int4|int8)$/i;
-const NUMBER_TYPE_PATTERN =
-  /^(?:smallint|integer|bigint|int2|int4|int8|real|double precision|float4|float8|numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i;
-const DECIMAL_TEXT_TYPE_PATTERN = /^(?:bigint|int8|numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i;
+const NUMBER_TYPE_PATTERN = new RegExp(
+  `^(?:smallint|integer|bigint|int2|int4|int8|real|double precision|float4|float8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
+  'i',
+);
+const DECIMAL_TEXT_TYPE_PATTERN = new RegExp(
+  `^(?:bigint|int8|numeric|decimal)(?:${TYPE_MODIFIER})?$`,
+  'i',
+);
 
 /**
  * Matches a Postgres array literal default of the form `'{...}'::elemtype[]`.
@@ -211,6 +222,11 @@ const BOOLEAN_FALSE_TOKEN_PATTERN = /^(?:f|false)$/i;
  * Reads an unquoted, non-NULL array element by the column's element type. Only text Postgres itself
  * would print is read; anything else keeps the raw expression.
  */
+/** A text default as the column stores it: a uuid in the form PostgreSQL writes, which its codec reads. */
+function storedText(text: string, nativeType: string | undefined): string {
+  return nativeType === 'uuid' ? (canonicalUuid(text) ?? text) : text;
+}
+
 function unquotedElementValue(token: string, elementType: string): JsonValue | undefined {
   if (token === '') return undefined;
   if (BOOLEAN_TYPE_PATTERN.test(elementType)) {
@@ -221,11 +237,11 @@ function unquotedElementValue(token: string, elementType: string): JsonValue | u
   if (NUMBER_TYPE_PATTERN.test(elementType)) {
     return NUMERIC_PATTERN.test(token) ? numberValue(token, elementType) : undefined;
   }
-  if (isJsonType(elementType)) {
+  if (isJsonElementType(elementType)) {
     const document = readJsonDocument(token);
     return document.kind === 'json' ? document.value : undefined;
   }
-  return textValue(token, elementType);
+  return storedText(token, elementType);
 }
 
 /**
@@ -251,7 +267,7 @@ function parseArrayLiteralBody(
     if (token.quoted) {
       // A quoted token is always a string — `"NULL"`, `"true"`, `"1"` are the
       // literal text, never the keyword/number.
-      const value = textValue(token.value, elementType);
+      const value = textElementValue(token.value, elementType);
       if (value === undefined) return undefined;
       result.push(value);
       continue;
@@ -261,7 +277,7 @@ function parseArrayLiteralBody(
       // A `json`/`jsonb` element's quoted `'null'` is the JSON value null, and an unquoted SQL NULL
       // is the absence of a value. Both would read back as JSON null, so the whole default is left
       // as its raw expression rather than printed as one the other reads back as.
-      if (isJsonType(elementType)) return undefined;
+      if (isJsonElementType(elementType)) return undefined;
       result.push(null);
       continue;
     }
@@ -309,29 +325,26 @@ function splitConstructorElements(body: string): readonly string[] {
  */
 function parseConstructorElement(element: string, elementType: string): JsonValue | undefined {
   // See `parseArrayLiteralBody`: an unquoted SQL NULL in a json list is not the JSON value null.
-  if (NULL_PATTERN.test(element)) return isJsonType(elementType) ? undefined : null;
+  if (NULL_PATTERN.test(element)) return isJsonElementType(elementType) ? undefined : null;
   if (TRUE_PATTERN.test(element)) return true;
   if (FALSE_PATTERN.test(element)) return false;
   const token = readLiteralToken(element);
   if (token === undefined) return undefined;
   return token.kind === 'number'
     ? numberValue(token.numeral, elementType)
-    : textValue(token.text, elementType);
+    : textElementValue(token.text, elementType);
 }
 
-function isJsonType(type: string): boolean {
-  return type === 'json' || type === 'jsonb';
+function isJsonElementType(elementType: string): boolean {
+  return elementType === 'json' || elementType === 'jsonb';
 }
 
 /**
- * The value a string literal stands for in a column or element of `type`: a `json`/`jsonb` text is
- * the JSON document it holds, and a `uuid` text is the uuid in the form Postgres prints it. Text that
- * is not JSON stays text. Undefined keeps the raw expression: the document holds a number a
- * JavaScript number would change.
+ * A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type.
+ * Undefined keeps the raw expression: the document holds a number a JavaScript number would change.
  */
-function textValue(text: string, type: string | undefined): JsonValue | undefined {
-  if (type === 'uuid') return canonicalUuidText(text);
-  if (type === undefined || !isJsonType(type)) return text;
+function textElementValue(text: string, elementType: string): JsonValue | undefined {
+  if (!isJsonElementType(elementType)) return storedText(text, elementType);
   const document = readJsonDocument(text);
   if (document.kind === 'inexact') return undefined;
   return document.kind === 'json' ? document.value : text;
@@ -411,7 +424,7 @@ function unwrapOuterArrayCasts(expression: string): string {
  * keeping the introspection layer focused on faithful data capture.
  *
  * @param rawDefault - Raw default expression from information_schema.columns.column_default
- * @param nativeType - Native column type, used for type-aware parsing (array, int8, numeric, JSON, uuid)
+ * @param nativeType - Native column type, used for type-aware parsing (array, int8, numeric, JSON)
  * @returns Normalized ColumnDefault or undefined if the expression cannot be parsed
  */
 export function parsePostgresDefault(
@@ -482,10 +495,12 @@ export function parsePostgresDefault(
     return value === undefined ? undefined : { kind: 'literal', value };
   }
 
-  const value = textValue(token.text, normalizedType);
-  return value === undefined
-    ? { kind: 'function', expression: trimmed }
-    : { kind: 'literal', value };
+  if (normalizedType !== undefined && isJsonElementType(normalizedType)) {
+    const document = readJsonDocument(token.text);
+    if (document.kind === 'inexact') return { kind: 'function', expression: trimmed };
+    if (document.kind === 'json') return { kind: 'literal', value: document.value };
+  }
+  return { kind: 'literal', value: storedText(token.text, normalizedType) };
 }
 
 /**

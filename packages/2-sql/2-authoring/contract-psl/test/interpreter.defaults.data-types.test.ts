@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
@@ -271,13 +272,6 @@ describe('written defaults a column refuses', () => {
 });
 
 describe('the codec lookup the column was resolved from', () => {
-  it('raises an internal error when it exposes no descriptorFor', () => {
-    const { descriptorFor: _descriptorFor, ...withoutDescriptors } = postgresCodecLookup;
-    expect(() => interpret(model('  count Int @default(1)'), withoutDescriptors)).toThrow(
-      'exposes no descriptorFor',
-    );
-  });
-
   it('raises an internal error when the column codec has no descriptor', () => {
     expect(() =>
       interpret(model('  count Int @default(1)'), {
@@ -285,5 +279,26 @@ describe('the codec lookup the column was resolved from', () => {
         descriptorFor: () => undefined,
       }),
     ).toThrow('no codec descriptor is registered for "pg/int4@1"');
+  });
+
+  it('passes a codec internal error through instead of reporting the default as refused', () => {
+    const intDescriptor = postgresCodecLookup.descriptorFor('pg/int4@1');
+    if (intDescriptor === undefined) throw new Error('the fixture lookup has pg/int4@1');
+    const brokenLookup = {
+      ...postgresCodecLookup,
+      descriptorFor: (id: string) =>
+        id === 'pg/int4@1'
+          ? {
+              ...intDescriptor,
+              factory: () => () => ({
+                ...intDescriptor.factory(undefined)({ name: id }),
+                decodeJson: () => {
+                  throw new InternalError('a codec broke an invariant');
+                },
+              }),
+            }
+          : postgresCodecLookup.descriptorFor(id),
+    };
+    expect(() => interpret(model('  count Int @default(1)'), brokenLookup)).toThrow(InternalError);
   });
 });

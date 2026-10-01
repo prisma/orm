@@ -6,7 +6,8 @@ import { type FormatOptions, format } from '@internal/psl-parser/format';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
-import { type CliStructuredError, errorRuntime, errorUnexpected } from '../../utils/cli-errors';
+import { type CliStructuredError, errorRuntime } from '../../utils/cli-errors';
+import { errorFromCaught } from './caught-errors';
 
 export interface FormatOperationOptions {
   readonly config: PrismaNextConfig;
@@ -62,7 +63,7 @@ async function formatOneFile(
         }),
       );
     }
-    return notOk(errorUnexpected(error instanceof Error ? error.message : String(error)));
+    return notOk(errorFromCaught(error, (message) => message));
   }
 
   try {

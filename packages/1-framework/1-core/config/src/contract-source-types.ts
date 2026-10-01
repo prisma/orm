@@ -1,5 +1,8 @@
 import type { Contract } from '@internal/contract/types';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
@@ -44,7 +47,7 @@ export interface ContractSourceContext {
   /** Extension contracts keyed by space ID, required for cross-space FK resolution. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly authoringContributions: AssembledAuthoringContributions;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
   /** The stack's data types, so a written default can be cast into a column's type. ADR 254. */
   readonly dataTypeLookup: DataTypeLookup;
   readonly controlMutationDefaults: ControlMutationDefaults;

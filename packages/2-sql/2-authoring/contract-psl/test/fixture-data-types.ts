@@ -13,6 +13,7 @@ import {
   createDataTypeLookup,
   type DataType,
   dataType,
+  isNonFiniteText,
 } from '@internal/framework-components/codec';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
@@ -26,7 +27,7 @@ const unchanged: Cast = (value) => value;
 const asText: Cast = (value) => String(value);
 const asNumber: Cast = (value) => {
   if (typeof value === 'number') return value;
-  if (typeof value === 'string' && NON_FINITE.has(value)) return value;
+  if (typeof value === 'string' && isNonFiniteText(value)) return value;
   const converted = Number(value);
   if (Number.isFinite(converted)) return converted;
   throw structuredError('CONTRACT.CAST_REFUSED', `${String(value)} is out of range.`, {
@@ -35,7 +36,6 @@ const asNumber: Cast = (value) => {
   });
 };
 
-const NON_FINITE: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
 const INTEGER_TEXT = /^-?\d+$/;
 const DECIMAL_TEXT = /^-?\d+\.\d+$/;
 const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
@@ -114,7 +114,7 @@ export const fixtureDataTypes: readonly DataType[] = [
 function classifyNumber(
   text: string,
 ): { readonly type: DataType['id']; readonly value: JsonValue } | undefined {
-  if (NON_FINITE.has(text)) return { type: pgNumeric.id, value: text };
+  if (isNonFiniteText(text)) return { type: pgNumeric.id, value: text };
   if (DECIMAL_TEXT.test(text)) return { type: pgNumeric.id, value: canonicalNumeral(text) };
   if (!INTEGER_TEXT.test(text)) return undefined;
   const digits = BigInt(text);

@@ -23,13 +23,18 @@ export interface MongoCodec<
 }
 
 /**
- * Conditional bundle for `encodeJson`/`decodeJson`: when `TInput` is structurally assignable to `JsonValue` the identity defaults are sound and both fields are optional; otherwise both fields are required so an author cannot silently produce a non-JSON-safe contract artifact.
+ * Conditional bundle for `encodeJson`/`decodeJson`. An identity `encodeJson` is sound whenever `TInput` is a JSON type, but an identity `decodeJson` returns any JSON value as a `TInput`, which is sound only when `TInput` is exactly `JsonValue`. So both are optional for `JsonValue`, `decodeJson` is required for a narrower JSON type such as `string`, and both are required for a type that is not JSON.
  */
 type JsonRoundTripConfig<TInput> = [TInput] extends [JsonValue]
-  ? {
-      encodeJson?: (value: TInput) => JsonValue;
-      decodeJson?: (json: JsonValue) => TInput;
-    }
+  ? [JsonValue] extends [TInput]
+    ? {
+        encodeJson?: (value: TInput) => JsonValue;
+        decodeJson?: (json: JsonValue) => TInput;
+      }
+    : {
+        encodeJson?: (value: TInput) => JsonValue;
+        decodeJson: (json: JsonValue) => TInput;
+      }
   : {
       encodeJson: (value: TInput) => JsonValue;
       decodeJson: (json: JsonValue) => TInput;
@@ -40,7 +45,7 @@ type JsonRoundTripConfig<TInput> = [TInput] extends [JsonValue]
  *
  * Author `encode` and `decode` as sync or async functions; the factory produces a {@link MongoCodec} whose query-time methods follow the boundary contract documented on the framework {@link BaseCodec}. Authors receive a second `ctx` options argument carrying the per-call context; ignore it if you don't need it.
  *
- * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` and `decodeJson` default to identity **only when `TInput` is assignable to `JsonValue`**; otherwise both are required so the contract artifact stays JSON-safe.
+ * Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encodeJson` defaults to identity when `TInput` is a JSON type, and `decodeJson` only when `TInput` is exactly `JsonValue`; any other codec supplies a `decodeJson` that follows {@link BaseCodec.decodeJson}, and a codec whose type is not JSON supplies both.
  *
  * Codec-id-keyed static metadata (`traits`, `targetTypes`, `renderOutputType`) lives on the unified `CodecDescriptor` rather than on the codec instance itself (TML-2357).
  */

@@ -345,7 +345,11 @@ type ContractBase = Omit<
             readonly fields: {
               readonly decimals: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/numeric@1';
+                  readonly typeParams: { readonly precision: 65; readonly scale: 30 };
+                };
                 readonly many: true;
               };
               readonly id: {

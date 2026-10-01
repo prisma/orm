@@ -1,7 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
 import { resolveStorageTable } from '@internal/sql-contract/resolve-storage-table';
-import { isStorageTypeInstance, type SqlStorage } from '@internal/sql-contract/types';
+import {
+  isStorageTypeInstance,
+  resolvedTypeParams,
+  type SqlStorage,
+} from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 
 /**
@@ -30,28 +34,22 @@ export function codecRefForStorageColumn(
   const tableDef = resolved.table;
   const columnDef = tableDef.columns[columnName];
   if (!columnDef) return undefined;
+  const typeParams = resolvedTypeParams(columnDef, storage.types);
+  const params =
+    typeParams === undefined
+      ? {}
+      : {
+          typeParams: blindCast<
+            JsonValue,
+            'column typeParams is a validated contract record; its values are JSON-serialisable'
+          >(typeParams),
+        };
   if (columnDef.typeRef !== undefined) {
     const instance = storage.types?.[columnDef.typeRef];
-    if (!instance) return undefined;
-    if (isStorageTypeInstance(instance)) {
-      const instanceParams = instance.typeParams;
-      const hasParamKeys = instanceParams !== undefined && Object.keys(instanceParams).length > 0;
-      return hasParamKeys
-        ? { codecId: instance.codecId, typeParams: instanceParams as JsonValue }
-        : { codecId: instance.codecId };
-    }
-    return undefined;
-  }
-  if (columnDef.typeParams !== undefined && Object.keys(columnDef.typeParams).length > 0) {
-    const typeParams = blindCast<
-      JsonValue,
-      'column typeParams is a validated contract record; its values are JSON-serialisable'
-    >(columnDef.typeParams);
-    return columnDef.many
-      ? { codecId: columnDef.codecId, typeParams, many: true }
-      : { codecId: columnDef.codecId, typeParams };
+    if (!instance || !isStorageTypeInstance(instance)) return undefined;
+    return { codecId: instance.codecId, ...params };
   }
   return columnDef.many
-    ? { codecId: columnDef.codecId, many: true }
-    : { codecId: columnDef.codecId };
+    ? { codecId: columnDef.codecId, ...params, many: true }
+    : { codecId: columnDef.codecId, ...params };
 }

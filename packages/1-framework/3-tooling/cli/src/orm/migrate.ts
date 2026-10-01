@@ -12,7 +12,7 @@ import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { createControlClient } from '../control-api/client';
-import { mapCaughtMigrationError } from '../control-api/operations/caught-errors';
+import { errorFromCaught } from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
 import {
   loadContractSpaceAggregateForCli,
@@ -35,7 +35,7 @@ import type {
   MigratePathDecision,
   PerSpaceExecutionEntry,
 } from '../control-api/types';
-import { errorContractValidationFailed, errorUnexpected } from '../utils/cli-errors';
+import { errorContractValidationFailed } from '../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl } from '../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../utils/extension-pack-inputs';
 import {
@@ -475,13 +475,11 @@ export function createMigrateCommand(createClient: CreateControlClient) {
           advancedRef,
         };
       } catch (error) {
-        const mapped = mapCaughtMigrationError(error);
         return notOk(
           normalizeError(
-            mapped ??
-              errorUnexpected(error instanceof Error ? error.message : String(error), {
-                why: `Unexpected error during migrate: ${error instanceof Error ? error.message : String(error)}`,
-              }),
+            errorFromCaught(error, (message) => `Unexpected error during migrate: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+            }),
           ),
         );
       } finally {

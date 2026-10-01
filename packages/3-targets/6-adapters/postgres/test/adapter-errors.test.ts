@@ -15,7 +15,7 @@ import {
   TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { col } from '@internal/sql-relational-core/contract-free';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { PostgresSchema } from '@internal/target-postgres/types';
@@ -170,17 +170,6 @@ describe('adapter-postgres structured error codes', () => {
   it('raises CONTRACT.INTROSPECTION_UNSUPPORTED for a malformed index reloption entry', () => {
     expect(structuredCodeOf(() => parsePgReloptions('{no_eq_sign}', 'item_body_idx'))).toBe(
       'CONTRACT.INTROSPECTION_UNSUPPORTED',
-    );
-  });
-
-  it('raises CONTRACT.DEFAULT_INVALID for a non-finite numeric literal default', async () => {
-    const controlAdapter = new PostgresControlAdapter(codecLookup);
-    const ast = new PostgresCreateTable({
-      table: 'defaults',
-      columns: [col('x', 'double precision', { default: lit(Number.NaN) })],
-    });
-    await expect(controlAdapter.lowerToExecuteRequest(ast, { contract })).rejects.toSatisfy(
-      (e) => isStructuredError(e) && e.code === 'CONTRACT.DEFAULT_INVALID',
     );
   });
 });

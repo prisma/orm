@@ -1,7 +1,6 @@
 import type { StorageColumn, StorageTable } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import {
-  buildColumnDefaultSql,
   buildColumnTypeSql,
   buildCreateIndexSql,
   buildDropIndexSql,
@@ -51,81 +50,6 @@ describe('buildColumnTypeSql', () => {
 
   it('rejects unsafe native types', () => {
     expect(() => buildColumnTypeSql(makeColumn({ nativeType: 'TEXT; DROP' }))).toThrow(/Unsafe/);
-  });
-});
-
-describe('buildColumnDefaultSql', () => {
-  it('returns empty for no default', () => {
-    expect(buildColumnDefaultSql(undefined)).toBe('');
-  });
-
-  it('renders literal string default', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: 'hello' })).toBe("DEFAULT 'hello'");
-  });
-
-  it('renders literal number default', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: 42 })).toBe('DEFAULT 42');
-  });
-
-  it('renders literal boolean as 0/1', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: true })).toBe('DEFAULT 1');
-    expect(buildColumnDefaultSql({ kind: 'literal', value: false })).toBe('DEFAULT 0');
-  });
-
-  it('renders NULL literal', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: null })).toBe('DEFAULT NULL');
-  });
-
-  it('writes a datetime default as the text its codec writes for every row', () => {
-    expect([
-      buildColumnDefaultSql(
-        { kind: 'literal', value: '2024-01-01T00:00:00Z' },
-        'sqlite/datetime@1',
-      ),
-      buildColumnDefaultSql(
-        { kind: 'literal', value: '-000043-03-15T00:00:00.5Z' },
-        'sqlite/datetime@1',
-      ),
-      buildColumnDefaultSql({ kind: 'literal', value: '2024-01-01T00:00:00Z' }, 'sqlite/text@1'),
-    ]).toEqual([
-      "DEFAULT '2024-01-01T00:00:00.000Z'",
-      "DEFAULT '-000043-03-15T00:00:00.500Z'",
-      "DEFAULT '2024-01-01T00:00:00Z'",
-    ]);
-  });
-
-  it("renders now() as datetime('now')", () => {
-    expect(buildColumnDefaultSql({ kind: 'function', expression: 'now()' })).toBe(
-      "DEFAULT (datetime('now'))",
-    );
-  });
-
-  it('returns empty for autoincrement()', () => {
-    expect(buildColumnDefaultSql({ kind: 'function', expression: 'autoincrement()' })).toBe('');
-  });
-
-  it('renders custom function default', () => {
-    expect(buildColumnDefaultSql({ kind: 'function', expression: 'random()' })).toBe(
-      'DEFAULT (random())',
-    );
-  });
-
-  it('renders a tagged-literal body verbatim inside DEFAULT (...)', () => {
-    expect(buildColumnDefaultSql({ kind: 'function', expression: 'CURRENT_TIMESTAMP' })).toBe(
-      'DEFAULT (CURRENT_TIMESTAMP)',
-    );
-  });
-
-  it('rejects a dollar-quoted body with CONTRACT.DEFAULT_INVALID, the same rule as Postgres', () => {
-    expect(() => buildColumnDefaultSql({ kind: 'function', expression: '$$x$$' })).toThrow(
-      expect.objectContaining({ code: 'CONTRACT.DEFAULT_INVALID' }),
-    );
-  });
-
-  it('rejects unsafe default expressions', () => {
-    expect(() =>
-      buildColumnDefaultSql({ kind: 'function', expression: 'foo(); DROP TABLE' }),
-    ).toThrow(/Unsafe/);
   });
 });
 

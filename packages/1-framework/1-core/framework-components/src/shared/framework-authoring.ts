@@ -672,6 +672,24 @@ export function isAuthoringTypeConstructorDescriptor(
   return 'kind' in value && value.kind === 'typeConstructor';
 }
 
+/** The type constructor at `path` in the contributions' type namespace, or `undefined` when none is there. */
+export function getAuthoringTypeConstructor(
+  contributions: { readonly type?: AuthoringTypeNamespace } | undefined,
+  path: readonly string[],
+): AuthoringTypeConstructorDescriptor | undefined {
+  let current: AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace | undefined =
+    contributions?.type;
+  for (const segment of path) {
+    if (typeof current !== 'object' || current === null || 'kind' in current) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return current !== undefined && isAuthoringTypeConstructorDescriptor(current)
+    ? current
+    : undefined;
+}
+
 export function isAuthoringFieldPresetDescriptor(
   value: AuthoringFieldPresetDescriptor | AuthoringFieldNamespace,
 ): value is AuthoringFieldPresetDescriptor {

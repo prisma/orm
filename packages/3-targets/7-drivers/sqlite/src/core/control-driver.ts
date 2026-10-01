@@ -1,10 +1,10 @@
-import type { SQLInputValue } from 'node:sqlite';
 import { DatabaseSync } from 'node:sqlite';
 import { errorRuntime } from '@internal/errors/execution';
 import type { ControlDriverDescriptor } from '@internal/framework-components/control';
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { basename } from 'pathe';
 import { normalizeSqliteError } from '../normalize-error';
+import { sqliteParams } from '../sqlite-params';
 import { sqliteDriverDescriptorMeta } from './descriptor-meta';
 
 export class SqliteControlDriver implements SqlControlDriverInstance<'sqlite'> {
@@ -22,7 +22,7 @@ export class SqliteControlDriver implements SqlControlDriverInstance<'sqlite'> {
   ): Promise<{ readonly rows: Row[] }> {
     try {
       const stmt = this.db.prepare(sql);
-      const rows = stmt.all(...((params ?? []) as SQLInputValue[])) as Row[];
+      const rows = stmt.all(...sqliteParams(params)) as Row[];
       return { rows };
     } catch (error) {
       throw normalizeSqliteError(error);

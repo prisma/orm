@@ -1,4 +1,4 @@
-import type { CodecCallContext } from '@internal/framework-components/codec';
+import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import {
   MongoAddFieldsStage,
@@ -154,6 +154,7 @@ describe('lowerFilter', () => {
         typeId: 'test/uppercase@1',
         decode: (wire: string) => wire,
         encode: (value: string) => value.toUpperCase(),
+        decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
       }),
     );
 
@@ -170,6 +171,7 @@ describe('lowerFilter', () => {
         typeId: 'test/uppercase@1',
         decode: (wire: string) => wire,
         encode: (value: string) => value.toUpperCase(),
+        decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
       }),
     );
 
@@ -195,6 +197,7 @@ describe('lowerFilter', () => {
         typeId: 'test/uppercase@1',
         decode: (wire: string) => wire,
         encode: (value: string) => value.toUpperCase(),
+        decodeJson: (json) => decodeJsonString('test/uppercase@1', json),
       }),
     );
 

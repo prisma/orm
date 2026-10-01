@@ -8,18 +8,20 @@ import type {
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeNamespace,
   AuthoringTypeConstructorDescriptor,
-  AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
   checkUncomposedNamespace,
   getAuthoringFieldPreset,
+  getAuthoringTypeConstructor,
   hasRegisteredFieldNamespace,
   instantiateAuthoringTypeConstructor,
   isAuthoringEntityTypeDescriptor,
-  isAuthoringTypeConstructorDescriptor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  CodecLookupWithDescriptors,
+} from '@internal/framework-components/codec';
 import {
   type ControlMutationDefaultRegistry,
   type DefaultFunctionLoweringContext,
@@ -57,7 +59,7 @@ import {
 } from '@internal/sql-contract/sql-expression';
 import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import {
   type DataTypeSupport,
@@ -75,6 +77,7 @@ import {
   interpretFieldAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
+import { type ValueObjectTypes, valueObjectDefaultMismatches } from './value-object-default';
 
 export type ColumnDescriptor = {
   readonly codecId: string;
@@ -101,25 +104,6 @@ export function toNamedTypeFieldDescriptor(
     nativeType: descriptor.nativeType,
     typeRef,
   };
-}
-
-export function getAuthoringTypeConstructor(
-  contributions: AuthoringContributions | undefined,
-  path: readonly string[],
-): AuthoringTypeConstructorDescriptor | undefined {
-  let current: AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace | undefined =
-    contributions?.type;
-
-  for (const segment of path) {
-    if (typeof current !== 'object' || current === null || 'kind' in current) {
-      return undefined;
-    }
-    current = current[segment];
-  }
-
-  return current !== undefined && isAuthoringTypeConstructorDescriptor(current)
-    ? current
-    : undefined;
 }
 
 /**
@@ -200,6 +184,7 @@ export function instantiatePslTypeConstructor(input: {
     validateAuthoringHelperArguments(helperPath, input.descriptor.args, args);
     return instantiateAuthoringTypeConstructor(input.descriptor, args);
   } catch (error) {
+    if (isInternalError(error)) throw error;
     const message = error instanceof Error ? error.message : String(error);
     input.diagnostics.push({
       code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
@@ -319,7 +304,7 @@ function resolveEntityRefTypeConstructorCall(input: {
   readonly namespaceExtensionEntities:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>
     | undefined;
-  readonly codecLookup: CodecLookup | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly source: DiagnosticSource;
   readonly entityLabel: string;
@@ -358,7 +343,7 @@ function resolveEntityRefTypeConstructorCall(input: {
   }
 
   const codecId = input.descriptor.output.codecId;
-  const codecDescriptor = input.codecLookup?.descriptorFor?.(codecId);
+  const codecDescriptor = input.codecLookup?.descriptorFor(codecId);
   if (codecDescriptor === undefined || !hasColumnFromEntityHook(codecDescriptor)) {
     throw contractError(
       'CONTRACT.PACK_CONTRIBUTION_INVALID',
@@ -455,7 +440,7 @@ export function resolveFieldTypeDescriptor(input: {
    * constructor's descriptor declares an `entityRefArg`, to reach the
    * registered codec's `columnFromEntity` authoring hook.
    */
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
 }): ResolveFieldTypeResult {
   const source = diagnosticSource(input.sources, input.field.node.syntax);
   // Avoid cascading unsupported-type diagnostics after invalid qualification.
@@ -620,10 +605,16 @@ export function lowerDefaultForField(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly columnDescriptor: ColumnDescriptor;
+  /** Whether the field is stored in a list column. A list of value objects is not: its one column holds the whole list as one JSON array. */
+  readonly isListColumn: boolean;
+  /** For a field typed by a value object, the value objects a literal default is checked against. */
+  readonly valueObjectDefault:
+    | { readonly valueObjectName: string; readonly types: ValueObjectTypes }
+    | undefined;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;
-  readonly codecLookup: CodecLookup | undefined;
+  readonly codecLookup: CodecLookupWithDescriptors | undefined;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
   readonly defaultValue?: AuthoredColumnDefault;
@@ -655,10 +646,15 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
+  // A list of value objects is stored in one column whose value is the whole list: a list literal
+  // fills it element by element, as it fills a list column, and any other literal is read as the
+  // whole value.
+  const readsListElements = (written: WrittenValue) =>
+    input.isListColumn || (input.field.list && written.kind === 'list');
   const readAsLiteral = (written: WrittenValue) => {
     const lowered = lowerDataTypeDefault({
       written,
-      isList: input.field.list,
+      isList: readsListElements(written),
       column: input.columnDescriptor,
       codecLookup: input.codecLookup,
       support: input.dataTypeSupport,
@@ -671,6 +667,20 @@ export function lowerDefaultForField(input: {
         ...source.at(),
       });
       return {};
+    }
+    if (input.valueObjectDefault !== undefined) {
+      const mismatches = valueObjectDefaultMismatches({
+        fieldPath: `${input.modelName}.${input.fieldName}`,
+        value: lowered.value,
+        list: input.field.list,
+        nullable: input.field.optional,
+        ...input.valueObjectDefault,
+        codecLookup: input.codecLookup,
+      });
+      for (const { code, message } of mismatches) {
+        input.diagnostics.push({ code, message, ...source.at() });
+      }
+      if (mismatches.length > 0) return {};
     }
     return { defaultValue: { kind: 'literal' as const, value: lowered.value, canonical: true } };
   };

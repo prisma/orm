@@ -6,9 +6,8 @@ import { defaultInCanonicalForm } from './default-in-canonical-form';
 /**
  * Structural equality for two resolved column defaults, ported from the relational walk's
  * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (a
- * value of a type with a canonical form, such as a date or time type, to that form through
- * `toCanonicalForm`; a 64-bit-integer native type's safe-integer number to its
- * decimal-text spelling; a numeric native type's number to its decimal text, and when the type has
+ * value of a type with a canonical form, such as a date or time type or a 64-bit integer type, to
+ * that form through `toCanonicalForm`; a numeric native type's number to its decimal text, and when the type has
  * a modifier, its decimal text to its digits without zeros that do not change the value; a list
  * element by element under its element type) then compared canonically (JSON objects match their
  * canonical string form); function expressions compare case- and whitespace-insensitively.
@@ -44,17 +43,12 @@ function normalizeFunctionExpression(expression: string): string {
   return expression.toLowerCase().replace(/\s+/g, '');
 }
 
-function isInt64NativeType(nativeType?: string): boolean {
-  if (!nativeType) return false;
-  const normalized = nativeType.toLowerCase();
-  return normalized === 'int8' || normalized === 'bigint';
-}
-
 /**
- * A numeric type with a modifier (`numeric(10,2)`) stores every value at its scale, so zeros that
- * do not change the value do not count. Without one, the value keeps the scale it was written with.
+ * A numeric type with a modifier (`numeric(10,2)`, or `numeric(5,-2)` with the negative scale
+ * PostgreSQL 15 and later accept) stores every value at its scale, so zeros that do not change the
+ * value do not count. Without one, the value keeps the scale it was written with.
  */
-const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*\d+)?\))?$/i;
+const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*-?\d+)?\))?$/i;
 const DECIMAL_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?$/;
 const EXPONENT_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/;
 
@@ -99,9 +93,6 @@ function normalizeLiteralValue(
   }
   if (value instanceof Date) {
     return json;
-  }
-  if (typeof value === 'number' && Number.isSafeInteger(value) && isInt64NativeType(nativeType)) {
-    return String(value);
   }
   const decimalType = nativeType === undefined ? null : DECIMAL_NATIVE_TYPE.exec(nativeType);
   if ((typeof value === 'number' || typeof value === 'string') && decimalType !== null) {

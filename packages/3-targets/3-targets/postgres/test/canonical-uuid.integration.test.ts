@@ -1,6 +1,6 @@
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { canonicalUuidText } from '../src/core/uuid-text';
+import { canonicalUuid } from '../src/core/codec-helpers';
 
 const spellings = [
   'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
@@ -20,26 +20,24 @@ const spellings = [
   'G0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
 ];
 
-describe('canonicalUuidText against Postgres', () => {
+describe('canonicalUuid against Postgres', () => {
   it(
-    'rewrites exactly the spellings Postgres reads as a uuid, into the text Postgres prints',
+    'rewrites exactly the spellings Postgres reads as a uuid into the text Postgres prints, and refuses the rest',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await withClient(connectionString, async (client) => {
-          const printedOrRefusedUnchanged: Record<string, string> = {};
+          const printedOrRefused: Record<string, string | undefined> = {};
           for (const spelling of spellings) {
-            printedOrRefusedUnchanged[spelling] = await client
+            printedOrRefused[spelling] = await client
               .query<{ printed: string }>('SELECT $1::uuid::text AS printed', [spelling])
               .then(
                 (result) => result.rows[0]?.printed ?? '',
-                () => spelling,
+                () => undefined,
               );
           }
           expect(
-            Object.fromEntries(
-              spellings.map((spelling) => [spelling, canonicalUuidText(spelling)]),
-            ),
-          ).toEqual(printedOrRefusedUnchanged);
+            Object.fromEntries(spellings.map((spelling) => [spelling, canonicalUuid(spelling)])),
+          ).toEqual(printedOrRefused);
         });
       });
     },

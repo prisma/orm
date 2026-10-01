@@ -19,6 +19,8 @@ The framework imports live at `@internal/framework-components/codec`:
 - `column(codecFactory, codecId, typeParams, nativeType)` — column-spec packager (`nativeType` is the database spelling for migrations and contract meta).
 - `Codec<...>`, `CodecDescriptor<P>`, `AnyCodecDescriptor` — consumer-facing interfaces (consumers depend on these; target-neutral authors extend the `*Impl` classes, while target-bound SQL authors use target-owned bases).
 
+`decodeJson` follows one rule, stated on [`Codec.decodeJson`](../../packages/1-framework/1-core/framework-components/src/shared/codec.ts): it reads a value in a stored JSON form of the codec's type and throws on anything else, and callers use it as the check that a value is valid. The readers in `@internal/framework-components/codec` (`decodeJsonString`, `decodeJsonMatching`, `decodeJsonBoolean`, `decodeJsonInteger`, `decodeJsonIntegerText`, `decodeJsonFloat`) implement it for the common forms and refuse through `refuseJsonValue`, which raises `RUNTIME.DECODE_FAILED` with `meta.codecId` and `meta.received`. A codec built with type parameters checks them there too, as `pg/vector@1` checks its length, and a target adds its column's rule to a family codec it adapts, as PostgreSQL's `sql/varchar@1` checks the column's length.
+
 SQL codecs use the same framework `CodecImpl` base. Their `encodeJson` and `decodeJson` methods define the codec's JSON-safe contract representation; `decode` remains responsible for the driver's ordinary column wire value. Keep that representation stable and mutually consistent, and keep `decodeJson` compatible with the values the current SQL JSON renderer returns for the codec. This distinction matters for types such as PostgreSQL `bytea` and extension-defined types whose values inside database-produced JSON may differ from their normal driver representation.
 
 PostgreSQL and SQLite target descriptors also declare AST-to-AST JSON projection hooks, described below. The production JSON renderers call `projectJson()` for every column-valued entry they build, so a descriptor's projection is what a database actually returns — see [The canonical JSON guarantee](#the-canonical-json-guarantee).
@@ -34,7 +36,7 @@ The guarantee rests on the codec, not on the database's own JSON conversion, whi
 - **`pg/geometry@1` is exempt.** The PostGIS geometry codec has no canonical JSON projection, so a geometry column inside database-produced JSON carries whatever PostGIS's own JSON conversion emits, and round-tripping it is not guaranteed. Tracked as [TML-3105](https://linear.app/prisma-company/issue/TML-3105).
 - **Float codecs need `extra_float_digits >= 1`.** `pg/float4@1`, `pg/float8@1`, `pg/float@1` and `sql/float@1` render through PostgreSQL's float-to-text conversion, which `extra_float_digits` controls. At `1` (the default since PostgreSQL 12) it prints the shortest decimal that round-trips exactly, and the guarantee holds. A session that lowers it to `0` or below prints fewer digits than the value needs, and a float read back through JSON may differ from the one stored. Nothing in the framework enforces the setting; if your deployment changes it, floats are outside the guarantee.
 
-Non-finite floats are rejected rather than silently mangled: JSON has no spelling for `NaN` or an infinity, and a database that holds one emits it as a *string*, so `sql/float@1` and `sqlite/real@1` refuse them in both directions rather than hand back a string typed as `number`. `pg/numeric@1` reads all three, because its application value is already text.
+Non-finite floats read back as the numbers they are. JSON has no number for `NaN` or an infinity, and PostgreSQL writes them in JSON as the text `"NaN"`, `"Infinity"` and `"-Infinity"`, so every float codec's `encodeJson` writes that text and its `decodeJson` reads it back as the number. SQLite writes an infinity in JSON as `9.0e+999`, so the SQLite float codecs' JSON projection writes the same text instead, and `decodeJson` refuses a number that is not finite. SQLite cannot store `NaN`, which it turns into `NULL`, so on SQLite `sqlite/real@1` and `sql/float@1` refuse `NaN` in `encode` and in both JSON directions, and the SQLite driver refuses a NaN parameter no codec encoded. `pg/numeric@1` reads all three, because its application value is already text.
 
 The consumer-facing [`BigInt`, `BigIntNumber`, and `UnboundedInt` representation choices](./integer-representation-types.md), including `BigIntNumber`'s deliberate JSON-number exception, are documented separately from this contributor guide.
 
@@ -56,6 +58,7 @@ import {
   CodecImpl,
   type ColumnHelperFor,
   column,
+  decodeJsonString,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { PostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
@@ -71,10 +74,7 @@ class PgTextCodec extends CodecImpl<
   async decode(wire: string, _ctx: CodecCallContext) { return wire; }
   encodeJson(value: string) { return value; }
   decodeJson(json: JsonValue) {
-    if (typeof json !== 'string') {
-      throw new TypeError('Expected a string JSON value');
-    }
-    return json;
+    return decodeJsonString('pg/text@1', json);
   }
 }
 
@@ -403,12 +403,17 @@ The PSL name, TS helper, BSON storage types and application type of every Mongo 
 
 | Codec id | JSON form |
 | --- | --- |
-| `mongo/objectId@1`, `mongo/string@1`, `mongo/int32@1`, `mongo/double@1`, `mongo/bool@1`, `mongo/vector@1`, `mongo/decimal128@1`, `mongo/json@1` | the application value itself |
-| `mongo/date@1` | ISO-8601 text |
+| `mongo/string@1`, `mongo/bool@1`, `mongo/vector@1`, `mongo/decimal128@1`, `mongo/json@1` | the application value itself |
+| `mongo/objectId@1` | the application value, 24 hexadecimal digits |
+| `mongo/int32@1` | the application value, an integer from -2147483648 to 2147483647 |
+| `mongo/double@1` | the application value, with NaN and the infinities written as the text `"NaN"`, `"Infinity"` and `"-Infinity"`, as the SQL float codecs write them |
+| `mongo/date@1` | ISO-8601 text in UTC, as `Date.toISOString()` writes it |
 | `mongo/int64@1` | decimal text; a safe-integer `number` is accepted on the way in |
 | `mongo/int64Number@1` | decimal text, as `mongo/int64@1` writes it |
 | `mongo/binary@1` | unwrapped base64 |
 | `mongo/bson@1` | canonical Extended JSON v2 (`EJSON.serialize(value, { relaxed: false })`), after writing each JavaScript number and `Uint8Array` as the BSON type the driver would store: an integer outside the int32 range as `double`, bytes as `binData` |
+
+`decodeJson` reads only these forms: a value of another kind, or text in another format, throws `RUNTIME.DECODE_FAILED` naming the codec. `mongo/bson@1` refuses Extended JSON that is not canonical, such as a bare number or `{ "$numberInt": "abc" }`, which the `bson` reader would read as 0. The Mongo runtime reads documents through `decode` and never calls `decodeJson`; what `decodeJson` reads is the JSON a schema holds, such as a PSL enum member's value under `@@type`.
 
 `Json` (`mongo/json@1`) means a JSON value, no more. Encode accepts exactly a plain JSON value (plain objects, arrays without holes, strings, finite numbers, booleans, `null`) and refuses anything else at any depth with `RUNTIME.ENCODE_FAILED`, naming its path. Decode accepts a stored value whose every part is a BSON `object`, `array`, `string`, `double`, `int`, `bool`, `null`, or a `long` in the safe-integer range (returned as a `number`), and refuses anything else (a `Date`, `ObjectId`, `Decimal128`, `Binary`, regex, timestamp, a larger `long`, a non-finite double) with `RUNTIME.DECODE_FAILED`, naming its BSON type and path. The validator admits the same BSON types at the field's top level.
 
@@ -432,7 +437,7 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
 }
 ```
 
-Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the value they produce in memory, a `bigint` and a `number`, and both read and write the digit text that type stores. `decodeJson` takes the canonical form and nothing else, and `encodeJson` produces it. A codec has no method for PSL and never sees PSL text.
+Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the value they produce in memory, a `bigint` and a `number`, and both read and write the digit text that type stores. `encodeJson` produces the canonical form, and `decodeJson` takes a stored form of the type and nothing else, as [`Codec.decodeJson`](../../packages/1-framework/1-core/framework-components/src/shared/codec.ts) states. A codec has no method for PSL and never sees PSL text.
 
 An extension's codec does the same. `arktype/json@1` stores a `jsonb` column and validates the document against a schema on the way out, so it names `pg/jsonb` and the extension registers no data type at all. Register a new one only for a database type no pack describes yet, as pgvector does for `vector`. Reusing the target's type is what lets a written `` json`{}` `` reach an arktype column: the tag yields `pg/json`, `pg/jsonb` casts from it unchanged, and the codec validates the document.
 
@@ -512,7 +517,7 @@ Reading a written default is then: the entry parses or classifies the text into 
 
 A data type need not be a column's type. `sql/expression` has an authoring entry that is a tag, declares no casts, and has no codec, so its values are admitted only where a position asks for that type. The SQL family defines and registers it. A family registers only a type whose definition must not differ between targets and that nothing casts from.
 
-Checks that depend on a column's parameters belong in the codec instance, on the canonical form: `vector(3)` refuses four elements, `numeric(10,2)` refuses a third decimal place, and a limit of the stored representation is the codec's to refuse too — `sqlite/real@1` refuses `NaN`, because SQLite cannot store it.
+Checks that depend on a column's parameters belong in the codec instance, on the canonical form: `vector(3)` refuses four elements, `numeric(10,2)` refuses a third decimal place, and a limit of the stored representation is the codec's to refuse too — on SQLite, `sqlite/real@1` and `sql/float@1` refuse `NaN`, because SQLite cannot store it.
 
 ### Assembly is strict
 

@@ -9,6 +9,7 @@ import type { Document, MongoValue } from '@internal/mongo-value';
 import { MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 /**
@@ -37,7 +38,8 @@ function isWireScalar(value: object): boolean {
  * (mirroring SQL's `wrapEncodeFailure` shape) with `{ label, codec }` details
  * and the original error attached on `cause`. A structured envelope (any error
  * with a dotted `code`, per `isStructuredError`) is re-thrown verbatim so
- * codec-raised envelopes and nested resolvers don't get double-wrapped.
+ * codec-raised envelopes and nested resolvers don't get double-wrapped, and
+ * so is an `InternalError`.
  *
  * `ctx: CodecCallContext` is forwarded verbatim to every
  * `codec.encode(value, ctx)` call. The same `ctx` reference is also passed
@@ -165,9 +167,10 @@ function paramRefLabel(ref: MongoParamRef, codecId: string): string {
 }
 
 /**
- * Every encode failure names the parameter, or the field and collection when the ORM supplied them. A codec's own `RUNTIME.ENCODE_FAILED` keeps its code and details, with the label added; any other structured envelope passes through unchanged; everything else is wrapped in a `RUNTIME.ENCODE_FAILED` envelope. The original error is the `cause`.
+ * Every encode failure names the parameter, or the field and collection when the ORM supplied them. A codec's own `RUNTIME.ENCODE_FAILED` keeps its code and details, with the label added; any other structured envelope and an `InternalError` pass through unchanged; everything else is wrapped in a `RUNTIME.ENCODE_FAILED` envelope. The original error is the `cause`.
  */
 function wrapEncodeFailure(error: unknown, ref: MongoParamRef, codecId: string): never {
+  if (isInternalError(error)) throw error;
   const codecDetails = isStructuredError(error) ? error.meta : undefined;
   if (isStructuredError(error) && error.code !== 'RUNTIME.ENCODE_FAILED') {
     throw error;

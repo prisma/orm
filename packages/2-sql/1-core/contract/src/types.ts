@@ -41,6 +41,7 @@ export { StorageTable, type StorageTableInput } from './ir/storage-table';
 export {
   CODEC_INSTANCE_KIND,
   isStorageTypeInstance,
+  resolvedTypeParams,
   type StorageTypeInstance,
   type StorageTypeInstanceInput,
   toStorageTypeInstance,

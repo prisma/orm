@@ -21,7 +21,7 @@ export function buildDataTypeResolver(
   const dataTypes = assembleDataTypes(frameworkComponents).lookup;
   const codecs = extractCodecLookup(frameworkComponents);
   return (codecId) => {
-    const dataTypeId = codecs.descriptorFor?.(codecId)?.dataType;
+    const dataTypeId = codecs.descriptorFor(codecId)?.dataType;
     return dataTypeId === undefined ? undefined : dataTypes.get(dataTypeId);
   };
 }

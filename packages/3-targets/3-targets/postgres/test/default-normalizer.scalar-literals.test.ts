@@ -45,6 +45,25 @@ describe('parsePostgresDefault numeric literals', () => {
   });
 });
 
+describe('parsePostgresDefault uuid literals', () => {
+  it('reads a uuid in the form PostgreSQL stores, whatever spelling it was written in', () => {
+    expect(
+      ['A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11', '{a0eebc99-9c0b4ef8-bb6d6bb9bd380a11}'].map(
+        (written) => parsePostgresDefault(`'${written}'::uuid`, 'uuid'),
+      ),
+    ).toEqual([
+      { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
+      { kind: 'literal', value: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' },
+    ]);
+  });
+
+  it('reads each element of a uuid list the same way', () => {
+    expect(
+      parsePostgresDefault("'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11,NULL}'::uuid[]", 'uuid[]'),
+    ).toEqual({ kind: 'literal', value: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', null] });
+  });
+});
+
 describe('parsePostgresDefault string literals', () => {
   it('parses a plain string literal', () => {
     expect(parsePostgresDefault("'hello'")).toEqual({ kind: 'literal', value: 'hello' });
@@ -226,6 +245,9 @@ describe('parsePostgresDefault numeric columns', () => {
     },
     { raw: '1.5::numeric(10,2)', nativeType: 'numeric(10,2)', value: '1.5' },
     { raw: "'NaN'::numeric", nativeType: 'numeric', value: 'NaN' },
+    { raw: "'12300'::numeric(5,-2)", nativeType: 'numeric(5,-2)', value: '12300' },
+    { raw: "'-500'::numeric(5,-2)", nativeType: 'numeric(5,-2)', value: '-500' },
+    { raw: '0.00123::numeric(3,5)', nativeType: 'numeric(3,5)', value: '0.00123' },
   ])('reads $raw as the decimal text $value for $nativeType', ({ raw, nativeType, value }) => {
     expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
   });

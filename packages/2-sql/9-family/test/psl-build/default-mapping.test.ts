@@ -1,7 +1,11 @@
 import type { JsonValue } from '@internal/contract/types';
 import type { DataTypeAuthoringEntry } from '@internal/framework-components/authoring';
 import type { Cast, DataType } from '@internal/framework-components/codec';
-import { createDataTypeLookup, dataType } from '@internal/framework-components/codec';
+import {
+  createDataTypeLookup,
+  dataType,
+  isNonFiniteText,
+} from '@internal/framework-components/codec';
 import {
   SQL_EXPRESSION_DATA_TYPE_ID,
   sqlExpressionAuthoringEntry,
@@ -9,7 +13,6 @@ import {
 } from '@internal/sql-contract/sql-expression';
 import {
   createNumberClassifier,
-  isNonFiniteText,
   numeralText,
   parseJsonBody,
   printJsonBody,

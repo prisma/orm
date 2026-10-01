@@ -165,6 +165,7 @@
     "./utils/simplify-deep": "./dist/utils__simplify-deep.mjs",
     "./utils/structured-error": "./dist/utils__structured-error.mjs",
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
+    "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"
