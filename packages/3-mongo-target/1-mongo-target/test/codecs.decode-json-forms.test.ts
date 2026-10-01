@@ -11,6 +11,7 @@ import {
   mongoDoubleCodec,
   mongoInt32Codec,
   mongoInt64Codec,
+  mongoInt64NumberCodec,
   mongoObjectIdCodec,
   mongoStringCodec,
   mongoVectorCodec,
@@ -112,6 +113,14 @@ const cases: readonly DecodeJsonCase[] = [
       ['-1', -1n],
     ],
     rejects: [12, '1.5', '9223372036854775808', null],
+  },
+  {
+    codec: mongoInt64NumberCodec,
+    reads: [
+      ['9007199254740991', 9007199254740991],
+      ['-42', -42],
+    ],
+    rejects: [42, '1.5', '9007199254740992', '-9007199254740992', null],
   },
   {
     codec: mongoDecimal128Codec,

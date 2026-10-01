@@ -7,6 +7,8 @@ import {
   INT64_RANGE,
   isIntegerIn,
   refuseJsonValue,
+  SAFE_INTEGER_BIGINT_RANGE,
+  SAFE_INTEGER_RANGE,
 } from '@internal/framework-components/codec';
 import { Binary, Decimal128, Double, Long, ObjectId } from 'bson';
 import { mongoTargetError } from './mongo-target-errors';
@@ -268,24 +270,24 @@ export function int64DecodeJson(codecId: string, json: JsonValue): bigint {
   return decodeJsonIntegerText(codecId, json, INT64_RANGE);
 }
 
-const SAFE_INTEGER_RANGE = `from ${Number.MIN_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER}`;
+const SAFE_INTEGERS = `from ${SAFE_INTEGER_RANGE.min} to ${SAFE_INTEGER_RANGE.max}`;
 
 export function int64NumberEncode(codecId: string, value: number): Long {
-  if (!Number.isSafeInteger(value)) {
+  if (!isIntegerIn(value, SAFE_INTEGER_RANGE)) {
     encodeFailed(
       codecId,
-      `value must be an integer ${SAFE_INTEGER_RANGE}; received ${describeReceived(value)}`,
+      `value must be an integer ${SAFE_INTEGERS}; received ${describeReceived(value)}`,
       value,
     );
   }
   return Long.fromNumber(value);
 }
 
-function safeIntegerOf(codecId: string, subject: string, value: bigint): number {
-  if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+function safeIntegerOf(codecId: string, value: bigint): number {
+  if (value < SAFE_INTEGER_BIGINT_RANGE.min || value > SAFE_INTEGER_BIGINT_RANGE.max) {
     decodeFailed(
       codecId,
-      `${subject} must be a whole number ${SAFE_INTEGER_RANGE}; received ${value}`,
+      `wire value must be a whole number ${SAFE_INTEGERS}; received ${value}`,
       value,
     );
   }
@@ -296,15 +298,15 @@ function safeIntegerOf(codecId: string, subject: string, value: bigint): number 
  * The driver hands a stored `long` over as a `number` when it fits in 53 bits (the default `promoteLongs`), as a `Long` otherwise or with `promoteLongs: false`, and as a `bigint` with `useBigInt64`.
  */
 export function int64NumberDecode(codecId: string, wire: Long | number | bigint): number {
-  if (typeof wire === 'bigint') return safeIntegerOf(codecId, 'wire value', wire);
-  if (isLong(wire)) return safeIntegerOf(codecId, 'wire value', wire.toBigInt());
-  if (typeof wire === 'number' && Number.isSafeInteger(wire)) return wire;
+  if (typeof wire === 'bigint') return safeIntegerOf(codecId, wire);
+  if (isLong(wire)) return safeIntegerOf(codecId, wire.toBigInt());
+  if (isIntegerIn(wire, SAFE_INTEGER_RANGE)) return wire;
   if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
     return refuseFractionalDouble(codecId, wire);
   }
   return decodeFailed(
     codecId,
-    `wire value must be a whole number ${SAFE_INTEGER_RANGE}; received ${describeReceived(wire)}`,
+    `wire value must be a whole number ${SAFE_INTEGERS}; received ${describeReceived(wire)}`,
     wire,
   );
 }
@@ -314,10 +316,7 @@ export function int64NumberEncodeJson(codecId: string, value: number): string {
 }
 
 export function int64NumberDecodeJson(codecId: string, json: JsonValue): number {
-  if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
-    return decodeFailed(codecId, 'JSON value must be decimal integer text', json);
-  }
-  return safeIntegerOf(codecId, 'JSON value', BigInt(json));
+  return Number(decodeJsonIntegerText(codecId, json, SAFE_INTEGER_BIGINT_RANGE));
 }
 
 export function decimalTextNumberLiteral(value: JsonValue): string | undefined {

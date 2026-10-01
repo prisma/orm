@@ -95,12 +95,11 @@ describe('mongo/int64Number@1', () => {
   it('writes and reads its JSON form as decimal text, as mongo/int64@1 does', () => {
     expect(codec().encodeJson(42)).toBe('42');
     expect(codec().decodeJson('-42')).toBe(-42);
-    expect(() => codec().decodeJson(42)).toThrow(
-      'mongo/int64Number@1 JSON value must be decimal integer text',
-    );
-    expect(() => codec().decodeJson('9007199254740992')).toThrow(
-      'mongo/int64Number@1 JSON value must be a whole number from -9007199254740991 to 9007199254740991; received 9007199254740992',
-    );
+    for (const json of [42, '9007199254740992']) {
+      expect(() => codec().decodeJson(json)).toThrow(
+        'mongo/int64Number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
+      );
+    }
     expect(() => codec().encodeJson(1.5)).toThrow(encodeFailed);
   });
 
