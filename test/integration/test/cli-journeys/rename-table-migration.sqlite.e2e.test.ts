@@ -1,7 +1,7 @@
 /**
  * Renaming a table keeps its rows (SQLite).
  *
- * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Journey R3: create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. Planning the change is refused by the case guard, which points at the `renameTable` call; a call naming a table the end contract lacks fails when `migration.ts` builds its operations. A migration created with `migration new` and `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })` renames the table and drops and recreates each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
+ * The SQLite twin of `rename-table-migration.e2e.test.ts`, driven through a file database and the SQLite facade config. Journey R3: create `userProfile` with rows, a unique constraint, a foreign key and an index, then drop the `@@map` so the model names `UserProfile`. Planning the change is refused by the case guard, which points at the `renameTable` call; a call naming a table the end contract lacks fails when `migration.ts` builds its operations. A migration created with `migration new --from <the hash the database is at>` and `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })` renames the table and drops and recreates each index named after the old table; `migrate` keeps the rows; `db verify --schema-only` is clean; a plan with no schema change is empty; and a later migration that removes the unique constraint, the foreign key and the index applies.
  *
  * Journey R4 follows the by-hand path of a project managed with `db update`: the case guard refuses and gives the two-statement rename, the statements are run by hand, and `db update` then drops each index named after the old table before creating it under the new name, keeping the rows.
  */
@@ -17,6 +17,7 @@ import {
   getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
+  latestMigrationToHash,
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
@@ -112,7 +113,7 @@ withTempDir(({ createTempDir }) => {
         expect(initial.exitCode, `R3.02: plan initial: ${initial.stderr}`).toBe(0);
         const applyInitial = await runMigrate(ctx);
         expect(applyInitial.exitCode, `R3.03: migrate initial: ${applyInitial.stderr}`).toBe(0);
-        const origin = latestMigrationDirName(ctx);
+        const origin = latestMigrationToHash(ctx);
         withDatabase(ctx.dbPath, (db) => {
           db.exec(
             `INSERT INTO "Account" (id) VALUES (1);
@@ -136,13 +137,14 @@ withTempDir(({ createTempDir }) => {
             .join('\n'),
           'R3.05: guard points at migration new and renameTable',
         ).toContain(
-          'create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
+          'create its migration with prisma migration new --from <hash of the migration the database is at>, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
         );
 
         const stale = await authorMigration(
           ctx,
           'stale',
           "...this.renameTable({ table: 'userProfile', to: 'Nope' })",
+          origin,
         );
         expect(stale.emit.exitCode, 'R3.06: a call naming a missing table fails').not.toBe(0);
         expect(stale.emit.stderr, 'R3.06: names the unmatched rename').toContain(
@@ -155,6 +157,7 @@ withTempDir(({ createTempDir }) => {
           ctx,
           'rename-user-profile',
           "...this.renameTable({ table: 'userProfile', to: 'UserProfile' })",
+          origin,
         );
         expect(rename.emit.exitCode, `R3.07: self-emit: ${rename.emit.stderr}`).toBe(0);
         const ops = JSON.parse(

@@ -387,14 +387,15 @@ export async function runMigrationNew(
 }
 
 /**
- * Authors a migration by hand: `migration new` scaffolds `migration.ts`, the given source replaces the body of its `operations` array, and `migration.ts` is run to write `ops.json` and `migration.json`. Returns the directory name and the self-emit result, which carries the error when building the operations fails.
+ * Authors a migration by hand: `migration new` scaffolds `migration.ts`, the given source replaces the body of its `operations` array, and `migration.ts` is run to write `ops.json` and `migration.json`. `origin` is the target hash of the migration the new one chains from, which `migration new` needs whenever migrations exist and no `db` ref names the origin. Returns the directory name and the self-emit result, which carries the error when building the operations fails.
  */
 export async function authorMigration(
   ctx: JourneyContext,
   name: string,
   operationsSource: string,
+  origin: string,
 ): Promise<{ readonly dirName: string; readonly emit: CommandResult }> {
-  const scaffold = await runMigrationNew(ctx, ['--name', name]);
+  const scaffold = await runMigrationNew(ctx, ['--name', name, '--from', origin]);
   if (scaffold.exitCode !== 0) {
     throw new Error(`authorMigration: migration new failed: ${scaffold.stderr}`);
   }

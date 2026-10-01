@@ -1,7 +1,7 @@
 /**
  * Renaming a table keeps its rows (Postgres).
  *
- * A model whose table name changes plans as `dropTable` plus `createTable`. A user who wants the rows makes the rename its own schema change, creates its migration with `migration new`, and writes `...this.renameTable({ table, to })`, which renames the table and each constraint and index named after the old table.
+ * A model whose table name changes plans as `dropTable` plus `createTable`. A user who wants the rows makes the rename its own schema change, creates its migration with `migration new --from <the hash the database is at>`, and writes `...this.renameTable({ table, to })`, which renames the table and each constraint and index named after the old table.
  *
  * Journey R1 creates `userProfile` with rows, a unique constraint, a foreign key, an index, row-level security and a policy, then drops the model's `@@map` so it names `UserProfile`. Planning the change is refused by the case-change guard, which points at the `renameTable` call; a call naming a table the end contract lacks fails when `migration.ts` builds its operations. After `migrate` the rows, the policy and RLS are kept, every constraint and index carries the new table name, `db verify --schema-only` is clean, a plan with no schema change is empty, and a later migration that removes the unique constraint, the foreign key and the index applies.
  *
@@ -18,6 +18,7 @@ import {
   getMigrationDirs,
   type JourneyContext,
   latestMigrationDirName,
+  latestMigrationToHash,
   parseJsonOutput,
   planMigrationAndSelfEmit,
   runContractEmit,
@@ -120,7 +121,7 @@ async function seedTableWithObjects(
   swapPslContract(ctx, 'contract-rename-table-objects-to');
   const emitRenamed = await runContractEmit(ctx);
   expect(emitRenamed.exitCode, `${label}.04: emit UserProfile: ${emitRenamed.stderr}`).toBe(0);
-  return latestMigrationDirName(ctx);
+  return latestMigrationToHash(ctx);
 }
 
 async function expectRenameApplied(
@@ -240,7 +241,7 @@ withTempDir(({ createTempDir }) => {
           bareError?.nextActions?.map((action) => action.label).join('\n'),
           'R1.05: guard points at migration new and renameTable',
         ).toContain(
-          'create its migration with prisma migration new, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
+          'create its migration with prisma migration new --from <hash of the migration the database is at>, and add ...this.renameTable({ table: "userProfile", to: "UserProfile" })',
         );
         expect(getMigrationDirs(ctx), 'R1.05: nothing written').toHaveLength(1);
 
@@ -248,6 +249,7 @@ withTempDir(({ createTempDir }) => {
           ctx,
           'stale',
           "...this.renameTable({ table: 'userProfile', to: 'Nope' })",
+          origin,
         );
         expect(stale.emit.exitCode, 'R1.06: a call naming a missing table fails').not.toBe(0);
         expect(stale.emit.stderr, 'R1.06: names the unmatched rename').toContain(
@@ -255,7 +257,7 @@ withTempDir(({ createTempDir }) => {
         );
         rmSync(join(ctx.testDir, 'migrations', 'app', stale.dirName), { recursive: true });
 
-        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL);
+        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL, origin);
         expect(rename.emit.exitCode, `R1.07: self-emit: ${rename.emit.stderr}`).toBe(0);
         const ops = operationsOf(ctx, rename.dirName);
         expect(
@@ -294,6 +296,7 @@ withTempDir(({ createTempDir }) => {
         expect(initial.exitCode, `R5.02: plan initial: ${initial.stderr}`).toBe(0);
         const applyInitial = await runMigrate(ctx);
         expect(applyInitial.exitCode, `R5.03: migrate initial: ${applyInitial.stderr}`).toBe(0);
+        const origin = latestMigrationToHash(ctx);
         await sql(
           db.connectionString,
           `INSERT INTO "public"."Account" (id) VALUES (1);
@@ -304,7 +307,7 @@ withTempDir(({ createTempDir }) => {
         writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_TO_PSL);
         const emitBoth = await runContractEmit(ctx);
         expect(emitBoth.exitCode, `R5.04: emit both changes: ${emitBoth.stderr}`).toBe(0);
-        const incomplete = await authorMigration(ctx, 'rename-and-retarget', RENAME_CALL);
+        const incomplete = await authorMigration(ctx, 'rename-and-retarget', RENAME_CALL, origin);
         expect(incomplete.emit.exitCode, `R5.05: self-emit: ${incomplete.emit.stderr}`).toBe(0);
         const refused = await runMigrate(ctx, ['--json']);
         expect(refused.exitCode, 'R5.06: migrate refuses the incomplete migration').not.toBe(0);
@@ -332,7 +335,7 @@ withTempDir(({ createTempDir }) => {
         writeFileSync(join(ctx.testDir, 'contract.prisma'), FOREIGN_KEY_RENAMED_PSL);
         const emitRenamed = await runContractEmit(ctx);
         expect(emitRenamed.exitCode, `R5.07: emit the rename alone: ${emitRenamed.stderr}`).toBe(0);
-        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL);
+        const rename = await authorMigration(ctx, 'rename-user-profile', RENAME_CALL, origin);
         expect(rename.emit.exitCode, `R5.07: self-emit: ${rename.emit.stderr}`).toBe(0);
         expect(
           operationsOf(ctx, rename.dirName).map((op) => op.label),
