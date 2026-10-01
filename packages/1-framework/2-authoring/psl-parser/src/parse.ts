@@ -79,7 +79,6 @@ export class Cursor {
     }
   }
 
-  /** Whether a line break separates the significant token `ahead` positions ahead from the one before it. */
   newlineBefore(ahead = 0): boolean {
     let rawIndex = 0;
     let remaining = ahead;

@@ -119,12 +119,10 @@ describe('generic block value completion across namespaces', () => {
 
   it('offers same-namespace siblings directly to a policy inside the namespace', () => {
     const result = completeBlockValueSource(
-      [
-        namespacedSource.replace(
-          '  role auditor {\n  }\n}',
-          '  role auditor {\n  }\n  policy_all own {\n    roles = [|\n  }\n}',
-        ),
-      ].join('\n'),
+      namespacedSource.replace(
+        '  role auditor {\n  }\n}',
+        '  role auditor {\n  }\n  policy_all own {\n    roles = [|\n  }\n}',
+      ),
       { clientSupportsTriggerSuggestCommand: true },
     );
     expect(result.labels).toEqual(['auditor', 'admin', 'auth']);
