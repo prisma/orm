@@ -9,15 +9,9 @@ import {
   findBlockDescriptor,
   isNamespaceLike,
   memberEntries,
-  type ScopeResolution,
 } from '@internal/psl-parser';
 import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
-import {
-  type CompletionItem,
-  CompletionItemKind,
-  CompletionItemTag,
-  InsertTextFormat,
-} from 'vscode-languageserver';
+import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
 import type {
   AttributeNameCompletionContext,
@@ -27,6 +21,7 @@ import type {
   NamespaceMemberCompletionContext,
   PslCompletionContext,
 } from './completion-context';
+import { scopeCompletionItems } from './completion-scope';
 import { requiredArgumentsSnippet } from './completion-snippets';
 import { localFieldNames, referencedFieldNames } from './completion-symbols';
 import {
@@ -34,7 +29,6 @@ import {
   provideAttributeNamedKeyCompletionItems,
   provideAttributeValueCompletionItems,
 } from './completion-values';
-import { refinesScalarType } from './named-type-classification';
 
 export interface PslCompletionCandidateSource extends AttributeSpecSource {
   readonly scalarTypes: readonly string[];
@@ -58,15 +52,6 @@ interface DeclarationKeywordCompletionCandidate {
   readonly snippetText: string;
   readonly detail: string;
   readonly kind: CompletionItemKind;
-}
-
-interface ModelTypeCompletionCandidate {
-  readonly label: string;
-  readonly insertText: string;
-  readonly filterText: string;
-  readonly detail: string;
-  readonly kind: CompletionItemKind;
-  readonly deprecated?: boolean;
 }
 
 const declarationKeywordCategoryOrder: Record<
@@ -162,6 +147,7 @@ export function providePslCompletionItems(
         : provideAttributeArgumentSlotCompletionItems(
             {
               context,
+              binder: input.candidates.binder,
               scope: input.candidates.binder.scopeAt(
                 'field' in context
                   ? context.field.syntax
@@ -192,6 +178,7 @@ export function providePslCompletionItems(
         : provideAttributeValueCompletionItems(
             {
               context,
+              binder: input.candidates.binder,
               scope: input.candidates.binder.scopeAt(
                 'field' in context
                   ? context.field.syntax
@@ -468,10 +455,13 @@ function provideModelTypeCompletionItems(
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
 ): readonly CompletionItem[] {
-  return modelTypeCompletionItems(
-    context,
-    sourceFile,
-    typeCandidates(source.binder.scopeAt(context.field.syntax).entries(), source),
+  return scopeCompletionItems(
+    source.binder.scopeAt(context.field.syntax).entries(),
+    source.binder,
+    {
+      start: sourceFile.positionAt(context.replacementStartOffset),
+      end: sourceFile.positionAt(context.offset),
+    },
   );
 }
 
@@ -486,92 +476,14 @@ function provideNamespaceMemberCompletionItems(
     return [];
   }
   const qualifier = source.binder.scopeAt(context.field.syntax).lookup(context.namespace);
-  return modelTypeCompletionItems(
-    context,
-    sourceFile,
-    qualifier !== undefined && isNamespaceLike(qualifier)
-      ? typeCandidates(memberEntries(qualifier), source)
-      : [],
-  );
-}
-
-function modelTypeCompletionItems(
-  context: ModelTypeCompletionContext | NamespaceMemberCompletionContext,
-  sourceFile: SourceFile,
-  candidates: readonly ModelTypeCompletionCandidate[],
-): readonly CompletionItem[] {
-  const replacementRange = {
-    start: sourceFile.positionAt(context.replacementStartOffset),
-    end: sourceFile.positionAt(context.offset),
-  };
-
-  return candidates.map((candidate) => ({
-    label: candidate.label,
-    kind: candidate.kind,
-    detail: candidate.detail,
-    filterText: candidate.filterText,
-    textEdit: {
-      range: replacementRange,
-      newText: candidate.insertText,
+  return scopeCompletionItems(
+    qualifier !== undefined && isNamespaceLike(qualifier) ? memberEntries(qualifier) : [],
+    source.binder,
+    {
+      start: sourceFile.positionAt(context.replacementStartOffset),
+      end: sourceFile.positionAt(context.offset),
     },
-    ...(candidate.deprecated === true ? { tags: [CompletionItemTag.Deprecated] } : {}),
-  }));
-}
-
-function typeCandidates(
-  entries: Iterable<readonly [string, ScopeResolution]>,
-  source: PslCompletionCandidateSource,
-): readonly ModelTypeCompletionCandidate[] {
-  const candidates: ModelTypeCompletionCandidate[] = [];
-  for (const [name, resolution] of entries) {
-    const base = { label: name, insertText: name, filterText: name };
-    switch (resolution.kind) {
-      case 'model':
-      case 'compositeType': {
-        const model = resolution.kind === 'model';
-        const detail = model ? 'Model' : 'Composite type';
-        candidates.push({
-          ...base,
-          detail,
-          kind: model ? CompletionItemKind.Class : CompletionItemKind.Struct,
-        });
-        break;
-      }
-      case 'namedType': {
-        const scalar = refinesScalarType(resolution.symbol, source.binder);
-        candidates.push({
-          ...base,
-          detail: scalar ? 'Scalar type' : 'Type alias',
-          kind: scalar ? CompletionItemKind.Unit : CompletionItemKind.Reference,
-        });
-        break;
-      }
-      case 'namespace':
-      case 'contributedNamespace':
-        candidates.push({
-          ...base,
-          detail: 'Namespace',
-          kind: CompletionItemKind.Module,
-        });
-        break;
-      case 'contributedType': {
-        const descriptor = resolution.symbol.descriptor;
-        candidates.push({
-          ...base,
-          detail:
-            descriptor.deprecated === undefined
-              ? descriptor.documentation || 'Configured scalar type'
-              : `Deprecated: use ${descriptor.deprecated.replacement}.`,
-          kind: CompletionItemKind.Keyword,
-          ...(descriptor.deprecated === undefined ? {} : { deprecated: true }),
-        });
-        break;
-      }
-      case 'block':
-        break;
-    }
-  }
-  return candidates;
+  );
 }
 
 function sortedUnique(names: readonly string[]): readonly string[] {

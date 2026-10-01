@@ -1,10 +1,4 @@
-import {
-  type ArgType,
-  type AttributeSpec,
-  entityReference,
-  matchesSelector,
-  type Scope,
-} from '@internal/psl-parser';
+import type { ArgType, AttributeSpec, Binder, Scope } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
@@ -14,6 +8,7 @@ import type {
   AttributeNamedKeyPosition,
   AttributeValuePosition,
 } from './completion-context';
+import { scopeCompletionItems } from './completion-scope';
 import { requiredArgumentsSnippet } from './completion-snippets';
 
 interface CompletionInput<Position extends AttributeArgumentPosition> {
@@ -28,6 +23,7 @@ interface ValueCompletionInput<Position extends AttributeArgumentPosition>
   extends CompletionInput<Position> {
   readonly fieldNames: (kind: 'fieldRef' | 'referencedFieldRef') => readonly string[];
   readonly scope: Scope;
+  readonly binder: Binder;
 }
 
 export function provideAttributeNamedKeyCompletionItems(
@@ -160,16 +156,16 @@ function valueItems(
     case 'fieldRef':
     case 'referencedFieldRef':
       return scalarItems(input, input.fieldNames(type.kind));
-    case 'entityRef': {
-      const items: CompletionItem[] = [];
-      for (const [name, resolution] of input.scope.entries()) {
-        const reference = entityReference(resolution);
-        if (reference !== undefined && matchesSelector(reference, type.expected)) {
-          items.push(completionItem(input, name, name, CompletionItemKind.Reference, false));
-        }
-      }
-      return items;
-    }
+    case 'entityRef':
+      return scopeCompletionItems(
+        input.scope.entries(),
+        input.binder,
+        {
+          start: input.sourceFile.positionAt(input.context.replacementStartOffset),
+          end: input.sourceFile.positionAt(input.context.replacementEndOffset),
+        },
+        type.expected,
+      );
     case 'list':
     case 'record':
     case 'int':

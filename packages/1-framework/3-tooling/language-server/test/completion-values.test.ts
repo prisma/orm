@@ -37,13 +37,13 @@ import {
 import { testBinder } from './helpers/binder';
 
 const emptyDocument = parse('', 'empty.psl');
-const emptyScope = testBinder({
+const emptyBinder = testBinder({
   sources: emptyDocument.sources,
   symbolTable: buildSymbolTable({
     documents: [emptyDocument.document],
     sources: emptyDocument.sources,
   }).symbolTable,
-}).scopeAt(emptyDocument.document.syntax);
+});
 const emptyTabStop1 = '$' + '{1:}';
 const namedTabStop = (index: number, name: string) => `\${${index}:${name}}`;
 const rejectedParse = vi.fn(() => {
@@ -382,7 +382,8 @@ describe('classified positions without cursor AST', () => {
           positionalIndex: 0,
         },
         sourceFile: new SourceFile('language-server-test.psl', ''),
-        scope: emptyScope,
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -415,7 +416,8 @@ describe('classified positions without cursor AST', () => {
           syntax: 'functionName',
         },
         sourceFile: new SourceFile('language-server-test.psl', 'f()'),
-        scope: emptyScope,
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: true,
         fieldNames: () => [],
       },
@@ -443,7 +445,8 @@ describe('classified positions without cursor AST', () => {
           syntax: 'scalar',
         },
         sourceFile,
-        scope: emptyScope,
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -477,6 +480,46 @@ namespace sibling { model Hidden {} }
     expect(
       complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
     ).toEqual(labels);
+  });
+
+  it.each([
+    ['model', 'Later'],
+    ['composite', 'Address'],
+    ['named', 'Alias'],
+    ['named', 'Related'],
+  ])('shares type-position metadata for %s references to %s', (selector, label) => {
+    const suffix = `${declarations}\ntypes { Related = Later }`;
+    const typeItems = complete(`model Example { value | }${suffix}`).items;
+    const entityItems = complete(
+      `model Example { value String @entity(${selector}: |) }${suffix}`,
+    ).items;
+    const typeItem = typeItems.find((item) => item.label === label);
+    const entityItem = entityItems.find((item) => item.label === label);
+    expect(typeItem).toBeDefined();
+    expect(entityItem).toBeDefined();
+    const { textEdit: typeEdit, ...typeMetadata } = typeItem!;
+    const { textEdit: entityEdit, sortText, ...entityMetadata } = entityItem!;
+    expect(entityMetadata).toEqual(typeMetadata);
+    expect(entityEdit?.newText).toBe(typeEdit?.newText);
+  });
+
+  it('keeps blocks out of type positions and renders selected block references as keywords', () => {
+    expect(complete(`model Example { value | }${declarations}`).labels).not.toContain('Rules');
+    expect(
+      complete(`model Example { value String @entity(block: |) }${declarations}`).items,
+    ).toEqual([
+      expect.objectContaining({
+        label: 'Rules',
+        kind: CompletionItemKind.Keyword,
+        detail: 'policy',
+        filterText: 'Rules',
+      }),
+    ]);
+  });
+
+  it('preserves the type-position cursor endpoint inside identifiers', () => {
+    const result = complete(`model Example { value Ex|ample }${declarations}`);
+    expect(result.apply('Later')).toBe(`model Example { value Laterample }${declarations}`);
   });
 
   it.each([
@@ -619,8 +662,8 @@ describe('recursive attribute values', () => {
     expect(field('none: |').items).toEqual([
       {
         label: 'Example',
-        kind: CompletionItemKind.Reference,
-        detail: 'PSL argument value',
+        kind: CompletionItemKind.Class,
+        detail: 'Model',
         filterText: 'Example',
         textEdit: {
           range: { start: { line: 1, character: 28 }, end: { line: 1, character: 28 } },
@@ -808,7 +851,8 @@ describe('recursive function arguments', () => {
           positionalIndex: 0,
         },
         sourceFile: new SourceFile('language-server-test.psl', ''),
-        scope: emptyScope,
+        scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
+        binder: emptyBinder,
         clientSupportsSnippets: true,
         clientSupportsTriggerParameterHintsCommand: true,
         fieldNames: () => [],
