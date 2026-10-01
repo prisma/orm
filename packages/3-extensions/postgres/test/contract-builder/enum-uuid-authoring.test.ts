@@ -85,9 +85,8 @@ describe('uuid-backed enum authoring against the real Postgres pack', () => {
     ).toThrow(
       expect.objectContaining({
         code: 'CONTRACT.ENUM_INVALID',
-        message: expect.stringMatching(
-          /^enumType\("Ratio"\): member "Half" is written 1\.5, which codec "pg\/numeric@1" cannot read back: .+\. Write the member as a value of the codec's input type\.$/,
-        ),
+        message:
+          'enumType("Ratio") member "Half" has a value its codec pg/numeric@1 refuses: pg/numeric@1 JSON value must be a decimal string',
       }),
     );
   });

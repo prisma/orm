@@ -486,9 +486,10 @@ function hasLiteralType(value: unknown): boolean {
 }
 
 /**
- * Refuses a member whose written value the codec does not read back from what it stores. The
- * contract's types name the member as written, while the runtime reads the stored value, so the
- * two must be the same value. A member with no literal type has nothing to contradict.
+ * Refuses a member whose codec reads its stored value back as a different value from the one written.
+ * The contract's types name the member as written, while the runtime reads the stored value, so the
+ * two must be the same value. A member with no literal type has nothing to contradict. The caller
+ * has already read the stored value back once, so the codec takes it.
  */
 function assertStoredAsWritten(
   enumName: string,
@@ -497,20 +498,7 @@ function assertStoredAsWritten(
   codec: Codec,
 ): void {
   if (!hasLiteralType(member.value)) return;
-  const written = `enumType("${enumName}"): member "${member.name}" is written ${canonicalStringify(member.value)}`;
-  const meta = { enumName, member: member.name, reason: 'member-not-stored-as-written' };
-  let readBack: unknown;
-  try {
-    readBack = codec.decodeJson(stored);
-  } catch (cause) {
-    if (cause instanceof InternalError) throw cause;
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    throw contractError(
-      'CONTRACT.ENUM_INVALID',
-      `${written}, which codec "${codec.id}" cannot read back: ${reason}. Write the member as a value of the codec's input type.`,
-      { cause, meta },
-    );
-  }
+  const readBack = codec.decodeJson(stored);
   if (
     hasLiteralType(readBack) &&
     canonicalStringify(readBack) === canonicalStringify(member.value)
@@ -520,8 +508,8 @@ function assertStoredAsWritten(
   const writeAs = hasLiteralType(readBack) ? canonicalStringify(readBack) : JSON.stringify(stored);
   throw contractError(
     'CONTRACT.ENUM_INVALID',
-    `${written}, but the column stores ${JSON.stringify(stored)}. Write the member as ${writeAs}.`,
-    { meta },
+    `enumType("${enumName}"): member "${member.name}" is written ${canonicalStringify(member.value)}, but the column stores ${JSON.stringify(stored)}. Write the member as ${writeAs}.`,
+    { meta: { enumName, member: member.name, reason: 'member-not-stored-as-written' } },
   );
 }
 
