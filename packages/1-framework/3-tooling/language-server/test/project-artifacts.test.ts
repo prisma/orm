@@ -150,7 +150,10 @@ describe('ProjectArtifacts binder', () => {
     project.documentChanged(schemaUri);
     const third = project.binder();
     expect(third).not.toBe(second);
-    expect(() => third.scopeAt(user.node.syntax)).toThrow();
+    expect(third.declaredSymbol(user.node.syntax)).toBeUndefined();
+    const changed = project.symbolTable().topLevel.models['Changed']!;
+    expect(third.scopeAt(changed.node.syntax).lookup('Changed')?.symbol).toBe(changed);
+    expect(third.scopeAt(changed.node.syntax).lookup('User')).toBeUndefined();
     project.documentClosed(schemaUri);
     expect(project.binder()).not.toBe(third);
   });

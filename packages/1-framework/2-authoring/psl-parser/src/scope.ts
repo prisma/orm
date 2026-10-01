@@ -35,28 +35,27 @@ export interface Scope {
   entries(): Iterable<readonly [string, ScopeResolution]>;
 }
 
-function ownMember<T>(record: Readonly<Record<string, T>>, name: string): T | undefined {
-  return Object.hasOwn(record, name) ? record[name] : undefined;
-}
-
 function* recordNames(...records: readonly Readonly<Record<string, unknown>>[]): Iterable<string> {
   for (const record of records) yield* Object.keys(record);
 }
 
-function* visibleEntries(
-  names: Iterable<string>,
-  lookup: (name: string) => ScopeResolution | undefined,
-  parent?: Scope,
-): Iterable<readonly [string, ScopeResolution]> {
-  const seen = new Set<string>();
-  for (const name of names) {
-    if (seen.has(name)) continue;
-    seen.add(name);
-    const resolution = lookup(name);
-    if (resolution !== undefined) yield [name, resolution];
-  }
-  for (const entry of parent?.entries() ?? []) {
-    if (!seen.has(entry[0])) yield entry;
+abstract class LexicalScope implements Scope {
+  constructor(protected readonly parent: Scope | undefined) {}
+
+  abstract lookup(name: string): ScopeResolution | undefined;
+  protected abstract ownNames(): Iterable<string>;
+
+  *entries(): Iterable<readonly [string, ScopeResolution]> {
+    const seen = new Set<string>();
+    for (const name of this.ownNames()) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      const resolution = this.lookup(name);
+      if (resolution !== undefined) yield [name, resolution];
+    }
+    for (const entry of this.parent?.entries() ?? []) {
+      if (!seen.has(entry[0])) yield entry;
+    }
   }
 }
 
@@ -67,12 +66,12 @@ function contributedResolution(member: ContributedMember): ScopeResolution {
 }
 
 function namespaceMember(namespace: NamespaceSymbol, name: string): ScopeResolution | undefined {
-  const model = ownMember(namespace.models, name);
+  const model = namespace.models[name];
   if (model !== undefined) return { kind: 'model', symbol: model, namespace };
-  const compositeType = ownMember(namespace.compositeTypes, name);
+  const compositeType = namespace.compositeTypes[name];
   if (compositeType !== undefined)
     return { kind: 'compositeType', symbol: compositeType, namespace };
-  const block = ownMember(namespace.blocks, name);
+  const block = namespace.blocks[name];
   if (block !== undefined) return { kind: 'block', symbol: block, namespace };
   return undefined;
 }
@@ -96,66 +95,56 @@ class ContributedScope implements Scope {
   }
 }
 
-class DocumentScope implements Scope {
+class DocumentScope extends LexicalScope {
   readonly #records: TopLevelRecords;
-  readonly #parent: Scope | undefined;
 
   constructor(records: TopLevelRecords, parent: Scope | undefined) {
+    super(parent);
     this.#records = records;
-    this.#parent = parent;
   }
 
   lookup(name: string): ScopeResolution | undefined {
     const records = this.#records;
-    const model = ownMember(records.models, name);
+    const model = records.models[name];
     if (model !== undefined) return { kind: 'model', symbol: model };
-    const compositeType = ownMember(records.compositeTypes, name);
+    const compositeType = records.compositeTypes[name];
     if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-    const namedType = ownMember(records.namedTypes, name);
+    const namedType = records.namedTypes[name];
     if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
-    const block = ownMember(records.blocks, name);
+    const block = records.blocks[name];
     if (block !== undefined) return { kind: 'block', symbol: block };
-    const namespace = ownMember(records.namespaces, name);
+    const namespace = records.namespaces[name];
     if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
-    return this.#parent?.lookup(name);
+    return this.parent?.lookup(name);
   }
 
-  entries(): Iterable<readonly [string, ScopeResolution]> {
+  protected ownNames(): Iterable<string> {
     const records = this.#records;
-    return visibleEntries(
-      recordNames(
-        records.models,
-        records.compositeTypes,
-        records.namedTypes,
-        records.blocks,
-        records.namespaces,
-      ),
-      (name) => this.lookup(name),
-      this.#parent,
+    return recordNames(
+      records.models,
+      records.compositeTypes,
+      records.namedTypes,
+      records.blocks,
+      records.namespaces,
     );
   }
 }
 
-class NamespaceScope implements Scope {
+class NamespaceScope extends LexicalScope {
   readonly #namespace: NamespaceSymbol;
-  readonly #parent: Scope;
 
-  constructor(namespace: NamespaceSymbol, parent: Scope) {
+  constructor(namespace: NamespaceSymbol, parent: Scope | undefined) {
+    super(parent);
     this.#namespace = namespace;
-    this.#parent = parent;
   }
 
   lookup(name: string): ScopeResolution | undefined {
-    return namespaceMember(this.#namespace, name) ?? this.#parent.lookup(name);
+    return namespaceMember(this.#namespace, name) ?? this.parent?.lookup(name);
   }
 
-  entries(): Iterable<readonly [string, ScopeResolution]> {
+  protected ownNames(): Iterable<string> {
     const namespace = this.#namespace;
-    return visibleEntries(
-      recordNames(namespace.models, namespace.compositeTypes, namespace.blocks),
-      (name) => this.lookup(name),
-      this.#parent,
-    );
+    return recordNames(namespace.models, namespace.compositeTypes, namespace.blocks);
   }
 }
 
@@ -186,11 +175,7 @@ export function* memberEntries(
     }
     return;
   }
-  const namespace = qualifier.symbol;
-  yield* visibleEntries(
-    recordNames(namespace.models, namespace.compositeTypes, namespace.blocks),
-    (name) => lookupMember(qualifier, name),
-  );
+  yield* new NamespaceScope(qualifier.symbol, undefined).entries();
 }
 
 export function lookupMember(

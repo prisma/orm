@@ -53,13 +53,11 @@ type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
 
 type ModelTypeCompletionCandidateCategory =
   | 'configuredScalar'
-  | 'topLevelModel'
-  | 'topLevelCompositeType'
+  | 'model'
+  | 'compositeType'
   | 'scalar'
   | 'typeAlias'
   | 'namespace'
-  | 'namespaceModel'
-  | 'namespaceCompositeType'
   | 'deprecatedScalar';
 
 interface DeclarationKeywordCompletionCandidate {
@@ -83,14 +81,12 @@ interface ModelTypeCompletionCandidate {
 
 const categoryOrder: Record<ModelTypeCompletionCandidateCategory, number> = {
   configuredScalar: 0,
-  topLevelModel: 1,
-  topLevelCompositeType: 2,
+  model: 1,
+  compositeType: 2,
   scalar: 3,
   typeAlias: 4,
   namespace: 5,
-  namespaceModel: 6,
-  namespaceCompositeType: 7,
-  deprecatedScalar: 8,
+  deprecatedScalar: 6,
 };
 
 const declarationKeywordCategoryOrder: Record<
@@ -543,18 +539,8 @@ function typeCandidates(
         const detail = model ? 'Model' : 'Composite type';
         candidates.push({
           ...base,
-          category:
-            resolution.namespace === undefined
-              ? model
-                ? 'topLevelModel'
-                : 'topLevelCompositeType'
-              : model
-                ? 'namespaceModel'
-                : 'namespaceCompositeType',
-          detail:
-            resolution.namespace === undefined
-              ? detail
-              : `${detail} in namespace ${resolution.namespace.name}`,
+          category: resolution.kind,
+          detail,
           kind: model ? CompletionItemKind.Class : CompletionItemKind.Struct,
         });
         break;

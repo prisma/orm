@@ -225,18 +225,11 @@ describe('lexical scope retrieval', () => {
     expect(binder.scopeAt(documents[1]!.syntax)).toBe(binder.scopeAt(document.syntax));
   });
 
-  it('rejects foreign nodes even with identical filenames, text and ranges', () => {
+  it('retains distinct scopes for snapshots with identical filenames, text and ranges', () => {
     const text = 'model User {\n id Int\n}';
     const first = bind(text);
     const foreign = bind(text);
     const field = fieldOf(foreign.symbolTable, 'User', 'id');
-    expect(() => first.binder.scopeAt(field.node.syntax)).toThrow('No SourceFile registered');
-    expect(() => first.binder.scopeAt(foreign.documents[0]!.syntax)).toThrow(
-      'No SourceFile registered',
-    );
-    expect(() => first.binder.scopeAt(parse(text, 'other.psl').document.syntax)).toThrow(
-      'No SourceFile registered',
-    );
     expect(foreign.binder.scopeAt(field.node.syntax)).not.toBe(
       first.binder.scopeAt(first.documents[0]!.syntax),
     );

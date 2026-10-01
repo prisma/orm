@@ -121,20 +121,17 @@ export function typeReferenceNode(symbol: FieldSymbol | NamedTypeSymbol): Syntax
 class PslBinder implements Binder {
   readonly #declarations: WeakMap<SyntaxNode, PslSymbol>;
   readonly #references: WeakMap<SyntaxNode, Resolution>;
-  readonly #sources: PslSources;
   readonly #documentScope: Scope;
   readonly #scopes: WeakMap<SyntaxNode, Scope>;
 
   constructor(
     declarations: WeakMap<SyntaxNode, PslSymbol>,
     references: WeakMap<SyntaxNode, Resolution>,
-    sources: PslSources,
     documentScope: Scope,
     scopes: WeakMap<SyntaxNode, Scope>,
   ) {
     this.#declarations = declarations;
     this.#references = references;
-    this.#sources = sources;
     this.#documentScope = documentScope;
     this.#scopes = scopes;
   }
@@ -148,7 +145,6 @@ class PslBinder implements Binder {
   }
 
   scopeAt(node: SyntaxNode): Scope {
-    this.#sources.sourceFileFor(node);
     return node.findAncestor((ancestor) => this.#scopes.get(ancestor)) ?? this.#documentScope;
   }
 }
@@ -187,7 +183,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
   const diagnostics: ParseDiagnostic[] = [];
-  const binder = new PslBinder(declarations, references, sources, document, scopes);
+  const binder = new PslBinder(declarations, references, document, scopes);
 
   for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);

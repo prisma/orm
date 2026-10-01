@@ -442,21 +442,27 @@ describe('providePslCompletionItems', () => {
     const { items } = completeWithSource({
       pslBlockDescriptors,
       markedSource: `model Shared { id Int }
+model ZRoot { id Int }
+type ZAddress { value String }
 namespace app {
   enum Shared { VALUE }
   model Int { id String }
   model Local { value | }
+  type Address { value String }
 }
 namespace other { model Hidden { id Int } }`,
     });
-    expect(items.map(({ label }) => label).sort()).toEqual([
-      'Boolean',
-      'DateTime',
-      'Int',
-      'Local',
-      'String',
-      'app',
-      'other',
+    expect(items.map(({ label, detail }) => [label, detail])).toEqual([
+      ['Boolean', 'Configured scalar type'],
+      ['DateTime', 'Configured scalar type'],
+      ['String', 'Configured scalar type'],
+      ['Int', 'Model'],
+      ['Local', 'Model'],
+      ['ZRoot', 'Model'],
+      ['Address', 'Composite type'],
+      ['ZAddress', 'Composite type'],
+      ['app', 'Namespace'],
+      ['other', 'Namespace'],
     ]);
     expect(items.find(({ label }) => label === 'Int')?.kind).toBe(CompletionItemKind.Class);
   });
@@ -1153,7 +1159,7 @@ namespace app {
     expect(items.map((item) => item.label)).toEqual(['Account', 'User', 'Profile']);
     expect(items.find((item) => item.label === 'User')).toMatchObject({
       filterText: 'User',
-      detail: 'Model in namespace auth',
+      detail: 'Model',
       textEdit: {
         range: {
           start: sourceFile.positionAt(cursorOffset - 'U'.length),
