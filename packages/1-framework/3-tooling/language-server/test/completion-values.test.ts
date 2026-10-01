@@ -195,6 +195,10 @@ const entitySignature = {
     model: { type: checked, documentation: 'Target model.' },
     composite: { type: entityRef({ kind: 'compositeType' }), documentation: 'Target type.' },
     named: { type: entityRef({ kind: 'namedType' }), documentation: 'Target alias.' },
+    enumeration: {
+      type: entityRef({ kind: 'block', keyword: 'enum' }),
+      documentation: 'Target enumeration.',
+    },
     block: {
       type: entityRef({ kind: 'block', keyword: 'policy' }),
       documentation: 'Target policy.',
@@ -467,6 +471,7 @@ model Later {}
 type Address {}
 types { Alias = String }
 policy Rules {}
+enum Choice { One Two }
 other Wrong {}
 namespace sibling { model Hidden {} }
 `;
@@ -476,6 +481,7 @@ namespace sibling { model Hidden {} }
     ['composite', ['Address']],
     ['named', ['Alias']],
     ['block', ['Rules']],
+    ['enumeration', ['Choice']],
   ])('filters the %s selector without offering namespaces or contributed types', (key, labels) => {
     expect(
       complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
@@ -483,19 +489,20 @@ namespace sibling { model Hidden {} }
   });
 
   it.each([
-    ['model', 'Later'],
-    ['composite', 'Address'],
-    ['named', 'Alias'],
-    ['named', 'Related'],
-  ])('shares type-position metadata for %s references to %s', (selector, label) => {
-    const suffix = `${declarations}\ntypes { Related = Later }`;
+    ['model', 'Later', CompletionItemKind.Class],
+    ['composite', 'Address', CompletionItemKind.Struct],
+    ['named', 'Alias', CompletionItemKind.Unit],
+    ['named', 'Related', CompletionItemKind.Reference],
+    ['named', 'Constructed', CompletionItemKind.Reference],
+  ] as const)('shares type-position metadata for %s references to %s', (selector, label, kind) => {
+    const suffix = `${declarations}\ntypes { Related = Later\n Constructed = vendor.Text() }`;
     const typeItems = complete(`model Example { value | }${suffix}`).items;
     const entityItems = complete(
       `model Example { value String @entity(${selector}: |) }${suffix}`,
     ).items;
     const typeItem = typeItems.find((item) => item.label === label);
     const entityItem = entityItems.find((item) => item.label === label);
-    expect(typeItem).toBeDefined();
+    expect(typeItem).toMatchObject({ label, kind });
     expect(entityItem).toBeDefined();
     const { textEdit: typeEdit, ...typeMetadata } = typeItem!;
     const { textEdit: entityEdit, sortText, ...entityMetadata } = entityItem!;
@@ -515,6 +522,23 @@ namespace sibling { model Hidden {} }
         filterText: 'Rules',
       }),
     ]);
+  });
+
+  it('uses an enum icon for enum references without changing custom block icons', () => {
+    const result = complete(
+      `model Example { value String @entity(enumeration: |) }${declarations}`,
+    );
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        label: 'Choice',
+        kind: CompletionItemKind.Enum,
+        detail: 'enum',
+        filterText: 'Choice',
+      }),
+    ]);
+    expect(result.apply('Choice')).toContain('@entity(enumeration: Choice)');
+    expect(result.items[0]?.insertTextFormat).toBeUndefined();
+    expect(result.items[0]?.command).toBeUndefined();
   });
 
   it('preserves the type-position cursor endpoint inside identifiers', () => {

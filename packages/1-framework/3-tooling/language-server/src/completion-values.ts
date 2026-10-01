@@ -164,6 +164,7 @@ function valueItems(
           start: input.sourceFile.positionAt(input.context.replacementStartOffset),
           end: input.sourceFile.positionAt(input.context.replacementEndOffset),
         },
+        input,
         type.expected,
       );
     case 'list':

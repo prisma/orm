@@ -272,6 +272,7 @@ function completeWithSource(input: {
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
   readonly clientSupportsSnippets?: boolean;
+  readonly clientSupportsTriggerSuggestCommand?: boolean;
   readonly clientSupportsTriggerParameterHintsCommand?: boolean;
   readonly scalarTypes?: readonly string[];
 }) {
@@ -315,6 +316,7 @@ function completeWithSource(input: {
           : { controlMutationDefaults: input.controlMutationDefaults }),
       },
       clientSupportsSnippets: input.clientSupportsSnippets === true,
+      clientSupportsTriggerSuggestCommand: input.clientSupportsTriggerSuggestCommand === true,
       clientSupportsTriggerParameterHintsCommand:
         input.clientSupportsTriggerParameterHintsCommand === true,
     }),
@@ -492,6 +494,118 @@ namespace other { model Hidden { id Int } }`,
       { label: 'Value', kind: CompletionItemKind.Keyword, detail: 'Custom value' },
     ]);
   });
+
+  it.each([false, true])('inserts namespace dots with negotiated suggestions: %s', (supported) => {
+    for (const qualifier of ['', 'custom.']) {
+      const { items } = completeWithSource({
+        markedSource: `namespace local {}\nmodel Owner { value ${qualifier}| }`,
+        pslBlockDescriptors: {},
+        clientSupportsSnippets: supported,
+        clientSupportsTriggerSuggestCommand: supported,
+        authoringContributions: assembleAuthoringContributions([
+          { id: 'namespaces', authoring: { type: { custom: { nested: {} } } } },
+        ]),
+      });
+      for (const label of qualifier === '' ? ['local', 'custom'] : ['nested']) {
+        const item = completionItemByLabel(items, label);
+        expect({
+          label: item.label,
+          kind: item.kind,
+          filterText: item.filterText,
+          newText: item.textEdit?.newText,
+          format: item.insertTextFormat,
+          command: item.command,
+        }).toEqual({
+          label,
+          kind: CompletionItemKind.Module,
+          filterText: label,
+          newText: `${label}.`,
+          format: undefined,
+          command: supported
+            ? { title: 'Suggest namespace members', command: 'editor.action.triggerSuggest' }
+            : undefined,
+        });
+      }
+    }
+  });
+
+  it.each([false, true])(
+    'renders scalar and constructor presentations with snippets: %s',
+    (snippets) => {
+      const types: AuthoringTypeNamespace = {
+        Scalar: {
+          kind: 'typeConstructor',
+          output: { codecId: 'fixture/value', nativeType: 'value' },
+        },
+        Deprecated: {
+          kind: 'typeConstructor',
+          deprecated: { replacement: 'Scalar' },
+          output: { codecId: 'fixture/value', nativeType: 'value' },
+        },
+        Empty: {
+          kind: 'typeConstructor',
+          args: [],
+          output: { codecId: 'fixture/value', nativeType: 'value' },
+        },
+        Required: {
+          kind: 'typeConstructor',
+          args: [
+            { name: 'size', kind: 'number' },
+            { name: 'label', kind: 'string' },
+            { name: 'scale', kind: 'number', optional: true },
+          ],
+          output: { codecId: 'fixture/value', nativeType: 'value' },
+        },
+        Optional: {
+          kind: 'typeConstructor',
+          args: [{ name: 'size', kind: 'number', optional: true }],
+          output: { codecId: 'fixture/value', nativeType: 'value' },
+        },
+        Entity: {
+          kind: 'typeConstructor',
+          entityRefArg: { index: 0, entityKind: 'choice' },
+          output: { codecId: 'fixture/value' },
+        },
+      };
+      for (const qualifier of ['', 'custom.']) {
+        const { items } = completeWithSource({
+          markedSource: `model Owner { value ${qualifier}| }`,
+          pslBlockDescriptors: {},
+          scalarTypes: [],
+          clientSupportsSnippets: snippets,
+          authoringContributions: assembleAuthoringContributions([
+            { id: 'constructors', authoring: { type: { ...types, custom: types } } },
+          ]),
+        });
+        for (const [label, snippet] of [
+          ['Scalar', 'Scalar'],
+          ['Deprecated', 'Deprecated'],
+          ['Empty', 'Empty()'],
+          ['Required', 'Required($' + '{1:size}, "$' + '{2:label}")'],
+          ['Optional', 'Optional($' + '{1:})'],
+          ['Entity', 'Entity($' + '{1:choice})'],
+        ] as const) {
+          const item = completionItemByLabel(items, label);
+          const callable = label !== 'Scalar' && label !== 'Deprecated';
+          expect({
+            label: item.label,
+            kind: item.kind,
+            newText: item.textEdit?.newText,
+            format: item.insertTextFormat,
+            command: item.command,
+            tags: item.tags,
+          }).toEqual({
+            label,
+            kind: callable ? CompletionItemKind.Function : CompletionItemKind.Keyword,
+            newText: snippets ? snippet : callable ? `${label}()` : label,
+            format: callable && snippets ? InsertTextFormat.Snippet : undefined,
+            command: undefined,
+            tags: label === 'Deprecated' ? [CompletionItemTag.Deprecated] : undefined,
+          });
+        }
+      }
+    },
+  );
 
   it('does not complete a global namespace when its qualifier is shadowed locally', () => {
     const { items } = complete(`namespace remote { model Item { id Int } }
@@ -1120,7 +1234,7 @@ namespace app {
           start: sourceFile.positionAt(cursorOffset - 'a'.length),
           end: sourceFile.positionAt(cursorOffset),
         },
-        newText: 'auth',
+        newText: 'auth.',
       },
     });
   });

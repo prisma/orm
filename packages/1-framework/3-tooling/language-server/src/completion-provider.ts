@@ -21,7 +21,7 @@ import type {
   NamespaceMemberCompletionContext,
   PslCompletionContext,
 } from './completion-context';
-import { scopeCompletionItems } from './completion-scope';
+import { type ScopeCompletionCapabilities, scopeCompletionItems } from './completion-scope';
 import { requiredArgumentsSnippet } from './completion-snippets';
 import { localFieldNames, referencedFieldNames } from './completion-symbols';
 import {
@@ -208,9 +208,14 @@ export function providePslCompletionItems(
     case 'genericBlockKey':
       return provideGenericBlockKeyCompletionItems(context, input.sourceFile, input.candidates);
     case 'modelType':
-      return provideModelTypeCompletionItems(context, input.sourceFile, input.candidates);
+      return provideModelTypeCompletionItems(context, input.sourceFile, input.candidates, input);
     case 'namespaceMember':
-      return provideNamespaceMemberCompletionItems(context, input.sourceFile, input.candidates);
+      return provideNamespaceMemberCompletionItems(
+        context,
+        input.sourceFile,
+        input.candidates,
+        input,
+      );
   }
 }
 
@@ -454,6 +459,7 @@ function provideModelTypeCompletionItems(
   context: ModelTypeCompletionContext,
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
 ): readonly CompletionItem[] {
   return scopeCompletionItems(
     source.binder.scopeAt(context.field.syntax).entries(),
@@ -462,6 +468,7 @@ function provideModelTypeCompletionItems(
       start: sourceFile.positionAt(context.replacementStartOffset),
       end: sourceFile.positionAt(context.offset),
     },
+    capabilities,
   );
 }
 
@@ -469,6 +476,7 @@ function provideNamespaceMemberCompletionItems(
   context: NamespaceMemberCompletionContext,
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
+  capabilities: ScopeCompletionCapabilities,
 ): readonly CompletionItem[] {
   // A foreign contract-space reference resolves against external symbols that no
   // registry exposes yet; local namespace members must not stand in for them.
@@ -483,6 +491,7 @@ function provideNamespaceMemberCompletionItems(
       start: sourceFile.positionAt(context.replacementStartOffset),
       end: sourceFile.positionAt(context.offset),
     },
+    capabilities,
   );
 }
 
