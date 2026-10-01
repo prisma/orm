@@ -185,13 +185,26 @@ types {
 
 describe('lexical scope retrieval', () => {
   it('retains one namespace scope across reopened declarations and files', () => {
-    const { binder, symbolTable, documents } = bind(
-      'model Root {\n id Int\n}\nnamespace app {\n model Item {\n id Int\n}\n}\nnamespace app {\n model Cart {\n item Item\n}\n}',
-      'namespace app {\n model Order {\n item Item\n}\n}\nnamespace other {\n model Hidden {\n id Int\n}\n}',
+    const { binder, symbolTable, documents, diagnostics } = bind(
+      'model Root {\n id Int\n}\nmodel Item {}\nnamespace app {}\nnamespace app {\n model Item {\n id Int\n}\n}\nnamespace app {\n model Cart {\n item Item @relation(references: [id])\n @@base(Item)\n}\n}',
+      'namespace app {\n model Order {\n item Item @relation(references: [id])\n @@base(Item)\n}\n}\nnamespace other {\n model Hidden {\n id Int\n}\n}',
     );
     const app = symbolTable.topLevel.namespaces['app']!;
     const item = app.models['Item']!;
     const scope = binder.scopeAt(item.node.syntax);
+    expect(diagnostics).toEqual([]);
+    for (const name of ['Cart', 'Order']) {
+      const entity = app.models[name]!;
+      const field = entity.fields['item']!;
+      expect(binder.symbolForNode(typeReferenceNode(field)!)).toEqual(scope.lookup('Item'));
+      expect(binder.symbolForNode(attributeNodes(entity, 'base')[0]!)).toEqual(
+        scope.lookup('Item'),
+      );
+      expect(binder.symbolForNode(attributeNodes(field, 'relation', 'references')[0]!)).toEqual({
+        kind: 'field',
+        symbol: item.fields['id'],
+      });
+    }
     expect(scope.lookup('Item')?.symbol).toBe(item);
     expect(scope.lookup('Hidden')).toBeUndefined();
     for (const declaration of app.declarations) {

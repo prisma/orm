@@ -68,12 +68,15 @@ it('shares forward entity binding and silent identifier fallback across entries 
       'model Later {',
       ' @@refs(External, targets: [Later])',
       '}',
+      'namespace app {}',
       'namespace app {',
       ' policy Local {',
       '  target = Later',
       '  fallback = Global',
       '  @@refs(Later, targets: [Global, External])',
       ' }',
+      '}',
+      'namespace app {',
       ' model Later {}',
       '}',
       'model Global {}',
@@ -82,6 +85,11 @@ it('shares forward entity binding and silent identifier fallback across entries 
   expect(diagnostics).toEqual([]);
   const root = symbolTable.topLevel.blocks['Root']!;
   const local = symbolTable.topLevel.namespaces['app']!;
+  const scope = binder.scopeAt(local.models['Later']!.node.syntax);
+  expect(binder.scopeAt(local.blocks['Local']!.node.syntax)).toBe(scope);
+  for (const declaration of local.declarations) {
+    expect(binder.scopeAt(declaration.node.syntax)).toBe(scope);
+  }
   const resolutions = [...local.blocks['Local']!.node.entries()].map((entry) =>
     binder.symbolForNode(entry.value()!.syntax),
   );

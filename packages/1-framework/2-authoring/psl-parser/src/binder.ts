@@ -4,6 +4,7 @@ import type {
 } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import type {
   AttributeSpecNamespace,
@@ -149,18 +150,53 @@ class PslBinder implements Binder {
   }
 }
 
+class ScopeStack {
+  readonly #base: Scope;
+  readonly #scopes: Scope[];
+
+  constructor(base: Scope) {
+    this.#base = base;
+    this.#scopes = [base];
+  }
+
+  current(): Scope {
+    return this.#scopes[this.#scopes.length - 1] ?? this.#base;
+  }
+
+  push(scope: Scope): void {
+    this.#scopes.push(scope);
+  }
+
+  pop(): void {
+    this.#scopes.pop();
+  }
+}
+
+function retainedNamespaceScope(
+  namespace: NamespaceSymbol,
+  scopes: WeakMap<SyntaxNode, Scope>,
+): Scope {
+  const declaration = namespace.declarations[0];
+  assertDefined(declaration, `Missing declaration for namespace "${namespace.name}"`);
+  const scope = scopes.get(declaration.node.syntax);
+  assertDefined(scope, `Missing scope for namespace "${namespace.name}"`);
+  return scope;
+}
+
 function walkEntities(
   symbolTable: SymbolTable,
-  documentScope: Scope,
-  namespaceScopes: ReadonlyMap<NamespaceSymbol, Scope>,
-  visit: (entity: ModelSymbol | CompositeTypeSymbol, scope: Scope) => void,
+  stack: ScopeStack,
+  scopes: WeakMap<SyntaxNode, Scope>,
+  visit: (entity: ModelSymbol | CompositeTypeSymbol) => void,
 ): void {
   const { topLevel } = symbolTable;
-  for (const entity of Object.values(topLevel.models)) visit(entity, documentScope);
-  for (const entity of Object.values(topLevel.compositeTypes)) visit(entity, documentScope);
-  for (const [namespace, scope] of namespaceScopes) {
-    for (const entity of Object.values(namespace.models)) visit(entity, scope);
-    for (const entity of Object.values(namespace.compositeTypes)) visit(entity, scope);
+  for (const entity of Object.values(topLevel.models)) visit(entity);
+  for (const entity of Object.values(topLevel.compositeTypes)) visit(entity);
+  for (const namespace of Object.values(topLevel.namespaces)) {
+    stack.push(retainedNamespaceScope(namespace, scopes));
+    for (const entity of Object.values(namespace.models)) visit(entity);
+    for (const entity of Object.values(namespace.compositeTypes)) visit(entity);
+    stack.pop();
   }
 }
 
@@ -178,7 +214,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     symbolTable.topLevel,
     contributedScope(contributedTypeScope(typeConstructors)),
   );
-  const namespaceScopes = new Map<NamespaceSymbol, Scope>();
+  const stack = new ScopeStack(document);
   const scopes = new WeakMap<SyntaxNode, Scope>();
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
@@ -198,7 +234,6 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   }
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
     const scope = namespaceScope(namespace, document);
-    namespaceScopes.set(namespace, scope);
     for (const declaration of namespace.declarations) {
       declarations.set(declaration.node.syntax, namespace);
       scopes.set(declaration.node.syntax, scope);
@@ -211,13 +246,13 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   // Attributes are parsed in a second walk once every field type is bound.
   // @relation(references: [x]) reads the referenced model's fields, and that
   // model may be declared further down the file.
-  walkEntities(symbolTable, document, namespaceScopes, (entity, scope) => {
+  walkEntities(symbolTable, stack, scopes, (entity) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const outcome = resolveTypeReference(field.node.typeAnnotation()?.name(), scope);
+      const outcome = resolveTypeReference(field.node.typeAnnotation()?.name(), stack.current());
       if (outcome === undefined) continue;
       references.set(node, outcome.resolution);
       if (outcome.message !== undefined) {
@@ -235,10 +270,10 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   });
 
-  walkEntities(symbolTable, document, namespaceScopes, (entity, scope) => {
+  walkEntities(symbolTable, stack, scopes, (entity) => {
     const context = {
       owner: entity,
-      scope,
+      scope: stack.current(),
       references,
       diagnostics,
       symbolTable,
@@ -274,13 +309,15 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     references,
     diagnostics,
   };
-  const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>, scope: Scope) => {
-    const context = { ...blockContext, scope };
+  const bindBlocks = (blocks: Readonly<Record<string, BlockSymbol>>) => {
+    const context = { ...blockContext, scope: stack.current() };
     for (const block of Object.values(blocks)) bindBlock(block, context);
   };
-  bindBlocks(symbolTable.topLevel.blocks, document);
-  for (const [namespace, scope] of namespaceScopes) {
-    bindBlocks(namespace.blocks, scope);
+  bindBlocks(symbolTable.topLevel.blocks);
+  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
+    stack.push(retainedNamespaceScope(namespace, scopes));
+    bindBlocks(namespace.blocks);
+    stack.pop();
   }
 
   return { binder, diagnostics };
