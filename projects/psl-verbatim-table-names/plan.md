@@ -14,7 +14,7 @@
 
 ### Slice 2 — Rename-table migration operation
 
-- **Outcome:** a user renames a table without losing its rows by writing `this.renameTable(...)` in a migration created with `prisma migration new`; the method also renames the constraints and indexes named after the table. The guard points at this path. Spec: `slices/rename-table-operation/spec.md`.
+- **Outcome:** a user renames a table without losing its rows by writing `this.renameTable(...)` in a migration created with `prisma migration new --from <hash>`; the method also renames the constraints and indexes named after the table. The guard points at this path. Spec: `slices/rename-table-operation/spec.md`.
 - **Builds on:** slice 1 (guard and error text).
 - **Hands to:** the rename operation and the companion-rename computation that a future planner-hint feature can reuse.
 - **PR:** https://github.com/prisma/orm/pull/30331
