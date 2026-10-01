@@ -45,7 +45,7 @@ Three steps the user does:
 
 1. **Edit your data contract.** ([`references/contract.md`](references/contract.md))
 2. **The system plans the migrations for you.** ([`references/migrations.md`](references/migrations.md))
-3. **If you need data migrations, you edit `migration.ts` and execute it.** ([`references/migrations.md`](references/migrations.md))
+3. **If you need a data migration, you write a `dataTransform` in `migration.ts` and execute it.** Inserts, updates and deletes never go in a `rawSql` step. ([`references/migrations.md`](references/migrations.md))
 
 Everything else — queries, runtime wiring, build integration, debugging, feedback — sits on top of those three.
 
