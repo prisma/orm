@@ -1,8 +1,9 @@
 import type { Contract, NamespaceId, StorageHashBase } from '@internal/contract/types';
-import type { ContractWithTypeMaps, SqlStorage, TypeMaps } from '@internal/sql-contract/types';
+import type { ContractWithTypeMaps, TypeMaps } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
 import { Collection } from '../src/collection';
+import type { CollectionRowOf, CollectionStateOf } from '../src/collection-types';
 
 import { createMockRuntime } from './helpers';
 
@@ -198,26 +199,6 @@ class PostCollection extends Collection<GeneratedLikeContract, 'Post'> {
   }
 }
 
-type RowOf<TCollection> =
-  TCollection extends Collection<
-    infer _Contract extends Contract<SqlStorage>,
-    infer _ModelName extends string,
-    infer Row,
-    infer _State
-  >
-    ? Row
-    : never;
-
-type StateOf<TCollection> =
-  TCollection extends Collection<
-    infer _Contract extends Contract<SqlStorage>,
-    infer _ModelName extends string,
-    infer _Row,
-    infer State
-  >
-    ? State
-    : never;
-
 const runtime = createMockRuntime();
 const context = {} as unknown as ExecutionContext<GeneratedLikeContract>;
 const collection = new PostCollection({ runtime, context }, 'Post', { namespaceId: 'public' });
@@ -362,15 +343,15 @@ userCollection.deleteAll();
 // @ts-expect-error deleteAndCount() requires where() first
 userCollection.deleteAndCount();
 
-type SelectedUserRow = RowOf<typeof selectedUsers>;
-type SelectedUserWithPostsRow = RowOf<typeof selectedUsersWithPosts>;
-type UsersWithPostCountRow = RowOf<typeof usersWithPostCount>;
-type UsersWithPostSummaryRow = RowOf<typeof usersWithPostSummary>;
-type FilteredUsersState = StateOf<typeof filteredUsers>;
-type OrderedUsersState = StateOf<typeof orderedUsers>;
-type CursorPagedUsersState = StateOf<typeof cursorPagedUsers>;
-type DistinctUsersState = StateOf<typeof distinctUsers>;
-type DistinctOnUsersState = StateOf<typeof distinctOnUsers>;
+type SelectedUserRow = CollectionRowOf<typeof selectedUsers>;
+type SelectedUserWithPostsRow = CollectionRowOf<typeof selectedUsersWithPosts>;
+type UsersWithPostCountRow = CollectionRowOf<typeof usersWithPostCount>;
+type UsersWithPostSummaryRow = CollectionRowOf<typeof usersWithPostSummary>;
+type FilteredUsersState = CollectionStateOf<typeof filteredUsers>;
+type OrderedUsersState = CollectionStateOf<typeof orderedUsers>;
+type CursorPagedUsersState = CollectionStateOf<typeof cursorPagedUsers>;
+type DistinctUsersState = CollectionStateOf<typeof distinctUsers>;
+type DistinctOnUsersState = CollectionStateOf<typeof distinctOnUsers>;
 type UserAggregateResult = Awaited<typeof userAggregate>;
 type GroupedUserStatsResult = Awaited<typeof groupedUserStats>;
 type GroupedUserStatsRow = GroupedUserStatsResult[number];
@@ -394,7 +375,7 @@ export type GeneratedContractTypeAssertions = [
   Assert<Equal<FilteredUsersState['hasWhere'], true>>,
   Assert<Equal<OrderedUsersState['hasOrderBy'], true>>,
   Assert<Equal<CursorPagedUsersState['hasOrderBy'], true>>,
-  Assert<Equal<DistinctUsersState['hasOrderBy'], false>>,
+  Assert<Equal<DistinctUsersState['hasOrderBy'], boolean>>,
   Assert<Equal<DistinctOnUsersState['hasOrderBy'], true>>,
   // `count` types as the contract's aggregate map declares it — this map names
   // `pg/int8@1`, whose application value is a bigint.
