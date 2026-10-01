@@ -20,7 +20,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'4e3e7b1a2e6aed06486b55d35bf1fe4b435c2c16ce1a0de8ba7ffc82157b6b64'>;
+  StorageHashBase<'da8a51f3d282fc4fe8370572fbd9912de1a1dee4b28ccab3b1f7be6b6ee43202'>;
 export type ExecutionHash =
   ExecutionHashBase<'551678164cf11e55dbfa5b34642fb312efdfc63dfd0d165887eaa0d73bb2db84'>;
 export type ProfileHash =
@@ -244,6 +244,12 @@ export type FieldOutputTypes = {
       readonly postId: CodecTypes['pg/int4@1']['output'];
       readonly subject: Varchar<200>;
     };
+    readonly Document: {
+      readonly body: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly subtitle: CodecTypes['pg/text@1']['output'] | null;
+      readonly title: CodecTypes['pg/text@1']['output'];
+    };
     readonly Post: {
       readonly embedding: Vector<3> | null;
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -276,6 +282,12 @@ export type FieldInputTypes = {
       readonly postId: CodecTypes['pg/int4@1']['input'];
       readonly subject: CodecTypes['sql/varchar@1']['input'];
     };
+    readonly Document: {
+      readonly body: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly subtitle: CodecTypes['pg/text@1']['input'] | null;
+      readonly title: CodecTypes['pg/text@1']['input'];
+    };
     readonly Post: {
       readonly embedding: CodecTypes['pg/vector@1']['input'] | null;
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -304,6 +316,12 @@ export type StorageColumnTypes = {
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly post_id: CodecTypes['pg/int4@1']['output'];
       readonly subject: Varchar<200>;
+    };
+    readonly documents: {
+      readonly body: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly subtitle: CodecTypes['pg/text@1']['output'] | null;
+      readonly title: CodecTypes['pg/text@1']['output'];
     };
     readonly posts: {
       readonly embedding: Vector<3> | null;
@@ -336,6 +354,12 @@ export type StorageColumnInputTypes = {
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly post_id: CodecTypes['pg/int4@1']['input'];
       readonly subject: CodecTypes['sql/varchar@1']['input'];
+    };
+    readonly documents: {
+      readonly body: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly subtitle: CodecTypes['pg/text@1']['input'] | null;
+      readonly title: CodecTypes['pg/text@1']['input'];
     };
     readonly posts: {
       readonly embedding: CodecTypes['pg/vector@1']['input'] | null;
@@ -371,6 +395,13 @@ export namespace Models {
     subject: Varchar<200>;
     readonly [RelationKeys]?: never;
   };
+  export type public_Document = {
+    body: CodecTypes['pg/text@1']['output'] | null;
+    id: CodecTypes['pg/int4@1']['output'];
+    subtitle: CodecTypes['pg/text@1']['output'] | null;
+    title: CodecTypes['pg/text@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
   export type public_Post = {
     embedding: Vector<3> | null;
     id: CodecTypes['pg/int4@1']['output'];
@@ -404,6 +435,7 @@ export declare const models: {
   public: {
     Article: Models.public_Article;
     Comment: Models.public_Comment;
+    Document: Models.public_Document;
     Post: Models.public_Post;
     Profile: Models.public_Profile;
     User: Models.public_User;
@@ -475,26 +507,78 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'comments_body_live_a3f98ae2';
+                  readonly name: 'comments_body_live_b354147d';
                   readonly prefix: 'comments_body_live';
-                  readonly expression: 'to_tsvector(\'english\', "body")';
+                  readonly columns: readonly ['body'];
                   readonly where: 'post_id = 1';
                   readonly unique: false;
-                  readonly type: 'gin';
+                  readonly type: 'fullText';
+                  readonly options: {
+                    readonly fields: readonly [readonly ['body']];
+                    readonly language: 'english';
+                  };
                 },
                 {
-                  readonly name: 'comments_body_search_7b2cde4d';
+                  readonly name: 'comments_body_search_36cd47c3';
                   readonly prefix: 'comments_body_search';
-                  readonly expression: 'to_tsvector(\'english\', "body")';
+                  readonly columns: readonly ['body'];
                   readonly unique: false;
-                  readonly type: 'gin';
+                  readonly type: 'fullText';
+                  readonly options: {
+                    readonly fields: readonly [readonly ['body']];
+                    readonly language: 'english';
+                  };
                 },
                 {
-                  readonly name: 'comments_subject_search_2b3d17a7';
+                  readonly name: 'comments_subject_search_694ff7b0';
                   readonly prefix: 'comments_subject_search';
-                  readonly expression: 'to_tsvector(\'english\', "subject")';
+                  readonly columns: readonly ['subject'];
                   readonly unique: false;
-                  readonly type: 'gin';
+                  readonly type: 'fullText';
+                  readonly options: {
+                    readonly fields: readonly [readonly ['subject']];
+                    readonly language: 'english';
+                  };
+                },
+              ];
+              foreignKeys: readonly [];
+            };
+            readonly documents: {
+              columns: {
+                readonly body: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly subtitle: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly title: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'documents_search_033e8055';
+                  readonly prefix: 'documents_search';
+                  readonly columns: readonly ['title', 'subtitle', 'body'];
+                  readonly unique: false;
+                  readonly type: 'fullText';
+                  readonly options: {
+                    readonly fields: readonly [readonly ['title', 'subtitle'], readonly ['body']];
+                    readonly language: 'english';
+                  };
                 },
               ];
               foreignKeys: readonly [];
@@ -597,6 +681,7 @@ type ContractBase = Omit<
   readonly roots: {
     readonly articles: { readonly namespace: 'public' & NamespaceId; readonly model: 'Article' };
     readonly comments: { readonly namespace: 'public' & NamespaceId; readonly model: 'Comment' };
+    readonly documents: { readonly namespace: 'public' & NamespaceId; readonly model: 'Document' };
     readonly posts: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
     readonly profiles: { readonly namespace: 'public' & NamespaceId; readonly model: 'Profile' };
     readonly users: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
@@ -662,6 +747,37 @@ type ContractBase = Omit<
                 readonly id: { readonly column: 'id' };
                 readonly postId: { readonly column: 'post_id' };
                 readonly subject: { readonly column: 'subject' };
+              };
+            };
+          };
+          readonly Document: {
+            readonly fields: {
+              readonly body: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly subtitle: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+            readonly relations: Record<string, never>;
+            readonly storage: {
+              readonly table: 'documents';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly body: { readonly column: 'body' };
+                readonly id: { readonly column: 'id' };
+                readonly subtitle: { readonly column: 'subtitle' };
+                readonly title: { readonly column: 'title' };
               };
             };
           };

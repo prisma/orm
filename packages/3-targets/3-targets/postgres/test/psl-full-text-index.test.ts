@@ -1,9 +1,8 @@
 /**
- * `@@fullTextIndex` renders the same expression the full-text operations
- * lower to, so neither is hand-written. Passing a different language to each
- * still leaves the index unused; only the rendering is shared. It is the documented
- * way to index a text column; `@@index(expression:)` stays available for
- * anything this attribute does not cover.
+ * `@@fullTextIndex` stores the index as data: a `gin` index over the covered
+ * columns, whose options hold the weight groups and the language. The search
+ * document is rendered from those options when the index is created and when
+ * a query searches it, so no SQL text is stored.
  */
 
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
@@ -13,7 +12,7 @@ import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
   postgresAuthoringModelAttributes,
@@ -105,52 +104,81 @@ function diagnosticsOf(source: string) {
 
 const model = (body: string) => `
 model Message {
-  id      Int    @id
-  text    String
-  summary String
+  id       Int     @id
+  text     String
+  summary  String
+  subtitle String?
+  body     String?
 ${body}
 }
 `;
 
 describe('@@fullTextIndex', () => {
-  it('produces the index the equivalent @@index(expression:) produces', () => {
-    const typed = indexesOf(model(`  @@fullTextIndex([text], name: "message_text_search")`));
-    const authored = indexesOf(
-      model(
-        `  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", name: "message_text_search")`,
-      ),
-    );
+  it('stores one field as a gin index over that column, with its definition in the options', () => {
+    const indexes = indexesOf(model(`  @@fullTextIndex([text], name: "message_text_search")`));
 
-    expect(typed).toEqual(authored);
-    expect(typed).toHaveLength(1);
-    expect(typed[0]).toMatchObject({
-      expression: `to_tsvector('english', "text")`,
-      type: 'gin',
+    expect(indexes).toHaveLength(1);
+    expect(indexes[0]).toMatchObject({
+      columns: ['text'],
+      type: 'fullText',
+      unique: false,
       prefix: 'message_text_search',
+      options: { fields: [['text']], language: 'english' },
+    });
+    expect(indexes[0]?.expression).toBeUndefined();
+  });
+
+  it('accepts a single field without a list', () => {
+    expect(indexesOf(model(`  @@fullTextIndex(text, name: "message_text_search")`))).toEqual(
+      indexesOf(model(`  @@fullTextIndex([text], name: "message_text_search")`)),
+    );
+  });
+
+  it('makes each item of a flat list its own weight group', () => {
+    const indexes = indexesOf(model(`  @@fullTextIndex([text, body], name: "message_search")`));
+
+    expect(indexes[0]).toMatchObject({
+      columns: ['text', 'body'],
+      options: { fields: [['text'], ['body']], language: 'english' },
     });
   });
 
-  it('renders the language it was given', () => {
+  it('keeps the fields of a nested list in one weight group', () => {
+    const indexes = indexesOf(
+      model(`  @@fullTextIndex([[text, subtitle], body], name: "message_search")`),
+    );
+
+    expect(indexes[0]).toMatchObject({
+      columns: ['text', 'subtitle', 'body'],
+      options: { fields: [['text', 'subtitle'], ['body']], language: 'english' },
+    });
+  });
+
+  it('records the language it was given', () => {
     const indexes = indexesOf(
       model(`  @@fullTextIndex([text], language: "german", name: "message_text_search_de")`),
     );
 
-    expect(indexes[0]).toMatchObject({ expression: `to_tsvector('german', "text")` });
+    expect(indexes[0]).toMatchObject({ options: { fields: [['text']], language: 'german' } });
   });
 
-  it('renders the storage column name of a renamed field, not the field name', () => {
+  it('stores the storage column name of a renamed field, not the field name', () => {
     const indexes = indexesOf(`
 model Message {
-  id   Int    @id
-  text String @map("body_text")
-  @@fullTextIndex([text], name: "message_text_search")
+  id    Int    @id
+  title String
+  text  String @map("body_text")
+  @@fullTextIndex([[title, text]], name: "message_text_search")
 }
 `);
 
-    expect(indexes[0]).toMatchObject({ expression: `to_tsvector('english', "body_text")` });
+    expect(indexes[0]).toMatchObject({
+      columns: ['title', 'body_text'],
+      options: { fields: [['title', 'body_text']], language: 'english' },
+    });
   });
 
-  it('files one index per declaration, so a model may search two columns', () => {
+  it('files one index per declaration, so a model may declare two', () => {
     const indexes = indexesOf(
       model(`  @@fullTextIndex([text], name: "message_text_search")
   @@fullTextIndex([summary], name: "message_summary_search")`),
@@ -162,22 +190,38 @@ model Message {
     ]);
   });
 
-  it('passes a where predicate through to the index, like @@index(expression:, where:)', () => {
-    const typed = indexesOf(
+  it('passes a where predicate through to the index', () => {
+    const indexes = indexesOf(
       model(`  @@fullTextIndex([text], where: "id > 0", name: "message_text_search_live")`),
     );
-    const authored = indexesOf(
-      model(
-        `  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", where: "id > 0", name: "message_text_search_live")`,
-      ),
-    );
 
-    expect(typed).toEqual(authored);
-    expect(typed[0]).toMatchObject({ where: 'id > 0' });
+    expect(indexes[0]).toMatchObject({ columns: ['text'], where: 'id > 0' });
+  });
+
+  it('takes map: as the exact database name', () => {
+    const indexes = indexesOf(model(`  @@fullTextIndex([text], map: "legacy_text_search")`));
+
+    expect(indexes[0]).toMatchObject({ name: 'legacy_text_search', columns: ['text'] });
+    expect(indexes[0]?.prefix).toBeUndefined();
+  });
+
+  it('names a different index for a different grouping, order or language', () => {
+    const nameOf = (attribute: string) => indexesOf(model(`  ${attribute}`))[0]?.name;
+
+    const names = new Set([
+      nameOf(`@@fullTextIndex([[text, body]], name: "s")`),
+      nameOf(`@@fullTextIndex([text, body], name: "s")`),
+      nameOf(`@@fullTextIndex([body, text], name: "s")`),
+      nameOf(`@@fullTextIndex([text, body], language: "german", name: "s")`),
+    ]);
+
+    expect(names.size).toBe(4);
   });
 
   it('rejects a field that is not textual, naming the field and its type', () => {
-    const diagnostics = diagnosticsOf(model(`  @@fullTextIndex([id], name: "message_id_search")`));
+    const diagnostics = diagnosticsOf(
+      model(`  @@fullTextIndex([text, id], name: "message_id_search")`),
+    );
 
     expect(diagnostics).toEqual(
       expect.arrayContaining([
@@ -234,6 +278,12 @@ model Message {
     );
   });
 
+  it('rejects a field the model does not declare', () => {
+    expect(
+      diagnosticsOf(model(`  @@fullTextIndex([[text, missing]], name: "x")`)).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('accepts a varchar column, mapped', () => {
     const indexes = indexesOf(`
 model Message {
@@ -243,9 +293,7 @@ model Message {
 }
 `);
 
-    expect(indexes[0]).toMatchObject({
-      expression: `to_tsvector('english', "subject_line")`,
-    });
+    expect(indexes[0]).toMatchObject({ columns: ['subject_line'] });
   });
 
   it('rejects a language Postgres does not ship, naming the ones it does', () => {
@@ -257,15 +305,45 @@ model Message {
     expect(diagnostic?.message).toContain('"german"');
   });
 
-  it('rejects more than one field', () => {
-    expect(diagnosticsOf(model(`  @@fullTextIndex([text, summary], name: "x")`))).toEqual(
+  it('rejects more than four weight groups', () => {
+    expect(
+      diagnosticsOf(model(`  @@fullTextIndex([text, summary, subtitle, body, id], name: "x")`)),
+    ).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_FULL_TEXT_INDEX_ONE_FIELD',
-          message: expect.stringContaining('one column'),
+          code: 'PSL_FULL_TEXT_INDEX_TOO_MANY_GROUPS',
+          message: expect.stringContaining('at most 4 weight groups'),
         }),
       ]),
     );
+  });
+
+  it('rejects an empty weight group', () => {
+    expect(diagnosticsOf(model(`  @@fullTextIndex([text, []], name: "x")`))).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_FULL_TEXT_INDEX_EMPTY_GROUP',
+          message: expect.stringContaining('empty weight group'),
+        }),
+      ]),
+    );
+  });
+
+  it('rejects an empty field list', () => {
+    expect(diagnosticsOf(model(`  @@fullTextIndex([], name: "x")`)).length).toBeGreaterThan(0);
+  });
+
+  it('rejects a field named twice, in one group or across groups', () => {
+    for (const fields of ['[[text, text]]', '[[text, body], text]']) {
+      expect(diagnosticsOf(model(`  @@fullTextIndex(${fields}, name: "x")`))).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_FULL_TEXT_INDEX_DUPLICATE_FIELD',
+            message: expect.stringContaining('"text"'),
+          }),
+        ]),
+      );
+    }
   });
 
   it('requires a name or a map', () => {
@@ -288,5 +366,42 @@ model Message {
         }),
       ]),
     );
+  });
+});
+
+describe('@@fullTextIndex with map:', () => {
+  const exactNameWarnings = () =>
+    vi
+      .mocked(process.emitWarning)
+      .mock.calls.filter(
+        ([, options]) =>
+          (options as { code?: string } | undefined)?.code === 'PN_EXACT_NAME_BODY_COMPARISON',
+      );
+
+  beforeEach(() => {
+    vi.spyOn(process, 'emitWarning').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('warns that db verify compares the expression text exactly', () => {
+    indexesOf(model(`  @@fullTextIndex([text], map: "legacy_text_search")`));
+
+    expect(exactNameWarnings()).toEqual([
+      [expect.stringContaining('index "legacy_text_search"'), expect.anything()],
+    ]);
+  });
+
+  it('warns once when the index also has a where predicate', () => {
+    indexesOf(model(`  @@fullTextIndex([text], where: "id > 0", map: "legacy_text_search_live")`));
+
+    expect(exactNameWarnings()).toHaveLength(1);
+  });
+
+  it('does not warn for a wire-named index', () => {
+    indexesOf(model(`  @@fullTextIndex([text], name: "message_text_search")`));
+
+    expect(exactNameWarnings()).toEqual([]);
   });
 });

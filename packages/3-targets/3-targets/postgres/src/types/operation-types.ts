@@ -19,6 +19,22 @@ type TextualSelf<CT extends CodecTypesBase> = TraitExpression<readonly ['textual
 
 type TextOperand<CT extends CodecTypesBase> = CodecExpression<'pg/text@1', false, CT>;
 
+/** A textual column, nullable or not, as an expression rather than a value. */
+type FullTextColumn<CT extends CodecTypesBase> = Extract<
+  TraitExpression<readonly ['textual'], boolean, CT>,
+  { buildAst(): unknown }
+>;
+
+/**
+ * The columns of a full-text search document, in weight groups: each item is one group, strongest
+ * first, either one column or a list of columns. Pass the same groups as the `@@fullTextIndex` the
+ * query should use.
+ */
+export type FullTextDocument<CT extends CodecTypesBase> = readonly (
+  | FullTextColumn<CT>
+  | readonly FullTextColumn<CT>[]
+)[];
+
 /**
  * The query side of a full-text operation: a `tsquery` expression from a parser or the `tsquery` tag
  * in `full-text`, or a `tsquery` value read back from a query, bound as a `tsquery` parameter. A
@@ -41,7 +57,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
     readonly fullTextMatches: {
       readonly self: TextualSelfSpec;
       readonly impl: (
-        self: TextualSelf<CT>,
+        self: TextualSelf<CT> | FullTextDocument<CT>,
         query: TsqueryArgument<CT>,
         options?: FullTextMatchesOptions,
       ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
@@ -49,7 +65,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
     readonly fullTextRank: {
       readonly self: TextualSelfSpec;
       readonly impl: (
-        self: TextualSelf<CT>,
+        self: TextualSelf<CT> | FullTextDocument<CT>,
         query: TsqueryArgument<CT>,
         options?: FullTextRankOptions,
       ) => Expression<{ codecId: 'pg/float4@1'; nullable: false }>;

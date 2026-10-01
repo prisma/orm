@@ -5,6 +5,8 @@ import type {
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import { computeIndexContentHash, parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
+import type { FullTextIndexDefinition } from '../full-text-index-expression';
+import { DEFAULT_FULL_TEXT_SEARCH_LANGUAGE } from '../text-search-languages';
 import { buildAttribute, namedArg, positionalArg } from './psl-literals';
 
 export function buildModelConstraintAttribute(
@@ -102,6 +104,33 @@ export function buildIndexAttribute(
     args.push(namedArg('options', `{ ${entries.join(', ')} }`));
   }
   return buildAttribute('model', 'index', args);
+}
+
+/**
+ * Emits one `@@fullTextIndex` attribute. A weight group of one field is written as the bare field,
+ * a larger group as a list, and the language only when it is not the default.
+ */
+export function buildFullTextIndexAttribute(
+  index: IndexAttributeSource,
+  definition: FullTextIndexDefinition,
+  fieldNameOf: (column: string) => string,
+  naming: AttributeNaming,
+): PslModelAttribute {
+  const groups = definition.fields.map((group) => {
+    const names = group.map(fieldNameOf);
+    return names.length === 1 ? (names[0] ?? '') : `[${names.join(', ')}]`;
+  });
+  const args: PslAttributeArgument[] = [
+    positionalArg(`[${groups.join(', ')}]`),
+    namingArg(naming, index.name),
+  ];
+  if (definition.language !== DEFAULT_FULL_TEXT_SEARCH_LANGUAGE) {
+    args.push(namedArg('language', `"${definition.language}"`));
+  }
+  if (index.where !== undefined) {
+    args.push(namedArg('where', `"${escapePslString(index.where)}"`));
+  }
+  return buildAttribute('model', 'fullTextIndex', args);
 }
 
 /**

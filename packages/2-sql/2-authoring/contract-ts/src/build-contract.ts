@@ -275,6 +275,7 @@ function encodeColumnDefault(
 function assertStorageSemantics(
   contract: Contract<SqlStorage>,
   indexTypeRegistry: IndexTypeRegistry,
+  codecLookup: CodecLookupWithDescriptors | undefined,
 ): void {
   const semanticErrors = validateStorageSemantics(contract.storage);
   if (semanticErrors.length > 0) {
@@ -284,7 +285,11 @@ function assertStorageSemantics(
       { meta: { errors: semanticErrors } },
     );
   }
-  validateIndexTypes(contract, indexTypeRegistry);
+  validateIndexTypes(
+    contract,
+    indexTypeRegistry,
+    codecLookup === undefined ? undefined : (codecId) => codecLookup.descriptorFor(codecId)?.traits,
+  );
 }
 
 function assertKnownTargetModel(
@@ -1850,7 +1855,7 @@ export function buildSqlContractFromDefinition(
     meta: {},
   };
 
-  assertStorageSemantics(contract, indexTypeRegistry);
+  assertStorageSemantics(contract, indexTypeRegistry, codecLookup);
   flushAuthoringWarnings(authoringWarnings);
 
   return contract;

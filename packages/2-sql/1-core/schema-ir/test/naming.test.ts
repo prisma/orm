@@ -120,8 +120,16 @@ describe('normalizeIndexOptionValue', () => {
     });
   });
 
-  it('String()-coerces everything else', () => {
+  it('String()-coerces every other scalar', () => {
     expect([70, '70', null].map(normalizeIndexOptionValue)).toEqual(['70', '70', 'null']);
+  });
+
+  it('writes a structured value as JSON, so nesting is kept', () => {
+    expect([[['a', 'b']], [['a'], ['b']], { x: 1 }].map(normalizeIndexOptionValue)).toEqual([
+      '[["a","b"]]',
+      '[["a"],["b"]]',
+      '{"x":1}',
+    ]);
   });
 });
 
@@ -344,6 +352,12 @@ describe('computeIndexContentHash', () => {
   });
 
   describe('options coercion and ordering', () => {
+    it('tells apart option values that differ only in how arrays nest', () => {
+      const oneGroup = computeIndexContentHash({ ...base, options: { fields: [['a', 'b']] } });
+      const twoGroups = computeIndexContentHash({ ...base, options: { fields: [['a'], ['b']] } });
+      expect(oneGroup).not.toBe(twoGroups);
+    });
+
     it('String()-coerces values: a typed 70 hashes equal to an introspected "70"', () => {
       const typed = computeIndexContentHash({ ...base, options: { fillfactor: 70 } });
       const stringly = computeIndexContentHash({ ...base, options: { fillfactor: '70' } });

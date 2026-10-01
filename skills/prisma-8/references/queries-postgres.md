@@ -100,7 +100,7 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` declares that index for you — pass it the field and, if you use one, the same language:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
@@ -116,6 +116,25 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
   indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
 }));
 ```
+
+**Searching several columns with weights.** One index can cover several columns. Each top-level item of the list is a weight group, strongest first; fields in a nested list share a weight:
+
+```prisma
+@@fullTextIndex([[title, subtitle], body], name: "post_search")
+```
+
+In the SQL builder, pass the same weight groups, in the same order, to `fns.fullTextMatches` and `fns.fullTextRank`, so the query searches the expression the index covers and a title match ranks above a body match:
+
+```typescript
+const q = websearchToTsquery(query);
+const posts = db.sql.public.post
+  .select('id', 'title')
+  .where((f, fns) => fns.fullTextMatches([[f.title, f.subtitle], [f.body]], q))
+  .orderBy((f, fns) => fns.fullTextRank([[f.title, f.subtitle], [f.body]], q), { direction: 'desc' })
+  .build();
+```
+
+A different grouping, order or language is not an error; the query just does not use the index. `fullTextHeadline` stays per column. The column methods (`row.title.fullTextMatches(q)`) search one column, and use a single-field index.
 
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 

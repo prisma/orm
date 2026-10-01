@@ -5,6 +5,7 @@ type ContractCode = `CONTRACT.${ContractSubcode}`;
 
 type ContractSubcode =
   | 'ARGUMENT_INVALID'
+  | 'INDEX_INVALID'
   | 'PACK_CONTRIBUTION_INVALID'
   | 'TABLE_AMBIGUOUS'
   | 'VALIDATION_FAILED';

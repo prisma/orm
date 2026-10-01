@@ -32,7 +32,6 @@ import {
   type ContractInput,
   type ContractModelBuilder,
   type DeferredIndexColumn,
-  type DeferredIndexExpression,
   type FieldStateOf,
   type ForeignKeyConstraint,
   type IdConstraint,
@@ -825,10 +824,9 @@ function resolveForeignKeyNodes(
  */
 function resolveDeferredColumns(
   spec: Pick<RuntimeModelSpec, 'modelName' | 'fieldToColumn'>,
-  expression: DeferredIndexExpression,
+  fieldNames: readonly string[],
   fieldCodecIds: Readonly<Record<string, string>>,
 ): readonly DeferredIndexColumn[] {
-  const fieldNames = expression.fields.map((ref) => ref.fieldName);
   const columnNames = mapFieldNamesToColumnNames(spec.modelName, fieldNames, spec.fieldToColumn);
   return fieldNames.map((fieldName, position) => {
     const name = columnNames[position];
@@ -896,10 +894,14 @@ function resolveModelNode(
     // forbids options without a type, but a caller that suppresses the
     // compile error still reaches here, and dropping the orphaned options
     // would hide it from lowerAuthoredIndex's runtime backstop.
+    const options =
+      index.resolveOptions !== undefined
+        ? index.resolveOptions(resolveDeferredColumns(spec, index.fields ?? [], fieldCodecIds))
+        : index.options;
     const method = blindCast<
       AuthoredIndexMethod,
       'the constraint type carries the union; reading the two fields separately loses the correlation'
-    >({ type: index.type, options: index.options });
+    >({ type: index.type, options });
     const carried = {
       where: index.where,
       unique: index.unique,
@@ -914,7 +916,11 @@ function resolveModelNode(
             typeof index.expression === 'string'
               ? index.expression
               : index.expression.render(
-                  resolveDeferredColumns(spec, index.expression, fieldCodecIds),
+                  resolveDeferredColumns(
+                    spec,
+                    index.expression.fields.map((ref) => ref.fieldName),
+                    fieldCodecIds,
+                  ),
                 ),
         }
       : {

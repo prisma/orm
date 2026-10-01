@@ -234,15 +234,18 @@ export interface IndexContentHashParts {
  * Canonicalizes one index option VALUE to the `on`/`off` boolean spelling:
  * JS booleans and the common catalog spellings (`pg_class.reloptions`
  * stores whatever spelling the DDL used, so a live index may carry
- * `'true'`/`'false'` or `'on'`/`'off'`) all map to one form; everything
- * else via `String()` (fully specified for numbers, so no platform
- * variance). Shared by the wire-name hash tuple, the node's option
- * equality, and the DDL renderer, so an authored `{ fastupdate: true }`
- * agrees with a live index created under any boolean spelling.
+ * `'true'`/`'false'` or `'on'`/`'off'`) all map to one form; every other
+ * scalar via `String()` (fully specified for numbers, so no platform
+ * variance); an array or object as JSON, since `String()` would flatten
+ * `[['a', 'b']]` and `[['a'], ['b']]` to the same text. Shared by the
+ * wire-name hash tuple, the node's option equality, and the DDL renderer,
+ * so an authored `{ fastupdate: true }` agrees with a live index created
+ * under any boolean spelling.
  */
 export function normalizeIndexOptionValue(value: unknown): string {
   if (value === true || value === 'true' || value === 'on') return 'on';
   if (value === false || value === 'false' || value === 'off') return 'off';
+  if (typeof value === 'object' && value !== null) return JSON.stringify(value);
   return String(value);
 }
 

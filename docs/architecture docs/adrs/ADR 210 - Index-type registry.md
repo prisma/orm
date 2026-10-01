@@ -1,6 +1,6 @@
 # ADR 210 — Index-type registry
 
-> **Decision (in one sentence):** Index types live in a per-contract registry assembled from the contract's target and extension packs; each entry names a `type` literal, an `arktype` validator for its `options`, and whether an index of the type can back a foreign key; the type and validator are what the authoring DSL narrows against, what the lowering validates against, and what the framework-owned Postgres renderer reads from when emitting `CREATE INDEX … USING <method> WITH (…)`, and the foreign-key flag is what decides whether a foreign key needs a derived backing index.
+> **Decision (in one sentence):** Index types live in a per-contract registry assembled from the contract's target and extension packs; each entry names a `type` literal, an `arktype` validator for its `options`, and whether an index of the type can back a foreign key; the type and validator are what the authoring DSL narrows against, what the lowering validates against, and what the framework-owned Postgres renderer reads from when emitting `CREATE INDEX … USING <method> WITH (…)` (for a type that is not an access method, such as Postgres's `fullText`, through the target's contract-to-schema conversion), and the foreign-key flag is what decides whether a foreign key needs a derived backing index.
 
 ## A grounding example
 
@@ -79,15 +79,18 @@ The registry resolves all three by giving the system one place that knows which 
 
 ## The registry primitive
 
-An entry names a `type` literal, carries a validator describing the entry's `options`, and says whether an index of the type can back a foreign key.
+An entry names a `type` literal, carries a validator describing the entry's `options`, and says whether an index of the type can back a foreign key. It may also name traits that the codec of every column an index of the type covers must carry.
 
 ```ts
 type IndexTypeEntry<TOptions> = {
   readonly type: string;
   readonly options: arktype.Type<TOptions>;
   readonly backsForeignKey: boolean;
+  readonly columnTraits?: readonly string[];
 };
 ```
+
+The contract build checks `columnTraits` through the contract's codec lookup, beside the options, and refuses an index over a column whose codec lacks one with `CONTRACT.INDEX_INVALID`. The check runs when the contract is built, not when a `contract.json` is loaded. A codec the lookup does not know is skipped, and a build without a codec lookup checks nothing. Postgres's `fullText` type requires `textual`, so a full-text index written through the general index API cannot cover a number column.
 
 Entries are produced by a small fluent builder. The builder is the only way an entry comes into existence; there is no other constructor:
 
@@ -105,7 +108,7 @@ Calling `.add(name, …)` twice with the same `name` is a builder-time error nam
 
 A foreign key gets a derived backing index unless an index of its table already covers its columns in order. Whether an index can stand in for that backing index depends on its access method: a btree or hash index serves the equality lookups a foreign key needs; a search, spatial or range-summary index does not. The SQL family does not know the access methods, so each entry declares it with `backsForeignKey`, and the registry answers `backsForeignKey(type)`, which is `false` for a type nobody registered. An index counts as backing when it has no `where` predicate and either has no `type` (the target's default access method) or a type whose entry declares `backsForeignKey: true`. Unique constraints and the primary key always count.
 
-`contract emit` and `contract infer` read the same registry: `indexTypeRegistryOf` assembles it from the target and the extension packs, the contract build calls it with the contract's packs, and the SQL family instance calls it with the stack's packs and hands its answer to the target's infer hook. An entry without `backsForeignKey` is refused when the registry is assembled, naming the type and the pack. Postgres declares it for `btree` and `hash`, and not for `gin`, `gist`, `spgist` or `brin`; ParadeDB's `bm25` does not back a foreign key.
+`contract emit` and `contract infer` read the same registry: `indexTypeRegistryOf` assembles it from the target and the extension packs, the contract build calls it with the contract's packs, and the SQL family instance calls it with the stack's packs and hands its answer to the target's infer hook. An entry without `backsForeignKey` is refused when the registry is assembled, naming the type and the pack. Postgres declares it for `btree` and `hash`, and not for `gin`, `gist`, `spgist`, `brin` or `fullText`; ParadeDB's `bm25` does not back a foreign key.
 
 ## How packs and contracts compose
 
@@ -165,9 +168,11 @@ CREATE INDEX <name> ON <table> USING <type> (<columns>) WITH (<key> = <literal>,
 
 There is **no per-entry rendering hook**. A single universal renderer formats `options` as `key = literal, …`, using the adapter's existing scalar quoting and escaping helpers for strings, numbers, and booleans. `null` and `NaN` are rejected at the renderer.
 
+The renderer receives `type` and `options` from the target's schema node for the index, not from the contract entry directly. For every access method the two are the same. A target may also register an index type that is not an access method, whose `options` are the index's definition rather than storage parameters. The Postgres target's `fullText` type is one: its options are `{ fields, language }`, the weight groups of a full-text search document as column names and its text-search configuration, validated with `'+': 'reject'`. The target's contract-to-schema conversion turns such an index into the node the renderer reads: for `fullText`, a `gin` index whose element list is the search document rendered from the definition, with no storage options. The renderer itself is unchanged, and the conversion is not a per-entry rendering hook: the entry carries no rendering function, the definition is turned into SQL by target code with the target's own quoting, and the conversion runs once for the schema node that migrations, verification and DDL all read.
+
 Two consequences are worth naming:
 
-- **The universal renderer is sufficient because validators constrain leaves to scalars.** There is no entry whose options need bespoke rendering, because no entry can declare an options shape with non-scalar leaves.
+- **The universal renderer is sufficient because the options it renders are scalars.** Every access method's options are storage parameters with scalar values; the structured options of a type such as `fullText` are consumed by the target's conversion and never reach `WITH (…)`.
 - **SQL-injection risk is bounded to framework-owned helpers.** An extension author cannot accidentally introduce an unsafe rendering path; the only path that produces SQL string fragments from extension data is the one the framework controls and tests.
 
 ## Index identity and migration semantics
@@ -213,7 +218,7 @@ A contract authored half-and-half (some models in PSL, some in TS, against the s
 
 ### Per-entry rendering hooks
 
-Let each registered entry carry a function that turns its `options` into a SQL fragment. Rejected on uniformity and security grounds. The framework already exposes safe scalar quoting helpers; an extension authoring its own renderer would either duplicate them or, worse, build SQL by string concatenation. The universal renderer is sufficient because validators constrain leaves to scalars.
+Let each registered entry carry a function that turns its `options` into a SQL fragment. Rejected on uniformity and security grounds. The framework already exposes safe scalar quoting helpers; an extension authoring its own renderer would either duplicate them or, worse, build SQL by string concatenation. The universal renderer is sufficient because the options it renders are storage parameters with scalar values. An index type whose options are a definition, such as Postgres's `fullText`, is turned into an index element list by its target's contract-to-schema conversion, which is target code with the target's own quoting, not a function an entry carries.
 
 ### `declare module` augmentation for index types
 

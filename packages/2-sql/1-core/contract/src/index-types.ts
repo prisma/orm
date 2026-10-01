@@ -9,11 +9,17 @@ export interface IndexTypeEntry<TOptions = unknown> {
    * so no separate backing index is derived for it.
    */
   readonly backsForeignKey: boolean;
+  /**
+   * Traits the codec of every column an index of this type covers must carry. The contract build
+   * checks them through the contract's codec lookup.
+   */
+  readonly columnTraits?: readonly string[];
 }
 
 type IndexTypeDeclaration<TOpts> = {
   readonly options: Type<TOpts>;
   readonly backsForeignKey: boolean;
+  readonly columnTraits?: readonly string[];
 };
 
 export type IndexTypeMap = { readonly [K in string]: { readonly options: unknown } };
@@ -57,6 +63,7 @@ class IndexTypeBuilderImpl<TMap extends IndexTypeMap> implements IndexTypeBuilde
         type: typeLiteral,
         options: entry.options as Type<unknown>,
         backsForeignKey: entry.backsForeignKey,
+        ...(entry.columnTraits === undefined ? {} : { columnTraits: entry.columnTraits }),
       },
     ]);
   }

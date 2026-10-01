@@ -1,36 +1,36 @@
 [
   {
-    "id": "index.post.post_title_search_724b05e5",
-    "label": "Create index \"post_title_search_724b05e5\" on \"post\"",
+    "id": "index.post.post_title_search_1c180f5a",
+    "label": "Create index \"post_title_search_1c180f5a\" on \"post\"",
     "operationClass": "additive",
     "target": {
       "id": "postgres",
       "details": {
         "schema": "public",
         "objectType": "index",
-        "name": "post_title_search_724b05e5",
+        "name": "post_title_search_1c180f5a",
         "table": "post"
       }
     },
     "precheck": [
       {
-        "description": "ensure index \"post_title_search_724b05e5\" does not exist",
+        "description": "ensure index \"post_title_search_1c180f5a\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_724b05e5\""]
+        "params": ["\"public\".\"post_title_search_1c180f5a\""]
       }
     ],
     "execute": [
       {
-        "description": "create index \"post_title_search_724b05e5\"",
-        "sql": "CREATE INDEX \"post_title_search_724b05e5\" ON \"public\".\"post\" USING \"gin\" (to_tsvector('english', \"title\"))",
+        "description": "create index \"post_title_search_1c180f5a\"",
+        "sql": "CREATE INDEX \"post_title_search_1c180f5a\" ON \"public\".\"post\" USING \"gin\" (to_tsvector('english', \"title\"))",
         "params": []
       }
     ],
     "postcheck": [
       {
-        "description": "verify index \"post_title_search_724b05e5\" exists",
+        "description": "verify index \"post_title_search_1c180f5a\" exists",
         "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
-        "params": ["\"public\".\"post_title_search_724b05e5\""]
+        "params": ["\"public\".\"post_title_search_1c180f5a\""]
       }
     ]
   }

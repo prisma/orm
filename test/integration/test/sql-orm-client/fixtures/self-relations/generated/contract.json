@@ -436,10 +436,20 @@
                   "unique": false
                 },
                 {
-                  "expression": "to_tsvector('english', \"name\")",
-                  "name": "person_name_search_2455a3e1",
+                  "columns": [
+                    "name"
+                  ],
+                  "name": "person_name_search_6cfa8cd0",
+                  "options": {
+                    "fields": [
+                      [
+                        "name"
+                      ]
+                    ],
+                    "language": "english"
+                  },
                   "prefix": "person_name_search",
-                  "type": "gin",
+                  "type": "fullText",
                   "unique": false
                 }
               ],
@@ -613,7 +623,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "68cbf64f1e2ea804ae94e926908ae4a093edc4f7e897b835b1eacc66ddd89b2b"
+    "storageHash": "c4eea44ff5ad9ad9b0b2da640a3474a169b73e0aa7b00e77d6632fde28b39235"
   },
   "capabilities": {
     "postgres": {

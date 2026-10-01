@@ -12,6 +12,10 @@ import {
 } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresError } from '../errors';
+import {
+  fullTextIndexDefinitionOf,
+  renderFullTextIndexExpression,
+} from '../full-text-index-expression';
 import type { PostgresRlsPolicy } from '../postgres-rls-policy';
 import type { PostgresContract } from '../postgres-schema';
 import { isPostgresSchema } from '../postgres-schema';
@@ -194,6 +198,20 @@ export function contractToPostgresDatabaseSchemaNode(
           }),
       );
       const indexes = sqlTable.indexes.map((i) => {
+        const fullText = fullTextIndexDefinitionOf(i);
+        if (fullText !== undefined) {
+          return new SqlIndexIR({
+            naming: namingOf(i.name, i.prefix),
+            where: i.where,
+            unique: i.unique,
+            partial: i.partial,
+            type: 'gin',
+            options: undefined,
+            annotations: i.annotations,
+            expression: renderFullTextIndexExpression(fullText),
+            dependsOn: columnDependsOn(ddlSchema, tableName, fullText.fields.flat()),
+          });
+        }
         const base = {
           naming: namingOf(i.name, i.prefix),
           where: i.where,

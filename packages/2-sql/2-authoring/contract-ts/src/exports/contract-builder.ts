@@ -40,6 +40,7 @@ export type {
   ColumnRef,
   DeferredIndexColumn,
   DeferredIndexExpression,
+  DeferredIndexOptions,
   IndexConstraint,
   IndexExpressionInput,
   TargetFieldRef,

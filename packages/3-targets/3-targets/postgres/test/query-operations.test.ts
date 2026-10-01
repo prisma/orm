@@ -112,6 +112,67 @@ describe('postgres target query operations', () => {
     });
   });
 
+  describe.each([
+    ['fullTextMatches', (document: string) => `${document} @@ {{arg0}}`],
+    ['fullTextRank', (document: string) => `ts_rank(${document}, {{arg0}})`],
+  ])('%s over weight groups', (method, wrap) => {
+    const column = (name: string, nullable: boolean) => {
+      const ast = ParamRef.of(name, { codec: { codecId: 'pg/text@1' } });
+      return { returnType: { codecId: 'pg/text@1', nullable }, buildAst: () => ast };
+    };
+    const title = column('title', false);
+    const subtitle = column('subtitle', true);
+    const body = column('body', true);
+
+    it('searches the weighted document the index renders, with the columns as trailing arguments', () => {
+      const ast = buildOpAst(method, [[title, subtitle], [body]], 'prisma');
+
+      expect(ast.lowering?.template).toBe(
+        wrap(
+          `(setweight(to_tsvector({{arg1}}, coalesce({{self}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg2}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg3}}, '')), 'B'))`,
+        ),
+      );
+      expect(ast.self).toBe(title.buildAst());
+      expect(ast.args.slice(2)).toEqual([subtitle.buildAst(), body.buildAst()]);
+      expect((ast.args[1] as LiteralExpr).value).toBe('english');
+    });
+
+    it('takes a bare column as a group of one', () => {
+      expect(buildOpAst(method, [title, body], 'prisma').lowering?.template).toBe(
+        wrap(
+          `(setweight(to_tsvector({{arg1}}, coalesce({{self}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg2}}, '')), 'B'))`,
+        ),
+      );
+    });
+
+    it('searches one column in one group exactly as the column form does', () => {
+      expect(buildOpAst(method, [[body]], 'prisma').lowering).toEqual(
+        buildOpAst(method, body, 'prisma').lowering,
+      );
+    });
+
+    it.each([
+      ['no group', []],
+      ['an empty group', [[title], []]],
+      ['more than four groups', [[title], [body], [subtitle], [title], [body]]],
+    ])('refuses %s', (_label, document) => {
+      expect(() => buildOpAst(method, document, 'prisma')).toThrow(
+        expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
+      );
+    });
+  });
+
+  it('places the rank normalization before the trailing columns', () => {
+    const ast = buildOpAst('fullTextRank', [[TEXT_COLUMN], [TEXT_COLUMN]], 'prisma', {
+      normalization: 32,
+    });
+
+    expect(ast.lowering?.template).toBe(
+      `ts_rank((setweight(to_tsvector({{arg1}}, coalesce({{self}}, '')), 'A') || setweight(to_tsvector({{arg1}}, coalesce({{arg3}}, '')), 'B')), {{arg0}}, {{arg2}})`,
+    );
+    expect((ast.args[2] as LiteralExpr).value).toBe(32);
+  });
+
   describe('fullTextRank options', () => {
     const rankTemplate = (ast: OperationExpr) => ast.lowering?.template;
 

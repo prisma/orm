@@ -94,3 +94,27 @@ test('ilike and the search operations take a textual column and refuse a native 
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextRank'>>();
   expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
 });
+
+test('fullTextMatches and fullTextRank take weight groups of textual columns, nullable ones too', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type DocumentOf<Name extends 'fullTextMatches' | 'fullTextRank'> = Parameters<
+    Ops[Name]['impl']
+  >[0];
+  type NullableTextColumn = Expression<{ codecId: 'pg/text@1'; nullable: true }>;
+  type VarcharColumn = Expression<{ codecId: 'sql/varchar@1'; nullable: false }>;
+  type NativeEnumColumn = Expression<{ codecId: 'pg/enum@1'; nullable: false }>;
+
+  expectTypeOf<
+    readonly [readonly [TextColumn, NullableTextColumn], readonly [VarcharColumn]]
+  >().toExtend<DocumentOf<'fullTextMatches'>>();
+  expectTypeOf<readonly [TextColumn, NullableTextColumn]>().toExtend<DocumentOf<'fullTextRank'>>();
+  expectTypeOf<readonly [readonly [TextColumn, NativeEnumColumn]]>().not.toExtend<
+    DocumentOf<'fullTextMatches'>
+  >();
+  expectTypeOf<readonly [readonly ['a bare string']]>().not.toExtend<
+    DocumentOf<'fullTextMatches'>
+  >();
+  expectTypeOf<readonly [readonly [TextColumn]]>().not.toExtend<
+    Parameters<Ops['fullTextHeadline']['impl']>[0]
+  >();
+});
