@@ -84,7 +84,7 @@
               "createdAt": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -94,7 +94,7 @@
               "createdAtTz": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "typeParams": {
                     "precision": 6
                   }
@@ -157,7 +157,7 @@
               "dateTimeLiteral": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "typeParams": {
                     "precision": 3
                   }
@@ -233,7 +233,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "bf36708c84339e57f8a36b9cef40a9b10fe0f83299fa25016bc67330c5d72255",
+    "storageHash": "e48b66adaa11ae84637bd6b4eeb04679c79585bfe36de820d879a555d84ed642",
     "namespaces": {
       "public": {
         "id": "public",
@@ -262,7 +262,7 @@
                 },
                 "createdAt": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -274,7 +274,7 @@
                 },
                 "createdAtTz": {
                   "nativeType": "timestamptz",
-                  "codecId": "pg/timestamptz-temporal@1",
+                  "codecId": "pg/timestamptz-string@1",
                   "nullable": false,
                   "typeParams": {
                     "precision": 6
@@ -353,7 +353,7 @@
                 },
                 "dateTimeLiteral": {
                   "nativeType": "timestamp",
-                  "codecId": "pg/timestamp-temporal@1",
+                  "codecId": "pg/timestamp-string@1",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3

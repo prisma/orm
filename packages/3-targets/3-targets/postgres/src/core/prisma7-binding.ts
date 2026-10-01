@@ -35,7 +35,7 @@ function arrayLiteral(literals: readonly string[], typeName: string): string {
  * `DateTime` default is carried as the SQL literal of the default Postgres
  * stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`), and a list default as an
  * `ARRAY[...]` of those literals cast to the column type, rather than through
- * the column codec, whose JSON form (base64, a Temporal value) is not what
+ * the column codec, whose JSON form (base64, ISO 8601 text) is not what
  * introspection reads back; verify parses both sides with the same parser.
  */
 export const prisma7PostgresBinding = {

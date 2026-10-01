@@ -73,7 +73,7 @@ This example stops before phase 4. The [upgrade guide](https://www.prisma.io/doc
 - This repository's CI fetches that engine in its own step before the example tests run, so the test itself downloads nothing.
 - The guide's `prisma7.config.ts` sets `datasource.url` to `process.env["DATABASE_URL"]`, which is `string | undefined`; under `exactOptionalPropertyTypes` that does not type-check, so this example adds the `datasource` block only when the variable is set. `prisma7 generate` runs without a database either way.
 - Prisma 7 rejects `url` inside the `datasource` block; the URL lives only in `prisma7.config.ts` (Prisma 7) and `prisma.config.ts` (Prisma 8), both reading the same `DATABASE_URL` from `.env`.
-- Prisma 8 returns `DateTime` columns as `Temporal.PlainDateTime`. Node 24 has no global `Temporal`, so `src/db.ts` imports `temporal-polyfill/full/global` before creating the client.
+- Prisma 8 reads a `DateTime` column as the text PostgreSQL prints, such as `2026-09-14 10:00:00.123` (UTC, as Prisma 7 wrote it), not as a JavaScript `Date`. `@db.Timestamptz`, `@db.Date` and `@db.Time` columns read as text too, so the application needs no `Temporal`.
 - `pnpm sign` creates `migrations/` (a snapshot of the signed contract and the `db` ref). It is Prisma 8's record of what was signed and is committed here; phase 4 builds on it.
 - The Prisma 8 CLI prints JSON when stdout is not a terminal (a pipe, a file, or an agent) and prose in a terminal.
 
