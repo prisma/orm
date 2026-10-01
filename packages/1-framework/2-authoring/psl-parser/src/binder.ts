@@ -4,7 +4,6 @@ import type {
 } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
-import { assertDefined } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import type {
   AttributeSpecNamespace,
@@ -172,28 +171,17 @@ class ScopeStack {
   }
 }
 
-function retainedNamespaceScope(
-  namespace: NamespaceSymbol,
-  scopes: WeakMap<SyntaxNode, Scope>,
-): Scope {
-  const declaration = namespace.declarations[0];
-  assertDefined(declaration, `Missing declaration for namespace "${namespace.name}"`);
-  const scope = scopes.get(declaration.node.syntax);
-  assertDefined(scope, `Missing scope for namespace "${namespace.name}"`);
-  return scope;
-}
-
 function walkEntities(
   symbolTable: SymbolTable,
   stack: ScopeStack,
-  scopes: WeakMap<SyntaxNode, Scope>,
+  binder: Binder,
   visit: (entity: ModelSymbol | CompositeTypeSymbol) => void,
 ): void {
   const { topLevel } = symbolTable;
   for (const entity of Object.values(topLevel.models)) visit(entity);
   for (const entity of Object.values(topLevel.compositeTypes)) visit(entity);
   for (const namespace of Object.values(topLevel.namespaces)) {
-    stack.push(retainedNamespaceScope(namespace, scopes));
+    stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
     for (const entity of Object.values(namespace.models)) visit(entity);
     for (const entity of Object.values(namespace.compositeTypes)) visit(entity);
     stack.pop();
@@ -246,7 +234,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   // Attributes are parsed in a second walk once every field type is bound.
   // @relation(references: [x]) reads the referenced model's fields, and that
   // model may be declared further down the file.
-  walkEntities(symbolTable, stack, scopes, (entity) => {
+  walkEntities(symbolTable, stack, binder, (entity) => {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
@@ -270,7 +258,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   });
 
-  walkEntities(symbolTable, stack, scopes, (entity) => {
+  walkEntities(symbolTable, stack, binder, (entity) => {
     const context = {
       owner: entity,
       scope: stack.current(),
@@ -315,7 +303,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
   };
   bindBlocks(symbolTable.topLevel.blocks);
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
-    stack.push(retainedNamespaceScope(namespace, scopes));
+    stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
     bindBlocks(namespace.blocks);
     stack.pop();
   }

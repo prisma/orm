@@ -40,13 +40,15 @@ export interface TopLevelScope {
   readonly compositeTypes: Record<string, CompositeTypeSymbol>;
 }
 
+interface NamespaceDeclaration {
+  readonly node: NamespaceDeclarationAst;
+  readonly span: PslSpan;
+}
+
 export interface NamespaceSymbol {
   readonly kind: 'namespace';
   readonly name: string;
-  readonly declarations: {
-    readonly node: NamespaceDeclarationAst;
-    readonly span: PslSpan;
-  }[];
+  readonly declarations: [NamespaceDeclaration, ...NamespaceDeclaration[]];
   readonly models: Record<string, ModelSymbol>;
   readonly compositeTypes: Record<string, CompositeTypeSymbol>;
   readonly blocks: Record<string, BlockSymbol>;
@@ -183,12 +185,17 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
           namespace = {
             kind: 'namespace',
             name,
-            declarations: [],
+            declarations: [{ node: declaration, span: nodePslSpan(declaration.syntax, sources) }],
             models: Object.create(null),
             compositeTypes: Object.create(null),
             blocks: Object.create(null),
           };
           namespaces[name] = namespace;
+        } else {
+          namespace.declarations.push({
+            node: declaration,
+            span: nodePslSpan(declaration.syntax, sources),
+          });
         }
         extendNamespace(namespace, declaration, diagnostics, sources);
       } else if (declaration instanceof TypesBlockAst) {
@@ -262,7 +269,6 @@ function extendNamespace(
   sources: PslSources,
 ): void {
   const { models, compositeTypes, blocks } = namespace;
-  namespace.declarations.push({ node, span: nodePslSpan(node.syntax, sources) });
 
   for (const member of node.declarations()) {
     const memberName = member.name()?.name();
