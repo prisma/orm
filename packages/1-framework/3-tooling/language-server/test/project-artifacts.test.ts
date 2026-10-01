@@ -284,12 +284,14 @@ describe('ProjectArtifacts snapshots', () => {
     documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: view });
     const parserOptions = { grammar: 'prisma-7' } as const;
     const withOptions = new ProjectArtifacts({
+      controlStack,
       inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: vi.fn(),
       parserOptions,
     });
     const withoutOptions = new ProjectArtifacts({
+      controlStack,
       inputs,
       readSnapshot: documents.readSnapshot,
       onInterpretationError: vi.fn(),
