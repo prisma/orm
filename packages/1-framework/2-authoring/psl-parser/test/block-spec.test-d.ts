@@ -155,7 +155,7 @@ describe('PslBlockSpecDescriptor', () => {
     const withContext = {
       ...descriptor,
       spec: (ctx: BlockSpecContext) => {
-        expectTypeOf(ctx.block).toEqualTypeOf<BlockSymbol>();
+        expectTypeOf(ctx.block).toEqualTypeOf<BlockSymbol | undefined>();
         return policySpec();
       },
     } satisfies PslBlockSpecDescriptor;

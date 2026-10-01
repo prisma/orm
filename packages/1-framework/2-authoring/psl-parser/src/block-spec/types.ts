@@ -3,7 +3,7 @@ import type { BlockSymbol, SymbolTable } from '../symbol-table';
 
 export interface BlockSpecContext {
   readonly symbols: SymbolTable;
-  readonly block: BlockSymbol;
+  readonly block: BlockSymbol | undefined;
 }
 
 export interface BlockEntryValueSpec {

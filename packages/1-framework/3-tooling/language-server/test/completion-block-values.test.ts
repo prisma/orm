@@ -174,3 +174,38 @@ describe('generic block key completion', () => {
     );
   });
 });
+
+describe('generic block declaration snippets', () => {
+  function snippet(keyword: string) {
+    const result = completeBlockValueSource(`${blockValueSource}\n|`, {
+      clientSupportsSnippets: true,
+    });
+    return result.items.find((item) => item.label === keyword)?.textEdit?.newText;
+  }
+
+  const name = `${'$'}{1:Name}`;
+
+  it('fills in the required parameters of a policy block', () => {
+    expect(snippet('policy_select')).toBe(
+      [`policy_select ${name} {`, `  target = ${'$'}{2:target}`, `  ${'$'}0`, '}'].join('\n'),
+    );
+  });
+
+  it('opens a list for required list parameters', () => {
+    expect(snippet('grant')).toBe(
+      [
+        `grant ${name} {`,
+        `  roles = [${'$'}{2:roles}]`,
+        `  target = ${'$'}{3:target}`,
+        `  ${'$'}0`,
+        '}',
+      ].join('\n'),
+    );
+  });
+
+  it.each(['priority', 'role'])('keeps the plain snippet for %s', (keyword) => {
+    expect(snippet(keyword)).toBe(
+      [`${keyword} ${name} {`, `  ${'$'}{0:// Block keys and attributes}`, '}'].join('\n'),
+    );
+  });
+});

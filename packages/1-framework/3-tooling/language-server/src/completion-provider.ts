@@ -3,12 +3,15 @@ import {
   isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
 import {
+  type ArgType,
   type AttributeSpec,
   assembleAttributeSpecs,
+  type BlockSpec,
   blockSpecFactoryOf,
   findBlockDescriptor,
   isNamespaceLike,
   memberEntries,
+  type SymbolTable,
 } from '@internal/psl-parser';
 import type {
   GenericBlockDeclarationAst,
@@ -346,7 +349,7 @@ function declarationKeywordCandidates(
     scope === 'namespace' ? namespaceNativeDeclarationKeywords : documentNativeDeclarationKeywords;
   return [
     ...nativeCandidates,
-    ...genericBlockDeclarationKeywordCandidates(source.pslBlockDescriptors),
+    ...genericBlockDeclarationKeywordCandidates(source.pslBlockDescriptors, source.symbolTable),
   ];
 }
 
@@ -368,6 +371,7 @@ function nativeDeclarationKeyword(
 
 function genericBlockDeclarationKeywordCandidates(
   descriptors: AuthoringPslBlockDescriptorNamespace,
+  symbols: SymbolTable,
 ): readonly DeclarationKeywordCompletionCandidate[] {
   return descriptorBlockKeywords(descriptors).map((keyword) => {
     const descriptor = findBlockDescriptor(descriptors, keyword);
@@ -375,16 +379,33 @@ function genericBlockDeclarationKeywordCandidates(
       category: 'genericBlock',
       label: keyword,
       insertText: `${keyword} `,
-      snippetText: genericBlockSnippet(keyword),
+      snippetText: genericBlockSnippet(
+        keyword,
+        descriptor === undefined
+          ? undefined
+          : blockSpecFactoryOf(descriptor)({ symbols, block: undefined }),
+      ),
       detail: descriptor?.documentation || 'Generic block keyword',
       kind: CompletionItemKind.Keyword,
     };
   });
 }
 
-function genericBlockSnippet(keyword: string): string {
-  const cursor = '$' + '{0:// Block keys and attributes}';
-  return [`${keyword} ${nameSnippetPlaceholder} {`, `  ${cursor}`, '}'].join('\n');
+function genericBlockSnippet(keyword: string, spec: BlockSpec | undefined): string {
+  const required =
+    spec?.mode === 'struct'
+      ? Object.entries(spec.parameters).filter(([, parameter]) => !isOptionalType(parameter.type))
+      : [];
+  const lines = required.map(([name, parameter], index) => {
+    const placeholder = `\${${index + 2}:${name}}`;
+    return `  ${name} = ${parameter.type.kind === 'list' ? `[${placeholder}]` : placeholder}`;
+  });
+  const cursor = lines.length === 0 ? '$' + '{0:// Block keys and attributes}' : '$0';
+  return [`${keyword} ${nameSnippetPlaceholder} {`, ...lines, `  ${cursor}`, '}'].join('\n');
+}
+
+function isOptionalType(type: ArgType<unknown, never>): boolean {
+  return 'optional' in type && type.optional === true;
 }
 
 function descriptorBlockKeywords(

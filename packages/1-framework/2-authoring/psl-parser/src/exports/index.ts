@@ -60,6 +60,7 @@ export { optional } from '../attribute-spec/optional';
 export type {
   AttributeSpecContext,
   AttributeSpecNamespace,
+  BlockAttributeSpecContext,
   BlockAttributeSpecFactory,
   FieldAttributeSpecContext,
   FieldAttributeSpecFactory,

@@ -431,7 +431,7 @@ describe('providePslCompletionItems', () => {
           spec: ({ block }: BlockSpecContext) =>
             structBlock({
               parameters: {
-                [block.name]: { type: str(), documentation: '' },
+                [block?.name ?? 'Unnamed']: { type: str(), documentation: '' },
               },
             }),
         },

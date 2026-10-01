@@ -66,6 +66,23 @@ export const blockValueDescriptors: AuthoringPslBlockDescriptorNamespace = {
         },
       }),
   },
+  grant: {
+    kind: 'pslBlock',
+    keyword: 'grant',
+    discriminator: 'fixture-grant',
+    name: { required: true },
+    spec: () =>
+      structBlock({
+        parameters: {
+          roles: {
+            type: list(entityRef({ kind: 'block', keyword: 'role' })),
+            documentation: 'The granted roles.',
+          },
+          note: { type: optional(str()), documentation: 'A free-form note.' },
+          target: { type: entityRef({ kind: 'model' }), documentation: 'The granted model.' },
+        },
+      }),
+  },
   priority: {
     kind: 'pslBlock',
     keyword: 'priority',
