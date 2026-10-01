@@ -385,7 +385,6 @@ describe('classified positions without cursor AST', () => {
         sourceFile: new SourceFile('language-server-test.psl', ''),
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
         binder: emptyBinder,
-        offersNamespaces: false,
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -420,7 +419,6 @@ describe('classified positions without cursor AST', () => {
         sourceFile: new SourceFile('language-server-test.psl', 'f()'),
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
         binder: emptyBinder,
-        offersNamespaces: false,
         clientSupportsSnippets: true,
         fieldNames: () => [],
       },
@@ -450,7 +448,6 @@ describe('classified positions without cursor AST', () => {
         sourceFile,
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
         binder: emptyBinder,
-        offersNamespaces: false,
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -477,16 +474,19 @@ namespace sibling { model Hidden {} }
 `;
 
   it.each([
-    ['model', ['Example', 'Later']],
+    ['model', ['Example', 'Later', 'sibling']],
     ['composite', ['Address']],
     ['named', ['Alias']],
     ['block', ['Rules']],
     ['enumeration', ['Choice']],
-  ])('filters the %s selector without offering namespaces or contributed types', (key, labels) => {
-    expect(
-      complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
-    ).toEqual(labels);
-  });
+  ])(
+    'filters the %s selector to matches and namespaces holding one, without contributed types',
+    (key, labels) => {
+      expect(
+        complete(`model Example { value String @entity(${key}: |) }${declarations}`).labels,
+      ).toEqual(labels);
+    },
+  );
 
   it.each([
     ['model', 'Later', CompletionItemKind.Class],
@@ -560,7 +560,7 @@ namespace sibling { model Hidden {} }
   });
 
   it.each(['|', 'model: |', 'nested: { targets: [ref(|)] }'])(
-    'respects namespace visibility before selector filtering: %s',
+    'offers visible matches and visible namespaces holding one: %s',
     (args) => {
       const result = complete(`
 model Global {}
@@ -576,6 +576,8 @@ namespace sibling { model Hidden {} }
         'Self',
         'Forward',
         'Global',
+        'local',
+        'sibling',
         ...(args === '|' ? Object.keys(entitySignature.named) : []),
       ]);
       expect(rejectedParse).not.toHaveBeenCalled();
@@ -876,7 +878,6 @@ describe('recursive function arguments', () => {
         sourceFile: new SourceFile('language-server-test.psl', ''),
         scope: emptyBinder.scopeAt(emptyDocument.document.syntax),
         binder: emptyBinder,
-        offersNamespaces: false,
         clientSupportsSnippets: true,
         clientSupportsTriggerParameterHintsCommand: true,
         fieldNames: () => [],

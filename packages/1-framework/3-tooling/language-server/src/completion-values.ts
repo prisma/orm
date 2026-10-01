@@ -35,7 +35,6 @@ interface ValueCompletionInput<Position extends AttributeArgumentPosition>
   readonly fieldNames: (kind: 'fieldRef' | 'referencedFieldRef') => readonly string[];
   readonly scope: Scope;
   readonly binder: Binder;
-  readonly offersNamespaces: boolean;
 }
 
 export function provideAttributeNamedKeyCompletionItems(
@@ -177,7 +176,7 @@ function valueItems(
     case 'entityRef':
       return entityItems(input, input.scope.entries(), {
         selector: type.expected,
-        namespaces: input.offersNamespaces,
+        namespaces: true,
       });
     case 'list':
     case 'record':
