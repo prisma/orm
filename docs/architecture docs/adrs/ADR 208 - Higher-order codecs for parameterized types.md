@@ -161,7 +161,7 @@ The same `vector(1536)` participates in four code paths. Each reads a different 
 
 `pnpm emit` walks the contract IR's models. For each scalar field, it looks up the codec by `codecId` and consults `renderOutputType(typeParams)`. The result is stamped into `FieldOutputTypes[Model][Field]` in `contract.d.ts`. If the codec has no renderer, the emitter falls through to the codec's base output type.
 
-For columns that reference a named storage type via `typeRef` (rather than carrying inline `typeParams`), the SQL emitter implements an `EmissionSpi.resolveFieldTypeParams(modelName, fieldName, model, contract)` callback that walks `storage.fields → storage.tables → storage.types` and returns the named instance's `typeParams`. The framework consults this resolver before falling back to inline params, so typeRef-based columns render with the same fidelity as inline-`typeParams` columns. Mongo and other families that don't use named storage types simply don't implement the optional hook.
+A field reads its type parameters from its domain type only. A SQL column that references a named storage type via `typeRef` carries no parameters of its own, so the SQL contract builder copies the named type's `typeParams` into the field's domain type when it builds the contract. A field typed by a named type therefore renders exactly as the same type written inline, and the emitter never looks into storage for a field's parameters. The storage column types in `contract.d.ts` (`StorageColumnTypes`) read the column's own `typeParams`, or else its named type's.
 
 ### 4. Runtime materialization and dispatch
 
@@ -234,7 +234,7 @@ The legacy `defineCodec({...})` factory and the family-side `mkCodec({...})` ins
 
 ## Resolves
 
-- **Parameterized columns (no-emit and emit).** `vector(1536)`, `arktypeJson(schema)`, and other parameterized columns resolve correctly in the no-emit path AND through the emit path (typeRef columns included, via `EmissionSpi.resolveFieldTypeParams`).
+- **Parameterized columns (no-emit and emit).** `vector(1536)`, `arktypeJson(schema)`, and other parameterized columns resolve correctly in the no-emit path AND through the emit path (typeRef columns included, through the named type's parameters that the SQL contract builder copies into the field's domain type).
 - **The deferred no-emit fix from [ADR 186](ADR%20186%20-%20Codec-dispatched%20type%20rendering.md).** The `renderOutputType` it introduced moves to its long-term home on the descriptor; the no-emit path now resolves through the factory's return type without consulting it.
 
 ## References

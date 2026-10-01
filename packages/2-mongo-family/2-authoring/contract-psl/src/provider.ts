@@ -16,6 +16,8 @@ export interface MongoContractOptions {
   readonly output?: string;
   /** The target's default codec ids for an `enum` block that omits `@@type`. */
   readonly enumInferenceCodecs?: { readonly text: string; readonly int: string };
+  /** Scalar names an earlier Prisma schema used, with the codec each maps to, so a field typed with one this schema does not accept is refused with the current name. */
+  readonly formerScalarCodecIds?: Readonly<Record<string, string>>;
 }
 
 function collectScalarTypeCodecIds(namespace: AuthoringTypeNamespace): ReadonlyMap<string, string> {
@@ -43,6 +45,12 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         authoringContributions: context.authoringContributions,
         composedExtensions: context.composedExtensions,
         ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),
+        ...ifDefined(
+          'formerScalarCodecIds',
+          options?.formerScalarCodecIds === undefined
+            ? undefined
+            : new Map(Object.entries(options.formerScalarCodecIds)),
+        ),
         ...ifDefined('reportWarning', context.reportWarning),
       });
     },

@@ -1,4 +1,5 @@
 import type { CodecControlHooks, ExpandNativeTypeInput } from '@internal/family-sql/control';
+import { isIntegerIn } from '@internal/framework-components/codec';
 import { postgresAggregateDescriptors } from '@internal/target-postgres/aggregates';
 import {
   PG_BIT_CODEC_ID,
@@ -37,7 +38,11 @@ import {
   SQL_TEXT_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
 } from '@internal/target-postgres/codec-ids';
-import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
+import {
+  NUMERIC_PRECISION_RANGE,
+  NUMERIC_SCALE_RANGE,
+  postgresCodecRegistry,
+} from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { adapterError } from './adapter-errors';
 
@@ -111,19 +116,19 @@ function expandNumeric({ nativeType, typeParams }: ExpandNativeTypeInput): strin
 
   if (hasPrecision) {
     const precision = typeParams['precision'];
-    if (!isPositiveInteger(precision)) {
+    if (!isIntegerIn(precision, NUMERIC_PRECISION_RANGE)) {
       throw adapterError(
         'RUNTIME.TYPE_PARAMS_INVALID',
-        `Invalid "precision" type parameter for "${nativeType}": expected a positive integer, got ${JSON.stringify(precision)}`,
+        `Invalid "precision" type parameter for "${nativeType}": expected an integer from ${NUMERIC_PRECISION_RANGE.min} to ${NUMERIC_PRECISION_RANGE.max}, got ${JSON.stringify(precision)}`,
         { meta: { nativeType, param: 'precision', received: precision } },
       );
     }
     if (hasScale) {
       const scale = typeParams['scale'];
-      if (!isNonNegativeInteger(scale)) {
+      if (!isIntegerIn(scale, NUMERIC_SCALE_RANGE)) {
         throw adapterError(
           'RUNTIME.TYPE_PARAMS_INVALID',
-          `Invalid "scale" type parameter for "${nativeType}": expected a non-negative integer, got ${JSON.stringify(scale)}`,
+          `Invalid "scale" type parameter for "${nativeType}": expected an integer from ${NUMERIC_SCALE_RANGE.min} to ${NUMERIC_SCALE_RANGE.max}, got ${JSON.stringify(scale)}`,
           { meta: { nativeType, param: 'scale', received: scale } },
         );
       }

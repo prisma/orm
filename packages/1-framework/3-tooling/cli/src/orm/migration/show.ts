@@ -18,6 +18,7 @@ import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import type { MigrationShowResult, ShowMigration } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import { loadContractSpaceAggregateForCli } from '../../control-api/operations/contract-space-aggregate-loader';
 import { resolveMigrationRef } from '../../control-api/operations/ref-resolution';
 import {
@@ -26,7 +27,6 @@ import {
   errorFileNotFound,
   errorMigrationPackageNotFound,
   errorNoMigrations,
-  errorUnexpected,
 } from '../../utils/cli-errors';
 import { previewBlockHeader, renderPreviewStatement } from '../../utils/formatters/migrations';
 import {
@@ -251,9 +251,7 @@ export const migrationShowCommand = defineOrmCommand({
                 why: `Contract file not found at ${contractPath}`,
                 fix: `Run \`{bin} contract emit\` to generate ${relative(ctx.cwd, contractPath)}`,
               })
-            : errorUnexpected(error instanceof Error ? error.message : String(error), {
-                why: 'Failed to read contract file',
-              }),
+            : errorFromCaught(error, () => 'Failed to read contract file'),
         ),
       );
     }

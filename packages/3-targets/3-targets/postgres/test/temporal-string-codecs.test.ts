@@ -28,6 +28,12 @@ const UNREPRESENTABLE_VALUES = [
   'Thu Jan 02 03:04:05.123456 2026 PST',
 ] as const;
 
+const OTHER_DATE_STYLES = [
+  '02.01.2026',
+  '01/02/2026 03:04:05.123456 CET',
+  'Thu Jan 02 03:04:05.123456 2026 PST',
+] as const;
+
 const CODECS = [
   {
     id: PG_DATE_STRING_CODEC_ID,
@@ -93,14 +99,19 @@ describe('representation-explicit temporal string codecs', () => {
         expect(codec.id).toBe(id);
       });
 
-      it.each(UNREPRESENTABLE_VALUES)(
-        'forwards %s unchanged on the wire and when reading JSON',
-        async (value) => {
-          expect({
-            encoded: await codec.encode(value, callCtx),
-            decoded: await codec.decode(value, callCtx),
-            fromJson: codec.decodeJson(value),
-          }).toEqual({ encoded: value, decoded: value, fromJson: value });
+      it.each(UNREPRESENTABLE_VALUES)('forwards %s unchanged on the wire', async (value) => {
+        expect({
+          encoded: await codec.encode(value, callCtx),
+          decoded: await codec.decode(value, callCtx),
+        }).toEqual({ encoded: value, decoded: value });
+      });
+
+      it.each(OTHER_DATE_STYLES)(
+        'refuses to read %s from JSON, which only a session in another DateStyle writes',
+        (value) => {
+          expect(() => codec.decodeJson(value)).toThrow(
+            expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }),
+          );
         },
       );
 

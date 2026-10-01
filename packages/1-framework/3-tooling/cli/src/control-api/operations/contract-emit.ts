@@ -71,6 +71,7 @@ export async function executeContractEmit(
 ): Promise<ContractEmitResult> {
   const {
     config,
+    cwd,
     projectDir,
     outputPath,
     signal = new AbortController().signal,
@@ -111,6 +112,7 @@ export async function executeContractEmit(
         stack,
         source: contractConfig.source,
         signal,
+        cwd,
         reportWarning: (diagnostic) => {
           sourceWarnings.push(diagnostic);
         },

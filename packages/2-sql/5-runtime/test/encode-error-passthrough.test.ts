@@ -1,5 +1,6 @@
 import { runtimeError } from '@internal/framework-components/runtime';
 import type { SqlCodecCallContext } from '@internal/sql-relational-core/ast';
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { encodeParam } from '../src/codecs/encoding';
@@ -66,6 +67,34 @@ describe('encodeParam — structured-envelope passthrough', () => {
         throwingRegistry(original),
       ),
     ).rejects.toBe(original);
+  });
+
+  describe('rethrows an InternalError from a codec unchanged', () => {
+    const original = new InternalError('codec invariant broke');
+
+    it('for one value', async () => {
+      await expect(
+        encodeParam(
+          'value',
+          { codec: { codecId: 'test/passthrough@1' }, name: 'p0' },
+          0,
+          ctx,
+          throwingRegistry(original),
+        ),
+      ).rejects.toBe(original);
+    });
+
+    it('for an element of a many-typed parameter', async () => {
+      await expect(
+        encodeParam(
+          ['value'],
+          { codec: { codecId: 'test/passthrough@1', many: true }, name: 'p0' },
+          0,
+          ctx,
+          throwingRegistry(original),
+        ),
+      ).rejects.toBe(original);
+    });
   });
 
   it('wraps a foreign Error into RUNTIME.ENCODE_FAILED with the original on cause', async () => {

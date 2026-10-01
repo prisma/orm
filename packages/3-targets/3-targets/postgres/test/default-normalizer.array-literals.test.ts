@@ -101,6 +101,39 @@ describe('parsePostgresDefault array literals', () => {
   });
 
   it.each([
+    { raw: "'{[2],[]}'::jsonb[]", nativeType: 'jsonb[]', value: [[2], []] },
+    { raw: String.raw`'{"{\"a\":1}",[2]}'::json[]`, nativeType: 'json[]', value: [{ a: 1 }, [2]] },
+  ])('reads the unquoted JSON elements Postgres prints in $raw', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it('fails closed for an unquoted json element that is not JSON', () => {
+    expect(parsePostgresDefault("'{[2}'::jsonb[]", 'jsonb[]')).toEqual({
+      kind: 'function',
+      expression: "'{[2}'::jsonb[]",
+    });
+  });
+
+  it.each([
+    "'{[12345678901234567890]}'::jsonb[]",
+    "'{[1e400]}'::jsonb[]",
+    "'{12345678901234567890}'::jsonb[]",
+    `'{"[12345678901234567890]"}'::jsonb[]`,
+    "ARRAY['12345678901234567890'::jsonb]",
+  ])(
+    'keeps the raw expression when a JavaScript number would change a json number in %s',
+    (raw) => {
+      expect(parsePostgresDefault(raw, 'jsonb[]')).toEqual({ kind: 'function', expression: raw });
+    },
+  );
+
+  it('reads json numbers a JavaScript number keeps exactly', () => {
+    expect(
+      parsePostgresDefault(`'{[1.0],1.5,"[0.1]",[100000000000000000000]}'::jsonb[]`, 'jsonb[]'),
+    ).toEqual({ kind: 'literal', value: [[1], 1.5, [0.1], [1e20]] });
+  });
+
+  it.each([
     { raw: "'{1,true}'::jsonb[]", nativeType: 'jsonb[]', value: [1, true] },
     { raw: "'{-1.5,2,false}'::json[]", nativeType: 'json[]', value: [-1.5, 2, false] },
     { raw: "ARRAY['1'::jsonb, 'true'::jsonb]", nativeType: 'jsonb[]', value: [1, true] },
@@ -227,14 +260,54 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
-  it('skips array parsing when the value is not a brace-delimited literal', () => {
-    expect(parsePostgresDefault('NULL', 'text[]')).toEqual({ kind: 'literal', value: null });
+  it.each(['NULL', 'NULL::text[]'])(
+    'reads the SQL NULL default %s on an array column as null',
+    (raw) => {
+      expect(parsePostgresDefault(raw, 'text[]')).toEqual({ kind: 'literal', value: null });
+    },
+  );
+
+  it('reads an array literal written without the outer cast', () => {
+    expect(parsePostgresDefault("'{a,b}'", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
   });
+
+  it.each([
+    { raw: "'{{a,b},{c,d}}'", nativeType: 'text[]' },
+    { raw: `'{"[12345678901234567890]"}'`, nativeType: 'jsonb[]' },
+  ])(
+    'keeps the raw expression for $raw on a $nativeType column when no array reader reads it',
+    ({ raw, nativeType }) => {
+      expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'function', expression: raw });
+    },
+  );
 
   it('does not treat a brace literal as an array default without an array native type', () => {
     expect(parsePostgresDefault("'{1,2}'::integer[]")).toEqual({
       kind: 'function',
       expression: "'{1,2}'::integer[]",
     });
+  });
+});
+
+describe('parsePostgresDefault uuid array literals', () => {
+  it.each([
+    { raw: "'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11,B0EEBC999C0B4EF8BB6D6BB9BD380A11}'::uuid[]" },
+    {
+      raw: '\'{"A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11","{B0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}"}\'',
+    },
+  ])('reads each element of $raw as the text Postgres prints', ({ raw }) => {
+    expect(parsePostgresDefault(raw, 'uuid[]')).toEqual({
+      kind: 'literal',
+      value: ['a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11', 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'],
+    });
+  });
+
+  it('keeps the case of uuid-shaped elements of a text array', () => {
+    expect(
+      parsePostgresDefault("'{A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11}'::text[]", 'text[]'),
+    ).toEqual({ kind: 'literal', value: ['A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'] });
   });
 });

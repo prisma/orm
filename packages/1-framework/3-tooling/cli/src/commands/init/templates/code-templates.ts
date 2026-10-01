@@ -46,6 +46,15 @@ export function targetPackageName(
   return resolveImportSpecifier(target === 'postgres' ? '@internal/postgres' : '@internal/mongo');
 }
 
+// biome-ignore lint/plugin/no-family-vocabulary: the driver the target package declares as a required peer dependency, which init installs with it
+const DRIVER_PEERS: ReadonlyMap<TargetId, string> = new Map([['mongo', 'mongodb']]);
+
+/** Packages the target package declares as required peer dependencies; init installs them with it. */
+export function targetPeerPackages(target: TargetId): readonly string[] {
+  const driver = DRIVER_PEERS.get(target);
+  return driver === undefined ? [] : [driver];
+}
+
 /** One entrypoint of the scaffolded project's target package. */
 export function targetEntrypoint(
   target: TargetId,

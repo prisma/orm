@@ -374,3 +374,26 @@ describe('coalesceSubtreeIssues', () => {
     expect(coalesceSubtreeIssues([onlyDrift])).toEqual([onlyDrift]);
   });
 });
+
+describe('planIssues — policy', () => {
+  it('names the operation class the policy refused on each conflict', () => {
+    const dropped = issue({
+      path: ['database', 'orphan'],
+      actual: table({ name: 'orphan', columns: {} }),
+    });
+    const result = planIssues({
+      issues: [dropped],
+      strategies: [],
+      policy: { allowedOperationClasses: ['additive'] },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('expected conflicts');
+    expect(result.failure).toEqual([
+      expect.objectContaining({
+        summary: expect.stringContaining('requires class "destructive"'),
+        refusedOperationClass: 'destructive',
+      }),
+    ]);
+  });
+});

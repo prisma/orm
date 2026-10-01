@@ -19,21 +19,33 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 0
+                  }
                 }
               },
               "d20_10": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 20,
+                    "scale": 10
+                  }
                 }
               },
               "d38_30": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 38,
+                    "scale": 30
+                  }
                 }
               },
               "id": {

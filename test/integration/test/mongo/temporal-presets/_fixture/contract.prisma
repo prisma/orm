@@ -10,6 +10,19 @@ model Post {
   @@map("posts")
 }
 
+model Counter {
+  id        ObjectId             @id @map("_id")
+  key       String
+  tags      String[]
+  scores    Int32[]
+  factor    Double
+  hits      Int32
+  label     String?
+  updatedAt temporal.updatedAt()
+
+  @@map("counters")
+}
+
 model Event {
   id        ObjectId             @id @map("_id")
   kind      String

@@ -3,7 +3,7 @@ import type {
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
-import type { AuthoringDataTypeEntry } from './framework-authoring';
+import type { DataTypeAuthoringEntry } from './framework-authoring';
 
 interface SourcePosition {
   readonly offset: number;
@@ -82,13 +82,6 @@ export interface ControlMutationDefaultEntry {
 
 export type ControlMutationDefaultRegistry = ReadonlyMap<string, ControlMutationDefaultEntry>;
 
-/** A `` tag`body` `` default literal as the attribute spec accepted it: tag, canonical body, and span. */
-export interface TaggedLiteralValue {
-  readonly tag: string;
-  readonly body: string;
-  readonly span: SourceSpan;
-}
-
 export interface ControlMutationDefaults {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly generatorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
@@ -100,5 +93,5 @@ export interface ControlMutationDefaults {
  */
 export interface ControlDefaultRegistries
   extends Pick<ControlMutationDefaults, 'defaultFunctionRegistry'> {
-  readonly dataTypeEntries: Readonly<Record<string, AuthoringDataTypeEntry>>;
+  readonly dataTypeEntries: Readonly<Record<string, DataTypeAuthoringEntry>>;
 }

@@ -5,20 +5,21 @@ Codec interface and registry for MongoDB value serialization.
 ## Responsibilities
 
 - **Codec interface**: `MongoCodec<Id, TTraits, TWire, TInput>` — declares how a JS value translates to and from the BSON-shaped wire format the Mongo driver exchanges, plus the JSON-safe form stored in contract artifacts. Same four generics as the framework `Codec` base; the codec instance carries only `id` plus the four conversion methods. Trait annotations (`equality`, `order`, `boolean`, `numeric`, `textual`, `vector`) for operator gating live on the unified `CodecDescriptor` (see [ADR 208](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)).
-- **Codec factory**: `mongoCodec()` — creates frozen codec instances from a config object. Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encode` and `decode` may be authored as sync or async functions and are lifted to Promise-returning query-time methods automatically. Build-time methods (`encodeJson`, `decodeJson`) are synchronous and default to identity when omitted.
+- **Codec factory**: `mongoCodec()` — creates frozen codec instances from a config object. Both `encode` and `decode` are required so `TInput` and `TWire` are always covered by an explicit author function — the factory installs no identity fallback. `encode` and `decode` may be authored as sync or async functions and are lifted to Promise-returning query-time methods automatically. Build-time methods (`encodeJson`, `decodeJson`) are synchronous. `encodeJson` defaults to identity when the application type is a JSON type. `decodeJson` defaults to identity only when the application type is exactly `JsonValue`: a codec whose application type is narrower (a string, a number, a boolean) does not compile without a `decodeJson`, which follows the rule on [`Codec.decodeJson`](../../../1-framework/1-core/framework-components/src/shared/codec.ts). A codec whose application type is not JSON supplies both. The readers in `@internal/framework-components/codec` (`decodeJsonString`, `decodeJsonInteger`, `decodeJsonFloat` and the others) implement that rule for the common JSON forms.
 - **Codec registry**: `MongoCodecRegistry` and `newMongoCodecRegistry()` — a map-based container that stores and retrieves codecs by ID, with duplicate-ID protection
 - **Type-level helper**: `MongoCodecInput<T>` for extracting the JS application type from a codec type. Trait metadata lives on the unified `CodecDescriptor` (see [ADR 208](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md)).
 
 ## Examples
 
 ```ts
+import { decodeJsonInteger, decodeJsonString } from '@internal/framework-components/codec';
+
 // Sync authoring:
 const intCodec = mongoCodec({
   typeId: 'mongo/int@1',
   encode: (v: number) => v,
   decode: (w: number) => w,
-  encodeJson: (v: number) => v,
-  decodeJson: (j: number) => j,
+  decodeJson: (json) => decodeJsonInteger('mongo/int@1', json, { min: -(2 ** 31), max: 2 ** 31 - 1 }),
 });
 
 // Async authoring (e.g. KMS-backed encryption): same factory, same shape.
@@ -26,8 +27,7 @@ const secretCodec = mongoCodec({
   typeId: 'mongo/secret@1',
   encode: async (v: string) => encrypt(v, await getKey()),
   decode: async (w: string) => decrypt(w, await getKey()),
-  encodeJson: (v: string) => v,
-  decodeJson: (j: string) => j,
+  decodeJson: (json) => decodeJsonString('mongo/secret@1', json),
 });
 ```
 
@@ -43,8 +43,7 @@ const kmsSecretCodec = mongoCodec({
     kms.encrypt({ plaintext: v }, { signal: ctx?.signal }),
   decode: async (w: string, ctx) =>
     kms.decrypt({ ciphertext: w }, { signal: ctx?.signal }),
-  encodeJson: (v: string) => v,
-  decodeJson: (j: string) => j,
+  decodeJson: (json) => decodeJsonString('mongo/kms-secret@1', json),
 });
 ```
 

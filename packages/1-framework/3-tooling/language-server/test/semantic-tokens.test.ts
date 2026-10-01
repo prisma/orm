@@ -294,6 +294,38 @@ describe('semantic token substrate', () => {
     ).toBeUndefined();
   });
 
+  it('classifies each segment of a dotted index path as a property', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'model Post {',
+        '  title   String',
+        '  address Address',
+        '  @@index([title, address.city])',
+        '  @@index([address.city(sort: Asc)])',
+        '  @@unique([address.geo.lat(sort: Desc)])',
+        '}',
+      ].join('\n'),
+    );
+
+    const details = collectDetails(source);
+
+    expect(
+      details
+        .filter(
+          (token) => token.line >= 3 && ['address', 'city', 'geo', 'lat'].includes(token.text),
+        )
+        .map((token) => `${token.line}:${token.text}:${token.tokenType}`),
+    ).toEqual([
+      '3:address:property',
+      '3:city:property',
+      '4:address:property',
+      '4:city:property',
+      '5:address:property',
+      '5:geo:property',
+      '5:lat:property',
+    ]);
+  });
+
   it('preserves source order when block attributes precede fields', () => {
     const source = parseSemanticTokenSource(
       ['model User {', '  @@map("users")', '  id Int @id', '}'].join('\n'),

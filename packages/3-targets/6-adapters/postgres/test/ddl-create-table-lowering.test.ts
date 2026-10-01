@@ -191,6 +191,7 @@ describe('PostgresCreateTable DDL lowering', () => {
         col('a_float', 'float8', { default: lit(3.14) }),
         col('a_bool', 'boolean', { default: lit(true) }),
         col('a_nullable', 'uuid', { default: lit(null) }),
+        col('a_null_text', 'text', { default: lit(null), codecRef: { codecId: 'pg/text@1' } }),
       ],
     });
     const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
@@ -199,7 +200,130 @@ describe('PostgresCreateTable DDL lowering', () => {
     expect(lowered.sql).toContain('"a_float" float8 DEFAULT 3.14');
     expect(lowered.sql).toContain('"a_bool" boolean DEFAULT true');
     expect(lowered.sql).toContain('"a_nullable" uuid DEFAULT NULL');
+    expect(lowered.sql).toContain('"a_null_text" text DEFAULT NULL');
     expect(lowered.sql).not.toContain('::');
+  });
+
+  it('refuses a uuid default not in the form PostgreSQL writes, as a hand-edited contract may hold', async () => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lower = (value: string) =>
+      adapter.lowerToExecuteRequest(
+        new PostgresCreateTable({
+          table: 'tokens',
+          columns: [col('u', 'uuid', { default: lit(value), codecRef: { codecId: 'pg/uuid@1' } })],
+        }),
+        { contract: {} as PostgresContract },
+      );
+
+    await expect(lower('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11')).rejects.toMatchObject({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      message:
+        'Column "tokens"."u" has a default its codec pg/uuid@1 refuses: pg/uuid@1 JSON value must be a UUID as PostgreSQL writes it, in lower case and hyphenated 8-4-4-4-12',
+      meta: {
+        table: 'tokens',
+        column: 'u',
+        codecId: 'pg/uuid@1',
+        value: 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11',
+        reason: 'codec-refused-default',
+      },
+    });
+    expect((await lower('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')).sql).toContain(
+      `"u" uuid DEFAULT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'`,
+    );
+  });
+
+  it.each([
+    ['text[]', 'pg/text@1', ['a', 1], 1],
+    ['int4[]', 'pg/int4@1', [1, 'two'], 'two'],
+  ])(
+    'refuses a list default on a %s column with an element its codec %s does not read, as a hand-written migration may hold',
+    async (nativeType, codecId, value, element) => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const lowering = adapter.lowerToExecuteRequest(
+        new PostgresCreateTable({
+          table: 'tokens',
+          columns: [
+            col('l', nativeType, { default: lit(value), codecRef: { codecId, many: true } }),
+          ],
+        }),
+        { contract: {} as PostgresContract },
+      );
+      await expect(lowering).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: {
+          table: 'tokens',
+          column: 'l',
+          codecId,
+          value: element,
+          elementPosition: 2,
+          reason: 'codec-refused-default',
+        },
+      });
+    },
+  );
+
+  it('renders a list default, a NULL element and an empty list', async () => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(
+      new PostgresCreateTable({
+        table: 'lists',
+        columns: [
+          col('tags', 'text[]', {
+            default: lit(['a', null, 'b']),
+            codecRef: { codecId: 'pg/text@1', many: true },
+          }),
+          col('counts', 'int4[]', {
+            default: lit([1, 2]),
+            codecRef: { codecId: 'pg/int4@1', many: true },
+          }),
+          col('none', 'text[]', {
+            default: lit([]),
+            codecRef: { codecId: 'pg/text@1', many: true },
+          }),
+        ],
+      }),
+      { contract: {} as PostgresContract },
+    );
+    expect(lowered.sql).toBe(
+      `CREATE TABLE "lists" (\n  "tags" text[] DEFAULT ARRAY['a', NULL, 'b']::text[],\n  "counts" int4[] DEFAULT ARRAY[1, 2]::int4[],\n  "none" text[] DEFAULT '{}'\n)`,
+    );
+  });
+
+  it('writes each list element as the codec writes a single value, inside the cast to the list type', async () => {
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(
+      new PostgresCreateTable({
+        table: 'lists',
+        columns: [
+          col('bytes', 'bytea[]', {
+            default: lit(['aGVsbG8=', null]),
+            codecRef: { codecId: 'pg/bytea@1', many: true },
+          }),
+          col('docs', 'jsonb[]', {
+            default: lit(['x', { a: 1 }]),
+            codecRef: { codecId: 'pg/jsonb@1', many: true },
+          }),
+        ],
+      }),
+      { contract: {} as PostgresContract },
+    );
+    expect(lowered.sql).toBe(
+      `CREATE TABLE "lists" (\n  "bytes" bytea[] DEFAULT ARRAY['\\x68656c6c6f', NULL]::bytea[],\n  "docs" jsonb[] DEFAULT ARRAY['"x"', '{"a":1}']::jsonb[]\n)`,
+    );
+  });
+
+  it('renders a null literal default as SQL NULL on a text column and as the JSON null on a jsonb column', async () => {
+    const ast = new PostgresCreateTable({
+      table: 'defaults',
+      columns: [
+        col('note', 'text', { default: lit(null), codecRef: { codecId: 'pg/text@1' } }),
+        col('doc', 'jsonb', { default: lit(null), codecRef: { codecId: 'pg/jsonb@1' } }),
+      ],
+    });
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(ast, { contract: {} as PostgresContract });
+    expect(lowered.sql).toContain('"note" text DEFAULT NULL');
+    expect(lowered.sql).toContain(`"doc" jsonb DEFAULT 'null'::jsonb`);
   });
 
   it('omits the cast on function defaults — a `DEFAULT (expr)` already returns the column type', async () => {

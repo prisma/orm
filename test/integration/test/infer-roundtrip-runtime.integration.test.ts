@@ -211,7 +211,12 @@ withTempDir(({ createTempDir }) => {
         await client.connect();
         try {
           await driver.connect({ kind: 'pgClient', client });
-          const runtime = new PostgresRuntimeImpl({ context, adapter, driver });
+          const runtime = new PostgresRuntimeImpl({
+            context,
+            adapter,
+            driver,
+            closeRefusal: undefined,
+          });
           try {
             const records = new Collection({ runtime, context }, 'Record', {
               namespaceId: 'public',

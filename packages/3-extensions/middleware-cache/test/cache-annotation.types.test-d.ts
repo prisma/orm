@@ -1,24 +1,30 @@
 import type { AnnotationValue, OperationKind } from '@internal/framework-components/runtime';
 import { expectTypeOf, test } from 'vitest';
-import { type CachePayload, cacheAnnotation } from '../src/cache-annotation';
+import { type CacheAnnotationOptions, cacheAnnotation } from '../src/cache-annotation';
 
-test('cacheAnnotation call signature preserves the CachePayload type', () => {
-  const applied = cacheAnnotation({ ttl: 60 });
-  expectTypeOf(applied).toEqualTypeOf<AnnotationValue<CachePayload, 'read'>>();
+test('cacheAnnotation call signature preserves the CacheAnnotationOptions type', () => {
+  const applied = cacheAnnotation({ key: 'user-1' });
+  expectTypeOf(applied).toEqualTypeOf<AnnotationValue<CacheAnnotationOptions, 'read'>>();
 });
 
-test('cacheAnnotation call rejects non-CachePayload arguments', () => {
-  // @ts-expect-error - unknown field on payload
-  cacheAnnotation({ ttl: 60, nonsense: true });
+test('cacheAnnotation call rejects non-CacheAnnotationOptions arguments', () => {
+  // @ts-expect-error - unknown field on the options
+  cacheAnnotation({ key: 'k', nonsense: true });
 
   // @ts-expect-error - wrong field type
-  cacheAnnotation({ ttl: '60' });
+  cacheAnnotation({ key: 1 });
 
   // @ts-expect-error - wrong field type
-  cacheAnnotation({ skip: 'yes' });
+  cacheAnnotation({ bypass: 'yes' });
+
+  // @ts-expect-error - ttl was removed; lifetime is the store's policy
+  cacheAnnotation({ ttl: 60 });
+
+  // @ts-expect-error - skip was renamed to bypass
+  cacheAnnotation({ skip: true });
 });
 
-test('cacheAnnotation.read returns CachePayload | undefined', () => {
+test('cacheAnnotation.read returns CacheAnnotationOptions | undefined', () => {
   const plan = {
     meta: {
       target: 'postgres',
@@ -30,7 +36,7 @@ test('cacheAnnotation.read returns CachePayload | undefined', () => {
     },
   };
   const result = cacheAnnotation.read(plan);
-  expectTypeOf(result).toEqualTypeOf<CachePayload | undefined>();
+  expectTypeOf(result).toEqualTypeOf<CacheAnnotationOptions | undefined>();
 });
 
 test('cacheAnnotation declares applicableTo = "read" only', () => {
@@ -40,21 +46,12 @@ test('cacheAnnotation declares applicableTo = "read" only', () => {
   expectTypeOf(cacheAnnotation.applicableTo).toEqualTypeOf<ReadonlySet<'read'>>();
 });
 
-test('CachePayload has optional ttl, skip, and key', () => {
-  const empty: CachePayload = {};
-  void empty;
-
-  const ttlOnly: CachePayload = { ttl: 60 };
-  void ttlOnly;
-
-  const skipOnly: CachePayload = { skip: true };
-  void skipOnly;
-
-  const keyOnly: CachePayload = { key: 'k' };
-  void keyOnly;
-
-  const all: CachePayload = { ttl: 60, skip: false, key: 'k' };
-  void all;
+test('CacheAnnotationOptions has optional key, meta and bypass', () => {
+  expectTypeOf<CacheAnnotationOptions>().toEqualTypeOf<{
+    readonly key?: string;
+    readonly meta?: unknown;
+    readonly bypass?: boolean;
+  }>();
 });
 
 test('cacheAnnotation is not applicable to write operations at the type level', () => {
@@ -71,10 +68,10 @@ test('cacheAnnotation is not applicable to write operations at the type level', 
 
   // And the AnnotationValue produced by calling the handle carries 'read'
   // specifically, so ValidAnnotations<'write', [typeof applied]> resolves to [never].
-  const applied = cacheAnnotation({ ttl: 60 });
-  expectTypeOf(applied).toExtend<AnnotationValue<CachePayload, 'read'>>();
-  // The applied value is NOT assignable to AnnotationValue<CachePayload, 'write'>.
-  expectTypeOf(applied).not.toExtend<AnnotationValue<CachePayload, 'write'>>();
+  const applied = cacheAnnotation({ key: 'user-1' });
+  expectTypeOf(applied).toExtend<AnnotationValue<CacheAnnotationOptions, 'read'>>();
+  // The applied value is NOT assignable to AnnotationValue<CacheAnnotationOptions, 'write'>.
+  expectTypeOf(applied).not.toExtend<AnnotationValue<CacheAnnotationOptions, 'write'>>();
 });
 
 test('OperationKind import is not accidentally widened by cacheAnnotation', () => {

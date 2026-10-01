@@ -7,7 +7,7 @@ import {
   PRISMA7_QUICK_REFERENCE_STEP,
 } from '../commands/init/output';
 import { chooseAction, runCommandAction } from '../utils/next-actions';
-import { EMIT_COMMAND } from './init-diagnostics';
+import { DB_SIGN_COMMAND, EMIT_COMMAND } from './init-diagnostics';
 
 function fileNodes(paths: readonly string[]): readonly TreeNode[] {
   return paths.map((path) => ({ label: path, tone: 'identifier' }));
@@ -73,7 +73,7 @@ export function buildInitNextActions(inputs: {
     actions.push(runCommandAction('Emit the contract', EMIT_COMMAND));
   }
   if (inputs.prisma7 !== null) {
-    actions.push(runCommandAction(DB_SIGN_STEP, 'prisma db sign'));
+    actions.push(runCommandAction(DB_SIGN_STEP, DB_SIGN_COMMAND));
     actions.push({
       kind: 'edit-file',
       label: 'Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts',

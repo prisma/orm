@@ -8,6 +8,7 @@
 
 import type {
   Contract,
+  ContractEnum,
   ContractField,
   ExecutionMutationDefault,
   ScalarFieldType,
@@ -20,6 +21,7 @@ import { isPslIdentifier, NAME_THE_PSL_SOURCE_LOSES } from '@internal/psl-parser
 import {
   type ForeignKey,
   type Index,
+  resolvedTypeParams,
   type SqlStorage,
   StorageColumn,
 } from '@internal/sql-contract/types';
@@ -176,16 +178,16 @@ export function refuseUnwrittenExecutionDefaults(
 // Fields and columns
 
 /**
- * The value-set references the PSL source gives a field typed by a domain enum and its column: the
- * column names the enum's value set, and a field that is not a list names the enum, both in the
- * default namespace. A field with no domain enum has neither.
+ * The value-set references the PSL source gives a field typed by a domain enum, one per plane: the
+ * domain names the enum and the storage column names the enum's value set, both in the default
+ * namespace. A field with no domain enum has neither.
  */
-function derivedValueSetRefs(enumName: string | undefined, list: boolean) {
-  if (enumName === undefined) return { field: undefined, column: undefined };
+function derivedValueSetRefs(enumName: string | undefined) {
+  if (enumName === undefined) return { domain: undefined, storage: undefined };
   const common = { namespaceId: DEFAULT_NAMESPACE_ID, entityName: enumName };
   return {
-    field: list ? undefined : { plane: 'domain', entityKind: 'enum', ...common },
-    column: { plane: 'storage', entityKind: 'valueSet', ...common },
+    domain: { plane: 'domain', entityKind: 'enum', ...common },
+    storage: { plane: 'storage', entityKind: 'valueSet', ...common },
   };
 }
 
@@ -201,10 +203,13 @@ export function refuseFieldColumnMismatch(input: {
   readonly modelName: string;
   readonly singleTableVariant: boolean;
   readonly domainEnumNames: ReadonlySet<string>;
+  /** The contract's named types, whose parameters a column typed by one takes. */
+  readonly namedTypes: NonNullable<SqlStorage['types']>;
 }): void {
   const { field, column, coordinate } = input;
   const fix =
     'Make the field and its column agree, or keep authoring this contract in its current source.';
+  const fixForEarlierRelease = `If an earlier release emitted this contract, emit it again. ${fix}`;
   if (input.singleTableVariant && !column.nullable) {
     throw unsupported(
       `column ${coordinate} of single-table variant "${input.modelName}" is not nullable, which cannot be written in Prisma 8 PSL.`,
@@ -232,27 +237,31 @@ export function refuseFieldColumnMismatch(input: {
   }
   if (
     field.type.kind === 'scalar' &&
-    (field.type.codecId !== column.codecId || !sameJson(field.type.typeParams, column.typeParams))
+    (field.type.codecId !== column.codecId ||
+      !sameJson(
+        resolvedTypeParams(field.type, undefined),
+        resolvedTypeParams(column, input.namedTypes),
+      ))
   ) {
     throw unsupported(
       `field ${coordinate} has a different codec or type parameters from its column, which cannot be written in Prisma 8 PSL.`,
       "The PSL source derives a scalar field's codec and type parameters from its column.",
-      fix,
+      fixForEarlierRelease,
       { coordinate },
     );
   }
   if (field.type.kind !== 'scalar' || column.codecId === PG_ENUM_CODEC_ID) return;
   const enumName = column.valueSet?.entityName;
-  const derived = derivedValueSetRefs(enumName, field.many === true);
+  const derived = derivedValueSetRefs(enumName);
   if (
-    !sameJson(field.valueSet, derived.field) ||
-    !sameJson(column.valueSet, derived.column) ||
+    !sameJson(field.valueSet, derived.domain) ||
+    !sameJson(column.valueSet, derived.storage) ||
     (enumName !== undefined && !input.domainEnumNames.has(enumName))
   ) {
     throw unsupported(
       `field ${coordinate} and its column do not name the enum of the default namespace and its value set that the PSL source derives for a field typed by an enum, which cannot be written in Prisma 8 PSL.`,
-      'PSL types the field by the enum name, and the PSL source then points the column at the value set of that enum in the default namespace, and a field that is not a list at the enum.',
-      fix,
+      'PSL types the field by the enum name, and the PSL source then points the column at the value set of that enum in the default namespace, and the field at the enum.',
+      fixForEarlierRelease,
       { coordinate },
     );
   }
@@ -260,7 +269,7 @@ export function refuseFieldColumnMismatch(input: {
 
 /**
  * Refuses a field PSL has no form for: one whose type is a union of types, or one that is a
- * dictionary. Runs for model fields and value-object fields alike.
+ * dictionary. Runs for model fields and value-object members alike.
  */
 export function refuseUnwritableFieldShape(
   field: ContractField,
@@ -284,41 +293,46 @@ export function refuseUnwritableFieldShape(
 }
 
 /**
- * Refuses a value-object field with type parameters or a value set: the PSL source keeps only the
- * codec of a value-object field's type, so either would be lost.
+ * Refuses a value-object member with a value set other than the one the PSL source derives for a member typed by an enum: the enum of the default namespace, with the enum's codec and no type parameters.
  */
-export function refuseValueObjectFieldPartsTheSourceDrops(
-  field: ContractField & { readonly type: ScalarFieldType },
-  coordinate: string,
-): void {
-  if (Object.keys(field.type.typeParams ?? {}).length === 0 && field.valueSet === undefined) return;
+export function refuseUnderivedMemberValueSet(input: {
+  readonly field: ContractField;
+  readonly type: ScalarFieldType;
+  readonly coordinate: string;
+  readonly domainEnums: Readonly<Record<string, ContractEnum>>;
+}): void {
+  const { field, type, coordinate } = input;
+  const { valueSet } = field;
+  if (valueSet === undefined) return;
+  const domainEnum = input.domainEnums[valueSet.entityName];
+  if (
+    sameJson(valueSet, derivedValueSetRefs(valueSet.entityName).domain) &&
+    domainEnum?.codecId === type.codecId &&
+    type.typeParams === undefined
+  ) {
+    return;
+  }
   throw unsupported(
-    `value-object field ${coordinate} carries type parameters or a value set, which cannot be written in Prisma 8 PSL.`,
-    "The PSL source keeps only the codec of a value-object field's type, so its type parameters and value set would be lost.",
+    `value-object member ${coordinate} carries a value set other than an enum of the default namespace with that enum's codec and no type parameters, which cannot be written in Prisma 8 PSL.`,
+    "PSL types the member by the enum name, and the PSL source then points the member at that enum in the default namespace and gives it the enum's codec.",
     KEEP_SOURCE,
     { coordinate },
   );
 }
 
-export function refuseValueObjectFieldCodecWithoutNativeType(
-  codecId: string,
-  coordinate: string,
-): never {
+export function refuseMemberCodecWithoutNativeType(codecId: string, coordinate: string): never {
   throw unsupported(
-    `field ${coordinate} uses codec "${codecId}", which no Postgres codec in the configured stack names a native type for.`,
-    'A value-object field has no storage column, so its PSL type is derived from the native type its codec names.',
+    `value-object member ${coordinate} uses codec "${codecId}", which no Postgres codec in the configured stack names a native type for.`,
+    'A value-object member has no storage column, so its PSL type is derived from the native type its codec names.',
     KEEP_SOURCE,
     { coordinate, codecId },
   );
 }
 
-export function refuseValueObjectFieldCodecNeedingTypeParameters(
-  codecId: string,
-  coordinate: string,
-): never {
+export function refuseMemberCodecNeedingTypeParameters(codecId: string, coordinate: string): never {
   throw unsupported(
-    `field ${coordinate} uses codec "${codecId}", which names a native type only from type parameters, and the PSL source keeps none on a value-object field.`,
-    "The PSL source keeps only the codec of a value-object field's type, so a codec that needs type parameters cannot be written there.",
+    `value-object member ${coordinate} uses codec "${codecId}", which names a native type only from type parameters the member does not carry.`,
+    'A value-object member has no storage column, so its PSL type is derived from the native type its codec names for its type parameters.',
     KEEP_SOURCE,
     { coordinate, codecId },
   );

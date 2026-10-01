@@ -47,7 +47,13 @@ async function createRuntime(path: string, middleware: readonly SqlMiddleware[] 
   await driver.connect({ kind: 'path', path });
   return {
     context,
-    runtime: new SqliteRuntimeImpl({ context, adapter, driver, middleware }),
+    runtime: new SqliteRuntimeImpl({
+      context,
+      adapter,
+      driver,
+      middleware,
+      closeRefusal: undefined,
+    }),
   };
 }
 

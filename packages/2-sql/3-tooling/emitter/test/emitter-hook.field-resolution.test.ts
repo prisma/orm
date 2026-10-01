@@ -16,19 +16,6 @@ const column = {
       entityName: 'Role',
     },
   },
-  amount: {
-    nativeType: 'numeric',
-    codecId: 'pg/numeric@1',
-    nullable: false,
-    typeParams: { precision: 10, scale: 2 },
-  },
-  viaRef: { nativeType: 'numeric', codecId: 'pg/numeric@1', nullable: false, typeRef: 'money' },
-  danglingRef: {
-    nativeType: 'numeric',
-    codecId: 'pg/numeric@1',
-    nullable: false,
-    typeRef: 'missing',
-  },
 } as const;
 
 function contractWith(parts: {
@@ -65,7 +52,6 @@ function contractWith(parts: {
           },
         },
       },
-      types: { money: { codecId: 'pg/numeric@1', typeParams: { precision: 19, scale: 4 } } },
     },
   });
   const models = Object.values(contract.domain.namespaces)[0]?.models ?? {};
@@ -73,77 +59,8 @@ function contractWith(parts: {
   return { contract, model };
 }
 
-const resolveTypeParams = (fieldName: string, fixture: ReturnType<typeof contractWith>) =>
-  sqlEmission.resolveFieldTypeParams?.('User', fieldName, fixture.model, fixture.contract);
-
 const resolveValueSet = (fieldName: string, fixture: ReturnType<typeof contractWith>) =>
   sqlEmission.resolveFieldValueSet?.('User', fieldName, fixture.model, fixture.contract);
-
-describe('resolveFieldTypeParams', () => {
-  const fixture = contractWith({
-    storageFields: {
-      amount: { column: 'amount' },
-      viaRef: { column: 'viaRef' },
-      dangling: { column: 'danglingRef' },
-      missingColumn: { column: 'nope' },
-    },
-  });
-
-  it('reads the type params off the column', () => {
-    expect(resolveTypeParams('amount', fixture)).toEqual({ precision: 10, scale: 2 });
-  });
-
-  it('follows a typeRef into the shared storage type', () => {
-    expect(resolveTypeParams('viaRef', fixture)).toEqual({ precision: 19, scale: 4 });
-  });
-
-  it('resolves to nothing when the pieces are missing', () => {
-    expect({
-      unmappedField: resolveTypeParams('unmapped', fixture),
-      missingColumn: resolveTypeParams('missingColumn', fixture),
-      danglingTypeRef: resolveTypeParams('dangling', fixture),
-    }).toEqual({
-      unmappedField: undefined,
-      missingColumn: undefined,
-      danglingTypeRef: undefined,
-    });
-  });
-
-  it('resolves to nothing when the model names a table the storage does not have', () => {
-    const missingTable = contractWith({ storageFields: { amount: { column: 'amount' } } });
-    const model = {
-      ...missingTable.model,
-      storage: {
-        namespaceId: UNBOUND_NAMESPACE_ID,
-        table: 'absent',
-        fields: { amount: { column: 'amount' } },
-      },
-    } as ContractModelBase;
-
-    expect(
-      sqlEmission.resolveFieldTypeParams?.('User', 'amount', model, missingTable.contract),
-    ).toBeUndefined();
-  });
-
-  it('resolves to nothing when the model carries no storage namespace', () => {
-    const fixtureWithoutNamespace = contractWith({
-      storageFields: { amount: { column: 'amount' } },
-    });
-    const model = {
-      ...fixtureWithoutNamespace.model,
-      storage: { table: 'user', fields: { amount: { column: 'amount' } } },
-    } as ContractModelBase;
-
-    expect(
-      sqlEmission.resolveFieldTypeParams?.(
-        'User',
-        'amount',
-        model,
-        fixtureWithoutNamespace.contract,
-      ),
-    ).toBeUndefined();
-  });
-});
 
 describe('resolveFieldValueSet', () => {
   const fixture = contractWith({

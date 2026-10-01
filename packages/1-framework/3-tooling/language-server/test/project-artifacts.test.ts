@@ -164,6 +164,34 @@ describe('ProjectArtifacts snapshots', () => {
     expect(parse).toHaveBeenCalledTimes(1);
   });
 
+  it('parses with the parser options the project declares, once per stored snapshot', () => {
+    const documents = new DocumentStore();
+    const view = `${directive}view ActiveUsers {\n  id Int @unique\n}\n`;
+    documents.open({ uri: schemaUri, languageId: 'prisma', version: 1, text: view });
+    const parserOptions = { grammar: 'prisma-7' } as const;
+    const withOptions = new ProjectArtifacts({
+      inputs,
+      readSnapshot: documents.readSnapshot,
+      onInterpretationError: vi.fn(),
+      parserOptions,
+    });
+    const withoutOptions = new ProjectArtifacts({
+      inputs,
+      readSnapshot: documents.readSnapshot,
+      onInterpretationError: vi.fn(),
+    });
+
+    expect(withOptions.document(schemaUri)).toBe(withOptions.document(schemaUri));
+    expect(withOptions.diagnostics(schemaUri)).toEqual([]);
+    expect(withoutOptions.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+    ]);
+    expect(vi.mocked(parse).mock.calls).toEqual([
+      [view, schemaUri, parserOptions],
+      [view, schemaUri, {}],
+    ]);
+  });
+
   it('keeps immutable source registries across edits, membership changes and closes', () => {
     const { interpretation, spy } = interpretationDouble(() => ok({} as never));
     const { project, set, snapshots } = projectWithSnapshots(interpretation, true);

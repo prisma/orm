@@ -1,7 +1,6 @@
 import type { ContractField } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
-import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
-import { extensionCodec, testBuildContext } from './build-context';
+import { addressContract, countryValueSet, withCountryMembers } from './member-support';
 import {
   deserialize,
   deserializeEdited,
@@ -262,16 +261,6 @@ describe('row-level security', () => {
 });
 
 describe('value objects', () => {
-  function addressContract(field: ContractField) {
-    return deserialize(
-      widgetContract({
-        columns: { address: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
-        fields: { address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } } },
-        domain: { valueObjects: { Address: { fields: { street: field } } } },
-      }),
-    );
-  }
-
   function withAddress(field: ContractField) {
     return printing(addressContract(field));
   }
@@ -287,7 +276,7 @@ describe('value objects', () => {
     ).toThrow(refusal({ namespaceId: 'auth', names: ['Address'] }));
   });
 
-  it('refuses a value-object field whose type is a union', () => {
+  it('refuses a value-object member whose type is a union', () => {
     expect(
       withAddress({
         nullable: false,
@@ -296,63 +285,44 @@ describe('value objects', () => {
     ).toThrow(refusal({ coordinate: '"public".Address.street', kind: 'union' }));
   });
 
-  it('refuses a value-object field that is a dictionary', () => {
+  it('refuses a value-object member that is a dictionary', () => {
     expect(withAddress({ ...TEXT_FIELD, dict: true })).toThrow(
       refusal({ coordinate: '"public".Address.street' }),
     );
   });
 
-  it('refuses a value-object field whose codec no Postgres codec in the stack names a native type for', () => {
+  it('refuses a value-object member whose codec no Postgres codec in the stack names a native type for', () => {
     expect(
       withAddress({ nullable: false, type: { kind: 'scalar', codecId: 'pgvector/vector@1' } }),
     ).toThrow(refusal({ coordinate: '"public".Address.street', codecId: 'pgvector/vector@1' }));
   });
 
-  it('refuses a value-object field whose codec names a native type only from type parameters', () => {
+  it('refuses a value-object member whose codec names a native type only from type parameters', () => {
     expect(
       withAddress({ nullable: false, type: { kind: 'scalar', codecId: 'pg/enum@1' } }),
-    ).toThrow(refusal({ coordinate: '"public".Address.street', codecId: 'pg/enum@1' }));
-  });
-
-  it('writes a value-object field typed by a codec only the stack knows, as the type constructor that produces it', () => {
-    const context = testBuildContext({
-      codecs: [extensionCodec],
-      types: {
-        ext: {
-          Citext: {
-            kind: 'typeConstructor',
-            output: { codecId: extensionCodec.codecId, nativeType: 'citext' },
-          },
-        },
-      },
-    });
-    const document = buildPostgresPslContract(
-      addressContract({
-        nullable: false,
-        type: { kind: 'scalar', codecId: extensionCodec.codecId },
+    ).toThrow(
+      expect.objectContaining({
+        message: expect.stringContaining('type parameters the member does not carry'),
+        meta: { coordinate: '"public".Address.street', codecId: 'pg/enum@1' },
       }),
-      context,
     );
-
-    expect(
-      document.namespaces.flatMap((namespace) =>
-        namespace.compositeTypes.flatMap((compositeType) =>
-          compositeType.fields.map((field) => field.typeName),
-        ),
-      ),
-    ).toEqual(['ext.Citext']);
   });
 
-  it('refuses a value-object field whose type carries type parameters, which the PSL source drops', () => {
+  it('reports the codec error, not a missing-parameters refusal, for a value-object member whose type parameters its codec rejects', () => {
     expect(
       withAddress({
         nullable: false,
-        type: { kind: 'scalar', codecId: 'sql/varchar@1', typeParams: { length: 20 } },
+        type: { kind: 'scalar', codecId: 'pg/text@1', typeParams: { length: 2 } },
       }),
-    ).toThrow(refusal({ coordinate: '"public".Address.street' }));
+    ).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.TYPE_PARAMS_INVALID',
+        details: { codecId: 'pg/text@1', typeParams: { length: 2 } },
+      }),
+    );
   });
 
-  it('refuses a value-object field that names a value set, which the PSL source drops', () => {
+  it('refuses a value-object member whose value set is not a domain enum of the default namespace', () => {
     expect(
       withAddress({
         ...TEXT_FIELD,
@@ -364,5 +334,43 @@ describe('value objects', () => {
         },
       }),
     ).toThrow(refusal({ coordinate: '"public".Address.street' }));
+  });
+
+  it('refuses a value-object member whose value set names an enum the domain does not declare', () => {
+    expect(
+      printing(
+        withCountryMembers({
+          country: { ...TEXT_FIELD, valueSet: { ...countryValueSet, entityName: 'Missing' } },
+        }),
+      ),
+    ).toThrow(refusal({ coordinate: '"public".Address.country' }));
+  });
+
+  it('refuses a value-object member typed by a domain enum that also has type parameters', () => {
+    expect(
+      printing(
+        withCountryMembers({
+          country: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'pg/text@1', typeParams: { length: 2 } },
+            valueSet: countryValueSet,
+          },
+        }),
+      ),
+    ).toThrow(refusal({ coordinate: '"public".Address.country' }));
+  });
+
+  it('refuses a value-object member that names a domain enum with a codec other than the enum codec', () => {
+    expect(
+      printing(
+        withCountryMembers({
+          country: {
+            nullable: false,
+            type: { kind: 'scalar', codecId: 'pg/int4@1' },
+            valueSet: countryValueSet,
+          },
+        }),
+      ),
+    ).toThrow(refusal({ coordinate: '"public".Address.country' }));
   });
 });

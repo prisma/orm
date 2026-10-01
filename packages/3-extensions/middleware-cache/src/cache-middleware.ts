@@ -4,158 +4,106 @@ import type {
   ExecutionPlan,
   RuntimeMiddlewareContext,
 } from '@internal/framework-components/runtime';
-import { type CachePayload, cacheAnnotation } from './cache-annotation';
-import { type CacheStore, createInMemoryCacheStore } from './cache-store';
+import { cacheAnnotation } from './cache-annotation';
+import {
+  type CachedRows,
+  type CacheEntry,
+  type CacheStore,
+  createInMemoryCacheStore,
+} from './cache-store';
 
 /**
  * Options accepted by `createCacheMiddleware`.
  *
- * - `store` — pluggable cache backend. Defaults to an in-process LRU
- *   produced by `createInMemoryCacheStore`. Users supply Redis,
- *   Memcached, or any other backend by implementing the `CacheStore`
- *   interface.
- * - `maxEntries` — only consulted when `store` is omitted. Sets the
- *   `maxEntries` cap on the default in-memory store. Defaults to 1000.
- * - `clock` — injectable time source for `storedAt` stamping on
- *   committed entries. Defaults to `Date.now`. Tests inject a controlled
- *   clock to make commit-time observable. Note: TTL math lives inside
- *   the store, not the middleware — supplying a clock here only affects
- *   the `storedAt` field on committed `CachedEntry` values.
+ * - `store` — the cache backend. Defaults to `createInMemoryCacheStore()`: 1000 values, 60 s.
+ * - `deriveKey` — computes the key of a cached read whose annotation has no `key`. Defaults to
+ *   `deriveKeyFromContentHash`. It runs on every such read, hit or miss, and an error from it
+ *   fails the read. It must return different keys whenever the rows can differ; build on
+ *   `deriveKeyFromContentHash` to keep the statement, parameters and storage hash.
+ *
+ * `TMeta` is the store's meta type; `createCacheMiddleware` infers it from `store`. The store holds
+ * `CachedRows`.
  */
-export interface CacheMiddlewareOptions {
-  readonly store?: CacheStore;
-  readonly maxEntries?: number;
-  readonly clock?: () => number;
+export interface CacheMiddlewareOptions<TMeta = unknown> {
+  readonly store?: CacheStore<TMeta, CachedRows>;
+  readonly deriveKey?: (
+    exec: ExecutionPlan,
+    ctx: RuntimeMiddlewareContext,
+  ) => string | Promise<string>;
 }
 
 /**
- * Per-execution buffer correlated with the post-lowering `exec` object
- * via a private `WeakMap`. Each in-flight cache miss owns one of these.
+ * The cache middleware.
  *
- * The plan-identity invariant required by this `WeakMap` correlation is
- * documented in the runtime subsystem doc and pinned by a regression
- * test: family runtimes produce a fresh, frozen `exec` per call (SQL
- * `prepareExecution` constructs `Object.freeze({...lowered, ...})` on each
- * invocation; Mongo lowers fresh per call). If a future plan-
- * memoization change ever recycles `exec` objects across calls, this
- * correlation would silently leak rows between concurrent executions
- * — which is exactly what the regression test catches.
+ * `invalidate` removes entries through one `store.unset({ keys, meta })` call. It does nothing
+ * when `keys` is empty or absent and `meta` is absent. The store moves the version of every key it
+ * removes, so a read that missed before the call and finishes after it does not store its rows:
+ * its conditional `store.set` returns `false`. This holds across processes that share a store. An
+ * error from the store propagates.
+ *
+ * `TMeta` is the store's meta type, which `invalidate`'s `meta` must have.
  */
-interface PendingMiss {
-  readonly key: string;
-  readonly ttlMs: number;
-  readonly buffer: Record<string, unknown>[];
-}
+export type CacheMiddleware<TMeta = unknown> = CrossFamilyMiddleware & {
+  readonly invalidate: (target: {
+    readonly keys?: readonly string[];
+    readonly meta?: TMeta;
+  }) => Promise<void>;
+};
 
 /**
- * Default `maxEntries` for the built-in in-memory store. Bounded so a
- * runaway producer cannot exhaust process memory; users who need
- * different bounds supply a custom `CacheStore`.
+ * The default `deriveKey`: the family runtime's content hash of the plan, which covers the
+ * statement, its parameters and the storage hash.
  */
-const DEFAULT_MAX_ENTRIES = 1000;
-
-/**
- * Reads the cache payload from the plan, if present and branded.
- *
- * Returns `undefined` when:
- * - the plan has no `meta.annotations`, or
- * - the `cache` namespace key is absent, or
- * - the value under `cache` is not a branded `AnnotationValue` (the
- *   `cacheAnnotation.read` defensive check covers this).
- */
-function readCachePayload(plan: ExecutionPlan): CachePayload | undefined {
-  return cacheAnnotation.read(plan);
-}
-
-/**
- * Computes the cache key for an execution.
- *
- * Two-tier resolution:
- *
- * 1. Per-query override: `cacheAnnotation({ key })` — the supplied
- *    string is used verbatim. Not rehashed; the user is responsible for
- *    keeping the string bounded and free of sensitive data.
- * 2. Default: `ctx.contentHash(exec)` — the family runtime owns this and
- *    returns an opaque, bounded digest (SHA-512 in the SQL and Mongo
- *    runtimes today).
- *
- * The returned string is consumed directly as the `Map<string, …>` key
- * by the underlying `CacheStore`; the cache middleware does not perform
- * any further transformation.
- */
-async function resolveCacheKey(
-  payload: CachePayload,
+export function deriveKeyFromContentHash(
   exec: ExecutionPlan,
   ctx: RuntimeMiddlewareContext,
 ): Promise<string> {
-  if (payload.key !== undefined) {
-    return payload.key;
-  }
   return ctx.contentHash(exec);
 }
 
 /**
- * Creates a family-agnostic caching middleware.
+ * A cache miss in flight, keyed on the post-lowering `exec` object in a `WeakMap`. Family runtimes
+ * build a fresh `exec` per call; the runtime subsystem doc records that invariant. `entry` is the
+ * empty entry `store.get` returned; `store.set(entry, rows)` is conditional on its version.
+ */
+interface PendingMiss {
+  readonly entry: CacheEntry<unknown, CachedRows>;
+  readonly buffer: Record<string, unknown>[];
+}
+
+/**
+ * Creates a read-through cache middleware that works with every family runtime.
  *
- * The middleware uses three hooks:
+ * It caches a read when the plan carries `cacheAnnotation`, the annotation does not set
+ * `bypass`, and the read runs in runtime scope (not inside a connection or transaction). The key
+ * is the annotation's `key`, else `deriveKey(exec, ctx)`.
  *
- * - `interceptQuery` — on each execution, checks the cache. On a hit, returns
- *   the cached raw rows; the runtime skips `runDriver` and `onRow`
- *   (`beforeQuery` is not affected — it has already run for every
- *   middleware before any `interceptQuery` is consulted) and yields the
- *   cached rows to the consumer (which, in the SQL runtime, sees them
- *   after the standard `decodeRow` pass — i.e. the cache stores
- *   wire-format values). On a miss, records a pending buffer keyed on
- *   the `exec` object identity and returns `undefined` (passthrough).
- * - `onRow` — on the miss path, appends each row yielded by the driver
- *   to the pending buffer.
- * - `afterQuery` — on the miss path, commits the buffer to the store
- *   if and only if `result.completed === true && result.source === 'driver'`.
- *   Failed executions and middleware-served executions never populate
- *   the cache. The pending buffer is cleared in all branches so a stale
- *   `WeakMap` entry cannot leak between executions sharing an `exec`.
- *
- * The middleware bypasses the cache entirely when:
- * - the plan has no `cache` annotation, or
- * - the annotation has `skip: true`, or
- * - the annotation has no `ttl`, or
- * - `ctx.scope !== 'runtime'` (connection / transaction scopes opt out).
- *
- * Returns a cross-family `RuntimeMiddleware` (no `familyId` /
- * `targetId`). The package depends only on
- * `@internal/framework-components/runtime`; cache keys come from
- * `ctx.contentHash(exec)`, populated by the family runtime, so SQL and
- * Mongo runtimes both work out of the box.
+ * - `interceptQuery` — on a hit, returns the stored rows and the driver does not run. On a miss,
+ *   starts collecting rows.
+ * - `onRow` — collects each row of a miss.
+ * - `afterQuery` — when the driver completed the read, calls `store.set(entry, rows)` with the
+ *   entry `store.get` returned, which stores only if the key's version has not moved. If an
+ *   `unset` moved it meanwhile, `set` returns `false` and the middleware logs
+ *   `middleware.cache.store-skipped`.
  *
  * @example
  * ```typescript
- * import { createCacheMiddleware, cacheAnnotation } from '@internal/middleware-cache';
+ * const cache = createCacheMiddleware();
+ * const db = postgres<Contract>({ contractJson, url, middleware: [cache] });
  *
- * const db = postgres({
- *   contractJson,
- *   url: process.env['DATABASE_URL']!,
- *   middleware: [createCacheMiddleware({ maxEntries: 1000 })],
- * });
- *
- * const user = await db.User.first(
- *   { id },
- *   (meta) => meta.annotate(cacheAnnotation({ ttl: 60_000 })),
+ * const user = await db.orm.public.User.first(
+ *   { id: 1 },
+ *   (meta) => meta.annotate(cacheAnnotation({ key: 'user-1' })),
  * );
+ * await db.orm.public.User.where({ id: 1 }).update({ name: 'Alicia' });
+ * await cache.invalidate({ keys: ['user-1'] });
  * ```
  */
-export function createCacheMiddleware(options?: CacheMiddlewareOptions): CrossFamilyMiddleware {
-  const store =
-    options?.store ??
-    createInMemoryCacheStore({
-      maxEntries: options?.maxEntries ?? DEFAULT_MAX_ENTRIES,
-    });
-  const clock = options?.clock ?? Date.now;
-
-  // Per-execution scratch space, keyed on the post-lowering `exec`
-  // object identity. WeakMap keeps cleanup automatic: if an execution is
-  // dropped without `afterQuery` firing (e.g. an early throw before
-  // the middleware lifecycle starts), the entry is GC'd alongside the exec
-  // object.
+export function createCacheMiddleware<TMeta = unknown>(
+  options?: CacheMiddlewareOptions<TMeta>,
+): CacheMiddleware<TMeta> {
+  const store: CacheStore<unknown, CachedRows> = options?.store ?? createInMemoryCacheStore();
+  const deriveKey = options?.deriveKey ?? deriveKeyFromContentHash;
   const pending = new WeakMap<object, PendingMiss>();
 
   async function interceptQuery(
@@ -165,31 +113,19 @@ export function createCacheMiddleware(options?: CacheMiddlewareOptions): CrossFa
     if (ctx.scope !== 'runtime') {
       return undefined;
     }
-
-    const payload = readCachePayload(exec);
-    if (payload === undefined) {
-      return undefined;
-    }
-    if (payload.skip === true) {
-      return undefined;
-    }
-    if (payload.ttl === undefined) {
+    const annotation = cacheAnnotation.read(exec);
+    if (annotation === undefined || annotation.bypass === true) {
       return undefined;
     }
 
-    const key = await resolveCacheKey(payload, exec, ctx);
-    const hit = await store.get(key);
-    if (hit !== undefined) {
+    const key = annotation.key ?? (await deriveKey(exec, ctx));
+    const entry = await store.get({ key, meta: annotation.meta });
+    if (!entry.data.empty) {
       ctx.log.debug?.({ event: 'middleware.cache.hit', middleware: 'cache', key });
-      // Hit path leaves no WeakMap entry — afterQuery's lookup will
-      // return undefined and short-circuit.
-      return { rows: hit.rows };
+      return { rows: entry.data.value };
     }
 
-    // Miss: record the pending buffer so onRow / afterExecute can
-    // commit on success. The TTL is captured here so a later mutation
-    // of the annotation (defensive) cannot change the commit window.
-    pending.set(exec, { key, ttlMs: payload.ttl, buffer: [] });
+    pending.set(exec, { entry, buffer: [] });
     ctx.log.debug?.({ event: 'middleware.cache.miss', middleware: 'cache', key });
     return undefined;
   }
@@ -199,11 +135,7 @@ export function createCacheMiddleware(options?: CacheMiddlewareOptions): CrossFa
     exec: ExecutionPlan,
     _ctx: RuntimeMiddlewareContext,
   ): Promise<void> {
-    const slot = pending.get(exec);
-    if (slot === undefined) {
-      return;
-    }
-    slot.buffer.push(row);
+    pending.get(exec)?.buffer.push(row);
   }
 
   async function afterQuery(
@@ -211,26 +143,32 @@ export function createCacheMiddleware(options?: CacheMiddlewareOptions): CrossFa
     result: AfterQueryResult,
     ctx: RuntimeMiddlewareContext,
   ): Promise<void> {
-    const slot = pending.get(exec);
-    if (slot === undefined) {
+    const miss = pending.get(exec);
+    if (miss === undefined) {
       return;
     }
-    // Always release the WeakMap entry — the exec is single-use and
-    // any state we leave behind is dead weight on the GC.
     pending.delete(exec);
-
     if (!result.completed || result.source !== 'driver') {
       return;
     }
-
-    await store.set(slot.key, { rows: slot.buffer, storedAt: clock() }, slot.ttlMs);
-    ctx.log.debug?.({ event: 'middleware.cache.store', middleware: 'cache', key: slot.key });
+    const stored = await store.set(miss.entry, miss.buffer);
+    ctx.log.debug?.({
+      event: stored ? 'middleware.cache.store' : 'middleware.cache.store-skipped',
+      middleware: 'cache',
+      key: miss.entry.key,
+    });
   }
 
-  return {
-    name: 'cache',
-    interceptQuery,
-    onRow,
-    afterQuery,
-  };
+  async function invalidate(target: {
+    readonly keys?: readonly string[];
+    readonly meta?: TMeta;
+  }): Promise<void> {
+    const keys = target.keys !== undefined && target.keys.length > 0 ? target.keys : undefined;
+    if (keys === undefined && target.meta === undefined) {
+      return;
+    }
+    await store.unset({ keys, meta: target.meta });
+  }
+
+  return { name: 'cache', interceptQuery, onRow, afterQuery, invalidate };
 }

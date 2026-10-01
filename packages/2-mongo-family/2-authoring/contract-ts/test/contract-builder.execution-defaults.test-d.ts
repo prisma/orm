@@ -1,4 +1,4 @@
-import type { ExecutionMutationDefaultPhases } from '@internal/contract/types';
+import type { ContractFieldType, ExecutionMutationDefaultPhases } from '@internal/contract/types';
 import {
   temporalAuthoringPresets,
   temporalCodecPreset,
@@ -69,6 +69,48 @@ test('preset options accept only the values the preset lists', () => {
     field.temporal.timestamp('later');
     // @ts-expect-error createdAt takes no arguments
     field.temporal.createdAt('now');
+    return { models: {} };
+  });
+});
+
+test('a field a preset fills cannot be made optional or a list', () => {
+  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field }) => {
+    // @ts-expect-error temporal.createdAt() fills the field, so it cannot be optional
+    field.temporal.createdAt().optional();
+    // @ts-expect-error temporal.updatedAt() fills the field, so it cannot be a list
+    field.temporal.updatedAt().many();
+    // @ts-expect-error a phase fills the field, so it cannot be optional
+    field.temporal.timestamp(undefined, 'now').optional();
+    field.temporal.timestamp().optional();
+    field.string().optional().many();
+    return { models: {} };
+  });
+});
+
+test('the type error for optional() or many() on a preset field says why', () => {
+  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field }) => {
+    const createdAt = field.temporal.createdAt();
+    expectTypeOf<
+      ThisParameterType<typeof createdAt.optional>
+    >().toEqualTypeOf<'A preset fills this field on write, so it cannot be optional'>();
+    expectTypeOf<
+      ThisParameterType<typeof createdAt.many>
+    >().toEqualTypeOf<'A preset fills this field on write, so it cannot be a list'>();
+    return { models: {} };
+  });
+});
+
+test('a preset field still satisfies the widest FieldBuilder constraint', () => {
+  type WideFieldBuilder = FieldBuilder<
+    ContractFieldType,
+    boolean,
+    boolean,
+    EnumTypeHandle | undefined,
+    ExecutionMutationDefaultPhases | undefined
+  >;
+  defineContract({ family: mongoFamilyPack, target: mongoTargetPack }, ({ field }) => {
+    expectTypeOf(field.temporal.createdAt()).toExtend<WideFieldBuilder>();
+    expectTypeOf(field.string().optional()).toExtend<WideFieldBuilder>();
     return { models: {} };
   });
 });

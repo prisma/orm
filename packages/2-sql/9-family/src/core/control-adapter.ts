@@ -3,6 +3,7 @@ import type { ControlAdapterInstance, ControlStack } from '@internal/framework-c
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
+  DdlColumn,
   DdlNode,
   LoweredStatement,
   LowererContext,
@@ -33,6 +34,10 @@ export interface ExecuteRequestLowerer extends Lowerer {
     ast: AnyQueryAst | DdlNode,
     context?: LowererContext<unknown>,
   ): Promise<SqlExecuteRequest>;
+  /**
+   * The `DEFAULT …` clause DDL writes for `column`'s default, or `''` when it has none or writes it another way, as an autoincrement column does. A literal default, and each element of a list default, is read by the column's codec first, so a value the codec refuses is `CONTRACT.DEFAULT_INVALID` naming `table` and the column. Every DDL statement that writes a column default writes this clause.
+   */
+  renderColumnDefault(column: DdlColumn, table: string): Promise<string>;
 }
 
 /**

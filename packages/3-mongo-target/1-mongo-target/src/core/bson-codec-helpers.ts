@@ -1,12 +1,16 @@
+import { isDeepStrictEqual } from 'node:util';
 import type { JsonValue } from '@internal/contract/types';
+import { INT32_RANGE, refuseJsonValue } from '@internal/framework-components/codec';
 import type { BsonInputValue, BsonValue } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
-import { Binary, Code, type Document, Double, EJSON, MinKey } from 'bson';
+import { Binary, Code, type Document, Double, EJSON } from 'bson';
 import {
+  BSON_MAJOR,
   bsonClassTag,
   bsonTypeTag,
   child,
   constructorName,
+  createdByBsonMajor,
   dbRefEntries,
   isPlainArray,
   isPlainObject,
@@ -30,13 +34,15 @@ const BSON_VALUE_TAGS: ReadonlySet<string> = new Set([
   'BSONSymbol',
 ]);
 
-const BSON_VERSION = Symbol.for('@@mdb.bson.version');
-const BSON_MAJOR: unknown = Reflect.get(new MinKey(), BSON_VERSION);
+const ENCODE_FIX_BY_RECEIVED: Readonly<Record<string, string>> = {
+  DBRef: 'Write it as a { $ref, $id } document instead.',
+};
 
 function encodeRefused(received: string, path: string): never {
+  const fix = ENCODE_FIX_BY_RECEIVED[received];
   throw mongoTargetError(
     'RUNTIME.ENCODE_FAILED',
-    `${MONGO_BSON_CODEC_ID} value must be a BSON value; received ${received} at ${where(path)}`,
+    `${MONGO_BSON_CODEC_ID} value must be a BSON value; received ${received} at ${where(path)}${fix === undefined ? '' : `. ${fix}`}`,
     { meta: { codecId: MONGO_BSON_CODEC_ID, received, valuePath: path } },
   );
 }
@@ -57,7 +63,7 @@ function assertBsonValue(value: unknown, path: string, ancestors: Set<object>): 
   const tag = bsonTypeTag(value);
   if (tag !== undefined) {
     if (!BSON_VALUE_TAGS.has(tag)) encodeRefused(tag, path);
-    if (Reflect.get(value, BSON_VERSION) !== BSON_MAJOR) {
+    if (!createdByBsonMajor(value)) {
       encodeRefused(`${tag} not created by bson ${String(BSON_MAJOR)}`, path);
     }
     return;
@@ -141,12 +147,9 @@ export function decodeBsonValue(wire: unknown): BsonValue {
   >(decodeValue(wire));
 }
 
-const INT32_MIN = -(2 ** 31);
-const INT32_MAX = 2 ** 31 - 1;
-
 function asDriverWrites(value: unknown): unknown {
   if (typeof value === 'number') {
-    return Number.isInteger(value) && (value < INT32_MIN || value > INT32_MAX)
+    return Number.isInteger(value) && (value < INT32_RANGE.min || value > INT32_RANGE.max)
       ? new Double(value)
       : value;
   }
@@ -177,8 +180,24 @@ export function encodeBsonJson(value: BsonInputValue): JsonValue {
   );
 }
 
+/**
+ * Reads the canonical Extended JSON `encodeBsonJson` writes. The `bson` reader also takes forms that are not canonical, some of them silently wrong (`{ "$numberInt": "abc" }` reads as 0), so a value that does not write back to the same JSON is refused.
+ */
 export function decodeBsonJson(json: JsonValue): BsonInputValue {
-  return EJSON.deserialize(blindCast<Document, 'canonical Extended JSON is a document'>(json), {
-    relaxed: false,
-  });
+  let value: BsonInputValue;
+  try {
+    value = EJSON.deserialize(
+      blindCast<
+        Document,
+        'EJSON.deserialize reads any JSON value; its parameter type names only a document'
+      >(json),
+      { relaxed: false },
+    );
+  } catch {
+    return refuseJsonValue(MONGO_BSON_CODEC_ID, 'canonical Extended JSON', json);
+  }
+  if (!isDeepStrictEqual(EJSON.serialize(value, { relaxed: false }), json)) {
+    return refuseJsonValue(MONGO_BSON_CODEC_ID, 'canonical Extended JSON', json);
+  }
+  return value;
 }

@@ -32,7 +32,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
-import { InternalError } from '@internal/utils/internal-error';
+import { InternalError, isInternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import {
@@ -793,6 +793,7 @@ function decodeIncludedJsonValue(
 }
 
 function wrapIncludedDecodeFailure(error: unknown, ref: DecodedValueRef, codecId: string): never {
+  if (isInternalError(error)) throw error;
   const message = error instanceof Error ? error.message : String(error);
   const wrapped = runtimeError(
     'RUNTIME.DECODE_FAILED',

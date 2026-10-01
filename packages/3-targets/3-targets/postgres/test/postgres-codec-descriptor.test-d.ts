@@ -161,6 +161,37 @@ test('postgresCodec requires explicit native and scalar projection behavior', ()
   postgresCodec(genericDescriptor, { nativeType: () => 'vector' });
 });
 
+class TextCodec extends CodecImpl<'demo/text@1', readonly ['equality'], string, string> {
+  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+    return value;
+  }
+  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return wire;
+  }
+  encodeJson(value: string): JsonValue {
+    return value;
+  }
+  decodeJson(json: JsonValue): string {
+    return String(json);
+  }
+}
+
+test('a factory option builds a codec of the family codec it adapts', () => {
+  postgresCodec(genericDescriptor, {
+    dataType: dataTypeId('demo/fixture'),
+    nativeType: () => 'vector',
+    jsonProjection: (expression) => expression,
+    factory: (descriptor, params) => () => new VectorCodec(descriptor, params.length),
+  });
+  postgresCodec(genericDescriptor, {
+    dataType: dataTypeId('demo/fixture'),
+    nativeType: () => 'vector',
+    jsonProjection: (expression) => expression,
+    // @ts-expect-error -- the adapted descriptor's factory promises the family codec, so the option cannot build another
+    factory: (descriptor) => () => new TextCodec(descriptor),
+  });
+});
+
 // @ts-expect-error -- direct descriptors must implement scalar JSON projection
 class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
   override readonly dataType = dataTypeId('demo/fixture');

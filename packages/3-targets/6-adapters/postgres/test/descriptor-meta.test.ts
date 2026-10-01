@@ -1,5 +1,5 @@
+import { postgresNativeAuthoringTypes } from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
-import { postgresNativeAuthoringTypes } from '../src/core/control-mutation-defaults';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import postgresRuntimeAdapterDescriptor from '../src/exports/runtime';
 
@@ -181,6 +181,19 @@ describe('expandNativeType hooks via descriptor-meta', () => {
       expect(() =>
         expand({ nativeType: 'numeric', typeParams: { precision: 10, scale: 1.5 } }),
       ).toThrow('Invalid "scale" type parameter');
+    });
+
+    it('takes the precision and scale PostgreSQL takes at their limits', () => {
+      expect([
+        expand({ nativeType: 'numeric', typeParams: { precision: 1000, scale: -1000 } }),
+        expand({ nativeType: 'numeric', typeParams: { precision: 1, scale: 1000 } }),
+      ]).toEqual(['numeric(1000,-1000)', 'numeric(1,1000)']);
+    });
+
+    it('refuses a precision above the 1000 PostgreSQL takes', () => {
+      expect(() => expand({ nativeType: 'numeric', typeParams: { precision: 1001 } })).toThrow(
+        'Invalid "precision" type parameter for "numeric": expected an integer from 1 to 1000, got 1001',
+      );
     });
   });
 

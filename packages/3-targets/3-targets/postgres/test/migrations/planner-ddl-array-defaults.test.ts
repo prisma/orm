@@ -1,7 +1,6 @@
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import {
-  buildColumnDefaultSql,
   buildColumnTypeSql,
   renderDefaultLiteral,
 } from '../../src/core/migrations/planner-ddl-builders';
@@ -74,12 +73,9 @@ describe('renderDefaultLiteral array columns', () => {
       } as StorageColumn;
       const columnTypeSql = buildColumnTypeSql(enumList, new Map(), {}, false);
 
-      expect(
-        buildColumnDefaultSql(
-          { kind: 'literal', value: ['asc'] },
-          { many: true, nativeType: columnTypeSql },
-        ),
-      ).toBe(`DEFAULT ARRAY['asc']::${cast}`);
+      expect(renderDefaultLiteral(['asc'], { many: true, nativeType: columnTypeSql })).toBe(
+        `ARRAY['asc']::${cast}`,
+      );
     },
   );
 

@@ -159,24 +159,49 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — DDL literal defaults', 
 });
 
 describe('SqliteControlAdapter.lowerToExecuteRequest — guards', () => {
-  it('throws when a numeric literal default is non-finite (NaN / ±Infinity)', async () => {
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      const ast = new SqliteCreateTable({
-        table: 'defaults',
-        columns: [col('x', 'INTEGER', { default: lit(value) })],
-      });
-      await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
-        /non-finite number wire value/,
-      );
-    }
+  it('refuses a NaN literal default, which SQLite stores as NULL, naming the column', async () => {
+    const ast = new SqliteCreateTable({
+      table: 'defaults',
+      columns: [col('x', 'REAL', { default: lit(Number.NaN) })],
+    });
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: 'Column "defaults"."x" has a NaN default, which SQLite stores as NULL',
+        meta: { table: 'defaults', column: 'x', value: 'NaN', reason: 'nan-default' },
+      }),
+    );
   });
 
-  it('throws when a Date literal default is invalid', async () => {
+  it('renders an infinite numeric literal default as the number SQLite reads as an infinity', async () => {
+    const lowered = await Promise.all(
+      [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY].map((value) =>
+        adapter.lowerToExecuteRequest(
+          new SqliteCreateTable({
+            table: 'defaults',
+            columns: [col('x', 'REAL', { default: lit(value) })],
+          }),
+          ctx,
+        ),
+      ),
+    );
+    expect(lowered.map(({ sql }) => sql)).toEqual(
+      ['9e999', '-9e999'].map((text) => `CREATE TABLE "defaults" (\n  "x" REAL DEFAULT ${text}\n)`),
+    );
+  });
+
+  it('refuses an invalid Date literal default, naming the column', async () => {
     const ast = new SqliteCreateTable({
       table: 'defaults',
       columns: [col('x', 'TEXT', { default: lit(new Date('not-a-date')) })],
     });
-    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(/invalid Date/);
+    await expect(adapter.lowerToExecuteRequest(ast, ctx)).rejects.toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: 'Column "defaults"."x" has an invalid Date default',
+        meta: { table: 'defaults', column: 'x', reason: 'invalid-date-default' },
+      }),
+    );
   });
 });
 
@@ -195,6 +220,17 @@ describe('SqliteControlAdapter.lowerToExecuteRequest — codec routing + DDL sha
     const result = await codecAdapter.lowerToExecuteRequest(ast, ctx);
     expect(result.sql).toContain(`DEFAULT 'ENC:PLAINTEXT'`);
     expect(result.sql).not.toContain('plaintext');
+  });
+
+  it('renders a null literal default on a codec-bearing column as DEFAULT NULL', async () => {
+    const ast = new SqliteCreateTable({
+      table: 'notes',
+      columns: [
+        col('body', 'TEXT', { default: lit(null), codecRef: { codecId: 'sqlite/text@1' } }),
+      ],
+    });
+    const result = await adapter.lowerToExecuteRequest(ast, ctx);
+    expect(result.sql).toBe('CREATE TABLE "notes" (\n  "body" TEXT DEFAULT NULL\n)');
   });
 
   it('renders IF NOT EXISTS with quoted identifiers (bootstrap control-table shape)', async () => {

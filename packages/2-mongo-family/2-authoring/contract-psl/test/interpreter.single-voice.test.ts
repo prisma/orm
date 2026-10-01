@@ -46,7 +46,7 @@ function diagnosticCodes(schema: string): readonly string[] {
 }
 
 describe('one voice per resolution failure', () => {
-  it.each(['Mystery', 'missing.Mystery', 'Missing()'])('reports %s through the binder', (type) => {
+  it.each(['missing.Mystery', 'Missing()'])('reports %s through the binder', (type) => {
     expect(
       diagnosticsOf(`model Item {\n  id ObjectId @id @map("_id")\n  bad ${type}\n}`).map(
         ({ code, message, sourceId }) => ({ code, message, sourceId }),
@@ -55,6 +55,21 @@ describe('one voice per resolution failure', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message: `Cannot find type "${type.replace('()', '')}"`,
+        sourceId: 'test.prisma',
+      },
+    ]);
+  });
+
+  it('reports an unknown unqualified type with the registered scalar names', () => {
+    expect(
+      diagnosticsOf('model Item {\n  id ObjectId @id @map("_id")\n  bad Mystery\n}').map(
+        ({ code, message, sourceId }) => ({ code, message, sourceId }),
+      ),
+    ).toEqual([
+      {
+        code: 'PSL_UNRESOLVED_REFERENCE',
+        message:
+          'Field "Item.bad" has type "Mystery", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32 and ObjectId.',
         sourceId: 'test.prisma',
       },
     ]);

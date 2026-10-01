@@ -115,8 +115,8 @@ describe('assertMutationDefaultGeneratorsAvailable', () => {
         category: 'RUNTIME',
         severity: 'error',
         message:
-          "Contract requires mutation default generator(s) 'gen-a', 'gen-b', but no runtime component provides them.",
-        details: { ids: ['gen-a', 'gen-b'] },
+          "Contract requires mutation default generators 'gen-a' for user.id and 'gen-b' for user.slug, but no runtime component in the execution stack provides them. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
+        details: { ids: ['gen-a', 'gen-b'], fields: ['user.id', 'user.slug'] },
       }),
     );
   });
@@ -133,7 +133,32 @@ describe('assertMutationDefaultGeneratorsAvailable', () => {
         ]),
         registry,
       ),
-    ).toThrow(expect.objectContaining({ details: { ids: ['uuidv4'] } }));
+    ).toThrow(expect.objectContaining({ details: { ids: ['uuidv4'], fields: ['user.id'] } }));
+  });
+
+  it('names every field that needs a missing generator', () => {
+    expect(() =>
+      assertMutationDefaultGeneratorsAvailable(
+        execution([
+          {
+            ref: { namespace: 'ns', entry: 'posts', field: 'createdAt' },
+            onCreate: { kind: 'generator', id: 'timestampNow' },
+          },
+          {
+            ref: { namespace: 'ns', entry: 'posts', field: 'updated_at' },
+            onCreate: { kind: 'generator', id: 'timestampNow' },
+            onUpdate: { kind: 'generator', id: 'timestampNow' },
+          },
+        ]),
+        new Map(),
+      ),
+    ).toThrow(
+      expect.objectContaining({
+        message:
+          "Contract requires mutation default generator 'timestampNow' for posts.createdAt and posts.updated_at, but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
+        details: { ids: ['timestampNow'], fields: ['posts.createdAt', 'posts.updated_at'] },
+      }),
+    );
   });
 });
 
@@ -361,7 +386,7 @@ describe('applyMutationDefaults', () => {
       expect.objectContaining({
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         message:
-          "Contract references mutation default generator 'sizedId' but no runtime component provides it.",
+          "Contract references mutation default generator 'sizedId' but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
         details: { id: 'sizedId' },
       }),
     );

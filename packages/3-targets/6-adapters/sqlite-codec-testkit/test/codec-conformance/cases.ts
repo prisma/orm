@@ -35,6 +35,14 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
   { codecId: 'sql/int@1', label: 'integer', value: 42, storageType: 'INTEGER' },
   { codecId: 'sql/float@1', label: 'finite float', value: 1.5, storageType: 'REAL' },
   { codecId: 'sqlite/text@1', label: 'text', value: 'hello', storageType: 'TEXT' },
+  { codecId: 'sqlite/text@1', label: 'empty text', value: '', storageType: 'TEXT' },
+  { codecId: 'sqlite/text@1', label: 'digits', value: '42', storageType: 'TEXT' },
+  {
+    codecId: 'sql/int@1',
+    label: 'largest safe integer',
+    value: 9007199254740991,
+    storageType: 'INTEGER',
+  },
   { codecId: 'sqlite/integer@1', label: 'integer', value: 42, storageType: 'INTEGER' },
   { codecId: 'sqlite/real@1', label: 'finite float', value: 1.5, storageType: 'REAL' },
   // hex() never wraps, so a blob's boundary is not length but case: a value whose
@@ -153,6 +161,32 @@ export const sqliteConformanceCases: readonly SqliteCodecConformanceCase[] = [
     label: 'text beyond the basic plane',
     value: 'a\u{1F600}b',
     storageType: 'TEXT',
+  },
+  // SQLite writes an infinity as the JSON number 9.0e+999, which parses back to
+  // Infinity; the float projections write the text encodeJson writes instead.
+  {
+    codecId: 'sqlite/real@1',
+    label: 'positive infinity',
+    value: Number.POSITIVE_INFINITY,
+    storageType: 'REAL',
+  },
+  {
+    codecId: 'sqlite/real@1',
+    label: 'negative infinity',
+    value: Number.NEGATIVE_INFINITY,
+    storageType: 'REAL',
+  },
+  {
+    codecId: 'sql/float@1',
+    label: 'positive infinity',
+    value: Number.POSITIVE_INFINITY,
+    storageType: 'REAL',
+  },
+  {
+    codecId: 'sql/float@1',
+    label: 'negative infinity',
+    value: Number.NEGATIVE_INFINITY,
+    storageType: 'REAL',
   },
   {
     codecId: 'sqlite/real@1',

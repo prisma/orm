@@ -1,5 +1,8 @@
 import type { Contract } from '@internal/contract/types';
-import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  DataTypeLookup,
+} from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ContractSerializer,
@@ -36,7 +39,7 @@ export interface SqlDescribedContractSpace {
  */
 export interface SqlPslBuildContext {
   readonly authoringContributions: Pick<AssembledAuthoringContributions, 'type' | 'dataTypes'>;
-  readonly codecLookup: CodecLookup;
+  readonly codecLookup: CodecLookupWithDescriptors;
   readonly dataTypeLookup: DataTypeLookup;
 }
 
@@ -64,13 +67,16 @@ export interface SqlControlTargetDescriptor<
    * Database→PSL inference for `contract infer`. Target logic (owns the dialect
    * maps), so it lives on the descriptor. Optional: targets without `contract
    * infer` (Mongo) omit it, and the family instance throws when it is absent.
-   * `describedContracts` carries the stack's extension packs' already-assembled
-   * contracts (each paired with its `spaceId`) so the inferrer can omit elements
-   * they already describe, and can qualify a cross-space relation with the
-   * owning pack's space id.
+   * `context` is the stack `contract emit` reads the inferred schema with, so a
+   * default is written in the form the codec of the column's type constructor
+   * reads back. `describedContracts` carries the stack's extension packs'
+   * already-assembled contracts (each paired with its `spaceId`) so the inferrer
+   * can omit elements they already describe, and can qualify a cross-space
+   * relation with the owning pack's space id.
    */
   readonly inferPslContract?: (
     schema: SqlSchemaIRNode,
+    context: SqlPslBuildContext,
     describedContracts?: readonly SqlDescribedContractSpace[],
   ) => PslDocumentAst;
   /**

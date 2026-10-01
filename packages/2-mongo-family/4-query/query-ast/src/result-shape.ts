@@ -1,3 +1,5 @@
+import { ifDefined } from '@internal/utils/defined';
+
 export type MongoResultShape =
   | { readonly kind: 'document'; readonly fields: Readonly<Record<string, MongoFieldShape>> }
   | { readonly kind: 'unknown' };
@@ -8,6 +10,8 @@ export type MongoFieldShape =
       readonly kind: 'document';
       readonly nullable: boolean;
       readonly fields: Readonly<Record<string, MongoFieldShape>>;
+      /** A stored document of the plan's collection inside a command result, such as the document an insert returns: a decode failure in it names its `_id` and gives the field's path from it. */
+      readonly row?: true;
     }
   | { readonly kind: 'array'; readonly nullable: boolean; readonly element: MongoFieldShape }
   | { readonly kind: 'unknown' };
@@ -31,6 +35,7 @@ export function freezeMongoFieldShape(shape: MongoFieldShape): MongoFieldShape {
         kind: 'document' as const,
         nullable: shape.nullable,
         fields: Object.freeze(fields),
+        ...ifDefined('row', shape.row),
       });
     }
     case 'array':

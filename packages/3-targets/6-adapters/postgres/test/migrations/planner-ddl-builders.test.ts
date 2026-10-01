@@ -1,11 +1,13 @@
 import type { CodecControlHooks } from '@internal/family-sql/control';
 import type { StorageColumn } from '@internal/sql-contract/types';
+import { col as ddlColumn, fn, lit } from '@internal/sql-relational-core/contract-free';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
-  buildColumnDefaultSql,
   buildColumnTypeSql,
   renderDefaultLiteral,
 } from '@internal/target-postgres/planner-ddl-builders';
 import { describe, expect, it } from 'vitest';
+import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 const noHooks = new Map<string, CodecControlHooks>();
 
@@ -122,46 +124,66 @@ describe('buildColumnTypeSql', () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildColumnDefaultSql
+// renderColumnDefault: the clause every DDL statement writes for a default
 // ---------------------------------------------------------------------------
 
-describe('buildColumnDefaultSql', () => {
-  it('returns empty string for undefined default', () => {
-    expect(buildColumnDefaultSql(undefined)).toBe('');
+describe('the DEFAULT clause the Postgres adapter writes in every DDL statement', () => {
+  const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+
+  it.each([
+    ['no default', ddlColumn('c', 'text'), ''],
+    ['a string', ddlColumn('c', 'text', { default: lit('hello') }), "DEFAULT 'hello'"],
+    ['a number', ddlColumn('c', 'int4', { default: lit(42) }), 'DEFAULT 42'],
+    ['a boolean', ddlColumn('c', 'bool', { default: lit(true) }), 'DEFAULT true'],
+    [
+      'autoincrement(), which SERIAL writes',
+      ddlColumn('c', 'SERIAL', { default: fn('autoincrement()') }),
+      '',
+    ],
+    ['a function', ddlColumn('c', 'timestamptz', { default: fn('now()') }), 'DEFAULT (now())'],
+    [
+      'a sequence',
+      ddlColumn('c', 'int4', { default: fn(`nextval('"user_id_seq"'::regclass)`) }),
+      `DEFAULT (nextval('"user_id_seq"'::regclass))`,
+    ],
+    [
+      'an empty list',
+      ddlColumn('c', 'text[]', {
+        default: lit([]),
+        codecRef: { codecId: 'pg/text@1', many: true },
+      }),
+      "DEFAULT '{}'",
+    ],
+    [
+      'a list',
+      ddlColumn('c', 'text[]', {
+        default: lit(['a', 'b']),
+        codecRef: { codecId: 'pg/text@1', many: true },
+      }),
+      `DEFAULT ARRAY['a', 'b']::text[]`,
+    ],
+    [
+      'an int8 list, as text cast to the list type',
+      ddlColumn('c', 'int8[]', {
+        default: lit(['1', '9007199254740993']),
+        codecRef: { codecId: 'pg/int8@1', many: true },
+      }),
+      `DEFAULT ARRAY['1', '9007199254740993']::int8[]`,
+    ],
+  ])('writes %s', async (_name, column, clause) => {
+    expect(await adapter.renderColumnDefault(column, 't')).toBe(clause);
   });
 
-  it('renders literal string default', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: 'hello' })).toBe("DEFAULT 'hello'");
-  });
-
-  it('renders literal number default', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: 42 })).toBe('DEFAULT 42');
-  });
-
-  it('renders literal boolean default', () => {
-    expect(buildColumnDefaultSql({ kind: 'literal', value: true })).toBe('DEFAULT true');
-  });
-
-  it('returns empty string for autoincrement function', () => {
-    expect(buildColumnDefaultSql({ kind: 'function', expression: 'autoincrement()' })).toBe('');
-  });
-
-  it('renders non-autoincrement function default', () => {
-    expect(buildColumnDefaultSql({ kind: 'function', expression: 'now()' })).toBe(
-      'DEFAULT (now())',
-    );
-  });
-
-  it('renders sequence default', () => {
-    expect(buildColumnDefaultSql({ kind: 'sequence', name: 'user_id_seq' })).toBe(
-      `DEFAULT nextval('"user_id_seq"'::regclass)`,
-    );
-  });
-
-  it('rejects unsafe function expressions', () => {
-    expect(() =>
-      buildColumnDefaultSql({ kind: 'function', expression: 'now(); DROP TABLE users' }),
-    ).toThrow('Unsafe default expression');
+  it('refuses an unsafe function expression with CONTRACT.DEFAULT_INVALID', async () => {
+    await expect(
+      adapter.renderColumnDefault(
+        ddlColumn('c', 'timestamptz', { default: fn('now(); DROP TABLE users') }),
+        't',
+      ),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      meta: { expression: 'now(); DROP TABLE users' },
+    });
   });
 });
 
@@ -209,31 +231,5 @@ describe('renderDefaultLiteral', () => {
   it('renders a mixed-type array literal element-by-element', () => {
     const result = renderDefaultLiteral([1, true, null], col({ nativeType: 'int4', many: true }));
     expect(result).toBe('ARRAY[1, true, NULL]::int4[]');
-  });
-});
-
-describe('buildColumnDefaultSql with a list column', () => {
-  it('renders DEFAULT with an empty array literal', () => {
-    const result = buildColumnDefaultSql(
-      { kind: 'literal', value: [] },
-      col({ nativeType: 'text', many: true }),
-    );
-    expect(result).toBe("DEFAULT '{}'");
-  });
-
-  it('renders DEFAULT with a populated array literal', () => {
-    const result = buildColumnDefaultSql(
-      { kind: 'literal', value: ['a', 'b'] },
-      col({ nativeType: 'text', many: true }),
-    );
-    expect(result).toBe(`DEFAULT ARRAY['a', 'b']::text[]`);
-  });
-
-  it('renders DEFAULT with int8 text elements cast to the list type', () => {
-    const result = buildColumnDefaultSql(
-      { kind: 'literal', value: ['1', '9007199254740993'] },
-      col({ nativeType: 'int8[]', many: true }),
-    );
-    expect(result).toBe(`DEFAULT ARRAY['1', '9007199254740993']::int8[]`);
   });
 });

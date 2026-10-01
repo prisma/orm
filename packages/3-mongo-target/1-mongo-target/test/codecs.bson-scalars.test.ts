@@ -1,5 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import { Binary, Decimal128, Long } from 'bson';
+import { Binary, BSON, Decimal128, Long } from 'bson';
 import { describe, expect, it } from 'vitest';
 import {
   MONGO_BINARY_CODEC_ID,
@@ -55,6 +55,12 @@ describe('mongoInt64Codec', () => {
   it('refuses a non-integral or unsafe number on the wire', async () => {
     await expect(mongoInt64Codec.decode(1.5, {})).rejects.toThrow(decodeFailed);
     await expect(mongoInt64Codec.decode(2 ** 60, {})).rejects.toThrow(decodeFailed);
+  });
+
+  it('says a fractional double on the wire is no whole number, and points at the repair', async () => {
+    await expect(mongoInt64Codec.decode(2.5, {})).rejects.toThrow(
+      'mongo/int64@1 wire value is the fractional double 2.5, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-written-as-long has the queries for a plain field, a list and a list of composite values.',
+    );
   });
 
   it('refuses an application value that is not a bigint', async () => {
@@ -191,9 +197,7 @@ describe('mongoBinaryCodec', () => {
   const bytes = new Uint8Array([0, 1, 2, 250, 255]);
 
   it('encodes bytes to a Binary', async () => {
-    const wire = await mongoBinaryCodec.encode(bytes, {});
-    expect(wire).toBeInstanceOf(Binary);
-    expect([...wire.buffer]).toEqual([...bytes]);
+    expect(await mongoBinaryCodec.encode(bytes, {})).toStrictEqual(new Binary(bytes));
   });
 
   it('decodes a Binary to a plain Uint8Array of the same bytes', async () => {
@@ -201,6 +205,24 @@ describe('mongoBinaryCodec', () => {
     expect(decoded).toBeInstanceOf(Uint8Array);
     expect(Buffer.isBuffer(decoded)).toBe(false);
     expect([...decoded]).toEqual([...bytes]);
+  });
+
+  it.each([
+    ['the default options', {}],
+    ['promoteBuffers: true', { promoteBuffers: true }],
+    ['promoteValues: false', { promoteValues: false }],
+  ])('decodes what the driver reads with %s to a plain Uint8Array', async (_name, options) => {
+    const stored = BSON.deserialize(BSON.serialize({ value: new Binary(bytes) }), options);
+    const decoded = await mongoBinaryCodec.decode(stored['value'], {});
+    expect(Buffer.isBuffer(decoded)).toBe(false);
+    expect(decoded).toEqual(bytes);
+  });
+
+  it('decodes a Uint8Array to a copy of its bytes', async () => {
+    const wire = new Uint8Array(bytes);
+    const decoded = await mongoBinaryCodec.decode(wire, {});
+    expect(decoded).toEqual(bytes);
+    expect(decoded).not.toBe(wire);
   });
 
   it('refuses a wire value of the wrong type', async () => {

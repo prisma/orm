@@ -538,12 +538,14 @@ export function errorUnexpected(
   options?: {
     readonly why?: string;
     readonly fix?: string;
+    readonly meta?: Record<string, unknown>;
     readonly cause?: unknown;
   },
 ): CliStructuredError {
   return new CliStructuredError('CLI.UNEXPECTED', 'Unexpected error', {
     why: options?.why ?? message,
     fix: options?.fix ?? 'Check the error message and try again',
+    ...ifDefined('meta', options?.meta),
     ...ifDefined('cause', options?.cause),
   });
 }

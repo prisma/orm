@@ -48,7 +48,7 @@ import type { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { loadConfigForSections } from '@internal/config-loader';
 import {
-  CliStructuredError,
+  type CliStructuredError,
   errorMigrationCliInvalidConfigArg,
   errorMigrationCliUnknownFlag,
 } from '@internal/errors/control';
@@ -57,8 +57,10 @@ import { createControlStack } from '@internal/framework-components/control';
 import { errorInvalidJson } from '@internal/migration-tools/errors';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { buildMigrationArtifacts, type Migration } from '@internal/migration-tools/migration';
+import { isStructuredError } from '@internal/utils/structured-error';
 import { Cli, Command, Option, UsageError } from 'clipanion';
 import { dirname, join } from 'pathe';
+import { errorFromCaught } from './control-api/operations/caught-errors';
 
 /**
  * Constructor shape accepted by `MigrationCLI.run`. `Migration` subclasses
@@ -310,11 +312,14 @@ async function orchestrate(
     await runMigration(importMetaUrl, MigrationClass, parsed, ctx);
     return 0;
   } catch (err) {
-    if (CliStructuredError.is(err)) {
-      // Migration-tools errors (e.g. `errorInvalidJson` thrown by
-      // `readExistingMetadata` when migration.json is malformed) are
-      // `CliStructuredError`s and render through the same surface.
-      writeStructuredError(ctx.stderr, err);
+    if (isStructuredError(err)) {
+      // A CLI error, such as `errorInvalidJson` for a malformed migration.json, and an error a
+      // library raised with a structured code, such as `CONTRACT.DEFAULT_INVALID` for a default the
+      // column's codec refuses, are written with their code.
+      writeStructuredError(
+        ctx.stderr,
+        errorFromCaught(err, (message) => message),
+      );
     } else {
       ctx.stderr.write(`${err instanceof Error ? err.message : String(err)}\n`);
     }

@@ -18,7 +18,7 @@ import { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node
 import type { SqlSchemaDiffNode } from '../schema-ir/schema-node-kinds';
 import { PostgresSchemaNodeKind } from '../schema-ir/schema-node-kinds';
 import { issueColumnName } from './issue-planner';
-import type { PostgresOpFactoryCall } from './op-factory-call';
+import { columnNameOfCall, type PostgresOpFactoryCall } from './op-factory-call';
 
 /**
  * Factory calls that create a whole, previously-absent top-level storage
@@ -117,7 +117,7 @@ function postgresCallFields(call: PostgresOpFactoryCall): PostgresCallFields {
   return {
     ...ifDefined('schemaName', 'schemaName' in call ? call.schemaName : undefined),
     ...ifDefined('tableName', 'tableName' in call ? call.tableName : undefined),
-    ...ifDefined('columnName', 'columnName' in call ? call.columnName : undefined),
+    ...ifDefined('columnName', columnNameOfCall(call)),
   };
 }
 

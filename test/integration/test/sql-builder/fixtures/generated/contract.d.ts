@@ -3,23 +3,7 @@
 // To regenerate, run: prisma contract emit
 import type { CodecTypes as PgVectorTypes, Vector } from '@internal/extension-pgvector/codec-types';
 import type { QueryOperationTypes as PgVectorQueryOperationTypes } from '@internal/extension-pgvector/operation-types';
-import type {
-  Bit,
-  Char,
-  CodecTypes as PgTypes,
-  Interval,
-  JsonValue,
-  Numeric,
-  Time,
-  TimeString,
-  Timestamp,
-  TimestampString,
-  Timestamptz,
-  TimestamptzString,
-  Timetz,
-  VarBit,
-  Varchar,
-} from '@internal/target-postgres/codec-types';
+import type { Char, CodecTypes as PgTypes, Varchar } from '@internal/target-postgres/codec-types';
 import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 import type {

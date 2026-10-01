@@ -86,7 +86,7 @@ Every lowering rule is checked against SQL that the earlier version's own toolch
 
 ```mermaid
 flowchart LR
-  schema["schema.prisma<br/>(Prisma 7)"] --> parser["@internal/psl-parser<br/>one grammar for every PSL document"]
+  schema["schema.prisma<br/>(Prisma 7)"] --> parser["@internal/psl-parser<br/>shared by every PSL source"]
   parser --> interpreter["@internal/sql-contract-prisma7<br/>rules of the Prisma 7 language for the SQL family"]
   binding["@internal/target-postgres<br/>prisma7PostgresBinding: what Postgres creates"] --> interpreter
   interpreter --> contract["Contract"]
@@ -94,7 +94,7 @@ flowchart LR
   facade -. wires .-> binding
 ```
 
-**The parser is shared, and it has one grammar.** `@internal/psl-parser` parses every PSL document the same way, whichever Prisma version wrote it. The two constructs the earlier language needs, attributes on enum members and field lines inside a `view` block, parse in every document. Each reader decides what it accepts. The Prisma 8 readers report an attribute on an enum member, and report a `view` block like any other block whose keyword no composed pack claims, so a Prisma 8 PSL contract that uses either fails. The Prisma 7 reader reads enum member attributes and refuses a `view` with the error shown above.
+**The parser is shared.** `@internal/psl-parser` parses every PSL document, whichever Prisma version wrote it. The earlier language needs two constructs that Prisma 8 does not use: attributes on enum members, and field lines inside a `view` block. Attributes on enum members parse in every document, because they only extend the syntax of one entry. Field lines inside a `view` block are different: reading a `view` body as model fields replaces the grammar of the whole block, and Prisma 8 does not intend to keep that grammar, since a pack may claim the `view` keyword and Prisma 8 views may get a syntax of their own. So field lines parse only in the `prisma-7` grammar. The parser names the grammar versions it accepts after the Prisma version whose grammar they are: `prisma-8`, the default, and `prisma-7`. A PSL contract source declares its grammar in `parserOptions`, and the Prisma 7 and Prisma 6 sources declare `prisma-7`, since Prisma 6 schemas use the same grammar. Every tool that parses a source's files passes the source's options to the parser: the source's own `load`, `contract format`, and the language server. In the `prisma-8` grammar, a `view` body parses as `key = value` entries. A field line with an attribute is then a parse error, and a field line without one reads as two bare entries, which `contract format` and the editor write on separate lines. Each reader decides what it accepts. The Prisma 8 readers report an attribute on an enum member, and report a `view` block like any other block whose keyword no composed pack claims, so a Prisma 8 PSL contract that uses either fails. The Prisma 7 reader reads enum member attributes and refuses a `view` with the error shown above.
 
 **Rules of the language live in the family authoring package.** `@internal/sql-contract-prisma7` holds everything that is true of the Prisma 7 language for the SQL family: blocks and attributes, relation pairing, junction tables, defaults, and the diagnostics. It knows nothing about a particular database and depends on no Prisma 7 package.
 
@@ -115,7 +115,7 @@ A second family or target adds a package and a binding. Neither adds a branch to
 Each facade publishes one function, named after the Prisma version whose schema it reads, and no aliases:
 
 - `prisma7Schema(path)` on `@prisma/orm-postgres/config` reads a Prisma 7 PostgreSQL schema.
-- A MongoDB reader will be `prisma6Schema(path)` on `@prisma/orm-mongo/config`, because Prisma 6 is the last version with a MongoDB connector.
+- The MongoDB reader is `prisma6Schema(path)` on `@prisma/orm-mongo/config`, because Prisma 6 is the last version with a MongoDB connector.
 - `prisma7Contract(path, { binding })` is the family-level factory the facades wrap. The facade name says `Schema` because the user points it at a schema file; the family name says `Contract` because it returns a `ContractConfig`.
 
 The version in the name tells the user which schema language is accepted, which differs by family. A second name for the same function would put two spellings into guides and examples for one thing.
@@ -144,5 +144,7 @@ For as long as the Prisma version it reads is supported. The repository's [READM
 **Read the schema through Prisma 7's own parser.** Prisma 7's WebAssembly parser drops `@ignore` fields and `@@ignore` models, presents views as ordinary models, and can omit implicit referential actions, which are exactly the details fidelity depends on. It is also a multi-megabyte synchronous load on the emit path and a dependency on an earlier Prisma package.
 
 **Relax the Prisma 8 checks that refuse the shapes Prisma 8 cannot express.** This would make the reader the reason Prisma 8's own language accepts something it was designed to refuse, and would hide the missing feature instead of recording it.
+
+**A behaviour flag, or letting each tool detect the version.** A flag such as `viewBodyAsModelFields` has no meaning on its own: it exists only because the Prisma 7 grammar reads `view` bodies that way, and no Prisma 8 source would set it. Naming the grammar says why, and absorbs any further Prisma 7 grammar difference without a second flag. The framework vocabulary rule forbids names of Prisma versions before 8, but the parser is the authority on its own grammar, so the rule records that exception for the grammar names. Detecting the version from the file, for example from a missing `// use prisma-8` line, would make every tool repeat a guess that can be wrong. A parse function on the source, instead of options, is more than the problem needs, and the config loader cannot check a function. The source declares its grammar instead.
 
 **Build the missing Prisma 8 features as part of the reader.** Views, opaque column types, and generated values on optional fields are each their own piece of work with their own design. Bundling them into the reader would tie a transition tool to features it does not need.

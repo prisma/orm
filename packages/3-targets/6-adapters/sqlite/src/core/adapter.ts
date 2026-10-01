@@ -443,6 +443,9 @@ function renderLiteral(expr: LiteralExpr): string {
   if (typeof expr.value === 'string') {
     return `'${escapeLiteral(expr.value)}'`;
   }
+  if (typeof expr.value === 'number' && !Number.isNaN(expr.value) && !Number.isFinite(expr.value)) {
+    return expr.value > 0 ? '9e999' : '-9e999';
+  }
   if (typeof expr.value === 'number' || typeof expr.value === 'boolean') {
     return String(expr.value);
   }

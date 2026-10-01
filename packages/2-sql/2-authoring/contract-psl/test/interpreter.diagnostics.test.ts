@@ -446,7 +446,7 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Named type "BadChar" constructor "Char" Authoring helper argument at Char[0] must be >= 1, received 0',
+            'Named type "BadChar" constructor "Char" Argument "length" of Char must be >= 1, received 0',
           ),
         }),
         expect.objectContaining({
@@ -458,7 +458,7 @@ model InvalidNativeTypes {
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
           message: expect.stringContaining(
-            'Named type "BadTimestamp" constructor "Timestamp" Authoring helper argument at Timestamp[0] must be >= 0, received -1',
+            'Named type "BadTimestamp" constructor "Timestamp" Argument "precision" of Timestamp must be >= 0, received -1',
           ),
         }),
       ]),
@@ -707,6 +707,10 @@ model User {
     const result = interpretPslDocumentToSqlContract({
       ...baseInput,
       ...document,
+      authoringContributions: {
+        ...baseInput.authoringContributions,
+        valueObjectStorageType: 'Jsonb',
+      },
       composedExtensions: [],
       controlMutationDefaults: builtinControlMutationDefaults,
     });

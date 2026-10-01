@@ -293,12 +293,14 @@ model Item {
       expect(result.failure.diagnostics).toEqual([
         expect.objectContaining({
           code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "BigInt"',
+          message:
+            'Field "Item.big" has type "BigInt", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId and Double.',
           sourceId: 'test.prisma',
         }),
         expect.objectContaining({
           code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "Bytes"',
+          message:
+            'Field "Item.data" has type "Bytes", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId and Double.',
           sourceId: 'test.prisma',
         }),
       ]);
@@ -360,7 +362,8 @@ model Item {
       expect(result.failure.diagnostics).toEqual([
         expect.objectContaining({
           code: 'PSL_UNRESOLVED_REFERENCE',
-          message: 'Cannot find type "Unsupported"',
+          message:
+            'Field "Item.data" has type "Unsupported", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String, Int32, Bool, Date, ObjectId and Double.',
           sourceId: 'test.prisma',
         }),
       ]);

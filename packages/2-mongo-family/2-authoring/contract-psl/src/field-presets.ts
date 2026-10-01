@@ -1,6 +1,7 @@
 import type { ContractField, ExecutionMutationDefaultPhases } from '@internal/contract/types';
 import {
   type AuthoringContributions,
+  type AuthoringFieldPresetDescriptor,
   checkUncomposedNamespace,
   getAuthoringFieldPreset,
   hasRegisteredFieldNamespace,
@@ -24,6 +25,15 @@ export interface FieldPresetContext {
   readonly composedExtensions: ReadonlySet<string>;
   readonly sources: PslSources;
   readonly diagnostics: PslDiagnosticCollector;
+  readonly warnPresetWithoutEffect: (preset: PresetWithoutEffect) => void;
+}
+
+export interface PresetWithoutEffect {
+  readonly field: FieldSymbol;
+  readonly entityLabel: string;
+  readonly helperPath: string;
+  readonly descriptor: AuthoringFieldPresetDescriptor;
+  readonly codecId: string;
 }
 
 export type FieldPresetResolution =
@@ -75,6 +85,7 @@ export function resolveFieldPreset(input: {
         entityLabel,
         namespace,
         helperPath,
+        authoringContributions: context.authoringContributions,
         source,
         span: call.span,
         diagnostics,
@@ -153,6 +164,16 @@ export function resolveFieldPreset(input: {
       ...source.at(call.span),
     });
     return INVALID;
+  }
+
+  if (instantiated.executionDefaults === undefined) {
+    context.warnPresetWithoutEffect({
+      field,
+      entityLabel,
+      helperPath,
+      descriptor,
+      codecId: instantiated.descriptor.codecId,
+    });
   }
 
   return {

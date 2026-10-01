@@ -12,6 +12,7 @@ import { sqliteCreateNamespace } from '../../src/core/sqlite-unbound-database';
 
 const stubLowerer: ExecuteRequestLowerer = {
   lower: () => ({ sql: '', params: [] }),
+  renderColumnDefault: async () => '',
   lowerToExecuteRequest: async () => ({ sql: '', params: [] }),
 };
 

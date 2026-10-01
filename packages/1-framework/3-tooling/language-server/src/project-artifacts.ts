@@ -1,4 +1,4 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import type { ContractSourceDiagnostic, PslParserOptions } from '@internal/config/config-types';
 import {
   buildSymbolTable,
   isPrismaNextSchema,
@@ -15,7 +15,7 @@ import {
   mapParseDiagnostics,
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
-import type { DocumentSnapshot } from './document-snapshot';
+import { DocumentSnapshot } from './document-snapshot';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
@@ -26,6 +26,7 @@ export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
   readonly readSnapshot: (uri: string) => DocumentSnapshot | undefined;
   readonly interpretation?: ProjectInterpretation;
+  readonly parserOptions?: PslParserOptions;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
 
@@ -33,6 +34,8 @@ export class ProjectArtifacts {
   readonly #options: ProjectArtifactsOptions;
   readonly #readSnapshot: ProjectArtifactsOptions['readSnapshot'];
   readonly #interpretation: ProjectInterpretation | undefined;
+  readonly #parserOptions: PslParserOptions | undefined;
+  readonly #snapshotsWithProjectOptions = new WeakMap<DocumentSnapshot, DocumentSnapshot>();
   #inputs: SchemaInputSet;
   readonly #documents = new Map<string, DocumentSnapshot>();
   #symbolTableResult: SymbolTableResult | undefined;
@@ -43,6 +46,7 @@ export class ProjectArtifacts {
     this.#options = options;
     this.#readSnapshot = options.readSnapshot;
     this.#interpretation = options.interpretation;
+    this.#parserOptions = options.parserOptions;
     this.#inputs = options.inputs;
   }
 
@@ -187,20 +191,28 @@ export class ProjectArtifacts {
   #readDocument(uri: string): DocumentSnapshot | undefined {
     const identity = canonicalFileIdentity(uri);
     const readSnapshot = this.#readSnapshot;
-    const snapshot = readSnapshot(uri);
-    if (
-      snapshot === undefined ||
-      !this.#inputs.includes(uri) ||
-      !isPrismaNextSchema(snapshot.text)
-    ) {
+    const stored = readSnapshot(uri);
+    if (stored === undefined || !this.#inputs.includes(uri) || !isPrismaNextSchema(stored.text)) {
       if (this.#documents.delete(identity)) {
         this.#refreshSources();
       }
       return undefined;
     }
+    const snapshot = this.#withProjectOptions(stored);
     if (this.#documents.get(identity) !== snapshot) {
       this.#documents.set(identity, snapshot);
       this.#refreshSources();
+    }
+    return snapshot;
+  }
+
+  #withProjectOptions(stored: DocumentSnapshot): DocumentSnapshot {
+    const parserOptions = this.#parserOptions;
+    if (parserOptions === undefined) return stored;
+    let snapshot = this.#snapshotsWithProjectOptions.get(stored);
+    if (snapshot === undefined) {
+      snapshot = new DocumentSnapshot(stored.uri, stored.text, parserOptions);
+      this.#snapshotsWithProjectOptions.set(stored, snapshot);
     }
     return snapshot;
   }

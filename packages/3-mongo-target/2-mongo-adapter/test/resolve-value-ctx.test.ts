@@ -1,4 +1,4 @@
-import type { CodecCallContext } from '@internal/framework-components/codec';
+import { type CodecCallContext, decodeJsonString } from '@internal/framework-components/codec';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { MongoParamRef } from '@internal/mongo-value';
 import { describe, expect, it } from 'vitest';
@@ -30,6 +30,7 @@ describe('resolveValue — CodecCallContext threading', () => {
           observed.push(ctx);
           return v;
         },
+        decodeJson: (json) => decodeJsonString('test/observe@1', json),
       }),
     );
 
@@ -50,6 +51,7 @@ describe('resolveValue — CodecCallContext threading', () => {
           observed.push(ctx);
           return v;
         },
+        decodeJson: (json) => decodeJsonString('test/observe-recursive@1', json),
       }),
     );
 
@@ -86,6 +88,7 @@ describe('resolveValue — CodecCallContext threading', () => {
           receivedValue = v;
           return v;
         },
+        decodeJson: (json) => decodeJsonString('test/single-arg-author@1', json),
       }),
     );
 
@@ -110,6 +113,7 @@ describe('resolveValue — CodecCallContext threading', () => {
           callCount += 1;
           return v;
         },
+        decodeJson: (json) => decodeJsonString('test/counter@1', json),
       }),
     );
 
@@ -138,6 +142,7 @@ describe('resolveValue — CodecCallContext threading', () => {
         typeId: 'test/blocking@1',
         decode: (w: string) => w,
         encode: (v: string) => release.promise.then((suffix) => `${v}:${suffix}`),
+        decodeJson: (json) => decodeJsonString('test/blocking@1', json),
       }),
     );
 
@@ -170,6 +175,7 @@ describe('resolveValue — CodecCallContext threading', () => {
         encode: () => {
           throw cause;
         },
+        decodeJson: (json) => decodeJsonString('test/explody@1', json),
       }),
     );
 
@@ -191,6 +197,7 @@ describe('resolveValue — CodecCallContext threading', () => {
         typeId: 'test/level-blocker@1',
         decode: (w: string) => w,
         encode: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
+        decodeJson: (json) => decodeJsonString('test/level-blocker@1', json),
       }),
     );
 
@@ -223,6 +230,7 @@ describe('resolveValue — CodecCallContext threading', () => {
         typeId: 'test/array-blocker@1',
         decode: (w: string) => w,
         encode: (v: string) => blockingLeaf.promise.then((s) => `${v}:${s}`),
+        decodeJson: (json) => decodeJsonString('test/array-blocker@1', json),
       }),
     );
 

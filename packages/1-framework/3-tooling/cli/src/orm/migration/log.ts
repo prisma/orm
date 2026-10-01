@@ -6,12 +6,8 @@ import { flag } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { MigrationLogResult } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
-import { mapCaughtMigrationError } from '../../control-api/operations/caught-errors';
-import {
-  errorTargetMigrationNotSupported,
-  errorUnexpected,
-  requireLiveDatabase,
-} from '../../utils/cli-errors';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
+import { errorTargetMigrationNotSupported, requireLiveDatabase } from '../../utils/cli-errors';
 import {
   closeQuietly,
   maskConnectionUrl,
@@ -159,13 +155,11 @@ export const migrationLogCommand = defineOrmCommand({
       await client.connect(dbConnection);
       entries = await client.readLedger();
     } catch (error) {
-      const mapped = mapCaughtMigrationError(error);
       return notOk(
         normalizeError(
-          mapped ??
-            errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read migration log: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+          errorFromCaught(error, (message) => `Failed to read migration log: ${message}`, {
+            connection: typeof dbConnection === 'string' ? dbConnection : undefined,
+          }),
         ),
       );
     } finally {

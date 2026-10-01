@@ -20,13 +20,14 @@ import type {
   ValidationContext,
 } from '@internal/framework-components/emission';
 import { entityAt, type Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import type {
-  SqlModelStorage,
-  SqlStorage,
-  StorageColumn,
-  StorageTable,
-  StorageTypeInstance,
-  StorageValueSet,
+import {
+  resolvedTypeParams,
+  type SqlModelStorage,
+  type SqlStorage,
+  type StorageColumn,
+  type StorageTable,
+  type StorageTypeInstance,
+  type StorageValueSet,
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
 import { sqlEmitterError, sqlEmitterValidationError } from './errors';
@@ -415,42 +416,6 @@ export const sqlEmission = {
     return `{ ${storageParts.join('; ')} }`;
   },
 
-  resolveFieldTypeParams(
-    _modelName: string,
-    fieldName: string,
-    model: ContractModelBase,
-    contract: Contract,
-  ): Record<string, unknown> | undefined {
-    const sqlModel = model as ContractModel<SqlModelStorage>;
-    const storageField = sqlModel.storage?.fields?.[fieldName];
-    if (!storageField) return undefined;
-
-    const storage = contract.storage as unknown as SqlStorage | undefined;
-    if (!storage) return undefined;
-
-    const tableName = sqlModel.storage.table;
-    const storageNamespaceId = sqlModel.storage.namespaceId;
-    if (!storageNamespaceId) return undefined;
-
-    const table = entityAt<StorageTable>(storage, {
-      namespaceId: storageNamespaceId,
-      entityKind: 'table',
-      entityName: tableName,
-    });
-    if (!table) return undefined;
-
-    const column = table.columns[storageField.column];
-    if (!column) return undefined;
-
-    if (column.typeRef) {
-      const typeInstance = storage.types?.[column.typeRef];
-      if (typeInstance === undefined) return undefined;
-      const codecShape = typeInstance as Partial<StorageTypeInstance>;
-      return codecShape.typeParams;
-    }
-    return column.typeParams;
-  },
-
   resolveFieldValueSet(
     _modelName: string,
     fieldName: string,
@@ -558,28 +523,13 @@ export const sqlEmission = {
 
 type ColumnTypeSide = 'output' | 'input';
 
-function columnTypeParams(
-  storage: SqlStorage,
-  column: StorageColumn,
-): Record<string, unknown> | undefined {
-  if (column.typeRef) {
-    const typeInstance = storage.types?.[column.typeRef];
-    if (typeInstance === undefined) return undefined;
-    return blindCast<
-      Partial<StorageTypeInstance>,
-      'storage.types entries are codec-instance triples carrying optional typeParams'
-    >(typeInstance).typeParams;
-  }
-  return column.typeParams;
-}
-
 function renderRefinedCodecType(
   column: StorageColumn,
   side: ColumnTypeSide,
   params: Record<string, unknown> | undefined,
   codecLookup: CodecLookup | undefined,
 ): string {
-  if (codecLookup && params && Object.keys(params).length > 0) {
+  if (codecLookup && params) {
     const rendered =
       side === 'output'
         ? codecLookup.renderOutputTypeFor(column.codecId, params)
@@ -609,7 +559,12 @@ function computeColumnType(
       : undefined;
   }
   if (base === undefined) {
-    base = renderRefinedCodecType(column, side, columnTypeParams(storage, column), codecLookup);
+    base = renderRefinedCodecType(
+      column,
+      side,
+      resolvedTypeParams(column, storage.types),
+      codecLookup,
+    );
   }
   if (column.many === true) base = `ReadonlyArray<${base}>`;
   return column.nullable ? `${base} | null` : base;

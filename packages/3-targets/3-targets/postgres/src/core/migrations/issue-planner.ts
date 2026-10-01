@@ -50,11 +50,16 @@ import type { PostgresNativeEnumSchemaNode } from '../schema-ir/postgres-native-
 import type { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import { PostgresSchemaNodeKind } from '../schema-ir/schema-node-kinds';
 import {
+  buildSetDefaultColumn,
   renderColumnAlterType,
   renderColumnDdl,
-  renderColumnDefaultSql,
 } from './column-ddl-rendering';
 import { resolveNamespaceIdForDdlSchema } from './control-policy';
+import {
+  defaultForeignKeyName,
+  defaultPrimaryKeyName,
+  defaultUniqueName,
+} from './default-constraint-names';
 import {
   AddCheckConstraintCall,
   AddColumnCall,
@@ -67,6 +72,7 @@ import {
   CreateNativeEnumTypeCall,
   CreateSchemaCall,
   CreateTableCall,
+  columnNameOfCall,
   DisableRowLevelSecurityCall,
   DropCheckConstraintCall,
   DropColumnCall,
@@ -158,9 +164,10 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
     case 'dropDefault':
       return 'drop';
     case 'addCheckConstraint':
-    case 'renameCheckConstraint':
+    case 'renameConstraint':
       return 'unique'; // after uniques, before indexes
     case 'createTable':
+    case 'renameTable':
       return 'table';
     case 'enableRowLevelSecurity':
     case 'disableRowLevelSecurity':
@@ -246,7 +253,6 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
   const anyCall = blindCast<
     {
       tableName?: string;
-      columnName?: string;
       indexName?: string;
       newIndexName?: string;
       constraintName?: string;
@@ -273,7 +279,8 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
     location.entityKind = 'native_enum';
     location.entityName = anyCall.typeName;
   }
-  if (anyCall.columnName) location.column = anyCall.columnName;
+  const columnName = columnNameOfCall(call);
+  if (columnName) location.column = columnName;
   // A rename call carries old/new index names; the new name is the index's
   // contract-side identity, so it is the conflict location.
   if (anyCall.indexName) location.index = anyCall.indexName;
@@ -305,6 +312,7 @@ export function conflictForDisallowedCall(
     kind: conflictKindForCall(call),
     summary,
     why: 'Use `migration new` to author a custom migration for this change.',
+    refusedOperationClass: call.operationClass,
     ...(location ? { location } : {}),
   };
 }
@@ -414,7 +422,7 @@ function isStrictDescendantPath(path: readonly string[], ancestor: readonly stri
 // ----------------------------------------------------------------------------
 
 function fkSpecFromNode(fk: SqlForeignKeyIR, tableName: string): ForeignKeySpec {
-  const name = fk.name ?? `${tableName}_${fk.columns.join('_')}_fkey`;
+  const name = fk.name ?? defaultForeignKeyName(tableName, fk.columns);
   return {
     name,
     columns: [...fk.columns],
@@ -474,7 +482,7 @@ function buildCreateTableCallsFromNode(
     calls.push(new AddForeignKeyCall(schemaName, table.name, fkSpecFromNode(fk, table.name)));
   }
   for (const unique of table.uniques) {
-    const constraintName = unique.name ?? `${table.name}_${unique.columns.join('_')}_key`;
+    const constraintName = unique.name ?? defaultUniqueName(table.name, unique.columns);
     calls.push(new AddUniqueCall(schemaName, table.name, constraintName, [...unique.columns]));
   }
   // Marker-driven: a newly-created table that is RLS-controlled enables RLS
@@ -712,14 +720,13 @@ function mapColumnDefaultNodeIssue(
     SqlColumnDefaultIR,
     'a not-found/not-equal column-default issue always carries the expected default node'
   >(issue.expected);
-  const defaultSql = renderColumnDefaultSql(columnName, defaultNode, codecHooks);
-  if (!defaultSql) return ok([]);
+  const column = buildSetDefaultColumn(columnName, defaultNode, codecHooks);
+  if (column === undefined) return ok([]);
   return ok([
     new SetDefaultCall(
       schemaName,
       tableName,
-      columnName,
-      defaultSql,
+      column,
       issueOutcome(issue) === 'not-equal' ? 'widening' : 'additive',
     ),
   ]);
@@ -735,7 +742,7 @@ function mapPrimaryKeyNodeIssue(
       { readonly columns: readonly string[]; readonly name?: string },
       'a not-found primary-key issue always carries the expected PrimaryKey node'
     >(issue.expected);
-    const constraintName = pk.name ?? `${tableName}_pkey`;
+    const constraintName = pk.name ?? defaultPrimaryKeyName(tableName);
     return ok([new AddPrimaryKeyCall(schemaName, tableName, constraintName, [...pk.columns])]);
   }
   if (issueOutcome(issue) === 'not-expected') {
@@ -744,7 +751,12 @@ function mapPrimaryKeyNodeIssue(
       'a not-expected primary-key issue always carries the actual PrimaryKey node'
     >(issue.actual);
     return ok([
-      new DropConstraintCall(schemaName, tableName, pk.name ?? `${tableName}_pkey`, 'primaryKey'),
+      new DropConstraintCall(
+        schemaName,
+        tableName,
+        pk.name ?? defaultPrimaryKeyName(tableName),
+        'primaryKey',
+      ),
     ]);
   }
   return notOk(nodeConflict('indexIncompatible', issue.path.join('/')));
@@ -767,7 +779,7 @@ function mapForeignKeyNodeIssue(
       SqlForeignKeyIR,
       'a not-expected foreign-key issue always carries the actual foreign-key node'
     >(issue.actual);
-    const name = fk.name ?? `${tableName}_${fk.columns.join('_')}_fkey`;
+    const name = fk.name ?? defaultForeignKeyName(tableName, fk.columns);
     return ok([new DropConstraintCall(schemaName, tableName, name, 'foreignKey')]);
   }
   return notOk(nodeConflict('foreignKeyConflict', issue.path.join('/')));
@@ -783,7 +795,7 @@ function mapUniqueNodeIssue(
       SqlUniqueIR,
       'a not-found unique issue always carries the expected unique node'
     >(issue.expected);
-    const name = unique.name ?? `${tableName}_${unique.columns.join('_')}_key`;
+    const name = unique.name ?? defaultUniqueName(tableName, unique.columns);
     return ok([new AddUniqueCall(schemaName, tableName, name, [...unique.columns])]);
   }
   if (issueOutcome(issue) === 'not-expected') {
@@ -791,7 +803,7 @@ function mapUniqueNodeIssue(
       SqlUniqueIR,
       'a not-expected unique issue always carries the actual unique node'
     >(issue.actual);
-    const name = unique.name ?? `${tableName}_${unique.columns.join('_')}_key`;
+    const name = unique.name ?? defaultUniqueName(tableName, unique.columns);
     return ok([new DropConstraintCall(schemaName, tableName, name, 'unique')]);
   }
   return notOk(nodeConflict('indexIncompatible', issue.path.join('/')));

@@ -1,4 +1,4 @@
-import type { CachePayload } from '@prisma/orm-extension-middleware-cache';
+import type { CacheAnnotationOptions } from '@prisma/orm-extension-middleware-cache';
 import { cacheAnnotation, createCacheMiddleware } from '@prisma/orm-extension-middleware-cache';
 import mongoRuntimeAdapter from '@prisma/orm-mongo/adapter/runtime';
 import { createMongoDriver } from '@prisma/orm-mongo/driver';
@@ -27,7 +27,7 @@ const contract = new MongoContractSerializer().deserializeContract<Contract>(con
  * `@internal/middleware-cache` + an annotated read short-circuits on
  * the second call. The same plan is executed twice; the second call
  * never reaches the driver because the cache middleware serves it from
- * the in-process LRU. Runs against `mongodb-memory-server` rather than
+ * the in-process store. Runs against `mongodb-memory-server` rather than
  * a mock context so the cross-family path is exercised by real code.
  */
 describe('mongo-demo cache middleware integration', {
@@ -53,14 +53,17 @@ describe('mongo-demo cache middleware integration', {
     await Promise.allSettled([client?.close(), replSet?.stop()]);
   }, timeouts.spinUpMongoMemoryServer);
 
-  function withCacheAnnotation<P extends MongoQueryPlan>(plan: P, payload: CachePayload): P {
+  function withCacheAnnotation<P extends MongoQueryPlan>(
+    plan: P,
+    options: CacheAnnotationOptions,
+  ): P {
     return {
       ...plan,
       meta: {
         ...plan.meta,
         annotations: {
           ...plan.meta.annotations,
-          cache: cacheAnnotation(payload),
+          cache: cacheAnnotation(options),
         },
       },
     };
@@ -74,7 +77,7 @@ describe('mongo-demo cache middleware integration', {
     const context = createMongoExecutionContext({ contract, stack });
     const driver = await createMongoDriver(replSet.getUri(), dbName);
     const driverExecuteSpy = vi.spyOn(driver, 'execute');
-    const cache = createCacheMiddleware({ maxEntries: 100 });
+    const cache = createCacheMiddleware();
     const runtime = createMongoRuntime({ context, driver, middleware: [cache] });
     const orm = mongoOrm({ contract, executor: runtime });
     const query = mongoQuery<Contract>({ contractJson });
@@ -93,7 +96,7 @@ describe('mongo-demo cache middleware integration', {
 
       const plan = withCacheAnnotation(
         query.from('posts').sort({ createdAt: -1 }).limit(5).build(),
-        { ttl: 60_000 },
+        {},
       );
 
       const first = await runtime.query(plan).toArray();
@@ -130,7 +133,7 @@ describe('mongo-demo cache middleware integration', {
     }
   });
 
-  it('does not cache a plan whose cacheAnnotation has skip: true', async () => {
+  it('does not cache a plan whose cacheAnnotation has bypass: true', async () => {
     const { runtime, orm, query, driverExecuteSpy } = await buildRuntime();
 
     try {
@@ -139,13 +142,13 @@ describe('mongo-demo cache middleware integration', {
 
       const plan = withCacheAnnotation(
         query.from('posts').sort({ createdAt: -1 }).limit(5).build(),
-        { ttl: 60_000, skip: true },
+        { bypass: true },
       );
 
       await runtime.query(plan).toArray();
       const callsAfterFirst = driverExecuteSpy.mock.calls.length;
 
-      // Same plan, but skip: true bypasses the cache. Driver hit again.
+      // Same plan, but bypass: true skips the cache. Driver hit again.
       await runtime.query(plan).toArray();
       expect(driverExecuteSpy.mock.calls.length).toBeGreaterThan(callsAfterFirst);
     } finally {

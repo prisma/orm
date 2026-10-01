@@ -190,6 +190,53 @@ model Person {
 `,
   },
   {
+    name: 'defaults on a value object and on a list of value objects',
+    schema: `type Address {
+  street String
+  zip    String?
+}
+
+model Person {
+  id    Int       @id
+  home  Address   @default(json\`{"street": "x"}\`)
+  homes Address[] @default([])
+  addrs Address[] @default(json\`[{"street": "y", "zip": null}]\`)
+}
+`,
+  },
+  {
+    name: 'value-object members with type parameters, single and list',
+    schema: `type Price {
+  amount  Numeric(65, 30)
+  history Numeric(65, 30)[]
+}
+
+model Product {
+  id    Int   @id
+  price Price
+}
+`,
+  },
+  {
+    name: 'value-object members typed by a domain enum, single and list, written back by enum name',
+    schema: `enum Country {
+  @@type("pg/text@1")
+  DE = "DE"
+  FR = "FR"
+}
+
+type Address {
+  country   Country
+  countries Country[]
+}
+
+model Person {
+  id   Int     @id
+  home Address
+}
+`,
+  },
+  {
     name: 'a policy expression holding a quote, a backslash and a line break',
     schema: `namespace unbound {
   role app_user {
@@ -292,6 +339,39 @@ namespace public {
       const printed = await printAndReadBack(authored);
 
       expect(printContract(authored).text).toContain('= "__proto__"');
+      expect(serializedWithoutCapabilities(printed)).toEqual(
+        serializedWithoutCapabilities(authored),
+      );
+    },
+    timeouts.pslRoundTrip,
+  );
+});
+
+describe('a value-object member typed by a named type', () => {
+  it(
+    'is written with the named type inline, and reads back',
+    async () => {
+      const authored = await readPsl(`// use prisma-8
+types {
+  Short = VarChar(10)
+}
+
+type Label {
+  code  Short
+  codes Short[]
+}
+
+model Product {
+  id    Int   @id
+  code  Short
+  label Label
+}
+`);
+      const printed = await printAndReadBack(authored);
+
+      expect(printContract(authored).text).toMatch(
+        /type Label \{\s+code\s+VarChar\(10\)\s+codes\s+VarChar\(10\)\[\]/,
+      );
       expect(serializedWithoutCapabilities(printed)).toEqual(
         serializedWithoutCapabilities(authored),
       );

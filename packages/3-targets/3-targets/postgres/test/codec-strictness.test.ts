@@ -24,7 +24,7 @@ describe('pg/int8@1 decodeJson', () => {
     ['a fractional JSON number', 1.5],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'pg/int8@1 database JSON value must be a decimal string',
+      'pg/int8@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
     );
   });
 });
@@ -38,7 +38,7 @@ describe('pg/unboundedint@1 decodeJson', () => {
 
   it('refuses a JSON number', () => {
     expect(() => codec.decodeJson(-7)).toThrow(
-      'pg/unboundedint@1 database JSON value must be a decimal string',
+      'pg/unboundedint@1 JSON value must be a decimal integer string',
     );
   });
 });
@@ -57,7 +57,7 @@ describe('pg/int8number@1 digit text', () => {
 
   it('refuses a JSON number', () => {
     expect(() => codec.decodeJson(42)).toThrow(
-      'pg/int8number@1 database JSON value must be decimal text',
+      'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
     );
   });
 
@@ -65,14 +65,14 @@ describe('pg/int8number@1 digit text', () => {
     'refuses the digit text %s, naming the limit',
     (json) => {
       expect(() => codec.decodeJson(json)).toThrow(
-        'pg/int8number@1 value must be an integer within the safe integer range',
+        'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
       );
     },
   );
 
   it('refuses decimal text', () => {
     expect(() => codec.decodeJson('1.5')).toThrow(
-      'pg/int8number@1 value must be a decimal integer',
+      'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
     );
   });
 });
@@ -89,7 +89,7 @@ describe('pg/numeric@1 decodeJson', () => {
     ['a fractional JSON number', 1.5],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      'pg/numeric@1 database JSON value must be a decimal string',
+      'pg/numeric@1 JSON value must be a decimal string',
     );
   });
 });
@@ -119,7 +119,7 @@ describe.each([
     ['decimal text', '1.5'],
   ])('refuses %s', (_name, json) => {
     expect(() => codec.decodeJson(json)).toThrow(
-      `${codecId} database JSON value must be a number or the text NaN, Infinity or -Infinity`,
+      `${codecId} JSON value must be a finite number or the text NaN, Infinity or -Infinity`,
     );
   });
 });
@@ -127,12 +127,17 @@ describe.each([
 describe('pg/float@1 decodeJson', () => {
   const codec = pgFloatDescriptor.factory()(ctx);
 
-  it.each([['42'], ['1.5'], ['NaN'], ['Infinity'], ['-Infinity']])(
-    'refuses the text %s',
-    (json) => {
-      expect(() => codec.decodeJson(json)).toThrow(
-        `Expected a finite number for sql/float@1, got ${JSON.stringify(json)}`,
-      );
-    },
-  );
+  it.each([['42'], ['1.5']])('refuses the text %s', (json) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      'pg/float@1 JSON value must be a finite number or the text NaN, Infinity or -Infinity',
+    );
+  });
+
+  it('reads the text PostgreSQL writes for NaN and the infinities', () => {
+    expect(['NaN', 'Infinity', '-Infinity'].map((json) => codec.decodeJson(json))).toEqual([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]);
+  });
 });

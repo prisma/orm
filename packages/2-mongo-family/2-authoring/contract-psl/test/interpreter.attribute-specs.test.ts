@@ -194,6 +194,28 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
+  it('points @default(now()) at the temporal.createdAt() preset', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id        ObjectId @id @map("_id")
+          createdAt Int32    @default(now())
+          count     Int32    @default(0)
+        }
+      `),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Field "Item.createdAt" uses unsupported attribute "@default". To fill the timestamp on create, use `temporal.createdAt()` as the field type.',
+      }),
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Item.count" uses unsupported attribute "@default"',
+      }),
+    ]);
+  });
+
   it('reports an unregistered attribute on a composite-type field', () => {
     expect(
       diagnosticsOf(`
@@ -236,5 +258,68 @@ describe('unknown attribute names diagnose against the registered namespace', ()
         }
       `),
     ).toEqual([]);
+  });
+});
+
+describe('an index path into a nested document', () => {
+  const nestedPathMessage = (path: string) =>
+    `Index field "${path}" on model "Item" is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "Item" or remove the index.`;
+
+  it('refuses each dotted form with its own diagnostic, not a parse error', () => {
+    expect(
+      diagnosticsOf(`
+        type Geo {
+          lat String
+        }
+        type Address {
+          city String
+          geo  Geo
+        }
+        model Item {
+          id      ObjectId @id @map("_id")
+          title   String
+          address Address
+          @@index([title, address.city])
+          @@index([address.city(sort: Desc)])
+          @@unique([address.geo.lat])
+          @@textIndex([address.city])
+        }
+      `),
+    ).toEqual([
+      {
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+        sourceId: 'schema.prisma',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 13 }) }),
+      },
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+      }),
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.geo.lat'),
+      }),
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+      }),
+    ]);
+  });
+
+  it('says a path through a field that is not a composite type names nothing', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id    ObjectId @id @map("_id")
+          title String
+          @@index([title.value])
+          @@index([missing.city(sort: Desc)])
+        }
+      `).map((diagnostic) => diagnostic.message),
+    ).toEqual([
+      'Index field "title.value" on model "Item" is a dotted path, but "title" is not a field of "Item" whose type is a composite type, so the path names no field. List fields of "Item" by name.',
+      'Index field "missing.city" on model "Item" is a dotted path, but "missing" is not a field of "Item" whose type is a composite type, so the path names no field. List fields of "Item" by name.',
+    ]);
   });
 });

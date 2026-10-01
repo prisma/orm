@@ -55,14 +55,26 @@ export type AuthoredColumnDefault =
       readonly canonical?: boolean;
     };
 
-export interface FieldNode {
+/** The type of a scalar: a codec and its type parameters, the domain's `ScalarFieldType` without its kind. */
+export type ScalarTypeDescriptor = Pick<ColumnTypeDescriptor, 'codecId' | 'typeParams'>;
+
+/**
+ * The column-free part of a scalar field. A value-object member is exactly this; a model field ({@link FieldNode}) adds its column.
+ */
+export interface ScalarMemberNode {
   readonly fieldName: string;
-  readonly columnName: string;
-  readonly descriptor: ColumnTypeDescriptor;
+  readonly descriptor: ScalarTypeDescriptor;
   readonly nullable: boolean;
+  readonly many?: boolean;
+  /** Present when the field is typed by an enum. */
+  readonly enumTypeHandle?: EnumTypeHandle;
+}
+
+export interface FieldNode extends ScalarMemberNode {
+  readonly descriptor: ColumnTypeDescriptor;
+  readonly columnName: string;
   readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  readonly many?: boolean;
   /**
    * Generated-check kinds the author declined for this column. The PSL
    * interpreter always writes concrete kinds; the TS builder's bare
@@ -70,8 +82,6 @@ export interface FieldNode {
    * derivable kinds at contract build time.
    */
   readonly noCheck?: readonly CheckKind[];
-  /** Present when the field was authored with `field.namedType(enumHandle)`. */
-  readonly enumTypeHandle?: EnumTypeHandle;
 }
 
 export interface PrimaryKeyNode {
@@ -200,19 +210,46 @@ export interface RelationNode {
   };
 }
 
-export interface ValueObjectFieldNode {
+/**
+ * The column-free part of a field typed by a value object. A value-object member is exactly this; a model field ({@link ValueObjectFieldNode}) adds its column.
+ */
+export interface ValueObjectMemberNode {
   readonly fieldName: string;
-  readonly columnName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
+  readonly many?: boolean;
+}
+
+/**
+ * A model field typed by a value object. It is stored in one column of the storage type the target declares for value objects, carried in `descriptor`; a list of value objects is stored in that one column too.
+ */
+export interface ValueObjectFieldNode extends ValueObjectMemberNode {
+  readonly columnName: string;
+  readonly descriptor: ColumnTypeDescriptor;
   readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
-  readonly many?: boolean;
 }
 
 export interface ValueObjectNode {
   readonly name: string;
-  readonly fields: readonly (FieldNode | ValueObjectFieldNode)[];
+  readonly fields: readonly (ScalarMemberNode | ValueObjectMemberNode)[];
+}
+
+/**
+ * Whether a field is stored in a list column. A list of scalars is; a list of value objects is not, because it is stored in one column whose value is the whole list, as one JSON array.
+ */
+export function storedAsListColumn(field: {
+  readonly list: boolean;
+  readonly typedByValueObject: boolean;
+}): boolean {
+  return field.list && !field.typedByValueObject;
+}
+
+/** Whether a field or member is typed by a value object. */
+export function isValueObjectMember(
+  field: ScalarMemberNode | ValueObjectMemberNode,
+): field is ValueObjectMemberNode {
+  return 'valueObjectName' in field;
 }
 
 export interface ModelNode {

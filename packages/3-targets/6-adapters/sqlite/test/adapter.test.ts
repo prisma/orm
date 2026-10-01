@@ -253,6 +253,17 @@ describe('SQLite adapter', () => {
       expect(sql).toContain('HAVING COUNT(*) > 1');
     });
 
+    it('renders an infinite number literal as the number SQLite reads as an infinity', () => {
+      const ast = SelectAst.from(TableSource.named('user')).withProjection([
+        ProjectionItem.of('up', LiteralExpr.of(Number.POSITIVE_INFINITY)),
+        ProjectionItem.of('down', LiteralExpr.of(Number.NEGATIVE_INFINITY)),
+      ]);
+
+      expect(adapter.lower(ast, { contract }).sql).toEqual(
+        'SELECT 9e999 AS "up", -9e999 AS "down" FROM "user"',
+      );
+    });
+
     it('renders table alias', () => {
       const ast = SelectAst.from(TableSource.named('user', 'u')).withProjection([
         ProjectionItem.of('id', ColumnRef.of('u', 'id')),

@@ -6,11 +6,12 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type {
-  AnyCodecDescriptor,
-  CodecLookup,
-  CodecTrait,
-  DataTypeId,
+import {
+  type AnyCodecDescriptor,
+  type CodecLookupWithDescriptors,
+  type CodecTrait,
+  type DataTypeId,
+  isNonFiniteText,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
 import {
@@ -57,8 +58,6 @@ const targetTypesByCodecId: Record<string, readonly string[]> = {
   'pg/json@1': ['json'],
   'pg/vector@1': ['vector'],
 };
-
-const NON_FINITE: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
 
 const dataTypeByCodecId: Readonly<Record<string, DataTypeId>> = {
   'pg/text@1': pgText.id,
@@ -110,7 +109,7 @@ const fixtureCodecs: Readonly<
   };
   const asDouble = (json: JsonValue): number => {
     if (typeof json === 'number') return json;
-    if (typeof json === 'string' && NON_FINITE.has(json)) return Number(json);
+    if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
     throw new Error('value must be a number');
   };
   const text = {
@@ -174,8 +173,8 @@ const fixtureCodecs: Readonly<
   };
 })();
 
-/** Passes `typeParams` through: the fixture vector type constructor already validates its length. */
-const vectorParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
+/** Passes `typeParams` through: the fixture type constructors already validate them. */
+const passThroughParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
   '~standard': {
     version: 1,
     vendor: 'contract-psl-fixtures',
@@ -183,17 +182,24 @@ const vectorParamsSchema: AnyCodecDescriptor['paramsSchema'] = {
   },
 };
 
-/** A descriptor for a fixture codec, parameterized only for `pg/vector@1`, whose length the codec checks. */
+const parameterizedCodecIds: ReadonlySet<string> = new Set([
+  'pg/vector@1',
+  'pg/numeric@1',
+  'sql/char@1',
+  'sql/varchar@1',
+]);
+
+/** A descriptor for a fixture codec, parameterized as the real codec is; only `pg/vector@1` checks its parameters. */
 function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const codec = fixtureCodecs[codecId];
   if (codec === undefined) return undefined;
-  const parameterized = codecId === 'pg/vector@1';
+  const parameterized = parameterizedCodecIds.has(codecId);
   return {
     codecId,
     dataType: dataTypeByCodecId[codecId] ?? pgText.id,
     traits: codec.traits,
     targetTypes: targetTypesByCodecId[codecId] ?? [],
-    paramsSchema: parameterized ? vectorParamsSchema : undefined,
+    paramsSchema: parameterized ? passThroughParamsSchema : undefined,
     isParameterized: parameterized,
     factory: (params: unknown) => () => ({
       id: codecId,
@@ -215,7 +221,7 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   };
 }
 
-export const postgresCodecLookup: CodecLookup = {
+export const postgresCodecLookup: CodecLookupWithDescriptors = {
   // A representative instance, built with no params — the same shape the control stack builds.
   get: (id: string) => fixtureDescriptor(id)?.factory({})({ name: id }),
   descriptorFor: fixtureDescriptor,

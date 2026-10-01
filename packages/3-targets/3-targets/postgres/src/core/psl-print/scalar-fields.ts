@@ -18,7 +18,6 @@ import {
 import { buildColumnDefault } from './column-defaults';
 import { buildColumnType } from './column-types';
 import type { ModelWithTable, VariantInfo } from './contract-model-index';
-import { buildDomainFieldType } from './domain-types';
 import type { NativeEnumEmission } from './enum-blocks';
 import { buildExecutionDefault, temporalPresetArguments } from './generated-values';
 import {
@@ -135,6 +134,7 @@ export function buildScalarFields(input: {
       modelName: entry.name,
       singleTableVariant: variant?.singleTable === true,
       domainEnumNames: input.defaultDomainEnumNames,
+      namedTypes: input.namedTypes,
     });
     if (column.typeRef !== undefined) {
       refuseColumnDifferingFromNamedType({
@@ -148,13 +148,7 @@ export function buildScalarFields(input: {
       column.typeRef !== undefined
         ? { typeName: column.typeRef }
         : field.type.kind === 'valueObject'
-          ? buildDomainFieldType({
-              field,
-              coordinate,
-              typeMap,
-              context,
-              enumBlockNames: enums.blockNamesByTypeName,
-            })
+          ? { typeName: field.type.name }
           : buildColumnType({
               column,
               typeMap,

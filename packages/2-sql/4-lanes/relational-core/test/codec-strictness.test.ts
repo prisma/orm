@@ -11,24 +11,24 @@ describe('sql/float@1 decodeJson', () => {
     expect(codec.decodeJson(1.5)).toBe(1.5);
   });
 
+  it('reads the text PostgreSQL writes for NaN and the infinities', () => {
+    expect(['NaN', 'Infinity', '-Infinity'].map((json) => codec.decodeJson(json))).toEqual([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]);
+  });
+
   it.each([
     ['digit text', '42'],
     ['decimal text', '1.5'],
     ['negative decimal text', '-1.50'],
-    ['the text NaN', 'NaN'],
-    ['the text Infinity', 'Infinity'],
-    ['the text -Infinity', '-Infinity'],
-  ])('refuses %s', (_name, json) => {
-    expect(() => codec.decodeJson(json)).toThrow(
-      `Expected a finite number for sql/float@1, got ${JSON.stringify(json)}`,
-    );
-  });
-
-  it.each([
     ['a boolean', true],
     ['null', null],
-    ['a non-finite number', Number.NaN],
+    ['an infinite number', Number.POSITIVE_INFINITY],
   ])('refuses %s', (_name, json) => {
-    expect(() => codec.decodeJson(json)).toThrow();
+    expect(() => codec.decodeJson(json)).toThrow(
+      'sql/float@1 JSON value must be a finite number or the text NaN, Infinity or -Infinity',
+    );
   });
 });

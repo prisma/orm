@@ -37,7 +37,7 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       attributeSpecs: { model: {}, field: {} },
     },
     dataTypeLookup: createDataTypeLookup([]),
-    codecLookup: emptyCodecLookup,
+    codecLookup: { ...emptyCodecLookup, descriptorFor: () => undefined },
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
@@ -109,7 +109,8 @@ model User {
     expect(interpretResult.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_UNRESOLVED_REFERENCE',
-        message: 'Cannot find type "Mystery"',
+        message:
+          'Field "User.bad" has type "Mystery", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String and ObjectId.',
         sourceId: schemaPath,
         span: expect.objectContaining({
           start: expect.objectContaining({ line: 4 }),
@@ -173,7 +174,8 @@ model Other {
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_UNRESOLVED_REFERENCE',
-        message: 'Cannot find type "Mystery"',
+        message:
+          'Field "Other.bad" has type "Mystery", which is not a scalar type, an enum, a composite type or a model. The Mongo scalar types are String and ObjectId.',
         sourceId: SOURCE_ID,
       }),
     ]);

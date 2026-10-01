@@ -239,6 +239,7 @@ function buildNamespace(
     typeMap: all.typeMap,
     context: all.context,
     enumBlockNames: enums.blockNamesByTypeName,
+    domainEnums: all.defaultDomainEnums,
   });
   const modelNameForTable = (tableName: string): string | undefined =>
     models.find(

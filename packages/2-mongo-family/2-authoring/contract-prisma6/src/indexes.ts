@@ -6,6 +6,7 @@ import {
   type ExpressionAst,
   FunctionCallAst,
   IdentifierAst,
+  PathExprAst,
   type PslSources,
 } from '@internal/psl-parser/syntax';
 import { prisma6Diagnostic } from './diagnostics';
@@ -33,6 +34,8 @@ interface ParseContext {
   readonly sourceId: string;
   readonly sources: PslSources;
   readonly diagnostics: ContractSourceDiagnostic[];
+  /** The owner's fields whose type is a composite type; an index path must start at one. */
+  readonly compositeFields: ReadonlySet<string>;
 }
 
 function unsupported(
@@ -105,13 +108,21 @@ function readFields(
       continue;
     }
     const call = FunctionCallAst.cast(element.syntax);
-    const path = call?.path() ?? [];
+    const path = PathExprAst.cast(element.syntax)?.path() ?? call?.path() ?? [];
     const [callee] = path;
+    if (path.length > 1 && (callee === undefined || !ctx.compositeFields.has(callee))) {
+      return unsupported(
+        attribute,
+        `lists the dotted path "${path.join('.')}", but "${callee ?? ''}" is not a composite-type field of the model, and Prisma 6 refuses the path as an unknown field. List fields of the model by name.`,
+        nodePslSpan(element.syntax, ctx.sources),
+        ctx,
+      );
+    }
     if (path.length > 1) {
       ctx.diagnostics.push(
         prisma6Diagnostic(
           'PSL.PRISMA6_MONGO_COMPOSITE_INDEX_PATH_UNSUPPORTED',
-          `Index path "${path.join('.')}" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index.`,
+          `Index path "${path.join('.')}" reaches into a composite type; indexes on composite-type fields are not supported yet. Index a top-level field or remove the index. Either change also reaches the Prisma 6 app, whose \`db push\` builds its indexes from this schema.`,
           ctx.sourceId,
           nodePslSpan(element.syntax, ctx.sources),
         ),

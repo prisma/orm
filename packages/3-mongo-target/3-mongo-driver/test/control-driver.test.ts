@@ -36,6 +36,16 @@ describe('mongoControlDriver descriptor', () => {
     }
   });
 
+  it('reports the database the connection string names', async () => {
+    const driver = await mongoControlDriver.create(replSet.getUri('shop'));
+
+    try {
+      expect(await driver.databaseName()).toBe('shop');
+    } finally {
+      await driver.close();
+    }
+  });
+
   it('exposes db that can execute commands', async () => {
     const url = replSet.getUri('control_driver_commands');
     const driver = await mongoControlDriver.create(url);

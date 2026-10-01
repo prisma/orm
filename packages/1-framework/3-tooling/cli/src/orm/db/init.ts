@@ -5,6 +5,7 @@ import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildRefAdvancementFields,
   type ContractIR,
@@ -13,18 +14,14 @@ import {
   preflightRefAdvancement,
 } from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
-import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorUnexpected,
-} from '../../utils/cli-errors';
-import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { closeQuietly } from '../../utils/command-helpers';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { baseDirFor } from '../migration/paths';
-import { isContractError, normalizeError } from '../normalize-error';
+import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
 import { prepareMigrationRun } from './prepare';
@@ -206,10 +203,11 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           startedAt,
         });
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+        if (
+          !CliStructuredError.is(error) &&
+          isStructuredError(error) &&
+          error.code === 'CONTRACT.VALIDATION_FAILED'
+        ) {
           return notOk(
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
@@ -218,17 +216,10 @@ export function createDbInitCommand(createClient: CreateControlClient) {
             ),
           );
         }
-        if (isContractError(error)) {
-          return notOk(normalizeError(error));
-        }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db init: ${safeMessage}`,
+            errorFromCaught(error, (message) => `Unexpected error during db init: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
             }),
           ),
         );

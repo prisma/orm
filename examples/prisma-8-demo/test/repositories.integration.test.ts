@@ -1089,7 +1089,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
+        const cache = createCacheMiddleware();
         const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
@@ -1116,11 +1116,11 @@ describe('ORM client integration examples', () => {
   );
 
   it(
-    'ormClientFindUserByIdCached forceRefresh: true bypasses the cache (skip annotation)',
+    'ormClientFindUserByIdCached forceRefresh: true bypasses the cache (bypass annotation)',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
+        const cache = createCacheMiddleware();
         const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
@@ -1131,7 +1131,7 @@ describe('ORM client integration examples', () => {
           await ormClientFindUserByIdCached(seededUserIds.admin, runtime);
           const callsAfterFirst = driverQuerySpy.mock.calls.length;
 
-          // Same query but with skip — should hit the driver again.
+          // Same query but bypassed — should hit the driver again.
           await ormClientFindUserByIdCached(seededUserIds.admin, runtime, {
             forceRefresh: true,
           });
@@ -1149,7 +1149,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
+        const cache = createCacheMiddleware();
         const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {
@@ -1182,7 +1182,7 @@ describe('ORM client integration examples', () => {
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await initTestDatabase({ connection: connectionString, contract });
-        const cache = createCacheMiddleware({ maxEntries: 100 });
+        const cache = createCacheMiddleware();
         const { runtime, driver } = await getRuntimeWithMiddleware(connectionString, [cache]);
 
         try {

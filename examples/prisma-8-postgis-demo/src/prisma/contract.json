@@ -37,7 +37,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/geometry@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "srid": 4326
+                  }
                 }
               },
               "name": {
@@ -71,7 +74,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/geometry@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "srid": 4326
+                  }
                 }
               },
               "id": {
@@ -132,7 +138,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/geometry@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "srid": 4326
+                  }
                 }
               }
             },

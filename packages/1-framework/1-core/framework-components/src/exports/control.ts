@@ -145,7 +145,6 @@ export type {
   MutationDefaultGeneratorDescriptor,
   SourceDiagnostic,
   SourceSpan,
-  TaggedLiteralValue,
   TypedDefaultFunctionCall,
 } from '../shared/mutation-default-types';
 export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';

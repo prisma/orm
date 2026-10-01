@@ -1,8 +1,53 @@
+import type { MigrationOperationClass } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever } from '@internal/utils/internal-error';
+import type { NextAction } from '@prisma/cli-engine/protocol';
+import { DB_UPDATE_POLICY } from '../control-api/operations/db-update';
 import type { DbInitFailure } from '../control-api/types';
 import type { CliStructuredError } from './cli-errors';
-import { errorMigrationPlanningFailed, errorRunnerFailed, errorRuntime } from './cli-errors';
+import {
+  ActionableCliError,
+  errorMigrationPlanningFailed,
+  errorRunnerFailed,
+  errorRuntime,
+} from './cli-errors';
+import { runCommandAction } from './next-actions';
+
+const DB_INIT_ADDITIVE_ONLY_FIX =
+  '`db init` applies only additive changes. Run `{bin} db update`, which also applies widening and destructive ones after you confirm them by typing the database name, or pass `--no-interactive --confirm <database>` where there is nobody to ask.';
+
+const DB_INIT_NEEDS_MIGRATION_FIX =
+  '`db init` applies only additive changes, and `db update` does not apply data operations. Plan a migration with `{bin} migration plan`, which can include them, and apply it with `{bin} db migrate`.';
+
+/**
+ * What to do instead of `db init` when its additive-only policy refused operations of the given classes: `db update` when its policy allows all of them, otherwise a planned migration.
+ */
+function adviceForRefusedClasses(refused: ReadonlySet<MigrationOperationClass>): {
+  readonly fix: string;
+  readonly nextAction: NextAction;
+} {
+  const allowedByDbUpdate: ReadonlySet<MigrationOperationClass> = new Set(
+    DB_UPDATE_POLICY.allowedOperationClasses,
+  );
+  if (![...refused].every((operationClass) => allowedByDbUpdate.has(operationClass))) {
+    return {
+      fix: DB_INIT_NEEDS_MIGRATION_FIX,
+      nextAction: runCommandAction(
+        'Plan a migration, since db update does not apply data operations',
+        '{bin} migration plan',
+      ),
+    };
+  }
+  return {
+    fix: DB_INIT_ADDITIVE_ONLY_FIX,
+    nextAction: runCommandAction(
+      refused.has('destructive')
+        ? 'Apply the change with db update, which lists the destructive operations and asks you to confirm them'
+        : 'Apply the change with db update',
+      '{bin} db update',
+    ),
+  };
+}
 
 function markerMismatchDetail(failure: DbInitFailure): string {
   const parts: string[] = [];
@@ -35,7 +80,24 @@ function markerMismatchDetail(failure: DbInitFailure): string {
  */
 export function mapDbInitFailure(failure: DbInitFailure): CliStructuredError {
   if (failure.code === 'PLANNING_FAILED') {
-    return errorMigrationPlanningFailed({ conflicts: failure.conflicts ?? [] });
+    const conflicts = failure.conflicts ?? [];
+    const planningFailed = errorMigrationPlanningFailed({ conflicts });
+    const refused = new Set(
+      conflicts.flatMap((conflict) =>
+        conflict.refusedOperationClass === undefined ? [] : [conflict.refusedOperationClass],
+      ),
+    );
+    if (refused.size === 0) {
+      return planningFailed;
+    }
+    const { fix, nextAction } = adviceForRefusedClasses(refused);
+    return new ActionableCliError(planningFailed.code, planningFailed.message, {
+      why: planningFailed.why ?? '',
+      fix,
+      nextActions: [nextAction],
+      ...ifDefined('meta', planningFailed.meta),
+      ...ifDefined('docsUrl', planningFailed.docsUrl),
+    });
   }
 
   if (failure.code === 'MIGRATION.MARKER_ORIGIN_MISMATCH') {

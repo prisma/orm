@@ -1,6 +1,10 @@
 import type { PlanMeta } from '@internal/contract/types';
 import type { MongoModelDefinition } from '@internal/mongo-contract';
-import type { MongoPipelineStage, MongoQueryPlan } from '@internal/mongo-query-ast/execution';
+import type {
+  MongoFieldShape,
+  MongoPipelineStage,
+  MongoQueryPlan,
+} from '@internal/mongo-query-ast/execution';
 import {
   AggregateCommand,
   MongoAndExpr,
@@ -12,9 +16,27 @@ import {
   MongoSortStage,
   MongoUnwindStage,
 } from '@internal/mongo-query-ast/execution';
-import { contractModelToMongoResultShape } from '@internal/mongo-query-builder';
+import {
+  contractModelToMongoResultShape,
+  type MongoValueObjects,
+} from '@internal/mongo-query-builder';
 import { ifDefined } from '@internal/utils/defined';
 import type { MongoCollectionState, MongoIncludeExpr } from './collection-state';
+
+function isToOne(include: MongoIncludeExpr): boolean {
+  return include.cardinality === 'N:1' || include.cardinality === '1:1';
+}
+
+/**
+ * An included document is decoded through the related model's codecs, like the root document. A to-one include with no related document reads as `null`.
+ */
+function includeShape(include: MongoIncludeExpr, valueObjects: MongoValueObjects): MongoFieldShape {
+  const target = contractModelToMongoResultShape(include.targetModel, { valueObjects });
+  const fields = target.kind === 'document' ? target.fields : {};
+  return isToOne(include)
+    ? { kind: 'document', nullable: true, fields }
+    : { kind: 'array', nullable: false, element: { kind: 'document', nullable: false, fields } };
+}
 
 function compileIncludes(includes: readonly MongoIncludeExpr[]): MongoPipelineStage[] {
   const stages: MongoPipelineStage[] = [];
@@ -29,7 +51,7 @@ function compileIncludes(includes: readonly MongoIncludeExpr[]): MongoPipelineSt
       }),
     );
 
-    if (inc.cardinality === 'N:1' || inc.cardinality === '1:1') {
+    if (isToOne(inc)) {
       stages.push(new MongoUnwindStage(`$${inc.relationName}`, true));
     }
   }
@@ -42,6 +64,7 @@ export function compileMongoQuery<Row = unknown>(
   state: MongoCollectionState,
   storageHash: string,
   model: MongoModelDefinition,
+  valueObjects: MongoValueObjects,
 ): MongoQueryPlan<Row> {
   const stages: MongoPipelineStage[] = [];
 
@@ -93,11 +116,12 @@ export function compileMongoQuery<Row = unknown>(
     state.selectedFields !== undefined && state.selectedFields.length > 0
       ? state.selectedFields
       : undefined;
-  const includeRelationNames =
-    state.includes.length > 0 ? state.includes.map((inc) => inc.relationName) : undefined;
   const resultShape = contractModelToMongoResultShape(model, {
     ...ifDefined('selection', selection),
-    ...ifDefined('includeRelationNames', includeRelationNames),
+    includes: Object.fromEntries(
+      state.includes.map((inc) => [inc.relationName, includeShape(inc, valueObjects)]),
+    ),
+    valueObjects,
   });
 
   return { collection, command, meta, resultShape };

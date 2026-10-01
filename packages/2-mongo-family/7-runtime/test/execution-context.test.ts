@@ -1,4 +1,5 @@
 import type { ExecutionMutationDefault } from '@internal/contract/types';
+import { decodeJsonString } from '@internal/framework-components/codec';
 import type { RuntimeMutationDefaultGenerator } from '@internal/framework-components/runtime';
 import { mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import { describe, expect, it } from 'vitest';
@@ -16,7 +17,12 @@ function registryWith(...ids: readonly string[]) {
   const registry = newMongoCodecRegistry();
   for (const id of ids) {
     registry.register(
-      mongoCodec({ typeId: id, decode: (w: string) => w, encode: (v: string) => v }),
+      mongoCodec({
+        typeId: id,
+        decode: (w: string) => w,
+        encode: (v: string) => v,
+        decodeJson: (json) => decodeJsonString(id, json),
+      }),
     );
   }
   return registry;
@@ -162,7 +168,7 @@ describe('createMongoExecutionContext composition', () => {
       expect.objectContaining({
         code: 'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
         message:
-          "Contract requires mutation default generator(s) 'clock', but no runtime component provides them.",
+          "Contract requires mutation default generator 'clock' for posts.createdAt, but no runtime component in the execution stack provides it. Built-in generators such as 'timestampNow' come from the database adapter's runtime descriptor, and others from the extension pack that defines them; include that component in the execution stack.",
       }),
     );
   });

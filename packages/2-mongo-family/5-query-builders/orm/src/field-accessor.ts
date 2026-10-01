@@ -104,19 +104,24 @@ type ResolveFieldType<
           ? ResolvedModelRow<TContract, ModelName>[K]
           : unknown;
 
-type NumericOps = {
-  inc(value: number): FieldOperation;
-  mul(value: number): FieldOperation;
+type NumericOps<Operand> = {
+  inc(value: Operand): FieldOperation;
+  mul(value: Operand): FieldOperation;
 };
 
-export type FieldExpression<T = unknown> = {
+type NumericOperandOf<T> = [T] extends [number] ? number : [T] extends [bigint] ? bigint : never;
+
+/**
+ * The update operations on a field whose value is `T`. `inc` and `mul` exist when `NumericOperand` is not `never`, and take it as their operand; by default a `number` field takes a `number` and a `bigint` field a `bigint`.
+ */
+export type FieldExpression<T = unknown, NumericOperand = NumericOperandOf<T>> = {
   set(value: T): FieldOperation;
   unset(): FieldOperation;
   push(value: T extends readonly (infer E)[] ? E : unknown): FieldOperation;
   pull(match: T extends readonly (infer E)[] ? E | Partial<E> : unknown): FieldOperation;
   addToSet(value: T extends readonly (infer E)[] ? E : unknown): FieldOperation;
   pop(end: 1 | -1): FieldOperation;
-} & (T extends number ? NumericOps : unknown);
+} & ([NumericOperand] extends [never] ? unknown : NumericOps<NumericOperand>);
 
 type HasValueObjects = MongoContract;
 
@@ -220,13 +225,41 @@ export type ResolveDotPathType<
     : never
   : never;
 
+/**
+ * The operand of `inc` and `mul` on a required, single-valued scalar field: the codec's input type when its codec has the `numeric` trait, or, for a codec map without traits, a `number` or `bigint` output. A codec entry typed `never` gives no operand.
+ */
+type ScalarNumericOperand<
+  TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
+  ModelName extends string & keyof MongoModelsMap<TContract>,
+  K extends keyof MongoModelsMap<TContract>[ModelName]['fields'] & string,
+  TCodecTypes extends Record<string, { output: unknown }>,
+> = MongoModelsMap<TContract>[ModelName]['fields'][K] extends
+  | { readonly nullable: true }
+  | { readonly many: true }
+  ? never
+  : MongoModelsMap<TContract>[ModelName]['fields'][K] extends {
+        readonly type: {
+          readonly kind: 'scalar';
+          readonly codecId: infer CId extends string & keyof TCodecTypes;
+        };
+      }
+    ? [TCodecTypes[CId]] extends [never]
+      ? never
+      : TCodecTypes[CId] extends { readonly traits: infer Traits; readonly input: infer Input }
+        ? 'numeric' extends Traits
+          ? Input
+          : never
+        : NumericOperandOf<TCodecTypes[CId]['output']>
+    : never;
+
 export type FieldAccessor<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
   ModelName extends string & keyof MongoModelsMap<TContract>,
   TCodecTypes extends Record<string, { output: unknown }> = ExtractMongoCodecTypes<TContract>,
 > = {
   readonly [K in ScalarFieldKeys<TContract, ModelName>]: FieldExpression<
-    ResolveFieldType<TContract, ModelName, K, TCodecTypes>
+    ResolveFieldType<TContract, ModelName, K, TCodecTypes>,
+    ScalarNumericOperand<TContract, ModelName, K, TCodecTypes>
   >;
 } & {
   readonly [K in ValueObjectFieldKeys<TContract, ModelName>]: FieldExpression<
@@ -239,7 +272,7 @@ export type FieldAccessor<
 // ── Runtime implementation ───────────────────────────────────────────────────
 
 // Runtime expression has all methods; type-level gating happens via FieldExpression<T>
-interface RuntimeFieldExpression extends NumericOps {
+interface RuntimeFieldExpression extends NumericOps<unknown> {
   set(value: unknown): FieldOperation;
   unset(): FieldOperation;
   push(value: unknown): FieldOperation;
@@ -256,10 +289,10 @@ function createFieldExpression(fieldPath: string): RuntimeFieldExpression {
     unset(): FieldOperation {
       return { operator: '$unset', field: fieldPath, value: new MongoParamRef('') };
     },
-    inc(value: number): FieldOperation {
+    inc(value: unknown): FieldOperation {
       return { operator: '$inc', field: fieldPath, value: new MongoParamRef(value) };
     },
-    mul(value: number): FieldOperation {
+    mul(value: unknown): FieldOperation {
       return { operator: '$mul', field: fieldPath, value: new MongoParamRef(value) };
     },
     push(value: unknown): FieldOperation {

@@ -111,7 +111,7 @@ describe('integration/sqlite include canonical JSON', () => {
       throw new InternalError('SQLite execution stack is missing its adapter or driver');
     }
     await driver.connect({ kind: 'path', path });
-    runtime = new SqliteRuntimeImpl({ context, adapter, driver });
+    runtime = new SqliteRuntimeImpl({ context, adapter, driver, closeRefusal: undefined });
     // SQLite has no schema namespaces, so the contract builder leaves models in
     // the unbound namespace rather than `public`.
     stations = new Collection({ runtime, context }, 'Station', {
@@ -293,16 +293,17 @@ describe('integration/sqlite include canonical JSON', () => {
     const exactTotal = (WIDE_BIGINT + 2n).toString();
     expect(shape).toEqual({
       name: 'RuntimeError',
-      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
+      message: `Failed to decode column canon_stations.stations with codec 'sqlite/bigintnumber@1': sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
       code: 'RUNTIME.DECODE_FAILED',
       category: 'RUNTIME',
       severity: 'error',
       details: { table: 'canon_stations', column: 'stations', codec: 'sqlite/bigintnumber@1' },
       cause: {
         name: 'StructuredError',
-        message: `sqlite/bigintnumber@1 value must be an integer within the safe integer range, got ${exactTotal}`,
+        message:
+          'sqlite/bigintnumber@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
         code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: exactTotal },
+        meta: { codecId: 'sqlite/bigintnumber@1', received: JSON.stringify(exactTotal) },
       },
     });
   });

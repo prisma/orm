@@ -146,6 +146,7 @@ describe('integration: rawSql expression in typed builder', {
 
   function buildRuntime(middleware?: readonly SqlMiddleware[]): Runtime {
     return new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,

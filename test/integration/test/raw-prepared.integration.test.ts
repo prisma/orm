@@ -105,6 +105,7 @@ describe('integration: prepared whole-query raw statements', {
     await driver.connect({ kind: 'pgClient', client });
 
     runtime = new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,

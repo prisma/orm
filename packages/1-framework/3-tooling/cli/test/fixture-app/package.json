@@ -3,12 +3,12 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.13",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.13",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.14",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.14",
     "@types/node": "catalog:",
     "dotenv": "^17.4.2",
     "mongodb": "catalog:",
     "pg": "catalog:"
   },
-  "version": "8.0.0-rc.13"
+  "version": "8.0.0-rc.14"
 }

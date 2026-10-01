@@ -391,11 +391,7 @@ async function introspectSchema(
   const rawSchemaNode = await controlAdapter.introspect(driver, undefined, schemaName);
   PostgresDatabaseSchemaNode.assert(rawSchemaNode);
 
-  const inferPslContract = postgresTargetDescriptor.inferPslContract;
-  if (!inferPslContract) {
-    throw new Error('generate-contract: postgres target descriptor has no inferPslContract');
-  }
-  const ast = inferPslContract(rawSchemaNode);
+  const ast = sqlFamilyDescriptor.create(controlStack).inferPslContract(rawSchemaNode);
   const namespace = ast.namespaces.find((ns) => ns.name === schemaName);
   if (!namespace) {
     throw new Error(

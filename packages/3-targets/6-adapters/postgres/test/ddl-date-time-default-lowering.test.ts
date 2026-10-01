@@ -73,4 +73,19 @@ describe('a date or time default in CREATE TABLE', () => {
       ),
     ).toBe("DEFAULT ARRAY['2024-01-01T00:00:00Z', '0044-03-15T00:00:00Z BC']::timestamptz[]");
   });
+
+  it.each([
+    ['timestamptz', 'pg/timestamptz-temporal@1', 'not a date'],
+    ['timestamptz', 'pg/timestamptz-date@1', '2024-01-01T00:00:00'],
+    ['date', 'pg/date-temporal@1', '2024-02-30'],
+    ['interval', 'pg/interval@1', '1 day'],
+  ])(
+    'refuses a %s default its codec %s does not read, %s, naming the column',
+    async (nativeType, codecId, value) => {
+      await expect(createTableDefault(nativeType, codecId, value)).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: { table: 't', column: 'v', codecId, value, reason: 'codec-refused-default' },
+      });
+    },
+  );
 });
