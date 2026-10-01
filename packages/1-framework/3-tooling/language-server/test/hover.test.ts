@@ -274,6 +274,23 @@ describe('providePslHover', () => {
     expect(result).toBeNull();
   });
 
+  it('returns null for a namespace resolution', () => {
+    const result = hover(
+      'namespace billing {\n  model Invoice {\n    id Int\n  }\n}\nmodel Foo {\n  bad billi|ng\n}',
+    );
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a contributedNamespace resolution', () => {
+    const result = hover('model Product {\n  label p|g\n}');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for a crossSpace reference', () => {
+    const result = hover('model Cart {\n  user auth:Us|er\n}');
+    expect(result).toBeNull();
+  });
+
   it('returns null when the cursor is not on an Ident token', () => {
     const result = hover('model User {| id Int\n}');
     expect(result).toBeNull();
