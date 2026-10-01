@@ -1,4 +1,7 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
+import type {
+  AuthoringArgumentDescriptor,
+  AuthoringPslBlockDescriptorNamespace,
+} from '@internal/framework-components/authoring';
 import type {
   AttributeSymbol,
   Binder,
@@ -28,7 +31,7 @@ import { renderSignatureLabel, resolveSignatureParameters } from './signature-he
 
 export interface ProvidePslHoverInput extends PslCursorInput {
   readonly binder: Binder;
-  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
+  readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
 }
 
 type HoverEntitySymbol =
@@ -61,7 +64,7 @@ export function providePslHover(input: ProvidePslHoverInput): Hover | null {
 function hoverValueAt(
   binder: Binder,
   token: SyntaxToken,
-  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace | undefined,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
 ): string | undefined {
   const result = resolveHoverResult(binder, token);
   if (result !== undefined) return renderHoverResult(result);
@@ -138,8 +141,7 @@ function renderHoverResult(result: HoverResult): string {
 
 function renderEntityContent(entity: HoverEntitySymbol): string {
   const fence = ['```prisma', renderDeclarationLine(entity), '```'].join('\n');
-  const doc = readDocComment(entity.node.syntax);
-  return doc === undefined ? fence : `${fence}\n\n${doc}`;
+  return withDocumentation(fence, readDocComment(entity.node.syntax));
 }
 
 function renderAttributeContent(symbol: AttributeSymbol): string {
@@ -147,13 +149,18 @@ function renderAttributeContent(symbol: AttributeSymbol): string {
   const params = resolveSignatureParameters(symbol.spec, undefined);
   const { label } = renderSignatureLabel(name, symbol.spec, params);
   const fence = ['```prisma', label, '```'].join('\n');
-  return `${fence}\n\n${symbol.spec.documentation}`;
+  return withDocumentation(fence, symbol.spec.documentation);
 }
 
 function renderContributedTypeContent(symbol: ContributedTypeSymbol): string {
   const fence = ['```prisma', renderContributedTypeLabel(symbol), '```'].join('\n');
-  const doc = symbol.descriptor.documentation;
-  return doc === undefined ? fence : `${fence}\n\n${doc}`;
+  return withDocumentation(fence, symbol.descriptor.documentation);
+}
+
+function withDocumentation(fence: string, documentation: string | undefined): string {
+  return documentation === undefined || documentation === ''
+    ? fence
+    : `${fence}\n\n${documentation}`;
 }
 
 function renderContributedTypeLabel(symbol: ContributedTypeSymbol): string {
@@ -162,14 +169,23 @@ function renderContributedTypeLabel(symbol: ContributedTypeSymbol): string {
   if (args.length === 0) return path;
   const labels = args.map((arg, index) => {
     const key = arg.name ?? `arg${index + 1}`;
-    return `${key}${arg.optional === true ? '?' : ''}: ${arg.kind}`;
+    return `${key}${arg.optional === true ? '?' : ''}: ${argumentTypeLabel(arg)}`;
   });
   return `${path}(${labels.join(', ')})`;
 }
 
+function argumentTypeLabel(arg: AuthoringArgumentDescriptor): string {
+  if (arg.kind === 'string') return 'string';
+  if (arg.kind === 'boolean') return 'boolean';
+  if (arg.kind === 'number') return 'number';
+  if (arg.kind === 'stringArray') return 'string[]';
+  if (arg.kind === 'object') return 'object';
+  return arg.values.map((value) => `'${value}'`).join(' | ');
+}
+
 function blockKeywordDocumentationAt(
   token: SyntaxToken,
-  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace | undefined,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
 ): string | undefined {
   const declaration = GenericBlockDeclarationAst.cast(token.parent);
   if (declaration === undefined || declaration.keyword()?.offset !== token.offset) return undefined;

@@ -52,6 +52,18 @@ const authoringContributions = assembleAuthoringContributions([
             kind: 'typeConstructor',
             output: { codecId: 'fixture/text', nativeType: 'text' },
           },
+          Tags: {
+            kind: 'typeConstructor',
+            documentation: 'A list of tags.',
+            args: [{ name: 'tags', kind: 'stringArray' }],
+            output: { codecId: 'fixture/tags', nativeType: 'tags' },
+          },
+          Mode: {
+            kind: 'typeConstructor',
+            documentation: 'A deletion mode.',
+            args: [{ name: 'mode', kind: 'option', values: ['cascade', 'restrict'] }],
+            output: { codecId: 'fixture/mode', nativeType: 'mode' },
+          },
         },
       },
     },
@@ -276,6 +288,14 @@ describe('providePslHover', () => {
     });
   });
 
+  it('omits the documentation section when spec.documentation is empty', () => {
+    const result = hover('model User {\n  id Int\n  author User @relates|To(fields: id)\n}');
+    expect(result).toEqual({
+      contents: { kind: 'markdown', value: '```prisma\n@relatesTo(fields: field name)\n```' },
+      range: { start: { line: 2, character: 15 }, end: { line: 2, character: 24 } },
+    });
+  });
+
   it('shows a contributed type with documentation and args', () => {
     const result = hover('model Product {\n  price pg.Varc|har(255)\n}');
     expect(result).toEqual({
@@ -292,6 +312,28 @@ describe('providePslHover', () => {
     expect(result).toEqual({
       contents: { kind: 'markdown', value: '```prisma\npg.Text\n```' },
       range: { start: { line: 1, character: 11 }, end: { line: 1, character: 15 } },
+    });
+  });
+
+  it('shows a stringArray contributed-type arg as string[]', () => {
+    const result = hover('model Product {\n  labels pg.Tag|s([])\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: '```prisma\npg.Tags(tags: string[])\n```\n\nA list of tags.',
+      },
+      range: { start: { line: 1, character: 12 }, end: { line: 1, character: 16 } },
+    });
+  });
+
+  it('shows an option contributed-type arg as its joined allowed values', () => {
+    const result = hover('model Product {\n  onDelete pg.Mo|de(cascade)\n}');
+    expect(result).toEqual({
+      contents: {
+        kind: 'markdown',
+        value: "```prisma\npg.Mode(mode: 'cascade' | 'restrict')\n```\n\nA deletion mode.",
+      },
+      range: { start: { line: 1, character: 14 }, end: { line: 1, character: 18 } },
     });
   });
 
