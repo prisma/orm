@@ -78,7 +78,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
           tags: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
+            many: { elementNullable: false },
           },
         },
       },

@@ -377,11 +377,13 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -399,6 +401,7 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -412,11 +415,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly userId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['userId', 'objectiveId'] };
@@ -469,21 +474,25 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                  readonly many: false;
                 };
                 readonly followerId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly objectiveId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly userId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['userId', 'objectiveId'] };

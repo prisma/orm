@@ -41,7 +41,11 @@ import {
   storageName,
 } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
-import { lowerDefaultForField, resolveFieldTypeDescriptor } from './psl-column-resolution';
+import {
+  lowerDefaultForField,
+  rejectStrictListNullDefault,
+  resolveFieldTypeDescriptor,
+} from './psl-column-resolution';
 import {
   fieldSpecContext,
   interpretFieldAttribute,
@@ -94,6 +98,23 @@ function lowerEnumDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const member = interpreted.value;
+  if (Array.isArray(member)) {
+    if (member.includes(null) && rejectStrictListNullDefault({ ...input, node })) return {};
+    const values = member.map((entry) =>
+      entry === null
+        ? null
+        : enumHandle.enumMembers.find((candidate) => candidate.name === entry)?.value,
+    );
+    return {
+      defaultValue: {
+        kind: 'literal',
+        value: blindCast<
+          ColumnDefaultLiteralInputValue,
+          'enum member values are codec-validated JsonValue-compatible scalars'
+        >(values),
+      },
+    };
+  }
   invariant(
     typeof member === 'string',
     'the enum @default grammar admits only member identifiers, so the parsed value is a string',
@@ -128,6 +149,7 @@ export type ResolvedField = {
   // Spelled literally because this package does not depend on
   // @internal/sql-schema-ir; the canonical alias is `CheckKind` there.
   readonly noCheck?: readonly ('membership' | 'elementNotNull')[];
+  readonly elementNullable?: true;
   readonly valueObjectTypeName?: string;
 };
 
@@ -357,6 +379,7 @@ function lowerNoCheckForField(input: {
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly isListColumn: boolean;
+  readonly elementNullable: boolean;
   readonly isDomainEnum: boolean;
   readonly diagnostics: PslDiagnosticCollector;
 }): readonly NoCheckKind[] | undefined {
@@ -377,7 +400,7 @@ function lowerNoCheckForField(input: {
   const span = getAttribute(input.field.attributes, 'noCheck')?.span ?? input.field.span;
   const subject = `Field "${input.model.name}.${input.field.name}"`;
   const derivable: NoCheckKind[] = [];
-  if (input.isListColumn) derivable.push('elementNotNull');
+  if (input.isListColumn && !input.elementNullable) derivable.push('elementNotNull');
   if (input.isDomainEnum) derivable.push('membership');
 
   const authored = [interpreted.first, interpreted.second].filter(
@@ -399,7 +422,7 @@ function lowerNoCheckForField(input: {
       const explanation =
         kind === 'membership'
           ? 'membership checks are derived only from enum value sets'
-          : 'element-non-null checks are derived only for list columns';
+          : 'element-non-null checks are derived only for lists whose elements are semantically non-null';
       input.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
         message: `${subject} @noCheck(${kind}) does not apply — ${explanation}`,
@@ -726,6 +749,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           sources: input.sources,
           binder: input.binder,
           isListColumn,
+          elementNullable: field.elementOptional,
           isDomainEnum: enumHandle !== undefined,
           diagnostics,
         })
@@ -743,6 +767,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       ...ifDefined('uniqueName', uniqueName),
       ...ifDefined('many', isListField ? (true as const) : undefined),
       ...ifDefined('noCheck', noCheckKinds),
+      ...ifDefined('elementNullable', field.elementOptional ? (true as const) : undefined),
       ...ifDefined('valueObjectTypeName', valueObjectName),
     });
   }

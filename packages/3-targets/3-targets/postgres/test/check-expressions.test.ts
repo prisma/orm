@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { postgresRenderCheckExpressions } from '../src/core/check-expressions';
 
-const base = { tableName: 'User', columnName: 'role', many: false, memberValues: undefined };
+const base = {
+  tableName: 'User',
+  columnName: 'role',
+  many: false,
+  memberValues: undefined,
+};
 
 describe('postgresRenderCheckExpressions', () => {
   it('renders a scalar domain enum as an IN membership predicate', () => {
@@ -18,12 +23,16 @@ describe('postgresRenderCheckExpressions', () => {
 
   it('compares numeric arrays with both operands cast to numeric[]', () => {
     expect(
-      postgresRenderCheckExpressions({ ...base, many: true, memberValues: [1, 2.5, -3] }),
+      postgresRenderCheckExpressions({
+        ...base,
+        many: { elementNullable: false },
+        memberValues: [1, 2.5, -3],
+      }),
     ).toEqual([
       {
         kind: 'membership',
         columnName: 'role',
-        expression: '"role"::numeric[] <@ ARRAY[1, 2.5, -3]::numeric[]',
+        expression: 'array_remove("role"::numeric[], NULL) <@ ARRAY[1, 2.5, -3]::numeric[]',
       },
       {
         kind: 'elementNotNull',
@@ -36,7 +45,7 @@ describe('postgresRenderCheckExpressions', () => {
   it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
     'rejects non-finite numeric member %s',
     (value) => {
-      for (const many of [false, true]) {
+      for (const many of [false, { elementNullable: false }] as const) {
         expect(() =>
           postgresRenderCheckExpressions({ ...base, many, memberValues: [1, value] }),
         ).toThrow(/non-finite numeric member/);
@@ -44,19 +53,19 @@ describe('postgresRenderCheckExpressions', () => {
     },
   );
 
-  it('renders an array domain enum as an <@ containment predicate', () => {
+  it('renders array membership over null-stripped elements', () => {
     expect(
       postgresRenderCheckExpressions({
         ...base,
         columnName: 'roles',
-        many: true,
+        many: { elementNullable: false },
         memberValues: ['user', 'admin'],
       }),
     ).toEqual([
       {
         kind: 'membership',
         columnName: 'roles',
-        expression: `"roles"::text[] <@ ARRAY['user', 'admin']::text[]`,
+        expression: `array_remove("roles"::text[], NULL) <@ ARRAY['user', 'admin']::text[]`,
       },
       {
         kind: 'elementNotNull',
@@ -67,11 +76,34 @@ describe('postgresRenderCheckExpressions', () => {
   });
 
   it('renders element-non-null only for a list column with no member set', () => {
-    expect(postgresRenderCheckExpressions({ ...base, columnName: 'tags', many: true })).toEqual([
+    expect(
+      postgresRenderCheckExpressions({
+        ...base,
+        columnName: 'tags',
+        many: { elementNullable: false },
+      }),
+    ).toEqual([
       {
         kind: 'elementNotNull',
         columnName: 'tags',
         expression: `array_position("tags", NULL) IS NULL`,
+      },
+    ]);
+  });
+
+  it('omits element-non-null for a nullable-element list while preserving membership', () => {
+    expect(
+      postgresRenderCheckExpressions({
+        ...base,
+        columnName: 'roles',
+        many: { elementNullable: true },
+        memberValues: ['user', 'admin'],
+      }),
+    ).toEqual([
+      {
+        kind: 'membership',
+        columnName: 'roles',
+        expression: `array_remove("roles"::text[], NULL) <@ ARRAY['user', 'admin']::text[]`,
       },
     ]);
   });
@@ -91,7 +123,7 @@ describe('postgresRenderCheckExpressions', () => {
       postgresRenderCheckExpressions({
         ...base,
         columnName: 'roles',
-        many: true,
+        many: { elementNullable: false },
         memberValues: [],
       }),
     ).toThrow(/empty member set/);

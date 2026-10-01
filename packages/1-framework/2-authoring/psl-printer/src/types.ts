@@ -9,6 +9,7 @@ export type PrinterField = {
   readonly typeName: string;
   readonly optional: boolean;
   readonly list: boolean;
+  readonly elementOptional?: boolean;
   readonly attributes: readonly string[];
   readonly mapName?: string | undefined;
   readonly isId: boolean;

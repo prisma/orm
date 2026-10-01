@@ -18,6 +18,7 @@ function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageCo
   return {
     nativeType: 'text',
     nullable: false,
+    many: false,
     ...overrides,
   };
 }

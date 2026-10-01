@@ -237,7 +237,9 @@ type MergeExtensionCodecTypesSafe<Packs> =
 export interface FieldBuilder<
   Type extends ContractFieldType = ContractFieldType,
   Nullable extends boolean = boolean,
-  Many extends boolean = boolean,
+  Many extends false | { readonly elementNullable: boolean } =
+    | false
+    | { readonly elementNullable: boolean },
   Handle extends EnumTypeHandle | undefined = EnumTypeHandle | undefined,
   ExecutionDefaults extends ExecutionMutationDefaultPhases | undefined = undefined,
 > {
@@ -252,7 +254,33 @@ export interface FieldBuilder<
     : () => FieldBuilder<Type, true, Many, Handle, ExecutionDefaults>;
   readonly many: FilledOnWrite<ExecutionDefaults> extends true
     ? (this: 'A preset fills this field on write, so it cannot be a list') => never
-    : () => FieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>;
+    : {
+        (): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: false },
+          Handle,
+          ExecutionDefaults
+        >;
+        (options: {
+          readonly elementsNullable: false;
+        }): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: false },
+          Handle,
+          ExecutionDefaults
+        >;
+        (options: {
+          readonly elementsNullable: true;
+        }): FieldBuilder<
+          Type,
+          Nullable,
+          { readonly elementNullable: true },
+          Handle,
+          ExecutionDefaults
+        >;
+      };
 }
 
 /**
@@ -346,7 +374,7 @@ export interface ModelBuilder<
 type AnyFieldBuilder = FieldBuilder<
   ContractFieldType,
   boolean,
-  boolean,
+  false | { readonly elementNullable: boolean },
   EnumTypeHandle | undefined,
   ExecutionMutationDefaultPhases | undefined
 >;
@@ -490,16 +518,15 @@ type ContractFieldFromBuilder<TBuilder> =
   TBuilder extends FieldBuilder<
     infer Type extends ContractFieldType,
     infer Nullable extends boolean,
-    infer Many extends boolean,
+    infer Many extends false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
-    ? Simplify<
-        {
-          readonly type: Type;
-          readonly nullable: Nullable;
-        } & (Many extends true ? { readonly many: true } : EmptyObject)
-      >
+    ? Simplify<{
+        readonly type: Type;
+        readonly nullable: Nullable;
+        readonly many: Many;
+      }>
     : never;
 
 type ContractFieldsFromRecord<Fields extends Record<string, AnyFieldBuilder>> = Simplify<{
@@ -528,7 +555,7 @@ type AnyFieldNullable<
     ? Fields[Name] extends FieldBuilder<
         ContractFieldType,
         true,
-        boolean,
+        false | { readonly elementNullable: boolean },
         EnumTypeHandle | undefined,
         ExecutionMutationDefaultPhases | undefined
       >
@@ -826,7 +853,7 @@ type BuilderEnumValueUnion<TBuilder> =
   TBuilder extends FieldBuilder<
     ContractFieldType,
     boolean,
-    boolean,
+    false | { readonly elementNullable: boolean },
     infer Handle extends EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
@@ -849,7 +876,7 @@ type BuilderBaseChannelType<
   TBuilder extends FieldBuilder<
     infer Type extends ContractFieldType,
     boolean,
-    boolean,
+    false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
@@ -896,13 +923,16 @@ type BuilderFieldChannelType<
   TBuilder extends FieldBuilder<
     ContractFieldType,
     infer Nullable extends boolean,
-    infer Many extends boolean,
+    infer Many extends false | { readonly elementNullable: boolean },
     EnumTypeHandle | undefined,
     ExecutionMutationDefaultPhases | undefined
   >
     ?
-        | (Many extends true
-            ? BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>[]
+        | (Many extends { readonly elementNullable: infer ElementNullable extends boolean }
+            ? Array<
+                | BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>
+                | (ElementNullable extends true ? null : never)
+              >
             : BuilderBaseChannelType<TBuilder, TValueObjects, TCodecTypes, Channel>)
         | (Nullable extends true ? null : never)
     : never;
@@ -1210,7 +1240,7 @@ export type ContractFactory<
 type FieldBuilderSpec<
   Type extends ContractFieldType,
   Nullable extends boolean,
-  Many extends boolean,
+  Many extends false | { readonly elementNullable: boolean },
 > = {
   readonly type: Type;
   readonly nullable: Nullable;
@@ -1220,7 +1250,7 @@ type FieldBuilderSpec<
 function createFieldBuilder<
   Type extends ContractFieldType,
   Nullable extends boolean,
-  Many extends boolean,
+  Many extends false | { readonly elementNullable: boolean },
   Handle extends EnumTypeHandle | undefined = undefined,
   ExecutionDefaults extends ExecutionMutationDefaultPhases | undefined = undefined,
 >(
@@ -1228,6 +1258,31 @@ function createFieldBuilder<
   enumHandle?: Handle,
   executionDefaults?: ExecutionDefaults,
 ): FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults> {
+  function many(): FieldBuilder<
+    Type,
+    Nullable,
+    { readonly elementNullable: false },
+    Handle,
+    ExecutionDefaults
+  >;
+  function many(options: {
+    readonly elementsNullable: false;
+  }): FieldBuilder<Type, Nullable, { readonly elementNullable: false }, Handle, ExecutionDefaults>;
+  function many(options: {
+    readonly elementsNullable: true;
+  }): FieldBuilder<Type, Nullable, { readonly elementNullable: true }, Handle, ExecutionDefaults>;
+  function many(options?: { readonly elementsNullable: boolean }) {
+    return createFieldBuilder(
+      {
+        type: spec.type,
+        nullable: spec.nullable,
+        many: { elementNullable: options?.elementsNullable ?? false },
+      },
+      enumHandle,
+      executionDefaults,
+    );
+  }
+
   return {
     __kind: 'field',
     ...ifDefined('__executionDefaults', executionDefaults),
@@ -1243,7 +1298,11 @@ function createFieldBuilder<
       'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
     >(() =>
       createFieldBuilder<Type, true, Many, Handle, ExecutionDefaults>(
-        { type: spec.type, nullable: true, many: spec.many },
+        {
+          type: spec.type,
+          nullable: true,
+          many: spec.many,
+        },
         enumHandle,
         executionDefaults,
       ),
@@ -1251,13 +1310,7 @@ function createFieldBuilder<
     many: blindCast<
       FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults>['many'],
       'every builder has the method at runtime, for a JavaScript caller the type does not stop; the type refuses it on a field a preset fills'
-    >(() =>
-      createFieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>(
-        { type: spec.type, nullable: spec.nullable, many: true },
-        enumHandle,
-        executionDefaults,
-      ),
-    ),
+    >(many),
   };
 }
 
@@ -1887,18 +1940,12 @@ function buildContractField(builder: AnyFieldBuilder): ContractField {
       }
     : undefined;
 
-  return builder.__many
-    ? {
-        type: builder.__type,
-        nullable: builder.__nullable,
-        many: true,
-        ...ifDefined('valueSet', valueSet),
-      }
-    : {
-        type: builder.__type,
-        nullable: builder.__nullable,
-        ...ifDefined('valueSet', valueSet),
-      };
+  return {
+    type: builder.__type,
+    nullable: builder.__nullable,
+    many: builder.__many,
+    ...ifDefined('valueSet', valueSet),
+  };
 }
 
 function buildFields(fields: Record<string, AnyFieldBuilder>): Record<string, ContractField> {

@@ -88,47 +88,56 @@ type ContractBase = Omit<
             readonly user: {
               columns: {
                 readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly email: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly phone: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly bio: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly posts: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly avatar: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly comments: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly tags: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly category: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;

@@ -154,7 +154,7 @@ type ContractBase = Omit<
               readonly contents: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContent' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly country: {
                 readonly nullable: true;
@@ -178,7 +178,7 @@ type ContractBase = Omit<
                   readonly kind: 'valueObject';
                   readonly name: 'CommentContentUpvotes';
                 };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
           };
@@ -211,7 +211,7 @@ type ContractBase = Omit<
         readonly upvotes: {
           readonly nullable: false;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContentUpvotes' };
-          readonly many: true;
+          readonly many: { readonly elementNullable: false };
         };
       };
     };

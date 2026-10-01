@@ -120,6 +120,33 @@ describe('a default on a value-object field matches its composite type', () => {
     ).toEqual([]);
   });
 
+  it('accepts nullable list elements in literal and JSON value-object defaults', () => {
+    expect(
+      scenario(
+        `  homes Address?[] @default([null, json\`{"street":"x","tags":[]}\`, null])
+  jsonHomes Address?[] @default(json\`[null,{"street":"x","tags":[]}]\`)
+  nested NullableMembers @default(json\`{"texts":[null,"x"],"addresses":[null,{"street":"x","tags":[]}]}\`)`,
+        `type NullableMembers {
+  texts String?[]
+  addresses Address?[]
+}
+`,
+      ).diagnostics,
+    ).toEqual([]);
+  });
+
+  it('checks non-null elements after restoring null positions in a list default', () => {
+    const { diagnostics, incompatible } = scenario(
+      '  homes Address?[] @default([null, json`{"tags":[]}`])',
+    );
+    expect(diagnostics).toEqual([
+      incompatible(
+        'homes',
+        'Field "User.homes[1].street": the member is required, and the default has no value for it',
+      ),
+    ]);
+  });
+
   it('refuses a JSON object or string as the default of a list of value objects', () => {
     const { diagnostics, incompatible } =
       scenario(`  homes Address[] @default(json\`{"street": "x", "tags": []}\`)

@@ -51,7 +51,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "long": {
                 "type": {
@@ -62,7 +63,8 @@
                     "scale": 30
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "tiny": {
                 "type": {
@@ -73,7 +75,8 @@
                     "scale": 30
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "negative": {
                 "type": {
@@ -84,7 +87,8 @@
                     "scale": 30
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "whole": {
                 "type": {
@@ -95,14 +99,16 @@
                     "scale": 30
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "zerosBare": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/numeric@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "zerosScaled": {
                 "type": {
@@ -113,7 +119,8 @@
                     "scale": 2
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "zerosDefault": {
                 "type": {
@@ -124,7 +131,8 @@
                     "scale": 30
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "list": {
                 "type": {
@@ -136,14 +144,17 @@
                   }
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               },
               "bigLong": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int8@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "bigList": {
                 "type": {
@@ -151,7 +162,9 @@
                   "codecId": "pg/int8@1"
                 },
                 "nullable": true,
-                "many": true
+                "many": {
+                  "elementNullable": false
+                }
               }
             },
             "relations": {}
@@ -171,7 +184,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "fc0e3f70a8750f86ca395db01cc042b99d644e08c2c69d1978d642256f8520fe",
+    "storageHash": "622e8975421f56a0050fbc84626e19a382d434983dc84c0dd0730559d8b62ea2",
     "namespaces": {
       "public": {
         "id": "public",
@@ -183,12 +196,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "long": {
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 65,
                     "scale": 30
@@ -202,6 +217,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 65,
                     "scale": 30
@@ -215,6 +231,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 65,
                     "scale": 30
@@ -228,6 +245,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 65,
                     "scale": 30
@@ -241,6 +259,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": "1.50"
@@ -250,6 +269,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 10,
                     "scale": 2
@@ -263,6 +283,7 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "precision": 65,
                     "scale": 30
@@ -276,7 +297,9 @@
                   "nativeType": "numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "typeParams": {
                     "precision": 65,
@@ -291,6 +314,7 @@
                   "nativeType": "int8",
                   "codecId": "pg/int8@1",
                   "nullable": false,
+                  "many": false,
                   "default": {
                     "kind": "literal",
                     "value": "9007199254740993"
@@ -300,7 +324,9 @@
                   "nativeType": "int8",
                   "codecId": "pg/int8@1",
                   "nullable": true,
-                  "many": true,
+                  "many": {
+                    "elementNullable": false
+                  },
                   "noCheck": ["elementNotNull"],
                   "default": {
                     "kind": "literal",

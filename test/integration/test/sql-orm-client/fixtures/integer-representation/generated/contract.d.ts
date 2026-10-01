@@ -336,16 +336,19 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly lifetime: {
                   readonly nativeType: 'numeric';
                   readonly codecId: 'pg/unboundedint@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly peak: {
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8number@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -359,16 +362,19 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly meter_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly reading: {
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8number@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };

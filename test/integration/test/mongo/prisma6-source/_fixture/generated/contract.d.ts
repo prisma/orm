@@ -162,7 +162,7 @@ type ContractBase = Omit<
               readonly addresses: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Address' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly name: {
                 readonly nullable: false;
@@ -171,7 +171,7 @@ type ContractBase = Omit<
               readonly scores: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/int64Number@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: Record<string, never>;

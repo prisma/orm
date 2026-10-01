@@ -50,6 +50,7 @@ stamped ${field}
 }`;
 
   const pgTimestampPrecision3 = {
+    many: false,
     nativeType: 'timestamp',
     codecId: 'pg/timestamp-temporal@1',
     nullable: false,
@@ -75,6 +76,7 @@ stamped ${field}
   it('timestamp() omits the typeParams key entirely and has no execution defaults', () => {
     const { column, defaults } = columnAndDefaults(model('temporal.timestamp()'));
     expect(column).toEqual({
+      many: false,
       nativeType: 'timestamp',
       codecId: 'pg/timestamp-temporal@1',
       nullable: false,
@@ -91,6 +93,7 @@ stamped ${field}
       nativeType: 'timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
+      many: false,
     });
     expect(defaults).toEqual([{ ref: stampedRef, onCreate: nowPhase, onUpdate: nowPhase }]);
   });
@@ -101,6 +104,7 @@ stamped ${field}
       nativeType: 'timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
+      many: false,
     });
     expect(defaults).toEqual([{ ref: stampedRef, onUpdate: nowPhase }]);
   });
@@ -144,6 +148,7 @@ stamped ${field}
       nativeType: 'text',
       codecId: 'sqlite/datetime@1',
       nullable: false,
+      many: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {

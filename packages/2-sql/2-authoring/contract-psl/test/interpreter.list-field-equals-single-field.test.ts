@@ -64,8 +64,8 @@ describe('interpretPslDocumentToSqlContract a list field equals the single field
       typeParams: { length: 12 },
     } as const;
     expect({ one: fields?.['one'], many: fields?.['many'] }).toEqual({
-      one: { nullable: false, type: varchar },
-      many: { nullable: false, type: varchar, many: true },
+      one: { nullable: false, type: varchar, many: false },
+      many: { nullable: false, type: varchar, many: { elementNullable: false } },
     });
   });
 
@@ -113,10 +113,10 @@ namespace public {
       label: fields?.['label'],
       tags: fields?.['tags'],
     }).toEqual({
-      one: { nullable: false, type: numeric },
-      many: { nullable: false, type: numeric, many: true },
-      label: { nullable: false, type: varchar },
-      tags: { nullable: false, type: varchar, many: true },
+      one: { nullable: false, type: numeric, many: false },
+      many: { nullable: false, type: numeric, many: { elementNullable: false } },
+      label: { nullable: false, type: varchar, many: false },
+      tags: { nullable: false, type: varchar, many: { elementNullable: false } },
     });
   });
 
@@ -151,8 +151,8 @@ model Product {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.domain.namespaces['public']?.valueObjects?.['Price']?.fields).toEqual({
-      one: { nullable: false, type: numeric },
-      many: { nullable: false, type: numeric, many: true },
+      one: { nullable: false, type: numeric, many: false },
+      many: { nullable: false, type: numeric, many: { elementNullable: false } },
     });
   });
 
@@ -193,13 +193,14 @@ model User {
     if (!result.ok) return;
     const fields = result.value.domain.namespaces['public']?.models['User']?.fields;
     const plan = {
+      many: false,
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
       valueSet: { plane: 'domain', entityKind: 'enum', namespaceId: 'public', entityName: 'Plan' },
     };
     expect({ plan: fields?.['plan'], plans: fields?.['plans'] }).toEqual({
       plan,
-      plans: { ...plan, many: true },
+      plans: { ...plan, many: { elementNullable: false } },
     });
   });
 });

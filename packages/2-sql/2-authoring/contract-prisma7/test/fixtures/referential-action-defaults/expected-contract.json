@@ -24,14 +24,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "b": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -81,21 +83,24 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "pa": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               },
               "pb": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -135,21 +140,24 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "pa": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               },
               "pb": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": true
+                "nullable": true,
+                "many": false
               }
             },
             "relations": {
@@ -183,7 +191,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -219,14 +228,16 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "authorId": {
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {
@@ -287,12 +298,14 @@
                 "a": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "b": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -307,17 +320,20 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "pa": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": true
+                  "nullable": true,
+                  "many": false
                 },
                 "pb": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -347,17 +363,20 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "pa": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": true
+                  "nullable": true,
+                  "many": false
                 },
                 "pb": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": true
+                  "nullable": true,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -387,7 +406,8 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],
@@ -402,12 +422,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "authorId": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 }
               },
               "uniques": [],

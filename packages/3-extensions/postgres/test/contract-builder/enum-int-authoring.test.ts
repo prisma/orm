@@ -21,7 +21,9 @@ describe('int-backed enum authoring against the real Postgres pack', () => {
     expect(contract.storage.namespaces['public']?.entries.table?.['Event']).toMatchObject({
       checks: expect.arrayContaining([
         expect.objectContaining({ expression: '"level" IN (1, 10)' }),
-        expect.objectContaining({ expression: '"levels"::numeric[] <@ ARRAY[1, 10]::numeric[]' }),
+        expect.objectContaining({
+          expression: 'array_remove("levels"::numeric[], NULL) <@ ARRAY[1, 10]::numeric[]',
+        }),
         expect.objectContaining({ expression: 'array_position("levels", NULL) IS NULL' }),
       ]),
     });

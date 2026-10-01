@@ -189,6 +189,7 @@ describe('accessors return undefined on missing children', () => {
     expect(ta.questionMark()).toBeUndefined();
     expect(ta.isList()).toBe(false);
     expect(ta.isOptional()).toBe(false);
+    expect(ta.isElementOptional()).toBe(false);
   });
 });
 
@@ -275,7 +276,63 @@ describe('TypeAnnotationAst', () => {
     const ta = TypeAnnotationAst.cast(root)!;
     expect(ta.isList()).toBe(true);
     expect(ta.isOptional()).toBe(false);
+    expect(ta.isElementOptional()).toBe(false);
     expect(ta.name()?.identifier()?.token()?.text).toBe('String');
+  });
+
+  it('reads a `?` after `]` as list-optional, not element-optional', () => {
+    const b = new GreenNodeBuilder();
+    b.startNode('TypeAnnotation');
+    b.startNode('QualifiedName');
+    b.startNode('Identifier');
+    b.token('Ident', 'String');
+    b.finishNode();
+    b.finishNode();
+    b.token('LBracket', '[');
+    b.token('RBracket', ']');
+    b.token('Question', '?');
+    const root = createSyntaxTree(b.finishNode());
+    const ta = TypeAnnotationAst.cast(root)!;
+    expect(ta.isList()).toBe(true);
+    expect(ta.isOptional()).toBe(true);
+    expect(ta.isElementOptional()).toBe(false);
+  });
+
+  it('reads a `?` before `[` as element-optional, not list-optional', () => {
+    const b = new GreenNodeBuilder();
+    b.startNode('TypeAnnotation');
+    b.startNode('QualifiedName');
+    b.startNode('Identifier');
+    b.token('Ident', 'String');
+    b.finishNode();
+    b.finishNode();
+    b.token('Question', '?');
+    b.token('LBracket', '[');
+    b.token('RBracket', ']');
+    const root = createSyntaxTree(b.finishNode());
+    const ta = TypeAnnotationAst.cast(root)!;
+    expect(ta.isList()).toBe(true);
+    expect(ta.isOptional()).toBe(false);
+    expect(ta.isElementOptional()).toBe(true);
+  });
+
+  it('reads a `?` on either side of `[]` as both axes optional', () => {
+    const b = new GreenNodeBuilder();
+    b.startNode('TypeAnnotation');
+    b.startNode('QualifiedName');
+    b.startNode('Identifier');
+    b.token('Ident', 'String');
+    b.finishNode();
+    b.finishNode();
+    b.token('Question', '?');
+    b.token('LBracket', '[');
+    b.token('RBracket', ']');
+    b.token('Question', '?');
+    const root = createSyntaxTree(b.finishNode());
+    const ta = TypeAnnotationAst.cast(root)!;
+    expect(ta.isList()).toBe(true);
+    expect(ta.isOptional()).toBe(true);
+    expect(ta.isElementOptional()).toBe(true);
   });
 
   it('detects optional type', () => {
@@ -289,6 +346,7 @@ describe('TypeAnnotationAst', () => {
     const ta = TypeAnnotationAst.cast(root)!;
     expect(ta.isList()).toBe(false);
     expect(ta.isOptional()).toBe(true);
+    expect(ta.isElementOptional()).toBe(false);
   });
 });
 

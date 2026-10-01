@@ -105,7 +105,9 @@
                 }
               },
               "items": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -216,7 +218,9 @@
                 }
               },
               "items": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -334,7 +338,9 @@
                 }
               },
               "items": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -349,7 +355,9 @@
                 }
               },
               "statusHistory": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": false,
                 "type": {
                   "kind": "valueObject",
@@ -452,7 +460,9 @@
                 }
               },
               "embedding": {
-                "many": true,
+                "many": {
+                  "elementNullable": false
+                },
                 "nullable": true,
                 "type": {
                   "codecId": "mongo/double@1",

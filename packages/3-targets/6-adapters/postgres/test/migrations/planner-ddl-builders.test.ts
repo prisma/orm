@@ -12,7 +12,7 @@ import { PostgresControlAdapter } from '../../src/core/control-adapter';
 const noHooks = new Map<string, CodecControlHooks>();
 
 function col(overrides: Partial<StorageColumn> & { nativeType: string }): StorageColumn {
-  return { codecId: 'pg/text@1', nullable: true, ...overrides };
+  return { many: false, codecId: 'pg/text@1', nullable: true, ...overrides };
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +84,7 @@ describe('buildColumnTypeSql', () => {
       nativeType: 'order_status',
       codecId: 'pg/enum@1',
       typeParams: { typeName: 'order_status' },
-      many: true,
+      many: { elementNullable: false },
     });
     expect(buildColumnTypeSql(column, noHooks)).toBe('"order_status"[]');
   });
@@ -219,17 +219,26 @@ describe('renderDefaultLiteral', () => {
   });
 
   it('renders an empty array literal for a list column', () => {
-    const result = renderDefaultLiteral([], col({ nativeType: 'text', many: true }));
+    const result = renderDefaultLiteral(
+      [],
+      col({ nativeType: 'text', many: { elementNullable: false } }),
+    );
     expect(result).toBe("'{}'");
   });
 
   it('renders a populated array literal for a list column, cast to the list type', () => {
-    const result = renderDefaultLiteral(['a', 'b'], col({ nativeType: 'text', many: true }));
+    const result = renderDefaultLiteral(
+      ['a', 'b'],
+      col({ nativeType: 'text', many: { elementNullable: false } }),
+    );
     expect(result).toBe(`ARRAY['a', 'b']::text[]`);
   });
 
   it('renders a mixed-type array literal element-by-element', () => {
-    const result = renderDefaultLiteral([1, true, null], col({ nativeType: 'int4', many: true }));
+    const result = renderDefaultLiteral(
+      [1, true, null],
+      col({ nativeType: 'int4', many: { elementNullable: false } }),
+    );
     expect(result).toBe('ARRAY[1, true, NULL]::int4[]');
   });
 });

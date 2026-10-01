@@ -361,6 +361,7 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -374,11 +375,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly postId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -412,11 +415,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly title: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -430,11 +435,13 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
                 readonly postId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
+                  readonly many: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['postId', 'categoryId'] };

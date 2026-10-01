@@ -34,19 +34,27 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const text = { nativeType: 'text', codecId: 'pg/text@1', many: true };
+    const text = { nativeType: 'text', codecId: 'pg/text@1', many: { elementNullable: false } };
     expect({
       fields: result.value.domain.namespaces['public']?.models['User']?.fields,
       columns: (result.value.storage as SqlStorage).namespaces['public']?.entries.table?.['User']
         ?.columns,
     }).toEqual({
       fields: {
-        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
-        tags: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: true },
-        aliases: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: true },
+        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false },
+        tags: {
+          nullable: false,
+          type: { kind: 'scalar', codecId: 'pg/text@1' },
+          many: { elementNullable: false },
+        },
+        aliases: {
+          nullable: true,
+          type: { kind: 'scalar', codecId: 'pg/text@1' },
+          many: { elementNullable: false },
+        },
       },
       columns: {
-        id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+        id: { many: false, nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
         tags: { ...text, nullable: false },
         aliases: { ...text, nullable: true },
       },

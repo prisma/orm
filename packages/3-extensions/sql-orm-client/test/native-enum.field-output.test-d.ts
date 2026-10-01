@@ -59,7 +59,12 @@ type NativeEnumStorage = {
         table: {
           AuthSession: {
             columns: {
-              aal: { nativeType: 'aal_level'; codecId: 'pg/enum@1'; nullable: false };
+              aal: {
+                readonly many: false;
+                nativeType: 'aal_level';
+                codecId: 'pg/enum@1';
+                nullable: false;
+              };
             };
             primaryKey: { columns: ['aal'] };
             uniques: [];
@@ -84,6 +89,7 @@ type NativeEnumModels = {
     // No `valueSet` on the domain field — a native enum has no domain enum.
     fields: {
       aal: {
+        readonly many: false;
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/enum@1' };
         readonly nullable: false;
       };

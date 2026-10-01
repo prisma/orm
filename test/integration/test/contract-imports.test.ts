@@ -28,17 +28,9 @@ async function runTscAndAssertSuccess(
   contractDtsContent: string,
 ): Promise<void> {
   try {
-    const { stderr } = await execFileAsync(
-      'pnpm',
-      ['exec', 'tsc', '--noEmit', '--project', tsconfigPath],
-      {
-        cwd: workspaceRoot,
-      },
-    );
-
-    if (stderr?.trim() && !stderr.includes('Found 0 errors')) {
-      throw new Error(`TypeScript compilation failed:\n${stderr}`);
-    }
+    await execFileAsync('pnpm', ['exec', 'tsc', '--noEmit', '--project', tsconfigPath], {
+      cwd: workspaceRoot,
+    });
   } catch (error: unknown) {
     if (error && typeof error === 'object') {
       const errorObj = error as { stderr?: string; stdout?: string; message?: string };
@@ -87,11 +79,20 @@ describe('contract.d.ts imports resolution', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar' as const, codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: false },
+              id: {
+                type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+                nullable: false,
+                many: false,
+              },
+              email: {
+                type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
               createdAt: {
                 type: { kind: 'scalar' as const, codecId: 'pg/timestamptz-temporal@1' },
                 nullable: false,
+                many: false,
               },
             },
             relations: {},
@@ -106,9 +107,21 @@ describe('contract.d.ts imports resolution', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar' as const, codecId: 'pg/int4@1' }, nullable: false },
-              title: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: false },
-              userId: { type: { kind: 'scalar' as const, codecId: 'pg/int4@1' }, nullable: false },
+              id: {
+                type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+                nullable: false,
+                many: false,
+              },
+              title: {
+                type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
+              userId: {
+                type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -122,12 +135,23 @@ describe('contract.d.ts imports resolution', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: {
+                        codecId: 'pg/int4@1',
+                        nativeType: 'int4',
+                        nullable: false,
+                        many: false,
+                      },
+                      email: {
+                        codecId: 'pg/text@1',
+                        nativeType: 'text',
+                        nullable: false,
+                        many: false,
+                      },
                       createdAt: {
                         codecId: 'pg/timestamptz-temporal@1',
                         nativeType: 'timestamptz',
                         nullable: false,
+                        many: false,
                       },
                     },
                     primaryKey: { columns: ['id'] },
@@ -137,9 +161,24 @@ describe('contract.d.ts imports resolution', () => {
                   },
                   post: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                      userId: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                      id: {
+                        codecId: 'pg/int4@1',
+                        nativeType: 'int4',
+                        nullable: false,
+                        many: false,
+                      },
+                      title: {
+                        codecId: 'pg/text@1',
+                        nativeType: 'text',
+                        nullable: false,
+                        many: false,
+                      },
+                      userId: {
+                        codecId: 'pg/int4@1',
+                        nativeType: 'int4',
+                        nullable: false,
+                        many: false,
+                      },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -266,8 +305,16 @@ type UserIdColumn = UserColumns['id'];
               },
             },
             fields: {
-              id: { type: { kind: 'scalar' as const, codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar' as const, codecId: 'pg/text@1' }, nullable: false },
+              id: {
+                type: { kind: 'scalar' as const, codecId: 'pg/int4@1' },
+                nullable: false,
+                many: false,
+              },
+              email: {
+                type: { kind: 'scalar' as const, codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -281,8 +328,18 @@ type UserIdColumn = UserColumns['id'];
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: {
+                        codecId: 'pg/int4@1',
+                        nativeType: 'int4',
+                        nullable: false,
+                        many: false,
+                      },
+                      email: {
+                        codecId: 'pg/text@1',
+                        nativeType: 'text',
+                        nullable: false,
+                        many: false,
+                      },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],

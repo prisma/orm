@@ -66,6 +66,7 @@ export interface ScalarMemberNode {
   readonly descriptor: ScalarTypeDescriptor;
   readonly nullable: boolean;
   readonly many?: boolean;
+  readonly elementNullable?: boolean;
   /** Present when the field is typed by an enum. */
   readonly enumTypeHandle?: EnumTypeHandle;
 }
@@ -218,6 +219,7 @@ export interface ValueObjectMemberNode {
   readonly valueObjectName: string;
   readonly nullable: boolean;
   readonly many?: boolean;
+  readonly elementNullable?: boolean;
 }
 
 /**

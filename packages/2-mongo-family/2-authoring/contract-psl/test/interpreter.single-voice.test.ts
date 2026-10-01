@@ -99,12 +99,18 @@ model Item {
 }`);
     if (!result.ok) throw new Error(JSON.stringify(result.failure));
     expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.models['Item']?.fields).toEqual({
-      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-      label: { type: { kind: 'valueObject', name: 'String' }, nullable: false },
+      _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false, many: false },
+      label: { type: { kind: 'valueObject', name: 'String' }, nullable: false, many: false },
     });
     expect(result.value.domain.namespaces[UNBOUND_NAMESPACE_ID]?.valueObjects).toEqual({
       String: {
-        fields: { length: { type: { kind: 'scalar', codecId: 'mongo/int32@1' }, nullable: false } },
+        fields: {
+          length: {
+            type: { kind: 'scalar', codecId: 'mongo/int32@1' },
+            nullable: false,
+            many: false,
+          },
+        },
       },
     });
   });

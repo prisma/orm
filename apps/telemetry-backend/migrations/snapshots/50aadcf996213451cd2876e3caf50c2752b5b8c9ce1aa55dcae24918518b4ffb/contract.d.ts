@@ -99,6 +99,7 @@ type ContractBase = Omit<
             readonly telemetry_event: {
               columns: {
                 readonly id: {
+                  readonly many: false;
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8@1';
                   readonly nullable: false;
@@ -108,72 +109,86 @@ type ContractBase = Omit<
                   };
                 };
                 readonly ingestedAt: {
+                  readonly many: false;
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                 };
                 readonly installationId: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly version: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly command: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly flags: {
+                  readonly many: false;
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                 };
                 readonly runtimeName: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly runtimeVersion: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly os: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly arch: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly packageManager: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly databaseTarget: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly tsVersion: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly agent: {
+                  readonly many: false;
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly extensions: {
+                  readonly many: false;
                   readonly nativeType: 'jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
@@ -215,7 +230,7 @@ type ContractBase = Omit<
           readonly flags: {
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-            readonly many: true;
+            readonly many: { readonly elementNullable: false };
           };
           readonly runtimeName: {
             readonly nullable: false;
@@ -252,7 +267,7 @@ type ContractBase = Omit<
           readonly extensions: {
             readonly nullable: false;
             readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-            readonly many: true;
+            readonly many: { readonly elementNullable: false };
           };
         };
         readonly relations: Record<string, never>;
@@ -318,7 +333,7 @@ type ContractBase = Omit<
               readonly flags: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
               readonly runtimeName: {
                 readonly nullable: false;
@@ -355,7 +370,7 @@ type ContractBase = Omit<
               readonly extensions: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
+                readonly many: { readonly elementNullable: false };
               };
             };
             readonly relations: Record<string, never>;

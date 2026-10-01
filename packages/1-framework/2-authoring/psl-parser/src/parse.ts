@@ -517,11 +517,15 @@ export function parseAttribute(cursor: Cursor): GreenNode {
 }
 
 /**
- * A type annotation: `QualifiedName (argList)? ([])? (?)?`, e.g.
- * `pgvector.Vector(1536)[]?`. When the field has no type, no node is emitted —
- * a missing type is the absence of a `TypeAnnotation`, not a zero-width one.
+ * A type annotation: `QualifiedName (argList)? (?)? ([])? (?)?`, e.g.
+ * `pgvector.Vector(1536)?[]?`. The two `?` positions are distinct axes: a `?`
+ * before `[]` makes the list elements nullable; a `?` after `[]` makes the
+ * list itself nullable. Without a `[]`, a single `?` is the field-level
+ * optional (`Foo?`), so a second `?` (`Foo??`) is malformed. When the field
+ * has no type, no node is emitted — a missing type is the absence of a
+ * `TypeAnnotation`, not a zero-width one.
  */
-export function parseTypeAnnotation(cursor: Cursor): void {
+export function parseTypeAnnotation(cursor: Cursor, memberCode: PslDiagnosticCode): void {
   const kind = cursor.peekKind();
   if (kind !== 'Ident' && kind !== 'LBracket' && kind !== 'Question') {
     return;
@@ -533,14 +537,31 @@ export function parseTypeAnnotation(cursor: Cursor): void {
       parseAttributeArgList(cursor);
     }
   }
+  const hasLeadingQuestion = cursor.peekKind() === 'Question';
+  if (hasLeadingQuestion) {
+    cursor.bump();
+  }
+  let isListType = false;
   if (cursor.peekKind() === 'LBracket') {
+    isListType = true;
     cursor.bump();
     if (cursor.peekKind() === 'RBracket') {
       cursor.bump();
     }
   }
-  if (cursor.peekKind() === 'Question') {
+  // A trailing `?` is the list/field axis. It is redundant only when a leading
+  // `?` already consumed the field axis and no `[]` separates the two.
+  let trailingAllowed = isListType || !hasLeadingQuestion;
+  while (cursor.peekKind() === 'Question') {
+    if (!trailingAllowed) {
+      cursor.diagnostic(
+        memberCode,
+        'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
+        cursor.mark(),
+      );
+    }
     cursor.bump();
+    trailingAllowed = false;
   }
   cursor.finishNode();
 }
@@ -823,7 +844,7 @@ export function parseField(cursor: Cursor): GreenNode | undefined {
       nameMark,
     );
   }
-  parseTypeAnnotation(cursor);
+  parseTypeAnnotation(cursor, 'PSL_INVALID_MODEL_MEMBER');
   while (cursor.peekKind() === 'At') {
     parseAttribute(cursor);
   }
@@ -841,7 +862,7 @@ export function parseNamedType(cursor: Cursor): GreenNode | undefined {
   } else {
     cursor.diagnostic('PSL_INVALID_TYPES_MEMBER', `Expected "=" after "${nameText}"`, nameMark);
   }
-  parseTypeAnnotation(cursor);
+  parseTypeAnnotation(cursor, 'PSL_INVALID_TYPES_MEMBER');
   while (cursor.peekKind() === 'At') {
     parseAttribute(cursor);
   }

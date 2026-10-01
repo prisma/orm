@@ -2,8 +2,6 @@ import { ContractValidationError } from '@internal/contract/contract-validation-
 import {
   type Contract,
   ContractExecutionSectionSchema,
-  type ContractField,
-  type ContractModel,
   CrossReferenceSchema,
 } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
@@ -143,7 +141,7 @@ export function createNamespaceEntrySchema(
       }
     }
     return true;
-  }) as Type<unknown>;
+  });
 }
 
 /**
@@ -165,7 +163,7 @@ export function createSqlStorageSchema(
     // unbound slot is injected when absent by `ensureUnboundNamespaceSlot`
     // in `build-contract.ts`, not enforced here structurally.
     'namespaces?': type({ '[string]': namespaceEntry }),
-  }) as Type<unknown>;
+  });
 }
 
 const StorageSchema = createSqlStorageSchema(DEFAULT_SQL_KINDS);
@@ -332,7 +330,7 @@ const ModelFieldSchema = type({
   '+': 'reject',
   nullable: 'boolean',
   type: ContractFieldTypeSchema,
-  'many?': 'true',
+  many: type('false').or({ '+': 'reject', elementNullable: 'boolean' }).default(false),
   'dict?': 'true',
   'valueSet?': DomainEnumRefSchema,
 });
@@ -437,14 +435,16 @@ export function createSqlContractSchema(
       namespaces: type({
         '[string]': type({
           models: type({ '[string]': ModelSchema }),
-          'valueObjects?': 'Record<string, unknown>',
+          'valueObjects?': type({
+            '[string]': type({ fields: type({ '[string]': ModelFieldSchema }) }),
+          }),
           'enum?': type({ '[string]': ContractEnumSchema }),
         }),
       }),
     }),
     storage,
     'execution?': ContractExecutionSectionSchema,
-  }) as Type<unknown>;
+  });
 }
 
 const SqlContractSchema = createSqlContractSchema(DEFAULT_SQL_KINDS);
@@ -504,12 +504,9 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
     );
   }
 
-  const rawValue = value as { targetFamily?: string };
-  if (rawValue.targetFamily !== undefined && rawValue.targetFamily !== 'sql') {
-    throw new ContractValidationError(
-      `Unsupported target family: ${rawValue.targetFamily}`,
-      'structural',
-    );
+  const targetFamily = 'targetFamily' in value ? value.targetFamily : undefined;
+  if (targetFamily !== undefined && targetFamily !== 'sql') {
+    throw new ContractValidationError(`Unsupported target family: ${targetFamily}`, 'structural');
   }
 
   const contractResult = contractSchema(value);
@@ -524,7 +521,10 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
 
   // Arktype's inferred output type differs from T due to exactOptionalPropertyTypes
   // and branded hash types — the runtime value is structurally compatible after validation
-  return contractResult as unknown as T;
+  return blindCast<
+    T,
+    'contractSchema validated the SQL contract structure; generic literal types and branded hashes are not inferred by arktype'
+  >(contractResult);
 }
 
 /**
@@ -546,7 +546,9 @@ export function validateStorageSemantics(storage: SqlStorage): string[] {
   validateTableScopedEntryNames(storage, errors);
 
   for (const { namespaceId, tableName, table: rawTable } of eachStorageTable(storage)) {
-    const table = rawTable as StorageTable;
+    const table = blindCast<StorageTable, 'table entry in structurally validated SQL storage'>(
+      rawTable,
+    );
     const namedObjects = new Map<string, string[]>();
     const registerNamedObject = (kind: string, name: string | undefined) => {
       if (!name) return;
@@ -675,10 +677,13 @@ export function validateStorageSemantics(storage: SqlStorage): string[] {
  */
 export function validateModelStorageReferences(contract: Contract<SqlStorage>): void {
   for (const [namespaceId, namespace] of Object.entries(contract.domain.namespaces)) {
-    const models = namespace.models as Record<string, ContractModel<SqlModelStorage>>;
-    for (const [modelName, model] of Object.entries(models)) {
+    for (const [modelName, model] of Object.entries(namespace.models)) {
+      const modelStorage = blindCast<
+        SqlModelStorage,
+        'model storage validated by ModelStorageSchema'
+      >(model.storage);
       const qualifiedName = `${namespaceId}:${modelName}`;
-      const storageNamespaceId = model.storage.namespaceId;
+      const storageNamespaceId = modelStorage.namespaceId;
       if (storageNamespaceId !== namespaceId) {
         throw new ContractValidationError(
           `Model "${qualifiedName}" storage.namespaceId "${storageNamespaceId}" does not match domain namespace "${namespaceId}"`,
@@ -686,7 +691,7 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
         );
       }
 
-      const storageTable = model.storage.table;
+      const storageTable = modelStorage.table;
       const storageNs = contract.storage.namespaces[storageNamespaceId];
       const rawTable = storageNs?.entries.table?.[storageTable];
       if (rawTable === undefined) {
@@ -696,10 +701,12 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
         );
       }
 
-      const table = rawTable as StorageTable;
+      const table = blindCast<StorageTable, 'table entry in structurally validated SQL storage'>(
+        rawTable,
+      );
 
       const columnNames = new Set(Object.keys(table.columns));
-      for (const [fieldName, field] of Object.entries(model.storage.fields)) {
+      for (const [fieldName, field] of Object.entries(modelStorage.fields)) {
         if (!columnNames.has(field.column)) {
           throw new ContractValidationError(
             `Model "${qualifiedName}" field "${fieldName}" references non-existent column "${field.column}" in table "${storageTable}"`,
@@ -710,9 +717,8 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
 
       const JSON_NATIVE_TYPES = new Set(['json', 'jsonb']);
       for (const [fieldName, domainField] of Object.entries(model.fields ?? {})) {
-        const f = domainField as ContractField;
-        if (f.type?.kind !== 'valueObject') continue;
-        const storageField = model.storage.fields[fieldName];
+        if (domainField.type?.kind !== 'valueObject') continue;
+        const storageField = modelStorage.fields[fieldName];
         if (!storageField) continue;
         const column = table.columns[storageField.column];
         if (!column) continue;
@@ -735,7 +741,9 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
  */
 export function validateSqlStorageConsistency(contract: Contract<SqlStorage>): void {
   for (const { namespaceId, tableName, table: rawTable } of eachStorageTable(contract.storage)) {
-    const table = rawTable as StorageTable;
+    const table = blindCast<StorageTable, 'table entry in structurally validated SQL storage'>(
+      rawTable,
+    );
     const columnNames = new Set(Object.keys(table.columns));
 
     if (table.primaryKey) {
@@ -806,7 +814,10 @@ export function validateSqlStorageConsistency(contract: Contract<SqlStorage>): v
             'storage',
           );
         }
-        const referencedTable = referencedRaw as StorageTable;
+        const referencedTable = blindCast<
+          StorageTable,
+          'referenced table entry in structurally validated SQL storage'
+        >(referencedRaw);
         const referencedColumnNames = new Set(Object.keys(referencedTable.columns));
         for (const colName of fk.target.columns) {
           if (!referencedColumnNames.has(colName)) {
@@ -855,7 +866,14 @@ export function validateSqlContractFully<T extends Contract<SqlStorage>>(
   const stripped =
     typeof value === 'object' && value !== null
       ? (() => {
-          const { schemaVersion: _, _generated: _g, ...rest } = value as Record<string, unknown>;
+          const {
+            schemaVersion: _,
+            _generated: _g,
+            ...rest
+          } = blindCast<
+            Record<string, unknown>,
+            'non-null object read only to omit wire metadata before structural validation'
+          >(value);
           return rest;
         })()
       : value;

@@ -24,7 +24,8 @@
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               },
               "role": {
                 "type": {
@@ -34,7 +35,8 @@
                     "typeName": "user_role"
                   }
                 },
-                "nullable": false
+                "nullable": false,
+                "many": false
               }
             },
             "relations": {}
@@ -66,12 +68,14 @@
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
+                  "nullable": false,
+                  "many": false
                 },
                 "role": {
                   "nativeType": "user_role",
                   "codecId": "pg/enum@1",
                   "nullable": false,
+                  "many": false,
                   "typeParams": {
                     "typeName": "user_role"
                   },

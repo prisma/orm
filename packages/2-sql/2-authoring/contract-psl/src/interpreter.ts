@@ -1472,6 +1472,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           descriptor: resolvedField.descriptor,
           nullable: resolvedField.nullable,
           ...ifDefined('many', resolvedField.many),
+          ...ifDefined(
+            'elementNullable',
+            resolvedField.many ? resolvedField.elementNullable === true : undefined,
+          ),
           ...ifDefined('default', resolvedField.defaultValue),
           ...ifDefined('executionDefaults', resolvedField.executionDefaults),
         };
@@ -1546,6 +1550,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         fieldName: field.name,
         nullable: field.optional,
         ...ifDefined('many', field.list ? (true as const) : undefined),
+        ...ifDefined('elementNullable', field.list ? field.elementOptional : undefined),
       };
       const fieldTypeReference = typeReferenceNode(field);
       const fieldTypeResolution =
@@ -1860,6 +1865,7 @@ function materializeMtiVariantStorageLinks(
         columnName: pkColumn,
         descriptor: baseField.descriptor,
         nullable: false,
+        many: false,
       });
     }
     if (linkFields.length === 0) return node;
