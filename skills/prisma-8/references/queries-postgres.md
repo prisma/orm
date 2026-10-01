@@ -356,6 +356,56 @@ function deleteMatching(posts: Filtered<PostCollection>) {
 await deleteMatching(Post.byAuthor(userId)).toArray();
 ```
 
+## Workflow — Shared query fragments
+
+A piece of a query used in several places is a function. Do not build a filter object and spread it into each query; write a function and pass it to `.where(...)`, `.orderBy(...)` or `.pipe(...)`.
+
+**The same filter on several models.** Type the field with `CodecField<Contract, CodecId, Nullable>`, the type of any field with that codec, and the function fits every model that has the field:
+
+```typescript
+import type { CodecField } from '@prisma/orm-postgres/orm-client';
+
+type CreatedAt = CodecField<Contract, 'pg/timestamptz-temporal@1'>;
+const createdSince = (since: Temporal.Instant) => (row: { createdAt: CreatedAt }) =>
+  row.createdAt.gte(since);
+
+await db.orm.public.User.where(createdSince(since)).all();
+await db.orm.public.Post.where(createdSince(since)).all();
+```
+
+Take the codec id from the field's type in `contract.d.ts` (a PSL `DateTime` is `pg/timestamptz-temporal@1`, a `String` is `pg/text@1`), and pass `true` as the third type argument for an optional field. A model without the field, or with the field under another codec or nullability, is a compile error.
+
+The fragment checks values against the codec's type, not the field's. For a field that narrows its codec's values, such as an enum stored as `pg/text@1`, it accepts values the field would refuse: `row.kind.eq('superuser')` compiles in the fragment even when `kind` has no such member. Write a filter on such a field inline, on the model, where the field's own type checks the value.
+
+**The same `select` and `include` in several queries.** Define it once with `modelStep`, apply it with `.pipe(...)`, and name its row with `CollectionRowOf`:
+
+```typescript
+import { type CollectionRowOf, modelStep } from '@prisma/orm-postgres/orm-client';
+
+const postSummary = modelStep<Contract, 'Post'>()((posts) =>
+  posts.select('id', 'title', 'createdAt').include('tags'),
+);
+type PostSummary = CollectionRowOf<ReturnType<typeof postSummary>>;
+
+await db.orm.public.Post.where({ userId }).pipe(postSummary).limit(20).all();
+await db.orm.public.User.include('posts', (posts) => posts.pipe(postSummary)).all();
+```
+
+Name one model of the contract. Apply the step before `.select(...)` or `.variant(...)`: it is refused on a collection they narrowed. After it, `update`, `delete` and `cursor` are refused, although an earlier `.where(...)` still runs; it is for reads.
+
+**A field to order by, from a request.** Pass the request's string to `orderByField` with the fields the endpoint allows. Do not index the field proxy with the raw string:
+
+```typescript
+import { orderByField } from '@prisma/orm-postgres/orm-client';
+
+await db.orm.public.Post
+  .orderBy(orderByField(db.orm.public.Post, input.orderBy, input.direction, ['title', 'createdAt']))
+  .limit(20)
+  .all();
+```
+
+`direction` is `'asc'` or `'desc'` (the type `Direction` from `@prisma/orm-postgres/relational-core/ast`). A name outside the list, a relation, or a field that cannot be ordered throws `ORM.ARGUMENT_INVALID` before the query runs; answer it as a bad request. Only the model's own fields can be named, not the fields of one variant.
+
 ## Workflow — Aggregates
 
 ```typescript
@@ -560,6 +610,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 - [ ] Expressed ranges as chained `.where(...)` clauses or a single `and(...)` clause — did NOT reach for a non-existent `.between(...)` operator.
 - [ ] For cursor pagination, used `.orderBy(...).cursor({ field: lastValue }).limit(n).all()` — did NOT hand-write a `.where(p => p.field.lt(cursor))` workaround when the `.cursor()` API serves the same purpose.
 - [ ] For ORM combinators, imported `and` / `or` / `not` from `@prisma/orm-postgres/orm-client`.
+- [ ] Wrote a query piece shared between places as a function: a `where` callback typed with `CodecField`, a `modelStep` applied with `.pipe(...)`, or `orderByField` for an order parameter from a request.
 - [ ] Ran SQL-builder plans via `db.runtime().query(plan)` when they return rows and `db.runtime().execute(plan)` only for non-returning writes (`tx.query` / `tx.execute` inside a transaction). Passed `insert()` an array of rows.
 - [ ] Wrapped multi-statement work in `db.transaction(async (tx) => { ... })` where atomicity matters.
 - [ ] For top-N grouped aggregates at meaningful scale, dropped to `db.sql.<ns>.<table>` rather than JS-side sort + slice over `groupBy(...).aggregate(...)`.

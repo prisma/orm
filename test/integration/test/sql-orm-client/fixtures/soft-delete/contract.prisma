@@ -1,0 +1,46 @@
+// use prisma-8
+
+// Emitted fixture for the sql-orm-client query fragment tests.
+//
+// Post and Comment have a nullable `deletedAt` with the same codec; Tag has
+// none. Post's `createdAt` has that codec without null.
+
+model User {
+  id    Int    @id @default(autoincrement())
+  name  String
+  posts Post[]
+
+  @@map("users")
+}
+
+model Post {
+  id        Int       @id @default(autoincrement())
+  title     String
+  views     Int
+  userId    Int       @map("user_id")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  comments Comment[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        Int       @id @default(autoincrement())
+  body      String
+  postId    Int       @map("post_id")
+  deletedAt DateTime? @map("deleted_at")
+
+  post Post @relation(fields: [postId], references: [id])
+
+  @@map("comments")
+}
+
+model Tag {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  @@map("tags")
+}

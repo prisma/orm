@@ -25,12 +25,19 @@ export {
   type PreparedRowQuery,
   prepareQuery,
 } from '../prepared-row-query';
+export {
+  type ModelStep,
+  modelStep,
+  orderByField,
+  type UnnarrowedCollection,
+} from '../query-fragments';
 export type {
   AggregateBuilder,
   AggregateIncludeReducers,
   AggregateResult,
   AggregateSelector,
   AggregateSpec,
+  CodecField,
   CollectionContext,
   CollectionModelName,
   CollectionState,
@@ -44,6 +51,7 @@ export type {
   ModelAccessor,
   NumericFieldNames,
   Orderable,
+  OrderableFieldName,
   OrderOptions,
   RelatedModelName,
   RelationFilterAccessor,

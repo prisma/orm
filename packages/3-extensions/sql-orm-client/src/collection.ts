@@ -384,12 +384,6 @@ export class CollectionBase<
   where<Self>(this: Self, input: WhereDirectInput): Filtered<Self>;
   where<Self>(
     this: Self,
-    fn: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
-  ): Filtered<Self>;
-  where<Self>(
-    this: Self,
     filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<Self>;
   where(
@@ -403,14 +397,6 @@ export class CollectionBase<
             State['nsId']
           >,
         ) => WhereDirectInput)
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Filtered<this> {
     const whereArg =

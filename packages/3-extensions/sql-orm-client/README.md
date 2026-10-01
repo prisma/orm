@@ -84,6 +84,46 @@ Inside a class body, a class method called on the result of another call loses w
 
 The type state holds the flags `hasWhere` and `hasOrderBy`. A flag that has not been established is `boolean`; a method that establishes it sets it to `true`. `update`, `updateAll`, `updateAndCount`, `delete`, `deleteAll` and `deleteAndCount` need `hasWhere: true`; `cursor` and `distinctOn` need `hasOrderBy: true`. Because `true` is a subtype of `boolean`, a filtered collection is a subtype of an unfiltered one: `search ? db.Post.withTitle(search) : db.Post` is a `PostCollection` that may have no filter, and `deleteAll()` on it does not compile. Read a collection's state and row with `CollectionStateOf<C>` and `CollectionRowOf<C>`. See [ADR 258](../../../docs/architecture%20docs/adrs/ADR%20258%20-%20A%20collection%20keeps%20its%20class%20through%20the%20chain.md).
 
+## Query fragments
+
+A piece of a query shared between places is a function. A row fragment is a function of the model accessor, and `where` and `orderBy` take it. A step is a function of a collection, and `pipe` applies it. Three helpers cover the common cases. See [ADR 259](../../../docs/architecture%20docs/adrs/ADR%20259%20-%20Query%20fragments%20are%20functions.md).
+
+**A filter for every model with a field.** `CodecField<Contract, CodecId, Nullable>` is the model accessor's type for any field with that codec and nullability. A row fragment whose parameter asks for that one field fits every model that has it:
+
+```ts
+type DeletedAt = CodecField<Contract, 'pg/timestamptz-temporal@1', true>;
+const notDeleted = (row: { deletedAt: DeletedAt }) => row.deletedAt.isNull();
+
+db.Post.where(notDeleted);
+db.Comment.where((c) => and(notDeleted(c), c.postId.eq(postId)));
+db.Tag.where(notDeleted); // error: Property 'deletedAt' is missing in type 'ModelAccessor<Contract, "Tag", ...>'
+```
+
+It has the same set of comparison methods as the field on the model accessor, chosen by the codec's traits, and the operations registered for the codec, such as `fullTextMatches` on a text field. A model without the field, a field of another codec and a field of another nullability are compile errors. The codec id must be one of the contract's codecs.
+
+A `CodecField` checks values against the codec's output type, not against the field's own type. Where a field refines its codec's value, such as a PSL enum stored as text or a `Char<36>` column, the fragment accepts values the field does not: `(row: { kind: CodecField<Contract, 'pg/text@1'> }) => row.kind.eq('superuser')` compiles, while `user.kind.eq('superuser')` written on the model is refused. One fragment serves many models, so it can only know the codec.
+
+**A shared `select` and `include`.** `modelStep<Contract, Model>()(body)` types the body once, against the model's plain collection, and returns a step, a `ModelStep<Contract, Model, Result>`:
+
+```ts
+const summary = modelStep<Contract, 'Post'>()((posts) => posts.select('id', 'title').include('user'));
+type PostSummary = CollectionRowOf<ReturnType<typeof summary>>;
+
+db.Post.where({ userId }).pipe(summary);
+db.User.include('posts', (posts) => posts.pipe(summary));
+db.Post.select('id').pipe(summary); // error: the rows no longer have every Post field
+```
+
+`Model` is one model name of the contract; a misspelled name or a union of names is a compile error. A type parameter is refused as well, because TypeScript cannot tell whether it is one name or a union, so pass a literal model name. The step takes an `UnnarrowedCollection<Contract, Model>`: a root, filtered, ordered or included collection, a custom class, an include refinement, or `this` in a custom class. It refuses a collection of another model, one narrowed by `select`, whose rows lack fields the body's result would claim, and one narrowed by `variant`, after which the model's class methods do not apply either. Its result has the default type state: a filter or order applied before it still runs, but `update` and `cursor` are refused after it.
+
+**A field to order by, from a request.** `orderByField(collection, name, direction?, allowed?)` returns an `orderBy` selector:
+
+```ts
+db.Post.orderBy(orderByField(db.Post, input.orderBy, input.direction, ['title', 'createdAt']));
+```
+
+`direction` is a `Direction`, `'asc'` or `'desc'`, and defaults to `'asc'`. `allowed` takes only fields whose codec has the `order` trait (`OrderableFieldName<Contract, Model>`); without it, every such field is allowed. `orderByField` throws `ORM.ARGUMENT_INVALID`, before any query runs, for a `name` that is not a field of the model, is a relation, has a codec without the `order` trait or is not in `allowed`, and for any other direction, including a name or direction that is not a string, such as a missing query parameter. An undefined direction takes the default. An empty `allowed` list refuses every name. The error quotes the name and cuts it to 64 characters; `meta` has it in full. The trait is read with the same run-time lookup the model accessor uses. Only the model's own fields can be named: on a collection narrowed by `variant`, a field that only the variant has is refused. The selector fits any collection of a model with the allowed fields, and `orderBy` records the order, so `cursor` is allowed after it.
+
 ## Skipping rows that collide with a unique constraint
 
 `createAll` and `createAndCount` take an options object in second position that asks the database to skip rows colliding with a unique constraint instead of failing the whole statement.

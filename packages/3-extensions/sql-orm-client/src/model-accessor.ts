@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import type { SqlOperationEntry } from '@internal/sql-operations';
 import {
   AndExpr,
@@ -30,10 +30,11 @@ import {
   resolveVariantFieldColumns,
   type VariantColumnRef,
 } from './collection-contract';
+import { codecTraits, hasTrait, resolveColumn } from './column-codec';
 import { and, not } from './filters';
 import { checkedOrderByItem } from './order-by-guards';
 import { ormError } from './orm-errors';
-import { storageTableForContract, tableSourceForContract } from './storage-resolution';
+import { tableSourceForContract } from './storage-resolution';
 import {
   COMPARISON_METHODS_META,
   type ComparisonMethodFns,
@@ -321,7 +322,7 @@ function createModelAccessorInScope<
         if (!column) {
           return undefined;
         }
-        const traits = context.codecDescriptors.descriptorFor(column.codecId)?.traits ?? [];
+        const traits = codecTraits(context, column.codecId);
         const operations = opsByCodecId.get(column.codecId) ?? [];
         const codec = codecRefForStorageColumn(
           contract.storage,
@@ -346,23 +347,6 @@ function createModelAccessorInScope<
     VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId>,
     'model accessor proxy resolves declared model fields and the selected variant fields dynamically'
   >(accessor);
-}
-
-function resolveColumn(
-  contract: Contract<SqlStorage>,
-  namespaceId: string,
-  tableName: string,
-  columnName: string,
-): { readonly codecId: string; readonly nullable: boolean } | undefined {
-  let table: StorageTable;
-  try {
-    table = storageTableForContract(contract, namespaceId, tableName);
-  } catch {
-    return undefined;
-  }
-  const column = table.columns[columnName];
-  if (!column) return undefined;
-  return { codecId: column.codecId, nullable: column.nullable };
 }
 
 function createScalarFieldAccessor(
@@ -418,7 +402,7 @@ function createExtensionMethodFactory(
     >(entry.impl);
     const result = impl(selfExpr, ...args);
     const returnCodecId = result.returnType.codecId;
-    const returnTraits = context.codecDescriptors.descriptorFor(returnCodecId)?.traits ?? [];
+    const returnTraits = codecTraits(context, returnCodecId);
     const isPredicate = returnTraits.includes('boolean');
 
     if (isPredicate) {
@@ -531,11 +515,6 @@ function relatedOrderableField<TContract extends Contract<SqlStorage>>(
         .withWhere(rows.correlation),
     );
   });
-}
-
-function hasTrait(context: ExecutionContext, codecId: string, trait: string): boolean {
-  const traits: readonly string[] = context.codecDescriptors.descriptorFor(codecId)?.traits ?? [];
-  return traits.includes(trait);
 }
 
 function buildRelationCountExpr<TContract extends Contract<SqlStorage>>(

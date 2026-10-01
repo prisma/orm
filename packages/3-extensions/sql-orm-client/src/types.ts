@@ -319,6 +319,19 @@ type OpMatchesField<Op, CodecId extends string, CT extends Record<string, unknow
       : false
   : false;
 
+type CodecOperations<TContract extends Contract<SqlStorage>, CodecId extends string> =
+  ExtractQueryOperationTypes<TContract> extends infer AllOps
+    ? {
+        [OpName in keyof AllOps & string as OpMatchesField<
+          AllOps[OpName],
+          CodecId,
+          ExtractCodecTypes<TContract>
+        > extends true
+          ? OpName
+          : never]: QueryOperationMethod<AllOps[OpName], ExtractCodecTypes<TContract>>;
+      }
+    : unknown;
+
 type FieldOperations<
   TContract extends Contract<SqlStorage>,
   NsId extends string,
@@ -338,6 +351,39 @@ type FieldOperations<
         }
       : unknown
     : unknown;
+
+type CodecTraits<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends string,
+> = CodecId extends keyof ExtractCodecTypes<TContract>
+  ? ExtractCodecTypes<TContract>[CodecId] extends { readonly traits: infer T }
+    ? T
+    : never
+  : never;
+
+type CodecOutput<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends string,
+> = CodecId extends keyof ExtractCodecTypes<TContract>
+  ? ExtractCodecTypes<TContract>[CodecId] extends { readonly output: infer O }
+    ? O
+    : unknown
+  : unknown;
+
+/**
+ * The model accessor's type for any field with the codec `CodecId` and the given nullability. A function of `{ deletedAt: CodecField<Contract, 'pg/timestamptz-temporal@1', true> }` is a `where` callback for every model with such a field. Values are checked against the codec's output type, which is wider than a field that refines it, such as an enum or `Char<36>`.
+ */
+export type CodecField<
+  TContract extends Contract<SqlStorage>,
+  CodecId extends keyof ExtractCodecTypes<TContract> & string,
+  Nullable extends boolean = false,
+> = Expression<{ codecId: CodecId; nullable: Nullable }> &
+  ComparisonMethods<
+    CodecOutput<TContract, CodecId> | (Nullable extends true ? null : never),
+    CodecTraits<TContract, CodecId>,
+    CodecId
+  > &
+  CodecOperations<TContract, CodecId>;
 
 function param(codec: CodecRef | undefined, value: unknown): AnyExpression {
   const expression = predicateExpression(value);
@@ -480,6 +526,13 @@ type OrderableFields<
     ? K
     : never]: Orderable;
 };
+
+/** The fields of a model whose codec has the `order` trait. */
+export type OrderableFieldName<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = keyof OrderableFields<TContract, ModelName, NsId> & string;
 
 /**
  * A to-one relation inside `where`/`orderBy`: the relation filters plus each orderable scalar field of the related model. A related field named like a relation method is not exposed.
@@ -1926,7 +1979,7 @@ export type RelationNames<
     }[keyof RelationsOf<TContract, ModelName, NsId>]) &
   string;
 
-type IsUnion<T, Whole = T> = T extends Whole ? ([Whole] extends [T] ? false : true) : never;
+export type IsUnion<T, Whole = T> = T extends Whole ? ([Whole] extends [T] ? false : true) : never;
 
 type IsSingletonString<T> = [T] extends [string]
   ? string extends T

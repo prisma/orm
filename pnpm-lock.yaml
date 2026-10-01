@@ -3609,6 +3609,9 @@ importers:
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
       pg:
         specifier: 'catalog:'
         version: 8.22.0
