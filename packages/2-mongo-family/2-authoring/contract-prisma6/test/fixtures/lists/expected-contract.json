@@ -31,7 +31,7 @@
               "scores": {
                 "type": {
                   "kind": "scalar",
-                  "codecId": "mongo/int32@1"
+                  "codecId": "mongo/int64Number@1"
                 },
                 "nullable": false,
                 "many": true

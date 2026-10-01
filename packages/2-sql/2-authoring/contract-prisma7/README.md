@@ -66,7 +66,7 @@ Codes are prefixed `PSL.PRISMA7_`:
 | `PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
 | `PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED` | `@updatedAt` on a column whose codec has no "now" generator in the target, such as `@db.Date`. |
 | `PSL.PRISMA7_IGNORED_FIELD_REFERENCED` | An `@ignore`d field that `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:` uses; Prisma 7 still creates the primary key, index, or foreign key over its column. |
-| `PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | An index argument Prisma 8 cannot carry (`sort`, `length`, `ops`, an unknown type) or a field that is not a column. |
+| `PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | An index argument Prisma 8 cannot carry (`sort`, `length`, `ops`, an unknown type), a dotted path such as `title.length`, which Prisma 7 refuses as an unknown field, or a field that is not a column. |
 | `PSL.PRISMA7_CONTRACT_INVALID` | A structured error (one with a dotted code, such as the contract builder's `CONTRACT.*` or a codec's `RUNTIME.*`) was thrown while `load` built the contract, or the contract failed the domain, storage consistency, or model storage reference check `load` runs afterwards. It is reported at the input path and asks the user to report the schema as a Prisma bug. Any other error thrown inside `load`, such as an `InternalError` or a `TypeError`, still throws: it is a bug in Prisma ORM, not a problem in the schema (ADR 245). |
 | `PSL.PRISMA7_SCHEMA_READ_FAILED` | The input path could not be read, or a schema directory holds no `.prisma` file. |
 
@@ -88,7 +88,7 @@ A generator or `@updatedAt` on an optional field is `PSL.PRISMA7_OPTIONAL_GENERA
 
 ## Multi-file input
 
-A directory input is read file by file in sorted path order, nested directories included, and a diagnostic names a nested file by its path under the directory (`prisma/schema/models/user.prisma`); the datasource check runs once over all of them. A model or enum declared in more than one file is `PSL_DUPLICATE_DECLARATION` on the later file, the same code the parser's symbol table uses for a duplicate within one file.
+A directory input is read file by file in sorted path order, nested directories included, and a diagnostic names a nested file by its path under the directory (`prisma/schema/models/user.prisma`); the datasource check runs once over all of them. A dotted path in a `datasource` or `generator` value (`provider = prisma.client.js`) is `PSL_INVALID_EXTENSION_BLOCK_MEMBER`, because Prisma 7 accepts none there. A model or enum declared in more than one file is `PSL_DUPLICATE_DECLARATION` on the later file, the same code the parser's symbol table uses for a duplicate within one file.
 
 ## Tests
 

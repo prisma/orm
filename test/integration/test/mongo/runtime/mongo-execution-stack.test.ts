@@ -20,6 +20,7 @@ const STANDARD_CODEC_IDS = [
   'mongo/date@1',
   'mongo/vector@1',
   'mongo/int64@1',
+  'mongo/int64Number@1',
   'mongo/decimal128@1',
   'mongo/binary@1',
   'mongo/json@1',

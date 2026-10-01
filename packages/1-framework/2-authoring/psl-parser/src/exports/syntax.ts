@@ -31,10 +31,12 @@ export {
   AttributeArgAst,
   BooleanLiteralExprAst,
   castExpression,
+  dottedPathsIn,
   FunctionCallAst,
   NumberLiteralExprAst,
   ObjectFieldAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   StringLiteralExprAst,
   TaggedLiteralExprAst,
 } from '../syntax/ast/expressions';

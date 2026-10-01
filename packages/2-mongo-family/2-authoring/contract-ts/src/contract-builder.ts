@@ -194,6 +194,11 @@ type MongoCodecTypes = {
     readonly output: bigint;
     readonly traits: 'equality' | 'order' | 'numeric';
   };
+  readonly 'mongo/int64Number@1': {
+    readonly input: number;
+    readonly output: number;
+    readonly traits: 'equality' | 'order' | 'numeric';
+  };
   readonly 'mongo/decimal128@1': {
     readonly input: string;
     readonly output: string;
@@ -1319,6 +1324,9 @@ export const field = {
   },
   int64() {
     return createScalarFieldBuilder('mongo/int64@1');
+  },
+  int64Number() {
+    return createScalarFieldBuilder('mongo/int64Number@1');
   },
   decimal128() {
     return createScalarFieldBuilder('mongo/decimal128@1');

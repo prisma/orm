@@ -2,9 +2,8 @@
 
 The one package a MongoDB application installs. It wires the framework, the Mongo family, and the Mongo target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-mongo": "0.16.0", "mongodb": "^7.0.0" } }
+```sh
+pnpm add @prisma/orm-mongo mongodb
 ```
 
 ```

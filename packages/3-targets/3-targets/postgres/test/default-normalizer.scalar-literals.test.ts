@@ -89,6 +89,23 @@ describe('parsePostgresDefault string literals', () => {
     });
   });
 
+  it.each([
+    { raw: "'12345678901234567890'::jsonb", nativeType: 'jsonb' },
+    { raw: `'{"a": 1e400}'::json`, nativeType: 'json' },
+  ])(
+    'keeps the raw expression when a JavaScript number would change a json number in $raw',
+    ({ raw, nativeType }) => {
+      expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'function', expression: raw });
+    },
+  );
+
+  it('reads a json number with trailing zeros as the same number', () => {
+    expect(parsePostgresDefault("'[1.0]'::jsonb", 'jsonb')).toEqual({
+      kind: 'literal',
+      value: [1],
+    });
+  });
+
   it('keeps malformed json content as a raw string when it fails to parse', () => {
     expect(parsePostgresDefault("'not valid json'", 'json')).toEqual({
       kind: 'literal',

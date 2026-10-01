@@ -37,6 +37,7 @@ import {
   decimal128Encode,
   decimal128EncodeJson,
   decimalTextBigintLiteral,
+  decimalTextNumberLiteral,
   doubleEncode,
   int32DecodeJson,
   int32Encode,
@@ -45,6 +46,10 @@ import {
   int64DecodeJson,
   int64Encode,
   int64EncodeJson,
+  int64NumberDecode,
+  int64NumberDecodeJson,
+  int64NumberEncode,
+  int64NumberEncodeJson,
   objectIdDecodeJson,
   objectIdEncode,
   objectIdEncodeJson,
@@ -61,6 +66,7 @@ import {
   MONGO_DOUBLE_CODEC_ID,
   MONGO_INT32_CODEC_ID,
   MONGO_INT64_CODEC_ID,
+  MONGO_INT64_NUMBER_CODEC_ID,
   MONGO_JSON_CODEC_ID,
   MONGO_OBJECTID_CODEC_ID,
   MONGO_STRING_CODEC_ID,
@@ -148,6 +154,18 @@ export const mongoInt64Codec = mongoCodec({
 });
 
 /**
+ * A BSON `long` read and written as a `number` from -(2^53 - 1) to 2^53 - 1, the value a Prisma 6 `Int` presents. A value outside that range, or with a fraction, is refused rather than rounded.
+ */
+export const mongoInt64NumberCodec = mongoCodec({
+  typeId: MONGO_INT64_NUMBER_CODEC_ID,
+  decode: (wire: Long | number | bigint) => int64NumberDecode(MONGO_INT64_NUMBER_CODEC_ID, wire),
+  encode: (value: number): Long | number | bigint =>
+    int64NumberEncode(MONGO_INT64_NUMBER_CODEC_ID, value),
+  encodeJson: (value: number) => int64NumberEncodeJson(MONGO_INT64_NUMBER_CODEC_ID, value),
+  decodeJson: (json) => int64NumberDecodeJson(MONGO_INT64_NUMBER_CODEC_ID, json),
+});
+
+/**
  * A BSON `decimal`. The application value and its JSON form are the same decimal text, written without an exponent.
  */
 export const mongoDecimal128Codec = mongoCodec({
@@ -209,6 +227,7 @@ export const mongoStandardCodecs = [
   mongoDateCodec,
   mongoVectorCodec,
   mongoInt64Codec,
+  mongoInt64NumberCodec,
   mongoDecimal128Codec,
   mongoBinaryCodec,
   mongoJsonCodec,
@@ -320,6 +339,12 @@ export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['long'],
     renderValueLiteral: decimalTextBigintLiteral,
+  }),
+  descriptorFor(mongoInt64NumberCodec, {
+    dataType: mongoInt64.id,
+    traits: ['equality', 'order', 'numeric'],
+    targetTypes: ['long'],
+    renderValueLiteral: decimalTextNumberLiteral,
   }),
   descriptorFor(mongoDecimal128Codec, {
     dataType: mongoDecimal128.id,

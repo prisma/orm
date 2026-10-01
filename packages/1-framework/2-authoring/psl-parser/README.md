@@ -30,6 +30,7 @@ In the provider-based authoring model, PSL providers call `parse` to obtain the 
 - Arguments are parsed into positional/named entries with preserved raw values and source spans.
 - The parser owns **syntax + structure + spans**, not semantics.
 - Example: `@default(uuid(7))` is preserved as a positional argument value `uuid(7)`; semantic lowering is handled downstream.
+- A value may be a dotted member path such as `address.city` in `@@index([address.city])`: a `PathExpr` node, read with `PathExprAst.path()`. A dotted callee is the same `PathExpr`, so `address.city` has one shape whether or not it is called (`address.city(sort: Asc)`, read with `FunctionCallAst.memberPath()`); a bare callee (`now()`) is a `QualifiedName`, read with `FunctionCallAst.name()`. `FunctionCallAst.path()` returns every segment either way. The syntax cannot tell a namespace-qualified function (`pg.now()`) from a called field path, so the parser does not try: each reader decides whether it accepts a path, and what it names.
 
 Interpretation/validation (for example `@internal/sql-contract-psl`) is responsible for:
 

@@ -145,6 +145,7 @@ test('BSON scalar helpers infer their application types', () => {
     fields: {
       _id: field.objectId(),
       views: field.int64(),
+      hits: field.int64Number(),
       price: field.decimal128(),
       thumbnail: field.binary(),
       meta: field.json(),
@@ -160,6 +161,7 @@ test('BSON scalar helpers infer their application types', () => {
   type PostRow = InferModelRow<typeof postContract, 'Post'>;
 
   expectTypeOf<PostRow['views']>().toEqualTypeOf<bigint>();
+  expectTypeOf<PostRow['hits']>().toEqualTypeOf<number>();
   expectTypeOf<PostRow['price']>().toEqualTypeOf<string>();
   expectTypeOf<PostRow['thumbnail']>().toEqualTypeOf<Uint8Array>();
   expectTypeOf<PostRow['meta']>().toEqualTypeOf<JsonValue>();

@@ -64,6 +64,10 @@ async function listSchemaFiles(absolutePath: string, displayPath: string): Promi
   return files;
 }
 
+function isMissingPath(error: unknown): boolean {
+  return error instanceof Error && Reflect.get(error, 'code') === 'ENOENT';
+}
+
 function readFailure(schemaPath: string, message: string, meta: Record<string, unknown>) {
   return notOk({
     summary: `Failed to read Prisma 6 schema at "${schemaPath}"`,
@@ -98,8 +102,11 @@ export function prisma6Contract(
         try {
           files = await listSchemaFiles(absolutePath, schemaPath);
         } catch (error) {
-          const message = String(error);
-          return readFailure(schemaPath, message, { schemaPath, absolutePath, cause: message });
+          const cause = String(error);
+          const message = isMissingPath(error)
+            ? `There is no file or directory at "${schemaPath}". Fix the path passed to prisma6Schema() in prisma.config.ts.`
+            : cause;
+          return readFailure(schemaPath, message, { schemaPath, absolutePath, cause });
         }
         if (files.length === 0) {
           return readFailure(

@@ -326,6 +326,24 @@ describe('init installs', () => {
     );
   });
 
+  it(
+    'installs the driver the Mongo package declares as a peer dependency',
+    async () => {
+      const run = await harness().run(
+        ['orm', 'init', '--target', 'mongodb', '--authoring', 'psl'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(0);
+      expect(calls[0]).toEqual({
+        file: expect.any(String),
+        args: ['add', '@prisma/orm-mongo', 'dotenv', 'mongodb'],
+        cwd: projectDir,
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
   describe('--skip-install', () => {
     it(
       'installs nothing and emits nothing',

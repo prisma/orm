@@ -55,7 +55,8 @@ function encodeFailed(codecId: string, message: string, received: unknown): neve
 }
 
 function describeReceived(value: unknown): string {
-  if (typeof value === 'number' || typeof value === 'bigint') return String(value);
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'bigint') return `${value}n`;
   if (typeof value === 'string') {
     return `string ${JSON.stringify(value.slice(0, RECEIVED_PREVIEW_LIMIT))}`;
   }
@@ -231,12 +232,26 @@ export function int64Encode(codecId: string, value: bigint): Long {
 }
 
 /**
+ * A stored double with a fraction, which a 64-bit integer codec cannot read. Such values were written through a Prisma 6 `Int` while its contract used the 32-bit codec, which took any number.
+ */
+function refuseFractionalDouble(codecId: string, wire: number): never {
+  return decodeFailed(
+    codecId,
+    `wire value is the fractional double ${wire}, and a 64-bit integer holds whole numbers only. Rewrite each such stored value as a long, rounded or cut off ({ $toLong: { $round: [<value>, 0] } }, or $trunc in place of $round), mapping over the list when the value sits in one. The upgrade guide step prisma6-int-written-as-long has the queries for a plain field, a list and a list of composite values.`,
+    wire,
+  );
+}
+
+/**
  * The driver promotes a stored `long` that fits in 53 bits to a `number`, and hands larger ones over as `Long`, so both arrive here.
  */
 export function int64Decode(codecId: string, wire: Long | number | bigint): bigint {
   if (typeof wire === 'bigint') return wire;
   if (isLong(wire)) return wire.toBigInt();
   if (typeof wire === 'number' && Number.isSafeInteger(wire)) return BigInt(wire);
+  if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
+    return refuseFractionalDouble(codecId, wire);
+  }
   return decodeFailed(codecId, 'wire value must be a Long or a safe integer', wire);
 }
 
@@ -251,6 +266,62 @@ export function int64EncodeJson(codecId: string, value: bigint | number): string
 
 export function int64DecodeJson(codecId: string, json: JsonValue): bigint {
   return decodeJsonIntegerText(codecId, json, INT64_RANGE);
+}
+
+const SAFE_INTEGER_RANGE = `from ${Number.MIN_SAFE_INTEGER} to ${Number.MAX_SAFE_INTEGER}`;
+
+export function int64NumberEncode(codecId: string, value: number): Long {
+  if (!Number.isSafeInteger(value)) {
+    encodeFailed(
+      codecId,
+      `value must be an integer ${SAFE_INTEGER_RANGE}; received ${describeReceived(value)}`,
+      value,
+    );
+  }
+  return Long.fromNumber(value);
+}
+
+function safeIntegerOf(codecId: string, subject: string, value: bigint): number {
+  if (value < BigInt(Number.MIN_SAFE_INTEGER) || value > BigInt(Number.MAX_SAFE_INTEGER)) {
+    decodeFailed(
+      codecId,
+      `${subject} must be a whole number ${SAFE_INTEGER_RANGE}; received ${value}`,
+      value,
+    );
+  }
+  return Number(value);
+}
+
+/**
+ * The driver hands a stored `long` over as a `number` when it fits in 53 bits (the default `promoteLongs`), as a `Long` otherwise or with `promoteLongs: false`, and as a `bigint` with `useBigInt64`.
+ */
+export function int64NumberDecode(codecId: string, wire: Long | number | bigint): number {
+  if (typeof wire === 'bigint') return safeIntegerOf(codecId, 'wire value', wire);
+  if (isLong(wire)) return safeIntegerOf(codecId, 'wire value', wire.toBigInt());
+  if (typeof wire === 'number' && Number.isSafeInteger(wire)) return wire;
+  if (typeof wire === 'number' && Number.isFinite(wire) && !Number.isInteger(wire)) {
+    return refuseFractionalDouble(codecId, wire);
+  }
+  return decodeFailed(
+    codecId,
+    `wire value must be a whole number ${SAFE_INTEGER_RANGE}; received ${describeReceived(wire)}`,
+    wire,
+  );
+}
+
+export function int64NumberEncodeJson(codecId: string, value: number): string {
+  return int64NumberEncode(codecId, value).toString();
+}
+
+export function int64NumberDecodeJson(codecId: string, json: JsonValue): number {
+  if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
+    return decodeFailed(codecId, 'JSON value must be decimal integer text', json);
+  }
+  return safeIntegerOf(codecId, 'JSON value', BigInt(json));
+}
+
+export function decimalTextNumberLiteral(value: JsonValue): string | undefined {
+  return typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 }
 
 export function decimalTextBigintLiteral(value: JsonValue): string | undefined {

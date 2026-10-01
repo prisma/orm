@@ -56,3 +56,91 @@ const LENGTH_ONE_WHEN_BARE: ReadonlySet<string> = new Set(['character', 'bit']);
 export function withLengthOneWhenBare(typeName: string): string {
   return LENGTH_ONE_WHEN_BARE.has(typeName) ? `${typeName}(1)` : typeName;
 }
+
+/**
+ * The type columns introspection reads for one column: `format_type(atttypid, atttypmod)` and the
+ * `information_schema.columns` type fields.
+ */
+export interface CatalogColumnType {
+  readonly formattedType: string | null;
+  readonly dataType: string;
+  readonly udtName: string;
+  readonly characterMaximumLength: number | null;
+  readonly numericPrecision: number | null;
+  readonly numericScale: number | null;
+}
+
+export interface IntrospectedNativeType {
+  /** The column's native type; for an array column, its element type. */
+  readonly nativeType: string;
+  readonly many: true | undefined;
+  /** The normalized full native type, with `[]` for an array column, as the contract side spells it. */
+  readonly resolvedNativeType: string;
+}
+
+/** The native type introspection reports for a column, from its catalog type columns. */
+export function introspectedNativeType(column: CatalogColumnType): IntrospectedNativeType {
+  const reported = reportedNativeType(column);
+  const many = reported.endsWith('[]') ? true : undefined;
+  const nativeType = many ? normalizeSchemaNativeType(reported.slice(0, -2)) : reported;
+  return {
+    nativeType,
+    many,
+    resolvedNativeType: `${normalizeSchemaNativeType(nativeType)}${many ? '[]' : ''}`,
+  };
+}
+
+function reportedNativeType(column: CatalogColumnType): string {
+  if (column.formattedType) {
+    return normalizeFormattedType(column.formattedType);
+  }
+  if (column.dataType === 'character varying' || column.dataType === 'character') {
+    return column.characterMaximumLength
+      ? `${column.dataType}(${column.characterMaximumLength})`
+      : column.dataType;
+  }
+  if (column.dataType === 'numeric' || column.dataType === 'decimal') {
+    if (column.numericPrecision && column.numericScale !== null) {
+      return `${column.dataType}(${column.numericPrecision},${column.numericScale})`;
+    }
+    return column.numericPrecision
+      ? `${column.dataType}(${column.numericPrecision})`
+      : column.dataType;
+  }
+  return column.udtName || column.dataType;
+}
+
+/**
+ * `format_type`'s name for a column type, named as the contract names it: a built-in type through {@link normalizeSchemaNativeType}, and a user-defined type, which `format_type` quotes where it needs to (mixed case, a reserved word, a dot) and schema-qualifies outside the search path, with each identifier unquoted.
+ */
+function normalizeFormattedType(formattedType: string): string {
+  if (formattedType.endsWith('[]')) {
+    return `${normalizeFormattedType(formattedType.slice(0, -2))}[]`;
+  }
+  const normalized = normalizeSchemaNativeType(formattedType);
+  if (normalized !== formattedType) return normalized;
+  return splitQualifiedName(formattedType).map(unquoteIdentifier).join('.');
+}
+
+function splitQualifiedName(name: string): string[] {
+  const segments: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (const char of name) {
+    if (char === '"') quoted = !quoted;
+    if (char === '.' && !quoted) {
+      segments.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
+  }
+  segments.push(current);
+  return segments;
+}
+
+function unquoteIdentifier(segment: string): string {
+  return segment.length >= 2 && segment.startsWith('"') && segment.endsWith('"')
+    ? segment.slice(1, -1).replaceAll('""', '"')
+    : segment;
+}

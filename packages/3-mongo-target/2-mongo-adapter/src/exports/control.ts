@@ -10,6 +10,7 @@ import {
   MONGO_DOUBLE_CODEC_ID,
   MONGO_INT32_CODEC_ID,
   MONGO_INT64_CODEC_ID,
+  MONGO_INT64_NUMBER_CODEC_ID,
   MONGO_JSON_CODEC_ID,
   MONGO_OBJECTID_CODEC_ID,
   MONGO_STRING_CODEC_ID,
@@ -62,6 +63,12 @@ export const mongoScalarAuthoringTypes = {
     kind: 'typeConstructor',
     documentation: 'A signed 64-bit integer read as a bigint, stored as BSON long.',
     output: { codecId: MONGO_INT64_CODEC_ID, nativeType: 'long' },
+  },
+  Int64Number: {
+    kind: 'typeConstructor',
+    documentation:
+      'A signed 64-bit integer read as a JavaScript number within its safe integer range, stored as BSON long.',
+    output: { codecId: MONGO_INT64_NUMBER_CODEC_ID, nativeType: 'long' },
   },
   Decimal128: {
     kind: 'typeConstructor',

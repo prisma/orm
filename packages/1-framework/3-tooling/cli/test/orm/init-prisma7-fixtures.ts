@@ -117,10 +117,16 @@ type ResolveContext = Parameters<typeof resolveInitInputs>[0];
 
 /** Input resolution with a check that reads every schema and no warning sink, unless the test supplies its own. */
 export function resolveInputs(
-  ctx: Omit<ResolveContext, 'checkPrisma7Source' | 'warn'> & {
+  ctx: Omit<ResolveContext, 'checkPrisma7Source' | 'warn' | 'packageManager'> & {
     readonly checkPrisma7Source?: CheckPrisma7Source;
     readonly warn?: ResolveContext['warn'];
+    readonly packageManager?: ResolveContext['packageManager'];
   },
 ) {
-  return resolveInitInputs({ checkPrisma7Source: stubCheck(), warn: () => {}, ...ctx });
+  return resolveInitInputs({
+    checkPrisma7Source: stubCheck(),
+    warn: () => {},
+    packageManager: 'pnpm',
+    ...ctx,
+  });
 }

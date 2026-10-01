@@ -161,25 +161,7 @@ The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm
   import type { CodecTypes } from '@prisma/orm-mongo/target/codec-types';
   ```
 
-- **A Mongo `Json` field holds only JSON values, and fields of a variant model go through their codecs.** A `Json` field now refuses a `Date`, an `ObjectId`, a `Decimal128`, a `Binary` or any other value that is not JSON, at any depth: a read fails with `RUNTIME.DECODE_FAILED` and a write fails with `RUNTIME.ENCODE_FAILED`. Change the type of a field that holds such values to `Bson`. A Mongo contract written in PSL with a `Json` field gets a new collection validator and a new storage hash, so run `prisma contract emit` and then `prisma db update`, or plan a migration. Through `.variant(...)`, a field declared only on the variant model is now written and read through its codec, so remove any code that converted such values by hand. See `mongo-json-field-semantics` and `mongo-variant-field-codecs` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.13/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.12-to-8.0.0-rc.13/), and `mongo-bson-codec-added` in the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.13/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.12-to-8.0.0-rc.13/). ([#30439](https://github.com/prisma/orm/pull/30439))
-
-  Before:
-
-  ```prisma
-  model Event {
-    id      ObjectId @id @map("_id")
-    payload Json
-  }
-  ```
-
-  After, when `payload` holds values that are not JSON:
-
-  ```prisma
-  model Event {
-    id      ObjectId @id @map("_id")
-    payload Bson
-  }
-  ```
+- **Fields of a Mongo variant model go through their codecs.** Through `.variant(...)`, a field declared only on the variant model is now written and read through its codec, as base-model fields always were: an `ObjectId` field is stored as an `ObjectId` and read back as a hex string, and a where filter on it encodes a hex string. Remove any code that converted such values by hand. A contract built with the TypeScript builder has no collection validator, so it may have stored such values as strings; the recipe converts them. See `mongo-variant-field-codecs` in the [app recipe](https://github.com/prisma/orm/blob/main/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.12-to-8.0.0-rc.13/), and `mongo-bson-codec-added` in the [extension recipe](https://github.com/prisma/orm/blob/main/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.12-to-8.0.0-rc.13/). ([#30439](https://github.com/prisma/orm/pull/30439))
 
 - **Four Mongo PSL scalar names are deprecated.** A Mongo schema now names each scalar after the BSON type it stores: `Int` becomes `Int32`, `Float` becomes `Double`, `Boolean` becomes `Bool` and `DateTime` becomes `Date`. The old names still work and produce the same contract, but each use reports a `PSL_DEPRECATED_SCALAR_NAME` warning, and a later release removes them. Postgres and SQLite schemas do not change. See `mongo-psl-scalar-names` in the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.13/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.12-to-8.0.0-rc.13/). ([#30396](https://github.com/prisma/orm/pull/30396))
 
@@ -230,7 +212,7 @@ The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm
 - **Order by a related row's column, a relation count, and null placement.** Inside `orderBy`, a to-one relation offers the related model's columns (`post.author.name.asc()`), a to-many relation offers `count()` with an optional filter (`user.posts.count().desc()`), and every `asc()` and `desc()` accepts `{ nulls: 'first' | 'last' }`. ([#30402](https://github.com/prisma/orm/pull/30402))
 - **`prisma contract print` writes the configured contract as Prisma 8 PSL.** The command loads whatever `contract` names in the config (a Prisma 7 schema, a TypeScript contract or a PSL contract) and prints it as a Prisma 8 PSL file that emits the same contract, including its hashes. It refuses, by name, any part of the contract that PSL cannot express. Use `--output <path>` to write a file. ([#30315](https://github.com/prisma/orm/pull/30315))
 - **A Prisma 6 MongoDB project can use its existing `schema.prisma` as the contract source.** Set `contract: prisma6Schema('prisma/schema.prisma')` with `prisma6Schema` from `@prisma/orm-mongo/config`. Anything the reader cannot express is reported as an error with a `PSL.PRISMA6_MONGO_*` code. ([#30405](https://github.com/prisma/orm/pull/30405))
-- **Mongo schemas can declare `Int64`, `Decimal128`, `Binary`, `Json` and `Bson` fields.** The ORM reads the first four as `bigint`, decimal text, `Uint8Array` and a JSON value. A `Bson` field holds any BSON value. The TypeScript helpers are `field.int64()`, `field.decimal128()`, `field.binary()`, `field.json()` and `field.bson()`. ([#30396](https://github.com/prisma/orm/pull/30396), [#30439](https://github.com/prisma/orm/pull/30439))
+- **Mongo schemas can declare `Int64`, `Decimal128`, `Binary`, `Json` and `Bson` fields.** The ORM reads the first four as `bigint`, decimal text, `Uint8Array` and a JSON value; a `Json` field refuses a value that is not JSON, at any depth. A `Bson` field holds any BSON value. The TypeScript helpers are `field.int64()`, `field.decimal128()`, `field.binary()`, `field.json()` and `field.bson()`. ([#30396](https://github.com/prisma/orm/pull/30396), [#30439](https://github.com/prisma/orm/pull/30439))
 - **Mongo schemas can declare automatic timestamps.** `temporal.createdAt()` and `temporal.updatedAt()` fill the field on create, and `temporal.updatedAt()` advances it on every update that writes something. ([#30403](https://github.com/prisma/orm/pull/30403))
 - **`prisma contract infer` prints Postgres array defaults as literal lists.** A default such as `'{a,b}'::text[]` on a text, varchar, enum, date or boolean array column now prints as `@default(["a", "b"])` instead of a raw `sql` expression. ([#30436](https://github.com/prisma/orm/pull/30436))
 
