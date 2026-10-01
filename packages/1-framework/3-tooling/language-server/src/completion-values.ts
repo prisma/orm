@@ -1,7 +1,11 @@
-import type { ArgType, AttributeSpec, Binder, Scope } from '@internal/psl-parser';
+import type { ArgType, Binder, Scope } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
-import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
+import {
+  type ArgumentGrammar,
+  type ArgumentSignature,
+  resolveGrammar,
+} from './attribute-argument-grammar';
 import type {
   AttributeArgumentPosition,
   AttributeArgumentSlotPosition,
@@ -28,10 +32,10 @@ interface ValueCompletionInput<Position extends AttributeArgumentPosition>
 
 export function provideAttributeNamedKeyCompletionItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
-  spec: AttributeSpec<never, never>,
+  root: ArgumentGrammar,
 ): readonly CompletionItem[] {
   return orderedItems(
-    resolveGrammar(spec, input.context.path).flatMap((grammar) =>
+    resolveGrammar(root, input.context.path).flatMap((grammar) =>
       'kind' in grammar ? [] : namedKeyItems(input, grammar),
     ),
   );
@@ -39,10 +43,10 @@ export function provideAttributeNamedKeyCompletionItems(
 
 export function provideAttributeArgumentSlotCompletionItems(
   input: ValueCompletionInput<AttributeArgumentSlotPosition>,
-  spec: AttributeSpec<never, never>,
+  root: ArgumentGrammar,
 ): readonly CompletionItem[] {
   return orderedItems(
-    resolveGrammar(spec, input.context.path).flatMap((grammar) => {
+    resolveGrammar(root, input.context.path).flatMap((grammar) => {
       if ('kind' in grammar) return [];
       const param = grammar.positional?.[input.context.positionalIndex]?.type;
       return [...valueItems(input, param, 'scalar'), ...namedKeyItems(input, grammar)];
@@ -52,10 +56,10 @@ export function provideAttributeArgumentSlotCompletionItems(
 
 export function provideAttributeValueCompletionItems(
   input: ValueCompletionInput<AttributeValuePosition>,
-  spec: AttributeSpec<never, never>,
+  root: ArgumentGrammar,
 ): readonly CompletionItem[] {
   return orderedItems(
-    resolveGrammar(spec, input.context.path).flatMap((grammar) =>
+    resolveGrammar(root, input.context.path).flatMap((grammar) =>
       'kind' in grammar ? valueItems(input, grammar, input.context.syntax) : [],
     ),
   );

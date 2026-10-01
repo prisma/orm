@@ -14,7 +14,7 @@ import {
   ObjectLiteralExprAst,
   SyntaxNode,
 } from '@internal/psl-parser/syntax';
-import type { AttributeSpecOwner } from './attribute-spec-resolution';
+import type { ArgumentOwner, AttributeOwner } from './attribute-spec-resolution';
 import {
   type AttributeArgumentPathStep,
   argumentAtCursor,
@@ -38,14 +38,9 @@ interface SignaturePosition {
     | undefined;
 }
 
-export type AttributeSignatureContext = AttributeSpecOwner &
-  SignaturePosition & {
-    readonly attributeName: string;
-  };
+export type SignatureContext = ArgumentOwner & SignaturePosition;
 
-export function classifyPslSignatureContext(
-  input: PslCursorInput,
-): AttributeSignatureContext | undefined {
+export function classifyPslSignatureContext(input: PslCursorInput): SignatureContext | undefined {
   const syntax = locateAttributeSyntax(input);
   if (syntax === undefined) return undefined;
   const attributeName = syntax.attribute.name()?.identifier()?.name();
@@ -59,7 +54,7 @@ export function classifyPslSignatureContext(
 
 function signatureOwner(
   attribute: FieldAttributeAst | ModelAttributeAst,
-): AttributeSpecOwner | undefined {
+): AttributeOwner | undefined {
   if (attribute instanceof FieldAttributeAst) {
     const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
     const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);

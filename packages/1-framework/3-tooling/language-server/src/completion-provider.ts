@@ -10,9 +10,18 @@ import {
   isNamespaceLike,
   memberEntries,
 } from '@internal/psl-parser';
-import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
+import type {
+  GenericBlockDeclarationAst,
+  SourceFile,
+  SyntaxNode,
+} from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
-import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
+import {
+  type ArgumentOwner,
+  type AttributeSpecSource,
+  argumentRootGrammar,
+  attributeSpecResolver,
+} from './attribute-spec-resolution';
 import type {
   AttributeNameCompletionContext,
   DeclarationKeywordCompletionContext,
@@ -124,8 +133,8 @@ export function providePslCompletionItems(
     case 'fieldAttributeNamedKey':
     case 'modelAttributeNamedKey':
     case 'blockAttributeNamedKey': {
-      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-      return spec === undefined
+      const root = argumentRootGrammar(context, input.candidates);
+      return root === undefined
         ? []
         : provideAttributeNamedKeyCompletionItems(
             {
@@ -135,26 +144,20 @@ export function providePslCompletionItems(
               clientSupportsTriggerSuggestCommand:
                 input.clientSupportsTriggerSuggestCommand === true,
             },
-            spec,
+            root,
           );
     }
     case 'fieldAttributeArgumentSlot':
     case 'modelAttributeArgumentSlot':
     case 'blockAttributeArgumentSlot': {
-      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-      return spec === undefined
+      const root = argumentRootGrammar(context, input.candidates);
+      return root === undefined
         ? []
         : provideAttributeArgumentSlotCompletionItems(
             {
               context,
               binder: input.candidates.binder,
-              scope: input.candidates.binder.scopeAt(
-                'field' in context
-                  ? context.field.syntax
-                  : 'model' in context
-                    ? context.model.syntax
-                    : context.block.syntax,
-              ),
+              scope: input.candidates.binder.scopeAt(ownerSyntax(context)),
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerSuggestCommand:
@@ -166,26 +169,20 @@ export function providePslCompletionItems(
                   ? localFieldNames(context, input.candidates.binder)
                   : referencedFieldNames(context, input.candidates.binder),
             },
-            spec,
+            root,
           );
     }
     case 'fieldAttributeValue':
     case 'modelAttributeValue':
     case 'blockAttributeValue': {
-      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-      return spec === undefined
+      const root = argumentRootGrammar(context, input.candidates);
+      return root === undefined
         ? []
         : provideAttributeValueCompletionItems(
             {
               context,
               binder: input.candidates.binder,
-              scope: input.candidates.binder.scopeAt(
-                'field' in context
-                  ? context.field.syntax
-                  : 'model' in context
-                    ? context.model.syntax
-                    : context.block.syntax,
-              ),
+              scope: input.candidates.binder.scopeAt(ownerSyntax(context)),
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerParameterHintsCommand:
@@ -195,7 +192,7 @@ export function providePslCompletionItems(
                   ? localFieldNames(context, input.candidates.binder)
                   : referencedFieldNames(context, input.candidates.binder),
             },
-            spec,
+            root,
           );
     }
     case 'declarationKeyword':
@@ -216,6 +213,17 @@ export function providePslCompletionItems(
         input.candidates,
         input,
       );
+  }
+}
+
+function ownerSyntax(owner: ArgumentOwner): SyntaxNode {
+  switch (owner.ownerKind) {
+    case 'field':
+      return owner.field.syntax;
+    case 'model':
+      return owner.model.syntax;
+    case 'block':
+      return owner.block.syntax;
   }
 }
 

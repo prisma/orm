@@ -18,6 +18,7 @@ import type {
   ModelDeclarationAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
+import type { ArgumentGrammar } from './attribute-argument-grammar';
 
 export interface AttributeSpecSource {
   readonly binder: Binder;
@@ -27,21 +28,45 @@ export interface AttributeSpecSource {
   readonly controlMutationDefaults?: ControlMutationDefaults;
 }
 
-export type AttributeSpecOwner =
-  | {
-      readonly ownerKind: 'block';
-      readonly block: GenericBlockDeclarationAst;
-      readonly blockKeyword: string;
-    }
-  | {
-      readonly ownerKind: 'field';
-      readonly model: ModelDeclarationAst;
-      readonly field: FieldDeclarationAst;
-    }
-  | { readonly ownerKind: 'model'; readonly model: ModelDeclarationAst };
+export interface FieldAttributeOwner {
+  readonly ownerKind: 'field';
+  readonly field: FieldDeclarationAst;
+  readonly model: ModelDeclarationAst;
+}
+
+export interface ModelAttributeOwner {
+  readonly ownerKind: 'model';
+  readonly model: ModelDeclarationAst;
+}
+
+export interface BlockAttributeOwner {
+  readonly ownerKind: 'block';
+  readonly block: GenericBlockDeclarationAst;
+  readonly blockKeyword: string;
+}
+
+export type AttributeOwner = BlockAttributeOwner | FieldAttributeOwner | ModelAttributeOwner;
+
+export interface NamedAttribute {
+  readonly attributeName: string;
+}
+
+export type ArgumentOwner = AttributeOwner & NamedAttribute;
+
+export function argumentRootGrammar(
+  owner: ArgumentOwner,
+  source: AttributeSpecSource,
+): ArgumentGrammar | undefined {
+  switch (owner.ownerKind) {
+    case 'field':
+    case 'model':
+    case 'block':
+      return attributeSpecResolver(owner, source)(owner.attributeName);
+  }
+}
 
 export function attributeSpecResolver(
-  context: AttributeSpecOwner,
+  context: AttributeOwner,
   source: AttributeSpecSource,
 ): (name: string) => AttributeSpec<never, never> | undefined {
   switch (context.ownerKind) {

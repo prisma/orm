@@ -1,14 +1,22 @@
-import type { AttributeSpec, PositionalParam } from '@internal/psl-parser';
+import type { PositionalParam } from '@internal/psl-parser';
 import {
   MarkupKind,
   type ParameterInformation,
   type SignatureHelp,
   type SignatureInformation,
 } from 'vscode-languageserver';
-import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
-import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
+import {
+  type ArgumentGrammar,
+  type ArgumentSignature,
+  resolveGrammar,
+} from './attribute-argument-grammar';
+import {
+  type ArgumentOwner,
+  type AttributeSpecSource,
+  argumentRootGrammar,
+} from './attribute-spec-resolution';
 import type { AttributeArgumentPathStep, PslCursorInput } from './attribute-syntax-context';
-import { type AttributeSignatureContext, classifyPslSignatureContext } from './signature-context';
+import { classifyPslSignatureContext, type SignatureContext } from './signature-context';
 
 export interface ProvidePslSignatureHelpInput extends PslCursorInput {
   readonly candidates: AttributeSpecSource;
@@ -18,14 +26,24 @@ export interface ProvidePslSignatureHelpInput extends PslCursorInput {
 export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): SignatureHelp | null {
   const context = classifyPslSignatureContext(input);
   if (context === undefined) return null;
-  const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
-  if (spec === undefined) return null;
-  return signatureHelp(context, spec, input.clientSupportsLabelOffsets === true);
+  const root = argumentRootGrammar(context, input.candidates);
+  if (root === undefined) return null;
+  return signatureHelp(context, root, input.clientSupportsLabelOffsets === true);
+}
+
+function rootSignatureName(owner: ArgumentOwner): string {
+  switch (owner.ownerKind) {
+    case 'field':
+      return `@${owner.attributeName}`;
+    case 'model':
+    case 'block':
+      return `@@${owner.attributeName}`;
+  }
 }
 
 function signatureHelp(
-  context: AttributeSignatureContext,
-  spec: AttributeSpec<never, never>,
+  context: SignatureContext,
+  root: ArgumentGrammar,
   labelOffsets: boolean,
 ): SignatureHelp | null {
   const callIndex = context.path.reduce(
@@ -34,11 +52,8 @@ function signatureHelp(
   );
   const call = context.path[callIndex];
   const signaturePath = context.path.slice(0, callIndex + 1);
-  const name =
-    call?.kind === 'functionCall'
-      ? call.name
-      : `${spec.level === 'field' ? '@' : '@@'}${spec.name}`;
-  const signatures = resolveGrammar(spec, signaturePath).flatMap((grammar) => {
+  const name = call?.kind === 'functionCall' ? call.name : rootSignatureName(context);
+  const signatures = resolveGrammar(root, signaturePath).flatMap((grammar) => {
     if ('kind' in grammar) return [];
     const active = context.path[callIndex + 1];
     const params = parameters(grammar, active?.kind === 'namedArgument' ? active.name : undefined);
@@ -59,7 +74,7 @@ function signatureHelp(
 }
 
 function parameterIndex(
-  context: AttributeSignatureContext,
+  context: SignatureContext,
   active: AttributeArgumentPathStep | undefined,
   params: readonly PositionalParam<unknown, never>[],
 ): number {
