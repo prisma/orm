@@ -13,13 +13,13 @@ import {
   primaryKey,
   unique,
 } from '@internal/sql-relational-core/contract-free';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { CreateTableCall } from '@internal/target-sqlite/op-factory-call';
 import { describe, expect, it } from 'vitest';
 import type { SqliteTableSpec } from '../../../../3-targets/sqlite/src/core/migrations/operations/shared';
 // Pre-slice oracle: the createTable function and SqliteTableSpec type from the
 // internal tables module (kept on disk for Phase 2 recreateTable use).
 import { createTable as preSliceCreateTableOp } from '../../../../3-targets/sqlite/src/core/migrations/operations/tables';
-import { createSqliteBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../../src/exports/control';
 
 const lowerer = new SqliteControlAdapter(createSqliteBuiltinCodecLookup());
@@ -49,8 +49,8 @@ describe('CreateTableCall lowering output', () => {
 
     const spec: SqliteTableSpec = {
       columns: [
-        { name: 'id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
-        { name: 'name', typeSql: 'TEXT', defaultSql: '', nullable: true },
+        { name: 'id', typeSql: 'INTEGER', nullable: false },
+        { name: 'name', typeSql: 'TEXT', nullable: true },
       ],
     };
     const columns = [col('id', 'INTEGER', { notNull: true }), col('name', 'TEXT')];
@@ -63,8 +63,8 @@ describe('CreateTableCall lowering output', () => {
 
     const spec: SqliteTableSpec = {
       columns: [
-        { name: 'user_id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
-        { name: 'group_id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
+        { name: 'user_id', typeSql: 'INTEGER', nullable: false },
+        { name: 'group_id', typeSql: 'INTEGER', nullable: false },
       ],
       primaryKey: { columns: ['user_id', 'group_id'] },
     };
@@ -84,9 +84,9 @@ describe('CreateTableCall lowering output', () => {
 
     const spec: SqliteTableSpec = {
       columns: [
-        { name: 'id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
-        { name: 'username', typeSql: 'TEXT', defaultSql: '', nullable: false },
-        { name: 'email', typeSql: 'TEXT', defaultSql: '', nullable: false },
+        { name: 'id', typeSql: 'INTEGER', nullable: false },
+        { name: 'username', typeSql: 'TEXT', nullable: false },
+        { name: 'email', typeSql: 'TEXT', nullable: false },
       ],
       primaryKey: { columns: ['id'] },
       uniques: [{ columns: ['username'] }, { columns: ['email'], name: 'uq_profiles_email' }],
@@ -112,9 +112,9 @@ describe('CreateTableCall lowering output', () => {
 
     const spec: SqliteTableSpec = {
       columns: [
-        { name: 'id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
-        { name: 'author_id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
-        { name: 'title', typeSql: 'TEXT', defaultSql: '', nullable: false },
+        { name: 'id', typeSql: 'INTEGER', nullable: false },
+        { name: 'author_id', typeSql: 'INTEGER', nullable: false },
+        { name: 'title', typeSql: 'TEXT', nullable: false },
       ],
       primaryKey: { columns: ['id'] },
       foreignKeys: [
@@ -148,11 +148,10 @@ describe('CreateTableCall lowering output', () => {
         {
           name: 'id',
           typeSql: 'INTEGER',
-          defaultSql: '',
           nullable: false,
           inlineAutoincrementPrimaryKey: true,
         },
-        { name: 'payload', typeSql: 'TEXT', defaultSql: '', nullable: true },
+        { name: 'payload', typeSql: 'TEXT', nullable: true },
       ],
     };
     const columns = [col('id', 'INTEGER PRIMARY KEY AUTOINCREMENT'), col('payload', 'TEXT')];
@@ -164,7 +163,14 @@ describe('CreateTableCall lowering output', () => {
     const tableName = 'settings';
 
     const spec: SqliteTableSpec = {
-      columns: [{ name: 'theme', typeSql: 'TEXT', defaultSql: "DEFAULT 'light'", nullable: true }],
+      columns: [
+        {
+          name: 'theme',
+          typeSql: 'TEXT',
+          default: { kind: 'literal', value: 'light' },
+          nullable: true,
+        },
+      ],
     };
     const columns = [col('theme', 'TEXT', { default: lit('light') })];
 
@@ -176,7 +182,12 @@ describe('CreateTableCall lowering output', () => {
 
     const spec: SqliteTableSpec = {
       columns: [
-        { name: 'max_items', typeSql: 'INTEGER', defaultSql: 'DEFAULT 10', nullable: true },
+        {
+          name: 'max_items',
+          typeSql: 'INTEGER',
+          default: { kind: 'literal', value: 10 },
+          nullable: true,
+        },
       ],
     };
     const columns = [col('max_items', 'INTEGER', { default: lit(10) })];
@@ -189,8 +200,18 @@ describe('CreateTableCall lowering output', () => {
 
     const spec: SqliteTableSpec = {
       columns: [
-        { name: 'enabled', typeSql: 'INTEGER', defaultSql: 'DEFAULT 1', nullable: true },
-        { name: 'deleted', typeSql: 'INTEGER', defaultSql: 'DEFAULT 0', nullable: true },
+        {
+          name: 'enabled',
+          typeSql: 'INTEGER',
+          default: { kind: 'literal', value: true },
+          nullable: true,
+        },
+        {
+          name: 'deleted',
+          typeSql: 'INTEGER',
+          default: { kind: 'literal', value: false },
+          nullable: true,
+        },
       ],
     };
     const columns = [
@@ -205,7 +226,14 @@ describe('CreateTableCall lowering output', () => {
     const tableName = 'items';
 
     const spec: SqliteTableSpec = {
-      columns: [{ name: 'notes', typeSql: 'TEXT', defaultSql: 'DEFAULT NULL', nullable: true }],
+      columns: [
+        {
+          name: 'notes',
+          typeSql: 'TEXT',
+          default: { kind: 'literal', value: null },
+          nullable: true,
+        },
+      ],
     };
     const columns = [col('notes', 'TEXT', { default: lit(null) })];
 
@@ -221,7 +249,7 @@ describe('CreateTableCall lowering output', () => {
         {
           name: 'created_at',
           typeSql: 'TEXT',
-          defaultSql: "DEFAULT '2025-01-01T00:00:00.000Z'",
+          default: { kind: 'literal', value: date },
           nullable: true,
         },
       ],
@@ -239,7 +267,7 @@ describe('CreateTableCall lowering output', () => {
         {
           name: 'settings',
           typeSql: 'TEXT',
-          defaultSql: 'DEFAULT \'{"retries":3}\'',
+          default: { kind: 'literal', value: { retries: 3 } },
           nullable: true,
         },
       ],
@@ -257,7 +285,7 @@ describe('CreateTableCall lowering output', () => {
         {
           name: 'created_at',
           typeSql: 'TEXT',
-          defaultSql: "DEFAULT (datetime('now'))",
+          default: { kind: 'function', expression: "datetime('now')" },
           nullable: true,
         },
       ],

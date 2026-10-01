@@ -65,7 +65,6 @@ describe('postgis operations', () => {
       expect(ast).toBeInstanceOf(OperationExpr);
       expect(ast.lowering).toEqual({
         targetFamily: 'sql',
-        strategy: 'function',
         template,
       });
     }
@@ -82,7 +81,6 @@ describe('postgis operations', () => {
     const ast = expr.buildAst();
     expect(ast.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'ST_DWithin({{self}}, {{arg0}}, {{arg1}})',
     });
   });

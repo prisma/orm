@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum Status {
+  ACTIVE
+  ARCHIVED
+}
+
+model Post {
+  id     Int    @id
+  status Status @default("ACTIVE")
+}

@@ -89,6 +89,7 @@ describe('integration: whole-query raw statements', { timeout: timeouts.database
     await driver.connect({ kind: 'pgClient', client });
 
     runtime = new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,

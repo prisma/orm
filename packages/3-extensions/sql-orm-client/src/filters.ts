@@ -3,7 +3,6 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   AndExpr,
   type AnyExpression,
-  BinaryExpr,
   ColumnRef,
   LiteralExpr,
   NullCheckExpr,
@@ -12,6 +11,8 @@ import {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { getFieldToColumnMap, modelOf, resolveModelTableName } from './collection-contract';
 import { ormError } from './orm-errors';
+import { predicateComparison } from './predicate-comparison';
+import { predicateExpression } from './predicate-expression';
 import type { ShorthandWhereFilter } from './types';
 
 export function and(...exprs: AnyExpression[]): AndExpr {
@@ -59,7 +60,9 @@ export function shorthandToWhereExpr<
     }
 
     assertFieldHasEqualityTrait(context, namespaceId, modelName, fieldName);
-    exprs.push(BinaryExpr.eq(left, LiteralExpr.of(value)));
+    exprs.push(
+      predicateComparison('eq', left, predicateExpression(value) ?? LiteralExpr.of(value)),
+    );
   }
 
   if (exprs.length === 0) {

@@ -44,7 +44,6 @@ export function lowerExpr(column: ColumnRef, ...args: Array<AnyOperationArg>): O
     returns: stringReturn,
     lowering: {
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'lower({{self}})',
     },
   });

@@ -1,4 +1,4 @@
-import { expectTypeOf } from 'vitest';
+import { expectTypeOf, test } from 'vitest';
 import { defineContract, enumType, field, member, model } from '../../src/exports/contract-builder';
 
 type SoleNamespaceModels<
@@ -7,6 +7,20 @@ type SoleNamespaceModels<
 
 // @ts-expect-error — capabilities are contributed by components, not authoring input
 defineContract({ capabilities: { postgres: { lateral: true } } });
+
+test('limits Date authoring to the temporal presets', () => {
+  defineContract({}, ({ field: f }) => {
+    expectTypeOf(f).not.toBeAny();
+    expectTypeOf(f).not.toHaveProperty('dateTimeDate');
+    expectTypeOf(f.temporal).not.toHaveProperty('timestamptzDate');
+    expectTypeOf(f.temporal).not.toHaveProperty('createdAtDate');
+    expectTypeOf(f.temporal).not.toHaveProperty('updatedAtDate');
+    expectTypeOf(f.temporal).toHaveProperty('timestamptzJsDate');
+    expectTypeOf(f.temporal).toHaveProperty('createdAtJsDate');
+    expectTypeOf(f.temporal).toHaveProperty('updatedAtJsDate');
+    return {};
+  });
+});
 
 const result = defineContract({});
 expectTypeOf(result.target).toEqualTypeOf<'postgres'>();

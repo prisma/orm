@@ -15,13 +15,26 @@ import {
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { buildDecodeContext, decodeRow } from '../src/codecs/decoding';
+import {
+  buildDecodeContext,
+  decodeRow as decodeRowBase,
+  sqlNativeArrayListDecoder,
+} from '../src/codecs/decoding';
 import { encodeParams } from '../src/codecs/encoding';
 import { createAsyncSecretCodec, decryptSecret, encryptSecret } from './seeded-secret-codec';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs, stubAst } from './utils';
 
 // ============================================================================= Shared helpers — AST-backed plans (ADR 205) =============================================================================
+
+function decodeRow(
+  row: Parameters<typeof decodeRowBase>[0],
+  decodeCtx: Parameters<typeof decodeRowBase>[1],
+  rowCtx: Parameters<typeof decodeRowBase>[2],
+  listDecoder: Parameters<typeof decodeRowBase>[3] = sqlNativeArrayListDecoder,
+): ReturnType<typeof decodeRowBase> {
+  return decodeRowBase(row, decodeCtx, rowCtx, listDecoder);
+}
 
 interface ParamSpec {
   readonly value: unknown;

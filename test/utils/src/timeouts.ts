@@ -5,6 +5,7 @@ const BASE_TIMEOUTS = {
   typeScriptCompilation: 8000,
   coldTransformImport: 30000,
   databaseOperation: 5000,
+  pslRoundTrip: 5000,
   default: 100,
   /**
    * Vitest `testTimeout` / `hookTimeout` when a package uses mostly local I/O
@@ -111,7 +112,20 @@ export const timeouts = {
   },
 
   /**
-   * Default timeout for general tests that don't fit into specific categories.
+   * Timeout for a test that prints a contract as PSL, writes the file, and reads it back through the
+   * PSL contract source: several parses and a file round trip, which can pass the package default
+   * on a busy worker.
+   */
+  get pslRoundTrip(): number {
+    return Math.round(BASE_TIMEOUTS.pslRoundTrip * getMultiplier());
+  },
+
+  /**
+   * A short wait inside a test: polling a condition, a connection attempt that
+   * must give up quickly. Never a vitest `testTimeout` or `hookTimeout` — CI's
+   * multiplier makes it 200ms, which fails healthy tests; `pnpm
+   * lint:vitest-timeouts` rejects a config that budgets with it. Use
+   * `vitestPackageDefault` there.
    */
   get default(): number {
     return Math.round(BASE_TIMEOUTS.default * getMultiplier());

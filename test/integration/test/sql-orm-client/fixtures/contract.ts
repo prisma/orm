@@ -7,7 +7,7 @@ import {
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import { defineContract, field, model, now, rel } from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
@@ -74,7 +74,7 @@ const UserTag = model('UserTag', {
     userId: field.column(int4Column).column('user_id'),
     tagId: field.column(charColumn(36)).column('tag_id'),
     note: field.column(textColumn).optional(),
-    createdAt: field.column(textColumn).column('created_at').defaultSql('now()'),
+    createdAt: field.column(textColumn).column('created_at').default(now()),
   },
 })
   .attributes(({ fields, constraints }) => ({

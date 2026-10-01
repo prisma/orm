@@ -15,6 +15,7 @@ import type { Contract } from '../src/prisma/contract';
 import contractJson from '../src/prisma/contract.json' with { type: 'json' };
 import { db } from '../src/prisma/db';
 import { crossAuthorSimilarity } from '../src/queries/cross-author-similarity';
+import { fullTextSearch } from '../src/queries/full-text-search';
 import { initTestDatabase } from './utils/control-client';
 
 const context = db.context;
@@ -194,6 +195,35 @@ describe('SQL DSL standalone query execution (TML-2160)', () => {
             topPairKeys.has(unorderedPairKey(seededPostIds.aliceFar, seededPostIds.bobClose)),
           ).toBe(true);
           expect(topTwo[0]!.distance).toBeLessThan(0.1);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'fullTextSearch returns matching posts with a rank and a highlighted headline',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+
+        try {
+          await seedCrossAuthorSimilarity(runtime);
+
+          const results = await fullTextSearch('alice', 10, runtime);
+
+          expect(results.map((row) => ({ id: row.id, headline: row.headline }))).toEqual([
+            { id: seededPostIds.aliceClose, headline: '<mark>Alice</mark> close' },
+            { id: seededPostIds.aliceFar, headline: '<mark>Alice</mark> far' },
+          ]);
+          for (const row of results) {
+            expect(row.rank).toBeGreaterThan(0);
+          }
+
+          expect(await fullTextSearch('alice -far', 10, runtime)).toHaveLength(1);
         } finally {
           await runtime.close();
         }

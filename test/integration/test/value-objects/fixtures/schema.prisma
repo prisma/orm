@@ -3,6 +3,7 @@ model Shop {
   name     String
   location Address
   notes    Address?
+  @@map("shop")
 }
 
 type Address {

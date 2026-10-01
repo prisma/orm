@@ -1,9 +1,12 @@
+// use prisma-8
+
 model Location {
   id         Int      @id
   name       String?
   companyId  Int?
   companyId2 Int?
   company    Company? @relation(fields: [companyId, companyId2], references: [id, id2])
+  @@map("location")
 }
 
 model Company {
@@ -13,4 +16,5 @@ model Company {
   locations Location[]
 
   @@id([id, id2])
+  @@map("company")
 }

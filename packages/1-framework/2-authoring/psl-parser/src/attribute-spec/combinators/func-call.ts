@@ -1,5 +1,5 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { nodePslSpan } from '../../resolve';
 import type { ExpressionAst } from '../../syntax/ast/expressions';
 import { FunctionCallAst } from '../../syntax/ast/expressions';
@@ -7,8 +7,6 @@ import { interpretArgs } from '../interpret';
 import type { AttributeCtx, FuncCallArgType, FuncCallSig, TypedFuncCall } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-// A name-pinned function-call argument — `funcCall('now', {})` matches `now()`, parsing the call's
-// arguments through `sig`.
 export function funcCall<const Name extends string, const Signature extends FuncCallSig>(
   name: Name,
   sig: Signature,
@@ -21,12 +19,13 @@ export function funcCall<const Name extends string, const Signature extends Func
     parse: (arg, ctx): Result<TypedFuncCall, readonly PslDiagnostic[]> => {
       const guard = matchCallee(arg, name, ctx);
       if (!guard.ok) return guard;
-      const span = nodePslSpan(guard.value.syntax, ctx.sourceFile);
+      const span = nodePslSpan(guard.value.syntax, ctx.sources);
       const bound = interpretArgs(
         guard.value.args(),
         { name, positional: sig.positional ?? [], named: sig.named ?? {} },
         ctx,
         span,
+        guard.value.syntax,
       );
       if (!bound.ok) return notOk<readonly PslDiagnostic[]>(bound.failure);
       return ok({ fn: name, span, args: bound.value });

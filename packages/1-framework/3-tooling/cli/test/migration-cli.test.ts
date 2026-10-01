@@ -15,8 +15,9 @@ import { pathToFileURL } from 'node:url';
 import { errorConfigFileNotFound } from '@internal/errors/control';
 import { Migration } from '@internal/migration-tools/migration';
 import { notOk, ok } from '@internal/utils/result';
+import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loadConfigMock = vi.fn();
 const createControlStackMock = vi.fn();
@@ -34,6 +35,10 @@ vi.mock('@internal/framework-components/control', async () => {
 
 vi.resetModules();
 const { MigrationCLI } = await import('../src/migration-cli');
+
+afterAll(() => {
+  vi.resetModules();
+});
 
 /**
  * `node:stream.Writable` subclass that captures every chunk written to
@@ -71,6 +76,16 @@ class FakeMigration extends Migration {
   }
   override describe() {
     return { from: 'from', to: 'to' };
+  }
+}
+
+class RefusedDefaultMigration extends FakeMigration {
+  override get operations(): never {
+    throw structuredError(
+      'CONTRACT.DEFAULT_INVALID',
+      'Column "Note"."at" has a default its codec sqlite/datetime@1 refuses',
+      { why: "A migration.ts can hold a default this version's codec refuses." },
+    );
   }
 }
 
@@ -403,6 +418,26 @@ describe('MigrationCLI.run', () => {
 
     const onDisk = readFileSync(join(workDir, 'migration.json'), 'utf-8');
     expect(onDisk).toBe(malformed);
+  });
+
+  it('writes an error a library raised with a structured code with that code', async () => {
+    loadConfigMock.mockResolvedValue(ok(okConfig));
+    createControlStackMock.mockReturnValue({ adapter: { create: () => ({}) } });
+    const stdout = new BufferStream();
+    const stderr = new BufferStream();
+
+    const exitCode = await MigrationCLI.run(
+      pathToFileURL(migrationFile).href,
+      RefusedDefaultMigration,
+      { argv: entrypointArgv(), stdout, stderr },
+    );
+
+    expect({ exitCode, stderr: stderr.text }).toEqual({
+      exitCode: 1,
+      stderr:
+        'CONTRACT.DEFAULT_INVALID: Column "Note"."at" has a default its codec sqlite/datetime@1 refuses\n' +
+        "A migration.ts can hold a default this version's codec refuses.\n",
+    });
   });
 
   it('rejects --config when followed by another flag with CLI.CONFIG_ARG_MISSING_PATH and exit 2', async () => {

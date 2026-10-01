@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/22610-parallel-batch (postgres matrix entry;
 // allProviders — this is the postgres port).
@@ -26,6 +28,7 @@ model User {
   email String  @unique
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -35,4 +38,5 @@ model Post {
   published Boolean @default(false)
   author    User    @relation(fields: [authorId], references: [id])
   authorId  String
+  @@map("post")
 }

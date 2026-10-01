@@ -3,9 +3,12 @@ import { structuredError } from '@internal/utils/structured-error';
 
 export type PostgresErrorCode =
   | 'CONTRACT.ENUM_INVALID'
+  | 'CONTRACT.INDEX_INVALID'
   | 'CONTRACT.POLICY_INVALID'
+  | 'RUNTIME.ARGUMENT_INVALID'
   | 'RUNTIME.BINDING_INVALID'
   | 'RUNTIME.BINDING_MISSING'
+  | 'DRIVER.CONNECTION_FAILED'
   | 'DRIVER.NOT_CONNECTED'
   | 'DRIVER.ALREADY_CONNECTED';
 

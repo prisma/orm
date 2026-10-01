@@ -1,0 +1,11 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model T {
+  id       Int    @id
+  required Json   @default("null")
+  optional Json?  @default("null")
+  list     Json[] @default(["null"])
+  nested   Json   @default("{\"a\":null}")
+}

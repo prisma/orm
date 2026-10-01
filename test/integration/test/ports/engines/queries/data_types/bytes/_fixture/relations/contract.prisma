@@ -1,6 +1,9 @@
+// use prisma-8
+
 model Parent {
   id       Int @id
   children Child[]
+  @@map("parent")
 }
 
 model Child {
@@ -8,4 +11,5 @@ model Child {
   parentId Int?
   parent Parent? @relation(fields: [parentId], references: [id])
   bytes Bytes
+  @@map("child")
 }

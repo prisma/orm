@@ -29,6 +29,7 @@ import {
   pgNumericDescriptor,
   pgTextDescriptor,
   pgTimetzDescriptor,
+  pgTsqueryDescriptor,
   pgUnboundedIntDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
@@ -39,6 +40,7 @@ import {
   postgresSqlTextDescriptor,
   postgresSqlVarcharDescriptor,
 } from './codecs';
+import { pgTimestamptzDateDescriptor } from './date-codecs';
 import {
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
@@ -79,6 +81,7 @@ export const codecDescriptorMap = {
   'date-string': pgDateStringDescriptor,
   'timestamp-string': pgTimestampStringDescriptor,
   'timestamptz-string': pgTimestamptzStringDescriptor,
+  'timestamptz-date': pgTimestamptzDateDescriptor,
   'time-string': pgTimeStringDescriptor,
   timetz: pgTimetzDescriptor,
   bool: pgBoolDescriptor,
@@ -90,6 +93,7 @@ export const codecDescriptorMap = {
   interval: pgIntervalDescriptor,
   json: pgJsonDescriptor,
   jsonb: pgJsonbDescriptor,
+  tsquery: pgTsqueryDescriptor,
 } as const;
 
 export type Resolve<T> = { readonly [K in keyof T]: { readonly [P in keyof T[K]]: T[K][P] } };

@@ -16,6 +16,8 @@ import type { EmitOptions, EmitResult, EmitStackInput } from '../src/exports';
 import { emit as emitImpl } from '../src/exports';
 
 const identitySerialize = (c: Contract): JsonObject => c as unknown as JsonObject;
+const identityDeserialize = (json: Record<string, unknown>): Contract =>
+  json as unknown as Contract;
 
 const sqlPreserveEmptyPatterns = [
   ['storage', 'namespaces', '*', 'entries', 'table'],
@@ -45,12 +47,13 @@ export function emit(
   contract: Contract,
   stack: EmitStackInput,
   family: EmissionSpi,
-  options?: Omit<EmitOptions, 'serializeContract'>,
+  options?: Omit<EmitOptions, 'serializeContract' | 'deserializeContract'>,
 ): Promise<EmitResult> {
   return emitImpl(contract, stack, family, {
     ...SQL_EMIT_HOOKS,
     ...options,
     serializeContract: identitySerialize,
+    deserializeContract: identityDeserialize,
   });
 }
 

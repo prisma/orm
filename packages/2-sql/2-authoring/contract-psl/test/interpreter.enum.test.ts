@@ -1,5 +1,5 @@
 import type { Contract } from '@internal/contract/types';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import type { Codec, CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   defineContract,
@@ -10,12 +10,15 @@ import {
 } from '@internal/sql-contract-ts/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { withDescriptors } from '../../contract-ts/test/with-descriptors';
 import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresEnumInferenceCodecs,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -29,59 +32,43 @@ import {
   testRenderCheckExpressions,
 } from './fixtures';
 
-// ---------------------------------------------------------------------------
-// Minimal test codecs for enum validation
-// ---------------------------------------------------------------------------
+// The PostgreSQL codecs come from the fixture descriptors; SQLite's are minimal stubs.
 
-const textCodec: Codec = {
-  id: 'pg/text@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
-    return json;
-  },
+function stubCodec(id: string, jsonType: 'string' | 'number'): Codec {
+  return {
+    id,
+    encode: async (v: unknown) => v,
+    decode: async (w: unknown) => w,
+    encodeJson: (value) => value as never,
+    decodeJson(json) {
+      if (typeof json !== jsonType) throw new Error(`expected ${jsonType}, got ${typeof json}`);
+      return json;
+    },
+  };
+}
+
+const sqliteCodecsById: Record<string, Codec> = {
+  'sqlite/text@1': stubCodec('sqlite/text@1', 'string'),
+  'sqlite/integer@1': stubCodec('sqlite/integer@1', 'number'),
 };
 
-const int4Codec: Codec = {
-  id: 'pg/int4@1',
-  encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
-  encodeJson: (value) => value as never,
-  decodeJson(json) {
-    if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);
-    return json;
-  },
-};
-
-const pgIntCodec: Codec = { ...int4Codec, id: 'pg/int@1' };
-const sqliteTextCodec: Codec = { ...textCodec, id: 'sqlite/text@1' };
-const sqliteIntegerCodec: Codec = { ...int4Codec, id: 'sqlite/integer@1' };
-
-const codecsById: Record<string, Codec> = {
-  'pg/text@1': textCodec,
-  'pg/int4@1': int4Codec,
-  'pg/int@1': pgIntCodec,
-  'sqlite/text@1': sqliteTextCodec,
-  'sqlite/integer@1': sqliteIntegerCodec,
-};
-
-const targetTypesById: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int4@1': ['int4'],
-  'pg/int@1': ['int4'],
+const sqliteTargetTypesById: Record<string, readonly string[]> = {
   'sqlite/text@1': ['text'],
   'sqlite/integer@1': ['integer'],
 };
 
-const testCodecLookup: CodecLookup = {
-  get(id: string): Codec | undefined {
-    return codecsById[id];
-  },
-  targetTypesFor(id: string): readonly string[] | undefined {
-    return targetTypesById[id];
-  },
+const sqliteCodecLookup = withDescriptors({
+  get: (id) => sqliteCodecsById[id],
+  targetTypesFor: (id) => sqliteTargetTypesById[id],
+  renderOutputTypeFor: () => undefined,
+});
+
+const testCodecLookup: CodecLookupWithDescriptors = {
+  get: (id) => postgresCodecLookup.get(id) ?? sqliteCodecLookup.get(id),
+  descriptorFor: (id) =>
+    postgresCodecLookup.descriptorFor(id) ?? sqliteCodecLookup.descriptorFor(id),
+  targetTypesFor: (id) =>
+    postgresCodecLookup.targetTypesFor(id) ?? sqliteCodecLookup.targetTypesFor(id),
   renderOutputTypeFor: () => undefined,
 };
 
@@ -96,11 +83,9 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSqlContractInput>) {
   const contributions = overrides?.authoringContributions ?? authoringContributions;
-  const descriptors = contributions.pslBlockDescriptors;
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    ...(descriptors !== undefined ? { pslBlockDescriptors: descriptors } : {}),
   });
   return interpretPslDocumentToSqlContract({
     ...document,
@@ -108,7 +93,14 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
-    authoringContributions: contributions,
+    authoringContributions: {
+      ...contributions,
+      dataTypes: {
+        ...fixtureDataTypeSupport.entries,
+        ...('dataTypes' in contributions ? contributions.dataTypes : {}),
+      },
+    },
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     codecLookup: testCodecLookup,
     createNamespace: createTestSqlNamespace,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
@@ -116,6 +108,33 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
     ...overrides,
   });
 }
+
+describe('enum member attributes', () => {
+  it('reports an attribute on an enum member, naming the attribute, because a Prisma 8 enum member carries none', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low" @map("LOW")
+  High = "high"
+}
+
+model Post {
+  id       Int      @id
+  priority Priority
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
+        message:
+          'enum "Priority": member "Low" carries @map, but an enum member takes no attributes',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 4 }) }),
+      }),
+    ]);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PSL ↔ TS parity: enum emits contract equal to TS enumType authoring
@@ -181,7 +200,7 @@ model Post {
             id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
             priority: field.namedType(PriorityHandle),
           },
-        }).sql({ table: 'post' }),
+        }).sql({ table: 'Post' }),
       },
     });
 
@@ -199,10 +218,10 @@ model Post {
     );
     // Strict equality on the storage column catches extra properties (e.g. a stray typeRef).
     expect(
-      pslNs !== undefined ? pslNs.entries.table?.['post']?.columns?.['priority'] : undefined,
-    ).toEqual(tsNs !== undefined ? tsNs.entries.table?.['post']?.columns?.['priority'] : undefined);
-    expect(pslNs !== undefined ? pslNs.entries.table?.['post']?.checks : undefined).toEqual(
-      tsNs !== undefined ? tsNs.entries.table?.['post']?.checks : undefined,
+      pslNs !== undefined ? pslNs.entries.table?.['Post']?.columns?.['priority'] : undefined,
+    ).toEqual(tsNs !== undefined ? tsNs.entries.table?.['Post']?.columns?.['priority'] : undefined);
+    expect(pslNs !== undefined ? pslNs.entries.table?.['Post']?.checks : undefined).toEqual(
+      tsNs !== undefined ? tsNs.entries.table?.['Post']?.checks : undefined,
     );
     // Both authoring paths must produce the same storageHash.
     expect((pslResult.value.storage as unknown as SqlStorage).storageHash).toEqual(
@@ -269,7 +288,7 @@ model Post {
             id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
             priority: field.namedType(PriorityHandle).default(PriorityHandle.members.Low),
           },
-        }).sql({ table: 'post' }),
+        }).sql({ table: 'Post' }),
       },
     });
 
@@ -277,8 +296,8 @@ model Post {
     const tsNs = (tsContract.storage as unknown as SqlStorage).namespaces['public'];
 
     // Storage column must be strictly equal (including the default field).
-    expect(pslNs?.entries.table?.['post']?.columns?.['priority']).toEqual(
-      tsNs?.entries.table?.['post']?.columns?.['priority'],
+    expect(pslNs?.entries.table?.['Post']?.columns?.['priority']).toEqual(
+      tsNs?.entries.table?.['Post']?.columns?.['priority'],
     );
     // Both paths must produce the same storageHash.
     expect((pslResult.value.storage as unknown as SqlStorage).storageHash).toEqual(
@@ -292,6 +311,25 @@ model Post {
 // ---------------------------------------------------------------------------
 
 describe('enum diagnostics', () => {
+  it('rejects a tagged literal default on an enum column: an enum column takes a member name', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+model Post {
+  id       Int      @id
+  priority Priority @default(sql\`'low'\`)
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_SYNTAX', sourceId: 'schema.prisma' }),
+    ]);
+  });
+
   it('missing @@type with non-inferable members emits PSL_ENUM_CANNOT_INFER_TYPE', () => {
     const result = interpret(`
 enum Priority {
@@ -325,7 +363,7 @@ model Post {
     );
   });
 
-  it('non-JSON member rawValue emits diagnostic', () => {
+  it('a non-JSON member value is rejected by the shared grammar, not by lowering', () => {
     const result = interpret(`
 enum Priority {
   @@type("pg/text@1")
@@ -338,7 +376,15 @@ model Post {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          message:
+            'Expected one of: string | number | boolean | null | JSON value[] | { [key]: JSON value }',
+        }),
+      ]),
+    );
+    expect(result.failure.diagnostics.some((d) => d.code === 'PSL_EXTENSION_INVALID_VALUE')).toBe(
+      false,
     );
   });
 
@@ -378,7 +424,7 @@ model Post {
     );
   });
 
-  it('duplicate member names emits PSL_EXTENSION_DUPLICATE_PARAMETER from the parser', () => {
+  it('duplicate member names emit PSL_EXTENSION_DUPLICATE_PARAMETER from the interpreter that resolves the blocks', () => {
     const result = interpret(`
 enum Priority {
   @@type("pg/text@1")
@@ -819,7 +865,7 @@ model Post {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
-    expect(ns?.entries.table?.['post']?.checks).toEqual([
+    expect(ns?.entries.table?.['Post']?.checks).toEqual([
       expect.objectContaining({ expression: '"priority" IN (1, 10)' }),
     ]);
   });
@@ -877,7 +923,7 @@ model Post {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
-    expect(ns?.entries.table?.['post']?.columns?.['priority']).toMatchObject({
+    expect(ns?.entries.table?.['Post']?.columns?.['priority']).toMatchObject({
       default: { kind: 'literal', value: 'low' },
     });
   });
@@ -898,7 +944,7 @@ model Post {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
-    expect(ns?.entries.table?.['post']?.columns?.['priority']).toMatchObject({
+    expect(ns?.entries.table?.['Post']?.columns?.['priority']).toMatchObject({
       default: { kind: 'literal', value: 'high' },
     });
   });
@@ -919,7 +965,7 @@ model Post {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
-    expect(ns?.entries.table?.['post']?.columns?.['priority']).toMatchObject({
+    expect(ns?.entries.table?.['Post']?.columns?.['priority']).toMatchObject({
       default: { kind: 'literal', value: 1 },
     });
   });
@@ -994,7 +1040,7 @@ model Post {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = (result.value.storage as unknown as SqlStorage).namespaces['public'];
-    expect(ns?.entries.table?.['post']?.columns?.['title']).toMatchObject({
+    expect(ns?.entries.table?.['Post']?.columns?.['title']).toMatchObject({
       default: { kind: 'literal', value: 'draft' },
     });
   });

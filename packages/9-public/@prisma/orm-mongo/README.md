@@ -2,9 +2,8 @@
 
 The one package a MongoDB application installs. It wires the framework, the Mongo family, and the Mongo target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-mongo": "0.16.0", "mongodb": "^7.0.0" } }
+```sh
+pnpm add @prisma/orm-mongo mongodb
 ```
 
 ```
@@ -23,7 +22,7 @@ The one package a MongoDB application installs. It wires the framework, the Mong
 | --- | --- |
 | `/runtime` | `mongo(url)` — the lazy query client |
 | `/static` | statically composed runtime for pre-wired deployments |
-| `/config` | `defineConfig` for `prisma.config.ts` |
+| `/config` | `defineConfig` for `prisma.config.ts`, and `prisma6Schema` to read a Prisma 6 MongoDB schema as the contract source |
 | `/contract-builder` | `defineContract` and Mongo contract authoring |
 | `/bson` | BSON value helpers (`ObjectId`, `Decimal128`, …) |
 | `/target`, `/family` | the Mongo target pack and the Mongo family pack |

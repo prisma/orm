@@ -1,3 +1,5 @@
+// use prisma-8
+
 model TestModel {
   id     Int      @id
   string String?
@@ -7,4 +9,5 @@ model TestModel {
   bytes  Bytes?
   bool   Boolean?
   dt     DateTime?
+  @@map("testModel")
 }

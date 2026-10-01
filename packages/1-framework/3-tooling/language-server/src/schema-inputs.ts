@@ -1,5 +1,7 @@
 import { normalize } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { expandContractInputs } from '@internal/config-loader';
+import { isPrismaNextSchema } from '@internal/psl-parser';
 
 export interface SchemaInputConfig {
   readonly contract?: {
@@ -20,22 +22,54 @@ export function hasPslInputs(config: SchemaInputConfig): boolean {
   return source?.format === 'psl' && source.inputs !== undefined;
 }
 
-export function resolveSchemaInputs(config: SchemaInputConfig): SchemaInputSet {
-  const inputs = hasPslInputs(config) ? config.contract?.source.inputs : undefined;
-  const uris = inputs?.map(configuredInputUri) ?? [];
-  const identities = new Set(uris.map(canonicalFileIdentity));
+export async function resolveSchemaInputs(
+  config: SchemaInputConfig,
+  readText: (uri: string) => string | undefined,
+): Promise<SchemaInputSet> {
+  const rawInputs = hasPslInputs(config) ? config.contract?.source.inputs : undefined;
+  const patterns = rawInputs?.map(toExpandablePath);
+  const expanded = await expandContractInputs(patterns);
+  const windows = isWindowsPlatform();
+  const candidates = expanded.map((path) =>
+    normalizeFileUri(pathToFileURL(path, { windows }).toString()),
+  );
+  const identities = new Set(candidates.map(canonicalFileIdentity));
+
+  function isMember(uri: string): boolean {
+    if (!identities.has(canonicalFileIdentity(uri))) {
+      return false;
+    }
+    const text = readText(uri);
+    return text !== undefined && isPrismaNextSchema(text);
+  }
 
   return {
-    includes: (uri) => identities.has(canonicalFileIdentity(uri)),
-    uris: () => uris,
+    includes: isMember,
+    uris: () => candidates.filter(isMember),
   };
 }
 
-function configuredInputUri(input: string): string {
-  if (isFileUri(input)) {
-    return input;
-  }
-  return pathToFileURL(input, { windows: isWindowsPlatform() }).toString();
+function toExpandablePath(input: string): string {
+  return isFileUri(input) ? fileURLToPath(new URL(input), { windows: isWindowsPlatform() }) : input;
+}
+
+export function isWatcherCacheEligible(config: SchemaInputConfig): boolean {
+  const patterns = config.contract?.source.inputs;
+  return (
+    hasPslInputs(config) &&
+    patterns !== undefined &&
+    patterns.length > 0 &&
+    patterns.every(
+      (pattern) =>
+        /^[A-Za-z0-9_./: *?-]+$/.test(pattern) &&
+        !isFileUri(pattern) &&
+        pattern.split('/').every((segment) => !segment.includes('**') || segment === '**'),
+    )
+  );
+}
+
+export function toWatcherGlobPattern(pattern: string): string {
+  return isWindowsPlatform() ? pattern.replaceAll('\\', '/') : pattern;
 }
 
 function isFileUri(input: string): boolean {
@@ -46,7 +80,7 @@ function isFileUri(input: string): boolean {
   }
 }
 
-function canonicalFileIdentity(uri: string): string {
+export function canonicalFileIdentity(uri: string): string {
   let url: URL;
   try {
     url = new URL(uri);
@@ -64,6 +98,13 @@ function canonicalFileIdentity(uri: string): string {
   } catch {
     return uri;
   }
+}
+
+export function normalizeFileUri(uri: string): string {
+  const identity = canonicalFileIdentity(uri);
+  return identity === uri
+    ? uri
+    : pathToFileURL(identity, { windows: isWindowsPlatform() }).toString();
 }
 
 function isWindowsPlatform(): boolean {

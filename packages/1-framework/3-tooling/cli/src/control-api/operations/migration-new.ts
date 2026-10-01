@@ -5,7 +5,6 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import { getEmittedArtifactPaths } from '@internal/emitter';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import {
@@ -16,15 +15,14 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import {
-  CliStructuredError,
+  type CliStructuredError,
   errorRuntime,
   errorTargetMigrationNotSupported,
-  errorUnexpected,
 } from '../../utils/cli-errors';
 import {
   getTargetMigrations,
@@ -33,16 +31,23 @@ import {
 } from '../../utils/command-helpers';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import type { ControlClient } from '../types';
+import { errorFromCaught } from './caught-errors';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
+import { resolveDefaultOriginHash } from './plan-resolution';
+import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 export interface MigrationNewOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate project paths and for display. */
-  readonly configPath?: string;
+  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
+  readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;
+  /** Renders the declarations of the destination snapshot from its `contract.json`. */
+  readonly client: Pick<ControlClient, 'renderContractDts'>;
 }
 
 export interface MigrationNewResult {
@@ -59,7 +64,6 @@ export async function executeMigrationNewCommand(
   const config = options.config;
   const cwd = options.cwd;
   const { migrationsDir, appMigrationsDir, appMigrationsRelative } = resolveMigrationPaths(
-    options.configPath,
     config,
     cwd,
   );
@@ -88,9 +92,10 @@ export async function executeMigrationNewCommand(
     throw error;
   }
 
+  let parsedContract: unknown;
   let toContract: Contract;
   try {
-    const parsedContract: unknown = JSON.parse(contractJsonContent);
+    parsedContract = JSON.parse(contractJsonContent);
     toContract = familyInstance.deserializeContract(parsedContract);
   } catch (error) {
     return notOk(
@@ -112,10 +117,12 @@ export async function executeMigrationNewCommand(
     );
   }
 
+  const verifySnapshotContent = snapshotVerifierFor(config);
   const aggregate = await loadContractSpaceAggregate({
     migrationsDir,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
     appContract: toContract,
+    ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
   const packageCorruptionFailure = refusePackageCorruptionOnAggregate(aggregate, migrationsDir);
   if (packageCorruptionFailure) {
@@ -123,28 +130,58 @@ export async function executeMigrationNewCommand(
   }
 
   const packages = aggregate.app.packages;
-  const graph = aggregate.app.graph();
 
   let fromHash: string | null = null;
 
-  if (packages.length > 0) {
-    if (options.from) {
-      const match = packages.find((p) => p.metadata.to.startsWith(options.from!));
-      if (!match) {
-        return notOk(
-          errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'Starting contract not found', {
-            why: `No migration with to hash matching "${options.from}" exists in ${appMigrationsRelative}`,
-            fix: 'Check that the --from hash matches a known migration target hash.',
-          }),
-        );
-      }
-      fromHash = match.metadata.to;
-    } else {
-      const latestMigration = findLatestMigration(graph);
-      if (latestMigration) {
-        fromHash = latestMigration.to;
-      }
+  if (options.from !== undefined) {
+    if (packages.length === 0) {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', '--from has no meaning on an empty graph', {
+          why: `--from "${options.from}" was passed, but ${appMigrationsRelative} contains no migrations, so there is no migration target hash it could name.`,
+          fix: 'Omit --from to scaffold the first migration (it records a baseline origin). `migration new --from` accepts the full 64-hex target hash of an existing migration, or a unique prefix of one.',
+        }),
+      );
     }
+    const matchedHashes = [
+      ...new Set(
+        packages
+          .filter((p) => p.metadata.to.startsWith(options.from ?? ''))
+          .map((p) => p.metadata.to),
+      ),
+    ].sort();
+    if (matchedHashes.length === 0) {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'Starting contract not found', {
+          why: `No migration with to hash matching "${options.from}" exists in ${appMigrationsRelative}`,
+          fix: 'Check that the --from hash matches a known migration target hash. `migration new --from` accepts the full 64-hex target hash of an existing migration, or a unique prefix of one.',
+        }),
+      );
+    }
+    if (matchedHashes.length > 1) {
+      return notOk(
+        errorRuntime('MIGRATION.REF_AMBIGUOUS', `Ambiguous --from prefix: "${options.from}"`, {
+          why: `"${options.from}" is a prefix of ${matchedHashes.length} migration target hashes in ${appMigrationsRelative}: ${matchedHashes.join(', ')}`,
+          fix: 'Provide a longer prefix or the full 64-hex target hash to disambiguate.',
+          meta: { input: options.from, candidates: matchedHashes },
+        }),
+      );
+    }
+    fromHash = matchedHashes[0] ?? null;
+  } else {
+    const origin = resolveDefaultOriginHash(aggregate.app);
+    if (!origin.ok) {
+      return notOk(origin.failure);
+    }
+    if (origin.value.kind === 'ref-needs-baseline') {
+      return notOk(
+        errorRuntime('MIGRATION.HASH_NOT_IN_GRAPH', 'The db ref is not a graph node yet', {
+          why: `The db ref points at ${origin.value.fromHash}, but ${appMigrationsRelative} contains no migrations, so that contract is not a graph node and nothing can chain from it.`,
+          fix: 'Run `{bin} migration plan` first: on an empty graph it writes the baseline migration for the db ref alongside the delta, after which `migration new` can chain from it.',
+          meta: { refName: origin.value.refName, resolvedHash: origin.value.fromHash },
+        }),
+      );
+    }
+    fromHash = origin.value.fromHash;
   }
 
   if (fromHash === toStorageHash && !options.from) {
@@ -195,17 +232,21 @@ export async function executeMigrationNewCommand(
     // Before any write: an unreadable or contradictory project manifest fails
     // the command outright rather than after a half-scaffolded migration
     // directory is already on disk.
-    const resolveSpecifier = createProjectSpecifierResolver(options.configPath);
+    const resolveSpecifier = createProjectSpecifierResolver(options.projectDir);
+    const declarations = await renderSnapshotDeclarations({
+      client: options.client,
+      contractJson: parsedContract,
+      contractJsonPath: contractPathAbsolute,
+      resolveImportSpecifier: resolveSpecifier,
+    });
+    if (!declarations.ok) {
+      return notOk(declarations.failure);
+    }
 
     await writeMigrationPackage(packageDir, metadata, []);
-    const destinationArtifacts = getEmittedArtifactPaths(contractPathAbsolute);
-    const [contractJsonRaw, contractDts] = await Promise.all([
-      readFile(destinationArtifacts.jsonPath, 'utf-8'),
-      readFile(destinationArtifacts.dtsPath, 'utf-8'),
-    ]);
     await writeContractSnapshot(migrationsDir, toStorageHash, {
-      contractJson: JSON.parse(contractJsonRaw) as unknown,
-      contractDts,
+      contractJson: parsedContract,
+      contractDts: declarations.value,
     });
 
     const planner = migrations.createPlanner(controlAdapter);
@@ -229,13 +270,6 @@ export async function executeMigrationNewCommand(
       summary: `Scaffolded migration at ${relative(cwd, packageDir)}`,
     });
   } catch (error) {
-    if (CliStructuredError.is(error)) {
-      return notOk(error);
-    }
-    return notOk(
-      errorUnexpected(error instanceof Error ? error.message : String(error), {
-        why: `Failed to scaffold migration: ${error instanceof Error ? error.message : String(error)}`,
-      }),
-    );
+    return notOk(errorFromCaught(error, (message) => `Failed to scaffold migration: ${message}`));
   }
 }

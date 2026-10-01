@@ -1,5 +1,5 @@
 import type {
-  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
   CodecInstanceContext,
 } from '@internal/framework-components/codec';
 import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
@@ -30,6 +30,7 @@ import {
   pgNumericDescriptor,
   pgTextDescriptor,
   pgTimetzDescriptor,
+  pgTsqueryDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
   pgVarcharDescriptor,
@@ -65,7 +66,7 @@ const descriptorByScalar = {
   jsonb: pgJsonbDescriptor,
   uuid: pgUuidDescriptor,
   inet: pgInetDescriptor,
-} as const satisfies Record<string, AnyCodecDescriptor>;
+} as const satisfies Record<string, AnyCodecDescriptorTemplate>;
 
 type ScalarName = keyof typeof descriptorByScalar;
 
@@ -145,6 +146,23 @@ describe('adapter-postgres codecs', () => {
       };
       expect(await codec.encode(value, {})).toBe(value);
       expect(await codec.decode(value, {})).toBe(value);
+    });
+
+    it.each([
+      'sql/int@1',
+      'sql/float@1',
+      'pg/int@1',
+      'pg/float@1',
+      'pg/int2@1',
+      'pg/int4@1',
+      'pg/float4@1',
+      'pg/float8@1',
+    ])('%s reads the decimal text of a list element as a number', async (codecId) => {
+      const descriptor = postgresCodecRegistry.descriptorFor(codecId);
+      const codec = descriptor?.factory(undefined as never)(SYNTH_CTX) as {
+        decode: (input: string, ctx: SqlCodecCallContext) => Promise<unknown>;
+      };
+      expect(await codec.decode('-7', {})).toBe(-7);
     });
 
     it('keeps boolean values unchanged', async () => {
@@ -250,7 +268,7 @@ describe('adapter-postgres codecs', () => {
   describe('bytea codec', () => {
     const byteaCodec = codecForScalar('bytea') as {
       encode: (value: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
-      decode: (wire: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
+      decode: (wire: Uint8Array | string, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
       encodeJson: (value: Uint8Array) => unknown;
       decodeJson: (json: unknown) => Uint8Array;
     };
@@ -270,12 +288,33 @@ describe('adapter-postgres codecs', () => {
       expect(decoded.byteLength).toBe(0);
     });
 
-    it('normalizes Buffer wire values to a plain Uint8Array view', async () => {
-      const buffer = Buffer.from([0x01, 0x02, 0x03]);
+    it('returns plain Uint8Array wire values by identity', async () => {
+      const input = new Uint8Array([0x01, 0x02, 0x03]);
+      const decoded = await byteaCodec.decode(input, {});
+      expect(decoded).toBe(input);
+    });
+
+    it('normalizes Buffer wire values to a plain Uint8Array view without copying', async () => {
+      const backing = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
+      const buffer = Buffer.from(backing.buffer, 1, 3);
       const decoded = await byteaCodec.decode(buffer, {});
       expect(decoded).toBeInstanceOf(Uint8Array);
       expect(decoded.constructor).toBe(Uint8Array);
+      expect(decoded.buffer).toBe(buffer.buffer);
+      expect(decoded.byteOffset).toBe(buffer.byteOffset);
+      expect(decoded.byteLength).toBe(buffer.byteLength);
       expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+    });
+
+    it('decodes target-parsed list element hex text', async () => {
+      const decoded = await byteaCodec.decode('\\x010203', {});
+      expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+    });
+
+    it('rejects non-hex bytea text', async () => {
+      await expect(byteaCodec.decode('not-bytea-hex', {})).rejects.toThrow(
+        'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
+      );
     });
 
     it('uses base64 for JSON in both directions', () => {
@@ -288,10 +327,10 @@ describe('adapter-postgres codecs', () => {
 
     it('rejects JSON that is not base64 text', () => {
       expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
       expect(() => byteaCodec.decodeJson('not base64!')).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
     });
 
@@ -309,7 +348,7 @@ describe('adapter-postgres codecs', () => {
 
     it('throws on non-string input to decodeJson', () => {
       expect(() => byteaCodec.decodeJson(42)).toThrow(
-        'pg/bytea@1 database JSON value must be a base64 string',
+        'pg/bytea@1 JSON value must be a base64 string',
       );
     });
   });
@@ -376,7 +415,7 @@ describe('adapter-postgres codecs', () => {
 
       it('rejects a JSON number, which has already lost digits', () => {
         expect(() => codec.decodeJson(42)).toThrow(
-          'pg/int8@1 database JSON value must be a decimal string',
+          'pg/int8@1 JSON value must be a decimal integer string from -9223372036854775808 to 9223372036854775807',
         );
       });
 
@@ -417,6 +456,18 @@ describe('adapter-postgres codecs', () => {
     it('resolves pgInetDescriptor by codec id from the registry', () => {
       const resolved = postgresCodecRegistry.descriptorFor('pg/inet@1');
       expect(resolved).toBe(pgInetDescriptor);
+    });
+  });
+
+  describe('pg/tsquery@1 registry resolution', () => {
+    it('resolves pgTsqueryDescriptor by codec id, so a bound tsquery parameter renders', () => {
+      const resolved = postgresCodecRegistry.descriptorFor('pg/tsquery@1');
+      expect(resolved).toBe(pgTsqueryDescriptor);
+      expect(resolved?.targetTypes).toEqual(['tsquery']);
+    });
+
+    it('claims no traits, so no comparison, ordering or text operation applies to a tsquery', () => {
+      expect(postgresCodecRegistry.descriptorFor('pg/tsquery@1')?.traits).toEqual([]);
     });
   });
 });

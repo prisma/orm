@@ -17,7 +17,9 @@ import { type } from 'arktype';
 export const InitOutputSchema = type({
   ok: 'true',
   target: "'postgres'|'mongodb'",
-  authoring: "'psl'|'typescript'",
+  /** `prisma7` when an existing Prisma 7 schema is the contract source. */
+  authoring: "'psl'|'typescript'|'prisma7'",
+  /** The starter schema init wrote, or the Prisma 7 schema it points the config at. */
   schemaPath: 'string',
   filesWritten: 'string[]',
   /**
@@ -27,6 +29,8 @@ export const InitOutputSchema = type({
    * agent-skill directories, which every run removes when it finds them.
    */
   filesDeleted: 'string[]',
+  /** The Prisma 7 config moved out of Prisma 8's way; empty on a normal run. */
+  filesRenamed: type({ from: 'string', to: 'string' }).array(),
   /**
    * What became of the dependency install. `skipped` is the deliberate
    * `--skip-install`; `failed` is an install that ran and did not succeed,
@@ -40,6 +44,18 @@ export const InitOutputSchema = type({
     devDeps: 'string[]',
   },
   contractEmitted: 'boolean',
+  /**
+   * What the Prisma 7 path did beyond a normal run: the schema adopted, the
+   * config renamed (or `null` when it was already `prisma7.config.*`), the
+   * `package.json` scripts now invoking `prisma7`, and the Prisma 7 package
+   * specs installed or listed to install. `null` on a normal run.
+   */
+  prisma7: type({
+    schemaPath: 'string',
+    configRenamedTo: 'string | null',
+    scriptsRewritten: 'string[]',
+    packagesMoved: 'string[]',
+  }).or('null'),
   nextSteps: 'string[]',
   warnings: 'string[]',
 });
@@ -80,6 +96,11 @@ export function buildNextSteps(options: {
   readonly contractEmitted: boolean;
   readonly emitCommand: string;
   readonly schemaPath: string;
+  /** Set on the Prisma 7 path: the steps become the transition routine. */
+  readonly prisma7: {
+    readonly packagesMoved: readonly string[];
+    readonly clientMoved: boolean;
+  } | null;
 }): string[] {
   const steps: string[] = [];
   let stepNumber = 1;
@@ -87,6 +108,10 @@ export function buildNextSteps(options: {
     steps.push(`${stepNumber}. ${text}`);
     stepNumber += 1;
   };
+  if (options.prisma7 !== null) {
+    pushPrisma7Steps(push, { ...options, prisma7: options.prisma7 });
+    return steps;
+  }
   if (options.packagesInstalled === 'failed') {
     push(
       'Install the project dependencies with your package manager — the install this run attempted failed, so nothing else here will work yet.',
@@ -107,4 +132,62 @@ export function buildNextSteps(options: {
     'Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
   );
   return steps;
+}
+
+/** The install that precedes the Prisma 7 check failed, so nothing was written. */
+export const NEXT_STEPS_BEFORE_SCAFFOLD: readonly string[] = [
+  '1. Install the project dependencies with your package manager. The install this run attempted failed before anything was written.',
+  '2. Run `prisma orm init` again.',
+];
+export const DB_SIGN_STEP =
+  'Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.';
+export const PRISMA7_ROUTES_STEP =
+  'Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts.';
+export const PRISMA7_LOOP_STEP =
+  'After each `prisma7 migrate dev`, run `prisma contract emit` and then `prisma db sign`.';
+export const PRISMA7_GENERATE_STEP =
+  'Run `prisma7 generate` so the Prisma 7 client matches the Prisma 7 CLI.';
+export const PRISMA7_QUICK_REFERENCE_STEP =
+  'Open prisma-8.md for a quick reference on the transition loop and your first typed query.';
+export const AGENT_SKILLS_STEP =
+  'Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.';
+
+/**
+ * The transition routine, project requirement 7: init set Prisma 8 up beside
+ * Prisma 7 and stopped, so every database action here is one the user runs.
+ */
+function pushPrisma7Steps(
+  push: (text: string) => void,
+  options: {
+    readonly packagesInstalled: InstallStatus;
+    readonly contractEmitted: boolean;
+    readonly emitCommand: string;
+    readonly prisma7: { readonly packagesMoved: readonly string[]; readonly clientMoved: boolean };
+  },
+): void {
+  const moved = options.prisma7.packagesMoved;
+  const including = moved.length === 0 ? '' : ` That includes ${moved.join(', ')}.`;
+  push('Set DATABASE_URL in your environment (export it or add it to .env).');
+  if (options.packagesInstalled === 'failed') {
+    push(
+      `Install the project dependencies with your package manager — the install this run attempted failed, so nothing else here will work yet.${including}`,
+    );
+  }
+  if (options.packagesInstalled === 'skipped') {
+    const listed = moved.length === 0 ? '' : `, including ${moved.join(', ')}`;
+    push(
+      `Install the project dependencies with your package manager (this run skipped them)${listed}.`,
+    );
+  }
+  if (!options.contractEmitted) {
+    push(`Emit the contract: \`${options.emitCommand}\``);
+  }
+  push(DB_SIGN_STEP);
+  push(PRISMA7_ROUTES_STEP);
+  push(PRISMA7_LOOP_STEP);
+  if (options.prisma7.clientMoved) {
+    push(PRISMA7_GENERATE_STEP);
+  }
+  push(PRISMA7_QUICK_REFERENCE_STEP);
+  push(AGENT_SKILLS_STEP);
 }

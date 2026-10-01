@@ -4,6 +4,7 @@ import { describe, it } from 'node:test';
 import {
   type MutablePackageJson,
   participatesInLockstep,
+  restampExtensionVersion,
   rewriteWorkspaceDeps,
   stampSkillMetadata,
 } from './set-version-utils.ts';
@@ -117,6 +118,22 @@ describe('rewriteWorkspaceDeps', () => {
     assert.equal(pkg.optionalDependencies!['@internal/d'], 'workspace:1.0.0');
   });
 
+  it('keeps the package name of an aliased workspace spec', () => {
+    const pkg: MutablePackageJson = {
+      name: 'aliased',
+      version: '0.7.0',
+      devDependencies: {
+        prisma: 'workspace:@internal/cli@0.7.0',
+        other: 'workspace:@internal/other@*',
+      },
+    };
+    rewriteWorkspaceDeps(pkg, '0.8.0');
+    assert.deepEqual(pkg.devDependencies, {
+      prisma: 'workspace:@internal/cli@0.8.0',
+      other: 'workspace:@internal/other@0.8.0',
+    });
+  });
+
   it('does not rewrite a non-workspace @internal/* spec (e.g. a published-version pin)', () => {
     // An extension package installs a published @internal/* dep via
     // its own author's `extension-upgrade-skill` flow. That spec is an
@@ -219,5 +236,58 @@ describe('stampSkillMetadata', () => {
       () => stampSkillMetadata('# no frontmatter\n', 'library_version', '8.1.0'),
       /frontmatter/,
     );
+  });
+});
+
+describe('restampExtensionVersion', () => {
+  const contractJson = [
+    '{',
+    '  "extensions": {',
+    '    "supabase": {',
+    '      "familyId": "sql",',
+    '      "id": "supabase",',
+    '      "kind": "extension",',
+    '      "targetId": "postgres",',
+    '      "version": "8.0.0-rc.9"',
+    '    }',
+    '  },',
+    '  "meta": { "version": "8.0.0-rc.9" }',
+    '}',
+    '',
+  ].join('\n');
+
+  const contractDts = [
+    '  readonly extensions: {',
+    '    readonly supabase: {',
+    "      readonly familyId: 'sql';",
+    "      readonly id: 'supabase';",
+    "      readonly kind: 'extension';",
+    "      readonly targetId: 'postgres';",
+    "      readonly version: '8.0.0-rc.9';",
+    '    };',
+    '  };',
+    "  readonly other: { readonly version: '8.0.0-rc.9' };",
+    '',
+  ].join('\n');
+
+  it('moves an extension version stamp in contract.json and leaves other version fields alone', () => {
+    const out = restampExtensionVersion(contractJson, '8.0.0-rc.9', '8.0.0-rc.10');
+    assert.match(out, /"targetId": "postgres",\n {6}"version": "8\.0\.0-rc\.10"/);
+    assert.match(out, /"meta": \{ "version": "8\.0\.0-rc\.9" \}/);
+  });
+
+  it('moves an extension version stamp in contract.d.ts and leaves other version fields alone', () => {
+    const out = restampExtensionVersion(contractDts, '8.0.0-rc.9', '8.0.0-rc.10');
+    assert.match(out, /readonly targetId: 'postgres';\n {6}readonly version: '8\.0\.0-rc\.10';/);
+    assert.match(out, /readonly other: \{ readonly version: '8\.0\.0-rc\.9' \}/);
+  });
+
+  it('returns the text unchanged when the stamp is not the from-version', () => {
+    assert.equal(restampExtensionVersion(contractJson, '8.0.0-rc.8', '8.0.0-rc.10'), contractJson);
+  });
+
+  it('is idempotent', () => {
+    const once = restampExtensionVersion(contractDts, '8.0.0-rc.9', '8.0.0-rc.10');
+    assert.equal(restampExtensionVersion(once, '8.0.0-rc.9', '8.0.0-rc.10'), once);
   });
 });

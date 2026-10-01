@@ -20,6 +20,7 @@ const mockHook = {
 
 function createSourceProvider(overrides: Record<string, unknown> = {}) {
   return {
+    format: 'typescript',
     load: async () => ok({ targetFamily: 'sql' } as Contract),
     ...overrides,
   };

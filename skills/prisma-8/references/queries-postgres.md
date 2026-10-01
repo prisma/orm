@@ -62,6 +62,61 @@ db.orm.public.User.where({ kind: 'admin' });
 
 Operators on the field proxy include `.eq`, `.neq`, `.lt`, `.lte`, `.gt`, `.gte`, `.like`, `.ilike`, `.in([...])`, `.isNull()`, `.isNotNull()`. Extensions add target-specific operators on extension-typed columns (`pgvector`'s `.cosineDistance(...)`, `postgis`'s `.within(...)` / `.intersectsBbox(...)` / `.distanceSphere(...)`).
 
+**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The argument `q` is a `tsquery`, built with a helper from `@prisma/orm-postgres/target/full-text`. A bare string is a type error, because Postgres would read it as `tsquery` syntax without lowercasing or stemming it. Pick the helper by where the text comes from:
+
+- A search box: `websearchToTsquery(input)`. `"an exact phrase"`, `-excluded` and `or` work, and it never errors. `plaintoTsquery` requires every word; `phrasetoTsquery` requires the words in order.
+- User input inside operator syntax, such as typeahead: the `tsquery` tag, `` tsquery`${term}:*` ``. The literal parts are trusted `tsquery` syntax you write. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax; an empty value adds no words, like a stop word. A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word. Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error for every input. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
+- Operator syntax you write in full: `toTsquery("'zebra' & !'graze'")`. Malformed text fails at execution, so never pass user input to it; use the `tsquery` tag for that.
+
+The four parsers are also `fns` members in the SQL builder. Each takes the text (a string, or a text column of any kind, `varchar` included) and `{ language? }`, and binds the text as a parameter. The `tsquery` tag is an import in both the ORM and the SQL builder. A `tsquery` value read back from a query can be passed straight back as the query.
+
+Each operation takes an options object as its second argument. `language` (default `'english'`) is the configuration for the column's `to_tsvector`, the expression the index covers; the parser's or tag's own `language` governs the query side, and the two normally match. It only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
+
+```typescript
+import { tsquery, websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
+
+// ORM: filter by the search-box query, order by relevance. Build the query once and reuse it.
+const q = websearchToTsquery(query);
+const hits = await db.orm.public.Message
+  .select('id', 'text')
+  .where((m) => m.text.fullTextMatches(q))
+  .orderBy((m) => m.text.fullTextRank(q).desc())
+  .limit(20)
+  .all();
+
+// ORM: typeahead, the typed text as a prefix term.
+const suggestions = await db.orm.public.Message
+  .select('id', 'text')
+  .where((m) => m.text.fullTextMatches(tsquery`${term}:*`))
+  .all();
+
+// SQL builder: the same query filters and highlights, so the snippet marks what selected the row.
+const snippets = db.sql.public.message
+  .select('id')
+  .select('snippet', (f, fns) =>
+    fns.fullTextHeadline(f.text, q, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 }),
+  )
+  .where((f, fns) => fns.fullTextMatches(f.text, q))
+  .build();
+```
+
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
+
+```prisma
+@@fullTextIndex([text], name: "message_text_search")
+@@fullTextIndex([text], where: "archived_at IS NULL", name: "message_text_search_live")
+```
+
+Give the index and the operation the same `language`: a mismatch raises no error, the query silently falls back to a sequential scan.
+
+In a TypeScript contract, the same helper from `@prisma/orm-postgres/contract-builder`:
+
+```typescript
+model('Message', { fields: { id, text } }).sql(({ cols }) => ({
+  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+}));
+```
+
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 
 ```typescript
@@ -95,7 +150,7 @@ await db.orm.public.User
   .all();
 ```
 
-**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas (each calling `.asc()` / `.desc()` on a field). `.limit(n)` limits; `.offset(n)` offsets.
+**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas. Each calls `.asc()` / `.desc()` on a field, an extension-operation result, a to-one relation's field, or a to-many relation's `count(...)`. Every `.asc()` / `.desc()` takes `{ nulls: 'first' | 'last' }`. `.limit(n)` limits; `.offset(n)` offsets.
 
 ```typescript
 await db.orm.public.Post
@@ -121,7 +176,29 @@ const page2 = await db.orm.public.Post
   .all();
 ```
 
-Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`, pass a value for each ordering column — a partial cursor seeks only on the columns you supply, which gives an incomplete keyset. An empty cursor object is a no-op: you get the unfiltered first page back.
+**Ordering by a relation.** A to-one relation (`1:1`, `N:1`) exposes the related model's orderable fields; a to-many relation (`1:N`, `N:M`) exposes `count(predicate?)`, through the junction for `N:M`. One hop only. Each lowers to a correlated scalar subquery, so the main query gains no join.
+
+```typescript
+await db.orm.public.Post
+  .orderBy([(p) => p.author.name.asc(), (p) => p.id.asc()])
+  .all();
+
+await db.orm.public.User
+  .orderBy((u) => u.posts.count((p) => p.views.gt(10)).desc())
+  .all();
+
+await db.orm.public.User
+  .orderBy((u) => u.tags.count().desc())
+  .all();
+
+await db.orm.public.User
+  .orderBy((u) => u.invitedBy.name.desc({ nulls: 'last' }))
+  .all();
+```
+
+A missing related row (null foreign key) orders as `NULL`. To-one relations have no `count`; to-many relations expose no fields.
+
+Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`, pass a value for each ordering column — a partial cursor seeks only on the columns you supply, which gives an incomplete keyset. An empty cursor object is a no-op: you get the unfiltered first page back. `cursor()` keys on plain columns only: it throws `ORM.ARGUMENT_INVALID` when an active order is a relation field, a relation `count(...)`, an extension-operation result (`fullTextRank`, vector distance) or sets `nulls`. `distinctOn()` throws the same only when one of its leading orders, as many as there are `distinctOn` columns, is not a plain column; relation, count and operation orders after them are fine. Paginate those orders with `.limit(n).offset(n)`.
 
 **`.first()` vs `.first({ pk })` vs `.all()`.** Use `.first()` for a single row (issues a `LIMIT 1`); use `.first({ pk })` for primary-key lookups; reserve `.all()` for the genuine many case (no implicit `LIMIT`).
 
@@ -339,6 +416,8 @@ db.sql.public.post
   .build();
 ```
 
+The SQL builder's `.orderBy(column, { direction, nulls })` takes the same null placement: `.orderBy('invited_by_id', { direction: 'asc', nulls: 'first' })` renders `ORDER BY "invited_by_id" ASC NULLS FIRST`.
+
 ## Workflow — Transactions
 
 The concept: `db.transaction(fn)` opens a transaction and passes a `tx` context to the callback. `tx.orm` and `tx.sql` mirror `db.orm` / `db.sql` but ride the same transaction; `tx.query(plan)` / `tx.execute(plan)` run a SQL-builder plan within it (rows vs affected count, as on the runtime). The transaction commits on the callback's successful return and rolls back on any thrown error.
@@ -391,7 +470,8 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** The ORM config (`ormConfig({...})`) does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).
 9. **Confabulating a TypedSQL or `.stream()` surface.** Neither exists. Raw SQL does: the client's raw lane, ``db.raw.sql`…` ``. Reusable statements do: `db.prepare(...)` (see *Prepared statements* in [`queries.md`](./queries.md)). Streaming: `for await` over a read terminal or `runtime.query(plan)` — with the caveats in *Streaming* in [`queries.md`](./queries.md).
 10. **Mixing the ORM mutation return with `runtime.query(plan)` / `runtime.execute(plan)`.** ORM terminals issue the query themselves and return rows. The runtime methods are for SQL-builder plans.
-11. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
+11. **Adding a `cursor()` to a relation, count, operation or `nulls` order.** It throws `ORM.ARGUMENT_INVALID`. Use `.limit(n).offset(n)`, or order by plain columns.
+12. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<ns>.<table>`.
 
 ## Reference Files
 

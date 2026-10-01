@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { assembleAttributeSpecs, fieldAttribute, modelAttribute } from '../src/exports';
 
 function modelSpecFactory(name: string) {
-  return () => modelAttribute(name, {});
+  return () =>
+    modelAttribute(name, { documentation: 'Declares a model attribute for argument binding.' });
 }
 
 function fieldSpecFactory(name: string) {
-  return () => fieldAttribute(name, {});
+  return () =>
+    fieldAttribute(name, { documentation: 'Declares a field attribute for argument binding.' });
 }
 
 function descriptor(attribute: string, spec: unknown) {

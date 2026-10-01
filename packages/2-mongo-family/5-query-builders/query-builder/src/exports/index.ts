@@ -37,6 +37,7 @@ export type {
 export {
   contractFieldToMongoFieldShape,
   contractModelToMongoResultShape,
+  type MongoValueObjects,
 } from '../result-shape';
 export { CollectionHandle, FilteredCollection } from '../state-classes';
 export type {

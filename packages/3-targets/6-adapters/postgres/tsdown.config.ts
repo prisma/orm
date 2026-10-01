@@ -6,7 +6,6 @@ export default defineConfig({
     'src/exports/types.ts',
     'src/exports/column-types.ts',
     'src/exports/control.ts',
-    'src/exports/operation-types.ts',
     'src/exports/runtime.ts',
     'src/exports/sql-renderer.ts',
   ],

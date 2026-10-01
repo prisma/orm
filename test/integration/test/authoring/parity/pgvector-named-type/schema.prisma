@@ -7,4 +7,5 @@ types {
 model Document {
   id Int @id @default(autoincrement())
   embedding Embedding1536
+  @@map("document")
 }

@@ -1,6 +1,6 @@
 # ADR 231 — Declarative attribute specifications: composable argument combinators with typed inference
 
-**Status:** Accepted
+**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`structBlock` / `mapBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md).
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
@@ -12,21 +12,25 @@ A PSL attribute carries positional and named arguments whose grammar must be val
 
 ```ts
 const sqlRelation = fieldAttribute('relation', {
-  positional: [{ key: 'name', type: optional(str()) }],
+  documentation: 'Defines a relation and its foreign-key fields.',
+  positional: [{ key: 'name', type: optional(str()), documentation: 'The relation name used to pair both sides.' }],
   named: {
-    name: optional(str()),
-    fields: optional(list(fieldRef(), { nonEmpty: true })),
-    references: optional(list(referencedFieldRef(), { nonEmpty: true })),
-    map: optional(str()),
-    onDelete: optional(
-      oneOf(
-        identifier('NoAction'),
-        identifier('Restrict'),
-        identifier('Cascade'),
-        identifier('SetNull'),
-        identifier('SetDefault'),
+    name: { type: optional(str()), documentation: 'The relation name, supplied by name instead of position.' },
+    fields: { type: optional(list(fieldRef(), { allowEmpty: false })), documentation: 'The ordered local foreign-key fields.' },
+    references: { type: optional(list(referencedFieldRef(), { allowEmpty: false })), documentation: 'The corresponding fields on the referenced model.' },
+    map: { type: optional(str()), documentation: 'The database foreign-key constraint name.' },
+    onDelete: {
+      documentation: 'The referential action when the referenced row is deleted.',
+      type: optional(
+        oneOf(
+          identifier('NoAction'),
+          identifier('Restrict'),
+          identifier('Cascade'),
+          identifier('SetNull'),
+          identifier('SetDefault'),
+        ),
       ),
-    ),
+    },
   },
   refine: relationInvariants,
 });
@@ -46,7 +50,7 @@ The SQL and Mongo family interpreters are the first consumers. They define their
 
 The kit consumes `ExpressionAst` directly. No intermediate argument representation is introduced, and no combinator reparses flattened source text except `json()`, the deliberate quoted-JSON-object exception.
 
-Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts, and the generic block reconstruction interprets them at parse time.
+Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts. Symbol-table construction collects declarations without interpreting blocks; consumers then bind references and interpret block values and attributes against the complete snapshot, as described in ADR 255.
 
 ---
 
@@ -79,8 +83,9 @@ A combinator declares what it reads. The contexts nest by what the site being pa
 
 ```ts
 interface AttributeCtx {
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
+  readonly symbols: SymbolTable;
+  readonly binder: Binder;
 }
 
 interface ModelAttributeCtx extends AttributeCtx {
@@ -89,16 +94,25 @@ interface ModelAttributeCtx extends AttributeCtx {
 
 interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 ```
 
-A block has no model, so a block attribute is parsed with only the source context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist.
+A block has no model, so a block attribute is parsed without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references read committed resolutions through `ctx.binder.symbolForNode`, rather than deriving scope from expression ancestry. The binder must use the same symbol table, sources, and registries as interpretation. It owns unresolved-reference diagnostics; combinators own expression-shape and entity-selector diagnostics and fail without additional diagnostics for absent or unresolved bindings.
 
 A spec fixes the attribute level and name, declares its arguments, and may refine the parsed result:
 
 ```ts
+interface Param<T, Ctx extends AttributeCtx> {
+  readonly type: ArgType<T, Ctx>;
+  readonly documentation: string;
+}
+
+interface PositionalParam<T, Ctx extends AttributeCtx> extends Param<T, Ctx> {
+  readonly key: string;
+}
+
 interface AttributeSpec<Out, Ctx extends AttributeCtx> {
+  readonly documentation: string;
   readonly level: 'field' | 'model' | 'block';
   readonly name: string;
   readonly positional: readonly PositionalParam<unknown, Ctx>[];
@@ -107,7 +121,7 @@ interface AttributeSpec<Out, Ctx extends AttributeCtx> {
 }
 ```
 
-Each constructor fixes the context its level carries and infers `AttributeOut<Pos, Named>` when constructing a spec. `InferAttr<S>` extracts that `Out` type. Optional parameters are `ArgType` values decorated by `optional(type)` or `optional(type, defaultValue)`; the engine detects the marker when finalizing absent arguments.
+Each constructor fixes the context its level carries and infers `AttributeOut<Pos, Named>` when constructing a spec. `InferAttr<S>` extracts that `Out` type. Parameter declarations carry required Markdown `documentation` alongside their reusable `type`. Attribute configurations and returned specs require documentation too. Optionality stays on the argument type: use `{ type: optional(type, defaultValue), documentation }` for a named parameter, or add `key` for a positional parameter. The engine inspects the wrapped type when finalizing absent arguments, and documentation never enters the parsed output.
 
 Positionals are fixed slots with an output key. Variadic positionals are not supported. Positional and named parameters may intentionally share a key, which supports the relation-name alias while allowing the engine to diagnose conflicting duplicate values.
 
@@ -118,9 +132,11 @@ Positionals are fixed slots with an output key. Variadic positionals are not sup
 ### Scalars and pinned literals
 
 - `str()` parses any string literal; `str(value)` matches one exact string and preserves its literal type.
-- `num()` parses any number literal; `num(value)` matches one exact number and preserves its literal type.
+- `num()` parses any number literal as a JavaScript number; `num(value)` matches one exact number and preserves its literal type.
+- `numLiteral()` parses any number literal and keeps its source text, for consumers that must not round it through a JavaScript number.
 - `int({ min, max })` parses an integer with optional inclusive bounds.
 - `bool()` parses a boolean literal.
+- `identifier()` accepts any bare identifier and returns its name as a string.
 - `identifier(name)` matches one exact bare identifier and preserves its literal type.
 
 There is no enum-specific combinator. A fixed vocabulary is a `oneOf` over pinned matchers, making the source spelling explicit:
@@ -142,13 +158,24 @@ These leaves perform direct AST checks. They do not wrap arktype schemas.
 
 `fieldRef()` parses a field-name identifier and validates it against the declaring model, so it is available to model and field attributes alike. `referencedFieldRef()` validates against the relation target, which only a field can resolve; cross-space references may defer the existence check when no referenced model is locally available. Both return the authored field name as a string.
 
-`entityRef()` parses an unresolved model-name string. Existence and family semantics remain downstream concerns.
+`entityRef(expected)` checks that the referenced declaration exists and has the expected kind: `{ kind: 'model' }`, `{ kind: 'compositeType' }`, `{ kind: 'namedType' }`, or `{ kind: 'block', keyword }`. It returns the selected declaration plus its lexical namespace (undefined at top level). Resolution prefers the containing namespace's declaration, then top level, never a sibling namespace; forward references are allowed, and missing or wrong-kind targets produce source-anchored expression diagnostics.
 
-The current kit does not return declaration-bearing entity coordinates, provide a document-path scope, or include a codec reference combinator. Those would be separate additions if a future consumer requires them.
+```ts
+const baseSpec = modelAttribute('base', {
+  documentation: 'Declares the base model.',
+  positional: [
+    { key: 'base', type: entityRef({ kind: 'model' }), documentation: 'The model to inherit from.' },
+  ],
+});
+```
+
+`oneOf(entityRef(expected), identifier())` prefers a checked identity and otherwise returns an unchecked name, without leaking failed-alternative diagnostics.
+
+The current kit does not provide a document-path scope or include a codec reference combinator. Those would be separate additions if a future consumer requires them.
 
 ### Native collections
 
-`list(of, { nonEmpty, unique })` parses a native array literal, applies the element combinator to every item, and may enforce non-emptiness and uniqueness.
+`list(of, { allowEmpty: false, unique: true })` parses a native array literal, applies the element combinator to every item, and may enforce non-emptiness and uniqueness.
 
 `record(of)` parses a native object literal into `Record<string, T>`, rejects duplicate keys, and applies `of` to each value. Keys are strings; the kit does not currently provide a generic `map(key, value)` combinator.
 
@@ -176,6 +203,7 @@ This trade-off keeps the leaf contract small and allows backtracking, at the cos
 
 ```ts
 interface FuncCallSig {
+  readonly documentation: string;
   readonly positional?: readonly PositionalParam<unknown, AttributeCtx>[];
   readonly named?: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
 }
@@ -187,7 +215,7 @@ interface TypedFuncCall {
 }
 ```
 
-Function arguments may use any combinator, including nested `funcCall` values. Namespaced names are rejected at the function-call boundary.
+Every function signature requires Markdown documentation, including zero-argument functions. Function parameter declarations carry their own documentation, independent of reusable argument types. Function arguments may use any combinator, including nested `funcCall` values. Namespaced names are rejected at the function-call boundary.
 
 The result is typed as a normalized function-call envelope, not as a name-literal-discriminated or signature-derived object. `funcCallFrom` and an unpinned raw function-call combinator are not part of the design.
 
@@ -206,9 +234,11 @@ const functionArms = registryEntries.map(([name, entry]) =>
   funcCall(name, entry.signature),
 );
 
-const scalarDefault = oneOf(str(), num(), bool(), ...functionArms);
+const scalarDefault = oneOf(str(), numLiteral(), bool(), ...functionArms);
 const enumDefault = oneOf(...enumMembers.map(identifier));
 ```
+
+The number arm is `numLiteral()`, not `num()`. `num()` yields a JavaScript number, which rounds a literal past the safe integer range and drops trailing zeros; `numLiteral()` yields the literal's source text, so a `Decimal` or `BigInt` default keeps every digit as written. What to do with that text is the lowering concern below: the plain number goes to a codec that reads one, and the decimal text to a codec that does not.
 
 Literal-to-codec compatibility remains a lowering concern. A `matchingScalarLiteral` combinator is not implemented.
 
@@ -218,13 +248,15 @@ Mongo constructs its index field-element grammar from the declaring model's fiel
 
 ```ts
 const sortSig = {
-  named: { sort: oneOf(identifier('Asc'), identifier('Desc')) },
+  documentation: 'Selects an index field with an explicit sort direction.',
+  named: { sort: { type: oneOf(identifier('Asc'), identifier('Desc')), documentation: 'The index order for this field: `Asc` or `Desc`.' } },
 } satisfies FuncCallSig;
 
 const indexFieldElement = oneOf(
   fieldRef(),
   funcCall('wildcard', {
-    positional: [{ key: 'scope', type: optional(entityRef()) }],
+    documentation: 'Indexes document fields using a wildcard index.',
+    positional: [{ key: 'scope', type: optional(identifier()), documentation: 'The field path to index recursively. Omit for all document fields.' }],
   }),
   ...fieldNames.map((name) => funcCall(name, sortSig)),
 );
@@ -300,7 +332,6 @@ The current implementation is sufficient for interpreter consumption but not yet
 ## Follow-up work
 
 - Add central spec discovery and traversable combinator metadata for language-tooling consumers.
-- Decide whether reference combinators should expose declaration-bearing results while preserving the interpreter's string-oriented lowering needs.
 - Revisit signature-derived `TypedFuncCall` output types if downstream code needs statically discriminated call unions.
 - Decide whether literal-to-field-type compatibility should remain in lowering or gain a dedicated field-context combinator.
 

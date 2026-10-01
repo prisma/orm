@@ -89,6 +89,7 @@ function renderTypedParam(
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
   many?: boolean,
   typeParams?: JsonValue,
+  forceCast = false,
 ): string {
   if (codecId === undefined) {
     return `$${index}`;
@@ -116,7 +117,7 @@ function renderTypedParam(
   if (isPgEnumParams(typeParams)) {
     return `$${index}::${quoteQualifiedName(nativeType)}${arraySuffix}`;
   }
-  if (!POSTGRES_INFERRABLE_NATIVE_TYPES.has(nativeType) || many) {
+  if (forceCast || !POSTGRES_INFERRABLE_NATIVE_TYPES.has(nativeType) || many) {
     return `$${index}::${nativeType}${arraySuffix}`;
   }
   return `$${index}`;
@@ -218,12 +219,7 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     : '';
   const havingClause = ast.having ? `HAVING ${renderWhere(ast.having, contract, pim)}` : '';
   const orderClause = ast.orderBy?.length
-    ? `ORDER BY ${ast.orderBy
-        .map((order) => {
-          const expr = renderExpr(order.expr, contract, pim);
-          return `${expr} ${order.dir.toUpperCase()}`;
-        })
-        .join(', ')}`
+    ? `ORDER BY ${renderOrderByItems(ast.orderBy, contract, pim)}`
     : '';
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
@@ -254,6 +250,9 @@ function renderProjection(
       const alias = quoteIdentifier(item.alias);
       if (item.expr.kind === 'literal') {
         return `${renderLiteral(item.expr)} AS ${alias}`;
+      }
+      if (item.expr.kind === 'prepared-param-ref') {
+        return `${renderParamRef(item.expr, pim, true)} AS ${alias}`;
       }
       return `${renderExpr(item.expr, contract, pim)} AS ${alias}`;
     })
@@ -474,6 +473,8 @@ function renderBinary(expr: BinaryExpr, contract: PostgresContract, pim: ParamIn
   const operatorMap: Record<BinaryExpr['op'], string> = {
     eq: '=',
     neq: '!=',
+    isNotDistinctFrom: 'IS NOT DISTINCT FROM',
+    isDistinctFrom: 'IS DISTINCT FROM',
     gt: '>',
     lt: '<',
     gte: '>=',
@@ -629,8 +630,25 @@ function renderOrderByItems(
   pim: ParamIndexMap,
 ): string {
   return items
-    .map((item) => `${renderExpr(item.expr, contract, pim)} ${item.dir.toUpperCase()}`)
+    .map(
+      (item) =>
+        `${renderExpr(item.expr, contract, pim)}${ORDER_DIRECTION_SQL[item.dir]}${renderNullsPlacement(item)}`,
+    )
     .join(', ');
+}
+
+const ORDER_DIRECTION_SQL: Readonly<Record<OrderByItem['dir'], string>> = {
+  asc: ' ASC',
+  desc: ' DESC',
+};
+
+const ORDER_NULLS_SQL: Readonly<Record<NonNullable<OrderByItem['nulls']>, string>> = {
+  first: ' NULLS FIRST',
+  last: ' NULLS LAST',
+};
+
+function renderNullsPlacement(item: OrderByItem): string {
+  return item.nulls === undefined ? '' : ORDER_NULLS_SQL[item.nulls];
 }
 
 function renderJsonArrayAggExpr(
@@ -710,7 +728,7 @@ function renderExpr(expr: AnyExpression, contract: PostgresContract, pim: ParamI
   }
 }
 
-function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap): string {
+function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap, forceCast = false): string {
   const index = pim.indexMap.get(ref);
   if (index === undefined) {
     throw new InternalError('ParamRef not found in index map');
@@ -722,6 +740,7 @@ function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap): string {
       pim.codecDescriptorRegistry,
       ref.codec.many,
       ref.codec.typeParams,
+      forceCast,
     );
   }
   if (ref.codec === undefined) {
@@ -931,19 +950,20 @@ function renderInsert(ast: InsertAst, contract: PostgresContract, pim: ParamInde
   const onConflictClause = ast.onConflict
     ? (() => {
         const conflictColumns = ast.onConflict.columns.map((col) => quoteIdentifier(col.column));
-        if (conflictColumns.length === 0) {
-          throw adapterError(
-            'RUNTIME.AST_INVALID',
-            'INSERT onConflict requires at least one conflict column',
-            { meta: { node: 'insert-on-conflict' } },
-          );
-        }
+        const target = conflictColumns.length === 0 ? '' : ` (${conflictColumns.join(', ')})`;
 
         const action = ast.onConflict.action;
         switch (action.kind) {
           case 'do-nothing':
-            return ` ON CONFLICT (${conflictColumns.join(', ')}) DO NOTHING`;
+            return ` ON CONFLICT${target} DO NOTHING`;
           case 'do-update-set': {
+            if (conflictColumns.length === 0) {
+              throw adapterError(
+                'RUNTIME.AST_INVALID',
+                'INSERT onConflict requires at least one conflict column',
+                { meta: { node: 'insert-on-conflict' } },
+              );
+            }
             const updateEntries = Object.entries(action.set);
             if (updateEntries.length === 0) {
               throw adapterError(
@@ -955,7 +975,7 @@ function renderInsert(ast: InsertAst, contract: PostgresContract, pim: ParamInde
             const updates = updateEntries.map(([colName, value]) => {
               return `${quoteIdentifier(colName)} = ${renderExpr(value, contract, pim)}`;
             });
-            return ` ON CONFLICT (${conflictColumns.join(', ')}) DO UPDATE SET ${updates.join(', ')}`;
+            return ` ON CONFLICT${target} DO UPDATE SET ${updates.join(', ')}`;
           }
           // v8 ignore next 4
           default:

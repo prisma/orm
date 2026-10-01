@@ -1,8 +1,10 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import paradedbPack from '@internal/extension-paradedb/pack';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 // postgresPack is used directly in interpretPslDocumentToSqlContract (not in defineContract).
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -14,16 +16,16 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 function interpret(schema: string) {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: {},
+  const { document, sources } = parse(schema, 'index-type-options.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return interpretPslDocumentToSqlContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    documents: [document],
+    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    symbolTable,
+    sources,
     target: postgresPack,
     scalarColumnDescriptors,
     composedExtensionContracts: new Map(),
@@ -49,7 +51,7 @@ describe('PSL @@index type and options — integration with real paradedb pack',
         public: {
           entries: {
             table: {
-              doc: {
+              Doc: {
                 indexes: [
                   {
                     columns: ['body'],

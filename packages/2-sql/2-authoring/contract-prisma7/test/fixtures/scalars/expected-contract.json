@@ -1,0 +1,530 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Scalars": {
+            "storage": {
+              "table": "Scalars",
+              "namespaceId": "public",
+              "fields": {
+                "string": {
+                  "column": "string"
+                },
+                "stringOpt": {
+                  "column": "stringOpt"
+                },
+                "stringList": {
+                  "column": "stringList"
+                },
+                "boolean": {
+                  "column": "boolean"
+                },
+                "booleanOpt": {
+                  "column": "booleanOpt"
+                },
+                "booleanList": {
+                  "column": "booleanList"
+                },
+                "int": {
+                  "column": "int"
+                },
+                "intOpt": {
+                  "column": "intOpt"
+                },
+                "intList": {
+                  "column": "intList"
+                },
+                "bigInt": {
+                  "column": "bigInt"
+                },
+                "bigIntOpt": {
+                  "column": "bigIntOpt"
+                },
+                "bigIntList": {
+                  "column": "bigIntList"
+                },
+                "float": {
+                  "column": "float"
+                },
+                "floatOpt": {
+                  "column": "floatOpt"
+                },
+                "floatList": {
+                  "column": "floatList"
+                },
+                "decimal": {
+                  "column": "decimal"
+                },
+                "decimalOpt": {
+                  "column": "decimalOpt"
+                },
+                "decimalList": {
+                  "column": "decimalList"
+                },
+                "dateTime": {
+                  "column": "dateTime"
+                },
+                "dateTimeOpt": {
+                  "column": "dateTimeOpt"
+                },
+                "dateTimeList": {
+                  "column": "dateTimeList"
+                },
+                "json": {
+                  "column": "json"
+                },
+                "jsonOpt": {
+                  "column": "jsonOpt"
+                },
+                "jsonList": {
+                  "column": "jsonList"
+                },
+                "bytes": {
+                  "column": "bytes"
+                },
+                "bytesOpt": {
+                  "column": "bytesOpt"
+                },
+                "bytesList": {
+                  "column": "bytesList"
+                }
+              }
+            },
+            "fields": {
+              "string": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "stringOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true
+              },
+              "stringList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "boolean": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bool@1"
+                },
+                "nullable": false
+              },
+              "booleanOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bool@1"
+                },
+                "nullable": true
+              },
+              "booleanList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bool@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "int": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "intOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true
+              },
+              "intList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "bigInt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "bigIntOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": true
+              },
+              "bigIntList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "float": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/float8@1"
+                },
+                "nullable": false
+              },
+              "floatOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/float8@1"
+                },
+                "nullable": true
+              },
+              "floatList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/float8@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "decimal": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": false
+              },
+              "decimalOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": true
+              },
+              "decimalList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "dateTime": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "dateTimeOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": true
+              },
+              "dateTimeList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "json": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/jsonb@1"
+                },
+                "nullable": false
+              },
+              "jsonOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/jsonb@1"
+                },
+                "nullable": true
+              },
+              "jsonList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/jsonb@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "bytes": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": false
+              },
+              "bytesOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": true
+              },
+              "bytesList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": true,
+                "many": true
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Scalars": {
+      "namespace": "public",
+      "model": "Scalars"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "52081c9cfa6d9e814bd9e21caf6696a6352faa7785c542fc0bc033ca54243f50",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Scalars": {
+              "columns": {
+                "string": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "stringOpt": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": true
+                },
+                "stringList": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                },
+                "boolean": {
+                  "nativeType": "bool",
+                  "codecId": "pg/bool@1",
+                  "nullable": false
+                },
+                "booleanOpt": {
+                  "nativeType": "bool",
+                  "codecId": "pg/bool@1",
+                  "nullable": true
+                },
+                "booleanList": {
+                  "nativeType": "bool",
+                  "codecId": "pg/bool@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                },
+                "int": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "intOpt": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true
+                },
+                "intList": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                },
+                "bigInt": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false
+                },
+                "bigIntOpt": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": true
+                },
+                "bigIntList": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                },
+                "float": {
+                  "nativeType": "float8",
+                  "codecId": "pg/float8@1",
+                  "nullable": false
+                },
+                "floatOpt": {
+                  "nativeType": "float8",
+                  "codecId": "pg/float8@1",
+                  "nullable": true
+                },
+                "floatList": {
+                  "nativeType": "float8",
+                  "codecId": "pg/float8@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                },
+                "decimal": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "decimalOpt": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "decimalList": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "dateTime": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "dateTimeOpt": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "dateTimeList": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "json": {
+                  "nativeType": "jsonb",
+                  "codecId": "pg/jsonb@1",
+                  "nullable": false
+                },
+                "jsonOpt": {
+                  "nativeType": "jsonb",
+                  "codecId": "pg/jsonb@1",
+                  "nullable": true
+                },
+                "jsonList": {
+                  "nativeType": "jsonb",
+                  "codecId": "pg/jsonb@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                },
+                "bytes": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": false
+                },
+                "bytesOpt": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": true
+                },
+                "bytesList": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"]
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["int"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

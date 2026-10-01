@@ -1,7 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type { PostgresClient, PostgresTransactionContext } from '../src/runtime/postgres';
+import type { PostgresClient } from '../src/runtime/postgres';
+import type { PostgresTransactionContext } from '../src/runtime/postgres-members';
 
 type TestContract = Contract<SqlStorage>;
 

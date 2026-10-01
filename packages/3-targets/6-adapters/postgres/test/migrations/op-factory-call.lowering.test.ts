@@ -21,7 +21,8 @@ import type { CodecControlHooks } from '@internal/family-sql/control';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import type { StorageColumn } from '@internal/sql-contract/types';
-import { col } from '@internal/sql-relational-core/contract-free';
+import { col, fn } from '@internal/sql-relational-core/contract-free';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
   AddColumnCall,
   AddForeignKeyCall,
@@ -49,7 +50,6 @@ import { TypeScriptRenderablePostgresMigration } from '@internal/target-postgres
 import { renderOps } from '@internal/target-postgres/render-ops';
 import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 const SNAPSHOTS_IMPORT_PATH = '../../snapshots';
@@ -82,7 +82,11 @@ describe('renderOps', () => {
       }),
       new SetNotNullCall('public', 'user', 'email'),
       new DropNotNullCall('public', 'user', 'nickname'),
-      new SetDefaultCall('public', 'user', 'created_at', 'DEFAULT now()'),
+      new SetDefaultCall(
+        'public',
+        'user',
+        col('created_at', 'timestamptz', { default: fn('now()') }),
+      ),
       new DropDefaultCall('public', 'user', 'updated_at'),
       new AddPrimaryKeyCall('public', 'user', 'user_pkey', ['id']),
       new AddUniqueCall('public', 'user', 'user_email_key', ['email']),
@@ -308,4 +312,34 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       `ALTER TABLE "public"."doc" ADD COLUMN "embedding" vector(3) DEFAULT ('[0,0,0]') NOT NULL`,
     );
   });
+});
+
+describe('SetDefaultCall', () => {
+  it('refuses a column with no default, which SET DEFAULT has nothing to write for', async () => {
+    await expect(
+      new SetDefaultCall('public', 'user', col('name', 'text')).toOp(testAdapter),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.DEFAULT_INVALID',
+      message:
+        'setDefault on column "name" of table "user" has no default. Pass the column with its default, as in col(name, type, { default: lit(value) }) or col(name, type, { default: fn(expression) }).',
+      meta: { table: 'user', column: 'name', reason: 'set-default-without-default' },
+    });
+  });
+
+  it.each(['serial', 'int4'])(
+    'refuses an autoincrement() default on a %s column, which SET DEFAULT cannot write',
+    async (type) => {
+      await expect(
+        new SetDefaultCall(
+          'public',
+          'user',
+          col('id', type, { default: fn('autoincrement()') }),
+        ).toOp(testAdapter),
+      ).rejects.toMatchObject({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        message: `setDefault cannot give the existing column "id" of table "user" an autoincrement() default, because autoincrement() is written as the column's SERIAL type when the column is created. Set a sequence default instead, as in fn("nextval('<sequence>'::regclass)").`,
+        meta: { table: 'user', column: 'id', reason: 'set-default-autoincrement' },
+      });
+    },
+  );
 });

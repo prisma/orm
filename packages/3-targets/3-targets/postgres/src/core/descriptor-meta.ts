@@ -30,6 +30,15 @@ const postgresTargetDescriptorMetaBase = {
     renderCheckExpressions: postgresRenderCheckExpressions,
     lowerEntityHandles: postgresLowerEntityHandles,
   },
+  types: {
+    queryOperationTypes: {
+      import: {
+        package: '@internal/target-postgres/operation-types',
+        named: 'QueryOperationTypes',
+        alias: 'PgTargetQueryOps',
+      },
+    },
+  },
 } as const;
 
 export const postgresTargetDescriptorMeta: typeof postgresTargetDescriptorMetaBase & {

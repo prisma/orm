@@ -234,7 +234,7 @@
     "storageHash": "aede3a2efea99253a03bdaa4679ec79f5000d06f8a853ed6f0c08f2f891aa479"
   },
   "execution": {
-    "executionHash": "93d4cdbed7d12477181192591395a625e6fbb11798673314b52f926dbd2741ce",
+    "executionHash": "fcf5b5610bfe1a583de72d24a6198e26e343a1dac89ecc6baac2dc706cee79f5",
     "mutations": {
       "defaults": [
         {
@@ -243,9 +243,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "transactional",
-            "table": "some_table_post"
+            "entry": "some_table_user",
+            "field": "id",
+            "namespace": "base"
           }
         },
         {
@@ -254,9 +254,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "base",
-            "table": "some_table_user"
+            "entry": "some_table_post",
+            "field": "id",
+            "namespace": "transactional"
           }
         }
       ]
@@ -275,6 +275,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

@@ -184,7 +184,7 @@ describe('integration/integer representation types', () => {
         // runtime's column-context envelope, with the codec error on `cause`.
         expect(shape).toEqual({
           name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.reading with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+          message: `Failed to decode column int_repr_samples.reading with codec 'pg/int8number@1': pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
           code: 'RUNTIME.DECODE_FAILED',
           category: 'RUNTIME',
           severity: 'error',
@@ -195,9 +195,10 @@ describe('integration/integer representation types', () => {
           },
           cause: {
             name: 'StructuredError',
-            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${FIRST_UNSAFE}`,
+            message:
+              'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
             code: 'RUNTIME.DECODE_FAILED',
-            meta: { codecId: 'pg/int8number@1', received: String(FIRST_UNSAFE) },
+            meta: { codecId: 'pg/int8number@1', received: JSON.stringify(String(FIRST_UNSAFE)) },
           },
         });
       }, contract);
@@ -354,7 +355,7 @@ describe('integration/integer representation types', () => {
         // scalar include names the column, with the codec error on `cause`.
         expect(shape).toEqual({
           name: 'RuntimeError',
-          message: `Failed to decode column int_repr_samples.samples with codec 'pg/int8number@1': pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
+          message: `Failed to decode column int_repr_samples.samples with codec 'pg/int8number@1': pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991`,
           code: 'RUNTIME.DECODE_FAILED',
           category: 'RUNTIME',
           severity: 'error',
@@ -365,9 +366,10 @@ describe('integration/integer representation types', () => {
           },
           cause: {
             name: 'StructuredError',
-            message: `pg/int8number@1 value must be an integer within the safe integer range, got ${2 * MAX_SAFE}`,
+            message:
+              'pg/int8number@1 JSON value must be a decimal integer string from -9007199254740991 to 9007199254740991',
             code: 'RUNTIME.DECODE_FAILED',
-            meta: { codecId: 'pg/int8number@1', received: String(2 * MAX_SAFE) },
+            meta: { codecId: 'pg/int8number@1', received: JSON.stringify(String(2 * MAX_SAFE)) },
           },
         });
       }, contract);

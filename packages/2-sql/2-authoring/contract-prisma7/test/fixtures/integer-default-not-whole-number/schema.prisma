@@ -1,0 +1,12 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model M {
+  id    Int      @id
+  big   BigInt   @default(1.5)
+  bigs  BigInt[] @default([1, 2.5])
+  int   Int      @default(1.5)
+  small Int      @default(2.5) @db.SmallInt
+  ints  Int[]    @default([1, 2.5])
+}

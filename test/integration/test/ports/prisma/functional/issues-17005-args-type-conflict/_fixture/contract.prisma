@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/17005-args-type-conflict
 // (postgres matrix entry).
@@ -12,11 +14,13 @@
 model Post {
   id    String      @id @default(cuid(2))
   media PostMedia[]
+  @@map("post")
 }
 
 model Media {
   id    String      @id @default(cuid(2))
   posts PostMedia[]
+  @@map("media")
 }
 
 model PostMedia {
@@ -27,4 +31,5 @@ model PostMedia {
   mediaId String
 
   @@unique([postId, mediaId])
+  @@map("postMedia")
 }

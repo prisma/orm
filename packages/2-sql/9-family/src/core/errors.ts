@@ -2,13 +2,15 @@ import type { StructuredError, StructuredErrorOptions } from '@internal/utils/st
 import { structuredError } from '@internal/utils/structured-error';
 
 type SqlFamilyErrorCode =
+  | 'CONTRACT.PRINT_UNSUPPORTED'
   | 'CONTRACT.FOREIGN_KEY_INVALID'
   | 'CONTRACT.INFER_UNSUPPORTED'
   | 'CONTRACT.MARKER_ROW_CORRUPT'
   | 'CONTRACT.PACK_CONTRIBUTION_INVALID'
   | 'CONTRACT.TABLE_AMBIGUOUS'
   | 'CONTRACT.TYPE_UNKNOWN'
-  | 'MIGRATION.MARKER_CAS_FAILURE';
+  | 'MIGRATION.MARKER_CAS_FAILURE'
+  | 'MIGRATION.TABLE_RENAME_UNMATCHED';
 
 export function sqlFamilyError(
   code: SqlFamilyErrorCode,

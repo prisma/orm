@@ -1,3 +1,4 @@
+import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 
 /**
@@ -24,6 +25,8 @@ export interface SchemaDiffIssue<TNode extends DiffableNode = DiffableNode> {
    * (the dependency is satisfied by reality).
    */
   readonly dependsOn?: readonly (readonly string[])[];
+  /** Why the actual node is not equal to the expected one, as text for people, when the expected node can say. Not an outcome: read that with `issueOutcome`. */
+  readonly explanation?: string;
 }
 
 /**
@@ -84,14 +87,17 @@ export interface DiffableNode {
    */
   readonly dependsOn?: readonly SchemaNodeRef[];
   isEqualTo(other: DiffableNode): boolean;
+  /**
+   * Why the actual state does not satisfy this expected node, when the difference has a cause beyond
+   * the two values, such as an expected value the node's type refuses. Called after `isEqualTo`
+   * returned false, and with `undefined` when the actual side has no such node.
+   */
+  explainMismatch?(actual: DiffableNode | undefined): string | undefined;
   children(): readonly DiffableNode[];
 }
 
-/** Delimiter joining `nodeKind` and `id` into one sibling-map key. Every `nodeKind` is a code-defined literal (kebab-case-style), so a null character can never appear in one. */
-const SIBLING_KEY_DELIMITER = '\u0000';
-
 function siblingKey(node: DiffableNode): string {
-  return `${node.nodeKind}${SIBLING_KEY_DELIMITER}${node.id}`;
+  return JSON.stringify([node.nodeKind, node.id]);
 }
 
 function insertNode(map: Map<string, DiffableNode>, node: DiffableNode): void {
@@ -110,6 +116,7 @@ function emitMissingSubtree(node: DiffableNode, parentPath: readonly string[]): 
     {
       path,
       expected: node,
+      ...ifDefined('explanation', node.explainMismatch?.(undefined)),
     },
     ...node.children().flatMap((c) => emitMissingSubtree(c, path)),
   ];
@@ -143,11 +150,11 @@ export function diffSchemas(
 }
 
 function schemaNodeRefKey(ref: SchemaNodeRef): string {
-  return ref.map((step) => step.id).join(SIBLING_KEY_DELIMITER);
+  return JSON.stringify(ref.map((step) => step.id));
 }
 
 function issuePathKey(path: readonly string[]): string {
-  return path.join(SIBLING_KEY_DELIMITER);
+  return JSON.stringify(path);
 }
 
 function terminalNodeKind(issue: SchemaDiffIssue): string | undefined {
@@ -207,6 +214,7 @@ function diffPair(
       path,
       expected,
       actual,
+      ...ifDefined('explanation', expected.explainMismatch?.(actual)),
     });
   }
   issues.push(...diffChildren(expected.children(), actual.children(), path));

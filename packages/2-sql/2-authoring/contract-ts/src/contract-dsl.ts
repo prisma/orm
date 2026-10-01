@@ -1,15 +1,21 @@
 import type {
   ColumnDefault,
-  ColumnDefaultLiteralInputValue,
   ControlPolicy,
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
 import { isColumnDefault } from '@internal/contract/types';
-import type { ForeignKeyDefaultsState } from '@internal/contract-authoring';
+import type {
+  CodecInput,
+  CodecTypeMap,
+  ForeignKeyDefaultsState,
+} from '@internal/contract-authoring';
 import type { AuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import { instantiateAuthoringFieldPreset } from '@internal/framework-components/authoring';
-import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import type {
+  CodecLookupWithDescriptors,
+  ColumnTypeDescriptor,
+} from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -23,6 +29,7 @@ import type {
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { NamedConstraintSpec } from './authoring-type-utils';
+import type { AuthoredColumnDefault } from './contract-definition';
 import { contractError } from './contract-errors';
 import type { EnumTypeHandle } from './enum-type';
 import { isEnumTypeHandle } from './enum-type';
@@ -58,7 +65,7 @@ export type ScalarFieldState<
   readonly typeRef?: TypeRef | undefined;
   readonly nullable: Nullable;
   readonly columnName?: ColumnName | undefined;
-  readonly default?: ColumnDefault | undefined;
+  readonly default?: AuthoredColumnDefault | undefined;
   readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
   readonly many?: Many extends true ? true : undefined;
   readonly noCheck?: readonly CheckKind[] | undefined;
@@ -73,7 +80,7 @@ type AnyScalarFieldState = {
   readonly typeRef?: NamedStorageTypeRef | undefined;
   readonly nullable: boolean;
   readonly columnName?: string | undefined;
-  readonly default?: ColumnDefault | undefined;
+  readonly default?: AuthoredColumnDefault | undefined;
   readonly executionDefaults?: ExecutionMutationDefaultPhases | undefined;
   readonly many?: boolean | undefined;
   readonly noCheck?: readonly CheckKind[] | undefined;
@@ -158,7 +165,45 @@ export type GeneratedFieldSpec = {
   readonly generated: ExecutionMutationDefaultValue;
 };
 
-function toColumnDefault(value: ColumnDefaultLiteralInputValue | ColumnDefault): ColumnDefault {
+export type CarriesCodecInput<Input> = {
+  /** Exists only in types: carries the input type of the column's codec, which `.default()` takes. */
+  __codecInput?(input: Input): void;
+};
+
+export type WithCodecInput<Descriptor, Input> = Descriptor & CarriesCodecInput<Input>;
+
+type DefaultInputOf<State> = State extends { readonly descriptor?: infer Descriptor }
+  ? NonNullable<Descriptor> extends CarriesCodecInput<infer Input>
+    ? Input
+    : unknown
+  : unknown;
+
+type IsList<State> = State extends { readonly many?: infer Many }
+  ? true extends Many
+    ? true
+    : false
+  : false;
+
+type DefaultLiteralOf<State> =
+  unknown extends DefaultInputOf<State>
+    ? unknown
+    : IsList<State> extends true
+      ? readonly DefaultInputOf<State>[]
+      : DefaultInputOf<State>;
+
+type EnumHandleOf<State> = State extends { readonly typeRef?: infer TypeRef }
+  ? string extends TypeRef
+    ? never
+    : Extract<TypeRef, EnumTypeHandle>
+  : never;
+
+type DefaultArgumentOf<State> = [EnumHandleOf<State>] extends [never]
+  ? DefaultLiteralOf<State> | ColumnDefault
+  : IsList<State> extends true
+    ? readonly EnumHandleOf<State>['values'][number][]
+    : EnumHandleOf<State>['values'][number];
+
+function toColumnDefault(value: unknown): AuthoredColumnDefault {
   if (isColumnDefault(value)) {
     return value;
   }
@@ -310,13 +355,20 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
     );
   }
 
-  default(value: ColumnDefaultLiteralInputValue | ColumnDefault): ScalarFieldBuilder<State> {
+  default<Self extends { readonly __state: AnyScalarFieldState }>(
+    this: Self,
+    value: DefaultArgumentOf<Self['__state']>,
+  ): ScalarFieldBuilder<State>;
+  default(value: unknown): ScalarFieldBuilder<State> {
     return new ScalarFieldBuilder({
       ...this.state,
       default: toColumnDefault(value),
     }) as ScalarFieldBuilder<State>;
   }
 
+  /**
+   * @deprecated Write `.default(now())` or `.default(autoincrement())`, or `` .default(sql`...`) `` for any other SQL. Removed in 8.0.0.
+   */
   defaultSql(expression: string): ScalarFieldBuilder<State> {
     return new ScalarFieldBuilder({
       ...this.state,
@@ -481,7 +533,11 @@ export class EnumScalarFieldBuilder<
     this.#handle = handle;
   }
 
-  override default(value: Handle['values'][number]): EnumScalarFieldBuilder<Handle, State> {
+  override default<Self extends { readonly __state: AnyScalarFieldState }>(
+    this: Self,
+    value: DefaultArgumentOf<Self['__state']>,
+  ): EnumScalarFieldBuilder<Handle, State>;
+  override default(value: unknown): EnumScalarFieldBuilder<Handle, State> {
     return blindCast<
       EnumScalarFieldBuilder<Handle, State>,
       'object spread does not narrow the generic State conditional; runtime shape is correct'
@@ -502,15 +558,44 @@ export class EnumScalarFieldBuilder<
   }
 }
 
-function columnField<Descriptor extends ColumnTypeDescriptor>(
+type CodecTypesOfNoPacks = Record<never, never>;
+
+export type ColumnFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfNoPacks> = <
+  Descriptor extends ColumnTypeDescriptor,
+>(
   descriptor: Descriptor,
-): ScalarFieldBuilder<ScalarFieldState<Descriptor, undefined, false, undefined>> {
-  return new ScalarFieldBuilder({
+) => ScalarFieldBuilder<
+  ScalarFieldState<
+    WithCodecInput<Descriptor, CodecInput<CodecTypes, Descriptor>>,
+    undefined,
+    false,
+    undefined
+  >
+>;
+
+export type NamedTypeFieldHelper<CodecTypes extends CodecTypeMap = CodecTypesOfNoPacks> = {
+  <TypeRef extends string>(
+    typeRef: TypeRef,
+  ): ScalarFieldBuilder<ScalarFieldState<ColumnTypeDescriptor, TypeRef, false, undefined>>;
+  <TypeRef extends StorageTypeInstance>(
+    typeRef: TypeRef,
+  ): ScalarFieldBuilder<
+    ScalarFieldState<
+      WithCodecInput<ColumnTypeDescriptor<TypeRef['codecId']>, CodecInput<CodecTypes, TypeRef>>,
+      TypeRef,
+      false,
+      undefined
+    >
+  >;
+  <Handle extends EnumTypeHandle>(typeRef: Handle): EnumScalarFieldBuilder<Handle>;
+};
+
+const columnField: ColumnFieldHelper = (descriptor) =>
+  new ScalarFieldBuilder({
     kind: 'scalar',
     descriptor,
     nullable: false,
   });
-}
 
 function generatedField<Descriptor extends ColumnTypeDescriptor>(
   spec: GeneratedFieldSpec & { readonly type: Descriptor },
@@ -526,18 +611,7 @@ function generatedField<Descriptor extends ColumnTypeDescriptor>(
   });
 }
 
-function namedTypeField<TypeRef extends string>(
-  typeRef: TypeRef,
-): ScalarFieldBuilder<ScalarFieldState<ColumnTypeDescriptor, TypeRef, false, undefined>>;
-function namedTypeField<TypeRef extends StorageTypeInstance>(
-  typeRef: TypeRef,
-): ScalarFieldBuilder<
-  ScalarFieldState<ColumnTypeDescriptor<TypeRef['codecId']>, TypeRef, false, undefined>
->;
-function namedTypeField<Handle extends EnumTypeHandle>(
-  typeRef: Handle,
-): EnumScalarFieldBuilder<Handle>;
-function namedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder {
+function untypedNamedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder {
   if (isEnumTypeHandle(typeRef)) {
     return new EnumScalarFieldBuilder(
       blindCast<
@@ -557,6 +631,11 @@ function namedTypeField(typeRef: NamedStorageTypeRef): ScalarFieldBuilder {
     nullable: false,
   });
 }
+
+const namedTypeField = blindCast<
+  NamedTypeFieldHelper,
+  'the overloads narrow the returned state by the kind of type reference; the implementation returns the builder for that kind'
+>(untypedNamedTypeField);
 
 export function buildFieldPreset(
   descriptor: AuthoringFieldPresetDescriptor,
@@ -838,7 +917,7 @@ type IndexInput<
 type ExpressionIndexInput<
   Name extends string | undefined,
   IndexTypes extends IndexTypeMap,
-> = IndexInput<Name, IndexTypes> & { readonly expression: string };
+> = IndexInput<Name, IndexTypes> & { readonly expression: IndexExpressionInput };
 
 type ForeignKeyOptions<Name extends string | undefined = string | undefined> =
   ConstraintOptions<Name> & {
@@ -861,11 +940,38 @@ export type IdConstraint<
   readonly name?: Name;
 };
 
-export type UniqueConstraint<FieldNames extends readonly string[] = readonly string[]> = {
+export type UniqueConstraint<
+  FieldNames extends readonly string[] = readonly string[],
+  Name extends string | undefined = string | undefined,
+> = {
   readonly kind: 'unique';
   readonly fields: FieldNames;
-  readonly name?: string;
+  readonly name?: Name;
 };
+
+/**
+ * An index expression rendered at lowering, once the storage column names are
+ * known. `fields` resolve exactly as the field-tuple form's do — a `.column()`
+ * override first, then the contract's column naming convention — and `render`
+ * receives the resolved names in the same order. Authoring code cannot know
+ * either, so an expression over a column has to be written this way rather
+ * than as a string, or it silently stops matching the column it names.
+ */
+/** A field the lowering resolved, as the renderer sees it. */
+export type DeferredIndexColumn = {
+  /** The storage column name, after `.column()` and the naming convention. */
+  readonly name: string;
+  /** The codec the column stores its values through. */
+  readonly codecId: string;
+};
+
+export type DeferredIndexExpression = {
+  readonly fields: readonly ColumnRef[];
+  readonly render: (columns: readonly DeferredIndexColumn[]) => string;
+};
+
+/** Opaque SQL, either written out or rendered at lowering. */
+export type IndexExpressionInput = string | DeferredIndexExpression;
 
 /** An authored index constraint's element structure — field tuple xor expression. */
 export type IndexConstraintElements<FieldNames extends readonly string[] = readonly string[]> =
@@ -877,7 +983,7 @@ export type IndexConstraintElements<FieldNames extends readonly string[] = reado
   | {
       readonly fields?: never;
       /** Opaque SQL: the entire CREATE INDEX element list — never parsed. */
-      readonly expression: string;
+      readonly expression: IndexExpressionInput;
     };
 
 /** Options only exist as options of a type, so the pair is one union. */
@@ -1025,11 +1131,14 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function id<FieldName extends string, Name extends string | undefined = undefined>(
+  function id<FieldName extends string, const Name extends string | undefined = undefined>(
     field: ColumnRef<FieldName>,
     options?: NamedConstraintSpec<Name>,
   ): IdConstraint<readonly [FieldName], Name>;
-  function id<FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  function id<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: NamedConstraintSpec<Name>,
   ): IdConstraint<FieldNames, Name>;
@@ -1044,14 +1153,17 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function unique<FieldName extends string>(
+  function unique<FieldName extends string, const Name extends string | undefined = undefined>(
     field: ColumnRef<FieldName>,
-    options?: ConstraintOptions,
-  ): UniqueConstraint<readonly [FieldName]>;
-  function unique<FieldNames extends readonly string[]>(
+    options?: ConstraintOptions<Name>,
+  ): UniqueConstraint<readonly [FieldName], Name>;
+  function unique<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
-    options?: ConstraintOptions,
-  ): UniqueConstraint<FieldNames>;
+    options?: ConstraintOptions<Name>,
+  ): UniqueConstraint<FieldNames, Name>;
   function unique(
     fieldOrFields: ColumnRef | readonly ColumnRef[],
     options?: ConstraintOptions,
@@ -1063,11 +1175,14 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function index<FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  function index<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: IndexInput<Name, IndexTypes>,
   ): IndexConstraint<FieldNames, Name>;
-  function index<Name extends string | undefined = undefined>(
+  function index<const Name extends string | undefined = undefined>(
     options: ExpressionIndexInput<Name, IndexTypes>,
   ): IndexConstraint<never, Name>;
   function index(
@@ -1075,7 +1190,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
       | ColumnRef
       | readonly ColumnRef[]
       | {
-          readonly expression: string;
+          readonly expression: IndexExpressionInput;
           readonly name?: string;
           readonly map?: string;
           readonly where?: string;
@@ -1122,7 +1237,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     SourceFieldName extends string,
     TargetModelName extends string,
     TargetFieldName extends string,
-    Name extends string | undefined = undefined,
+    const Name extends string | undefined = undefined,
   >(
     field: ColumnRef<SourceFieldName>,
     target: TargetFieldRef<TargetModelName, TargetFieldName>,
@@ -1137,7 +1252,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     SourceFieldNames extends readonly string[],
     TargetModelName extends string,
     TargetFieldNames extends readonly string[],
-    Name extends string | undefined = undefined,
+    const Name extends string | undefined = undefined,
   >(
     fields: { readonly [K in keyof SourceFieldNames]: ColumnRef<SourceFieldNames[K] & string> },
     target: {
@@ -1230,11 +1345,11 @@ type AttributeContext<Fields extends Record<string, ScalarFieldBuilder>> = {
 };
 
 type PackAwareIndex<IndexTypes extends IndexTypeMap> = {
-  <FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  <FieldNames extends readonly string[], const Name extends string | undefined = undefined>(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: IndexInput<Name, IndexTypes>,
   ): IndexConstraint<FieldNames, Name>;
-  <Name extends string | undefined = undefined>(
+  <const Name extends string | undefined = undefined>(
     options: ExpressionIndexInput<Name, IndexTypes>,
   ): IndexConstraint<never, Name>;
 };
@@ -1381,52 +1496,115 @@ type ModelIdLiteralName<
   ? InlineIdLiteralName<Fields>
   : AttributeIdLiteralName<AttributesSpec>;
 
-type SqlIndexes<SqlSpec extends SqlStageSpec> = SqlSpec extends {
+type AttributeUniques<AttributesSpec extends ModelAttributesSpec | undefined> =
+  AttributesSpec extends {
+    readonly uniques?: infer Uniques extends readonly unknown[];
+  }
+    ? Uniques
+    : readonly [];
+
+type SqlIndexes<SqlSpec extends SqlStageSpec | undefined> = SqlSpec extends {
   readonly indexes?: infer Indexes extends readonly unknown[];
 }
   ? Indexes
   : readonly [];
 
-type SqlForeignKeys<SqlSpec extends SqlStageSpec> = SqlSpec extends {
+type SqlForeignKeys<SqlSpec extends SqlStageSpec | undefined> = SqlSpec extends {
   readonly foreignKeys?: infer ForeignKeys extends readonly unknown[];
 }
   ? ForeignKeys
   : readonly [];
 
-type SqlNamedObjects<SqlSpec extends SqlStageSpec> = [
-  ...SqlIndexes<SqlSpec>,
-  ...SqlForeignKeys<SqlSpec>,
-];
+type ModelNamedObjects<
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [...AttributeUniques<AttributesSpec>, ...SqlIndexes<SqlSpec>, ...SqlForeignKeys<SqlSpec>];
+
+type InlineUniqueLiteralName<Field> =
+  FieldStateOf<Field> extends {
+    readonly unique: { readonly name?: infer Name };
+  }
+    ? StaticLiteralName<Name>
+    : never;
+
+type RelationForeignKeyLiteralName<Relation> =
+  RelationStateOf<Relation> extends {
+    readonly sql?: infer Spec;
+  }
+    ? Spec extends { readonly fk?: { readonly name?: infer Name } }
+      ? StaticLiteralName<Name>
+      : never
+    : never;
+
+type ModelLiteralNamesBySource<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = {
+  readonly [FieldName in keyof Fields & string as `field:${FieldName}`]: InlineUniqueLiteralName<
+    Fields[FieldName]
+  >;
+} & {
+  readonly [RelationName in keyof Relations &
+    string as `relation:${RelationName}`]: RelationForeignKeyLiteralName<Relations[RelationName]>;
+} & {
+  readonly id: ModelIdLiteralName<Fields, AttributesSpec>;
+  readonly stages: NamedConstraintLiteralName<ModelNamedObjects<AttributesSpec, SqlSpec>[number]>;
+};
+
+type LiteralNamesInMoreThanOneSource<NamesBySource> = {
+  readonly [Source in keyof NamesBySource]: NamesBySource[Source] &
+    NamesBySource[Exclude<keyof NamesBySource, Source>];
+}[keyof NamesBySource];
+
+type HasDuplicateModelNames<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [
+  | DuplicateLiteralNames<ModelNamedObjects<AttributesSpec, SqlSpec>>
+  | LiteralNamesInMoreThanOneSource<
+      ModelLiteralNamesBySource<Fields, Relations, AttributesSpec, SqlSpec>
+    >,
+] extends [never]
+  ? false
+  : true;
 
 type ValidateSqlStageSpec<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   AttributesSpec extends ModelAttributesSpec | undefined,
   SqlSpec extends SqlStageSpec,
-> = [DuplicateLiteralNames<SqlNamedObjects<SqlSpec>>] extends [never]
-  ? [
-      Extract<
-        ModelIdLiteralName<Fields, AttributesSpec>,
-        NamedConstraintLiteralName<SqlNamedObjects<SqlSpec>[number]>
-      >,
-    ] extends [never]
-    ? SqlSpec
-    : never
-  : never;
+> =
+  HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true ? never : SqlSpec;
 
 type ValidateAttributesStageSpec<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   SqlSpec extends SqlStageSpec | undefined,
   AttributesSpec extends ModelAttributesSpec,
-> = SqlSpec extends SqlStageSpec
-  ? [
-      Extract<
-        ModelIdLiteralName<Fields, AttributesSpec>,
-        NamedConstraintLiteralName<SqlNamedObjects<SqlSpec>[number]>
-      >,
-    ] extends [never]
-    ? AttributesSpec
-    : never
-  : AttributesSpec;
+> =
+  HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true
+    ? never
+    : AttributesSpec;
+
+type DuplicateModelNamesError =
+  'Error: two ids, uniques, indexes or foreign keys on this model have the same name';
+
+type ModelDuplicateNames<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [AttributesSpec] extends [never]
+  ? DuplicateModelNamesError
+  : [SqlSpec] extends [never]
+    ? DuplicateModelNamesError
+    : HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true
+      ? DuplicateModelNamesError
+      : undefined;
 
 function findDuplicateRelationName(
   existingRelations: Record<string, AnyRelationBuilder>,
@@ -1453,6 +1631,12 @@ export class ContractModelBuilder<
   declare readonly __sql: SqlSpec;
   declare readonly __indexTypes: IndexTypes;
   declare readonly __spaceId: TSpaceId;
+  declare readonly __duplicateNames: ModelDuplicateNames<
+    Fields,
+    Relations,
+    AttributesSpec,
+    SqlSpec
+  >;
   readonly refs: ModelName extends string ? ModelTokenRefs<ModelName, Fields, TSpaceId> : never;
 
   constructor(
@@ -1549,31 +1733,35 @@ export class ContractModelBuilder<
   }
 
   attributes<const NextAttributesSpec extends ModelAttributesSpec>(
-    specOrFactory: StageInput<
-      AttributeContext<Fields>,
-      ValidateAttributesStageSpec<Fields, SqlSpec, NextAttributesSpec>
-    >,
-  ): ContractModelBuilder<
-    ModelName,
-    Fields,
-    Relations,
-    NextAttributesSpec,
-    SqlSpec,
-    IndexTypes,
-    TSpaceId
-  > {
-    return new ContractModelBuilder(
-      this.stageOne,
-      specOrFactory,
-      this.sqlFactory,
-      this.spaceId,
-      this.tableName,
+    specOrFactory: StageInput<AttributeContext<Fields>, NextAttributesSpec>,
+  ): [ValidateAttributesStageSpec<Fields, Relations, SqlSpec, NextAttributesSpec>] extends [never]
+    ? ContractModelBuilder<ModelName, Fields, Relations, never, SqlSpec, IndexTypes, TSpaceId>
+    : ContractModelBuilder<
+        ModelName,
+        Fields,
+        Relations,
+        NextAttributesSpec,
+        SqlSpec,
+        IndexTypes,
+        TSpaceId
+      > {
+    return blindCast<
+      never,
+      'conditional return type; runtime value is always a valid ContractModelBuilder'
+    >(
+      new ContractModelBuilder(
+        this.stageOne,
+        specOrFactory,
+        this.sqlFactory,
+        this.spaceId,
+        this.tableName,
+      ),
     );
   }
 
   sql<const NextSqlSpec extends SqlStageSpec>(
     specOrFactory: StageInput<SqlContext<Fields, IndexTypes>, NextSqlSpec>,
-  ): [ValidateSqlStageSpec<Fields, AttributesSpec, NextSqlSpec>] extends [never]
+  ): [ValidateSqlStageSpec<Fields, Relations, AttributesSpec, NextSqlSpec>] extends [never]
     ? ContractModelBuilder<
         ModelName,
         Fields,
@@ -1790,7 +1978,7 @@ export type ContractInput<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: Types;
   readonly models?: Models;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   /**
    * Domain enum handles authored via `enumType()`. Each handle lowers to a
    * domain `enum` entry and a storage `valueSet` entry in the target's

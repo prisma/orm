@@ -45,8 +45,6 @@ export type {
 } from '../runtime-spi';
 export type {
   ExecutionContext,
-  GeneratorStability,
-  RuntimeMutationDefaultGenerator,
   RuntimeParameterizedCodecDescriptor,
   SqlExecutionStack,
   SqlExecutionStackWithDriver,
@@ -64,9 +62,11 @@ export {
   createSqlExecutionStack,
 } from '../sql-context';
 export type {
+  CloseRefusal,
   ConnectionProvider,
   Runtime,
   RuntimeConnection,
+  RuntimeOptions,
   RuntimeQueryable,
   RuntimeTransaction,
   TransactionContext,

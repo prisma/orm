@@ -35,7 +35,7 @@ const codecTypeImports: TypesImportSpec[] = [
 ];
 const queryOperationTypeImports: TypesImportSpec[] = [
   {
-    package: '@internal/adapter-postgres/operation-types',
+    package: '@internal/target-postgres/operation-types',
     named: 'QueryOperationTypes',
     alias: 'PgQueryOps',
   },
@@ -82,21 +82,21 @@ function emit(root: ImportRoot): string {
 describe('emitted contract types under each import root', () => {
   it('names workspace packages under the internal root', () => {
     expect(importedSpecifiers(emit(internalImportRoot)).sort()).toEqual([
-      '@internal/adapter-postgres/operation-types',
       '@internal/contract/types',
       '@internal/extension-pgvector/codec-types',
       '@internal/sql-contract/types',
       '@internal/target-postgres/codec-types',
+      '@internal/target-postgres/operation-types',
     ]);
   });
 
   it('names the facade and the extension pack under the facade root', () => {
     expect(importedSpecifiers(emit(postgresFacade)).sort()).toEqual([
       '@prisma/orm-extension-pgvector/codec-types',
-      '@prisma/orm-postgres/adapter/operation-types',
       '@prisma/orm-postgres/contract/types',
       '@prisma/orm-postgres/family-contract/types',
       '@prisma/orm-postgres/target/codec-types',
+      '@prisma/orm-postgres/target/operation-types',
     ]);
   });
 
@@ -105,8 +105,8 @@ describe('emitted contract types under each import root', () => {
       '@prisma/orm-extension-pgvector/codec-types',
       '@prisma/orm-family-sql/contract/types',
       '@prisma/orm-framework/contract/types',
-      '@prisma/orm-target-postgres/adapter/operation-types',
       '@prisma/orm-target-postgres/target/codec-types',
+      '@prisma/orm-target-postgres/target/operation-types',
     ]);
   });
 

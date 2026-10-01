@@ -1,0 +1,32 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id       Int       @id
+  email    String    @unique
+  posts    Post[]
+  edited   Post[]    @relation("PostEditor")
+  profile  Profile?
+  settings Settings?
+}
+
+model Post {
+  id       Int   @id
+  authorId Int
+  author   User  @relation(fields: [authorId], references: [id])
+  editorId Int?
+  editor   User? @relation("PostEditor", fields: [editorId], references: [id], onUpdate: NoAction, map: "post_editor_fkey")
+}
+
+model Profile {
+  id     Int  @id
+  userId Int  @unique
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Settings {
+  id     Int   @id
+  userId Int?  @unique
+  user   User? @relation(fields: [userId], references: [id])
+}

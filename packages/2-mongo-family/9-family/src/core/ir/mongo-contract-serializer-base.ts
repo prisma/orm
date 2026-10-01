@@ -94,6 +94,12 @@ export abstract class MongoContractSerializerBase<TContract>
    */
   shouldPreserveEmpty = mongoContractCanonicalizationHooks.shouldPreserveEmpty;
 
+  // No hashCanonicalizationHooks: the Mongo emit pipeline hashes a projection
+  // of storage (`{ id, collections }` per namespace), not the persisted
+  // `{ id, entries: { collection } }` shape, so the published hash cannot be
+  // recomputed from a snapshot's content. Mongo snapshots therefore read
+  // without content verification until the hash covers the persisted shape.
+
   /**
    * Family-shared structural validation: parse against the Mongo
    * contract arktype schema, then run framework-shared domain + Mongo

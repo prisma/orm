@@ -23,6 +23,8 @@ import {
   errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
+import { errorFromCaught } from './caught-errors';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -83,7 +85,13 @@ export async function resolveContractRefToSnapshot(
       const contractJson = blindCast<
         Record<string, unknown>,
         'contract snapshot store entries are JSON objects written by writeContractSnapshot'
-      >(await readContractSnapshotJson(options.migrationsDir, targetHash));
+      >(
+        await readContractSnapshotJson(
+          options.migrationsDir,
+          targetHash,
+          snapshotVerifierFor(options.config),
+        ),
+      );
       return ok({
         hash: targetHash,
         contractJson,
@@ -118,12 +126,7 @@ export async function resolveContractRefToSnapshot(
           }),
         );
       }
-      return notOk(
-        errorUnexpected(error instanceof Error ? error.message : String(error), {
-          why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-          cause: error,
-        }),
-      );
+      return notOk(errorFromCaught(error, (message) => `Failed to read contract file: ${message}`));
     }
     let parsed: unknown;
     try {

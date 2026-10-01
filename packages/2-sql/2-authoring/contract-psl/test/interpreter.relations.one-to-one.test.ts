@@ -2,6 +2,7 @@ import { crossRef } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   modelsOf,
   postgresScalarTypeDescriptors,
@@ -10,6 +11,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),

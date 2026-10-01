@@ -63,7 +63,7 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { materialiseMigrationPackage } from '@internal/migration-tools/io';
 import { emitContractSpaceArtifacts } from '@internal/migration-tools/spaces';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import postgresTargetDescriptor from '@internal/target-postgres/control';
+import postgresTargetDescriptor, { parsePostgresListText } from '@internal/target-postgres/control';
 import { applicationDomainOf, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -381,15 +381,16 @@ describe('pgvector Scenario A end-to-end (PGlite, T4.3)', {
     const markers = await driver!.query<{
       space: string;
       core_hash: string;
-      invariants: readonly string[];
+      invariants: string;
     }>('select space, core_hash, invariants from prisma_contract.marker order by space');
     const markerBySpace = new Map(markers.rows.map((row) => [row.space, row]));
 
     expect(markerBySpace.has('app')).toBe(true);
     expect(markerBySpace.has(PGVECTOR_SPACE_ID)).toBe(true);
 
-    expect(markerBySpace.get(PGVECTOR_SPACE_ID)?.core_hash).toBe(PGVECTOR_STORAGE_HASH);
-    expect([...(markerBySpace.get(PGVECTOR_SPACE_ID)?.invariants ?? [])].sort()).toEqual(
+    const pgvectorMarker = markerBySpace.get(PGVECTOR_SPACE_ID);
+    expect(pgvectorMarker?.core_hash).toBe(PGVECTOR_STORAGE_HASH);
+    expect([...parsePostgresListText(pgvectorMarker?.invariants)].sort()).toEqual(
       [...pgvectorHeadRef.invariants].sort(),
     );
 

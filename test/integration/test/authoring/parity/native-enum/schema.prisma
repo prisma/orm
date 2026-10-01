@@ -9,6 +9,7 @@ namespace public {
   model Account {
     id Int @id @default(autoincrement())
     role pg.enum(Role)
+    @@map("account")
   }
 }
 
@@ -23,5 +24,6 @@ namespace auth {
   model Session {
     id Int @id @default(autoincrement())
     aal pg.enum(AalLevel)?
+    @@map("session")
   }
 }

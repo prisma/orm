@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/23201-non-ascii-comments (postgres matrix entry;
 // allProviders — this is the postgres port).
@@ -13,4 +15,5 @@
 model User {
   id    String @id @default(cuid(2))
   email String @unique // привет, 世界
+  @@map("user")
 }

@@ -10,4 +10,5 @@
 model Customer {
   userId String   @id @map("user id")
   test   Boolean?
+  @@map("customer")
 }

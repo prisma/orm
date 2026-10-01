@@ -1,7 +1,7 @@
 {
   "name": "@internal/mongo-contract-psl",
   "private": true,
-  "version": "8.0.0-rc.9",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,21 +15,20 @@
     "clean": "rm -rf dist coverage"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.9",
-    "@internal/contract": "workspace:8.0.0-rc.9",
-    "@internal/contract-authoring": "workspace:8.0.0-rc.9",
-    "@internal/errors": "workspace:8.0.0-rc.9",
-    "@internal/framework-components": "workspace:8.0.0-rc.9",
-    "@internal/mongo-contract": "workspace:8.0.0-rc.9",
-    "@internal/mongo-value": "workspace:8.0.0-rc.9",
-    "@internal/psl-parser": "workspace:8.0.0-rc.9",
-    "@internal/utils": "workspace:8.0.0-rc.9",
+    "@internal/config": "workspace:8.0.0-rc.14",
+    "@internal/contract": "workspace:8.0.0-rc.14",
+    "@internal/contract-authoring": "workspace:8.0.0-rc.14",
+    "@internal/framework-components": "workspace:8.0.0-rc.14",
+    "@internal/mongo-contract": "workspace:8.0.0-rc.14",
+    "@internal/mongo-value": "workspace:8.0.0-rc.14",
+    "@internal/psl-parser": "workspace:8.0.0-rc.14",
+    "@internal/utils": "workspace:8.0.0-rc.14",
     "mongodb": "catalog:",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.9",
-    "@repo/tsdown": "workspace:8.0.0-rc.9",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -48,9 +47,18 @@
   ],
   "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./provider": "./dist/exports/provider.mjs",
-    "./package.json": "./package.json"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./provider": {
+      "types": "./dist/exports/provider.d.mts",
+      "import": "./dist/exports/provider.mjs"
+    },
+    "./package.json": {
+      "types": "./package.json",
+      "import": "./package.json"
+    }
   },
   "engines": {
     "node": ">=24"

@@ -23,8 +23,8 @@ import {
   dropIndex,
   setValidation,
   validatedCollection,
-} from '../src/core/migration-factories';
-import { schemaCollectionToCreateCollectionOptions } from '../src/core/op-factory-call';
+} from '../src/core/migrations/migration-factories';
+import { schemaCollectionToCreateCollectionOptions } from '../src/core/migrations/op-factory-call';
 
 describe('createIndex', () => {
   const keys = [{ field: 'email', direction: 1 as const }];

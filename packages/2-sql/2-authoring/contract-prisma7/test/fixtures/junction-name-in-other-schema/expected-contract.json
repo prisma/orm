@@ -1,0 +1,323 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "one": {
+        "models": {
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "one",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "tags": {
+                "to": {
+                  "namespace": "one",
+                  "model": "Tag"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_PostToTag",
+                  "namespaceId": "one",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "Tag": {
+            "storage": {
+              "table": "Tag",
+              "namespaceId": "one",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "namespace": "one",
+                  "model": "Post"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_PostToTag",
+                  "namespaceId": "one",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "PostToTag": {
+            "storage": {
+              "table": "_PostToTag",
+              "namespaceId": "one",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "post": {
+                "to": {
+                  "namespace": "one",
+                  "model": "Post"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              },
+              "tag": {
+                "to": {
+                  "namespace": "one",
+                  "model": "Tag"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "two": {
+        "models": {
+          "PostToTag": {
+            "storage": {
+              "table": "PostToTag",
+              "namespaceId": "two",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Post": {
+      "namespace": "one",
+      "model": "Post"
+    },
+    "Tag": {
+      "namespace": "one",
+      "model": "Tag"
+    },
+    "PostToTag": {
+      "namespace": "two",
+      "model": "PostToTag"
+    },
+    "_PostToTag": {
+      "namespace": "one",
+      "model": "PostToTag"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "648e760b3a9e25a88f6323bdcf6eae63be660dffbe599f69c0b33d3aa23576e5",
+    "namespaces": {
+      "one": {
+        "id": "one",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Post": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Tag": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_PostToTag": {
+              "columns": {
+                "A": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "B": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_PostToTag_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "one",
+                    "tableName": "_PostToTag",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "one",
+                    "tableName": "Post",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                },
+                {
+                  "source": {
+                    "namespaceId": "one",
+                    "tableName": "_PostToTag",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "one",
+                    "tableName": "Tag",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"]
+              }
+            }
+          }
+        }
+      },
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {}
+        }
+      },
+      "two": {
+        "id": "two",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "PostToTag": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

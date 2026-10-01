@@ -1,0 +1,20 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id       Int    @id
+  slug     String @unique
+  code     String @unique(map: "post_code_unique")
+  title    String
+  category String @map("category_name")
+  hashed   String
+
+  @@unique([title, category])
+  @@unique([slug, title], map: "post_slug_title_unique", name: "slugTitle")
+  @@index([category])
+  @@index([title, category], map: "post_title_category")
+  @@index([hashed], type: Hash)
+  @@index([title], type: BTree)
+  @@map("posts")
+}

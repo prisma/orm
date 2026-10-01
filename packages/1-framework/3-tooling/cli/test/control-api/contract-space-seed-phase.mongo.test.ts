@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os';
 import { coreHash, profileHash } from '@internal/contract/types';
 import {
   contractSnapshotDir,
-  readContractSnapshotDts,
   readContractSnapshotJson,
 } from '@internal/migration-tools/contract-snapshot-store';
 import {
@@ -36,7 +35,7 @@ import { runContractSpaceSeedPhase } from '../../src/control-api/operations/cont
  * - A Mongo aggregate with one extension descriptor writes the head
  *   contract into the migrations-root snapshot store (`snapshots/<hex>/`)
  *   plus `refs/head.json` — no per-space `contract.json` / `contract.d.ts`.
- * - `readContractSnapshotJson`, `readContractSnapshotDts`,
+ * - `readContractSnapshotJson`, the store's `contract.d.ts`,
  *   `readContractSpaceHeadRef`, `listContractSpaceDirectories` round-trip
  *   the written values.
  * - Re-running the seed phase with no contract change produces
@@ -172,7 +171,10 @@ describe('runContractSpaceSeedPhase (Mongo-shaped contract)', () => {
     // contract.d.ts: framework-wide placeholder stub. Asserts the
     // property a future typed-`.d.ts` renderer would change
     // deliberately.
-    const dtsRaw = await readContractSnapshotDts(migrationsDir, headHash);
+    const dtsRaw = await readFile(
+      join(contractSnapshotDir(migrationsDir, headHash), 'contract.d.ts'),
+      'utf-8',
+    );
     expect(dtsRaw).toContain('export {};');
     expect(dtsRaw).toContain(EXT_SPACE);
     expect(dtsRaw).not.toContain('@ts-nocheck');

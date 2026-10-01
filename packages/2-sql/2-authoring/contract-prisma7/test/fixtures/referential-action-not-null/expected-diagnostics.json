@@ -1,0 +1,26 @@
+[
+  {
+    "code": "PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 18,
+    "message": "Relation field \"Post.deleteNull\": onDelete: SetNull sets the foreign key fields to null, but \"Post.a\" is required, so Prisma 8 cannot describe this foreign key. Make \"Post.a\" and \"Post.deleteNull\" optional, which drops NOT NULL on Prisma 7's next migration and makes them nullable in the Prisma 7 client, or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged."
+  },
+  {
+    "code": "PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 20,
+    "message": "Relation field \"Post.updateNull\": onUpdate: SetNull sets the foreign key fields to null, but \"Post.b\" is required, so Prisma 8 cannot describe this foreign key. Make \"Post.b\" and \"Post.updateNull\" optional, which drops NOT NULL on Prisma 7's next migration and makes them nullable in the Prisma 7 client, or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged."
+  },
+  {
+    "code": "PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 22,
+    "message": "Relation field \"Post.deleteDef\": onDelete: SetDefault sets the foreign key fields to their column defaults, but \"Post.c\" is required and has no column default, so Prisma 8 cannot describe this foreign key. Give \"Post.c\" a column default, such as a literal or @default(dbgenerated(\"<expression>\")): Prisma 7's next migration sets it and \"Post.c\" becomes optional when creating records with the Prisma 7 client. Or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged."
+  },
+  {
+    "code": "PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 24,
+    "message": "Relation field \"Post.updateDef\": onUpdate: SetDefault sets the foreign key fields to their column defaults, but \"Post.d\" is required and has no column default, so Prisma 8 cannot describe this foreign key. Give \"Post.d\" a column default, such as a literal or @default(dbgenerated(\"<expression>\")): Prisma 7's next migration sets it and \"Post.d\" becomes optional when creating records with the Prisma 7 client. Or choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged."
+  }
+]

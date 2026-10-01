@@ -13,6 +13,7 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
@@ -23,14 +24,15 @@ import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { ifDefined } from '@internal/utils/defined';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
-import { postgresScalarAuthoringTypes } from '../../src/core/control-mutation-defaults';
 import {
   controlAdapter,
   createDriver,
@@ -43,6 +45,8 @@ import {
   synthEdges,
   testTimeout,
 } from './fixtures/runner-fixtures';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 // ============================================================================
 // PSL sources
@@ -94,17 +98,20 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarTypeDescriptors = buildScalarTypeDescriptors();
 
-  const { document, sourceFile } = parse(psl);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  const { document, sources } = parse(
+    psl,
+    'native-enum-add-value.real-postgres.integration.test.psl',
+  );
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
 
   const result = interpretPslDocumentToSqlContract({
+    documents: [document],
+    dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: {
       kind: 'target' as const,
       familyId: 'sql' as const,
@@ -214,7 +221,9 @@ async function isRealPostgresAvailable(): Promise<boolean> {
 
 async function dropTestDatabaseViaMaintenance(): Promise<void> {
   const maintenance = await createDriver(MAINTENANCE_URL);
-  await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
+  await maintenance.query(
+    'DROP DATABASE IF EXISTS prisma_8_native_enum_add_value_realdb WITH (FORCE)',
+  );
   await maintenance.close();
 }
 
@@ -229,8 +238,10 @@ describe.runIf(await isRealPostgresAvailable())(
 
     beforeAll(async () => {
       const maintenance = await createDriver(MAINTENANCE_URL);
-      await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
-      await maintenance.query(`CREATE DATABASE ${TEST_DB}`);
+      await maintenance.query(
+        'DROP DATABASE IF EXISTS prisma_8_native_enum_add_value_realdb WITH (FORCE)',
+      );
+      await maintenance.query('CREATE DATABASE prisma_8_native_enum_add_value_realdb');
       await maintenance.close();
 
       driver = await createDriver(testDatabaseUrl());

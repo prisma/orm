@@ -1,29 +1,18 @@
 export type { AuthoringPslBlockDescriptorNamespace } from '../shared/framework-authoring';
 export type {
   ContributedPslDiagnosticCode,
-  PslBlockParam,
-  PslBlockParamList,
-  PslBlockParamOption,
-  PslBlockParamRef,
-  PslBlockParamValue,
+  ParsedPslExtensionBlock,
   PslDiagnosticCode,
   PslExtensionBlock,
   PslExtensionBlockAttribute,
   PslExtensionBlockAttributeArg,
-  PslExtensionBlockParamBare,
-  PslExtensionBlockParamList,
-  PslExtensionBlockParamOption,
-  PslExtensionBlockParamRef,
-  PslExtensionBlockParamScalarValue,
-  PslExtensionBlockParamValue,
   PslExtensionBlockParsedAttribute,
+  PslExtensionBlockPrintEntry,
   PslPosition,
   PslSpan,
 } from '../shared/psl-extension-block';
 
 import { blindCast } from '@internal/utils/casts';
-import type { CodecLookup } from '../shared/codec-types';
-import type { AuthoringPslBlockDescriptorNamespace } from '../shared/framework-authoring';
 import type {
   ContributedPslDiagnosticCode,
   PslDiagnosticCode,
@@ -196,6 +185,12 @@ export interface PslTypesBlock {
  * (or whether) to map the PSL bucket to the IR sentinel.
  */
 export const UNSPECIFIED_PSL_NAMESPACE_ID = '__unspecified__';
+
+/**
+ * The name the unbound namespace is written under in PSL: `namespace unbound { … }`. Readers map it
+ * to the IR's `__unbound__` namespace id, and writers map that id back to it.
+ */
+export const UNBOUND_PSL_NAMESPACE_NAME = 'unbound';
 
 /** A value in {@link PslNamespace.entries}: a built-in entity node or an extension-contributed {@link PslExtensionBlock}. */
 export type PslNamespaceEntry = PslModel | PslCompositeType | PslExtensionBlock;
@@ -377,40 +372,4 @@ export function namespacePslExtensionBlocks(ns: PslNamespace): readonly PslExten
     }
   }
   return result;
-}
-
-export interface ParsePslDocumentInput {
-  readonly schema: string;
-  readonly sourceId: string;
-  /**
-   * Registry of declarative block descriptors, keyed by arbitrary path
-   * segments with {@link AuthoringPslBlockDescriptor} leaves. The registry
-   * teaches the parser which top-level keywords belong to extension
-   * contributions: when the parser encounters an unknown keyword, it looks
-   * it up here and, when found, reads the block generically into a
-   * {@link PslExtensionBlock} node. Absent or undefined means no extension
-   * blocks are registered and any unknown keyword yields
-   * `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK`.
-   *
-   * Contrast with the parsed block nodes themselves, which live in
-   * {@link PslNamespace.entries} under their discriminator key (read them with
-   * {@link namespacePslExtensionBlocks}); this field holds the registry of
-   * descriptors that teach the parser how to read those blocks.
-   */
-  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
-  /**
-   * Codec lookup for validating `value`-kind extension block parameters.
-   * When provided alongside `pslBlockDescriptors`, the generic validator runs
-   * over every parsed extension block after the full AST is assembled,
-   * appending any diagnostics to the parse result. Absent or undefined means
-   * no codec validation runs; `ref` resolution still runs when namespace
-   * context is available (built from the assembled namespaces).
-   */
-  readonly codecLookup?: CodecLookup;
-}
-
-export interface ParsePslDocumentResult {
-  readonly ast: PslDocumentAst;
-  readonly diagnostics: readonly PslDiagnostic[];
-  readonly ok: boolean;
 }

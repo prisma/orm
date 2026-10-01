@@ -1,6 +1,7 @@
 import type { SqlControlAdapterDescriptor } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
-import { assembleSqliteCodecRegistry } from '../core/codec-lookup';
+import { assembleSqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { sqliteDataTypeEntries } from '@internal/target-sqlite/data-types';
 import { SqliteControlAdapter } from '../core/control-adapter';
 import {
   createSqliteDefaultFunctionRegistry,
@@ -11,7 +12,11 @@ import { sqliteAdapterDescriptorMeta } from '../core/descriptor-meta';
 
 const sqliteAdapterDescriptor: SqlControlAdapterDescriptor<'sqlite'> = {
   ...sqliteAdapterDescriptorMeta,
-  authoring: { type: sqliteScalarAuthoringTypes, valueObjectStorageType: 'Json' },
+  authoring: {
+    type: sqliteScalarAuthoringTypes,
+    dataTypes: sqliteDataTypeEntries(),
+    valueObjectStorageType: 'Json',
+  },
   controlMutationDefaults: {
     defaultFunctionRegistry: createSqliteDefaultFunctionRegistry(),
     generatorDescriptors: createSqliteMutationDefaultGeneratorDescriptors(),
@@ -24,6 +29,10 @@ const sqliteAdapterDescriptor: SqlControlAdapterDescriptor<'sqlite'> = {
 
 export default sqliteAdapterDescriptor;
 
+export {
+  createSqliteBuiltinCodecLookup,
+  createSqliteCodecRegistryWithBuiltins,
+} from '@internal/target-sqlite/codecs';
 // `parseSqliteDefault`, `normalizeSqliteNativeType`, `quoteIdentifier`,
 // and `escapeLiteral` live target-side (one-way `adapter → target` edge,
 // matching Postgres). Re-exported from the adapter so consumers — both
@@ -32,10 +41,6 @@ export default sqliteAdapterDescriptor;
 export { parseSqliteDefault } from '@internal/target-sqlite/default-normalizer';
 export { normalizeSqliteNativeType } from '@internal/target-sqlite/native-type-normalizer';
 export { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
-export {
-  createSqliteBuiltinCodecLookup,
-  createSqliteCodecRegistryWithBuiltins,
-} from '../core/codec-lookup';
 // `SqlControlAdapterDescriptor` is declared in two places in the codebase
 // (`family-sql/control-adapter` and `family-sql/migrations/types`); the
 // migrations-side declaration narrows `create()`'s return type to the base

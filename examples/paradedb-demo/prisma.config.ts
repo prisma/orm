@@ -1,9 +1,9 @@
 import 'dotenv/config';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import paradedb from '@prisma/orm-extension-paradedb/control';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './prisma/contract.ts',
     output: './src/prisma',

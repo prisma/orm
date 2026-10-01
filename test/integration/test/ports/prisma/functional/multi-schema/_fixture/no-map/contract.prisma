@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/multi-schema (postgres matrix entry, mapTable = false).
 //
@@ -29,6 +31,7 @@ namespace base {
     id       String  @id @default(cuid(2))
     email    String
     posts    transactional.Post[]
+    @@map("user")
   }
 }
 
@@ -38,5 +41,6 @@ namespace transactional {
     title    String
     authorId String
     author   base.User  @relation(fields: [authorId], references: [id])
+    @@map("post")
   }
 }

@@ -107,7 +107,6 @@ describe('cfExpr.fn — catalog function-call helper', () => {
     expect(op.method).toBe('to_regclass');
     expect(op.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'to_regclass({{self}})',
     });
     expect(op.returns).toEqual({ codecId: 'pg/text@1', nullable: true });
@@ -344,7 +343,7 @@ describe('CfExpr — additional expression helpers', () => {
       self: LiteralExpr.of('x'),
       args: undefined,
       returns: { nullable: true },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'to_regclass({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'to_regclass({{self}})' },
     });
     const expr = new CfExpr(inner).isNull();
     expect(expr.ast).toBeInstanceOf(NullCheckExpr);

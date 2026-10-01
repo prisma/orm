@@ -33,11 +33,11 @@ interface TokenDetails {
 }
 
 function parseSemanticTokenSource(source: string): ParsedSemanticTokenSource {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: {},
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return { document, sourceFile, symbolTable, scalarTypes };
 }
@@ -294,6 +294,38 @@ describe('semantic token substrate', () => {
     ).toBeUndefined();
   });
 
+  it('classifies each segment of a dotted index path as a property', () => {
+    const source = parseSemanticTokenSource(
+      [
+        'model Post {',
+        '  title   String',
+        '  address Address',
+        '  @@index([title, address.city])',
+        '  @@index([address.city(sort: Asc)])',
+        '  @@unique([address.geo.lat(sort: Desc)])',
+        '}',
+      ].join('\n'),
+    );
+
+    const details = collectDetails(source);
+
+    expect(
+      details
+        .filter(
+          (token) => token.line >= 3 && ['address', 'city', 'geo', 'lat'].includes(token.text),
+        )
+        .map((token) => `${token.line}:${token.text}:${token.tokenType}`),
+    ).toEqual([
+      '3:address:property',
+      '3:city:property',
+      '4:address:property',
+      '4:city:property',
+      '5:address:property',
+      '5:geo:property',
+      '5:lat:property',
+    ]);
+  });
+
   it('preserves source order when block attributes precede fields', () => {
     const source = parseSemanticTokenSource(
       ['model User {', '  @@map("users")', '  id Int @id', '}'].join('\n'),
@@ -340,7 +372,7 @@ describe('semantic token substrate', () => {
   });
 
   it('encodes ordered LSP five-integer token data', () => {
-    const sourceFile = new SourceFile('aaa bbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aaa bbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(0, 3, 'keyword'),
       pendingToken(4, 7, 'class', semanticTokenModifierBits.declaration),
@@ -353,7 +385,7 @@ describe('semantic token substrate', () => {
   });
 
   it('splits multiline text token events before encoding', () => {
-    const sourceFile = new SourceFile('aa\nbbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aa\nbbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(0, sourceFile.length, 'string', 0, true),
     ];
@@ -364,7 +396,7 @@ describe('semantic token substrate', () => {
   });
 
   it('filters split multiline text token segments to the requested range', () => {
-    const sourceFile = new SourceFile('aa\nbbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aa\nbbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(0, sourceFile.length, 'string', 0, true),
     ];
@@ -378,14 +410,14 @@ describe('semantic token substrate', () => {
   });
 
   it('does not split multiline structural token events before encoding', () => {
-    const sourceFile = new SourceFile('aa\nbbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aa\nbbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [pendingToken(0, sourceFile.length, 'class')];
 
     expect(encodeWithBuilder(sourceFile, tokens)).toEqual({ data: [0, 0, 9, 2, 0] });
   });
 
   it('combines modifier bitsets deterministically', () => {
-    const sourceFile = new SourceFile('Scalar');
+    const sourceFile = new SourceFile('language-server-test.psl', 'Scalar');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(
         0,

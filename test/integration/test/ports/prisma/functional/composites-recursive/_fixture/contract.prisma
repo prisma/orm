@@ -14,11 +14,12 @@
 // MongoDB PSL `type` blocks become value objects in the contract.
 
 type ListNode {
-  value Int
+  value Int32
   next  ListNode?
 }
 
 model LinkedList {
   id   ObjectId @id @map("_id")
   head ListNode
+  @@map("linkedList")
 }

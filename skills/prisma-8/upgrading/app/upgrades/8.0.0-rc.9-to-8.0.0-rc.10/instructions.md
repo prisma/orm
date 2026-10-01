@@ -43,6 +43,15 @@ changes:
       glob: "**/contract.json"
       matches:
         - '"cardinality":\s*"(?:N:1|1:1)",\s*"on":'
+  - id: reemit-supabase-extension-version
+    summary: |
+      Contracts that use the Supabase extension carry its package version in their extension
+      metadata. Re-emit them after upgrading so `contract.json` and `contract.d.ts` say
+      `8.0.0-rc.10` instead of `8.0.0-rc.9`.
+    detection:
+      glob: "**/contract.json"
+      contains:
+        - '"id": "supabase"'
   - id: contract-dts-exports-models
     summary: |
       `contract.d.ts` now exports a `Models` namespace and a `models` constant that name every
@@ -69,3 +78,7 @@ For every file matched by `detection`, replace the `PRISMA_NEXT_` prefix with `P
 ## `primer-file-prisma-8-md`
 
 Rename `prisma-next.md` at the project root to `prisma-8.md`, and update any link to it in the project README or agent instructions.
+
+## `reemit-supabase-extension-version`
+
+For every `contract.json` matched by `detection`, run `prisma contract emit` once after upgrading the Supabase extension and commit the regenerated `contract.json` and `contract.d.ts`. The only expected change is the Supabase extension's `version` field moving from `8.0.0-rc.9` to `8.0.0-rc.10` in both files. Do not edit the generated files by hand.

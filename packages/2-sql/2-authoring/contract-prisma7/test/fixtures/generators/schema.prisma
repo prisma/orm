@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Generated {
+  id          Int    @id
+  uuid4       String @default(uuid())
+  uuid4Again  String @default(uuid(4))
+  uuid7       String @default(uuid(7))
+  cuid1       String @default(cuid())
+  cuid2       String @default(cuid(2))
+  ulid        String @default(ulid())
+  nanoid      String @default(nanoid())
+  nanoidSized String @default(nanoid(10))
+}

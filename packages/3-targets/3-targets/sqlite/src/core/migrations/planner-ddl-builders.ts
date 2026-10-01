@@ -13,10 +13,10 @@ import type {
   StorageTable,
   StorageTypeInstance,
 } from '@internal/sql-contract/types';
+import { SQLITE_DATETIME_CODEC_ID } from '../codec-ids';
+import { decodeSqliteDatetime, encodeSqliteDatetime } from '../codecs';
 import { sqliteError } from '../errors';
 import { escapeLiteral, quoteIdentifier } from '../sql-utils';
-
-type SqliteColumnDefault = StorageColumn['default'];
 
 const SAFE_NATIVE_TYPE_PATTERN = /^[a-zA-Z][a-zA-Z0-9_ ]*$/;
 
@@ -27,17 +27,6 @@ function assertSafeNativeType(nativeType: string): void {
       `Unsafe native type name in contract: "${nativeType}". ` +
         'Native type names must match /^[a-zA-Z][a-zA-Z0-9_ ]*$/',
       { meta: { nativeType } },
-    );
-  }
-}
-
-function assertSafeDefaultExpression(expression: string): void {
-  if (expression.includes(';') || /--|\/\*|\bSELECT\b/i.test(expression)) {
-    throw sqliteError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Unsafe default expression in contract: "${expression}". ` +
-        'Default expressions must not contain semicolons, SQL comment tokens, or subqueries.',
-      { meta: { expression } },
     );
   }
 }
@@ -57,29 +46,15 @@ export function buildColumnTypeSql(
 }
 
 /**
- * Renders the column's `DEFAULT …` clause. Returns the empty string when
- * there is no default, and also when the default is `autoincrement()` —
- * SQLite encodes that as `INTEGER PRIMARY KEY AUTOINCREMENT` inline on the
- * column definition, not as a separate DEFAULT.
+ * A datetime default is the stored value itself in SQLite, which compares text byte by byte, so it
+ * is written as the text the column's codec writes for every row, not as its canonical form.
  */
-export function buildColumnDefaultSql(columnDefault: SqliteColumnDefault | undefined): string {
-  if (!columnDefault) return '';
-
-  switch (columnDefault.kind) {
-    case 'literal':
-      return `DEFAULT ${renderDefaultLiteral(columnDefault.value)}`;
-    case 'function': {
-      if (columnDefault.expression === 'autoincrement()') return '';
-      if (columnDefault.expression === 'now()') return "DEFAULT (datetime('now'))";
-      assertSafeDefaultExpression(columnDefault.expression);
-      return `DEFAULT (${columnDefault.expression})`;
-    }
-  }
-}
-
-export function renderDefaultLiteral(value: unknown): string {
+export function renderDefaultLiteral(value: unknown, codecId?: string): string {
   if (value instanceof Date) {
-    return `'${escapeLiteral(value.toISOString())}'`;
+    return `'${escapeLiteral(encodeSqliteDatetime(value))}'`;
+  }
+  if (typeof value === 'string' && codecId === SQLITE_DATETIME_CODEC_ID) {
+    return `'${escapeLiteral(encodeSqliteDatetime(decodeSqliteDatetime(value)))}'`;
   }
   if (typeof value === 'string') {
     return `'${escapeLiteral(value)}'`;

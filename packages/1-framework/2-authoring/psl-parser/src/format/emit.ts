@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { ModelAttributeAst } from '../syntax/ast/attributes';
 import {
   CompositeTypeDeclarationAst,
@@ -102,7 +103,8 @@ class LineWriter {
   }
 }
 
-// Qualified-name separators hug; argument/object colons keep the usual value space.
+// Qualified-name separators hug. `[` hugs a type (`String[]`) but keeps the space before a list
+// value after `:`, `,` or `=`.
 function spaceBetween(
   prev: TokenKind | undefined,
   cur: TokenKind,
@@ -110,10 +112,13 @@ function spaceBetween(
 ): boolean {
   if (prev === undefined) return false;
   if (inQualifiedName) return false;
+  // Only a tagged literal puts a string directly after an identifier, and its tag and string hug.
+  if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
-    case 'LParen':
     case 'LBracket':
+      return prev === 'Colon' || prev === 'Comma' || prev === 'Equals';
+    case 'LParen':
     case 'RParen':
     case 'RBracket':
     case 'Comma':
@@ -177,9 +182,9 @@ function closeContinuation(writer: LineWriter, count: number): void {
 function emitField(
   writer: LineWriter,
   field: FieldDeclarationAst,
-  columns: AlignmentColumns | undefined,
+  alignmentColumns: AlignmentColumns | undefined,
 ): number {
-  return streamRow(writer, field.syntax, columns);
+  return streamRow(writer, field.syntax, alignmentColumns);
 }
 
 function emitNamedType(writer: LineWriter, decl: NamedTypeDeclarationAst): number {
@@ -189,7 +194,7 @@ function emitNamedType(writer: LineWriter, decl: NamedTypeDeclarationAst): numbe
 function streamRow(
   writer: LineWriter,
   row: SyntaxNode,
-  columns: AlignmentColumns | undefined,
+  alignmentColumns: AlignmentColumns | undefined,
 ): number {
   let continuation = 0;
   let sawAttribute = false;
@@ -198,10 +203,10 @@ function streamRow(
     if (child instanceof SyntaxNode) {
       let padTo: number | undefined;
       if (child.kind === 'TypeAnnotation' && continuation === 0) {
-        padTo = columns?.typeColumn;
+        padTo = alignmentColumns?.typeColumn;
       } else if (child.kind === 'FieldAttribute') {
         if (continuation > 0) writer.newline();
-        else if (!sawAttribute) padTo = columns?.attributeColumn;
+        else if (!sawAttribute) padTo = alignmentColumns?.attributeColumn;
         sawAttribute = true;
       }
       continuation += streamNode(writer, child, padTo);
@@ -259,10 +264,11 @@ function emitModel(
   model: ModelDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const columns = alignmentMap(model.syntax);
+  const alignmentColumns = alignmentMap(model.syntax);
   emitBlockBody(writer, model.syntax, trailing, (node) => {
     const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, columns));
+    if (field)
+      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -275,10 +281,11 @@ function emitCompositeType(
   composite: CompositeTypeDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const columns = alignmentMap(composite.syntax);
+  const alignmentColumns = alignmentMap(composite.syntax);
   emitBlockBody(writer, composite.syntax, trailing, (node) => {
     const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, columns));
+    if (field)
+      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -291,7 +298,10 @@ function emitGenericBlock(
   block: GenericBlockDeclarationAst,
   trailing: string | undefined,
 ): void {
+  const alignment = alignmentMap(block.syntax);
   emitBlockBody(writer, block.syntax, trailing, (node) => {
+    const field = FieldDeclarationAst.cast(node);
+    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, alignment));
     const entry = KeyValuePairAst.cast(node);
     if (entry) return leafMember(writer, 'regular', () => emitKeyValue(writer, entry));
     const attribute = ModelAttributeAst.cast(node);
@@ -374,12 +384,15 @@ function emitBlockBody(
   const children = Array.from(node.children());
   const openIndex = children.findIndex((el) => !(el instanceof SyntaxNode) && el.kind === 'LBrace');
 
-  streamHeader(writer, node);
-  const headerComment = sameLineCommentAfter(children, openIndex);
-  if (headerComment !== undefined) writer.comment(headerComment);
+  const headerComments = streamHeader(writer, node);
+  const openingComment = sameLineCommentAfter(children, openIndex);
+  if (openingComment !== undefined) headerComments.push(openingComment);
+  const [firstComment, ...otherComments] = headerComments;
+  if (firstComment !== undefined) writer.comment(firstComment);
   else writer.newline();
 
   writer.indent();
+  for (const comment of otherComments) writer.comment(comment);
   walkRegion(writer, children, 'RBrace', classify);
   writer.unindent();
 
@@ -388,7 +401,9 @@ function emitBlockBody(
   else writer.newline();
 }
 
-function streamHeader(writer: LineWriter, node: SyntaxNode): void {
+/** Writes the block header through `{` and returns the source comments found before the `{`. */
+function streamHeader(writer: LineWriter, node: SyntaxNode): string[] {
+  const comments: string[] = [];
   let done = false;
   const walk = (parent: SyntaxNode): void => {
     for (const child of parent.children()) {
@@ -397,7 +412,11 @@ function streamHeader(writer: LineWriter, node: SyntaxNode): void {
         walk(child);
         continue;
       }
-      if (child.kind === 'Whitespace' || child.kind === 'Newline' || child.kind === 'Comment') {
+      if (child.kind === 'Comment') {
+        comments.push(child.text);
+        continue;
+      }
+      if (child.kind === 'Whitespace' || child.kind === 'Newline') {
         continue;
       }
       const space = spaceBetween(writer.prevKind(), child.kind, false);
@@ -409,6 +428,7 @@ function streamHeader(writer: LineWriter, node: SyntaxNode): void {
     }
   };
   walk(node);
+  return comments;
 }
 
 function walkRegion(
@@ -430,7 +450,11 @@ function walkRegion(
     if (element instanceof SyntaxNode) {
       if (!sawOpenBrace) continue;
       const member = classify(element);
-      if (member === undefined) continue;
+      if (member === undefined) {
+        throw new InternalError(
+          `Formatter has no rule for a ${element.kind} node at offset ${element.offset}; formatting would drop its text`,
+        );
+      }
       if (!ledByComment) {
         if (newlines >= 2 && sawContent && !writer.lastIsBlank()) writer.blank();
         else if (separationBlankWanted(writer, member.category, sawContent, lastWasRegular)) {

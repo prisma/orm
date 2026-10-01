@@ -1,0 +1,20 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id   Int   @id
+  tags Tag[]
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[]
+}
+
+model Tagging {
+  id    Int    @id
+  extra String
+
+  @@map("_PostToTag")
+}

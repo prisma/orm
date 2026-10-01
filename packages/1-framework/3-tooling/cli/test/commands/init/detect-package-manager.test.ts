@@ -6,6 +6,7 @@ import {
   detectPackageManager,
   formatAddArgs,
   formatAddDevArgs,
+  formatRemoveCommand,
   formatRunCommand,
   formatRunScriptCommand,
   hasProjectManifest,
@@ -179,6 +180,18 @@ describe('formatAddDevArgs', () => {
 
   it('uses -D for other managers', () => {
     expect(formatAddDevArgs('npm', ['prisma'])).toEqual(['add', '-D', 'prisma']);
+  });
+});
+
+describe('formatRemoveCommand', () => {
+  it.each([
+    ['pnpm', 'pnpm remove @prisma/orm-postgres dotenv'],
+    ['npm', 'npm uninstall @prisma/orm-postgres dotenv'],
+    ['yarn', 'yarn remove @prisma/orm-postgres dotenv'],
+    ['bun', 'bun remove @prisma/orm-postgres dotenv'],
+    ['deno', 'deno remove @prisma/orm-postgres dotenv'],
+  ] as const)('formats the %s command', (pm, command) => {
+    expect(formatRemoveCommand(pm, ['@prisma/orm-postgres', 'dotenv'])).toBe(command);
   });
 });
 

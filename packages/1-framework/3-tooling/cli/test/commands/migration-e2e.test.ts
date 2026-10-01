@@ -11,7 +11,7 @@ import {
   writeMigrationPackage,
 } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { findLeaf, reconstructGraph } from '@internal/migration-tools/migration-graph';
+import { isGraphNode, reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
@@ -140,8 +140,8 @@ describe('migration plan → emit end-to-end', () => {
         expect(packages).toHaveLength(2);
 
         const graph = reconstructGraph(packages);
-        const leaf = findLeaf(graph);
-        expect(leaf).toBe('hash-b');
+        expect(isGraphNode('hash-b', graph)).toBe(true);
+        expect(graph.forwardChain.get('hash-b')).toBeUndefined();
 
         // Verify chain integrity
         const pkg1 = packages.find((p) => p.metadata.to === 'hash-a')!;
@@ -171,14 +171,12 @@ describe('migration plan → emit end-to-end', () => {
         [],
       );
 
-      // Read migrations and check leaf
       const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
       const graph = reconstructGraph(packages);
-      const leaf = findLeaf(graph);
 
       // Same hash → no-op
       const toStorageHash = 'target-hash';
-      expect(leaf).toBe(toStorageHash);
+      expect(isGraphNode(toStorageHash, graph)).toBe(true);
 
       // No new migration should be written — the CLI command checks this condition
       // and returns early with noOp: true

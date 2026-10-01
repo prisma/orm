@@ -2,13 +2,15 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { assert, describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -16,6 +18,8 @@ import {
 } from '../../src/core/authoring';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { printPslFromFlat } from './fixtures';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
   Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
@@ -38,7 +42,14 @@ const authoringTypes = {
     kind: 'typeConstructor',
     args: [
       { kind: 'number', name: 'precision', integer: true, minimum: 1, optional: true },
-      { kind: 'number', name: 'scale', integer: true, minimum: 0, optional: true },
+      {
+        kind: 'number',
+        name: 'scale',
+        integer: true,
+        minimum: -1000,
+        maximum: 1000,
+        optional: true,
+      },
     ],
     output: {
       codecId: 'pg/numeric@1',
@@ -74,7 +85,7 @@ const target = {
   authoring: { type: authoringTypes },
 };
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
@@ -82,16 +93,16 @@ const codecLookup: CodecLookup = {
 };
 
 function parseAndEmit(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  const { document, sources } = parse(source, 'infer-parse-emit.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return interpretPslDocumentToSqlContract({
+    documents: [document],
+    dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),

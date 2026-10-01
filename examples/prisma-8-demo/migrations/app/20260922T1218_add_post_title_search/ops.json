@@ -1,0 +1,37 @@
+[
+  {
+    "id": "index.post.post_title_search_724b05e5",
+    "label": "Create index \"post_title_search_724b05e5\" on \"post\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "post_title_search_724b05e5",
+        "table": "post"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"post_title_search_724b05e5\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": ["\"public\".\"post_title_search_724b05e5\""]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"post_title_search_724b05e5\"",
+        "sql": "CREATE INDEX \"post_title_search_724b05e5\" ON \"public\".\"post\" USING \"gin\" (to_tsvector('english', \"title\"))",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"post_title_search_724b05e5\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": ["\"public\".\"post_title_search_724b05e5\""]
+      }
+    ]
+  }
+]

@@ -28,6 +28,11 @@ export function resolveTarget(value: string | undefined): TargetId | undefined {
   return mapped;
 }
 
+/** The target a Prisma 7 `datasource` provider names; `undefined` when Prisma 8 has none for it. */
+export function targetFromProviderName(provider: string): TargetId | undefined {
+  return TARGET_ALIASES.get(provider);
+}
+
 export function resolveAuthoring(value: string | undefined): AuthoringId | undefined {
   if (value === undefined) return undefined;
   const mapped = AUTHORING_VALUES.get(value.toLowerCase());

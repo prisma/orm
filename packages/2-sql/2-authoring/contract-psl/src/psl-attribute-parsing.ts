@@ -1,19 +1,31 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { PslSpan, ResolvedAttribute } from '@internal/psl-parser';
-import { parseQuotedStringLiteral } from '@internal/psl-parser';
-import type { ExpressionAst } from '@internal/psl-parser/syntax';
+import type { FieldSymbol, ModelSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
+import {
+  type DiagnosticSource,
+  type PslDiagnosticCollector,
+  parseQuotedStringLiteral,
+} from '@internal/psl-parser';
+import type {
+  ExpressionAst,
+  FieldAttributeAst,
+  ModelAttributeAst,
+} from '@internal/psl-parser/syntax';
+import { assertDefined } from '@internal/utils/assertions';
 
 export { parseQuotedStringLiteral };
 
-export function lowerFirst(value: string): string {
-  if (value.length === 0) return value;
-  return value[0]?.toLowerCase() + value.slice(1);
+export function storageName(
+  symbol: ModelSymbol | FieldSymbol,
+  physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>,
+): string {
+  const name = physicalNames.get(symbol);
+  assertDefined(name, 'Physical names are populated for every model and field before lowering');
+  return name;
 }
 
-export function getAttribute(
-  attributes: readonly ResolvedAttribute[] | undefined,
+export function getAttribute<TNode extends FieldAttributeAst | ModelAttributeAst>(
+  attributes: readonly ResolvedAttribute<TNode>[] | undefined,
   name: string,
-): ResolvedAttribute | undefined {
+): ResolvedAttribute<TNode> | undefined {
   return attributes?.find((attribute) => attribute.name === name);
 }
 
@@ -55,37 +67,27 @@ export function getPositionalArgumentEntry(
   };
 }
 
-export function unquoteStringLiteral(value: string): string {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(['"])(.*)\1$/);
-  if (!match) {
-    return trimmed;
-  }
-  return match[2] ?? '';
-}
-
 export function mapFieldNamesToColumns(input: {
-  readonly modelName: string;
+  readonly model: ModelSymbol;
+  readonly physicalNames: ReadonlyMap<ModelSymbol | FieldSymbol, string>;
   readonly fieldNames: readonly string[];
-  readonly mapping: { readonly fieldColumns: Map<string, string> };
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly source: DiagnosticSource;
+  readonly diagnostics: PslDiagnosticCollector;
   readonly span: PslSpan;
   readonly entityLabel: string;
 }): readonly string[] | undefined {
   const columns: string[] = [];
   for (const fieldName of input.fieldNames) {
-    const columnName = input.mapping.fieldColumns.get(fieldName);
-    if (!columnName) {
+    const field = input.model.fields[fieldName];
+    if (field === undefined) {
       input.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-        message: `${input.entityLabel} references unknown field "${input.modelName}.${fieldName}"`,
-        sourceId: input.sourceId,
-        span: input.span,
+        message: `${input.entityLabel} references unknown field "${input.model.name}.${fieldName}"`,
+        ...input.source.at(input.span),
       });
       return undefined;
     }
-    columns.push(columnName);
+    columns.push(storageName(field, input.physicalNames));
   }
   return columns;
 }

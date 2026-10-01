@@ -22,9 +22,10 @@ import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-de
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import { resolvePolymorphismInfo, resolvePrimaryKeyColumn } from './collection-contract';
+import { resolvePolymorphismInfo, resolvePrimaryKeyColumns } from './collection-contract';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst, resolveTableColumns } from './query-plan-meta';
+import { buildPrimaryKeyJoinOn } from './query-plan-source';
 import { storageTableForContract, tableSourceForContract } from './storage-resolution';
 import { combineWhereExprs } from './where-utils';
 
@@ -133,16 +134,37 @@ function normalizeInsertRows(
   return { rows: normalizedRows };
 }
 
+/**
+ * Ask the database to skip rows that collide with a unique constraint.
+ * An empty `columns` list means every unique constraint on the table.
+ */
+export interface InsertConflictSkip {
+  readonly columns: readonly string[];
+}
+
+function conflictSkipClause(
+  tableName: string,
+  conflictSkip: InsertConflictSkip | undefined,
+): InsertOnConflict | undefined {
+  if (!conflictSkip) return undefined;
+  if (conflictSkip.columns.length === 0) return InsertOnConflict.doNothing();
+  return InsertOnConflict.on(
+    conflictSkip.columns.map((column) => ColumnRef.of(tableName, column)),
+  ).doNothing();
+}
+
 export function compileInsertReturning(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
   rows: readonly Record<string, unknown>[],
   returningColumns: readonly string[] | undefined,
+  conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
   const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
     .withRows(normalizedRows)
+    .withOnConflict(conflictSkipClause(tableName, conflictSkip))
     .withReturning(buildReturningColumns(contract, namespaceId, tableName, returningColumns));
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
@@ -153,11 +175,12 @@ export function compileInsertCount(
   namespaceId: string,
   tableName: string,
   rows: readonly Record<string, unknown>[],
+  conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
-  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName)).withRows(
-    normalizedRows,
-  );
+  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
+    .withRows(normalizedRows)
+    .withOnConflict(conflictSkipClause(tableName, conflictSkip));
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -210,21 +233,19 @@ function buildCountMutationWhere(
     return combineWhereExprs(filters);
   }
 
-  const pkColumn = resolvePrimaryKeyColumn(contract, namespaceId, tableName);
+  const pkColumns = resolvePrimaryKeyColumns(contract, namespaceId, tableName);
   const baseTableRef = `${tableName}__write_filter`;
   const remapper = createTableRefRemapper(tableName, baseTableRef);
   const innerFilters = filters.map((filter) => filter.rewrite(remapper));
-  const correlation = BinaryExpr.eq(
-    ColumnRef.of(baseTableRef, pkColumn),
-    ColumnRef.of(tableName, pkColumn),
+  const correlation = pkColumns.map((column) =>
+    BinaryExpr.eq(ColumnRef.of(baseTableRef, column), ColumnRef.of(tableName, column)),
   );
-  const where = combineWhereExprs([correlation, ...innerFilters]);
-  const joinOn = EqColJoinOn.of(
-    ColumnRef.of(baseTableRef, pkColumn),
-    ColumnRef.of(variant.table, pkColumn),
-  );
+  const where = combineWhereExprs([...correlation, ...innerFilters]);
+  const joinOn = buildPrimaryKeyJoinOn(baseTableRef, variant.table, pkColumns);
   let subquery = SelectAst.from(TableSource.named(tableName, baseTableRef, namespaceId))
-    .withProjection([ProjectionItem.of('_write_filter', ColumnRef.of(baseTableRef, pkColumn))])
+    .withProjection(
+      pkColumns.map((column) => ProjectionItem.of(column, ColumnRef.of(baseTableRef, column))),
+    )
     .withJoins([
       JoinAst.inner(tableSourceForContract(contract, namespaceId, variant.table), joinOn),
     ]);
@@ -270,6 +291,7 @@ export function compileInsertReturningSplit(
   tableName: string,
   rows: readonly Record<string, unknown>[],
   returningColumns: readonly string[] | undefined,
+  conflictSkip?: InsertConflictSkip,
 ): ReadonlyArray<SqlQueryPlan<Record<string, unknown>>> {
   if (rows.length === 0) {
     throw ormError('ORM.MUTATION_DATA_MISSING', 'create() requires at least one row', {
@@ -277,7 +299,7 @@ export function compileInsertReturningSplit(
     });
   }
   return groupRowsByColumnSignature(rows).map((group) =>
-    compileInsertReturning(contract, namespaceId, tableName, group, returningColumns),
+    compileInsertReturning(contract, namespaceId, tableName, group, returningColumns, conflictSkip),
   );
 }
 
@@ -286,6 +308,7 @@ export function compileInsertCountSplit(
   namespaceId: string,
   tableName: string,
   rows: readonly Record<string, unknown>[],
+  conflictSkip?: InsertConflictSkip,
 ): ReadonlyArray<SqlQueryPlan<Record<string, unknown>>> {
   if (rows.length === 0) {
     throw ormError('ORM.MUTATION_DATA_MISSING', 'createAndCount() requires at least one row', {
@@ -293,7 +316,7 @@ export function compileInsertCountSplit(
     });
   }
   return groupRowsByColumnSignature(rows).map((group) =>
-    compileInsertCount(contract, namespaceId, tableName, group),
+    compileInsertCount(contract, namespaceId, tableName, group, conflictSkip),
   );
 }
 

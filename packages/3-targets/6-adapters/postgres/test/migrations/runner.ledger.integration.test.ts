@@ -6,9 +6,9 @@ import {
   buildFabricatedMigrationEdge,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import type { PostgresPlanTargetDetails } from '@internal/target-postgres/planner-target-details';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 import {
   contract,

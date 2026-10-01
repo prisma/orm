@@ -20,7 +20,7 @@ import { pgVectorError } from '../core/errors';
  */
 export function vector<N extends number>(
   length: N,
-): ColumnTypeDescriptor & { readonly typeParams: { readonly length: N } } {
+): ColumnTypeDescriptor<typeof VECTOR_CODEC_ID> & { readonly typeParams: { readonly length: N } } {
   if (!Number.isInteger(length) || length < 1 || length > VECTOR_MAX_DIM) {
     throw pgVectorError(
       'CONTRACT.ARGUMENT_INVALID',

@@ -3,7 +3,11 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction } from '@internal/utils/structured-error';
+import {
+  type Diagnostic,
+  isStructuredError,
+  type NextAction,
+} from '@internal/utils/structured-error';
 import { CliStructuredError } from './control';
 
 // ============================================================================
@@ -114,6 +118,10 @@ export function errorMarkerReadFailed(options: {
   );
 }
 
+function isDriverError(err: unknown): boolean {
+  return isStructuredError(err) && err.code.startsWith('DRIVER.');
+}
+
 function isMarkerRowParseError(err: unknown): err is Error {
   return (
     err instanceof Error &&
@@ -160,7 +168,7 @@ export function rethrowMarkerReadError(
   err: unknown,
   context: { readonly space: string; readonly markerLocation: string },
 ): never {
-  if (CliStructuredError.is(err)) {
+  if (CliStructuredError.is(err) || isDriverError(err)) {
     throw err;
   }
   if (isMarkerRowParseError(err)) {
@@ -330,6 +338,7 @@ export function errorRuntime(
   options?: {
     readonly why?: string;
     readonly fix?: string;
+    readonly diagnostics?: readonly Diagnostic[];
     readonly meta?: Record<string, unknown>;
     readonly cause?: unknown;
   },
@@ -337,6 +346,7 @@ export function errorRuntime(
   return new CliStructuredError(code, summary, {
     ...ifDefined('why', options?.why),
     ...ifDefined('fix', options?.fix),
+    ...ifDefined('diagnostics', options?.diagnostics),
     ...ifDefined('meta', options?.meta),
     ...ifDefined('cause', options?.cause),
   });

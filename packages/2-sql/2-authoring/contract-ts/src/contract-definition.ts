@@ -36,14 +36,45 @@ export type AttachedEntities = Readonly<
   Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>
 >;
 
-export interface FieldNode {
+/**
+ * A literal default as an authoring surface builds it: a value of the column codec's input type, which the contract build encodes through that codec into a {@link ColumnDefault}. Only the codec knows the type, so it is `unknown` until encoded.
+ */
+export type AuthoredColumnDefaultLiteralValue = unknown;
+
+export type AuthoredColumnDefault =
+  | ColumnDefault
+  | {
+      readonly kind: 'literal';
+      readonly value: AuthoredColumnDefaultLiteralValue;
+      /**
+       * Whether the value is already the canonical form the contract stores. A text contract source
+       * reads a written default into the canonical form itself, through the column's data type and
+       * its casts, so the build stores it as it stands; a TypeScript `.default(value)` hands over an
+       * application value, which the column's codec encodes. ADR 254.
+       */
+      readonly canonical?: boolean;
+    };
+
+/** The type of a scalar: a codec and its type parameters, the domain's `ScalarFieldType` without its kind. */
+export type ScalarTypeDescriptor = Pick<ColumnTypeDescriptor, 'codecId' | 'typeParams'>;
+
+/**
+ * The column-free part of a scalar field. A value-object member is exactly this; a model field ({@link FieldNode}) adds its column.
+ */
+export interface ScalarMemberNode {
   readonly fieldName: string;
-  readonly columnName: string;
-  readonly descriptor: ColumnTypeDescriptor;
+  readonly descriptor: ScalarTypeDescriptor;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
+  /** Present when the field is typed by an enum. */
+  readonly enumTypeHandle?: EnumTypeHandle;
+}
+
+export interface FieldNode extends ScalarMemberNode {
+  readonly descriptor: ColumnTypeDescriptor;
+  readonly columnName: string;
+  readonly default?: AuthoredColumnDefault;
+  readonly executionDefaults?: ExecutionMutationDefaultPhases;
   /**
    * Generated-check kinds the author declined for this column. The PSL
    * interpreter always writes concrete kinds; the TS builder's bare
@@ -51,8 +82,6 @@ export interface FieldNode {
    * derivable kinds at contract build time.
    */
   readonly noCheck?: readonly CheckKind[];
-  /** Present when the field was authored with `field.namedType(enumHandle)`. */
-  readonly enumTypeHandle?: EnumTypeHandle;
 }
 
 export interface PrimaryKeyNode {
@@ -130,7 +159,11 @@ export interface ForeignKeyNode {
 export interface RelationNode {
   readonly fieldName: string;
   readonly toModel: string;
-  readonly toTable: string;
+  /**
+   * Physical table of the related model. Undefined only for a cross-space
+   * relation whose handle carries no static table name.
+   */
+  readonly toTable: string | undefined;
   /**
    * Namespace coordinate of the related model. When omitted the assembler
    * resolves the coordinate from the referenced model node's own
@@ -159,7 +192,7 @@ export interface RelationNode {
   readonly on: {
     readonly parentTable: string;
     readonly parentColumns: readonly string[];
-    readonly childTable: string;
+    readonly childTable: string | undefined;
     readonly childColumns: readonly string[];
   };
   readonly through?: {
@@ -177,19 +210,46 @@ export interface RelationNode {
   };
 }
 
-export interface ValueObjectFieldNode {
+/**
+ * The column-free part of a field typed by a value object. A value-object member is exactly this; a model field ({@link ValueObjectFieldNode}) adds its column.
+ */
+export interface ValueObjectMemberNode {
   readonly fieldName: string;
-  readonly columnName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
-  readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
+}
+
+/**
+ * A model field typed by a value object. It is stored in one column of the storage type the target declares for value objects, carried in `descriptor`; a list of value objects is stored in that one column too.
+ */
+export interface ValueObjectFieldNode extends ValueObjectMemberNode {
+  readonly columnName: string;
+  readonly descriptor: ColumnTypeDescriptor;
+  readonly default?: AuthoredColumnDefault;
+  readonly executionDefaults?: ExecutionMutationDefaultPhases;
 }
 
 export interface ValueObjectNode {
   readonly name: string;
-  readonly fields: readonly (FieldNode | ValueObjectFieldNode)[];
+  readonly fields: readonly (ScalarMemberNode | ValueObjectMemberNode)[];
+}
+
+/**
+ * Whether a field is stored in a list column. A list of scalars is; a list of value objects is not, because it is stored in one column whose value is the whole list, as one JSON array.
+ */
+export function storedAsListColumn(field: {
+  readonly list: boolean;
+  readonly typedByValueObject: boolean;
+}): boolean {
+  return field.list && !field.typedByValueObject;
+}
+
+/** Whether a field or member is typed by a value object. */
+export function isValueObjectMember(
+  field: ScalarMemberNode | ValueObjectMemberNode,
+): field is ValueObjectMemberNode {
+  return 'valueObjectName' in field;
 }
 
 export interface ModelNode {
@@ -228,6 +288,13 @@ export interface ContractDefinition {
   readonly target: TargetPackRef<'sql', string>;
   readonly defaultControlPolicy?: ControlPolicy;
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>>;
+  /**
+   * Test-fixture escape hatch: pins the emitted `storage.storageHash`
+   * instead of computing it from content. A pinned hash is not
+   * content-derived, so snapshot content verification
+   * (`MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`) rejects any migration
+   * snapshot addressed by it — never set this in a real project.
+   */
   readonly storageHash?: string;
   readonly foreignKeyDefaults?: ForeignKeyDefaultsState;
   readonly storageTypes?: Record<string, StorageTypeInstance>;

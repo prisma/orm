@@ -159,6 +159,7 @@ describe('integration: SQL middleware rewriting', { timeout: timeouts.databaseOp
 
   function buildRuntime(middleware: SqlMiddleware[], log?: Log): Runtime {
     return new PostgresRuntimeImpl({
+      closeRefusal: undefined,
       context,
       adapter: stackInstance.adapter,
       driver,

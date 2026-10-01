@@ -6,7 +6,7 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     testTimeout: timeouts.typeScriptCompilation,
-    hookTimeout: timeouts.default,
+    hookTimeout: timeouts.vitestPackageDefault,
     typecheck: {
       enabled: true,
       include: ['test/**/*.test-d.ts'],

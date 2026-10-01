@@ -1,3 +1,4 @@
+import { blindCast } from '@internal/utils/casts';
 import type { NotOk, Ok } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
 import type {
@@ -21,7 +22,9 @@ function cloneRecord<T extends AnyRecord>(value: T): T {
   if (value === readOnlyEmptyObject) {
     return value;
   }
-  return Object.freeze({ ...value }) as T;
+  return blindCast<T, 'shallow clone preserves the input record shape while freezing it'>(
+    Object.freeze({ ...value }),
+  );
 }
 
 function freezeSteps(
@@ -52,10 +55,14 @@ function freezeDetailsValue<T>(value: T): T {
   }
   // Arrays: shallow clone and freeze
   if (Array.isArray(value)) {
-    return Object.freeze([...value]) as T;
+    return blindCast<T, 'shallow clone preserves the input array shape while freezing it'>(
+      Object.freeze([...value]),
+    );
   }
   // Objects: shallow clone and freeze (matching cloneRecord pattern)
-  return Object.freeze({ ...value }) as T;
+  return blindCast<T, 'shallow clone preserves the input object shape while freezing it'>(
+    Object.freeze({ ...value }),
+  );
 }
 
 function freezeTargetDetails<TTargetDetails>(

@@ -68,8 +68,8 @@ describe('SqlContractSerializer logic validation', () => {
             {
               ref: {
                 namespace: 'public',
-                table: 'User',
-                column: 'id',
+                entry: 'User',
+                field: 'id',
               },
               onCreate: {
                 kind: 'generator',

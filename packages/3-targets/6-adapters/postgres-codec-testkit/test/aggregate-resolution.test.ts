@@ -72,7 +72,7 @@ describe('PostgreSQL aggregate resolution', () => {
       operation: 'count',
       output: { codecId: 'pg/int8number@1' },
       nullable: false,
-      emptyResultJson: 0,
+      emptyResultJson: '0',
       lower: undefined,
     });
     expect(registry.resolve('count', { codecId: 'pg/text@1' })?.output).toEqual({
@@ -108,6 +108,22 @@ describe('PostgreSQL aggregate resolution', () => {
       overRows: 'count(*)',
       overValues: `count("${TABLE}"."${COLUMN}")`,
     });
+  });
+
+  it.each(['min', 'max'])('preserves Date codec identity and precision for %s', (operation) => {
+    expect(
+      registry.resolve(operation, {
+        codecId: 'pg/timestamptz-date@1',
+        typeParams: { precision: 3 },
+      })?.output,
+    ).toEqual({ codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } });
+  });
+
+  it.each(['min', 'max'])('preserves the native enum codec and its type for %s', (operation) => {
+    expect(
+      registry.resolve(operation, { codecId: 'pg/enum@1', typeParams: { typeName: 'mood' } })
+        ?.output,
+    ).toEqual({ codecId: 'pg/enum@1', typeParams: { typeName: 'mood' } });
   });
 
   it('prefers the exact varchar overload over the textual fallback', () => {

@@ -1,5 +1,5 @@
 import { datetimeColumn } from '@prisma/orm-sqlite/adapter/column-types';
-import { defineContract, field, model } from '@prisma/orm-sqlite/contract-builder';
+import { defineContract, field, model, now, sql } from '@prisma/orm-sqlite/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { applyMigration, int, text } from './harness';
 
@@ -62,8 +62,8 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
   // Round-trip regression for the canonical `now()` default. SQLite has
   // several spellings for "wall-clock now" (`CURRENT_TIMESTAMP`,
   // `datetime('now')`, the bare `now()` form): `parseSqliteDefault`
-  // canonicalizes the schema side, and `lowerDbgenerated` canonicalizes
-  // the contract side. As long as both sides converge on `now()`, the
+  // reads every spelling as `now()`, on the schema side and, through
+  // `sqliteResolveDefault`, on the contract side. As long as both sides converge on `now()`, the
   // additive apply must verify clean and the column's stored default
   // must be one of the SQLite-native spellings (the runner's
   // post-execute schema verify already proves the canonical
@@ -77,7 +77,7 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
               fields: {
                 id: int.id(),
                 name: text,
-                createdAt: field.column(datetimeColumn).defaultSql('now()'),
+                createdAt: field.column(datetimeColumn).default(now()),
               },
             }),
           },
@@ -94,6 +94,58 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
           )
         ).rows[0];
         expect(typeof row?.createdAt).toBe('string');
+      },
+    );
+  });
+
+  it('stores a sql`CURRENT_TIMESTAMP` default verbatim and verifies clean against it', async () => {
+    await applyMigration(
+      {
+        destination: defineContract({
+          models: {
+            User: model('User', {
+              fields: {
+                id: int.id(),
+                name: text,
+                createdAt: field.column(datetimeColumn).default(sql`CURRENT_TIMESTAMP`),
+              },
+            }),
+          },
+        }),
+      },
+      async ({ schema, driver }) => {
+        expect(schema.tables['User']!.columns['createdAt']!.default).toBe('CURRENT_TIMESTAMP');
+        await driver.query('INSERT INTO "User" (id, name) VALUES (?, ?)', [1, 'Alice']);
+        const row = (
+          await driver.query<{ createdAt: string }>(
+            'SELECT createdAt FROM "User" WHERE id = ?',
+            [1],
+          )
+        ).rows[0];
+        expect(typeof row?.createdAt).toBe('string');
+      },
+    );
+  });
+
+  it.each([
+    ['sql`CURRENT_TIMESTAMP`', sql`CURRENT_TIMESTAMP`],
+    ["sql`'x'`", sql`'x'`],
+  ])('plans no operation once %s has been applied', async (_label, columnDefault) => {
+    const contract = defineContract({
+      models: {
+        User: model('User', {
+          fields: {
+            id: int.id(),
+            name: text,
+            createdAt: field.column(datetimeColumn).default(columnDefault),
+          },
+        }),
+      },
+    });
+    await applyMigration(
+      { origin: contract, destination: contract },
+      async ({ plannedOperationIds }) => {
+        expect(plannedOperationIds).toEqual([]);
       },
     );
   });

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/mixed-string-uuid-datetime-list-inputs
 // (postgres matrix entry only; mongodb and cockroachdb skipped).
@@ -16,4 +18,5 @@
 model Post {
   id    String   @id @default(cuid(2))
   words String[]
+  @@map("post")
 }

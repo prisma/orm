@@ -123,8 +123,9 @@ The demo includes ORM client examples under `src/orm-client/`:
 - `ormClientGetEngagementPrecision(runtime)` — `count`/`sum`/`avg` beside `countBigInt`/`sumBigInt`/`avgDecimal`, including the bare `sum` that raises rather than rounding
 - `ormClientGetEngagementSpread(runtime)` — an extension-contributed `stddev` aggregate, called like a built-in
 - `ormClientUpsertUser(data, runtime)` — `upsert()` for create-or-update by primary key
-- `ormClientFindUserByIdCached(id, runtime, options?)` — opt-in cached `first({ id })` lookup via `cacheAnnotation({ ttl })` from `@internal/middleware-cache`
+- `ormClientFindUserByIdCached(id, runtime, options?)` — opt-in cached `first({ id })` lookup via `cacheAnnotation({ bypass? })` from `@internal/middleware-cache`
 - `ormClientGetUsersCached(limit, runtime, options?)` — opt-in cached `User.all()` listing, with optional explicit cache-key override
+- `ormClientSearchPostsByTitle(query, limit, runtime)` — **full-text search**: `p.title.fullTextMatches(websearchToTsquery(query))` filtered and `p.title.fullTextRank(websearchToTsquery(query)).desc()` ordered, over the GIN index `@@fullTextIndex([title])` declares
 
 Run from the CLI:
 
@@ -341,7 +342,7 @@ and the [aggregate descriptor guide](../../docs/reference/aggregate-descriptor-g
 
 ## Cache Middleware Examples
 
-The demo wires `@internal/middleware-cache` into the Postgres client in `src/prisma/db.ts`. The cache middleware is **opt-in per query** — it only acts on plans whose `meta.annotations` carry a `cacheAnnotation` payload with a `ttl` set. Three CLI commands run a query twice and report the latency of each call so the cache hit is visible:
+The demo wires `@internal/middleware-cache` into the Postgres client in `src/prisma/db.ts`. The cache middleware is **opt-in per query** — it only acts on plans whose `meta.annotations` carry a `cacheAnnotation`. The default store keeps each entry for 60 seconds. Three CLI commands run a query twice and report the latency of each call so the cache hit is visible:
 
 ```bash
 # ORM client first({ id }) cached for 60s.
@@ -350,7 +351,7 @@ pnpm start -- cache-demo-user 00000000-0000-0000-0000-000000000001
 # ORM client User.all() listing cached for 60s.
 pnpm start -- cache-demo-users 5
 
-# SQL DSL .annotate(cacheAnnotation({ ttl })) on a select.
+# SQL DSL .annotate(cacheAnnotation({})) on a select.
 pnpm start -- cache-demo-sql 5
 ```
 
@@ -367,9 +368,9 @@ Speedup: 26.2x faster
 
 The corresponding source files:
 
-- `src/orm-client/find-user-by-id-cached.ts` — `db.User.first({ id }, (meta) => meta.annotate(cacheAnnotation({ ttl })))`
-- `src/orm-client/get-users-cached.ts` — `db.User.limit(n).all((meta) => meta.annotate(cacheAnnotation({ ttl, key? })))`
-- `src/queries/get-users-cached.ts` — `db.sql.public.user.select(...).annotate(cacheAnnotation({ ttl })).build()`
+- `src/orm-client/find-user-by-id-cached.ts` — `db.User.first({ id }, (meta) => meta.annotate(cacheAnnotation({ bypass })))`
+- `src/orm-client/get-users-cached.ts` — `db.User.limit(n).all((meta) => meta.annotate(cacheAnnotation({ key? })))`
+- `src/queries/get-users-cached.ts` — `db.sql.public.user.select(...).annotate(cacheAnnotation({})).build()`
 
 Relevant points:
 
@@ -438,9 +439,11 @@ Run `pnpm dev` for the Vite app that visualizes the contract. It renders directl
 - `scripts/stamp-marker.ts` - Contract marker management
 - `scripts/seed.ts` - Database seeding (includes vector embeddings)
 - `src/queries/similarity-search.ts` - Example vector similarity search query
+- `src/queries/full-text-search.ts` - Example full-text search with `fullTextRank` and `fullTextHeadline`
 - `test/` - Integration tests demonstrating Prisma 8 usage
 
 ## Features Demonstrated
 
 - **Vector Similarity Search**: The demo includes a `similarity-search.ts` query that demonstrates cosine distance operations using the pgvector extension pack.
+- **Full-Text Search**: `Post` declares `@@fullTextIndex([title], name: "post_title_search")` (the TypeScript twin is `fullTextIndex(cols.title, { name: 'post_title_search' })`), which emits a GIN index over `to_tsvector('english', "title")`. `src/orm-client/search-posts-by-title.ts` searches through the ORM with `fullTextMatches` and `fullTextRank`; `src/queries/full-text-search.ts` adds the rank and a `<mark>`-highlighted `fullTextHeadline` through the SQL DSL. The query argument is a `tsquery`: both files wrap the search string in `websearchToTsquery` (imported from `@prisma/orm-postgres/target/full-text` in the ORM file, a `fns` member in the DSL file), which binds it as a parameter and parses it with `websearch_to_tsquery`, so `"an exact phrase"`, `-excluded` and `or` work as in a search box. A bare string is a type error; for a typeahead prefix match, `` tsquery`${term}:*` `` from the same import quotes the typed text as one term. Try `pnpm start -- repo-search-posts-text second` and `pnpm start -- full-text-search "first or second"`.
 - **Extension Packs**: Shows how to configure and use extension packs (pgvector) in `prisma.config.ts`.

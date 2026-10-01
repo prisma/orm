@@ -1,0 +1,32 @@
+[
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Field \"FieldKey.id\" is marked @ignore, but its @id uses it, and Prisma 7 still creates the primary key that includes its column. Remove @ignore from \"FieldKey.id\"; Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again."
+  },
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 21,
+    "message": "Field \"Indexed.c\" is marked @ignore, but its @unique uses it, and Prisma 7 still creates the unique index that includes its column. Remove @ignore from \"Indexed.c\"; Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again."
+  },
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"CompositeKey.b\" is marked @ignore, but @@id on model \"CompositeKey\" uses it, and Prisma 7 still creates the primary key that includes its column. Remove @ignore from \"CompositeKey.b\"; Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again."
+  },
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 23,
+    "message": "Field \"Indexed.b\" is marked @ignore, but @@unique on model \"Indexed\" uses it, and Prisma 7 still creates the unique index that includes its column. Remove @ignore from \"Indexed.b\"; Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again."
+  },
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 24,
+    "message": "Field \"Indexed.b\" is marked @ignore, but @@index on model \"Indexed\" uses it, and Prisma 7 still creates the index that includes its column. Remove @ignore from \"Indexed.b\"; Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again."
+  }
+]

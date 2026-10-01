@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL_DUPLICATE_DECLARATION",
+    "file": "c-user.prisma",
+    "line": 6,
+    "message": "Duplicate declaration of enum \"Role\"; first declared in b-user.prisma."
+  },
+  {
+    "code": "PSL_DUPLICATE_DECLARATION",
+    "file": "c-user.prisma",
+    "line": 1,
+    "message": "Duplicate declaration of model \"User\"; first declared in b-user.prisma."
+  }
+]

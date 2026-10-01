@@ -8,6 +8,19 @@ alwaysApply: false
 
 This rulecard is intentionally short. For examples and edge cases, see `docs/reference/arktype-usage.md`.
 
+## Read the arktype docs before building machinery
+
+Before you write code that walks a schema, copies values around validation, or repairs arktype's output afterwards, read the arktype docs at https://arktype.io/docs, in particular Configuration, Morphs and Scopes. arktype has documented options for most problems that seem to need bespoke code. Never read arktype's compiled node tree (`schema.internal`, `.structure`, `.branches`); it is not a public API.
+
+## What a transformation does to its input
+
+- A morph is any transformation: `.pipe()`, `=>`, or a default value. When any morph applies anywhere in a value, arktype first clones the whole input, then writes the results into the clone.
+- The default clone keeps prototypes but rebuilds every plain object and class instance. Object identity is lost, private `#fields` are lost, and `===` checks against shared objects fail. Functions, `Map` and `Set` are kept as they are.
+- The clone is the `clone` config option, settable per scope (`scope(def, { clone })`) or per type (`.configure({ clone })`). `clone: false` writes into the input instead, and throws on frozen input.
+- Do not make a value's behaviour depend on object identity if it may pass through validation. Represent "absent" as `undefined`, not as a shared stand-in object.
+
+Details and examples: `docs/reference/arktype-usage.md` § "What a transformation does to its input".
+
 ## Rules of thumb
 
 - Use optional keys via `'key?'` (not `string | undefined`).

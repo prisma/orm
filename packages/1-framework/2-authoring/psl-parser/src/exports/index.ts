@@ -1,4 +1,5 @@
 export type {
+  ParsedPslExtensionBlock,
   PslAttribute,
   PslAttributeArgument,
   PslAttributeNamedArgument,
@@ -8,18 +9,13 @@ export type {
   PslDefaultFunctionValue,
   PslDefaultLiteralValue,
   PslDefaultValue,
-  PslDiagnostic,
   PslDiagnosticCode,
   PslDocumentAst,
   PslExtensionBlock,
   PslExtensionBlockAttribute,
   PslExtensionBlockAttributeArg,
-  PslExtensionBlockParamBare,
-  PslExtensionBlockParamList,
-  PslExtensionBlockParamOption,
-  PslExtensionBlockParamRef,
-  PslExtensionBlockParamScalarValue,
-  PslExtensionBlockParamValue,
+  PslExtensionBlockParsedAttribute,
+  PslExtensionBlockPrintEntry,
   PslField,
   PslFieldAttribute,
   PslModel,
@@ -47,12 +43,15 @@ export { funcCall } from '../attribute-spec/combinators/func-call';
 export { identifier } from '../attribute-spec/combinators/identifier';
 export { int } from '../attribute-spec/combinators/int';
 export { json } from '../attribute-spec/combinators/json';
+export { jsonValue } from '../attribute-spec/combinators/json-value';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
 export { num } from '../attribute-spec/combinators/num';
+export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
 export { record } from '../attribute-spec/combinators/record';
 export { str } from '../attribute-spec/combinators/str';
+export { taggedLiteral } from '../attribute-spec/combinators/tagged-literal';
 export { fieldAttribute } from '../attribute-spec/field-attribute';
 export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
@@ -73,28 +72,97 @@ export type {
   AttributeLevel,
   AttributeOut,
   AttributeSpec,
+  EntityRefArgType,
   FieldAttributeCtx,
+  FixedIdentifierArgType,
   FuncCallSig,
+  IdentifierArgType,
   InferAttr,
+  InspectableArgType,
+  JsonValueArgType,
   ModelAttributeCtx,
   NamedOut,
+  NullArgType,
+  NumLiteral,
   OptionalArgType,
   OutOf,
   Param,
+  ParsedTaggedLiteral,
   PositionalParam,
   PosOut,
   RejectingArgType,
+  TaggedLiteralArgType,
   TypedFuncCall,
+  UnrestrictedIdentifierArgType,
 } from '../attribute-spec/types';
-export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
+export type {
+  AttributeSymbol,
+  Binder,
+  BinderResult,
+  BoundSpec,
+  CreateBinderOptions,
+  DescribeUnsupportedAttribute,
+  PslSymbol,
+  Resolution,
+  UnsupportedAttribute,
+} from '../binder';
+export {
+  createBinder,
+  PSL_UNRESOLVED_REFERENCE,
+  typeReferenceNode,
+} from '../binder';
+export { mapBlock, structBlock } from '../block-spec/constructors';
+export type { PslBlockSpecDescriptor } from '../block-spec/descriptor';
+export { blockSpecFactoryOf } from '../block-spec/descriptor';
+export type {
+  InterpretExtensionBlockAttributesInput,
+  InterpretExtensionBlockInput,
+  InterpretExtensionBlocksResult,
+} from '../block-spec/interpret';
+export {
+  interpretExtensionBlock,
+  interpretExtensionBlockAttributes,
+  interpretExtensionBlocks,
+} from '../block-spec/interpret';
+export type {
+  BlockEntryValueSpec,
+  BlockSpec,
+  BlockSpecContext,
+  BlockSpecFactory,
+  InferBlock,
+  MapBlockSpec,
+  StructBlockSpec,
+} from '../block-spec/types';
+export type {
+  ContributedMember,
+  ContributedNamespaceSymbol,
+  ContributedTypeScope,
+  ContributedTypeSymbol,
+} from '../contributed-type-scope';
+export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
+export {
+  createPslDiagnosticCollector,
+  diagnosticFromSpan,
+  diagnosticSource,
+  mapPslDiagnostics,
+} from '../diagnostic';
+export type {
+  DeclarationFor,
+  EntityDeclaration,
+  EntitySelector,
+  ResolvedEntityReference,
+} from '../entity-reference';
+export { findBlockDescriptor } from '../extension-block';
+export { NAME_THE_PSL_SOURCE_LOSES } from '../name-the-psl-source-loses';
 export {
   keywordPslSpan,
   nodePslSpan,
-  rangeToPslSpan,
   readResolvedAttribute,
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from '../resolve';
+export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
+export type { Scope, ScopeResolution } from '../scope';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,
@@ -112,3 +180,4 @@ export type {
   TopLevelScope,
 } from '../symbol-table';
 export { buildSymbolTable } from '../symbol-table';
+export { isPslIdentifier } from '../tokenizer';

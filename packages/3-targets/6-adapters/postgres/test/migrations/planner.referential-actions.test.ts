@@ -3,6 +3,7 @@ import { INIT_ADDITIVE_POLICY, type SqlMigrationPlanOperation } from '@internal/
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { type ForeignKey, type ReferentialAction, SqlStorage } from '@internal/sql-contract/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { createPostgresMigrationPlanner } from '@internal/target-postgres/planner';
 import {
   PostgresDatabaseSchemaNode,
@@ -11,7 +12,6 @@ import {
 } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 function createRefActionContract(

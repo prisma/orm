@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -24,6 +25,7 @@ describe('index naming at PSL lowering', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
   }
@@ -38,10 +40,10 @@ describe('index naming at PSL lowering', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['doc']!.indexes).toEqual([
+    expect(unboundTables(storage)['Doc']!.indexes).toEqual([
       {
-        name: 'doc_body_idx_f3377346',
-        prefix: 'doc_body_idx',
+        name: 'Doc_body_idx_f3377346',
+        prefix: 'Doc_body_idx',
         columns: ['body'],
         unique: false,
       },
@@ -58,7 +60,7 @@ describe('index naming at PSL lowering', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['doc']!.indexes).toEqual([
+    expect(unboundTables(storage)['Doc']!.indexes).toEqual([
       {
         name: 'doc_body_lookup',
         columns: ['body'],
@@ -81,6 +83,7 @@ describe('@@index matrix threading at PSL lowering', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
   }
@@ -94,7 +97,7 @@ describe('@@index matrix threading at PSL lowering', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['user']!.indexes).toEqual([
+    expect(unboundTables(storage)['User']!.indexes).toEqual([
       {
         name: 'users_email_eq_17273133',
         prefix: 'users_email_eq',
@@ -113,7 +116,7 @@ describe('@@index matrix threading at PSL lowering', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const index = unboundTables(storage)['user']!.indexes[0];
+    const index = unboundTables(storage)['User']!.indexes[0];
     expect(index).toMatchObject({
       prefix: 'users_email_active',
       columns: ['email'],
@@ -131,7 +134,7 @@ describe('@@index matrix threading at PSL lowering', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const index = unboundTables(storage)['user']!.indexes[0];
+    const index = unboundTables(storage)['User']!.indexes[0];
     expect(index).toMatchObject({
       prefix: 'users_email_eq',
       expression: 'eql_v3.eq_term(email)',
@@ -150,7 +153,7 @@ describe('@@index matrix threading at PSL lowering', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(unboundTables(storage)['user']!.indexes).toEqual([
+      expect(unboundTables(storage)['User']!.indexes).toEqual([
         { name: 'users_email_adopted', expression: 'lower(email)', unique: false },
       ]);
       expect(emitWarning).toHaveBeenCalledTimes(1);

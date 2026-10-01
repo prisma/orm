@@ -7,7 +7,7 @@ export default defineConfig({
     pool: 'threads',
     maxWorkers: 1,
     isolate: false,
-    testTimeout: timeouts.default,
-    hookTimeout: timeouts.default,
+    testTimeout: timeouts.vitestPackageDefault,
+    hookTimeout: timeouts.vitestPackageDefault,
   },
 });

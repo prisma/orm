@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id Int @id
+}
+
+model Post {
+  id       Int  @id
+  authorId Int
+  author   User @relation(fields: [authorId], references: [id], onDelete: toString)
+  editorId Int
+  editor   User @relation("Editor", fields: [editorId], references: [id], onUpdate: cascade)
+}

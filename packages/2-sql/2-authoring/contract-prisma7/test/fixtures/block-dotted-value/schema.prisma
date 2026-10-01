@@ -1,0 +1,12 @@
+generator client {
+  provider = prisma.client.js
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", auth.users]
+}
+
+model Post {
+  id Int @id
+}

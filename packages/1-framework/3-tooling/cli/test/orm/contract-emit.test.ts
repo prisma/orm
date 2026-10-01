@@ -8,6 +8,7 @@ import type { ContractEmitResult } from '../../src/control-api/types';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import type { ContractEmitCommandDeps } from '../../src/orm/contract/emit';
 import { createContractEmitCommand } from '../../src/orm/contract/emit';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 /**
  * The command is mounted from the factory with the operation injected, so no
@@ -79,7 +80,7 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
 }
 
 function harness(config: Record<string, unknown> = ormConfig()) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {
@@ -101,8 +102,7 @@ function countingLoader(config: Record<string, unknown> = ormConfig()): {
     loadConfig: (configPath) => {
       calls.push(configPath ?? '(none)');
       return Promise.resolve({
-        path: join(PROJECT_DIR, 'prisma.config.ts'),
-        sections: { orm: config },
+        files: [{ path: join(PROJECT_DIR, 'prisma.config.ts'), sections: { orm: config } }],
         diagnostics: [],
       });
     },
@@ -137,6 +137,44 @@ describe('contract emit', () => {
     expect(executeContractEmit).toHaveBeenCalledTimes(1);
     expect(executeContractEmit.mock.calls[0]?.[0]).toMatchObject({
       config,
+      cwd: PROJECT_DIR,
+    });
+  });
+
+  it('resolves relative config paths against the --config file, not the working directory', async () => {
+    const configDir = join(PROJECT_DIR, 'sub');
+    const config = ormConfig({
+      contract: {
+        source: {
+          format: 'psl',
+          inputs: ['./contract.prisma'],
+          load: () => ({ ok: true, value: {} }),
+        },
+        output: './generated/contract.json',
+      },
+    });
+    const loadConfig = (configPath?: string) =>
+      Promise.resolve({
+        files: [
+          { path: join(PROJECT_DIR, configPath ?? 'prisma.config.ts'), sections: { orm: config } },
+        ],
+        diagnostics: [],
+      });
+
+    const run = await createTestCli({ commands, groups, loadConfig }).run(
+      ['contract', 'emit', '--json', '--config', 'sub/prisma.config.ts'],
+      { cwd: PROJECT_DIR },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(executeContractEmit.mock.calls[0]?.[0]).toMatchObject({
+      config: {
+        contract: {
+          source: { inputs: [join(configDir, 'contract.prisma')] },
+          output: join(configDir, 'generated', 'contract.json'),
+        },
+        baseDir: configDir,
+      },
       cwd: PROJECT_DIR,
     });
   });
@@ -301,6 +339,61 @@ describe('contract emit', () => {
     });
   });
 
+  describe('contract source warnings', () => {
+    const span = {
+      start: { offset: 30, line: 3, column: 9 },
+      end: { offset: 33, line: 3, column: 12 },
+    };
+    const warning = (sourceId: string) => ({
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message:
+        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      sourceId,
+      span,
+      severity: 'warning',
+    });
+    const diagnostic = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+      severity: 'warn',
+      summary:
+        'prisma/schema.prisma:3:9 PSL_DEPRECATED_SCALAR_NAME: Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      nextActions: [],
+      where: { path: 'prisma/schema.prisma', line: 3 },
+      meta: { code: 'PSL_DEPRECATED_SCALAR_NAME', span },
+    };
+
+    it('are diagnostics of the result, with code, file, line and column', async () => {
+      executeContractEmit.mockResolvedValue(
+        emitResult({ sourceWarnings: [warning('prisma/schema.prisma')] }),
+      );
+
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      expect(run.exitCode).toBe(0);
+      const terminal = run.json.at(-1);
+      expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+        ok: true,
+        diagnostics: [expect.objectContaining(diagnostic)],
+      });
+      expect(
+        run.events.filter((event) => event.kind === 'message' && event.severity === 'warn'),
+      ).toEqual([]);
+    });
+
+    it('name a file under the working directory by its relative path', async () => {
+      executeContractEmit.mockResolvedValue(
+        emitResult({ sourceWarnings: [warning(`${PROJECT_DIR}/prisma/schema.prisma`)] }),
+      );
+
+      const run = await harness().run(['contract', 'emit', '--json'], { cwd: PROJECT_DIR });
+
+      const terminal = run.json.at(-1);
+      expect(terminal?.kind === 'result' && terminal.envelope).toMatchObject({
+        diagnostics: [expect.objectContaining(diagnostic)],
+      });
+    });
+  });
+
   it('keeps the dotted code of an error the operation raised', async () => {
     const { errorRuntime } = await import('@internal/errors/execution');
     executeContractEmit.mockRejectedValue(
@@ -323,6 +416,36 @@ describe('contract emit', () => {
     expect(envelope?.nextActions).toEqual([
       { kind: 'user-choice', label: 'Fix the contract source and re-run' },
     ]);
+  });
+
+  it.each([false, true])('reports a source filename without a span for json=%s', async (json) => {
+    const finding = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+      severity: 'error' as const,
+      summary: 'prisma/models.prisma PSL_PARSE_ERROR: Unexpected token',
+      nextActions: [],
+      where: { path: 'prisma/models.prisma' },
+      meta: { code: 'PSL_PARSE_ERROR' },
+    };
+    executeContractEmit.mockRejectedValue(
+      new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve contract source', {
+        why: 'Provider parse failed',
+        diagnostics: [finding],
+      }),
+    );
+
+    const run = await harness().run(['contract', 'emit', ...(json ? ['--json'] : [])], {
+      cwd: PROJECT_DIR,
+      isTty: { stdout: true, stderr: true },
+    });
+
+    expect(run.exitCode).toBe(2);
+    if (json) {
+      expect(erroredEnvelope(run).diagnostics).toContainEqual(finding);
+    } else {
+      expect(stripAnsi(run.stderr)).toContain('prisma/models.prisma');
+      expect(stripAnsi(run.stderr)).toContain('Unexpected token');
+    }
   });
 
   /**

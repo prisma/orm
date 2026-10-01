@@ -1,0 +1,4 @@
+model Top {
+  id    Int    @id
+  users User[]
+}

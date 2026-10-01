@@ -1,10 +1,10 @@
 import type { LedgerEntryRecord } from '@internal/contract/types';
 import type { MountedTree } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BIN_GROUPS as BinGroups } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 const mocks = vi.hoisted(() => ({
   connect: vi.fn(),
@@ -88,7 +88,7 @@ function ledgerEntry(overrides: Partial<LedgerEntryRecord> = {}): LedgerEntryRec
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 describe('migration log', () => {

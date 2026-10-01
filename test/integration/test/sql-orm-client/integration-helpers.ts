@@ -59,6 +59,24 @@ export function createUsersCollectionWithoutReturning(runtime: PgIntegrationRunt
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
 
+export function createReturningUsersCollectionWithout(
+  runtime: PgIntegrationRuntime,
+  capabilityKeys: readonly string[],
+) {
+  const base = withReturningCapability(getTestContract());
+  const capabilities: Record<string, Record<string, unknown>> = {};
+  for (const [group, entries] of Object.entries(base.capabilities)) {
+    capabilities[group] = Object.fromEntries(
+      Object.entries(entries as Record<string, unknown>).filter(
+        ([key]) => !capabilityKeys.includes(key),
+      ),
+    );
+  }
+  const contract = { ...base, capabilities } as TestContract;
+  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+  return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
+}
+
 export function createPostsCollection(runtime: PgIntegrationRuntime) {
   return new Collection({ runtime, context: getTestContext() }, 'Post', { namespaceId: 'public' });
 }

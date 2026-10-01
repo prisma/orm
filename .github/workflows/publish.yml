@@ -126,13 +126,17 @@ jobs:
       - name: Run conformance checks
         run: pnpm check:conformance
 
-      # Publish-time gate: ensures every substrate change since the previous
-      # `v[0-9]*` tag is accompanied by a matching upgrade-instructions
-      # directory in the user-skill / extension-upgrade-skill packages, and
-      # that any newly added entries land in the in-flight transition
-      # directory. See `scripts/check-upgrade-coverage.mjs`.
+      # Releases must consume all pending fragments; dev/beta builds may retain them.
       - name: Check upgrade-instruction coverage
-        run: pnpm check:upgrade-coverage --mode publish
+        env:
+          DIST_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          case "$DIST_TAG" in
+            dev|beta) MODE=dev ;;
+            '') echo 'Missing publish classification' >&2; exit 1 ;;
+            *) MODE=publish ;;
+          esac
+          pnpm check:upgrade-coverage --mode "$MODE" --head "$GITHUB_SHA"
 
       # Publish-time check (releases only): a `latest` Release publishes
       # the committed notes file as its body, so that file must exist

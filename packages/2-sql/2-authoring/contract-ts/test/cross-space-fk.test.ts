@@ -216,6 +216,61 @@ describe('cross-space FK via constraints.foreignKey in sql()', () => {
 // Missing-pack fail-fast (AC5 TS half)
 // ---------------------------------------------------------------------------
 
+/**
+ * Synthetic supabase OrderItem handle whose `.sql()` stage is a factory
+ * function, so the handle carries no statically readable table name.
+ */
+function buildSyntheticSupabaseOrderItem() {
+  return new ContractModelBuilder(
+    {
+      modelName: 'OrderItem' as const,
+      namespace: 'auth',
+      fields: {
+        id: field.column(int4Column).id(),
+        sku: field.column(textColumn),
+      },
+      relations: {},
+    },
+    undefined,
+    undefined,
+    'supabase' as const,
+  ).sql(() => ({ table: 'order_items' }));
+}
+
+describe('cross-space FK to a handle with no statically readable table name', () => {
+  const defineLineNoteContract = () => {
+    const ExtOrderItem = buildSyntheticSupabaseOrderItem();
+
+    const LineNote = model('LineNote', {
+      fields: {
+        id: field.column(int4Column).id(),
+        orderItemId: field.column(int4Column),
+      },
+    }).sql(({ cols, constraints }) => ({
+      table: 'line_note',
+      foreignKeys: [constraints.foreignKey(cols.orderItemId, ExtOrderItem.refs.id)],
+    }));
+
+    return defineContract({
+      family: bareFamilyPack,
+      target: postgresTargetPack,
+      createNamespace: createTestSqlNamespace,
+      extensions: { supabase: supabasePack },
+      models: { LineNote },
+    });
+  };
+
+  it('throws a structured error instead of guessing the target table', () => {
+    expect(defineLineNoteContract).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.FOREIGN_KEY_INVALID',
+        message:
+          'Foreign key on "LineNote" references model "OrderItem" in contract space "supabase" but the target table name is unknown: the handle\'s .sql() stage is a factory function, so its table cannot be read statically. Declare the target model\'s .sql() stage with a static object carrying `table`.',
+      }),
+    );
+  });
+});
+
 describe('missing-pack fail-fast diagnostic', () => {
   it('throws when the referenced spaceId is not in extensions', () => {
     const ExtUser = buildSyntheticSupabaseAuthUser();

@@ -1,0 +1,29 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         Int    @id
+  deleteNull Post[] @relation("DeleteNull")
+  updateNull Post[] @relation("UpdateNull")
+  deleteDef  Post[] @relation("DeleteDefault")
+  updateDef  Post[] @relation("UpdateDefault")
+  withDef    Post[] @relation("DefaultPresent")
+  mixed      Post[] @relation("Mixed")
+}
+
+model Post {
+  id           Int  @id
+  a            Int
+  deleteNull   User @relation("DeleteNull", fields: [a], references: [id], onDelete: SetNull)
+  b            Int
+  updateNull   User @relation("UpdateNull", fields: [b], references: [id], onUpdate: SetNull)
+  c            Int
+  deleteDef    User @relation("DeleteDefault", fields: [c], references: [id], onDelete: SetDefault)
+  d            Int
+  updateDef    User @relation("UpdateDefault", fields: [d], references: [id], onUpdate: SetDefault)
+  e            Int  @default(1)
+  withDef      User @relation("DefaultPresent", fields: [e], references: [id], onDelete: SetDefault, onUpdate: SetDefault)
+  f            Int?
+  mixed        User? @relation("Mixed", fields: [f], references: [id], onDelete: SetNull, onUpdate: SetDefault)
+}

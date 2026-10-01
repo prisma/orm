@@ -9,11 +9,20 @@ import { MongoValidator } from '@internal/mongo-contract';
  */
 export type FieldValueSets = Record<string, { readonly values: readonly JsonValue[] }>;
 
-function resolveBsonType(
-  codecId: string,
-  codecLookup: CodecLookup | undefined,
-): string | undefined {
-  return codecLookup?.targetTypesFor(codecId)?.[0];
+/**
+ * The `bsonType` keyword for a list of BSON type names: the name itself for one entry, the list for several.
+ */
+function bsonTypeKeyword(bsonTypes: readonly string[]): string | readonly string[] {
+  const [only, ...rest] = bsonTypes;
+  return only !== undefined && rest.length === 0 ? only : [...bsonTypes];
+}
+
+function withNull(bsonTypes: readonly string[]): readonly string[] {
+  return bsonTypes.includes('null') ? bsonTypes : ['null', ...bsonTypes];
+}
+
+function anyValueSchema(field: ContractField): Record<string, unknown> {
+  return 'many' in field && field.many ? { bsonType: 'array', items: {} } : {};
 }
 
 function fieldToBsonSchema(
@@ -23,8 +32,10 @@ function fieldToBsonSchema(
   valueSets: FieldValueSets | undefined,
 ): Record<string, unknown> | undefined {
   if (field.type.kind === 'scalar') {
-    const bsonType = resolveBsonType(field.type.codecId, codecLookup);
-    if (!bsonType) return undefined;
+    const bsonTypes = codecLookup?.targetTypesFor(field.type.codecId);
+    if (bsonTypes === undefined) return undefined;
+    if (bsonTypes.length === 0) return anyValueSchema(field);
+    const bsonType = bsonTypeKeyword(bsonTypes);
 
     const enumValues =
       field.valueSet !== undefined
@@ -38,7 +49,7 @@ function fieldToBsonSchema(
     }
 
     if (field.nullable) {
-      const s: Record<string, unknown> = { bsonType: ['null', bsonType] };
+      const s: Record<string, unknown> = { bsonType: bsonTypeKeyword(withNull(bsonTypes)) };
       if (enumValues) s['enum'] = [...enumValues, null];
       return s;
     }

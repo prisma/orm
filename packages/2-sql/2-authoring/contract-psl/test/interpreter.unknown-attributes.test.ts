@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresNativeScalarTypeDescriptors,
@@ -17,6 +18,7 @@ function interpret(schema: string) {
     authoringContributions: { type: postgresScalarAuthoringTypes },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     capabilities: { sql: { scalarList: true, checkConstraint: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
     ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),

@@ -28,6 +28,7 @@ import {
   OrderByItem,
   OrExpr,
   ParamRef,
+  PreparedParamRef,
   ProjectionItem,
   SelectAst,
   type SqlQueryable,
@@ -95,6 +96,36 @@ const contract = new SqlContractSerializer().deserializeContract({
 
 describe('Postgres adapter', () => {
   const adapter = createPostgresAdapter();
+
+  it.each([
+    ['eq', '='],
+    ['neq', '!='],
+    ['isNotDistinctFrom', 'IS NOT DISTINCT FROM'],
+    ['isDistinctFrom', 'IS DISTINCT FROM'],
+  ] as const)('lowers %s without changing ordinary equality', (op, sqlOperator) => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withWhere(
+        new BinaryExpr(
+          op,
+          ColumnRef.of('user', 'id'),
+          ParamRef.of(null, { codec: { codecId: 'pg/int4@1' } }),
+        ),
+      );
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      `SELECT "user"."id" AS "id" FROM "user" WHERE "user"."id" ${sqlOperator} $1`,
+    );
+  });
+
+  it('types a standalone prepared projection from its declared codec', () => {
+    const ref = PreparedParamRef.of('value', { codecId: 'pg/int4@1' }, true);
+    const ast = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of('value', ref),
+    ]);
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      'SELECT $1::integer AS "value" FROM "user"',
+    );
+  });
 
   it('lowers rich select statements with aggregates, JSON, and subqueries', () => {
     const subquery = SelectAst.from(TableSource.named('post'))
@@ -304,7 +335,6 @@ describe('Postgres adapter', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'vector_length({{self}})',
       },
     });
@@ -356,6 +386,43 @@ describe('Postgres adapter', () => {
 
     expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
       'INSERT INTO "user" DEFAULT VALUES ON CONFLICT ("email") DO NOTHING',
+    );
+  });
+
+  it('renders a targetless DO NOTHING conflict clause without a column list', () => {
+    const ast = InsertAst.into(TableSource.named('user'))
+      .withRows([
+        {
+          id: ParamRef.of(1, { name: 'id', codec: { codecId: 'pg/int4@1' } }),
+          email: ParamRef.of('a@example.com', { name: 'email', codec: { codecId: 'pg/text@1' } }),
+        },
+      ])
+      .withOnConflict(InsertOnConflict.doNothing());
+
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      'INSERT INTO "user" ("id", "email") VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    );
+  });
+
+  it('throws when a targetless conflict clause carries DO UPDATE SET', () => {
+    const ast = InsertAst.into(TableSource.named('user'))
+      .withRows([
+        {
+          id: ParamRef.of(1, { name: 'id', codec: { codecId: 'pg/int4@1' } }),
+          email: ParamRef.of('a@example.com', { name: 'email', codec: { codecId: 'pg/text@1' } }),
+        },
+      ])
+      .withOnConflict(
+        InsertOnConflict.doNothing().doUpdateSet({
+          email: ParamRef.of('b@example.com', { name: 'email', codec: { codecId: 'pg/text@1' } }),
+        }),
+      );
+
+    expect(() => adapter.lower(ast, { contract, params: [] })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: expect.stringContaining('INSERT onConflict requires at least one conflict column'),
+      }),
     );
   });
 
@@ -562,8 +629,12 @@ describe('Postgres adapter', () => {
       expect(descriptors.length).toBeGreaterThan(0);
       const ids = descriptors.map((d: { codecId: string }) => d.codecId);
       expect(ids).toEqual(expect.arrayContaining(['pg/numeric@1', 'pg/timestamptz-temporal@1']));
+      const parameterized = descriptors.filter((d) => d.isParameterized).map((d) => d.codecId);
+      expect(parameterized).toEqual(
+        expect.arrayContaining(['pg/numeric@1', 'pg/timestamptz-temporal@1']),
+      );
       for (const descriptor of descriptors) {
-        expect(descriptor.paramsSchema).toBeDefined();
+        expect(descriptor.isParameterized).toBe(descriptor.paramsSchema !== undefined);
       }
     },
     timeouts.coldTransformImport,
@@ -670,7 +741,7 @@ describe('Postgres adapter', () => {
       updated_at: new Date('2026-04-30T00:00:00Z'),
       app_tag: 'app',
       meta: {},
-      invariants: ['inv-1'],
+      invariants: '{"inv-1"}',
     };
     let call = 0;
     const queryable: SqlQueryable = {

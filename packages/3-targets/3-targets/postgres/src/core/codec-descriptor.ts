@@ -1,12 +1,15 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
+  type AnyCodecDescriptorTemplate,
   type Codec,
   type CodecDescriptor,
   CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
+  type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import {
@@ -101,24 +104,46 @@ export abstract class PostgresCodecDescriptor<P = void>
   }
 }
 
-type DescriptorParams<D extends AnyCodecDescriptor> =
-  D extends CodecDescriptor<infer P> ? P : never;
+type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
+  D extends CodecDescriptorTemplate<infer P> ? P : never;
 
-export interface PostgresCodecOptions<P> {
+/** The codec the family descriptor's factory builds, which a `factory` option's codec extends. */
+type DescriptorCodec<D extends AnyCodecDescriptorTemplate> = ReturnType<ReturnType<D['factory']>>;
+
+export interface PostgresCodecOptions<
+  P,
+  C extends Codec<string, readonly CodecTrait[], unknown, unknown> = Codec<
+    string,
+    readonly CodecTrait[],
+    unknown,
+    unknown
+  >,
+> {
+  /** The data type the adapted codec represents here. A template names none; this target does. */
+  readonly dataType: DataTypeId;
   readonly nativeType: (params: P) => string;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
   readonly jsonArrayProjection?: (expression: ProjectionExpr, params: P) => ProjectionExpr;
+  /**
+   * Builds the codec in place of the adapted one, where PostgreSQL stores fewer values than the family codec reads: a subclass of the family codec whose `decodeJson` adds PostgreSQL's own rule.
+   */
+  readonly factory?: (
+    descriptor: PostgresCodecDescriptor<P>,
+    params: P,
+  ) => (ctx: CodecInstanceContext) => C;
 }
 
-export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptor> = Pick<
+export type AdaptedPostgresCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
   D,
-  keyof CodecDescriptor<DescriptorParams<D>>
+  keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
+  Pick<CodecDescriptor, 'dataType'> &
   Pick<AnyPostgresCodecDescriptor, 'descriptorKind' | 'nativeTypeFor' | 'projectJson'>;
 
-class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends PostgresCodecDescriptor<
-  DescriptorParams<D>
-> {
+class PostgresCodecDescriptorAdapter<
+  D extends AnyCodecDescriptorTemplate,
+> extends PostgresCodecDescriptor<DescriptorParams<D>> {
+  override readonly dataType: DataTypeId;
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly targetTypes: readonly string[];
@@ -138,11 +163,16 @@ class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends Postg
     private readonly options: PostgresCodecOptions<DescriptorParams<D>>,
   ) {
     super();
+    this.dataType = options.dataType;
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
     this.paramsSchema = descriptor.paramsSchema;
-    this.factory = (params) => descriptor.factory(params);
+    const factory = options.factory;
+    this.factory =
+      factory === undefined
+        ? (params) => descriptor.factory(params)
+        : (params) => factory(this, params);
 
     const renderOutputType = descriptor.renderOutputType;
     if (renderOutputType !== undefined) {
@@ -185,9 +215,9 @@ class PostgresCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends Postg
   }
 }
 
-export function postgresCodec<D extends AnyCodecDescriptor>(
+export function postgresCodec<D extends AnyCodecDescriptorTemplate>(
   descriptor: D,
-  options: PostgresCodecOptions<DescriptorParams<D>>,
+  options: PostgresCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>,
 ): AdaptedPostgresCodecDescriptor<D> {
   return blindCast<
     AdaptedPostgresCodecDescriptor<D>,
@@ -215,11 +245,12 @@ export function isPostgresCodecDescriptor(value: unknown): value is AnyPostgresC
     Array.isArray(value.targetTypes) &&
     value.targetTypes.every((targetType) => typeof targetType === 'string') &&
     'paramsSchema' in value &&
-    isObjectLike(value.paramsSchema) &&
-    '~standard' in value.paramsSchema &&
-    isObjectLike(value.paramsSchema['~standard']) &&
-    'validate' in value.paramsSchema['~standard'] &&
-    typeof value.paramsSchema['~standard'].validate === 'function' &&
+    (value.paramsSchema === undefined ||
+      (isObjectLike(value.paramsSchema) &&
+        '~standard' in value.paramsSchema &&
+        isObjectLike(value.paramsSchema['~standard']) &&
+        'validate' in value.paramsSchema['~standard'] &&
+        typeof value.paramsSchema['~standard'].validate === 'function')) &&
     'isParameterized' in value &&
     typeof value.isParameterized === 'boolean' &&
     'factory' in value &&

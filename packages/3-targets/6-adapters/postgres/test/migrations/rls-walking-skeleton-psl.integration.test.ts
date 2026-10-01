@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
@@ -9,13 +10,14 @@ import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresRlsPolicy,
   PostgresSchema,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { postgresScalarAuthoringTypes } from '../../src/core/control-mutation-defaults';
 import {
   controlAdapter,
   createDriver,
@@ -27,6 +29,8 @@ import {
   postgresTargetDescriptor,
   testTimeout,
 } from './fixtures/runner-fixtures';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 // ============================================================================
 // PSL source — the author-facing input
@@ -64,17 +68,17 @@ function buildPslContract() {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarColumnDescriptors = buildScalarTypeDescriptors();
 
-  const { document, sourceFile } = parse(PSL);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  const { document, sources } = parse(PSL, 'rls-walking-skeleton-psl.integration.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
 
   return interpretPslDocumentToSqlContract({
+    documents: [document],
+    dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: {
       kind: 'target' as const,
       familyId: 'sql' as const,

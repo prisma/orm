@@ -424,121 +424,12 @@ describe('emitter', () => {
       queryOperationTypeImports,
     };
 
-    const result = await emit(ir, options, mockSqlHook);
+    const hookUsingQueryOperations = createMockSpi({
+      getFamilyTypeAliases: () => 'export type QueryOperationTypes = ExtQueryOpTypes<CodecTypes>;',
+    });
+
+    const result = await emit(ir, options, hookUsingQueryOperations);
     expect(result.contractDts).toContain("from '@ext/query'");
-  });
-
-  it('threads resolveFieldTypeParams from emitter SPI through to field type maps', async () => {
-    // The emitter wraps `emitter.resolveFieldTypeParams(name, field, model, contract)`
-    // into a `(name, field) => …` adapter for `generateBothFieldTypesMaps`.
-    const ir = createTestContract({
-      models: {
-        User: {
-          storage: { namespaceId: '__unbound__', table: 'user' },
-          fields: {
-            id: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
-            embedding: {
-              type: { kind: 'scalar', codecId: 'pg/vector@1' },
-              nullable: false,
-            },
-          },
-          relations: {},
-        },
-      },
-    });
-
-    const calls: Array<{
-      modelName: string;
-      fieldName: string;
-      hasModel: boolean;
-      hasContract: boolean;
-    }> = [];
-    const hookWithResolver = createMockSpi({
-      resolveFieldTypeParams: (modelName, fieldName, model, contract) => {
-        calls.push({
-          modelName,
-          fieldName,
-          hasModel: model !== undefined,
-          hasContract: contract !== undefined,
-        });
-        if (modelName === 'User' && fieldName === 'embedding') {
-          return { length: 1536 };
-        }
-        return undefined;
-      },
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    await emit(ir, options, hookWithResolver);
-
-    const userEmbeddingCall = calls.find(
-      (c) => c.modelName === 'User' && c.fieldName === 'embedding',
-    );
-    expect(userEmbeddingCall).toBeDefined();
-    expect(userEmbeddingCall?.hasModel).toBe(true);
-    expect(userEmbeddingCall?.hasContract).toBe(true);
-  });
-
-  it('does not invoke resolveFieldTypeParams when the contract has no models', async () => {
-    // With no models in the contract, field-map generation has no
-    // fields to walk and never reaches the wrapper. The wrapper itself
-    // also carries an internal `if (!model) return undefined` guard,
-    // but field-map generation already filters non-model entries
-    // before invoking the resolver, so that internal branch is
-    // unreachable from the emit path. This test pins the upstream
-    // short-circuit: the SPI delegate must stay unobserved when the
-    // contract has nothing to walk.
-    const ir = createTestContract({ storage: emptySqlStorage });
-
-    let resolverInvocations = 0;
-    const hookWithResolver = createMockSpi({
-      resolveFieldTypeParams: () => {
-        resolverInvocations += 1;
-        return undefined;
-      },
-    });
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    await emit(ir, options, hookWithResolver);
-    expect(resolverInvocations).toBe(0);
-  });
-
-  it('does not build a resolveFieldTypeParams wrapper when the SPI omits the hook', async () => {
-    // When `emitter.resolveFieldTypeParams` is undefined, the wrapper is
-    // also undefined and `generateBothFieldTypesMaps` falls back to the
-    // codec-id-keyed `CodecLookup` only. This guards the
-    // `emitter.resolveFieldTypeParams ?` ternary in
-    // `generate-contract-dts.ts` so a future refactor can't accidentally
-    // start synthesizing a no-op resolver.
-    const ir = createTestContract({
-      models: {
-        User: {
-          storage: { namespaceId: '__unbound__', table: 'user' },
-          fields: {
-            id: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
-          },
-          relations: {},
-        },
-      },
-    });
-    const baseSpi = createMockSpi();
-    expect(baseSpi.resolveFieldTypeParams).toBeUndefined();
-
-    const options: EmitStackInput = {
-      codecTypeImports: [],
-      extensionIds: [],
-    };
-
-    const result = await emit(ir, options, baseSpi);
-    expect(result.contractDts).toContain('export type FieldOutputTypes');
   });
 
   it('emits value object clauses when the domain namespace declares value objects', async () => {

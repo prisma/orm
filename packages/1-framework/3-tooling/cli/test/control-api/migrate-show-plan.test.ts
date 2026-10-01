@@ -35,7 +35,6 @@ describe('executeMigrateShowPlan', () => {
   let tempDir: string;
   let migrationsDir: string;
   let appMigrationsDir: string;
-  let configPath: string;
   let config: PrismaNextConfig;
   let firstDirName: string;
   let firstMigrationHash: string;
@@ -77,7 +76,6 @@ describe('executeMigrateShowPlan', () => {
     migrationsDir = join(tempDir, 'migrations');
     appMigrationsDir = join(migrationsDir, 'app');
     await mkdir(join(appMigrationsDir, 'refs'), { recursive: true });
-    configPath = join(tempDir, 'prisma.config.ts');
     await writeFile(join(tempDir, 'contract.json'), JSON.stringify(contractJsonForHash(HASH_B)));
 
     const first = await writeAttestedMigration({
@@ -124,7 +122,6 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
-      configPath,
       from: HASH_A,
     });
     expect(result.ok).toBe(true);
@@ -149,7 +146,6 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
-      configPath,
       from: EMPTY_CONTRACT_HASH,
     });
     expect(result.ok).toBe(true);
@@ -168,7 +164,6 @@ describe('executeMigrateShowPlan', () => {
     const result = await executeMigrateShowPlan({
       config,
       cwd: tempDir,
-      configPath,
       from: HASH_A,
       onPreflightComplete,
     });

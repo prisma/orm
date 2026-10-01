@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/23902 (postgres matrix entry; allProviders).
 //
@@ -29,6 +31,7 @@ model User {
   email String  @unique
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -43,4 +46,5 @@ model Post {
   authorId  String?
 
   @@index([authorId])
+  @@map("post")
 }

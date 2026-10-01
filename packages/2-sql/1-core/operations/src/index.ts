@@ -8,7 +8,6 @@ import type { QueryOperationTypeEntry } from '@internal/sql-contract/types';
 
 export interface SqlLoweringSpec {
   readonly targetFamily: 'sql';
-  readonly strategy: 'infix' | 'function';
   readonly template: string;
 }
 

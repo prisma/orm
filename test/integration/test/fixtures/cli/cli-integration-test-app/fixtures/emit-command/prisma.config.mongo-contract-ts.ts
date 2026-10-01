@@ -4,16 +4,17 @@ import type { Contract } from '@internal/contract/types';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { ok } from '@internal/utils/result';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { contract } from './contract.mongo';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: mongoFamilyDescriptor,
     target: mongoTargetDescriptor,
     adapter: mongoAdapter,
     contract: {
       source: {
+        format: 'typescript',
         load: async () => ok(contract as Contract),
       },
       output: 'output/contract.json',

@@ -21,6 +21,7 @@ import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
 import {
   PG_DATE_STRING_CODEC_ID,
   PG_DATE_TEMPORAL_CODEC_ID,
+  PG_ENUM_CODEC_ID,
   PG_FLOAT_CODEC_ID,
   PG_FLOAT4_CODEC_ID,
   PG_FLOAT8_CODEC_ID,
@@ -38,6 +39,7 @@ import {
   PG_TIME_TEMPORAL_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
@@ -121,9 +123,10 @@ const DOUBLE_PRECISION_CODECS = [
 ] as const;
 
 /**
- * Codecs whose `min`/`max` returns the input type and whose traits do not already say so: the temporal types, `inet`, and `text[]` advertise `order` or `equality`, which `uuid`, `bit`, `bit varying`, `bool`, `bytea`, `json`, and `jsonb` also advertise while having no `min`/`max` at all. An exact overload per supported codec is therefore the only honest shape — a trait fallback over `order` would claim the unsupported ones too.
+ * Codecs whose `min`/`max` returns the input type and whose traits do not already say so: the temporal types, `inet`, `text[]`, and native enums advertise `order` or `equality`, which `uuid`, `bit`, `bit varying`, `bool`, `bytea`, `json`, and `jsonb` also advertise while having no `min`/`max` at all. An exact overload per supported codec is therefore the only honest shape — a trait fallback over `order` would claim the unsupported ones too.
  */
 const MIN_MAX_PRESERVING_CODECS = [
+  PG_ENUM_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_INTERVAL_CODEC_ID,
   PG_INET_CODEC_ID,
@@ -131,6 +134,7 @@ const MIN_MAX_PRESERVING_CODECS = [
   PG_DATE_STRING_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
@@ -162,7 +166,7 @@ export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor>
     input: { kind: 'any' },
     output: { kind: 'codec', codecId: PG_INT8_NUMBER_CODEC_ID },
     nullable: false,
-    emptyResultJson: 0,
+    emptyResultJson: '0',
   },
   {
     operation: 'countBigInt',

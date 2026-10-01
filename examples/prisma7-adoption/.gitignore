@@ -1,0 +1,4 @@
+.env
+generated/prisma7/
+node_modules/
+.story-*/

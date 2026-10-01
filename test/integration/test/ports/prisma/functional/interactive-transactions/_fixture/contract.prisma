@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `interactive-transactions`
 // (packages/client/tests/functional/interactive-transactions, postgres matrix entry).
 //
@@ -25,6 +27,7 @@ model User {
   name  String?
   posts Post[]
   val   Int?
+  @@map("user")
 }
 
 model Post {
@@ -36,4 +39,5 @@ model Post {
   content   String?
   authorId  String?
   author    User?    @relation(fields: [authorId], references: [id])
+  @@map("post")
 }

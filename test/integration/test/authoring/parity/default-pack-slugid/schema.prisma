@@ -2,4 +2,5 @@
 
 model User {
   id String @id @default(slugid())
+  @@map("user")
 }

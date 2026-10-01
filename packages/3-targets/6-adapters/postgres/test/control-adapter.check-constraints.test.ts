@@ -1,7 +1,7 @@
 import type { SqlControlDriverInstance } from '@internal/sql-contract/types';
 import { SqlCheckConstraintIR } from '@internal/sql-schema-ir/types';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../src/core/control-adapter';
 
 /**

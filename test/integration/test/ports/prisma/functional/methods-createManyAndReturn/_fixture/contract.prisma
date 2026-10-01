@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `methods/createMany`
 // (packages/client/tests/functional/methods/createMany, postgres matrix entry):
 //
@@ -20,6 +22,7 @@ model User {
   email String  @unique
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -27,4 +30,5 @@ model Post {
   title  String
   user   User   @relation(fields: [userId], references: [id])
   userId String
+  @@map("post")
 }

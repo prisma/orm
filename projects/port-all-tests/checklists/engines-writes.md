@@ -481,7 +481,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [ ] `writes::nested_mutations::nested_create_many::create_many_on_create` — basic nested createMany on top-level create works [connectors: all]
 - [ ] `writes::nested_mutations::nested_create_many::create_many_shorthand_on_create` — nested createMany shorthand (single object data) on create works [connectors: all]
 - [ ] `writes::nested_mutations::nested_create_many::nested_createmany_fail_dups` — nested createMany errors on duplicates by default (2002) [connectors: exclude:mongodb]
-- [ ] `writes::nested_mutations::nested_create_many::no_error_on_dups_when_skip_dups` — nested createMany with skipDuplicates true ignores duplicates [connectors: exclude:sqlite,sqlserver,mongodb]
+- [x] `writes::nested_mutations::nested_create_many::no_error_on_dups_when_skip_dups` — nested createMany with skipDuplicates true ignores duplicates [connectors: exclude:sqlite,sqlserver,mongodb] → non-ported `test/integration/test/ports/engines/non-ported.md`
 - [ ] `writes::nested_mutations::nested_create_many::allow_create_large_number_records` — nested createMany allows creating 1000 records (horizontal partitioning/batching) [connectors: all]
 
 ### query-engine/connector-test-kit-rs/query-engine-tests/tests/writes/nested_mutations/not_using_schema_base/nested_update_inside_update.rs
@@ -576,7 +576,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [ ] `writes::top_level_mutations::create_many::basic_create_many_autoinc_cockroachdb` — createMany autoincrement (BigInt id) on CockroachDB, count 3 [connectors: only:cockroachdb; caps:createmany]
 - [ ] `writes::top_level_mutations::create_many::create_many_defaults_nulls` — omitted field uses default, explicit null stays null [connectors: caps:createmany]
 - [ ] `writes::top_level_mutations::create_many::create_many_error_dups` — duplicate ids error with 2002 by default [connectors: caps:createmany]
-- [ ] `writes::top_level_mutations::create_many::create_many_no_error_skip_dup` — skipDuplicates:true dedupes, count 1 [connectors: caps:createmany,createskipduplicates]
+- [x] `writes::top_level_mutations::create_many::create_many_no_error_skip_dup` — skipDuplicates:true dedupes, count 1 [connectors: caps:createmany,createskipduplicates] → PASS `test/integration/test/ports/engines/writes/top_level_mutations/create_many/create_many.test.ts` › `skipping duplicates dedupes the batch and counts one row`
 - [ ] `writes::top_level_mutations::create_many::large_num_records_horizontal` — creates 1000 records (row-count batching), count 1000 [connectors: caps:createmany]
 - [ ] `writes::top_level_mutations::create_many::large_num_records_vertical` — creates 2000 4-param rows (param batching), count 2000 [connectors: caps:createmany]
 - [ ] `writes::top_level_mutations::create_many::create_many_map_behavior` — createMany with @map DateTime column, count 2 [connectors: caps:createmany]
@@ -596,7 +596,7 @@ Protocol: each line is one source test. `[ ]` = not yet dispositioned. The Opus 
 - [ ] `writes::top_level_mutations::create_many_and_return::basic_create_many_autoinc_cockroachdb` — createManyAndReturn autoincrement (BigInt) on CockroachDB [connectors: only:cockroachdb; caps:createmany,insertreturning]
 - [ ] `writes::top_level_mutations::create_many_and_return::create_many_defaults_nulls` — omitted uses default, explicit null stays null, returned + findMany [connectors: caps:createmany,insertreturning]
 - [ ] `writes::top_level_mutations::create_many_and_return::create_many_error_dups` — duplicate ids error 2002 [connectors: caps:createmany,insertreturning]
-- [ ] `writes::top_level_mutations::create_many_and_return::create_many_no_error_skip_dup` — skipDuplicates:true returns single row [connectors: caps:createmany,insertreturning,createskipduplicates]
+- [x] `writes::top_level_mutations::create_many_and_return::create_many_no_error_skip_dup` — skipDuplicates:true returns single row [connectors: caps:createmany,insertreturning,createskipduplicates] → PASS `test/integration/test/ports/engines/writes/top_level_mutations/create_many/create_many_and_return.test.ts` › `skipping duplicates returns the single row the database inserted`
 - [ ] `writes::top_level_mutations::create_many_and_return::large_num_records_horizontal` — createManyAndReturn 1000 records, array length 1000 [connectors: caps:createmany,insertreturning]
 - [ ] `writes::top_level_mutations::create_many_and_return::large_num_records_vertical` — createManyAndReturn 2000 4-param rows, array length 2000 [connectors: caps:createmany,insertreturning]
 - [ ] `writes::top_level_mutations::create_many_and_return::create_many_map_behavior` — createManyAndReturn with @map DateTime column, returns both rows [connectors: caps:createmany,insertreturning]

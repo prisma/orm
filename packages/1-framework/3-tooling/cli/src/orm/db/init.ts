@@ -1,22 +1,26 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
-import { resolveRefAdvancementFields } from '../../control-api/operations/ref-advancement';
-import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorUnexpected,
-} from '../../utils/cli-errors';
-import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
+  buildRefAdvancementFields,
+  type ContractIR,
+  computeRefAdvancementName,
+  NO_REF_ADVANCEMENT,
+  preflightRefAdvancement,
+} from '../../control-api/operations/ref-advancement';
+import type { CreateControlClient, DbInitSuccess } from '../../control-api/types';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { closeQuietly } from '../../utils/command-helpers';
 import { mapDbInitFailure } from '../../utils/db-init-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import { migrationResultBlocks, migrationResultNextActions } from './migration-blocks';
@@ -139,6 +143,25 @@ export function createDbInitCommand(createClient: CreateControlClient) {
       const { client, contractJson, contractPath, dbConnection, migrationsDir, refsDir } =
         prepared.value;
 
+      const refName = computeRefAdvancementName({
+        ...ifDefined('advanceRef', args.flags.advanceRef),
+        ...ifDefined('db', args.flags.db),
+      });
+      let advancement: { readonly name: string; readonly contractIR: ContractIR } | null = null;
+      if (refName !== null) {
+        const preflight = await preflightRefAdvancement({
+          name: refName,
+          contractJson,
+          contractJsonPath: contractPath,
+          projectDir: baseDirFor(ctx.config),
+          client,
+        });
+        if (!preflight.ok) {
+          return notOk(normalizeError(preflight.failure));
+        }
+        advancement = { name: refName, contractIR: preflight.value };
+      }
+
       let document: MigrationCommandResult;
       try {
         await client.connect(dbConnection);
@@ -157,32 +180,34 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           result.value.mode === 'apply'
             ? (result.value.marker?.storageHash ?? result.value.destination.storageHash)
             : result.value.destination.storageHash;
-        const advancement = await resolveRefAdvancementFields({
-          ...ifDefined('advanceRef', args.flags.advanceRef),
-          ...ifDefined('db', args.flags.db),
-          refsDir,
-          migrationsDir,
-          contractJson,
-          contractJsonPath: contractPath,
-          mode: result.value.mode,
-          hash: advancementHash,
-        });
-        if (!advancement.ok) {
-          return notOk(normalizeError(advancement.failure));
+        const advanced =
+          advancement === null
+            ? ok(NO_REF_ADVANCEMENT)
+            : await buildRefAdvancementFields({
+                name: advancement.name,
+                refsDir,
+                migrationsDir,
+                contractIR: advancement.contractIR,
+                mode: result.value.mode,
+                hash: advancementHash,
+              });
+        if (!advanced.ok) {
+          return notOk(normalizeError(advanced.failure));
         }
 
         document = initDocument({
           value: result.value,
           targetId: ctx.config.target.targetId,
-          advancedRef: advancement.value.advancedRef,
-          plannedAdvanceRef: advancement.value.plannedAdvanceRef,
+          advancedRef: advanced.value.advancedRef,
+          plannedAdvanceRef: advanced.value.plannedAdvanceRef,
           startedAt,
         });
       } catch (error) {
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+        if (
+          !CliStructuredError.is(error) &&
+          isStructuredError(error) &&
+          error.code === 'CONTRACT.VALIDATION_FAILED'
+        ) {
           return notOk(
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
@@ -191,14 +216,10 @@ export function createDbInitCommand(createClient: CreateControlClient) {
             ),
           );
         }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db init: ${safeMessage}`,
+            errorFromCaught(error, (message) => `Unexpected error during db init: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
             }),
           ),
         );

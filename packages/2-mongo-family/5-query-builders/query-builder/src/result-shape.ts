@@ -1,44 +1,78 @@
-import type { ContractField } from '@internal/contract/types';
+import type { ContractField, ContractValueObject } from '@internal/contract/types';
 import type { MongoModelDefinition } from '@internal/mongo-contract';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
 import { freezeMongoFieldShape, freezeMongoResultShape } from '@internal/mongo-query-ast/execution';
 
-export function contractFieldToMongoFieldShape(field: ContractField): MongoFieldShape {
-  const { type, nullable, many } = field;
-  if (type.kind === 'valueObject' || type.kind === 'union') {
-    return Object.freeze({ kind: 'unknown' as const });
+export type MongoValueObjects = Readonly<Record<string, ContractValueObject>>;
+
+const UNKNOWN: MongoFieldShape = Object.freeze({ kind: 'unknown' as const });
+
+function valueObjectFields(
+  valueObject: ContractValueObject,
+  valueObjects: MongoValueObjects,
+  enclosing: ReadonlySet<string>,
+): Record<string, MongoFieldShape> {
+  return Object.fromEntries(
+    Object.entries(valueObject.fields).map(([name, field]) => [
+      name,
+      fieldShape(field, valueObjects, enclosing),
+    ]),
+  );
+}
+
+function elementShape(
+  field: ContractField,
+  valueObjects: MongoValueObjects,
+  enclosing: ReadonlySet<string>,
+): MongoFieldShape {
+  const { type } = field;
+  if (type.kind === 'scalar') {
+    return { kind: 'leaf', codecId: type.codecId, nullable: false };
   }
-  if (type.kind !== 'scalar') {
-    return Object.freeze({ kind: 'unknown' as const });
+  if (type.kind !== 'valueObject' || enclosing.has(type.name)) return UNKNOWN;
+  const valueObject = valueObjects[type.name];
+  if (valueObject === undefined) return UNKNOWN;
+  return {
+    kind: 'document',
+    nullable: false,
+    fields: valueObjectFields(valueObject, valueObjects, new Set([...enclosing, type.name])),
+  };
+}
+
+function fieldShape(
+  field: ContractField,
+  valueObjects: MongoValueObjects,
+  enclosing: ReadonlySet<string>,
+): MongoFieldShape {
+  if (field.dict === true) return UNKNOWN;
+  const element = elementShape(field, valueObjects, enclosing);
+  if (element.kind === 'unknown') return UNKNOWN;
+  if (field.many === true) {
+    return { kind: 'array', nullable: field.nullable, element };
   }
-  if (field.dict === true) {
-    return Object.freeze({ kind: 'unknown' as const });
-  }
-  if (many === true) {
-    return freezeMongoFieldShape({
-      kind: 'array',
-      nullable,
-      element: { kind: 'leaf', codecId: type.codecId, nullable: false },
-    });
-  }
-  return freezeMongoFieldShape({
-    kind: 'leaf',
-    codecId: type.codecId,
-    nullable,
-  });
+  return { ...element, nullable: field.nullable };
+}
+
+/**
+ * The shape the runtime decodes one field against. A value-object field becomes a document of its own fields when `valueObjects` holds its definition; a value object nested inside itself is left undecoded.
+ */
+export function contractFieldToMongoFieldShape(
+  field: ContractField,
+  valueObjects: MongoValueObjects = {},
+): MongoFieldShape {
+  return freezeMongoFieldShape(fieldShape(field, valueObjects, new Set()));
 }
 
 export function contractModelToMongoResultShape(
   model: MongoModelDefinition,
   options?: {
     readonly selection?: readonly string[];
-    readonly includeRelationNames?: readonly string[];
+    /** The shape of each included relation, keyed by relation name. */
+    readonly includes?: Readonly<Record<string, MongoFieldShape>>;
+    readonly valueObjects?: MongoValueObjects;
   },
 ): MongoResultShape {
-  const fields: Record<string, MongoFieldShape> = {};
-  for (const rel of options?.includeRelationNames ?? []) {
-    fields[rel] = Object.freeze({ kind: 'unknown' as const });
-  }
+  const fields: Record<string, MongoFieldShape> = { ...options?.includes };
   const modelFields = model.fields;
   // An explicit empty selection is honored as-is (returns a document shape
   // with no fields). Only the absence of a selection falls back to the model's
@@ -51,10 +85,10 @@ export function contractModelToMongoResultShape(
     }
     const cf = modelFields[key];
     if (!cf) {
-      fields[key] = Object.freeze({ kind: 'unknown' as const });
+      fields[key] = UNKNOWN;
       continue;
     }
-    fields[key] = contractFieldToMongoFieldShape(cf);
+    fields[key] = contractFieldToMongoFieldShape(cf, options?.valueObjects);
   }
   return freezeMongoResultShape({ kind: 'document', fields });
 }

@@ -12,6 +12,7 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -37,6 +38,7 @@ describe('PSL ↔ TS namespace parity', () => {
   model User {
     id Int @id
     posts public.Post[]
+    @@map("user")
   }
 }
 
@@ -45,6 +47,7 @@ namespace public {
     id    Int @id
     userId Int
     user  auth.User @relation(fields: [userId], references: [id])
+    @@map("post")
   }
 }
 `,
@@ -58,6 +61,7 @@ namespace public {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -171,6 +175,7 @@ namespace public {
   id    Int @id
   userId Int
   user  supabase:auth.User @relation(fields: [userId], references: [id])
+  @@map("profile")
 }
 `,
       sourceId: 'schema.prisma',
@@ -184,6 +189,7 @@ namespace public {
       composedExtensions: ['supabase'],
       composedExtensionContracts: new Map([['supabase', syntheticExtensionContract]]),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -255,6 +261,7 @@ namespace public {
       composedExtensions: ['supabase'],
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 

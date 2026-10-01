@@ -1,3 +1,5 @@
+// use prisma-8
+
 types {
   Decimal65_30 = Numeric(65, 30)
 }
@@ -5,4 +7,5 @@ types {
 model TestModel {
   id      Int             @id
   decimal Decimal65_30?
+  @@map("testModel")
 }

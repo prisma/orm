@@ -1,0 +1,68 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.title\": @default(\"untitled\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"title\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Post.count\": @default(0) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"count\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"Post.token\": @default(uuid()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"token\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"Post.code\": @default(cuid()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"code\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Post.stamp\": @default(now()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"stamp\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Field \"Post.other\": @default(auto()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"other\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Field \"Post.legacy\": @default(dbgenerated(\"legacy()\")) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"legacy\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 15,
+    "message": "Field \"Post.published\": @default(false) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"published\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 16,
+    "message": "Field \"Post.role\": @default(USER) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every Prisma 6 create call must then pass \"role\". Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 17,
+    "message": "Field \"Post.nickname\": @default(\"anon\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: a Prisma 6 create call that leaves \"nickname\" out no longer gets the default value. Set the value in the application code that creates documents, then remove the default."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 22,
+    "message": "Field \"Address.city\": @default(\"unknown\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. The Prisma 6 client fills this default today, so removing it also changes the Prisma 6 app: every \"Address\" value the Prisma 6 app writes must then include \"city\". Set the value in the application code that creates documents, then remove the default."
+  }
+]

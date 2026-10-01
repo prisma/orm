@@ -4,6 +4,13 @@ export { GroupedCollection } from '../grouped-collection';
 export { createModelAccessor } from '../model-accessor';
 export type { OrmOptions } from '../orm';
 export { orm } from '../orm';
+export type { PreparedCollection } from '../prepared-collection';
+export {
+  createPreparedRowQuery,
+  type PreparedFrom,
+  type PreparedRowQuery,
+  prepareQuery,
+} from '../prepared-row-query';
 export type {
   AggregateBuilder,
   AggregateResult,
@@ -19,6 +26,8 @@ export type {
   IncludeExpr,
   ModelAccessor,
   NumericFieldNames,
+  Orderable,
+  OrderOptions,
   RelatedModelName,
   RelationFilterAccessor,
   RelationMutator,
@@ -28,6 +37,8 @@ export type {
   RelationsOf,
   RuntimeQueryable,
   ShorthandWhereFilter,
+  ToManyRelationAccessor,
+  ToOneRelationAccessor,
   UniqueConstraintCriterion,
 } from '../types';
 export { emptyState } from '../types';

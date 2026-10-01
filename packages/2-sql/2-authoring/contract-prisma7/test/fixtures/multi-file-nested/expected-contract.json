@@ -1,0 +1,166 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "topId": {
+                  "column": "topId"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "topId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "top": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Top"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["topId"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          },
+          "Top": {
+            "storage": {
+              "table": "Top",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "users": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["topId"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    },
+    "Top": {
+      "namespace": "public",
+      "model": "Top"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "3a9f2e182a3602cf9efe72a2ac5026a6993017d7f1803fed3c3360df922aff7c",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "topId": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["topId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Top",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Top": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

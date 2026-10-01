@@ -71,16 +71,20 @@ describe('PSL scalar-list Mongo parity', () => {
         throw new Error('authoring produced no contract');
       }
 
+      const sqlFamily = sql.create(sqlStack);
       const sqlEmitted = await emit(sqlResult.contract, sqlStack, sql.emission, {
         serializeContract: (c) => sqlSerializeContract(c) as unknown as JsonObject,
+        deserializeContract: (json) => sqlFamily.deserializeContract(json),
         ...sqlContractCanonicalizationHooks,
       });
+      const mongoFamily = mongoFamilyDescriptor.create(mongoStack);
       const mongoEmitted = await emit(
         mongoResult.contract,
         mongoStack,
         mongoFamilyDescriptor.emission,
         {
           serializeContract: (c) => mongoSerializeContract(c) as unknown as JsonObject,
+          deserializeContract: (json) => mongoFamily.deserializeContract(json),
           ...mongoContractCanonicalizationHooks,
         },
       );

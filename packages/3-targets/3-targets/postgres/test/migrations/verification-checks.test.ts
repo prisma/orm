@@ -41,7 +41,6 @@ describe('tableExistsAst — PG to_regclass check builder', () => {
 
       const opExpr = nullCheck.expr as OperationExpr;
       expect(opExpr.kind).toBe('operation');
-      expect(opExpr.lowering.strategy).toBe('function');
       expect(opExpr.lowering.template).toBe('to_regclass({{self}})');
 
       const selfParam = opExpr.self as ParamRef;

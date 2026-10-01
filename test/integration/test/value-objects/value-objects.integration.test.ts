@@ -7,11 +7,13 @@ import {
   UNBOUND_DOMAIN_NAMESPACE_ID,
 } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
 import { mongoOrm } from '@internal/mongo-orm';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
 import { describeWithMongoDB } from '../mongo/setup';
@@ -68,24 +70,26 @@ const postgresScalarTypeDescriptors = new Map([
 function interpretMongoPsl(schema: string) {
   const mongoScalarTypeDescriptors = new Map([
     ['String', 'mongo/string@1'],
-    ['Int', 'mongo/int32@1'],
-    ['Boolean', 'mongo/bool@1'],
-    ['DateTime', 'mongo/date@1'],
+    ['Int32', 'mongo/int32@1'],
+    ['Bool', 'mongo/bool@1'],
+    ['Date', 'mongo/date@1'],
     ['ObjectId', 'mongo/objectId@1'],
-    ['Float', 'mongo/double@1'],
+    ['Double', 'mongo/double@1'],
   ]);
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: {},
+  const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return interpretPslDocumentToMongoContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'test.prisma',
+    documents: [document],
+    symbolTable,
+    sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      dataTypeEntries: {},
+      defaultFunctionRegistry: new Map(),
+    },
   });
 }
 
@@ -100,16 +104,16 @@ const postgresScalarAuthoringTypes = Object.fromEntries(
 );
 
 function interpretSqlPsl(schema: string) {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: {},
+  const { document, sources } = parse(schema, 'sql-value-objects.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return interpretPslDocumentToSqlContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'test.prisma',
+    documents: [document],
+    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    symbolTable,
+    sources,
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     // Mirrors the real postgres adapter declaration.
@@ -148,7 +152,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
 
     const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
-    const userCollection = orm['user']!;
+    const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
     const created = await userCollection.create({
@@ -179,7 +183,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
     const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
-    const userCollection = orm['user']!;
+    const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
     await userCollection.create({
@@ -218,7 +222,7 @@ type Address {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
     const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
-    const userCollection = orm['user']!;
+    const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<
       typeof userCollection.create
@@ -257,7 +261,7 @@ describe('value objects: end-to-end SQL pipeline', () => {
         { entries: { table: Record<string, { columns: Record<string, { nativeType: string }> }> } }
       >;
     };
-    const userTable = storage.namespaces['public']!.entries.table['user'];
+    const userTable = storage.namespaces['public']!.entries.table['User'];
     expect(userTable).toBeDefined();
     expect(userTable!.columns['homeAddress']).toBeDefined();
     expect(userTable!.columns['homeAddress']!.nativeType).toBe('jsonb');
@@ -274,7 +278,7 @@ model Item {
 
 type Metadata {
   label String
-  count Int
+  count Int32
 }
 `);
     const sqlResult = interpretSqlPsl(`

@@ -1,33 +1,5 @@
-/**
- * Round-trip test for the declarative extension-block mechanism.
- *
- * Exercises the full pipeline for a declarative extension contribution:
- *
- *   text → parse → validate → lower via entityTypes factory → PolicySelectIr
- *        → serialize → hydrate → IR → print → re-parse → equivalent AST node
- *
- * The fixture (`./fixtures/declarative-policy-select-extension.ts`) contributes
- * NO parser or printer code. All parsing, validation, and printing is
- * framework-owned. The print legs (IR → PSL text → re-parse) confirm the
- * generic printer closes the loop.
- *
- * A stub codec for `fixture-policy/text@1` is registered for the duration of
- * these tests so the validator can accept double-quoted `using` literals and
- * the printer can round-trip them via the codec's JSON encode/decode.
- */
-
-import type { JsonValue } from '@internal/contract/types';
-import {
-  type CodecCallContext,
-  CodecDescriptorImpl,
-  CodecImpl,
-  type CodecInstanceContext,
-  voidParamsSchema,
-} from '@internal/framework-components/codec';
-import {
-  assembleAuthoringContributions,
-  extractCodecLookup,
-} from '@internal/framework-components/control';
+import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
+import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import {
   makePslNamespace,
   makePslNamespaceEntries,
@@ -37,77 +9,22 @@ import {
   type PslSpan,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
-import {
-  type BlockSymbol,
-  buildSymbolTable,
-  findBlockDescriptor,
-  type SymbolTable,
-  validateExtensionBlockFromSymbol,
-} from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { BlockSymbol, PslDiagnostic, SymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { describe, expect, it } from 'vitest';
 import { printPslFromAst } from '../src/print-psl';
 import {
   declarativePolicySelectContributions,
-  FIXTURE_POLICY_CODEC_ID,
   hydratePolicySelectIrFromJson,
   POLICY_SELECT_DISCRIMINATOR,
   POLICY_SELECT_KEYWORD,
   PolicySelectIr,
 } from './fixtures/declarative-policy-select-extension';
 
-// ---------------------------------------------------------------------------
-// Stub codec — accepts any double-quoted string literal for the `using` param
-// ---------------------------------------------------------------------------
-
-class FixturePolicyTextCodec extends CodecImpl<
-  typeof FIXTURE_POLICY_CODEC_ID,
-  readonly ['textual'],
-  string,
-  string
-> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
-    return value;
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-  decodeJson(json: JsonValue): string {
-    return json as string;
-  }
-}
-
-class FixturePolicyTextDescriptor extends CodecDescriptorImpl<void> {
-  override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
-  override readonly traits = ['textual'] as const;
-  override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
-  override factory(): (ctx: CodecInstanceContext) => FixturePolicyTextCodec {
-    return () => new FixturePolicyTextCodec(this);
-  }
-}
-
-const fixtureCodecDescriptor = new FixturePolicyTextDescriptor();
-
-const codecLookup = extractCodecLookup([
-  {
-    id: 'fixture-policy-ext',
-    types: { codecTypes: { codecDescriptors: [fixtureCodecDescriptor] } },
-  },
-]);
-
 const assembled = assembleAuthoringContributions([
   { authoring: declarativePolicySelectContributions },
 ]);
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getFactory() {
   const factoryEntry = assembled.entityTypes['policy_select'];
@@ -121,12 +38,6 @@ function getFactory() {
   return output.factory as (block: unknown, ctx: unknown) => PolicySelectIr;
 }
 
-const POLICY_SELECT_DESCRIPTOR = (() => {
-  const descriptor = findBlockDescriptor(assembled.pslBlockDescriptors, POLICY_SELECT_KEYWORD);
-  if (descriptor === undefined) throw new Error('expected a policy_select block descriptor');
-  return descriptor;
-})();
-
 const ZERO_SPAN: PslSpan = {
   start: { offset: 0, line: 1, column: 1 },
   end: { offset: 0, line: 1, column: 1 },
@@ -134,22 +45,39 @@ const ZERO_SPAN: PslSpan = {
 
 interface ParsedPolicySelect {
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly diagnostics: readonly PslDiagnostic[];
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly blockSymbols: readonly BlockSymbol[];
 }
 
-function parsePolicySelect(schema: string, sourceId = 'r1'): ParsedPolicySelect {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+function parsePolicySelect(schema: string): ParsedPolicySelect {
+  const { document, sources } = parse(schema, 'declarative-policy-select.round-trip.test.psl');
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
+  });
+  const { binder, diagnostics: binderDiagnostics } = createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {
+      Int: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+      String: { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1' } },
+    },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
-  const blockSymbols = Object.values(table.topLevel.blocks).filter(
+  const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
+    symbolTable,
+    sources,
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+    binder,
+  });
+  const diagnostics = [...collectionDiagnostics, ...binderDiagnostics, ...blockDiagnostics];
+  const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(
     (block) => block.keyword === POLICY_SELECT_KEYWORD,
   );
-  return { symbolTable: table, sourceFile, sourceId, blockSymbols };
+  return { symbolTable, diagnostics, parsedBlocks, blockSymbols };
 }
 
 function onlyBlockSymbol(parsed: ParsedPolicySelect): BlockSymbol {
@@ -161,19 +89,10 @@ function onlyBlockSymbol(parsed: ParsedPolicySelect): BlockSymbol {
   return block;
 }
 
-function reconstruct(_parsed: ParsedPolicySelect, block: BlockSymbol): PslExtensionBlock {
-  return block.block;
-}
-
-function validate(parsed: ParsedPolicySelect, block: BlockSymbol) {
-  return validateExtensionBlockFromSymbol({
-    block,
-    descriptor: POLICY_SELECT_DESCRIPTOR,
-    symbolTable: parsed.symbolTable,
-    sourceFile: parsed.sourceFile,
-    sourceId: parsed.sourceId,
-    codecLookup,
-  });
+function envelopeOf(parsed: ParsedPolicySelect, block: BlockSymbol): ParsedPslExtensionBlock {
+  const envelope = parsed.parsedBlocks.get(block);
+  if (envelope === undefined) throw new Error('expected a typed envelope for the block');
+  return envelope;
 }
 
 function documentForPrinting(
@@ -202,11 +121,7 @@ function documentForPrinting(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
-describe('declarative policy_select round-trip (parse → validate → lower → IR)', () => {
+describe('declarative policy_select round-trip (parse → collect → spec → lower → IR)', () => {
   describe('given a PSL document with a policy_select block and a matching model', () => {
     const source = `model Post {
   id   Int    @id
@@ -219,30 +134,25 @@ policy_select ProfilesSelect {
 }
 `;
 
-    it('reconstructs the block into a uniform PslExtensionBlock with the correct discriminator', () => {
+    it('publishes a typed envelope with the correct discriminator and decoded values', () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toEqual([]);
-      const reconstructed = reconstruct(parsed, block);
-      expect(reconstructed).toMatchObject({
+      expect(parsed.diagnostics).toEqual([]);
+      const envelope = envelopeOf(parsed, block);
+      expect(envelope).toMatchObject({
         kind: POLICY_SELECT_DISCRIMINATOR,
         name: 'ProfilesSelect',
       });
+      expect(envelope?.values['using']).toBe('auth.uid() = author_id');
     });
 
-    it('validates the block and surfaces no diagnostics for a well-formed block', () => {
+    it('lowers the typed envelope to a PolicySelectIr via the entityTypes factory', () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toEqual([]);
-    });
-
-    it('lowers the reconstructed block to a PolicySelectIr via the entityTypes factory', () => {
-      const parsed = parsePolicySelect(source);
-      const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toEqual([]);
+      expect(parsed.diagnostics).toEqual([]);
 
       const factory = getFactory();
-      const ir = factory(reconstruct(parsed, block), { family: 'fixture', target: 'fixture' });
+      const ir = factory(envelopeOf(parsed, block), { family: 'fixture', target: 'fixture' });
 
       expect(ir).toBeInstanceOf(PolicySelectIr);
       expect(Object.isFrozen(ir)).toBe(true);
@@ -259,7 +169,7 @@ policy_select ProfilesSelect {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
 
-      const ir = getFactory()(reconstruct(parsed, block), { family: 'fixture', target: 'fixture' });
+      const ir = getFactory()(envelopeOf(parsed, block), { family: 'fixture', target: 'fixture' });
       const serialized = JSON.stringify(ir);
       const hydrated = hydratePolicySelectIrFromJson(JSON.parse(serialized));
 
@@ -282,12 +192,12 @@ policy_select AdminRead {
 }
 `;
 
-    it('lowers the `as` option into the IR instance', () => {
+    it('lowers the `as` token into the IR instance', () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toEqual([]);
+      expect(parsed.diagnostics).toEqual([]);
 
-      const ir = getFactory()(reconstruct(parsed, block), { family: 'fixture', target: 'fixture' });
+      const ir = getFactory()(envelopeOf(parsed, block), { family: 'fixture', target: 'fixture' });
       expect(ir).toBeInstanceOf(PolicySelectIr);
       expect(ir.as).toBe('permissive');
       expect(ir.name).toBe('AdminRead');
@@ -305,15 +215,16 @@ policy_select BadBlock {
 }
 `;
 
-    it('surfaces a PSL_EXTENSION_MISSING_REQUIRED_PARAMETER diagnostic', () => {
+    it('surfaces the missing-required diagnostic and publishes no envelope', () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toMatchObject([
-        {
+      expect(parsed.diagnostics).toEqual([
+        expect.objectContaining({
           code: 'PSL_EXTENSION_MISSING_REQUIRED_PARAMETER',
           message: expect.stringContaining('using'),
-        },
+        }),
       ]);
+      expect(parsed.parsedBlocks.has(block)).toBe(false);
     });
   });
 
@@ -324,52 +235,20 @@ policy_select BadBlock {
 }
 `;
 
-    it('surfaces a PSL_EXTENSION_UNRESOLVED_REF diagnostic', () => {
+    it("surfaces the binder's unresolved-reference diagnostic and publishes no envelope", () => {
       const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toMatchObject([
-        {
-          code: 'PSL_EXTENSION_UNRESOLVED_REF',
-          message: expect.stringContaining('NonExistentModel'),
-        },
+      expect(parsed.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find entity "NonExistentModel"',
+        }),
       ]);
+      expect(parsed.parsedBlocks.has(block)).toBe(false);
     });
   });
 
-  describe('given a block without a codecLookup in the parse call', () => {
-    it('still reconstructs the block node, but codec validation rejects the value parameter', () => {
-      const source = `model Post {
-  id Int @id
-}
-
-policy_select NakedParse {
-  target = Post
-  using  = "auth.uid() = id"
-}
-`;
-      const parsed = parsePolicySelect(source);
-      const block = onlyBlockSymbol(parsed);
-
-      expect(reconstruct(parsed, block)).toMatchObject({
-        kind: POLICY_SELECT_DISCRIMINATOR,
-        name: 'NakedParse',
-      });
-
-      const diagnostics = validateExtensionBlockFromSymbol({
-        block,
-        descriptor: POLICY_SELECT_DESCRIPTOR,
-        symbolTable: parsed.symbolTable,
-        sourceFile: parsed.sourceFile,
-        sourceId: parsed.sourceId,
-        codecLookup: extractCodecLookup([]),
-      });
-      expect(diagnostics[0]).toMatchObject({
-        code: 'PSL_EXTENSION_INVALID_VALUE',
-      });
-    });
-  });
-
-  describe('full round-trip: parse → validate → lower → IR → serialize → hydrate → IR → print → re-parse', () => {
+  describe('full round-trip: parse → spec → lower → IR → serialize → hydrate → print → re-parse', () => {
     const source = `model Post {
   id   Int    @id
   body String
@@ -377,48 +256,66 @@ policy_select NakedParse {
 
 policy_select ProfilesSelect {
   target = Post
-  using  = "auth.uid() = author_id"
+  as     = restrictive
+  using  = "auth.uid() = \\"author\\""
 }
 `;
 
-    it('prints the block back to PSL text that contains the keyword and all parameters', () => {
-      const parsed = parsePolicySelect(source, 'rt1');
-      const block = onlyBlockSymbol(parsed);
-      expect(validate(parsed, block)).toEqual([]);
+    function producedPolicyBlock(): PslExtensionBlock {
+      return {
+        kind: POLICY_SELECT_DISCRIMINATOR,
+        keyword: POLICY_SELECT_KEYWORD,
+        name: 'ProfilesSelect',
+        parameters: {
+          target: { expression: 'Post', span: ZERO_SPAN },
+          as: { expression: 'restrictive', span: ZERO_SPAN },
+          using: { expression: '"auth.uid() = \\"author\\""', span: ZERO_SPAN },
+        },
+        blockAttributes: [],
+        span: ZERO_SPAN,
+      };
+    }
+
+    it('prints the block back to PSL text containing the keyword and all entries', () => {
+      const parsed = parsePolicySelect(source);
+      expect(parsed.diagnostics).toEqual([]);
 
       const printed = printPslFromAst(
-        documentForPrinting(parsed.symbolTable, reconstruct(parsed, block)),
-        { pslBlockDescriptors: assembled.pslBlockDescriptors, codecLookup },
+        documentForPrinting(parsed.symbolTable, producedPolicyBlock()),
+        {
+          pslBlockDescriptors: assembled.pslBlockDescriptors,
+        },
       );
 
       expect(printed).toContain('policy_select ProfilesSelect {');
       expect(printed).toContain('target = Post');
-      expect(printed).toContain('using = "auth.uid() = author_id"');
+      expect(printed).toContain('as = restrictive');
+      expect(printed).toContain('using = "auth.uid() = \\"author\\""');
     });
 
-    it('re-parses the printed PSL and produces an IR-equivalent extension block', () => {
-      const firstParsed = parsePolicySelect(source, 'rt2');
+    it('re-parses the printed PSL through the real pipeline into an equivalent IR', () => {
+      const firstParsed = parsePolicySelect(source);
       const firstBlock = onlyBlockSymbol(firstParsed);
-      expect(validate(firstParsed, firstBlock)).toEqual([]);
-      const original = reconstruct(firstParsed, firstBlock);
+      expect(firstParsed.diagnostics).toEqual([]);
 
-      const printed = printPslFromAst(documentForPrinting(firstParsed.symbolTable, original), {
-        pslBlockDescriptors: assembled.pslBlockDescriptors,
-        codecLookup,
-      });
+      const printed = printPslFromAst(
+        documentForPrinting(firstParsed.symbolTable, producedPolicyBlock()),
+        { pslBlockDescriptors: assembled.pslBlockDescriptors },
+      );
 
-      const reParsed = parsePolicySelect(printed, 'rt2-reparse');
-      const reParsedBlockSymbol = onlyBlockSymbol(reParsed);
-      expect(validate(reParsed, reParsedBlockSymbol)).toEqual([]);
-      const reParsedBlock = reconstruct(reParsed, reParsedBlockSymbol);
+      const reParsed = parsePolicySelect(printed);
+      expect(reParsed.diagnostics).toEqual([]);
+      const reParsedBlock = onlyBlockSymbol(reParsed);
 
-      // Semantic equivalence: lower both blocks to their IR and compare. The IR
-      // is the contract-bound artifact, so identical IR after print → re-parse is
-      // the round-trip guarantee that matters — the equivalent of the two
-      // documents hashing the same, and stronger than matching a few AST fields.
       const lower = getFactory();
-      const originalIr = lower(original, { family: 'fixture', target: 'fixture' });
-      const reParsedIr = lower(reParsedBlock, { family: 'fixture', target: 'fixture' });
+      const originalIr = lower(envelopeOf(firstParsed, firstBlock), {
+        family: 'fixture',
+        target: 'fixture',
+      });
+      const reParsedIr = lower(envelopeOf(reParsed, reParsedBlock), {
+        family: 'fixture',
+        target: 'fixture',
+      });
       expect(JSON.stringify(reParsedIr)).toBe(JSON.stringify(originalIr));
     });
   });

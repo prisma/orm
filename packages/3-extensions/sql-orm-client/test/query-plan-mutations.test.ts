@@ -99,6 +99,105 @@ describe('query plan mutations', () => {
     expect(plan.ast.rows).toEqual([{}, {}]);
   });
 
+  it('compileInsertCount() attaches a targetless DO NOTHING clause when asked to skip conflicts', () => {
+    const contract = getTestContract();
+    const plan = compileInsertCount(
+      contract,
+      'public',
+      'users',
+      [{ id: 10, name: 'Alice', email: 'alice@example.com' }],
+      { columns: [] },
+    );
+
+    assertInsertAst(plan.ast);
+    expect(plan.ast.onConflict?.columns).toEqual([]);
+    expect(plan.ast.onConflict?.action.kind).toBe('do-nothing');
+  });
+
+  it('compileInsertCount() targets the named columns when asked to skip conflicts on them', () => {
+    const contract = getTestContract();
+    const plan = compileInsertCount(
+      contract,
+      'public',
+      'users',
+      [{ id: 10, name: 'Alice', email: 'alice@example.com' }],
+      { columns: ['email'] },
+    );
+
+    assertInsertAst(plan.ast);
+    expect(plan.ast.onConflict?.columns).toEqual([ColumnRef.of('users', 'email')]);
+    expect(plan.ast.onConflict?.action.kind).toBe('do-nothing');
+  });
+
+  it('compileInsertCount() leaves the clause off when not asked to skip conflicts', () => {
+    const contract = getTestContract();
+    const plan = compileInsertCount(contract, 'public', 'users', [
+      { id: 10, name: 'Alice', email: 'alice@example.com' },
+    ]);
+
+    assertInsertAst(plan.ast);
+    expect(plan.ast.onConflict).toBeUndefined();
+  });
+
+  it('compileInsertReturning() attaches the skip clause alongside RETURNING', () => {
+    const contract = withReturningCapability(getTestContract());
+    const plan = compileInsertReturning(
+      contract,
+      'public',
+      'users',
+      [{ id: 10, name: 'Alice', email: 'alice@example.com' }],
+      ['id'],
+      { columns: ['email'] },
+    );
+
+    assertInsertAst(plan.ast);
+    expect(plan.ast.onConflict?.columns).toEqual([ColumnRef.of('users', 'email')]);
+    expect(plan.ast.onConflict?.action.kind).toBe('do-nothing');
+    expect(plan.ast.returning).toHaveLength(1);
+  });
+
+  it('compileInsertCountSplit() puts the skip clause on every group statement', () => {
+    const contract = getTestContract();
+    const plans = compileInsertCountSplit(
+      contract,
+      'public',
+      'users',
+      [
+        { id: 10, name: 'Alice', email: 'alice@example.com' },
+        { id: 11, name: 'Bob', email: 'bob@example.com', invited_by_id: 10 },
+      ],
+      { columns: [] },
+    );
+
+    expect(plans).toHaveLength(2);
+    for (const plan of plans) {
+      assertInsertAst(plan.ast);
+      expect(plan.ast.onConflict?.columns).toEqual([]);
+      expect(plan.ast.onConflict?.action.kind).toBe('do-nothing');
+    }
+  });
+
+  it('compileInsertReturningSplit() puts the skip clause on every group statement', () => {
+    const contract = withReturningCapability(getTestContract());
+    const plans = compileInsertReturningSplit(
+      contract,
+      'public',
+      'users',
+      [
+        { id: 10, name: 'Alice', email: 'alice@example.com' },
+        { id: 11, name: 'Bob', email: 'bob@example.com', invited_by_id: 10 },
+      ],
+      ['id'],
+      { columns: ['email'] },
+    );
+
+    expect(plans).toHaveLength(2);
+    for (const plan of plans) {
+      assertInsertAst(plan.ast);
+      expect(plan.ast.onConflict?.columns).toEqual([ColumnRef.of('users', 'email')]);
+    }
+  });
+
   it('compileUpsertReturning() uses DO NOTHING and default returning columns when update is empty', () => {
     const contract = withReturningCapability(getTestContract());
     const plan = compileUpsertReturning(

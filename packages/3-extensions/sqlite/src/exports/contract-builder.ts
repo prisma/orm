@@ -13,5 +13,12 @@ export type {
   ScalarFieldBuilder,
   UniqueConstraintNode,
 } from '@internal/sql-contract-ts/contract-builder';
-export { field, model, rel } from '@internal/sql-contract-ts/contract-builder';
+export {
+  autoincrement,
+  field,
+  model,
+  now,
+  rel,
+  sql,
+} from '@internal/sql-contract-ts/contract-builder';
 export { defineContract } from '../contract/define-contract';

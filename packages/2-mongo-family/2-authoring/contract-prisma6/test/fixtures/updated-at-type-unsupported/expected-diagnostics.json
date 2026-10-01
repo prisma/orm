@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.version\": @updatedAt is only supported on a DateTime field. Removing it also stops the Prisma 6 client from setting the field on every update. Set the value in application code when you write documents, then remove @updatedAt."
+  }
+]

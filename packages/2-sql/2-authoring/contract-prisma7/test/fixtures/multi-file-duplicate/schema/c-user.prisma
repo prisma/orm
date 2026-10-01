@@ -1,0 +1,8 @@
+model User {
+  id    Int    @id
+  email String
+}
+
+enum Role {
+  ADMIN
+}

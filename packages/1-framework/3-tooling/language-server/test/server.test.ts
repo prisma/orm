@@ -1,3 +1,4 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
 import { pathToFileURL } from 'node:url';
@@ -9,13 +10,22 @@ import {
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
 import {
+  type AttributeSpecNamespace,
+  blockAttribute,
+  bool,
   buildSymbolTable,
+  entityRef,
   fieldAttribute,
+  funcCall,
+  identifier,
   int,
+  list,
   modelAttribute,
+  oneOf,
   optional,
   type SymbolTable,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import type { FormatOptions } from '@internal/psl-parser/format';
 import type { PslInterpretCapable, PslInterpretInput } from '@internal/psl-parser/interpret';
@@ -30,6 +40,7 @@ import {
   CompletionItemKind,
   type CompletionList,
   CompletionRequest,
+  type ConnectionOptions,
   createConnection,
   type Diagnostic,
   DiagnosticRefreshRequest,
@@ -50,6 +61,7 @@ import {
   type InitializeResult,
   InsertTextFormat,
   LogMessageNotification,
+  MarkupKind,
   MessageType,
   type Position,
   PublishDiagnosticsNotification,
@@ -57,15 +69,25 @@ import {
   type RegistrationParams,
   RegistrationRequest,
   type SemanticTokens,
+  ShutdownRequest,
+  type SignatureHelpContext,
+  SignatureHelpRequest,
+  SignatureHelpTriggerKind,
   StreamMessageReader,
   StreamMessageWriter,
+  TextDocumentSyncKind,
   type TextEdit,
+  type UnregistrationParams,
+  UnregistrationRequest,
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
-import type { DocumentArtifacts } from '../src/project-artifacts';
-import { resolveSchemaInputs } from '../src/schema-inputs';
+import type { DocumentSnapshot } from '../src/document-snapshot';
+import { guardedConnection } from '../src/guarded-connection';
+import { CONFIG_LOAD_FAILED_CODE } from '../src/project';
+import { ProjectArtifacts, type ProjectArtifactsOptions } from '../src/project-artifacts';
+import { resolveSchemaInputs, type SchemaInputConfig } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
-import { CONFIG_LOAD_FAILED_CODE, createServer } from '../src/server';
+import { createServer } from '../src/server';
 
 type ResolveInputs = (configPath: string) => Promise<ConfigResolution>;
 type FindNearestConfigPathForFile = (filePath: string) => Promise<string | undefined>;
@@ -79,9 +101,6 @@ const configLoaderMock = vi.hoisted(() => ({
 }));
 const configResolutionMock = vi.hoisted(() => ({
   resolveConfigInputs: vi.fn<ResolveInputs>(),
-}));
-const pipelineMock = vi.hoisted(() => ({
-  runPipeline: vi.fn<typeof import('../src/pipeline')['runPipeline']>(),
 }));
 
 vi.mock('@internal/config-loader', async (importOriginal) => {
@@ -97,11 +116,21 @@ vi.mock('../src/config-resolution', async (importOriginal) => {
   return { ...actual, resolveConfigInputs: configResolutionMock.resolveConfigInputs };
 });
 
-// Pass-through spy on the parse seam so tests can count parses.
-vi.mock('../src/pipeline', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/pipeline')>();
-  pipelineMock.runPipeline.mockImplementation(actual.runPipeline);
-  return { ...actual, runPipeline: pipelineMock.runPipeline };
+vi.mock('@internal/psl-parser/syntax', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@internal/psl-parser/syntax')>();
+  return { ...actual, parse: vi.fn(actual.parse) };
+});
+
+vi.mock('../src/project-artifacts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/project-artifacts')>();
+  return {
+    ...actual,
+    ProjectArtifacts: vi.fn(function MockProjectArtifacts(options: ProjectArtifactsOptions) {
+      const artifacts = new actual.ProjectArtifacts(options);
+      artifacts.symbolDiagnostics = vi.fn(artifacts.symbolDiagnostics);
+      return artifacts;
+    }),
+  };
 });
 
 const root = tmpdir();
@@ -114,8 +143,9 @@ const formattedPsl = '// use prisma-8\nmodel User {\n  id Int\n}\n';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
-const emptySnippetPlaceholder1 = '$' + '{1:}';
-const emptySnippetPlaceholder2 = '$' + '{2:}';
+const targetSnippetPlaceholder = '$' + '{1:target}';
+const nameArgumentSnippetPlaceholder = '$' + '{2:name}';
+const modeSnippetPlaceholder = '$' + '{1:mode}';
 
 const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   policy: {
@@ -123,20 +153,39 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'fixture-policy',
     name: { required: true },
-    parameters: {
-      on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
-      mode: { kind: 'option', values: ['permissive', 'restrictive'] },
-    },
+    spec: () =>
+      structBlock({
+        parameters: {
+          on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+          where: { type: optional(str()), documentation: '' },
+          mode: {
+            type: optional(
+              oneOf(
+                identifier('permissive', { documentation: 'Combined with OR.' }),
+                identifier('restrictive', { documentation: 'Combined with AND.' }),
+              ),
+            ),
+            documentation: '',
+          },
+        },
+      }),
   },
 };
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { mode: str(), enabled: optional(str()) },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    mode: { type: str(), documentation: 'The security mode.' },
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+  },
 });
 const completionAuthoringContributions = assembleAuthoringContributions([
   {
@@ -169,23 +218,26 @@ const completionInterpretationContext = {
   controlMutationDefaults: assembleControlMutationDefaults([]),
 } as unknown as ContractSourceContext;
 
-function resolutionForInputs(
+const alwaysMember = (): string => '// use prisma-8\n';
+
+async function resolutionForInputs(
   inputs: readonly string[],
   formatter?: FormatOptions,
   descriptors: AuthoringPslBlockDescriptorNamespace = {},
-): ConfigResolutionWithFormatter {
+): Promise<ConfigResolutionWithFormatter> {
+  const schemaInputConfig: SchemaInputConfig = { contract: { source: { format: 'psl', inputs } } };
   const resolution = {
-    inputs: resolveSchemaInputs({
-      contract: { source: { format: 'psl', inputs } },
-    }),
+    inputs: await resolveSchemaInputs(schemaInputConfig, alwaysMember),
+    schemaInputConfig,
     controlStack: { scalarTypes: [...scalarTypes], pslBlockDescriptors: descriptors },
   };
   return formatter === undefined ? resolution : { ...resolution, formatter };
 }
 
-function emptyResolution(): ConfigResolution {
+async function emptyResolution(): Promise<ConfigResolution> {
   return {
-    inputs: resolveSchemaInputs({}),
+    inputs: await resolveSchemaInputs({}, alwaysMember),
+    schemaInputConfig: {},
     controlStack: { scalarTypes: [...scalarTypes], pslBlockDescriptors: {} },
   };
 }
@@ -201,7 +253,7 @@ const completionInterpretationSource = {
 } as unknown as PslInterpretCapable;
 
 const resolveToSchemaWithAttributeContributions: ResolveInputs = async () => {
-  const resolution = resolutionForInputs([schemaPath], undefined, pslBlockDescriptors);
+  const resolution = await resolutionForInputs([schemaPath], undefined, pslBlockDescriptors);
   return {
     ...resolution,
     controlStack: {
@@ -215,6 +267,102 @@ const resolveToSchemaWithAttributeContributions: ResolveInputs = async () => {
     },
   };
 };
+
+async function recursiveCompletionResolution(): Promise<ConfigResolution> {
+  const sql = (await import(
+    new URL(
+      '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+      import.meta.url,
+    ).href
+  )) as { sqlAttributeSpecs: AttributeSpecNamespace };
+  const signature = {
+    documentation: 'Selects a value and a set of flags.',
+    named: {
+      value: {
+        type: funcCall('choose', {
+          documentation: 'Chooses between the first and second modes.',
+          named: {
+            mode: {
+              type: oneOf(
+                identifier('First', {
+                  documentation: 'An accepted identifier in this test grammar.',
+                }),
+                identifier('Second', {
+                  documentation: 'An accepted identifier in this test grammar.',
+                }),
+              ),
+              documentation: 'The selected mode.',
+            },
+            enabled: { type: optional(bool()), documentation: 'Whether the choice is enabled.' },
+          },
+        }),
+        documentation: 'The configured choice.',
+      },
+      flags: { type: list(bool()), documentation: 'The boolean flags accompanying the choice.' },
+    },
+  };
+  const probeField = fieldAttribute('probe', signature);
+  const probeModel = modelAttribute('probe', signature);
+  const probeBlock = blockAttribute('probe', signature);
+  const descriptors: AuthoringPslBlockDescriptorNamespace = {
+    policy: {
+      kind: 'pslBlock',
+      keyword: 'policy',
+      discriminator: 'completion-policy',
+      name: { required: true },
+      spec: () => structBlock({ parameters: {} }),
+      attributes: { probe: () => probeBlock },
+    },
+  };
+  const resolution = await resolutionForInputs([schemaPath], undefined, descriptors);
+  return {
+    ...resolution,
+    controlStack: {
+      ...resolution.controlStack,
+      authoringContributions: assembleAuthoringContributions([
+        { id: 'sql-family', authoring: { attributeSpecs: sql.sqlAttributeSpecs } },
+        {
+          id: 'contributed-attributes',
+          authoring: {
+            attributeSpecs: { field: { probe: () => probeField }, model: {} },
+            modelAttributes: {
+              completion: {
+                probe: {
+                  kind: 'modelAttribute',
+                  attribute: 'probe',
+                  spec: () => probeModel,
+                  lower: () => undefined,
+                },
+              },
+            },
+          },
+        },
+      ]),
+      controlMutationDefaults: assembleControlMutationDefaults([]),
+    },
+    interpretation: {
+      context: completionInterpretationContext,
+      source: {
+        ...completionInterpretationSource,
+        interpret: () =>
+          notOk({
+            summary: 'Incomplete authoring buffer',
+            diagnostics: [
+              {
+                code: 'PSL_TEST_INTERPRETATION_FAILED',
+                message: 'Incomplete authoring buffer',
+                sourceId: schemaUri,
+                span: {
+                  start: { offset: 0, line: 1, column: 1 },
+                  end: { offset: 1, line: 1, column: 2 },
+                },
+              },
+            ],
+          }),
+      },
+    },
+  };
+}
 
 function resolveToSchemaWithFormatter(formatter: FormatOptions): ResolveInputs {
   return async () => resolutionForInputs([schemaPath], formatter);
@@ -236,11 +384,14 @@ function parseAndSymbolTableDiagnostics(source: string): {
   readonly parseDiagnostics: readonly ParseDiagnostic[];
   readonly symbolTableDiagnostics: readonly ParseDiagnostic[];
 } {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
-  const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+  const {
     document,
-    sourceFile,
-    pslBlockDescriptors: {},
+    sources,
+    diagnostics: parseDiagnostics,
+  } = parse(source, 'language-server-test.psl');
+  const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return { parseDiagnostics, symbolTableDiagnostics };
 }
@@ -254,17 +405,17 @@ const snippetCompletionCapabilities: ClientCapabilities = {
 };
 
 const pullDiagnosticsCapabilities: ClientCapabilities = {
-  textDocument: { diagnostic: {} },
+  textDocument: { diagnostic: { relatedDocumentSupport: true } },
 };
 
 const pullDiagnosticsWithRefreshCapabilities: ClientCapabilities = {
-  textDocument: { diagnostic: {} },
+  textDocument: { diagnostic: { relatedDocumentSupport: true } },
   workspace: { diagnostics: { refreshSupport: true } },
 };
 
 interface Harness {
   readonly client: ReturnType<typeof createConnection>;
-  readonly initialize: () => Promise<InitializeResult>;
+  readonly initialize: (initializationOptions?: unknown) => Promise<InitializeResult>;
   readonly waitForDiagnostics: (uri: string) => Promise<readonly Diagnostic[]>;
   readonly waitForDiagnosticsMatching: (
     uri: string,
@@ -280,9 +431,16 @@ interface Harness {
   readonly diagnosticRefreshCount: () => number;
   readonly waitForDiagnosticRefresh: () => Promise<void>;
   readonly notifyConfigChanged: (uri?: string) => void;
-  readonly getDocumentAst: (uri: string) => DocumentArtifacts | undefined;
+  readonly getDocumentAst: (uri: string) => DocumentSnapshot | undefined;
   readonly getProjectSymbolTable: (uri: string) => SymbolTable | undefined;
-  dispose: () => void;
+  readonly delayNextSchemaWatcherRegistration: () => Promise<{
+    readonly id: string;
+    readonly release: () => void;
+  }>;
+  readonly schemaWatcherRegistrationIds: () => readonly string[];
+  readonly unregisteredIds: () => readonly string[];
+  dispose: () => Promise<void>;
+  disconnect: () => void;
 }
 
 function startHarness(
@@ -294,16 +452,40 @@ function startHarness(
   configLoaderMock.findNearestConfigPathForFile.mockImplementation(findNearestConfigPathForFile);
   const clientToServer = new PassThrough();
   const serverToClient = new PassThrough();
+  const pendingMessages = new Set<Promise<void>>();
+  const connectionOptions: ConnectionOptions = {
+    messageStrategy: {
+      handleMessage: (message, next) => {
+        const preceding = [...pendingMessages];
+        const task = Promise.resolve()
+          .then(async () => {
+            if ('method' in message && message.method === ShutdownRequest.type.method) {
+              await Promise.all(preceding);
+            }
+            await next(message);
+          })
+          .finally(() => pendingMessages.delete(task));
+        pendingMessages.add(task);
+        return task;
+      },
+    },
+  };
 
   const serverConnection = createConnection(
     new StreamMessageReader(clientToServer),
     new StreamMessageWriter(serverToClient),
+    connectionOptions,
   );
   const server = createServer(serverConnection);
 
-  const client = createConnection(
-    new StreamMessageReader(serverToClient),
-    new StreamMessageWriter(clientToServer),
+  // Guarded like the server: a client send whose write fails after dispose
+  // must not become an unhandled rejection in the test process.
+  const client = guardedConnection(
+    createConnection(
+      new StreamMessageReader(serverToClient),
+      new StreamMessageWriter(clientToServer),
+      connectionOptions,
+    ),
   );
 
   const pending = new Map<string, (diagnostics: readonly Diagnostic[]) => void>();
@@ -357,17 +539,37 @@ function startHarness(
     params.registrations.some(
       (registration) => registration.method === 'workspace/didChangeWatchedFiles',
     );
+  const isSchemaWatcherRegistration = (params: RegistrationParams) =>
+    isWatchedFilesRegistration(params) &&
+    !JSON.stringify(params.registrations).includes('prisma.config.ts');
   interface RegistrationWaiter {
     readonly resolve: () => void;
   }
   const registrationWaiters: RegistrationWaiter[] = [];
+  let pendingSchemaWatcherDelay:
+    | { readonly resolve: (value: { readonly id: string; readonly release: () => void }) => void }
+    | undefined;
+  const unregisteredIds: string[] = [];
   client.onRequest(RegistrationRequest.type, (params) => {
     registrations.push(params);
-    if (!isWatchedFilesRegistration(params)) {
-      return;
+    if (isWatchedFilesRegistration(params)) {
+      for (const waiter of registrationWaiters.splice(0)) {
+        waiter.resolve();
+      }
     }
-    for (const waiter of registrationWaiters.splice(0)) {
-      waiter.resolve();
+    if (pendingSchemaWatcherDelay !== undefined && isSchemaWatcherRegistration(params)) {
+      const waiter = pendingSchemaWatcherDelay;
+      pendingSchemaWatcherDelay = undefined;
+      const id = params.registrations[0]?.id ?? '';
+      return new Promise<void>((releaseResponse) => {
+        waiter.resolve({ id, release: releaseResponse });
+      });
+    }
+    return undefined;
+  });
+  client.onRequest(UnregistrationRequest.type, (params: UnregistrationParams) => {
+    for (const unregistration of params.unregisterations) {
+      unregisteredIds.push(unregistration.id);
     }
   });
 
@@ -400,6 +602,13 @@ function startHarness(
     }
   });
   client.listen();
+
+  function disconnect(): void {
+    server.dispose();
+    client.dispose();
+    clientToServer.end();
+    serverToClient.end();
+  }
 
   return {
     client,
@@ -451,8 +660,9 @@ function startHarness(
         }
         diagnosticRefreshWaiters.push(resolve);
       }),
-    initialize: async () => {
+    initialize: async (initializationOptions) => {
       const result = await client.sendRequest(InitializeRequest.type, {
+        initializationOptions,
         processId: process.pid,
         rootUri: pathToFileURL(root).toString(),
         capabilities,
@@ -493,17 +703,23 @@ function startHarness(
     },
     getDocumentAst: (uri) => server.getDocumentAst(uri),
     getProjectSymbolTable: (uri) => server.getProjectSymbolTable(uri),
-    dispose: () => {
-      // Dispose the server first, so its connection is gone before the
-      // transport dies. Sends made after that point — an in-flight `publish`
-      // reporting diagnostics, or `publishSafely` logging a failure — go
-      // through the guarded connection, which drops a send the connection
-      // refuses rather than letting it throw inside a fire-and-forget call.
-      server.dispose();
-      client.dispose();
-      clientToServer.end();
-      serverToClient.end();
+    delayNextSchemaWatcherRegistration: () =>
+      new Promise((resolve) => {
+        pendingSchemaWatcherDelay = { resolve };
+      }),
+    schemaWatcherRegistrationIds: () =>
+      registrations
+        .filter(isSchemaWatcherRegistration)
+        .flatMap((params) => params.registrations.map((registration) => registration.id)),
+    unregisteredIds: () => unregisteredIds,
+    dispose: async () => {
+      await client.sendRequest(ShutdownRequest.type);
+      while (pendingMessages.size > 0) {
+        await Promise.all(pendingMessages);
+      }
+      disconnect();
     },
+    disconnect,
   };
 }
 
@@ -584,6 +800,19 @@ function requestCompletion(
   });
 }
 
+function requestSignatureHelp(
+  harness: Harness,
+  uri: string,
+  position: Position,
+  context?: SignatureHelpContext,
+) {
+  return harness.client.sendRequest(SignatureHelpRequest.type, {
+    textDocument: { uri },
+    position,
+    ...(context === undefined ? {} : { context }),
+  });
+}
+
 function completionItems(
   result: CompletionItem[] | CompletionList | null,
 ): readonly CompletionItem[] {
@@ -619,7 +848,8 @@ function applyCompletionItem(source: string, item: CompletionItem): string {
 }
 
 function applyTextEdit(source: string, edit: TextEdit): string {
-  const { sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
   const start = sourceFile.offsetAt(edit.range.start);
   const end = sourceFile.offsetAt(edit.range.end);
   return `${source.slice(0, start)}${edit.newText}${source.slice(end)}`;
@@ -658,25 +888,141 @@ function deferredSettleable<T>(): {
 let harness: Harness | undefined;
 
 afterEach(async () => {
-  // The harness disposes the server before the client (see `dispose` above),
-  // so the server's `disposed` guard is raised before the transport dies and
-  // an in-flight `publish` can never log through a dead connection. This tick
-  // is a separate concern: it lets any in-flight JSON-RPC request/response
-  // write flush before the streams are torn down, so vscode-jsonrpc's own
-  // internal error logging doesn't reject a notification mid-transmission.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  harness?.dispose();
+  await harness?.dispose();
   harness = undefined;
   configResolutionMock.resolveConfigInputs.mockReset();
   configLoaderMock.findNearestConfigPathForFile.mockReset();
-  pipelineMock.runPipeline.mockClear();
+  vi.mocked(parse).mockClear();
 });
 
 describe('language server', { timeout: timeouts.databaseOperation }, () => {
+  it('publishes once per open and edit, using a normalized URI across equivalent lifecycle notifications', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const alias = schemaUri.replace('schema.psl', '%73chema.psl');
+    openDocument(harness, alias, unformattedPsl);
+    await harness.waitForDiagnostics(schemaUri);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(1);
+    expect(harness.publishCount(alias)).toBe(0);
+    const first = harness.getDocumentAst(schemaUri)!;
+    expect(first).toBe(harness.getDocumentAst(alias));
+    expect(first.sourceFile.filename).toBe(schemaUri);
+    expect(await requestFormatting(harness, schemaUri)).toEqual([
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 3, character: 1 } },
+        newText: formattedPsl,
+      },
+    ]);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [
+        {
+          range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+          text: 'Post',
+        },
+      ],
+    });
+    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(2);
+    expect(harness.publishCount(alias)).toBe(0);
+    expect(harness.getDocumentAst(schemaUri)).not.toBe(first);
+    expect(Object.keys(harness.getProjectSymbolTable(schemaUri)!.topLevel.models)).toEqual([
+      'Post',
+    ]);
+    expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 3 },
+      contentChanges: [],
+    });
+    await requestFormatting(harness, alias);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(2);
+    closeDocument(harness, schemaUri);
+    await harness.waitForDiagnosticsCount(schemaUri, 3);
+    expect(harness.getDocumentAst(alias)).toBeUndefined();
+    expect(harness.getProjectSymbolTable(schemaUri)).toBeUndefined();
+    openDocument(harness, schemaUri, unformattedPsl);
+    await harness.waitForDiagnosticsCount(schemaUri, 4);
+    expect(harness.publishCount(alias)).toBe(0);
+    expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
+    expect(Object.keys(harness.getProjectSymbolTable(alias)!.topLevel.models)).toEqual(['User']);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces simultaneous alias opens without a spelling-only clear', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const alias = schemaUri.replace('schema.psl', '%73chema.psl');
+    openDocument(harness, alias, duplicateModelSource);
+    expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
+    openDocument(harness, schemaUri, unformattedPsl);
+    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(2);
+    expect(harness.publishCount(alias)).toBe(0);
+    expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
+    expect(harness.getDocumentAst(alias)).toBe(harness.getDocumentAst(schemaUri));
+    closeDocument(harness, alias);
+    await harness.waitForDiagnosticsCount(schemaUri, 3);
+    expect(harness.getDocumentAst(schemaUri)).toBeUndefined();
+    expect(await requestFormatting(harness, schemaUri)).toEqual([]);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads aliases from the current buffer for pull diagnostics and editor features', async () => {
+    harness = startHarness(resolveToSchema, pullDiagnosticsCapabilities);
+    await harness.initialize();
+    const alias = schemaUri.replace('schema.psl', '%73chema.psl');
+    openDocument(harness, alias, unformattedPsl);
+    expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([]);
+    expect(harness.getDocumentAst(schemaUri)?.sourceFile.filename).toBe(schemaUri);
+    const updated = '// use prisma-8\r\nmodel Post {\r\n  id Int\r\n}\r\nmodel Post {}';
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: updated }],
+    });
+    const diagnostics = fullReportItems(await requestPullDiagnostics(harness, schemaUri));
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(fullReportItems(await requestPullDiagnostics(harness, alias))).toEqual(diagnostics);
+    expect(await requestFoldingRanges(harness, schemaUri)).toEqual(
+      await requestFoldingRanges(harness, alias),
+    );
+    expect(await requestSemanticTokens(harness, schemaUri)).toEqual(
+      await requestSemanticTokens(harness, alias),
+    );
+    const position = { line: 2, character: 5 };
+    const completions = completionItems(await requestCompletion(harness, schemaUri, position));
+    expect(completions.map(({ label }) => label)).toContain('Post');
+    expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
+    expect(vi.mocked(parse)).toHaveBeenLastCalledWith(updated, schemaUri, {});
+    expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
+    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(harness.publishCount(alias)).toBe(0);
+  });
+
+  it('ignores changes and closes for unopened documents', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: unformattedPsl }],
+    });
+    closeDocument(harness, schemaUri);
+    expect(await requestFormatting(harness, schemaUri)).toEqual([]);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(configResolutionMock.resolveConfigInputs).not.toHaveBeenCalled();
+  });
+
   it('answers initialize and advertises text-document features plus completion support', async () => {
     harness = startHarness(resolveToSchema);
     const result = await harness.initialize();
-    expect(result.capabilities.textDocumentSync).toBeDefined();
+    expect(result.capabilities.textDocumentSync).toEqual({
+      openClose: true,
+      change: TextDocumentSyncKind.Incremental,
+    });
     expect(result.capabilities.documentFormattingProvider).toBe(true);
     expect(result.capabilities.foldingRangeProvider).toBe(true);
     expect(result.capabilities.semanticTokensProvider).toEqual({
@@ -684,7 +1030,220 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       full: true,
       range: true,
     });
-    expect(result.capabilities.completionProvider).toEqual({ triggerCharacters: ['.', '@'] });
+    expect(result.capabilities.completionProvider).toEqual({
+      triggerCharacters: ['.', '@', '[', '(', '{', ':', ','],
+    });
+    expect(result.capabilities.signatureHelpProvider).toEqual({
+      triggerCharacters: ['(', ','],
+    });
+  });
+
+  it.each([
+    { args: '|', parameter: 0, trigger: '(' },
+    { args: '"user", name: |', parameter: 1, trigger: ',' },
+    { args: 'priority: |1, name: "visible", target: "user"', parameter: 2, trigger: undefined },
+    { args: 'name: "visible",| priority: 1', parameter: 2, trigger: ',' },
+    { args: 'name: "visible", |priority: 1', parameter: 2, trigger: undefined },
+    { args: 'name: "visible",| priority: 1', parameter: 2, trigger: undefined },
+  ])(
+    'serves documented signature help through trigger and explicit requests: $args',
+    async ({ args, parameter, trigger }) => {
+      harness = startHarness(resolveToSchemaWithAttributeContributions);
+      await harness.initialize();
+      const { source, position } = sourceWithCursor(
+        `// use prisma-8\nmodel User { id Int @marker(${args}) }`,
+      );
+      openDocument(harness, schemaUri, source);
+      await harness.waitForDiagnostics(schemaUri);
+      const result = await requestSignatureHelp(harness, schemaUri, position, {
+        triggerKind:
+          trigger === undefined
+            ? SignatureHelpTriggerKind.Invoked
+            : SignatureHelpTriggerKind.TriggerCharacter,
+        isRetrigger: false,
+        ...(trigger === undefined ? {} : { triggerCharacter: trigger }),
+      });
+      expect(result).toEqual({
+        activeSignature: 0,
+        activeParameter: parameter,
+        signatures: [
+          {
+            label: '@marker(string, name: string, priority?: integer)',
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: 'Attaches a named marker to a target.',
+            },
+            parameters: [
+              {
+                label: 'string',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: '**target**\n\nThe marker target.',
+                },
+              },
+              {
+                label: 'name: string',
+                documentation: { kind: MarkupKind.Markdown, value: 'The marker name.' },
+              },
+              {
+                label: 'priority?: integer',
+                documentation: { kind: MarkupKind.Markdown, value: 'The marker priority.' },
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+
+  it.each([
+    'model User { id Int @probe(value: choose(mode: First, enabled: |)) }',
+    'model User { id Int @probe(value: choose(mode: First,| enabled: true)) }',
+    'model User { id Int @probe(value: choose(mode: First, |enabled: true)) }',
+    'model User { id Int\n @@probe(value: choose(mode: First, enabled: |)) }',
+    'policy Rule { @@probe(value: choose(mode: First, enabled: |)) }',
+    'model User { id Int @probe(value: choose(mode: First, enabled: |',
+  ])(
+    'serves innermost signatures from contributed owners and unfinished input: %s',
+    async (body) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize();
+      const { source, position } = sourceWithCursor(`// use prisma-8\n${body}`);
+      openDocument(harness, schemaUri, source);
+      const diagnostics = await harness.waitForDiagnostics(schemaUri);
+      expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+        'PSL_TEST_INTERPRETATION_FAILED',
+      );
+      expect(await requestSignatureHelp(harness, schemaUri, position)).toEqual({
+        activeSignature: 0,
+        activeParameter: 1,
+        signatures: [
+          {
+            label: 'choose(mode: First | Second, enabled?: boolean)',
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: 'Chooses between the first and second modes.',
+            },
+            parameters: [
+              {
+                label: 'mode: First | Second',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: 'The selected mode.',
+                },
+              },
+              {
+                label: 'enabled?: boolean',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: 'Whether the choice is enabled.',
+                },
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+
+  it('uses the current buffer and suppresses unknown nested signatures without outer fallback', async () => {
+    const resolution = await recursiveCompletionResolution();
+    harness = startHarness(async () => resolution);
+    await harness.initialize();
+    const initial = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @probe(value: choose(|)) }',
+    );
+    openDocument(harness, schemaUri, initial.source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(
+      (await requestSignatureHelp(harness, schemaUri, initial.position))?.signatures[0]?.label,
+    ).toBe('choose(mode: First | Second, enabled?: boolean)');
+    const changed = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @probe(value: unknown(|)) }',
+    );
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: changed.source }],
+    });
+    expect(await requestSignatureHelp(harness, schemaUri, changed.position)).toBeNull();
+  });
+
+  it.each([
+    { uri: schemaUri, directive: '', open: true },
+    {
+      uri: pathToFileURL(join(root, 'outside.prisma')).href,
+      directive: '// use prisma-8\n',
+      open: true,
+    },
+    { uri: schemaUri, directive: '// use prisma-8\n', open: false },
+  ])(
+    'returns no signature help for unmanaged or unopened documents: %j',
+    async ({ uri, directive, open }) => {
+      harness = startHarness(resolveToSchemaWithAttributeContributions);
+      await harness.initialize();
+      const { source, position } = sourceWithCursor(`${directive}model User { id Int @marker(|) }`);
+      if (open) openDocument(harness, uri, source);
+      expect(await requestSignatureHelp(harness, uri, position)).toBeNull();
+    },
+  );
+
+  it('returns no signature help after a document closes', async () => {
+    harness = startHarness(resolveToSchemaWithAttributeContributions);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @marker(|) }',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect((await requestSignatureHelp(harness, schemaUri, position))?.activeParameter).toBe(0);
+    closeDocument(harness, schemaUri);
+    expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
+  });
+
+  it('contains contribution-factory failures and serves the next signature request', async () => {
+    const factory = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('broken signature factory');
+      })
+      .mockReturnValue(markerAttribute);
+    const resolution = await resolveToSchemaWithAttributeContributions(configPath);
+    harness = startHarness(async () => ({
+      ...resolution,
+      controlStack: {
+        ...resolution.controlStack,
+        authoringContributions: assembleAuthoringContributions([
+          {
+            id: 'broken-signature',
+            authoring: { attributeSpecs: { field: { marker: factory }, model: {} } },
+          },
+        ]),
+      },
+    }));
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @marker(|) }',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
+    expect((await requestSignatureHelp(harness, schemaUri, position))?.signatures[0]?.label).toBe(
+      '@marker(string, name: string, priority?: integer)',
+    );
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns no signature help when project configuration cannot load', async () => {
+    harness = startHarness(async () => {
+      throw new Error('signature config failed');
+    });
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @marker(|) }',
+    );
+    openDocument(harness, schemaUri, source);
+    expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
   });
 
   it('returns model field type completions for configured PSL inputs', async () => {
@@ -739,10 +1298,9 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
     openDocument(harness, schemaUri, initial);
-    await harness.waitForDiagnostics(schemaUri);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
 
-    const republished = harness.waitForDiagnosticsCount(schemaUri, 3);
+    const republished = harness.waitForDiagnosticsCount(schemaUri, 2);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: updated.source }],
@@ -776,14 +1334,14 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
     openDocument(harness, schemaUri, source);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     const items = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(items.map((item) => item.label)).toContain('User');
     await expect(requestSemanticTokens(harness, schemaUri)).resolves.not.toEqual({ data: [] });
     await expect(requestFoldingRanges(harness, schemaUri)).resolves.not.toEqual([]);
-    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('parses once for an edit followed by an immediate completion', async () => {
@@ -803,10 +1361,10 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
     openDocument(harness, schemaUri, initial);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
 
-    pipelineMock.runPipeline.mockClear();
-    const republished = harness.waitForDiagnosticsCount(schemaUri, 3);
+    vi.mocked(parse).mockClear();
+    const republished = harness.waitForDiagnosticsCount(schemaUri, 2);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: updated.source }],
@@ -822,7 +1380,8 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       'User',
     ]);
     await republished;
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledWith(updated.source, schemaUri, {});
   });
 
   it('returns generic block parameter completions for configured PSL descriptors', async () => {
@@ -923,18 +1482,254 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(item).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}")`,
+        newText: `marker("${targetSnippetPlaceholder}", name: "${nameArgumentSnippetPlaceholder}")`,
       },
     });
     expect(applyCompletionItem(completion.source, item)).toEqual(
       [
         '// use prisma-8',
         'model User {',
-        `  id Int @marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}") // keep`,
+        `  id Int @marker("${targetSnippetPlaceholder}", name: "${nameArgumentSnippetPlaceholder}") // keep`,
         '}',
       ].join('\n'),
     );
   });
+
+  it.each([
+    [undefined, false],
+    [null, false],
+    [{ completion: null }, false],
+    [{ completion: { supportsTriggerSuggestCommand: true } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: 'true' } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: false } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: true } }, true],
+  ])(
+    'requires explicit parameter-hints opt-in: %j',
+    async (options, enabled) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippetCompletionCapabilities);
+      await harness.initialize(options);
+      for (const [body, label] of [
+        ['model User { id Int @pro| }', 'probe'],
+        ['model User { id Int @probe(value: ch|) }', 'choose'],
+      ]) {
+        const completion = sourceWithCursor(`// use prisma-8\n${body}`);
+        openDocument(harness, schemaUri, completion.source);
+        await harness.waitForDiagnostics(schemaUri);
+        const item = completionItemByLabel(
+          completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+          label!,
+        );
+        expect(item.insertTextFormat).toBe(InsertTextFormat.Snippet);
+        expect(item.command).toEqual(
+          enabled
+            ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+            : undefined,
+        );
+      }
+    },
+    5_000,
+  );
+
+  it('completes nested keys and values from updated buffers despite interpretation failure', async () => {
+    const resolution = await recursiveCompletionResolution();
+    harness = startHarness(async () => resolution);
+    await harness.initialize();
+    const initial = sourceWithCursor(
+      '// use prisma-next\nmodel User { id Int @probe(value: choose(|)) }',
+    );
+    openDocument(harness, schemaUri, initial.source);
+    const diagnostics = await harness.waitForDiagnostics(schemaUri);
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      'PSL_TEST_INTERPRETATION_FAILED',
+    );
+    expect(
+      completionItems(await requestCompletion(harness, schemaUri, initial.position)).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['mode', 'enabled']);
+    const changed = sourceWithCursor(
+      '// use prisma-next\nmodel User { id Int @probe(value: choose(mode: Fi|rst)) }',
+    );
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: changed.source }],
+    });
+    await settle();
+    const values = completionItems(await requestCompletion(harness, schemaUri, changed.position));
+    expect(values.map((item) => item.label)).toEqual(['First', 'Second']);
+    expect(applyCompletionItem(changed.source, completionItemByLabel(values, 'Second'))).toBe(
+      '// use prisma-next\nmodel User { id Int @probe(value: choose(mode: Second)) }',
+    );
+  }, 5_000);
+
+  it.each([
+    ['model User { id Int @probe(flags: [, |]) }', ['true', 'false']],
+    ['model User { id Int\n @@probe(value: choose(mode: |)) }', ['First', 'Second']],
+    ['policy Rule { @@probe(value: choose(mode: |)) }', ['First', 'Second']],
+    ['model User { id Int @probe(value: choose(mode: |', ['First', 'Second']],
+  ])(
+    'completes configured collection and contributed owner values: %s',
+    async (body, expected) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize();
+      const completion = sourceWithCursor(`// use prisma-next\n${body}`);
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      expect(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)).map(
+          (item) => item.label,
+        ),
+      ).toEqual(expected);
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'respects snippet capability for nested function edits: %s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize();
+      const completion = sourceWithCursor(
+        '// use prisma-next\nmodel User { id Int @probe(value: ch|) // keep\n}',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'choose',
+      );
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+      const inserted = snippets ? `choose(mode: ${modeSnippetPlaceholder})` : 'choose';
+      expect(applyCompletionItem(completion.source, item)).toBe(
+        `// use prisma-next\nmodel User { id Int @probe(value: ${inserted}) // keep\n}`,
+      );
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'negotiates named-key value stops for snippet support: %s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize();
+      const completion = sourceWithCursor(
+        '// use prisma-8\nmodel User { id Int @probe(value: choose(mo|de)) }',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'mode',
+      );
+      expect(item.textEdit?.newText).toBe(`mode: ${snippets ? modeSnippetPlaceholder : ''}`);
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+      expect(item.command).toBeUndefined();
+      expect(applyCompletionItem(completion.source, item)).toBe(
+        `// use prisma-8\nmodel User { id Int @probe(value: choose(mode: ${snippets ? modeSnippetPlaceholder : ''})) }`,
+      );
+    },
+    5_000,
+  );
+
+  it.each([
+    [undefined, false],
+    [null, false],
+    [true, false],
+    ['true', false],
+    [{}, false],
+    [{ completion: null }, false],
+    [{ completion: true }, false],
+    [{ completion: { supportsTriggerSuggestCommand: 'true' } }, false],
+    [{ completion: { supportsTriggerSuggestCommand: false } }, false],
+    [{ completion: { supportsTriggerSuggestCommand: true } }, true],
+  ])(
+    'requires explicit trigger-suggest opt-in: %j',
+    async (initializationOptions, enabled) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize(initializationOptions);
+      const completion = sourceWithCursor(
+        '// use prisma-8\nmodel User { id Int @probe(value: choose(|)) }',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'mode',
+      );
+      expect(item.textEdit?.newText).toBe('mode: ');
+      expect(item.command).toEqual(
+        enabled
+          ? { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' }
+          : undefined,
+      );
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'only retriggers new named-key value slots, snippets=%s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize({ completion: { supportsTriggerSuggestCommand: true } });
+      for (const [args, label, retrigger] of [
+        ['value: choose(mo|de)', 'mode', true],
+        ['value: choose(mo|de: First)', 'mode', false],
+        ['value: choose(mode: |)', 'First', false],
+        ['value: |', 'choose', false],
+      ] as const) {
+        const completion = sourceWithCursor(
+          `// use prisma-8\nmodel User { id Int @probe(${args}) }`,
+        );
+        openDocument(harness, schemaUri, completion.source);
+        await harness.waitForDiagnostics(schemaUri);
+        const item = completionItemByLabel(
+          completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+          label,
+        );
+        expect(item.command).toEqual(
+          retrigger
+            ? { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' }
+            : undefined,
+        );
+        if (retrigger)
+          expect(item.textEdit?.newText).toBe(`mode: ${snippets ? modeSnippetPlaceholder : ''}`);
+      }
+    },
+    5_000,
+  );
+
+  it('uses actual SQL relation grammar and current-buffer referenced model fields', async () => {
+    const resolution = await recursiveCompletionResolution();
+    harness = startHarness(async () => resolution);
+    await harness.initialize();
+    const source = (field: string) =>
+      `// use prisma-next\nmodel Target { topOnly Int }\nnamespace remote { model Target { ${field} Int } }\nmodel Owner { ownOnly Int\n relation remote.Target @relation(references: [|]) }`;
+    const initial = sourceWithCursor(source('remoteOnly'));
+    openDocument(harness, schemaUri, initial.source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(
+      completionItems(await requestCompletion(harness, schemaUri, initial.position)).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['remoteOnly']);
+    const changed = sourceWithCursor(source('renamedRemote'));
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: changed.source }],
+    });
+    await settle();
+    const items = completionItems(await requestCompletion(harness, schemaUri, changed.position));
+    expect(items.map((item) => item.label)).toEqual(['renamedRemote']);
+    expect(applyCompletionItem(changed.source, completionItemByLabel(items, 'renamedRemote'))).toBe(
+      changed.source.replace('references: []', 'references: [renamedRemote]'),
+    );
+  }, 5_000);
 
   it('returns declaration keyword completions with plain-text edits by default', async () => {
     harness = startHarness(resolveToSchemaWithPslBlockDescriptors);
@@ -964,14 +1759,18 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       harness = startHarness(async () => resolutionForInputs(['D:\\project\\next.prisma']));
       await harness.initialize();
       openDocument(harness, windowsDocumentUri, '// use prisma-8\n');
-      await harness.waitForDiagnostics(windowsDocumentUri);
+      await harness.waitForDiagnostics('file:///d:/project/next.prisma');
+      expect(harness.publishCount(windowsDocumentUri)).toBe(0);
+      expect(harness.getDocumentAst(windowsDocumentUri)?.sourceFile.filename).toBe(
+        'file:///d:/project/next.prisma',
+      );
 
       const items = completionItems(
         await requestCompletion(harness, windowsDocumentUri, { line: 1, character: 0 }),
       );
       expect(items.find((item) => item.label === 'namespace')).toMatchObject({
         kind: CompletionItemKind.Keyword,
-        detail: 'PSL declaration keyword',
+        detail: 'Groups declarations belonging to the same database schema or database.',
       });
       expect(items.map((item) => item.label)).not.toContain('datasource');
     } finally {
@@ -989,11 +1788,13 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const items = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(items.find((item) => item.label === 'model')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}` },
     });
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `policy ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: {
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block keys and attributes}\n}`,
+      },
     });
   });
 
@@ -1383,7 +2184,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: '// use prisma-8\nmodel Invoice {\n  id Int @id\n}\n' }],
     });
-    load.resolve(resolutionForInputs([schemaPath]));
+    load.resolve(await resolutionForInputs([schemaPath]));
     await currentDiagnostics;
 
     await expect(requestSemanticTokens(harness, schemaUri)).resolves.toEqual({
@@ -2077,15 +2878,21 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     harness = startHarness(resolveToSchema, pullDiagnosticsCapabilities);
     const result = await harness.initialize();
     expect(result.capabilities.diagnosticProvider).toEqual({
-      interFileDependencies: false,
+      interFileDependencies: true,
       workspaceDiagnostics: false,
     });
   });
 
-  it('does not advertise the diagnostic provider to push clients', async () => {
-    harness = startHarness(resolveToSchema);
+  it.each<ClientCapabilities>([
+    {},
+    { textDocument: { diagnostic: {} } },
+    { textDocument: { diagnostic: { relatedDocumentSupport: false } } },
+  ])('uses push without advertising a diagnostic provider for %j', async (capabilities) => {
+    harness = startHarness(resolveToSchema, capabilities);
     const result = await harness.initialize();
     expect(result.capabilities.diagnosticProvider).toBeUndefined();
+    openDocument(harness, schemaUri, duplicateModelSource);
+    expect(await harness.waitForDiagnostics(schemaUri)).not.toEqual([]);
   });
 
   it('serves a full report through pull without pushing publishDiagnostics', async () => {
@@ -2124,7 +2931,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     openDocument(harness, schemaUri, '// use prisma-8\nmodel User {\n  id Int @id\n}\n');
     expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([]);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: duplicateModelSource }],
@@ -2134,20 +2941,20 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     expect(fullReportItems(report).map((diagnostic) => diagnostic.code)).toContain(
       'PSL_DUPLICATE_DECLARATION',
     );
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).toHaveBeenCalledTimes(1);
 
     closeDocument(harness, schemaUri);
     await settle();
     expect(harness.publishCount(schemaUri)).toBe(0);
   });
 
-  it('reparses on the next pull after a config reload', async () => {
+  it('reuses the snapshot parse on the next pull after a config reload', async () => {
     harness = startHarness(resolveToSchema, pullDiagnosticsWithRefreshCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, duplicateModelSource);
     expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).not.toEqual([]);
 
-    pipelineMock.runPipeline.mockClear();
+    vi.mocked(parse).mockClear();
     const refreshed = harness.waitForDiagnosticRefresh();
     harness.notifyConfigChanged();
     await refreshed;
@@ -2156,7 +2963,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
     expect(fullReportItems(report).map((diagnostic) => diagnostic.code)).toContain(
       'PSL_DUPLICATE_DECLARATION',
     );
-    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(parse)).not.toHaveBeenCalled();
   });
 
   it('requests a diagnostics refresh instead of republishing when a config changes', async () => {
@@ -2193,7 +3000,7 @@ describe('language server pull diagnostics', { timeout: timeouts.databaseOperati
 });
 
 describe('language server project lifecycle', { timeout: timeouts.databaseOperation }, () => {
-  it('drops the project when its last open input closes and reopening re-evaluates the config', async () => {
+  it('keeps the project after its last open input closes and reopening reuses it (design decision 8)', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
     openDocument(harness, schemaUri, duplicateModelSource);
@@ -2213,7 +3020,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     );
     openDocument(harness, schemaUri, duplicateModelSource, 2);
     await rediagnosed;
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the project while another open input remains', async () => {
@@ -2224,7 +3031,9 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     openDocument(harness, schemaUri, duplicateModelSource);
     expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
     openDocument(harness, schema2Uri, formattedPsl);
-    expect(await harness.waitForDiagnostics(schema2Uri)).toEqual([]);
+    expect(
+      await harness.waitForDiagnosticsMatching(schema2Uri, (diagnostics) => diagnostics.length > 0),
+    ).toEqual([expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })]);
 
     const cleared = harness.waitForDiagnosticsMatching(
       schema2Uri,
@@ -2237,7 +3046,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves no project behind when only a stray document was opened', async () => {
+  it('reuses the project a stray document caused to load once a real input opens', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();
     const otherUri = pathToFileURL(join(root, 'not-a-schema.psl')).toString();
@@ -2251,7 +3060,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     );
     openDocument(harness, schemaUri, duplicateModelSource);
     await diagnosed;
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the project when a stray document opens beside an open input', async () => {
@@ -2268,7 +3077,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
   });
 
-  it('does not reload a dropped project when its config changes', async () => {
+  it('reloads the surviving project when its config changes after the last close', async () => {
     harness = startHarness(resolveToSchema, watchedFilesCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, duplicateModelSource);
@@ -2283,7 +3092,7 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
 
     harness.notifyConfigChanged();
     await settle();
-    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -2303,7 +3112,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     const broken = await harness.waitForDiagnostics(schemaUri);
     expect(broken.map((diagnostic) => diagnostic.code)).toContain('PSL_DUPLICATE_DECLARATION');
     const firstAst = harness.getDocumentAst(schemaUri);
-    expect(firstAst?.document).toBeDefined();
+    expect(firstAst?.parse().document).toBeDefined();
 
     const cleared = harness.waitForDiagnosticsMatching(
       schemaUri,
@@ -2320,7 +3129,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     await cleared;
 
     const secondAst = harness.getDocumentAst(schemaUri);
-    expect(secondAst?.document).not.toBe(firstAst?.document);
+    expect(secondAst?.parse().document).not.toBe(firstAst?.parse().document);
     expect(Object.keys(harness.getProjectSymbolTable(schemaUri)?.topLevel.models ?? {})).toEqual(
       expect.arrayContaining(['User', 'Post']),
     );
@@ -2339,7 +3148,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     closeDocument(harness, schemaUri);
     await closed;
 
-    load.resolve(resolutionForInputs([schemaPath]));
+    load.resolve(await resolutionForInputs([schemaPath]));
     await requestFormatting(harness, schemaUri);
 
     expect(harness.latestDiagnostics(schemaUri)).toEqual([]);
@@ -2381,8 +3190,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     await harness.initialize();
 
     // Open with a diagnostic-producing source so the only empty publish is the
-    // close's clear: an `onDidOpen` + `onDidChangeContent` pair both fire on open,
-    // so a clean source would publish `[]` twice and resolve the waiter early.
+    // close's clear.
     harness.client.sendNotification(DidOpenTextDocumentNotification.type, {
       textDocument: {
         uri: schemaUri,
@@ -2394,7 +3202,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
     expect(harness.getDocumentAst(schemaUri)).toBeDefined();
     expect(harness.getProjectSymbolTable(schemaUri)).toBeDefined();
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    expect(harness.publishCount(schemaUri)).toBe(1);
 
     const closed = harness.waitForDiagnosticsMatching(
       schemaUri,
@@ -2411,6 +3219,41 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
 });
 
 describe('language server disposal', { timeout: timeouts.databaseOperation }, () => {
+  it.each([
+    { method: RegistrationRequest.method, capabilities: watchedFilesCapabilities },
+    {
+      method: DiagnosticRefreshRequest.method,
+      capabilities: pullDiagnosticsWithRefreshCapabilities,
+    },
+  ])(
+    'finishes an outstanding $method response before disposing the transport',
+    async ({ method, capabilities }) => {
+      const entered = deferred<void>();
+      const response = deferred<void>();
+      harness = startHarness(resolveToSchema, capabilities);
+      harness.client.onRequest(method, () => {
+        entered.resolve();
+        return response.promise;
+      });
+      let disposed = false;
+      await harness.initialize();
+      harness.notifyConfigChanged();
+      await entered.promise;
+
+      const disposal = harness.dispose().then(() => {
+        disposed = true;
+      });
+      await requestFormatting(harness, schemaUri);
+      const disposedBeforeResponse = disposed;
+      response.resolve();
+      await disposal;
+      harness = undefined;
+
+      expect(disposedBeforeResponse).toBe(false);
+      expect(disposed).toBe(true);
+    },
+  );
+
   async function assertNoUnhandledRejection(
     settle: (load: {
       readonly resolve: (value: ConfigResolution) => void;
@@ -2430,7 +3273,7 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
       openDocument(harness, schemaUri, duplicateModelSource);
       await waitUntil(() => configResolutionMock.resolveConfigInputs.mock.calls.length > 0);
 
-      harness.dispose();
+      harness.disconnect();
       harness = undefined;
 
       settle(load);
@@ -2444,13 +3287,46 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
   }
 
   it('does not reject when an in-flight publish resolves after dispose', async () => {
-    await assertNoUnhandledRejection((load) => load.resolve(resolutionForInputs([schemaPath])));
+    const resolution = await resolutionForInputs([schemaPath]);
+    await assertNoUnhandledRejection((load) => load.resolve(resolution));
   });
 
   it('does not reject when an in-flight publish rejects after dispose', async () => {
     await assertNoUnhandledRejection((load) =>
       load.reject(new Error('config load failed after dispose')),
     );
+  });
+
+  it('does not reject when a client notification is still being written at dispose', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      harness = startHarness(resolveToSchema);
+      await harness.initialize();
+      openDocument(harness, schemaUri, duplicateModelSource);
+      await harness.waitForDiagnostics(schemaUri);
+
+      // The write is queued behind the writer's own semaphore, so ending the
+      // transport in the same tick fails it after the connection is disposed:
+      // jsonrpc then reports the failed write through the connection's console,
+      // which is one more send on a disposed connection.
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: schemaUri, version: 2 },
+        contentChanges: [{ text: duplicateModelSource }],
+      });
+      harness.disconnect();
+      harness = undefined;
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });
 
@@ -2462,6 +3338,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   const unresolvedDiagnostic = {
     code: 'PSL_UNRESOLVED_RELATION',
     message: 'relation target not found',
+    sourceId: schemaUri,
     span: { start: { offset: 22, line: 2, column: 7 }, end: { offset: 26, line: 2, column: 11 } },
   };
   const expectedUnresolved: Diagnostic = {
@@ -2472,10 +3349,10 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
     source: 'prisma',
   };
 
-  function interpretationResolution(interpret: PslInterpretCapable['interpret']): {
+  async function interpretationResolution(interpret: PslInterpretCapable['interpret']): Promise<{
     readonly resolveInputs: ResolveInputs;
     readonly spy: ReturnType<typeof vi.fn>;
-  } {
+  }> {
     const spy = vi.fn(interpret);
     const source = {
       format: 'psl',
@@ -2484,7 +3361,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
       interpret: spy,
     } as unknown as PslInterpretCapable;
     const resolution: ConfigResolution = {
-      ...resolutionForInputs([schemaPath]),
+      ...(await resolutionForInputs([schemaPath])),
       interpretation: { source, context: {} as unknown as ContractSourceContext },
     };
     return { resolveInputs: async () => resolution, spy };
@@ -2492,13 +3369,79 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
 
   function fixAwareInterpret(): PslInterpretCapable['interpret'] {
     return (input: PslInterpretInput) =>
-      input.sourceFile.text.includes('// fixed')
+      input.sources.sourceFileFor(input.documents[0]!.syntax).text.includes('// fixed')
         ? ok({} as never)
         : notOk({ summary: 'Schema has 1 error', diagnostics: [unresolvedDiagnostic] });
   }
 
+  it('recovers from an interpreter exception on a same-version pull and logs its original stack', async () => {
+    const error = new Error('private interpreter detail');
+    const { resolveInputs, spy } = await interpretationResolution(() => ok({} as never));
+    spy.mockImplementationOnce(() => {
+      throw error;
+    });
+    harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
+    const logs: string[] = [];
+    harness.client.onNotification(LogMessageNotification.type, (params) => {
+      if (params.type === MessageType.Error) logs.push(params.message);
+    });
+    await harness.initialize();
+    openDocument(harness, schemaUri, duplicateModelSource);
+    const { parseDiagnostics, symbolTableDiagnostics } =
+      parseAndSymbolTableDiagnostics(duplicateModelSource);
+    const parserItems = toPublishedDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]);
+    expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([
+      ...parserItems,
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        message:
+          'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
+        severity: DiagnosticSeverity.Error,
+        source: 'prisma',
+      },
+    ]);
+    expect(logs).toEqual([`PSL interpretation failed for ${schemaUri}: ${error.stack}`]);
+    expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual(parserItems);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])('recovers diagnostics after edits for pull=%s', async (pull) => {
+    const interpret = fixAwareInterpret();
+    const { resolveInputs } = await interpretationResolution((input, context) => {
+      if (input.sources.sourceFileFor(input.documents[0]!.syntax).text.includes('// crash'))
+        throw new Error('interpreter failed');
+      return interpret(input, context);
+    });
+    harness = startHarness(resolveInputs, pull ? pullDiagnosticsCapabilities : {});
+    await harness.initialize();
+    openDocument(harness, schemaUri, `${cleanSchema}// crash`);
+    const failed = pull
+      ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
+      : await harness.waitForDiagnostics(schemaUri);
+    expect(failed.map((item) => item.code)).toEqual(['PRISMA_NEXT_INTERPRETATION_FAILED']);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: cleanSchema }],
+    });
+    const recovered = pull
+      ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
+      : await harness.waitForDiagnosticsMatching(schemaUri, (items) =>
+          items.some((item) => item.code === expectedUnresolved.code),
+        );
+    expect(recovered).toEqual([expectedUnresolved]);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 3 },
+      contentChanges: [{ text: fixedSchema }],
+    });
+    const fixed = pull
+      ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
+      : await harness.waitForDiagnosticsMatching(schemaUri, (items) => items.length === 0);
+    expect(fixed).toEqual([]);
+  });
+
   it('pull serves the interpreter diagnostic at its mapped range and clears it after a fix', async () => {
-    const { resolveInputs } = interpretationResolution(fixAwareInterpret());
+    const { resolveInputs } = await interpretationResolution(fixAwareInterpret());
     harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
@@ -2516,7 +3459,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('push publishes the combined parse and interpreter diagnostics', async () => {
-    const { resolveInputs } = interpretationResolution(fixAwareInterpret());
+    const { resolveInputs } = await interpretationResolution(fixAwareInterpret());
     harness = startHarness(resolveInputs);
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
@@ -2526,10 +3469,10 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('anchors a span-less interpreter diagnostic at document start', async () => {
-    const { resolveInputs } = interpretationResolution(() =>
+    const { resolveInputs } = await interpretationResolution(() =>
       notOk({
         summary: 'Schema has 1 error',
-        diagnostics: [{ code: 'PSL_SPANLESS', message: 'no span available' }],
+        diagnostics: [{ code: 'PSL_SPANLESS', message: 'no span available', sourceId: schemaUri }],
       }),
     );
     harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
@@ -2575,7 +3518,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   });
 
   it('interprets only for diagnostics: never for tokens, folding, or completion; memoized per version', async () => {
-    const { resolveInputs, spy } = interpretationResolution(fixAwareInterpret());
+    const { resolveInputs, spy } = await interpretationResolution(fixAwareInterpret());
     harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
     await harness.initialize();
     openDocument(harness, schemaUri, cleanSchema);
@@ -2610,7 +3553,7 @@ describe('language server config failure surfacing', {
     source: 'prisma',
   });
 
-  function interpretingResolution(): ConfigResolution {
+  async function interpretingResolution(): Promise<ConfigResolution> {
     const source = {
       format: 'psl',
       inputs: [schemaPath],
@@ -2618,11 +3561,13 @@ describe('language server config failure surfacing', {
       interpret: () =>
         notOk({
           summary: 'Schema has 1 error',
-          diagnostics: [{ code: 'PSL_INTERPRETER_FINDING', message: 'finding' }],
+          diagnostics: [
+            { code: 'PSL_INTERPRETER_FINDING', message: 'finding', sourceId: schemaUri },
+          ],
         }),
     } as unknown as PslInterpretCapable;
     return {
-      ...resolutionForInputs([schemaPath]),
+      ...(await resolutionForInputs([schemaPath])),
       interpretation: { source, context: {} as unknown as ContractSourceContext },
     };
   }
@@ -2738,7 +3683,67 @@ describe('language server config failure surfacing', {
     expect(fullReportItems(after).map((d) => d.code)).toContain('PSL_INTERPRETER_FINDING');
   });
 
-  it('clears the config diagnostic when the last managed document closes', async () => {
+  function documentFor(input: PslInterpretInput, uri: string) {
+    return input.documents.find((doc) => input.sources.sourceFileFor(doc.syntax).filename === uri);
+  }
+
+  it.each(['edit', 'close'])(
+    'invalidates last-good source roots on %s during a failed reload',
+    async (event) => {
+      const siblingPath = join(root, 'sibling.psl');
+      const siblingUri = pathToFileURL(siblingPath).toString();
+      const resolution = {
+        ...(await interpretingResolution()),
+        inputs: await resolveSchemaInputs(
+          {
+            contract: { source: { format: 'psl', inputs: [schemaPath, siblingPath] } },
+          },
+          alwaysMember,
+        ),
+      };
+      const spy = vi.spyOn(resolution.interpretation!.source, 'interpret');
+      const gate = deferredSettleable<ConfigResolution>();
+      let calls = 0;
+      harness = startHarness(() => {
+        calls += 1;
+        return calls === 1 ? Promise.resolve(resolution) : gate.promise;
+      }, pullDiagnosticsCapabilities);
+      await harness.initialize();
+      openDocument(harness, schemaUri, cleanSchema);
+      await requestPullDiagnostics(harness, schemaUri);
+      openDocument(harness, siblingUri, cleanSchema);
+      await requestPullDiagnostics(harness, siblingUri);
+      const previous = spy.mock.calls.at(-1)![0];
+
+      harness.notifyConfigChanged();
+      await waitUntil(() => calls === 2);
+      if (event === 'close') {
+        closeDocument(harness, siblingUri);
+      } else {
+        harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+          textDocument: { uri: siblingUri, version: 2 },
+          contentChanges: [{ text: `${cleanSchema}\nmodel Post {\n id Int\n}\n` }],
+        });
+      }
+      await settle();
+      gate.reject(new Error('config exploded'));
+      await harness.waitForDiagnosticsMatching(configUri, (diagnostics) => diagnostics.length > 0);
+      if (event === 'edit') {
+        await requestPullDiagnostics(harness, siblingUri);
+      }
+      await requestPullDiagnostics(harness, schemaUri);
+      const current = spy.mock.calls.at(-1)![0];
+      const staleSibling = documentFor(previous, siblingUri);
+      expect(staleSibling).toBeDefined();
+      expect(() => current.sources.sourceFileFor(staleSibling!.syntax)).toThrow(/No SourceFile/);
+      const currentSchema = documentFor(current, schemaUri);
+      expect(currentSchema).toBeDefined();
+      expect(current.sources.sourceFileFor(currentSchema!.syntax).filename).toBe(schemaUri);
+      expect(currentSchema).toBe(documentFor(spy.mock.calls[0]![0], schemaUri));
+    },
+  );
+
+  it('keeps the config diagnostic after the last managed document closes (design decision 8)', async () => {
     let broken = false;
     harness = startHarness(async () => {
       if (broken) {
@@ -2757,11 +3762,12 @@ describe('language server config failure surfacing', {
     harness.client.sendNotification(DidCloseTextDocumentNotification.type, {
       textDocument: { uri: schemaUri },
     });
+    await settle();
 
-    await harness.waitForDiagnosticsMatching(configUri, (diagnostics) => diagnostics.length === 0);
+    expect(harness.latestDiagnostics(configUri)?.length).toBeGreaterThan(0);
   });
 
-  it('drops the project without resurrection or zombie marker when a reload fails after the last document closed', async () => {
+  it('publishes a reload failure even when it settles after the last document closed', async () => {
     const gate = deferredSettleable<ConfigResolution>();
     let call = 0;
     harness = startHarness(() => {
@@ -2781,8 +3787,8 @@ describe('language server config failure surfacing', {
     gate.reject(new Error('config exploded'));
     await settle();
 
-    expect(harness.nonEmptyPublishCount(configUri)).toBe(0);
-    expect(harness.latestDiagnostics(configUri) ?? []).toEqual([]);
+    expect(harness.nonEmptyPublishCount(configUri)).toBe(1);
+    expect(harness.latestDiagnostics(configUri)?.length).toBeGreaterThan(0);
   });
 
   it('leaves a newer load untouched when a superseded load fails', async () => {
@@ -2830,6 +3836,60 @@ describe('language server config failure surfacing', {
   });
 });
 
+describe('project symbol diagnostics assembly', () => {
+  it.each(['push', 'pull'] as const)(
+    'routes cross-file duplicates once to their owning document over %s',
+    async (mode) => {
+      const siblingPath = join(root, 'sibling.psl');
+      const siblingUri = pathToFileURL(siblingPath)
+        .toString()
+        .replace('sibling.psl', '%73ibling.psl');
+      harness = startHarness(
+        async () => resolutionForInputs([schemaPath, siblingPath]),
+        mode === 'pull' ? pullDiagnosticsCapabilities : undefined,
+      );
+      await harness.initialize();
+      const source = '// use prisma-8\nmodel User {\n  id Int @id\n}\n';
+      openDocument(harness, schemaUri, source);
+      if (mode === 'push') await harness.waitForDiagnostics(schemaUri);
+      else await requestPullDiagnostics(harness, schemaUri);
+      openDocument(harness, siblingUri, source);
+      const expected = [
+        {
+          code: 'PSL_DUPLICATE_DECLARATION',
+          message: 'Duplicate declaration of "User"',
+          severity: DiagnosticSeverity.Error,
+          source: 'prisma',
+          range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+        },
+      ];
+      if (mode === 'push') {
+        expect(
+          await harness.waitForDiagnosticsMatching(
+            pathToFileURL(siblingPath).toString(),
+            (diagnostics) => diagnostics.length > 0,
+          ),
+        ).toEqual(expected);
+        expect(harness.latestDiagnostics(schemaUri)).toEqual([]);
+      } else {
+        expect(await requestPullDiagnostics(harness, siblingUri)).toEqual({
+          kind: DocumentDiagnosticReportKind.Full,
+          items: expected,
+          relatedDocuments: { [schemaUri]: { kind: 'full', items: [] } },
+        });
+        expect(await requestPullDiagnostics(harness, schemaUri)).toEqual({
+          kind: DocumentDiagnosticReportKind.Full,
+          items: [],
+          relatedDocuments: {
+            [pathToFileURL(siblingPath).toString()]: { kind: 'full', items: expected },
+          },
+        });
+      }
+      expect(harness.getDocumentAst(siblingUri)?.parse().diagnostics).toEqual([]);
+    },
+  );
+});
+
 describe('language server prisma-8 directive gating', {
   timeout: timeouts.databaseOperation,
 }, () => {
@@ -2861,6 +3921,45 @@ describe('language server prisma-8 directive gating', {
     await expect(requestFoldingRanges(harness, schemaUri)).resolves.toEqual([]);
     expect(harness.getDocumentAst(schemaUri)).toBeUndefined();
     expect(harness.getProjectSymbolTable(schemaUri)).toBeUndefined();
+  });
+
+  const attributedView =
+    'view ActiveUsers {\nid Int @unique\nemail   String @map("user_email")\n}\n';
+  const resolveToSchemaReadingViewFields: ResolveInputs = async () => ({
+    ...(await resolutionForInputs([schemaPath])),
+    parserOptions: { grammar: 'prisma-7' },
+  });
+
+  it('parses a marked input with the parser options its source declares', async () => {
+    harness = startHarness(resolveToSchemaReadingViewFields);
+    await harness.initialize();
+
+    openDocument(harness, schemaUri, `// use prisma-8\n${attributedView}`);
+
+    expect(await harness.waitForDiagnostics(schemaUri)).toEqual([]);
+  });
+
+  it('formats a marked input with the parser options its source declares', async () => {
+    harness = startHarness(resolveToSchemaReadingViewFields);
+    await harness.initialize();
+
+    openDocument(harness, schemaUri, `// use prisma-8\n${attributedView}`);
+    await harness.waitForDiagnostics(schemaUri);
+
+    const edits = await requestFormatting(harness, schemaUri);
+    expect(edits?.[0]?.newText).toBe(
+      '// use prisma-8\nview ActiveUsers {\n  id    Int    @unique\n  email String @map("user_email")\n}\n',
+    );
+  });
+
+  it('leaves an unmarked input alone even when its source declares parser options', async () => {
+    harness = startHarness(resolveToSchemaReadingViewFields);
+    await harness.initialize();
+
+    openDocument(harness, schemaUri, attributedView);
+    expect(await harness.waitForDiagnostics(schemaUri)).toEqual([]);
+
+    await expect(requestFormatting(harness, schemaUri)).resolves.toEqual([]);
   });
 
   it('returns no formatting edits for an unmarked configured input', async () => {
@@ -2946,5 +4045,426 @@ describe('language server prisma-8 directive gating', {
     expect(models).not.toContain('Stray');
     expect(harness.getDocumentAst(schema2Uri)).toBeUndefined();
     expect(harness.getProjectSymbolTable(schema2Uri)).toBeUndefined();
+  });
+});
+
+describe('language server whole-project push and freshness', {
+  timeout: timeouts.databaseOperation,
+}, () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    for (const fixtureDirPath of tempDirs) {
+      await rm(fixtureDirPath, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  async function fixtureDir(): Promise<string> {
+    const created = await mkdtemp(join(tmpdir(), 'lsp-whole-project-'));
+    tempDirs.push(created);
+    return created;
+  }
+
+  const userSchema = '// use prisma-8\nmodel User {\n  id Int @id\n}\n';
+  const postSchema = '// use prisma-8\nmodel Post {\n  id Int @id\n}\n';
+  const conflictingSchema =
+    '// use prisma-8\nmodel User {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n';
+  const selfDuplicatePostSchema =
+    '// use prisma-8\nmodel Post {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n';
+  const isDuplicateDeclaration = (diagnostics: readonly Diagnostic[]): boolean =>
+    diagnostics.some((diagnostic) => diagnostic.code === 'PSL_DUPLICATE_DECLARATION');
+
+  it.each([false, true])(
+    'returns related diagnostics for an open sibling=%s without member pushes',
+    async (openSibling) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      const alias = memberAUri.replace('a.prisma', '%61.prisma');
+      await writeFile(memberAPath, userSchema);
+      await writeFile(memberBPath, postSchema);
+      const interpret = vi.fn(completionInterpretationSource.interpret);
+      harness = startHarness(
+        async () => ({
+          ...(await resolutionForInputs([memberAPath, memberBPath])),
+          interpretation: {
+            source: { ...completionInterpretationSource, interpret },
+            context: completionInterpretationContext,
+          },
+        }),
+        pullDiagnosticsCapabilities,
+      );
+      await harness.initialize();
+      openDocument(harness, alias, userSchema);
+      if (openSibling) openDocument(harness, memberBUri, postSchema);
+      expect(await requestPullDiagnostics(harness, alias)).toEqual({
+        kind: 'full',
+        items: [],
+        relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
+      });
+      const artifacts = vi.mocked(ProjectArtifacts).mock.results.at(-1)?.value;
+      vi.mocked(artifacts.symbolDiagnostics).mockClear();
+      interpret.mockClear();
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: alias, version: 2 },
+        contentChanges: [{ text: conflictingSchema }],
+      });
+      const report = await requestPullDiagnostics(harness, alias);
+      expect(report).toMatchObject({
+        relatedDocuments: {
+          [memberBUri]: {
+            kind: 'full',
+            items: [expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })],
+          },
+        },
+      });
+      expect(artifacts.symbolDiagnostics).toHaveBeenCalledTimes(1);
+      expect(interpret).toHaveBeenCalledTimes(1);
+      await requestPullDiagnostics(harness, memberBUri);
+      expect(interpret).toHaveBeenCalledTimes(1);
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: alias, version: 3 },
+        contentChanges: [{ text: userSchema }],
+      });
+      expect(await requestPullDiagnostics(harness, alias)).toEqual({
+        kind: 'full',
+        items: [],
+        relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
+      });
+      closeDocument(harness, alias);
+      await requestPullDiagnostics(harness, memberAUri);
+      await settle();
+      expect(harness.publishCount(memberAUri)).toBe(0);
+      expect(harness.publishCount(memberBUri)).toBe(0);
+      expect(harness.publishCount(alias)).toBe(0);
+    },
+  );
+
+  it.each(['delete', 'directive', 'config', 'replace-config'] as const)(
+    'clears previously related members after %s even when the excluded member is pulled first',
+    async (removal) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      await writeFile(memberAPath, userSchema);
+      await writeFile(memberBPath, selfDuplicatePostSchema);
+      let inputs = [memberAPath, memberBPath];
+      harness = startHarness(
+        async () => resolutionForInputs(inputs),
+        pullDiagnosticsWithRefreshCapabilities,
+      );
+      await harness.initialize();
+      openDocument(harness, memberAUri, userSchema);
+      expect(await requestPullDiagnostics(harness, memberAUri)).toMatchObject({
+        relatedDocuments: {
+          [memberBUri]: { items: [expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })] },
+        },
+      });
+      if (removal === 'delete') await rm(memberBPath);
+      if (removal === 'directive')
+        await writeFile(memberBPath, selfDuplicatePostSchema.replace('// use prisma-8\n', ''));
+      const refreshed = harness.waitForDiagnosticRefresh();
+      let nextPullUri = memberAUri;
+      if (removal === 'config' || removal === 'replace-config') {
+        const replacementPath = join(dir, 'replacement.prisma');
+        await writeFile(replacementPath, postSchema);
+        inputs = removal === 'replace-config' ? [replacementPath] : [memberAPath];
+        if (removal === 'replace-config') nextPullUri = pathToFileURL(replacementPath).toString();
+        harness.notifyConfigChanged();
+      } else {
+        harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+          changes: [
+            {
+              uri: memberBUri,
+              type: removal === 'delete' ? FileChangeType.Deleted : FileChangeType.Changed,
+            },
+          ],
+        });
+      }
+      await refreshed;
+      expect(fullReportItems(await requestPullDiagnostics(harness, memberBUri))).toEqual([]);
+      expect(await requestPullDiagnostics(harness, nextPullUri)).toMatchObject({
+        relatedDocuments: { [memberBUri]: { kind: 'full', items: [] } },
+      });
+      expect(harness.publishCount(memberBUri)).toBe(0);
+    },
+  );
+
+  it.each([false, true])(
+    'observes external edits with refresh support=%s without falling back to push',
+    async (refreshSupport) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      await writeFile(memberAPath, userSchema);
+      await writeFile(memberBPath, postSchema);
+      harness = startHarness(
+        async () => resolutionForInputs([memberAPath, memberBPath]),
+        refreshSupport ? pullDiagnosticsWithRefreshCapabilities : pullDiagnosticsCapabilities,
+      );
+      await harness.initialize();
+      openDocument(harness, memberAUri, userSchema);
+      await requestPullDiagnostics(harness, memberAUri);
+      await writeFile(memberBPath, selfDuplicatePostSchema);
+      harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+        changes: [{ uri: memberBUri, type: FileChangeType.Changed }],
+      });
+      if (refreshSupport) await harness.waitForDiagnosticRefresh();
+      else await settle();
+      expect(await requestPullDiagnostics(harness, memberAUri)).toMatchObject({
+        relatedDocuments: {
+          [memberBUri]: { items: [expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' })] },
+        },
+      });
+      expect(harness.diagnosticRefreshCount()).toBe(refreshSupport ? 1 : 0);
+      expect(harness.publishCount(memberAUri)).toBe(0);
+      expect(harness.publishCount(memberBUri)).toBe(0);
+    },
+  );
+
+  it('does not mix related reports or pending clears between projects', async () => {
+    const firstDir = await fixtureDir();
+    const secondDir = await fixtureDir();
+    const firstPaths = [join(firstDir, 'a.prisma'), join(firstDir, 'b.prisma')];
+    const secondPaths = [join(secondDir, 'c.prisma'), join(secondDir, 'd.prisma')];
+    const firstUris = firstPaths.map((path) => pathToFileURL(path).toString());
+    const secondUris = secondPaths.map((path) => pathToFileURL(path).toString());
+    await Promise.all([...firstPaths, ...secondPaths].map((path) => writeFile(path, userSchema)));
+    harness = startHarness(
+      async (path) => resolutionForInputs(path.startsWith(firstDir) ? firstPaths : secondPaths),
+      pullDiagnosticsWithRefreshCapabilities,
+      async (path) => join(path.startsWith(firstDir) ? firstDir : secondDir, 'prisma.config.ts'),
+    );
+    await harness.initialize();
+    const first = await requestPullDiagnostics(harness, firstUris[0]!);
+    expect(first.kind === 'full' && Object.keys(first.relatedDocuments ?? {})).toEqual([
+      firstUris[1],
+    ]);
+    const second = await requestPullDiagnostics(harness, secondUris[0]!);
+    expect(second.kind === 'full' && Object.keys(second.relatedDocuments ?? {})).toEqual([
+      secondUris[1],
+    ]);
+    await rm(firstPaths[1]!);
+    harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: firstUris[1]!, type: FileChangeType.Deleted }],
+    });
+    await harness.waitForDiagnosticRefresh();
+    const secondAgain = await requestPullDiagnostics(harness, secondUris[0]!);
+    expect(secondAgain).toEqual(second);
+    expect(harness.publishCount(firstUris[1]!)).toBe(0);
+  });
+
+  it.each<ClientCapabilities>([{}, { textDocument: { diagnostic: {} } }])(
+    'produces then clears a diagnostic in a closed sibling from an edit in an open member for %j',
+    async (capabilities) => {
+      const dir = await fixtureDir();
+      const memberAPath = join(dir, 'a.prisma');
+      const memberBPath = join(dir, 'b.prisma');
+      const memberAUri = pathToFileURL(memberAPath).toString();
+      const memberBUri = pathToFileURL(memberBPath).toString();
+      await writeFile(memberAPath, userSchema, 'utf8');
+      await writeFile(memberBPath, postSchema, 'utf8');
+
+      harness = startHarness(
+        async () => resolutionForInputs([memberAPath, memberBPath]),
+        capabilities,
+      );
+      await harness.initialize();
+
+      openDocument(harness, memberAUri, userSchema);
+      await harness.waitForDiagnostics(memberAUri);
+      expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+
+      const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: memberAUri, version: 2 },
+        contentChanges: [{ text: conflictingSchema }],
+      });
+      expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+      expect(harness.publishCount(memberBUri)).toBeGreaterThan(0);
+
+      const cleared = harness.waitForDiagnosticsMatching(
+        memberBUri,
+        (diagnostics) => diagnostics.length === 0,
+      );
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: memberAUri, version: 3 },
+        contentChanges: [{ text: userSchema }],
+      });
+      expect(await cleared).toEqual([]);
+    },
+  );
+
+  it('picks up an external edit to a closed member via a watch event', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, postSchema, 'utf8');
+
+    const activeHarness = startHarness(
+      async () => resolutionForInputs([memberAPath, memberBPath]),
+      watchedFilesCapabilities,
+    );
+    harness = activeHarness;
+    await harness.initialize();
+    await harness.waitForWatchedFilesRegistration(timeouts.default);
+
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+    await waitUntil(() =>
+      watchedFilesRegistrations(activeHarness).some((registration) =>
+        JSON.stringify(registration.registerOptions).includes('a.prisma'),
+      ),
+    );
+
+    await writeFile(memberBPath, conflictingSchema, 'utf8');
+    const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+    harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: memberBUri, type: FileChangeType.Changed }],
+    });
+    expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+  });
+
+  it('disposes a superseded schema-watcher registration instead of leaking it when two reloads race', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+
+    const activeHarness = startHarness(
+      async () => resolutionForInputs([memberAPath]),
+      watchedFilesCapabilities,
+    );
+    harness = activeHarness;
+    await harness.initialize();
+    await harness.waitForWatchedFilesRegistration(timeouts.default);
+
+    const held = harness.delayNextSchemaWatcherRegistration();
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    const { id: firstRegistrationId, release: releaseFirstResponse } = await held;
+
+    harness.notifyConfigChanged();
+    await waitUntil(() => activeHarness.schemaWatcherRegistrationIds().length === 2);
+    const secondRegistrationId = activeHarness
+      .schemaWatcherRegistrationIds()
+      .find((id) => id !== firstRegistrationId);
+    expect(secondRegistrationId).toBeDefined();
+
+    releaseFirstResponse();
+    await waitUntil(() => activeHarness.unregisteredIds().includes(firstRegistrationId));
+
+    expect(activeHarness.unregisteredIds()).not.toContain(secondRegistrationId);
+  });
+
+  it('picks up an external edit to a closed member via stat revalidation when no watcher is registered', async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, postSchema, 'utf8');
+
+    harness = startHarness(async () => resolutionForInputs([memberAPath, memberBPath]));
+    await harness.initialize();
+    expect(watchedFilesRegistrations(harness).length).toBe(0);
+
+    openDocument(harness, memberAUri, userSchema);
+    await harness.waitForDiagnostics(memberAUri);
+    expect(await harness.waitForDiagnostics(memberBUri)).toEqual([]);
+
+    await writeFile(memberBPath, conflictingSchema, 'utf8');
+    expect(watchedFilesRegistrations(harness).length).toBe(0);
+
+    const conflicted = harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: memberAUri, version: 2 },
+      contentChanges: [{ text: `${userSchema}// trigger a revalidation pass\n` }],
+    });
+    expect(isDuplicateDeclaration(await conflicted)).toBe(true);
+  });
+
+  it.each(['push', 'pull-without-related'] as const)(
+    'publishes and clears a closed aliased member at its normalized URI over %s',
+    async (mode) => {
+      const dir = await fixtureDir();
+      const memberPath = join(dir, 'member.prisma');
+      const memberUri = pathToFileURL(memberPath).toString();
+      const alias = memberUri.replace('member.prisma', '%6dember.prisma');
+      await writeFile(memberPath, selfDuplicatePostSchema, 'utf8');
+      harness = startHarness(
+        async () => resolutionForInputs([memberPath]),
+        mode === 'pull-without-related' ? { textDocument: { diagnostic: {} } } : undefined,
+      );
+      await harness.initialize();
+      openDocument(harness, alias, postSchema);
+      expect(await harness.waitForDiagnostics(memberUri)).toEqual([]);
+      const closed = harness.waitForDiagnosticsMatching(memberUri, isDuplicateDeclaration);
+      closeDocument(harness, memberUri);
+      expect(isDuplicateDeclaration(await closed)).toBe(true);
+      expect(harness.publishCount(alias)).toBe(0);
+      await rm(memberPath);
+      const cleared = harness.waitForDiagnosticsMatching(
+        memberUri,
+        (diagnostics) => diagnostics.length === 0,
+      );
+      harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+        changes: [{ uri: alias, type: FileChangeType.Deleted }],
+      });
+      expect(await cleared).toEqual([]);
+      expect(harness.publishCount(memberUri)).toBe(3);
+      expect(harness.publishCount(alias)).toBe(0);
+    },
+  );
+
+  it("clears a closed member's diagnostics and drops it from the symbol table once it is deleted", async () => {
+    const dir = await fixtureDir();
+    const memberAPath = join(dir, 'a.prisma');
+    const memberBPath = join(dir, 'b.prisma');
+    const memberAUri = pathToFileURL(memberAPath).toString();
+    const memberBUri = pathToFileURL(memberBPath).toString();
+    await writeFile(memberAPath, userSchema, 'utf8');
+    await writeFile(memberBPath, selfDuplicatePostSchema, 'utf8');
+
+    harness = startHarness(
+      async () => resolutionForInputs([memberAPath, memberBPath]),
+      watchedFilesCapabilities,
+    );
+    await harness.initialize();
+
+    openDocument(harness, memberAUri, userSchema);
+    expect(
+      isDuplicateDeclaration(
+        await harness.waitForDiagnosticsMatching(memberBUri, isDuplicateDeclaration),
+      ),
+    ).toBe(true);
+    expect(Object.keys(harness.getProjectSymbolTable(memberAUri)?.topLevel.models ?? {})).toContain(
+      'Post',
+    );
+
+    await rm(memberBPath);
+    const cleared = harness.waitForDiagnosticsMatching(
+      memberBUri,
+      (diagnostics) => diagnostics.length === 0,
+    );
+    harness.client.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: memberBUri, type: FileChangeType.Deleted }],
+    });
+    expect(await cleared).toEqual([]);
+    expect(
+      Object.keys(harness.getProjectSymbolTable(memberAUri)?.topLevel.models ?? {}),
+    ).not.toContain('Post');
   });
 });

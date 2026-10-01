@@ -5,4 +5,5 @@ model user {
   email  String
   phone  String?
   avatar String?
+  @@map("user")
 }

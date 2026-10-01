@@ -131,6 +131,20 @@ describe('projectImportRoot', () => {
     });
   });
 
+  it('rejects a manifest that installs two database facades', () => {
+    const configPath = writeManifest({
+      '@prisma/orm-postgres': '0.16.0',
+      '@prisma/orm-mongo': '0.16.0',
+    });
+
+    expect(() => projectImportRoot(configPath)).toThrow(CliStructuredError);
+    expect(caught(() => projectImportRoot(configPath))).toMatchObject({
+      code: 'CLI.PROJECT_MANIFEST_INVALID',
+      why: expect.stringContaining('only one database facade'),
+      meta: { path: join(project, 'package.json') },
+    });
+  });
+
   it('reports an unreadable manifest instead of walking past it', () => {
     // A directory named `package.json` makes `readFileSync` fail with EISDIR,
     // which is a read failure rather than "there is no manifest here".

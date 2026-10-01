@@ -6,6 +6,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  dataTypeId,
 } from '@internal/framework-components/codec';
 import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -59,6 +60,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -77,6 +79,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
 }
 
 class DirectVectorDescriptor extends SqliteCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -99,6 +102,7 @@ class DirectVectorDescriptor extends SqliteCodecDescriptor<VectorParams> {
 const genericDescriptor = new GenericVectorDescriptor();
 const directDescriptor = new DirectVectorDescriptor();
 const adaptedDescriptor = sqliteCodec(genericDescriptor, {
+  dataType: dataTypeId('demo/fixture'),
   jsonProjection(expression, params) {
     expectTypeOf(expression).toEqualTypeOf<ProjectionExpr>();
     expectTypeOf(params).toEqualTypeOf<VectorParams>();
@@ -154,6 +158,7 @@ test('SQLite protocol remains scalar-only', () => {
 
 // @ts-expect-error -- direct descriptors must implement scalar JSON projection
 class MissingJsonProjection extends SqliteCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/missing-json@1' as const;
   override readonly traits: readonly CodecTrait[] = [];
   override readonly targetTypes: readonly string[] = [];

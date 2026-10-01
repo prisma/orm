@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { VerifyDatabaseResult } from '@internal/framework-components/control';
 import {
   VERIFY_CODE_HASH_MISMATCH,
@@ -5,10 +6,9 @@ import {
   VERIFY_CODE_TARGET_MISMATCH,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
-import { isInternalError } from '@internal/utils/internal-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
-import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
+import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import type { DbVerifyMode } from '../../control-api/types';
@@ -24,8 +24,6 @@ import {
 } from '../../utils/combine-verify-results';
 import { closeQuietly, maskConnectionUrl } from '../../utils/command-helpers';
 import type { DbVerifyReport } from '../../utils/formatters/verify';
-import { runCommandAction } from '../../utils/next-actions';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { migrationsDirFor } from '../migration/paths';
@@ -34,6 +32,7 @@ import { controlProgressReporter } from '../progress';
 import {
   readEmittedContract,
   requireVerifyConnection,
+  schemaDriftNextActions,
   schemaFindingBlocks,
   schemaVerdictDiagnostic,
   verificationThrow,
@@ -58,12 +57,6 @@ type DbVerifyDocument = DbVerifyReport & {
 /** The schema-verify document `--schema-only` and the drift branch report. */
 type SchemaVerifyDocument = CombinedVerifyResult['result'] & {
   readonly unclaimed: readonly string[];
-};
-
-const PUSH_THE_CONTRACT = runCommandAction('Push the contract to the database', '{bin} db update');
-const RECONCILE_BY_HAND: NextAction = {
-  kind: 'user-choice',
-  label: 'Or reconcile the differences by hand and verify again',
 };
 
 function errorInvalidVerifyMode(options: {
@@ -335,7 +328,11 @@ function driftDiagnostics(inputs: {
       schemaVerdictDiagnostic({
         result,
         space,
-        nextActions: [PUSH_THE_CONTRACT, RECONCILE_BY_HAND],
+        nextActions: schemaDriftNextActions({
+          verb: 'verify',
+          contractRef: undefined,
+          issues: result.schema.issues,
+        }),
       }),
     );
   if (perSpace.length > 0) {
@@ -438,7 +435,7 @@ export function createDbVerifyCommand(
         strict,
         database: maskConnectionUrl(dbConnection),
       });
-      const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+      const migrationsDir = migrationsDirFor(ctx.config);
       const client = createClient({
         family: ctx.config.family,
         target: ctx.config.target,
@@ -640,9 +637,6 @@ export function createDbVerifyCommand(
           ctx.present({ data: document, exitCode: 0 }, verifyPresentations({ document, header })),
         );
       } catch (error) {
-        if (isInternalError(error)) {
-          throw error;
-        }
         return notOk(
           verificationThrow({ error, invocation: commandInvocation, connection: dbConnection }),
         );

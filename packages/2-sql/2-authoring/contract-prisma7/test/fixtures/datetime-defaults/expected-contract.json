@@ -1,0 +1,447 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Scalars": {
+            "storage": {
+              "table": "Scalars",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "tsZ": {
+                  "column": "tsZ"
+                },
+                "tsMs": {
+                  "column": "tsMs"
+                },
+                "tsPlus": {
+                  "column": "tsPlus"
+                },
+                "tsMinus": {
+                  "column": "tsMinus"
+                },
+                "tsMicro": {
+                  "column": "tsMicro"
+                },
+                "tzZ": {
+                  "column": "tzZ"
+                },
+                "tzPlus": {
+                  "column": "tzPlus"
+                },
+                "dZ": {
+                  "column": "dZ"
+                },
+                "dMidnight": {
+                  "column": "dMidnight"
+                },
+                "dMinus": {
+                  "column": "dMinus"
+                },
+                "tZ": {
+                  "column": "tZ"
+                },
+                "tMs": {
+                  "column": "tMs"
+                },
+                "tPlus": {
+                  "column": "tPlus"
+                },
+                "ttzZ": {
+                  "column": "ttzZ"
+                },
+                "ttzPlus": {
+                  "column": "ttzPlus"
+                },
+                "bytes": {
+                  "column": "bytes"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "tsZ": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "tsMs": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "tsPlus": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "tsMinus": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "tsMicro": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "tzZ": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "tzPlus": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "dZ": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-temporal@1"
+                },
+                "nullable": false
+              },
+              "dMidnight": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-temporal@1"
+                },
+                "nullable": false
+              },
+              "dMinus": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-temporal@1"
+                },
+                "nullable": false
+              },
+              "tZ": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "tMs": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "tPlus": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "ttzZ": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timetz@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "ttzPlus": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timetz@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "bytes": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Scalars": {
+      "namespace": "public",
+      "model": "Scalars"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "e1a092e0c7b1877fa542abd990916fa565d8ee511575b6b6b785169144c5e1b6",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Scalars": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "tsZ": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 03:04:05'"
+                  }
+                },
+                "tsMs": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 03:04:05.123'"
+                  }
+                },
+                "tsPlus": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 03:04:05'"
+                  }
+                },
+                "tsMinus": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 23:04:05'"
+                  }
+                },
+                "tsMicro": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 03:04:05.123456'"
+                  }
+                },
+                "tzZ": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 03:04:05+00'"
+                  }
+                },
+                "tzPlus": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02 01:04:05+00'"
+                  }
+                },
+                "dZ": {
+                  "nativeType": "date",
+                  "codecId": "pg/date-temporal@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02'"
+                  }
+                },
+                "dMidnight": {
+                  "nativeType": "date",
+                  "codecId": "pg/date-temporal@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02'"
+                  }
+                },
+                "dMinus": {
+                  "nativeType": "date",
+                  "codecId": "pg/date-temporal@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-02'"
+                  }
+                },
+                "tZ": {
+                  "nativeType": "time",
+                  "codecId": "pg/time-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'12:34:56'"
+                  }
+                },
+                "tMs": {
+                  "nativeType": "time",
+                  "codecId": "pg/time-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'12:34:56.789'"
+                  }
+                },
+                "tPlus": {
+                  "nativeType": "time",
+                  "codecId": "pg/time-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'03:04:05'"
+                  }
+                },
+                "ttzZ": {
+                  "nativeType": "timetz",
+                  "codecId": "pg/timetz@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'12:34:56+00'"
+                  }
+                },
+                "ttzPlus": {
+                  "nativeType": "timetz",
+                  "codecId": "pg/timetz@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'03:04:05+02'"
+                  }
+                },
+                "bytes": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "'\\x68656c6c6f'"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -9,6 +9,6 @@ export default defineConfig({
     // graph on first import. The 100ms default bets that neither costs
     // anything, which loses whenever the whole suite runs under load.
     testTimeout: timeouts.typeScriptCompilation,
-    hookTimeout: timeouts.default,
+    hookTimeout: timeouts.vitestPackageDefault,
   },
 });

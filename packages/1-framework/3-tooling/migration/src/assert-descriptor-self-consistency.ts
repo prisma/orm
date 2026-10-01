@@ -1,7 +1,7 @@
 import type { PreserveEmptyPredicate, StorageSort } from '@internal/contract/hashing';
-import { computeStorageHash } from '@internal/contract/hashing';
 import { ifDefined } from '@internal/utils/defined';
 import { errorDescriptorHeadHashMismatch } from './errors';
+import { recomputePublishedStorageHash } from './hash';
 
 /**
  * Inputs the helper needs to recompute the descriptor's storage hash and
@@ -46,25 +46,14 @@ export interface DescriptorSelfConsistencyInputs {
  * clear remediation hint without re-deriving them.
  */
 export function assertDescriptorSelfConsistency(inputs: DescriptorSelfConsistencyInputs): void {
-  // The published `storage.storageHash` is the *output* of the production
-  // emit pipeline's `computeStorageHash` call, computed over a storage
-  // object that did not yet carry `storageHash`. Recomputing against the
-  // published storage as-is would feed the result back into its own input
-  // and produce a different digest. Strip `storageHash` before
-  // recomputing so the helper sees the same canonical shape the
-  // descriptor's authoring pipeline saw.
-  // The helper requires only a plain record-shaped storage value at
-  // runtime; a single cast here keeps the public input type
-  // family-agnostic (`unknown`) while still letting us strip the
-  // descriptor-published `storageHash` before re-canonicalising.
-  const storageRecord = inputs.storage as Record<string, unknown>;
-  const { storageHash: _stripped, ...storageWithoutHash } = storageRecord;
-  const recomputed = computeStorageHash({
+  const recomputed = recomputePublishedStorageHash({
     target: inputs.target,
     targetFamily: inputs.targetFamily,
-    storage: storageWithoutHash,
-    ...ifDefined('shouldPreserveEmpty', inputs.shouldPreserveEmpty),
-    ...ifDefined('sortStorage', inputs.sortStorage),
+    storage: inputs.storage,
+    hooks: {
+      ...ifDefined('shouldPreserveEmpty', inputs.shouldPreserveEmpty),
+      ...ifDefined('sortStorage', inputs.sortStorage),
+    },
   });
   if (recomputed !== inputs.headRefHash) {
     throw errorDescriptorHeadHashMismatch({

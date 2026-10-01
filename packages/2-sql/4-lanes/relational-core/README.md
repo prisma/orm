@@ -93,7 +93,7 @@ flowchart TD
 
 ### Codec authoring (class form)
 
-SQL codec authors extend the framework `CodecImpl` base (and pair the codec with a `CodecDescriptorImpl` registration) per [ADR 208 — Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md). Each codec class declares `encode`, `decode`, `encodeJson`, and `decodeJson`. The JSON methods use the exact scalar shape produced by the corresponding database inside JSON values; include decoding calls `decodeJson`, while ordinary column decoding calls `decode`.
+SQL codec authors extend the framework `CodecImpl` base (and pair the codec with a `CodecDescriptorImpl` registration) per [ADR 208 — Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md). Each codec class declares `encode`, `decode`, `encodeJson`, and `decodeJson`. The JSON methods use the exact scalar shape produced by the corresponding database inside JSON values; include decoding calls `decodeJson`, while ordinary column decoding calls `decode`. `decodeJson` follows the rule on [`Codec.decodeJson`](../../../1-framework/1-core/framework-components/src/shared/codec.ts): it reads a stored JSON form of the type and throws on anything else. The readers in `@internal/framework-components/codec` implement it for the common forms. The DDL renderers read and encode a literal default with `encodeLiteralDefault` (`src/ast/ddl-default.ts`), and each element of a list default with `encodeListLiteralDefault`; both report a value the column's codec refuses as `CONTRACT.DEFAULT_INVALID`, naming the column.
 
 - Query-time methods (`encode` / `decode`) are typed as `Promise<…>`-returning at the public boundary; sync method bodies are accepted via TypeScript bivariance and the runtime always awaits.
 - Build-time methods (`encodeJson` / `decodeJson` / `renderOutputType?`) stay synchronous so contract validation and client construction stay synchronous.
@@ -105,10 +105,11 @@ SQL codec authors extend the framework `CodecImpl` base (and pair the codec with
 import {
   CodecDescriptorImpl,
   CodecImpl,
-  voidParamsSchema,
   type CodecCallContext,
   type CodecInstanceContext,
+  decodeJsonString,
 } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
 
 class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality'], string, string> {
   override readonly id = 'pg/text@1';
@@ -116,14 +117,14 @@ class PgTextCodec extends CodecImpl<'pg/text@1', readonly ['equality'], string, 
   encode(v: string, _ctx: CodecCallContext): Promise<string> { return Promise.resolve(v); }
   decode(w: string, _ctx: CodecCallContext): Promise<string> { return Promise.resolve(w); }
   encodeJson(v: string) { return v; }
-  decodeJson(j: unknown) { return j as string; }
+  decodeJson(json: JsonValue) { return decodeJsonString('pg/text@1', json); }
 }
 
 class PgTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'pg/text@1';
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override readonly factory = () => (_ctx: CodecInstanceContext) => new PgTextCodec();
 }
 ```
@@ -147,7 +148,7 @@ class PgKmsSecretCodec extends CodecImpl<'pg/kms-secret@1', readonly [], string,
     return kms.decrypt({ ciphertext: w }, { signal: ctx.signal });
   }
   encodeJson(v: string) { return v; }
-  decodeJson(j: unknown) { return j as string; }
+  decodeJson(json: JsonValue) { return decodeJsonString('pg/kms-secret@1', json); }
 }
 ```
 
@@ -164,6 +165,7 @@ See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%
 - Inserts: `InsertAst.rows` is row-based and uses `InsertValue` cells (`ColumnRef`, `ParamRef`, or the insert-only `DefaultValueExpr` sentinel for SQL `DEFAULT`) for batched inserts
 - `SelectAst.selectAllIntent` — preserves select-all intent when normalized to explicit columns
 - `DeleteAst.where` and `UpdateAst.where` optional for mutation-without-WHERE lint support
+- Data type support the SQL targets share (ADR 254): the number classifier, the JSON body reader and printer, and `canonicalDateTime`, the reader the date and time types build their canonical form with ([ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md#date-and-time-types))
 
 ### Type Definitions (`types.ts`)
 - Defines TypeScript types for column builders, operations, projections

@@ -7,12 +7,12 @@ import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { blindCast } from '@internal/utils/casts';
 import type { PresentedResult } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { MigrationCheckResult } from '../../src/commands/json/schemas';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const HASH_A = `4cb4256${'0'.repeat(57)}`;
@@ -136,7 +136,7 @@ async function seedDanglingRef(migrationsDir: string, name: string): Promise<voi
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 function diagnosticsOf(run: {

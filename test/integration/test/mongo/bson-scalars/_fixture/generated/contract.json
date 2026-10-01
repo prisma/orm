@@ -1,0 +1,868 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "roots": {
+    "assets": {
+      "model": "Asset",
+      "namespace": "__unbound__"
+    },
+    "authors": {
+      "model": "Author",
+      "namespace": "__unbound__"
+    },
+    "books": {
+      "model": "Book",
+      "namespace": "__unbound__"
+    },
+    "posts": {
+      "model": "Post",
+      "namespace": "__unbound__"
+    },
+    "readings": {
+      "model": "Reading",
+      "namespace": "__unbound__"
+    },
+    "series": {
+      "model": "Series",
+      "namespace": "__unbound__"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "enum": {
+          "Role": {
+            "codecId": "mongo/string@1",
+            "members": [
+              {
+                "name": "User",
+                "value": "USER"
+              },
+              {
+                "name": "Admin",
+                "value": "admin"
+              }
+            ]
+          }
+        },
+        "models": {
+          "Asset": {
+            "discriminator": {
+              "field": "kind"
+            },
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "kind": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "assets"
+            },
+            "variants": {
+              "Photo": {
+                "value": "photo"
+              }
+            }
+          },
+          "Author": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "address": {
+                "nullable": true,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Address"
+                }
+              },
+              "avatar": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/binary@1",
+                  "kind": "scalar"
+                }
+              },
+              "balance": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/decimal128@1",
+                  "kind": "scalar"
+                }
+              },
+              "karma": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              },
+              "role": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Role",
+                  "namespaceId": "__unbound__",
+                  "plane": "domain"
+                }
+              }
+            },
+            "relations": {
+              "books": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "_id"
+                  ],
+                  "targetFields": [
+                    "authorId"
+                  ]
+                },
+                "to": {
+                  "model": "Book",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "collection": "authors"
+            }
+          },
+          "Book": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "authorId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "title": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {
+              "author": {
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": [
+                    "authorId"
+                  ],
+                  "targetFields": [
+                    "_id"
+                  ]
+                },
+                "to": {
+                  "model": "Author",
+                  "namespace": "__unbound__"
+                }
+              }
+            },
+            "storage": {
+              "collection": "books"
+            }
+          },
+          "Photo": {
+            "base": {
+              "model": "Asset",
+              "namespace": "__unbound__"
+            },
+            "fields": {
+              "exif": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "ownerId": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "stamps": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Stamp"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "assets"
+            }
+          },
+          "Post": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "meta": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "notes": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              },
+              "price": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/decimal128@1",
+                  "kind": "scalar"
+                }
+              },
+              "raw": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/bson@1",
+                  "kind": "scalar"
+                }
+              },
+              "thumbnail": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/binary@1",
+                  "kind": "scalar"
+                }
+              },
+              "views": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "posts"
+            }
+          },
+          "Reading": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "count": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "readings"
+            }
+          },
+          "Series": {
+            "fields": {
+              "_id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "bytes": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/binary@1",
+                  "kind": "scalar"
+                }
+              },
+              "dates": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/date@1",
+                  "kind": "scalar"
+                }
+              },
+              "decimals": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/decimal128@1",
+                  "kind": "scalar"
+                }
+              },
+              "doubles": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/double@1",
+                  "kind": "scalar"
+                }
+              },
+              "flags": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "ids": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/objectId@1",
+                  "kind": "scalar"
+                }
+              },
+              "ints": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              },
+              "longs": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              },
+              "points": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "kind": "valueObject",
+                  "name": "Point"
+                }
+              },
+              "words": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "series"
+            }
+          }
+        },
+        "valueObjects": {
+          "Address": {
+            "fields": {
+              "city": {
+                "nullable": true,
+                "type": {
+                  "codecId": "mongo/string@1",
+                  "kind": "scalar"
+                }
+              },
+              "zip": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              }
+            }
+          },
+          "Point": {
+            "fields": {
+              "tags": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int64@1",
+                  "kind": "scalar"
+                }
+              },
+              "x": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/int32@1",
+                  "kind": "scalar"
+                }
+              }
+            }
+          },
+          "Stamp": {
+            "fields": {
+              "note": {
+                "nullable": false,
+                "type": {
+                  "codecId": "mongo/json@1",
+                  "kind": "scalar"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "__unbound__": {
+        "entries": {
+          "collection": {
+            "assets": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "bsonType": "object",
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "_id": {
+                          "bsonType": "objectId"
+                        },
+                        "exif": {
+                          "bsonType": [
+                            "object",
+                            "array",
+                            "string",
+                            "double",
+                            "int",
+                            "long",
+                            "bool",
+                            "null"
+                          ]
+                        },
+                        "kind": {
+                          "enum": [
+                            "photo"
+                          ]
+                        },
+                        "ownerId": {
+                          "bsonType": "objectId"
+                        },
+                        "stamps": {
+                          "bsonType": "array",
+                          "items": {
+                            "additionalProperties": false,
+                            "bsonType": "object",
+                            "properties": {
+                              "note": {
+                                "bsonType": [
+                                  "object",
+                                  "array",
+                                  "string",
+                                  "double",
+                                  "int",
+                                  "long",
+                                  "bool",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "note"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "exif",
+                        "kind",
+                        "ownerId",
+                        "stamps"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "kind": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "kind"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "authors": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "address": {
+                      "oneOf": [
+                        {
+                          "bsonType": "null"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "bsonType": "object",
+                          "properties": {
+                            "city": {
+                              "bsonType": [
+                                "null",
+                                "string"
+                              ]
+                            },
+                            "zip": {
+                              "bsonType": "long"
+                            }
+                          },
+                          "required": [
+                            "zip"
+                          ]
+                        }
+                      ]
+                    },
+                    "avatar": {
+                      "bsonType": [
+                        "null",
+                        "binData"
+                      ]
+                    },
+                    "balance": {
+                      "bsonType": "decimal"
+                    },
+                    "karma": {
+                      "bsonType": "long"
+                    },
+                    "role": {
+                      "bsonType": "string",
+                      "enum": [
+                        "USER",
+                        "admin"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "balance",
+                    "karma",
+                    "role"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "books": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "authorId": {
+                      "bsonType": "objectId"
+                    },
+                    "title": {
+                      "bsonType": "string"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "authorId",
+                    "title"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "posts": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "meta": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
+                    "notes": {
+                      "bsonType": [
+                        "object",
+                        "array",
+                        "string",
+                        "double",
+                        "int",
+                        "long",
+                        "bool",
+                        "null"
+                      ]
+                    },
+                    "price": {
+                      "bsonType": "decimal"
+                    },
+                    "raw": {},
+                    "thumbnail": {
+                      "bsonType": "binData"
+                    },
+                    "views": {
+                      "bsonType": "long"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "meta",
+                    "price",
+                    "thumbnail",
+                    "views"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "readings": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "count": {
+                      "bsonType": "int"
+                    },
+                    "ratio": {
+                      "bsonType": "double"
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "count",
+                    "ratio"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            },
+            "series": {
+              "kind": "mongo-collection",
+              "validator": {
+                "jsonSchema": {
+                  "additionalProperties": false,
+                  "bsonType": "object",
+                  "properties": {
+                    "_id": {
+                      "bsonType": "objectId"
+                    },
+                    "bytes": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "binData"
+                      }
+                    },
+                    "dates": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "date"
+                      }
+                    },
+                    "decimals": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "decimal"
+                      }
+                    },
+                    "doubles": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "double"
+                      }
+                    },
+                    "flags": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "bool"
+                      }
+                    },
+                    "ids": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "objectId"
+                      }
+                    },
+                    "ints": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "int"
+                      }
+                    },
+                    "longs": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "long"
+                      }
+                    },
+                    "points": {
+                      "bsonType": "array",
+                      "items": {
+                        "additionalProperties": false,
+                        "bsonType": "object",
+                        "properties": {
+                          "tags": {
+                            "bsonType": "array",
+                            "items": {
+                              "bsonType": "long"
+                            }
+                          },
+                          "x": {
+                            "bsonType": "int"
+                          }
+                        },
+                        "required": [
+                          "tags",
+                          "x"
+                        ]
+                      }
+                    },
+                    "words": {
+                      "bsonType": "array",
+                      "items": {
+                        "bsonType": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "_id",
+                    "bytes",
+                    "dates",
+                    "decimals",
+                    "doubles",
+                    "flags",
+                    "ids",
+                    "ints",
+                    "longs",
+                    "points",
+                    "words"
+                  ]
+                },
+                "kind": "mongo-validator",
+                "validationAction": "error",
+                "validationLevel": "strict"
+              }
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": [
+                "USER",
+                "admin"
+              ]
+            }
+          }
+        },
+        "id": "__unbound__",
+        "kind": "mongo-database"
+      }
+    },
+    "storageHash": "e6b8f0ca84154e70d8240cabf47951883d699f4a84e45131c60f899dd900deb4"
+  },
+  "capabilities": {},
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

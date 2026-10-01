@@ -387,10 +387,10 @@ type ContractBase = Omit<
   };
   readonly capabilities: {
     readonly sql: {
-      readonly enums: false;
       readonly foreignKeys: true;
+      readonly insertOnConflictSkip: true;
+      readonly insertOnConflictWithoutTarget: true;
       readonly jsonAgg: true;
-      readonly lateral: false;
       readonly limit: true;
       readonly orderBy: true;
       readonly returning: true;

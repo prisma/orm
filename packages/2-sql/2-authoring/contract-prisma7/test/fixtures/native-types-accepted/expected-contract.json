@@ -1,0 +1,445 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "NativeTypes": {
+            "storage": {
+              "table": "NativeTypes",
+              "namespaceId": "public",
+              "fields": {
+                "text": {
+                  "column": "text"
+                },
+                "varChar": {
+                  "column": "varChar"
+                },
+                "char": {
+                  "column": "char"
+                },
+                "uuid": {
+                  "column": "uuid"
+                },
+                "inet": {
+                  "column": "inet"
+                },
+                "boolean": {
+                  "column": "boolean"
+                },
+                "integer": {
+                  "column": "integer"
+                },
+                "smallInt": {
+                  "column": "smallInt"
+                },
+                "bigInt": {
+                  "column": "bigInt"
+                },
+                "real": {
+                  "column": "real"
+                },
+                "doublePrecision": {
+                  "column": "doublePrecision"
+                },
+                "decimal": {
+                  "column": "decimal"
+                },
+                "timestamp": {
+                  "column": "timestamp"
+                },
+                "timestamptz": {
+                  "column": "timestamptz"
+                },
+                "date": {
+                  "column": "date"
+                },
+                "time": {
+                  "column": "time"
+                },
+                "timetz": {
+                  "column": "timetz"
+                },
+                "json": {
+                  "column": "json"
+                },
+                "jsonB": {
+                  "column": "jsonB"
+                },
+                "byteA": {
+                  "column": "byteA"
+                },
+                "varCharList": {
+                  "column": "varCharList"
+                },
+                "timestamptzOpt": {
+                  "column": "timestamptzOpt"
+                }
+              }
+            },
+            "fields": {
+              "text": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "varChar": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "sql/varchar@1",
+                  "typeParams": {
+                    "length": 255
+                  }
+                },
+                "nullable": false
+              },
+              "char": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "sql/char@1",
+                  "typeParams": {
+                    "length": 10
+                  }
+                },
+                "nullable": false
+              },
+              "uuid": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/uuid@1"
+                },
+                "nullable": false
+              },
+              "inet": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/inet@1"
+                },
+                "nullable": false
+              },
+              "boolean": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bool@1"
+                },
+                "nullable": false
+              },
+              "integer": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "smallInt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int2@1"
+                },
+                "nullable": false
+              },
+              "bigInt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "real": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/float4@1"
+                },
+                "nullable": false
+              },
+              "doublePrecision": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/float8@1"
+                },
+                "nullable": false
+              },
+              "decimal": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "nullable": false
+              },
+              "timestamp": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "timestamptz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "date": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-temporal@1"
+                },
+                "nullable": false
+              },
+              "time": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "timetz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timetz@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "json": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/json@1"
+                },
+                "nullable": false
+              },
+              "jsonB": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/jsonb@1"
+                },
+                "nullable": false
+              },
+              "byteA": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": false
+              },
+              "varCharList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "sql/varchar@1",
+                  "typeParams": {
+                    "length": 32
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "timestamptzOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": true
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "NativeTypes": {
+      "namespace": "public",
+      "model": "NativeTypes"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "660448ec6bbb66c7c4b052a9ab102116209b56d940f030e3afed15b620e48c6a",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "NativeTypes": {
+              "columns": {
+                "text": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "varChar": {
+                  "nativeType": "character varying",
+                  "codecId": "sql/varchar@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 255
+                  }
+                },
+                "char": {
+                  "nativeType": "character",
+                  "codecId": "sql/char@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "length": 10
+                  }
+                },
+                "uuid": {
+                  "nativeType": "uuid",
+                  "codecId": "pg/uuid@1",
+                  "nullable": false
+                },
+                "inet": {
+                  "nativeType": "inet",
+                  "codecId": "pg/inet@1",
+                  "nullable": false
+                },
+                "boolean": {
+                  "nativeType": "bool",
+                  "codecId": "pg/bool@1",
+                  "nullable": false
+                },
+                "integer": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "smallInt": {
+                  "nativeType": "int2",
+                  "codecId": "pg/int2@1",
+                  "nullable": false
+                },
+                "bigInt": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false
+                },
+                "real": {
+                  "nativeType": "float4",
+                  "codecId": "pg/float4@1",
+                  "nullable": false
+                },
+                "doublePrecision": {
+                  "nativeType": "float8",
+                  "codecId": "pg/float8@1",
+                  "nullable": false
+                },
+                "decimal": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "timestamp": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timestamptz": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "date": {
+                  "nativeType": "date",
+                  "codecId": "pg/date-temporal@1",
+                  "nullable": false
+                },
+                "time": {
+                  "nativeType": "time",
+                  "codecId": "pg/time-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "timetz": {
+                  "nativeType": "timetz",
+                  "codecId": "pg/timetz@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "json": {
+                  "nativeType": "json",
+                  "codecId": "pg/json@1",
+                  "nullable": false
+                },
+                "jsonB": {
+                  "nativeType": "jsonb",
+                  "codecId": "pg/jsonb@1",
+                  "nullable": false
+                },
+                "byteA": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": false
+                },
+                "varCharList": {
+                  "nativeType": "character varying",
+                  "codecId": "sql/varchar@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "length": 32
+                  }
+                },
+                "timestamptzOpt": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": true,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["integer"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

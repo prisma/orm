@@ -784,7 +784,7 @@
                   "codecId": "pg/timestamptz-string@1",
                   "default": {
                     "kind": "literal",
-                    "value": "2024-01-15 10:30:00+00"
+                    "value": "2024-01-15T10:30:00Z"
                   },
                   "nativeType": "timestamptz",
                   "nullable": false
@@ -1098,10 +1098,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0c1077bafff654086b3061835717977f48bde28bec901e0ec7751ca741c8873c"
+    "storageHash": "7cbc5dc7fc12771baa682acc74bd2a89e90e55b8717b28fa255b8dc8ea0377b9"
   },
   "execution": {
-    "executionHash": "5629682c0d69cfa236e08de82a20c1a4fdcf1163a78ac2f17ffaf993caf4f8f4",
+    "executionHash": "ea437be9a5579f915d397cc5e3df495136323e0a43ec0df5da760b862c22489b",
     "mutations": {
       "defaults": [
         {
@@ -1110,9 +1110,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "event"
+            "entry": "event",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]
@@ -1132,6 +1132,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

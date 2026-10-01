@@ -10,6 +10,7 @@ import {
   DerivedTableSource,
   EqColJoinOn,
   JoinAst,
+  type JoinOnExpr,
   LiteralExpr,
   OrderByItem,
   OrExpr,
@@ -20,11 +21,13 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { assertDefined } from '@internal/utils/assertions';
+import { InternalError } from '@internal/utils/internal-error';
 import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
 } from './collection-contract';
+import { assertCursorCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { resolveTableColumns } from './query-plan-meta';
 import { tableSourceForContract } from './storage-resolution';
@@ -91,9 +94,12 @@ function buildCursorWhere(
     return undefined;
   }
 
+  assertCursorCompatibleOrder(orderBy);
   const entries: CursorOrderEntry[] = [];
   for (const order of orderBy) {
-    if (order.expr.kind !== 'column-ref') continue;
+    if (order.expr.kind !== 'column-ref') {
+      throw new InternalError('assertCursorCompatibleOrder admits only column orders');
+    }
     const column = order.expr.column;
     const value = cursor[column];
     if (value === undefined) {
@@ -276,6 +282,25 @@ function buildDedupedTableSource(
   };
 }
 
+function buildPrimaryKeyJoinOn(
+  leftTable: string,
+  rightTable: string,
+  primaryKeyColumns: readonly string[],
+): JoinOnExpr {
+  const [firstColumn] = primaryKeyColumns;
+  if (primaryKeyColumns.length === 1 && firstColumn !== undefined) {
+    return EqColJoinOn.of(
+      ColumnRef.of(leftTable, firstColumn),
+      ColumnRef.of(rightTable, firstColumn),
+    );
+  }
+  return AndExpr.of(
+    primaryKeyColumns.map((column) =>
+      BinaryExpr.eq(ColumnRef.of(leftTable, column), ColumnRef.of(rightTable, column)),
+    ),
+  );
+}
+
 function buildMtiJoins(
   contract: Contract<SqlStorage>,
   namespaceId: string,
@@ -285,18 +310,18 @@ function buildMtiJoins(
 ): { joins: JoinAst[]; projection: ProjectionItem[] } {
   const joins: JoinAst[] = [];
   const projection: ProjectionItem[] = [];
-  const pkColumn = resolvePrimaryKeyColumn(contract, namespaceId, polyInfo.baseTable);
 
   const variantsToJoin = variantName
     ? polyInfo.mtiVariants.filter((v) => v.modelName === variantName)
     : polyInfo.mtiVariants;
+  if (variantsToJoin.length === 0) {
+    return { joins, projection };
+  }
+  const pkColumns = resolvePrimaryKeyColumns(contract, namespaceId, polyInfo.baseTable);
 
   for (const variant of variantsToJoin) {
     const joinType = variantName ? 'inner' : 'left';
-    const joinOn = EqColJoinOn.of(
-      ColumnRef.of(polyInfo.baseTable, pkColumn),
-      ColumnRef.of(variant.table, pkColumn),
-    );
+    const joinOn = buildPrimaryKeyJoinOn(polyInfo.baseTable, variant.table, pkColumns);
     const join =
       joinType === 'inner'
         ? JoinAst.inner(tableSourceForContract(contract, namespaceId, variant.table), joinOn)
@@ -306,7 +331,7 @@ function buildMtiJoins(
     const variantColumns = resolveTableColumns(contract, namespaceId, variant.table);
     const selectedVariantColumns = selectedColumnsByTable?.get(variant.table);
     for (const col of variantColumns) {
-      if (col === pkColumn) continue;
+      if (pkColumns.includes(col)) continue;
       if (selectedColumnsByTable !== undefined && selectedVariantColumns?.has(col) !== true) {
         continue;
       }
@@ -350,13 +375,16 @@ function buildAggregateInput(
       : [];
 
   const where = buildStateWhere(contract, tableName, state, { namespaceId });
+  const hiddenOrders = hasEntries(state.distinct)
+    ? projectExpressionOrders(tableName, state.orderBy)
+    : undefined;
   const { source, where: effectiveWhere } = buildDedupedTableSource(
     contract,
     namespaceId,
     tableName,
     state,
     where,
-    projection,
+    [...projection, ...(hiddenOrders?.projection ?? [])],
     variantJoins,
   );
 
@@ -372,8 +400,9 @@ function buildAggregateInput(
   if (hasEntries(state.distinctOn)) {
     inner = inner.withDistinctOn(state.distinctOn.map((column) => ColumnRef.of(tableName, column)));
   }
-  if (hasEntries(state.orderBy)) {
-    inner = inner.withOrderBy(state.orderBy);
+  const orderBy = hiddenOrders?.orderBy ?? state.orderBy;
+  if (hasEntries(orderBy)) {
+    inner = inner.withOrderBy(orderBy);
   }
   if (state.limit !== undefined) {
     inner = inner.withLimit(state.limit);
@@ -385,10 +414,30 @@ function buildAggregateInput(
   return { source: DerivedTableSource.as(tableName, inner) };
 }
 
+/**
+ * The dedup wrap exposes only its projection, so an order over an expression (a relation order, a count, an operation result) cannot be evaluated above it. Each such order is projected inside the wrap as a hidden `__order_N` column and the outer order reads that column.
+ */
+function projectExpressionOrders(
+  tableName: string,
+  orderBy: readonly OrderByItem[] | undefined,
+): { readonly projection: ProjectionItem[]; readonly orderBy: OrderByItem[] } {
+  const projection: ProjectionItem[] = [];
+  const outerOrderBy = (orderBy ?? []).map((item, index) => {
+    if (item.expr.kind === 'column-ref') {
+      return item;
+    }
+    const alias = `__order_${index}`;
+    projection.push(ProjectionItem.of(alias, item.expr));
+    return item.withExpr(ColumnRef.of(tableName, alias));
+  });
+  return { projection, orderBy: outerOrderBy };
+}
+
 export {
   buildAggregateInput,
   buildDedupedTableSource,
   buildMtiJoins,
+  buildPrimaryKeyJoinOn,
   buildStateWhere,
   createTableRefRemapper,
   wrapWithRowNumberDedup,

@@ -33,15 +33,15 @@ const RETIREMENT_PROOFS = new Set([
   'packages/1-framework/3-tooling/cli/test/orm/init-scaffold.test.ts',
   'packages/1-framework/1-core/errors/test/next-actions.test.ts',
   'packages/1-framework/3-tooling/migration/test/next-actions.test.ts',
-  'packages/9-public/@prisma/orm-postgres/test/facade-tarball.test.ts',
+  'test/integration/test/packaging/facade-tarball.test.ts',
   'packages/9-public/@prisma/orm-target-postgres/test/cross-shell-tarball.test.ts',
   'test/integration/test/cli.init-skill-distribution.integration.test.ts',
 ]);
 
 /** Files that read the retired name so projects and shells set up by earlier releases keep working. */
 const COMPATIBILITY_SITES = new Set([
-  'packages/1-framework/3-tooling/language-server/src/schema-directive.ts',
-  'packages/1-framework/3-tooling/language-server/test/schema-directive.test.ts',
+  'packages/1-framework/2-authoring/psl-parser/src/schema-directive.ts',
+  'packages/1-framework/2-authoring/psl-parser/test/schema-directive.test.ts',
   'packages/1-framework/3-tooling/language-server/test/server.test.ts',
   'packages/1-framework/3-tooling/cli-telemetry/src/gating.ts',
   'packages/1-framework/3-tooling/cli-telemetry/test/gating.test.ts',
@@ -62,9 +62,9 @@ const COMPATIBILITY_SITES = new Set([
  */
 const ALLOWED = [
   {
-    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the shipped upgrade instructions, the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
+    why: 'a dated record of past work — the changelog, the release notes, the ADRs, the shipped upgrade instructions and their archived sources, the gotcha logs, the framework-gaps review, the `projects/` and `drive/` write-ups, and committed migration steps and their content-addressed contract snapshots. Each says what was true, decided, or observed at a time when the old name was the name; rewriting one would misreport it (or break its hash)',
     matches: (relPath) =>
-      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|projects\/|drive\/)/.test(
+      /^(CHANGELOG\.md|docs\/releases\/v[^/]*\.md|docs\/architecture docs\/adrs\/|docs\/reference\/framework-gaps\.md|skills\/prisma-8\/upgrading\/|upgrade-instructions\/releases\/|projects\/|drive\/)/.test(
         relPath,
       ) ||
       /(^|\/)gotchas\.md$/.test(relPath) ||

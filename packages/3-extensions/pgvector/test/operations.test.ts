@@ -44,7 +44,6 @@ describe('pgvector operations', () => {
     expect(distAst).toBeInstanceOf(OperationExpr);
     expect(distAst.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: '{{self}} <=> {{arg0}}',
     });
 
@@ -58,7 +57,6 @@ describe('pgvector operations', () => {
     expect(simAst).toBeInstanceOf(OperationExpr);
     expect(simAst.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: '1 - ({{self}} <=> {{arg0}})',
     });
   });

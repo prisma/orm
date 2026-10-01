@@ -13,7 +13,7 @@ import { inferPostgresPslContract } from '../../src/core/psl-infer/infer-psl-con
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
-import { inferPslAstFromFlat as sqlSchemaIrToPslAst } from './fixtures';
+import { inferBuildContext, inferPslAstFromFlat as sqlSchemaIrToPslAst } from './fixtures';
 
 function ir(partial: Partial<SqlSchemaIRInput> & Pick<SqlSchemaIRInput, 'tables'>): SqlSchemaIR {
   return new SqlSchemaIR({
@@ -281,7 +281,6 @@ describe('inferPostgresPslContract', () => {
     const out = printPsl(sqlSchemaIrToPslAst(schemaIR));
     expect(out).toMatchInlineSnapshot(`
       "// use prisma-8
-      // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model User {
         id    Int     @id
@@ -521,12 +520,12 @@ describe('inferPostgresPslContract', () => {
 
     // The same table name in two schemas has no unambiguous single-bucket model:
     // throw rather than silently dropping one namespace's table.
-    expect(() => inferPostgresPslContract(tree)).toThrow(
+    expect(() => inferPostgresPslContract(tree, inferBuildContext)).toThrow(
       /duplicate table name "thing" across schemas is not yet supported/i,
     );
     let caught: unknown;
     try {
-      inferPostgresPslContract(tree);
+      inferPostgresPslContract(tree, inferBuildContext);
     } catch (error) {
       caught = error;
     }

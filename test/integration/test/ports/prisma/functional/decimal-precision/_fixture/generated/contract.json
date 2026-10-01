@@ -19,21 +19,33 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 0
+                  }
                 }
               },
               "d20_10": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 20,
+                    "scale": 10
+                  }
                 }
               },
               "d38_30": {
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 38,
+                    "scale": 30
+                  }
                 }
               },
               "id": {
@@ -146,7 +158,7 @@
     }
   },
   "execution": {
-    "executionHash": "02281733c000380f7ab5ee43f5d4c14fcf47fa86822157687df881ea8271bedb",
+    "executionHash": "1d956b68d7bc7f9dffef3e648e3ba465e3f17a0c8bde1877dbd3f9b742ebfe64",
     "mutations": {
       "defaults": [
         {
@@ -155,9 +167,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "testModel"
+            "entry": "testModel",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]
@@ -176,6 +188,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

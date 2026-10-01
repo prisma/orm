@@ -1,0 +1,178 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "audit": {
+        "models": {
+          "Composite": {
+            "storage": {
+              "table": "Composite",
+              "namespaceId": "audit",
+              "fields": {
+                "a": {
+                  "column": "a"
+                },
+                "b": {
+                  "column": "b"
+                }
+              }
+            },
+            "fields": {
+              "a": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "b": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      },
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          },
+          "Plain": {
+            "storage": {
+              "table": "Plain",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    },
+    "Composite": {
+      "namespace": "audit",
+      "model": "Composite"
+    },
+    "Plain": {
+      "namespace": "public",
+      "model": "Plain"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "f9ebac55bec1254f60f71b39247fcf5e08ac507e1fb05aac8f4221ff09459fbd",
+    "namespaces": {
+      "audit": {
+        "id": "audit",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Composite": {
+              "columns": {
+                "a": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "b": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["a", "b"]
+              }
+            }
+          }
+        }
+      },
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Plain": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,4 +1,3 @@
-import type { CodecRegistry } from '@internal/framework-components/codec';
 import type { StorageColumn, StorageTable } from '@internal/sql-contract/types';
 import type {
   AnyQueryAst,
@@ -16,12 +15,7 @@ import type {
   SelectAst,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import type {
-  AnyPostgresCodecDescriptor,
-  PostgresCodecDescriptorRegistry,
-} from '@internal/target-postgres/codec-descriptor';
-
-export type PostgresCodecRegistry = CodecRegistry & PostgresCodecDescriptorRegistry;
+import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 
 export interface PostgresAdapterOptions {
   readonly profileId?: string;

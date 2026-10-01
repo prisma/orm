@@ -43,19 +43,17 @@ import type {
 import { isDdlNode } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codec-descriptor';
-import { jsonDocumentRetag } from '@internal/target-sqlite/codecs';
+import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import {
+  createSqliteCodecRegistryWithBuiltins,
+  jsonDocumentRetag,
+} from '@internal/target-sqlite/codecs';
 import type { SqliteDdlNode } from '@internal/target-sqlite/ddl';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-sqlite/sql-utils';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
-import { createSqliteCodecRegistryWithBuiltins } from './codec-lookup';
 import { SqliteControlAdapter } from './control-adapter';
-import type {
-  SqliteAdapterOptions,
-  SqliteCodecRegistry,
-  SqliteContract,
-  SqliteLoweredStatement,
-} from './types';
+import type { SqliteAdapterOptions, SqliteContract, SqliteLoweredStatement } from './types';
 
 function nodeKind(value: unknown): string {
   if (
@@ -81,6 +79,8 @@ const defaultCapabilities = Object.freeze({
     jsonAgg: true,
     returning: true,
     enums: false,
+    insertOnConflictSkip: true,
+    insertOnConflictWithoutTarget: true,
   },
 });
 
@@ -246,11 +246,7 @@ function renderSelect(ast: SelectAst, ctx: SqliteRenderContext): string {
     ? `GROUP BY ${ast.groupBy.map((expr) => renderExpr(expr, ctx)).join(', ')}`
     : '';
   const havingClause = ast.having ? `HAVING ${renderExpr(ast.having, ctx)}` : '';
-  const orderClause = ast.orderBy?.length
-    ? `ORDER BY ${ast.orderBy
-        .map((order) => `${renderExpr(order.expr, ctx)} ${order.dir.toUpperCase()}`)
-        .join(', ')}`
-    : '';
+  const orderClause = ast.orderBy?.length ? `ORDER BY ${renderOrderByItems(ast.orderBy, ctx)}` : '';
   // SQLite has no standalone OFFSET clause, so an offset with no limit needs an explicit LIMIT -1.
   const limitClause =
     ast.limit === undefined && ast.offset !== undefined
@@ -447,6 +443,9 @@ function renderLiteral(expr: LiteralExpr): string {
   if (typeof expr.value === 'string') {
     return `'${escapeLiteral(expr.value)}'`;
   }
+  if (typeof expr.value === 'number' && !Number.isNaN(expr.value) && !Number.isFinite(expr.value)) {
+    return expr.value > 0 ? '9e999' : '-9e999';
+  }
   if (typeof expr.value === 'number' || typeof expr.value === 'boolean') {
     return String(expr.value);
   }
@@ -567,6 +566,8 @@ function renderBinary(expr: BinaryExpr, ctx: SqliteRenderContext): string {
   const operatorMap: Record<BinaryExpr['op'], string> = {
     eq: '=',
     neq: '!=',
+    isNotDistinctFrom: 'IS',
+    isDistinctFrom: 'IS NOT',
     gt: '>',
     lt: '<',
     gte: '>=',
@@ -685,7 +686,26 @@ function renderJsonObjectExpr(expr: JsonObjectExpr, ctx: SqliteRenderContext): s
 }
 
 function renderOrderByItems(items: ReadonlyArray<OrderByItem>, ctx: SqliteRenderContext): string {
-  return items.map((item) => `${renderExpr(item.expr, ctx)} ${item.dir.toUpperCase()}`).join(', ');
+  return items
+    .map(
+      (item) =>
+        `${renderExpr(item.expr, ctx)}${ORDER_DIRECTION_SQL[item.dir]}${renderNullsPlacement(item)}`,
+    )
+    .join(', ');
+}
+
+const ORDER_DIRECTION_SQL: Readonly<Record<OrderByItem['dir'], string>> = {
+  asc: ' ASC',
+  desc: ' DESC',
+};
+
+const ORDER_NULLS_SQL: Readonly<Record<NonNullable<OrderByItem['nulls']>, string>> = {
+  first: ' NULLS FIRST',
+  last: ' NULLS LAST',
+};
+
+function renderNullsPlacement(item: OrderByItem): string {
+  return item.nulls === undefined ? '' : ORDER_NULLS_SQL[item.nulls];
 }
 
 function renderJsonArrayAggExpr(expr: JsonArrayAggExpr, ctx: SqliteRenderContext): string {
@@ -776,24 +796,25 @@ function renderInsert(ast: InsertAst, ctx: SqliteRenderContext): string {
   let onConflictClause = '';
   if (ast.onConflict) {
     const conflictColumns = ast.onConflict.columns.map((col) => quoteIdentifier(col.column));
-    if (conflictColumns.length === 0) {
-      throw structuredError(
-        'RUNTIME.AST_INVALID',
-        'INSERT onConflict requires at least one conflict column',
-        { meta: { node: 'insert', table: ast.table.name } },
-      );
-    }
+    const target = conflictColumns.length === 0 ? '' : ` (${conflictColumns.join(', ')})`;
 
     const action = ast.onConflict.action;
     switch (action.kind) {
       case 'do-nothing':
-        onConflictClause = ` ON CONFLICT (${conflictColumns.join(', ')}) DO NOTHING`;
+        onConflictClause = ` ON CONFLICT${target} DO NOTHING`;
         break;
       case 'do-update-set': {
+        if (conflictColumns.length === 0) {
+          throw structuredError(
+            'RUNTIME.AST_INVALID',
+            'INSERT onConflict requires at least one conflict column',
+            { meta: { node: 'insert', table: ast.table.name } },
+          );
+        }
         const updates = Object.entries(action.set).map(([colName, value]) => {
           return `${quoteIdentifier(colName)} = ${renderExpr(value, ctx)}`;
         });
-        onConflictClause = ` ON CONFLICT (${conflictColumns.join(', ')}) DO UPDATE SET ${updates.join(', ')}`;
+        onConflictClause = ` ON CONFLICT${target} DO UPDATE SET ${updates.join(', ')}`;
         break;
       }
       default:

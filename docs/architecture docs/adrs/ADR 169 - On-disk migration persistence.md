@@ -7,6 +7,8 @@
 - **Migration identity (section 3 below).** `migrationId` is now computed from `(strippedManifest, ops)` only. The full source and destination contract IRs are not part of the hash input. ADR 199 captures the storage-only identity model.
 - **Contracts embedded in the manifest (section 7 below).** `migration.json` no longer inlines `fromContract` / `toContract`. The full contract IRs live as sibling `start-contract.json` / `end-contract.json` files next to the manifest (the snapshot convention from ADR 197); the manifest itself records only the storage-hash bookends. The author-time data-migration code reads the snapshots through TypeScript imports. The change was driven by TML-2512; the runner-independence property — apply only needs `migration.json` + `ops.json` per package — is locked in by regression tests in `@internal/migration-tools`.
 
+**Target resolution by walking to a tip (2026-09-24).** `findLeaf`, `findLatestMigration` and the codes `MIGRATION.AMBIGUOUS_TARGET`, `MIGRATION.NO_TARGET` and `MIGRATION.NO_INITIAL_MIGRATION` described in section 2 were removed. No command resolves a target by walking from the empty hash to a single leaf: origins and destinations come from a ref, the emitted head, the live marker, or an explicit flag, and a graph with several branch tips is a normal state rather than an error. `migration plan` and `migration new` resolve a missing `--from` the same way (the `db` ref, else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`). Removed in [prisma/orm#30389](https://github.com/prisma/orm/pull/30389), which lists the sites that changed.
+
 The rest of the body — offline planning via contract-to-schemaIR conversion, graph-topology ordering, direct SQL on disk, transactional apply with resume semantics, and "from" contract resolution — remains accurate.
 
 ## Context
@@ -91,6 +93,8 @@ If migration N fails, migrations 1..N-1 are already committed. Re-running `migra
 `migrate` is policy-agnostic — it derives allowed operation classes from the operations already present in `ops.json`. The policy gate belongs at plan time (`migration plan`), not apply time.
 
 ### 6. "From" contract resolution
+
+Since 8.0.0-rc.12 the default origin is the `db` ref: with no migrations and no `db` ref the origin is the empty database, with migrations but no `db` ref the command is refused with `MIGRATION.PLAN_ORIGIN_UNKNOWN`, and otherwise the origin is the hash the `db` ref points at. The rest of this section describes the earlier behaviour.
 
 `migration plan` determines the "from" contract by resolving the latest migration target:
 - **No migrations**: Assume `empty` (new project). The converted schema IR is empty.

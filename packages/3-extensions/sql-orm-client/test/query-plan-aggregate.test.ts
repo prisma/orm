@@ -338,7 +338,6 @@ describe('query plan aggregate', () => {
         returns: { codecId: 'core/bool', nullable: false },
         lowering: {
           targetFamily: 'sql',
-          strategy: 'function',
           template: 'position({1} in {0}) > 0',
         },
       });

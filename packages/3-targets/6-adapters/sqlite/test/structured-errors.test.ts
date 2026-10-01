@@ -11,15 +11,17 @@ import {
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import { col, lit } from '@internal/sql-relational-core/contract-free';
+import type { AnySqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
+import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import { createTable } from '@internal/target-sqlite/contract-free';
 import { SqliteCreateTable } from '@internal/target-sqlite/ddl';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { createSqliteAdapter, sqliteRawCodecInferer } from '../src/core/adapter';
-import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
 import { decodeSqliteMarkerRow } from '../src/core/marker-ledger';
-import type { SqliteCodecRegistry, SqliteContract } from '../src/core/types';
+import type { SqliteContract } from '../src/core/types';
 
 const contract = {} as SqliteContract;
 const runtimeAdapter = createSqliteAdapter();
@@ -112,10 +114,10 @@ describe('structured error codes', () => {
     });
   });
 
-  it('CONTRACT.DEFAULT_INVALID on a non-finite number literal default', async () => {
+  it('CONTRACT.DEFAULT_INVALID on a NaN number literal default', async () => {
     const ast = new SqliteCreateTable({
       table: 'defaults',
-      columns: [col('x', 'INTEGER', { default: lit(Number.POSITIVE_INFINITY) })],
+      columns: [col('x', 'REAL', { default: lit(Number.NaN) })],
     });
     const err = await catchAsyncError(() =>
       controlAdapter.lowerToExecuteRequest(ast, { contract }),
@@ -135,6 +137,14 @@ describe('structured error codes', () => {
     const lookup: SqliteCodecRegistry = {
       ...createSqliteBuiltinCodecLookup(),
       get: (id) => (id === 'test/symbol@1' ? symbolCodec : undefined),
+      descriptorFor: (id) =>
+        id === 'test/symbol@1'
+          ? ({
+              codecId: id,
+              paramsSchema: undefined,
+              factory: () => () => symbolCodec,
+            } as unknown as AnySqliteCodecDescriptor)
+          : undefined,
       forCodecRef: () => {
         throw new Error('not used in DDL tests');
       },

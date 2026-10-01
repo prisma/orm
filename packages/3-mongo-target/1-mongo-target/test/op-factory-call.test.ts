@@ -20,14 +20,14 @@ import {
   createIndex,
   dropCollection,
   dropIndex,
-} from '../src/core/migration-factories';
+} from '../src/core/migrations/migration-factories';
 import {
   CollModCall,
   CreateCollectionCall,
   CreateIndexCall,
   DropCollectionCall,
   DropIndexCall,
-} from '../src/core/op-factory-call';
+} from '../src/core/migrations/op-factory-call';
 
 describe('Mongo call classes', () => {
   describe('construction + toOp parity', () => {

@@ -23,16 +23,26 @@ import type {
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
-  PslExtensionBlock,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable } from '@internal/psl-parser';
+import type {
+  AnyCodecDescriptor,
+  CodecLookupWithDescriptors,
+} from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
+import {
+  buildSymbolTable,
+  createPslDiagnosticCollector,
+  jsonValue,
+  mapBlock,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -48,27 +58,33 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'native_enum',
     discriminator: NATIVE_ENUM_DISCRIMINATOR,
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: () =>
+      mapBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
   },
   plain_ref: {
     kind: 'pslBlock',
     keyword: 'plain_ref',
     discriminator: PLAIN_REF_DISCRIMINATOR,
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: () =>
+      mapBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
   },
 };
 
 type TestNativeEnum = { readonly typeName: string; readonly members: readonly string[] };
 type TestPlainRef = { readonly name: string };
 
-function lowerTestNativeEnum(block: PslExtensionBlock): TestNativeEnum {
-  return { typeName: block.name, members: Object.keys(block.parameters) };
+function lowerTestNativeEnum(block: ParsedPslExtensionBlock): TestNativeEnum {
+  return { typeName: block.name, members: Object.keys(block.values) };
 }
 
-function lowerTestPlainRef(block: PslExtensionBlock): TestPlainRef {
+function lowerTestPlainRef(block: ParsedPslExtensionBlock): TestPlainRef {
   return { name: block.name };
 }
 
@@ -83,7 +99,7 @@ const nativeEnumEntityTypeOutput = {
     kind: 'valueSet' as const,
     values: entity.members,
   }),
-} satisfies AuthoringEntityTypeFactoryOutput<PslExtensionBlock, TestNativeEnum> &
+} satisfies AuthoringEntityTypeFactoryOutput<ParsedPslExtensionBlock, TestNativeEnum> &
   SqlValueSetDerivingEntityTypeOutput;
 
 const entityTypes: AuthoringEntityTypeNamespace = {
@@ -109,6 +125,7 @@ function makeCodecDescriptor(options: {
 }): AnyCodecDescriptor {
   return {
     codecId: options.codecId,
+    dataType: dataTypeId('demo/fixture'),
     traits: ['equality'],
     targetTypes: ['text'],
     paramsSchema: {
@@ -156,7 +173,7 @@ const codecsById = new Map<string, AnyCodecDescriptor>([
   [rejectsCodec.codecId, rejectsCodec],
 ]);
 
-const codecLookup: CodecLookup = {
+const codecLookup: CodecLookupWithDescriptors = {
   get: () => undefined,
   targetTypesFor: () => undefined,
   renderOutputTypeFor: () => undefined,
@@ -195,6 +212,7 @@ const authoringContributions: AuthoringContributions = {
 };
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -207,7 +225,6 @@ function interpretWith(schema: string) {
   const document = symbolTableInputFromParseArgs({
     schema,
     sourceId: 'schema.prisma',
-    pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
     ...baseInput,
@@ -246,7 +263,7 @@ namespace docs {
         docs: {
           entries: {
             table: {
-              authSession: {
+              AuthSession: {
                 columns: {
                   aal: {
                     codecId: 'test/native-enum@1',
@@ -293,7 +310,7 @@ namespace docs {
         >;
       }
     ).namespaces;
-    const column = namespaces['docs']?.entries.table['authSession']?.columns['aal'];
+    const column = namespaces['docs']?.entries.table['AuthSession']?.columns['aal'];
     expect(column).toMatchObject({ codecId: 'test/native-enum@1' });
     expect((column as { typeRef?: unknown } | undefined)?.typeRef).toBeUndefined();
   });
@@ -319,7 +336,7 @@ namespace docs {
         docs: {
           entries: {
             table: {
-              thing: {
+              Thing: {
                 columns: {
                   ref: { codecId: 'test/plain-ref@1', nativeType: 'AnyName' },
                 },
@@ -337,7 +354,7 @@ namespace docs {
         >;
       }
     ).namespaces;
-    const column = namespaces['docs']?.entries.table['thing']?.columns['ref'];
+    const column = namespaces['docs']?.entries.table['Thing']?.columns['ref'];
     expect((column as { valueSet?: unknown } | undefined)?.valueSet).toBeUndefined();
   });
 
@@ -467,22 +484,21 @@ namespace docs {
     // ref (mirroring what a real namespace lowering pass would have
     // produced) but no `namespaceId` — a combination the exported function
     // signature permits even though production never produces it.
-    const { document, sourceFile } = parse(`
+    const { document, sources } = parse(
+      `
 model AuthSession {
   id Int @id
   aal pg.enum(AalLevel)
 }
-`);
-    const { table } = buildSymbolTable({
-      document,
-      sourceFile,
-      pslBlockDescriptors,
-    });
-    const field = table.topLevel.models['AuthSession']?.fields['aal'];
+`,
+      'schema.prisma',
+    );
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
+    const field = symbolTable.topLevel.models['AuthSession']?.fields['aal'];
     expect(field).toBeDefined();
     if (!field) return;
 
-    const diagnostics: Parameters<typeof resolveFieldTypeDescriptor>[0]['diagnostics'] = [];
+    const diagnostics = createPslDiagnosticCollector(sources);
     const result = resolveFieldTypeDescriptor({
       field,
       enumTypeDescriptors: new Map(),
@@ -493,7 +509,7 @@ model AuthSession {
       familyId: 'sql',
       targetId: 'postgres',
       diagnostics,
-      sourceId: 'schema.prisma',
+      sources,
       entityLabel: 'Field "AuthSession.aal"',
       namespaceExtensionEntities: {
         [NATIVE_ENUM_DISCRIMINATOR]: { AalLevel: { typeName: 'AalLevel', members: ['aal1'] } },
@@ -503,7 +519,7 @@ model AuthSession {
     });
 
     expect(result.ok).toBe(false);
-    expect(diagnostics).toEqual(
+    expect(diagnostics.toExternal()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',

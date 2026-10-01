@@ -150,6 +150,7 @@ export async function createPgIntegrationRuntime(
       await driver.connect({ kind: 'pgClient', client });
 
       const realRuntime = new PostgresRuntimeImpl({
+        closeRefusal: undefined,
         context,
         adapter: stackInstance.adapter,
         driver,
@@ -195,7 +196,7 @@ export async function createPgIntegrationRuntime(
       options?: RuntimeExecuteOptions,
     ): AsyncIterableResult<Row> {
       record(plan);
-      return target.query(plan, options);
+      return target.query<Row>(plan, options);
     };
   }
 

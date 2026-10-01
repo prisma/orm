@@ -146,14 +146,14 @@ The load-bearing semantics of a ref is **"the contract CD will `migrate --to` in
 Consequences:
 - Refs are **environment-named** (`production`, `staging`, ...). The Git-generic `head` ref has been dropped — it carried no information the emitted `contract.json` doesn't already imply.
 - A ref is a *promise* the repo makes about the next CD run. The PR is the moment that promise is staked.
-- The `db` ref differs in meaning, not mechanics: it records the contract the project's dev database has been brought to (advanced implicitly by `db init`/`db update` on the default URL) and serves as `migration plan`'s default origin. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
+- The `db` ref differs in meaning, not mechanics. It has two roles: it is the default origin of `migration plan`, and it is the checkpoint of the contract the project's dev database was last brought to — written by `db init` / `db update` when run against the default URL, and by `db sign` regardless of `--db` (unless `--no-advance-ref`). A signature that must not replace the default origin passes `--advance-ref <name>` to checkpoint another ref instead. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
 
 ### Initialization vs adoption-by-signing
 
 Two distinct entry points for bringing a database under contract control:
 
 - **`db init`** — bootstrap. The DB is empty (greenfield) or being adopted by *executing* an initial migration (brownfield-incremental). Lays down structure. Live, may mutate.
-- **`db sign`** — declare that an existing live database satisfies a contract. Verifies live schema satisfies the contract, then writes the contract hash into the marker. **Refuses if it doesn't satisfy.** No structural changes. The adoption path when the DB already happens to match.
+- **`db sign`** — declare that an existing live database satisfies a contract. Verifies live schema satisfies the contract, then writes the contract hash into the marker and advances the `db` ref to it (`--advance-ref <name>` overrides; `--db` does not suppress it; `--no-advance-ref` skips it). **Refuses if it doesn't satisfy.** No structural changes. The adoption path when the DB already happens to match.
 
 `db sign` is a sibling of `db verify` (both verify the live DB against a contract), not a sibling of `migrate` (no structural mutation).
 
@@ -253,7 +253,7 @@ Grouped by sub-area so the relationships are visible. Some terms appear in more 
 - **Adoption** — bringing an existing database under contract control. Three paths: **greenfield**, **brownfield-conservative**, **brownfield-incremental**.
 - **Introspection** — read-only schema discovery of a live database.
 - **Initialization** — `db init`. Bootstraps an empty database (greenfield) or applies initial migrations to an existing one. Lays down structure.
-- **Signing** — `db sign`. Verifies a live DB satisfies a contract, then writes the contract hash into the marker. The adoption path for an already-matching database. No structural changes.
+- **Signing** — `db sign`. Verifies a live DB satisfies a contract, then writes the contract hash into the marker and advances the `db` ref to it (`--advance-ref <name>` overrides; `--db` does not suppress it; `--no-advance-ref` skips it). The adoption path for an already-matching database. No structural changes.
 - **Reconciliation** — `db update`. Live-introspect, diff against a target contract, execute the difference. Off-graph; dev-only first-class workflow.
 - **Squash** — collapsing a range of migrations into a single equivalent migration.
 - **Promotion** — moving a ref forward (typically: advancing `production` to match a freshly-merged change).
@@ -278,7 +278,7 @@ Grouped by intent.
 - **`migrate --to <contract>`** — *the* migration verb. Walks the graph from the marker's current contract to the target. Forward-only. Same verb everywhere (dev, staging, production); only the DB URL changes.
 - **`db init`** — bootstrap an empty database, or adopt an existing one by executing initial migrations from `∅`. Lays down structure. Live, may mutate.
 - **`db update`** — off-graph reconciliation. `db update` reconciles to the current contract; `db update --to <hash>` reconciles to any contract we can name on disk. **Dev-only.** Does not produce a migration and does not consult the graph; on the default dev URL it implicitly advances the `db` ref (`--advance-ref <name>` overrides, `--db <non-default-url>` opts out — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
-- **`db sign [<contract>]`** *(explicit form: `db sign --contract <contract>`)* — verify the live DB satisfies a contract, then write the contract hash into the marker. **Refuses if it doesn't satisfy.** No structural mutation. The adoption path for an already-matching DB. Without an argument, defaults to the current `contract.json`. The argument names *the thing being signed* — distinct from `--to` (movement) used by `migrate` and `db update`.
+- **`db sign [<contract>]`** *(explicit form: `db sign --contract <contract>`)* — verify the live DB satisfies a contract, then write the contract hash into the marker and advance the `db` ref to the signed hash (`--advance-ref <name>` overrides; unlike `db init` / `db update`, `--db` does not suppress it; `--no-advance-ref` skips it). **Refuses if it doesn't satisfy.** No structural mutation. The adoption path for an already-matching DB. Without an argument, defaults to the current `contract.json`. The argument names *the thing being signed* — distinct from `--to` (movement) used by `migrate` and `db update`.
 
 ### Verification
 

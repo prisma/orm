@@ -108,12 +108,12 @@ export type TraitExpression<
 /**
  * Resolve a raw value or an Expression into an AST expression node.
  *
- * When `value` is an Expression (duck-typed by its `buildAst` method), the AST it wraps is returned. Otherwise the value is embedded as a ParamRef tagged with the caller-supplied {@link CodecRef} (when known). The runtime resolves the ref via `contractCodecs.forCodecRef(codec)`; content-keyed memoisation collapses repeated lookups for the same logical column onto one shared codec.
+ * When `value` is an object with a callable `buildAst`, the AST it wraps is returned. Otherwise the value is embedded as a ParamRef tagged with the caller-supplied {@link CodecRef} (when known). The runtime resolves the ref via `contractCodecs.forCodecRef(codec)`; content-keyed memoisation collapses repeated lookups for the same logical column onto one shared codec.
  *
  * Operation implementations that compare a column-bound expression to a user value derive the column's {@link CodecRef} from the column-bound side (via {@link codecOf}) and forward it here so encode-side dispatch resolves to the per-instance codec for parameterized codec ids (`vector(1024)` vs. `vector(1536)`).
  */
 export function toExpr(value: unknown, codec?: CodecRef): AstExpression {
-  if (isExpressionLike(value)) {
+  if (isExpression(value)) {
     return value.buildAst();
   }
   if (codec === undefined) {
@@ -137,30 +137,25 @@ export function param<T>(value: T, opts: { codecId: string }): ParamRef {
  * Derive the {@link CodecRef} carried by an expression-like value.
  *
  * Resolution order:
- * 1. `wrapper.codec` — explicit column-bound {@link CodecRef} stamped at field-proxy time.
- * 2. `wrapper.returnType.codec` — scope-level codec when the scope was built from contract storage.
- * 3. `{ codecId: wrapper.returnType.codecId }` — minimal ref derived from the expression's declared codec id (covers synthetic expressions like `count()` whose returnType has a known codec id but no explicit column binding).
+ * 1. `wrapper.returnType.codec` — scope-level codec when the scope was built from contract storage.
+ * 2. `{ codecId: wrapper.returnType.codecId }` — minimal ref derived from the expression's declared codec id (covers synthetic expressions like `count()` whose returnType has a known codec id but no explicit column binding).
  *
  * Returns `undefined` for raw scalar values (non-expression-like).
  */
 export function codecOf(value: unknown): CodecRef | undefined {
-  if (!isExpressionLike(value)) return undefined;
-  const wrapper = value as {
-    codec?: CodecRef;
-    returnType?: { codec?: CodecRef; codecId?: string };
-  };
-  if (wrapper.codec) return wrapper.codec;
-  if (wrapper.returnType?.codec) return wrapper.returnType.codec;
-  if (wrapper.returnType?.codecId) return { codecId: wrapper.returnType.codecId };
-  return undefined;
+  if (!isExpression(value)) return undefined;
+  return (
+    value.returnType?.codec ??
+    (value.returnType?.codecId ? { codecId: value.returnType.codecId } : undefined)
+  );
 }
 
-function isExpressionLike(value: unknown): value is Expression<ScopeField> {
+export function isExpression(value: unknown): value is Expression<ScopeField> {
   return (
     typeof value === 'object' &&
     value !== null &&
     'buildAst' in value &&
-    typeof (value as { buildAst: unknown }).buildAst === 'function'
+    typeof value.buildAst === 'function'
   );
 }
 
@@ -337,7 +332,7 @@ function resolveInterpolation(
   adapter: RawCodecInferer,
   value: RawExprInterpolation,
 ): AstExpression | ParamRef {
-  if (isExpressionLike(value)) {
+  if (isExpression(value)) {
     return value.buildAst();
   }
   if (value instanceof ParamRef) {

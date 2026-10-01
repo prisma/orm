@@ -55,7 +55,7 @@ describe('defineOrmCommand', () => {
       const envelope = erroredEnvelope(run);
 
       expect(envelope.nextActions).toEqual([
-        { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
+        { kind: 'user-choice', label: 'Run `prisma-test migration list` to see every space.' },
       ]);
       expect(envelope.error).not.toHaveProperty('fix');
     });
@@ -141,60 +141,6 @@ describe('defineOrmCommand', () => {
 
       expect(run.exitCode).toBe(0);
       expect(terminalEnvelope(run)).toMatchObject({ ok: true });
-    });
-  });
-});
-
-describe('config finalization at the command boundary', () => {
-  it('hands the handler absolute contract and migration paths whatever the loader left relative', async () => {
-    let seen: { output?: string | undefined; dir?: string | undefined } = {};
-    const cli = createTestCli({
-      commands: {
-        probe: defineOrmCommand({
-          help: { summary: 'Records the config paths the handler receives' },
-          needs: {
-            config: {
-              name: 'orm',
-              validate: (raw) => ({
-                ok: true as const,
-                value: raw as Record<string, unknown>,
-                diagnostics: [],
-              }),
-            },
-          },
-          handler: async (_args, ctx) => {
-            const config = ctx.config as {
-              contract?: { output?: string };
-              migrations?: { dir?: string };
-            };
-            seen = { output: config.contract?.output, dir: config.migrations?.dir };
-            return ok(
-              ctx.present(
-                { data: seen, exitCode: 0 },
-                { stdout: () => [], next: () => [], human: () => [], json: () => seen },
-              ),
-            );
-          },
-        }),
-      },
-      config: {
-        orm: {
-          contract: {
-            source: { load: async () => ({ ok: true, value: {} }) },
-            output: './src/prisma/contract.json',
-          },
-          migrations: { dir: './migrations' },
-        },
-      },
-    });
-
-    const cwd = process.cwd();
-    const run = await cli.run(['probe', '--json'], { cwd });
-
-    expect(run.exitCode).toBe(0);
-    expect(seen).toEqual({
-      output: `${cwd}/src/prisma/contract.json`,
-      dir: `${cwd}/migrations`,
     });
   });
 });

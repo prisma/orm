@@ -1,4 +1,4 @@
-import type { ResultType } from '@internal/framework-components/runtime';
+import type { AsyncIterableResult, ResultType } from '@internal/framework-components/runtime';
 import type { Scalars, Shape } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
 import type {
@@ -284,6 +284,35 @@ test('Shape over the Any union adds a variant-only relation to the variants that
   expectTypeOf<
     Extract<Shape<PolyModels.public_AnyTask, { '+': 'assignee' }>, { type: 'epic' }>
   >().not.toHaveProperty('assignee');
+});
+
+test('prepared terminals preserve complete emitted ordinary result types', () => {
+  const nested = db.User.select('id').include('posts', (posts) =>
+    posts.select('title').include('author'),
+  );
+  expectTypeOf(nested.prepared.all().consume).returns.toEqualTypeOf<
+    AsyncIterableResult<ResultType<typeof nested>>
+  >();
+  expectTypeOf(nested.prepared.first().consume).returns.toEqualTypeOf<
+    ReturnType<typeof nested.first>
+  >();
+
+  const required = db.Article.select('id').include('reviewer');
+  expectTypeOf(required.prepared.all().consume).returns.toEqualTypeOf<
+    AsyncIterableResult<{ id: number; reviewer: Scalars<Models.public_User> }>
+  >();
+  const refined = db.Article.select('id').include('reviewer', (reviewer) => reviewer.select('id'));
+  expectTypeOf(refined.prepared.first().consume).returns.toEqualTypeOf<
+    Promise<{ id: number; reviewer: { id: number } | null } | null>
+  >();
+
+  const bugs = poly.Task.variant('Bug').include('assignee');
+  expectTypeOf(bugs.prepared.all().consume).returns.toEqualTypeOf<
+    AsyncIterableResult<Shape<PolyModels.public_Bug, { '+': 'assignee' }>>
+  >();
+  expectTypeOf(bugs.prepared.first().consume).returns.toEqualTypeOf<
+    ReturnType<typeof bugs.first>
+  >();
 });
 
 test('Shape rejects a key that is not a relation', () => {

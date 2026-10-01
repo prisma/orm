@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/29331-query-plan-cache-bloat
 // (postgres matrix entry; allProviders — we port postgres).
@@ -13,6 +15,7 @@
 model Contact {
   id        String             @id @default(cuid(2))
   analytics ContactAnalytics[]
+  @@map("contact")
 }
 
 model ContactAnalytics {
@@ -36,4 +39,5 @@ model ContactAnalytics {
   bool1     Boolean?
   bool2     Boolean?
   bool3     Boolean?
+  @@map("contactAnalytics")
 }

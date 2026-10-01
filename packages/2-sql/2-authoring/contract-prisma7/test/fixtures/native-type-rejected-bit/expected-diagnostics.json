@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Rejected.value\": native type \"@db.Bit\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  }
+]

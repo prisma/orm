@@ -1,6 +1,9 @@
+// use prisma-8
+
 model TestModel {
   id Int @id
   my_enum MyEnum?
+  @@map("testModel")
 }
 
 enum MyEnum {

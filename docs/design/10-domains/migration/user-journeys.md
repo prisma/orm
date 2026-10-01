@@ -176,11 +176,11 @@ The two are deliberately separately named — sharing `verify` across both would
 # point the CLI at the existing DB
 contract infer            # introspect -> derive a contract that matches the DB
 # review/edit the inferred contract.json
-db sign                   # write the marker: 'this DB satisfies <contract>'
+db sign                   # write the marker ('this DB satisfies <contract>') and set the db ref
 # from here, the normal author + migrate flow applies
 ```
 
-The contract becomes the graph's root node (an `∅`-from migration is not produced — brownfield contracts simply exist as graph nodes the marker points at). Subsequent contract changes go through the normal `migration plan` / `migrate --to <ref>` flow.
+`db sign` sets the `db` ref to the signed contract's hash, and the first `migration plan` after it auto-emits the baseline `null → signed-hash`, so the signed contract becomes the graph's root node; once the contract has moved on from the signed one, the plan also emits the delta `signed-hash → contract`. Subsequent contract changes go through the normal `migration plan` / `migrate --to <ref>` flow.
 
 Step-count ergonomics for this path are a tracked concern — the underlying steps are correct but the user-facing sequence is currently more verbs than it should be. Follow-up: [TML-2561](https://linear.app/prisma-company/issue/TML-2561) (brownfield adoption ergonomics).
 

@@ -2,4 +2,5 @@
 
 model User {
   id Char(24) @id @default(cuid(2))
+  @@map("user")
 }

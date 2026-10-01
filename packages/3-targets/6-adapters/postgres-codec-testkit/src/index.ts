@@ -9,8 +9,9 @@
  *
  * A projection conforms when both of these hold:
  *
- * 1. the parsed value deep-equals `codec.encodeJson(value)` — the codec's
- *    current `encodeJson` is the yardstick and the projection is its SQL
+ * 1. the parsed value, in the canonical form of the codec's data type when the
+ *    type declares one (ADR 254), deep-equals `codec.encodeJson(value)` — the
+ *    codec's current `encodeJson` is the yardstick and the projection is its SQL
  *    realization; and
  * 2. `codec.decodeJson` turns the parsed value back into the application value
  *    the case started from.
@@ -42,7 +43,10 @@ import { computeProfileHash, computeStorageHash } from '@internal/contract/hashi
 import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import { validateCodecTypeParams } from '@internal/framework-components/codec';
+import {
+  createDataTypeLookup,
+  validateCodecTypeParams,
+} from '@internal/framework-components/codec';
 import { SqlStorage } from '@internal/sql-contract/types';
 import {
   CastExpr,
@@ -55,6 +59,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 
@@ -194,6 +199,8 @@ function buildConformanceContract(): PostgresContract {
 
 const conformanceContract: PostgresContract = buildConformanceContract();
 
+const dataTypes = createDataTypeLookup(postgresDataTypes);
+
 /**
  * Widens a codec's wire value to the shape `pg` serializes unambiguously: a
  * `Buffer` for binary, and a UTC ISO string for a `Date` so the parameter's
@@ -296,6 +303,22 @@ function expectedJson(
   return overElements(conformanceCase.value, (element) =>
     element === null ? null : codec.encodeJson(element),
   );
+}
+
+/**
+ * The projected value in the canonical form of the codec's data type, element by element for an
+ * array case, so that PostgreSQL's text and `encodeJson` compare as values, not as spellings.
+ */
+function projectedInCanonicalForm(
+  projected: JsonValue,
+  dataTypeId: string,
+  conformanceCase: PostgresCodecConformanceCase,
+): JsonValue {
+  const toCanonicalForm = dataTypes.get(dataTypeId)?.toCanonicalForm;
+  if (toCanonicalForm === undefined) return projected;
+  if (conformanceCase.many !== true) return toCanonicalForm(projected);
+  if (!Array.isArray(projected)) return projected;
+  return projected.map((element) => (element === null ? null : toCanonicalForm(element)));
 }
 
 function roundTripValue(
@@ -405,9 +428,19 @@ export async function runPostgresCodecProjection(
 
   const base = { sql, rawJson, projected, expected } as const;
 
-  // A case judged on round-trip equality skips this gate by design: its two spellings are both
-  // correct and differ, so comparing them would only ever report a disagreement that is not a defect.
-  if (conformanceCase.valueEquality === undefined && !isDeepStrictEqual(projected, expected)) {
+  let canonical: JsonValue;
+  try {
+    canonical = projectedInCanonicalForm(projected, descriptor.dataType, conformanceCase);
+  } catch (error) {
+    return {
+      ...base,
+      failure: {
+        kind: 'mismatch',
+        detail: `the data type ${descriptor.dataType} refuses the projected ${JSON.stringify(projected)}: ${describeError(error)}`,
+      },
+    };
+  }
+  if (!isDeepStrictEqual(canonical, expected)) {
     return {
       ...base,
       failure: {

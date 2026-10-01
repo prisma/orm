@@ -108,7 +108,10 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/vector@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 1536
+                  }
                 }
               },
               "id": {
@@ -335,6 +338,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

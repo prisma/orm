@@ -1,0 +1,37 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model AVeryLongModelNameThatKeepsGoingAndGoingForever {
+  id                                              Int    @id
+  aVeryLongColumnNameThatAlsoKeepsGoingAndGoing   String
+  anotherVeryLongColumnNameThatIsAlsoQuiteLengthy String @unique
+  short                                           String
+
+  @@index([aVeryLongColumnNameThatAlsoKeepsGoingAndGoing])
+  @@unique([short, aVeryLongColumnNameThatAlsoKeepsGoingAndGoing])
+}
+
+model Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt {
+  id                                          Int    @id
+  ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng String
+
+  @@index([ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng])
+}
+
+model AVeryLongModelNameThatKeepsGoingAndGoingForeverX {
+  id     Int  @id
+  others AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing[]
+}
+
+model AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing {
+  id     Int  @id
+  firsts AVeryLongModelNameThatKeepsGoingAndGoingForeverX[]
+}
+
+model Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123 {
+  id  Int    @id
+  col String
+
+  @@index([col])
+}

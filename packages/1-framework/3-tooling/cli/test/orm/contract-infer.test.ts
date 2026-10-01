@@ -1,12 +1,12 @@
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { CliStructuredError } from '@internal/errors/control';
 import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { createContractInferCommand } from '../../src/orm/contract/infer';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const PSL = 'model User {\n  id Int @id\n}\n';
@@ -91,7 +91,7 @@ function ormConfig(dir: string, overrides: Record<string, unknown> = {}): Record
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {
@@ -120,6 +120,20 @@ describe('contract infer', () => {
       meta: { dbUrl: 'postgres://****:****@localhost:5432/appdb' },
       timings: { total: expect.any(Number) },
     });
+  });
+
+  it('describes the written file as inferred from the database', async () => {
+    const dir = await projectDir();
+
+    await harness(ormConfig(dir)).run(['contract', 'infer', '--json'], { cwd: dir });
+
+    expect(mocks.printPsl).toHaveBeenCalledWith(
+      { kind: 'psl-document' },
+      expect.objectContaining({
+        description:
+          'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
+      }),
+    );
   });
 
   it('writes the printed PSL beside the emitted contract', async () => {

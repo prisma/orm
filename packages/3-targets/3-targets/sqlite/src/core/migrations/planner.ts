@@ -6,6 +6,7 @@ import type {
   SqlPlannerFailureResult,
 } from '@internal/family-sql/control';
 import {
+  detectTableNameCaseChanges,
   extractCodecControlHooks,
   planFieldEventOperations,
   plannerFailure,
@@ -20,9 +21,21 @@ import type {
 } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { RelationalSchemaNodeKind, type SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import {
+  RelationalSchemaNodeKind,
+  type SqlSchemaIR,
+  SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { buildSqlitePlanDiff } from './diff-database-schema';
-import { coalesceSubtreeIssues, issueNode, planIssues } from './issue-planner';
+import { indexNameCaseChange, pairIndexReplacements } from './index-replacements';
+import {
+  coalesceSubtreeIssues,
+  conflictForDisallowedCall,
+  issueNode,
+  planIssues,
+} from './issue-planner';
+import { RenameTableCall } from './op-factory-call';
+import { renameTableSteps } from './operations/tables';
 import {
   type SqliteMigrationDestinationInfo,
   TypeScriptRenderableSqliteMigration,
@@ -123,7 +136,35 @@ export class SqliteMigrationPlanner
     const policyResult = this.ensureAdditivePolicy(options.policy);
     if (policyResult) return policyResult;
 
-    const { expected, actual, issues } = this.collectSchemaIssues(options);
+    const { expected, actual, issues: diffIssues } = this.collectSchemaIssues(options);
+    const replacedIndexes = pairIndexReplacements(diffIssues, indexNameCaseChange);
+    const disallowedIndexCalls = replacedIndexes.calls.filter(
+      (call) => !options.policy.allowedOperationClasses.includes(call.operationClass),
+    );
+    if (disallowedIndexCalls.length > 0) {
+      return plannerFailure(
+        disallowedIndexCalls.map((call) =>
+          conflictForDisallowedCall(call, options.policy.allowedOperationClasses),
+        ),
+      );
+    }
+    const issues = diffIssues.filter((issue) => !replacedIndexes.consumed.has(issue));
+    const caseChangeConflicts = detectTableNameCaseChanges({
+      issues,
+      tableOf: (issue) => {
+        const node = issueNode(issue);
+        return node instanceof SqlTableIR ? node : undefined;
+      },
+      namespaceIdOf: () => UNBOUND_NAMESPACE_ID,
+      renameByHandStatements: (rename) =>
+        renameTableSteps(rename.from, rename.to).map((renameStep) => renameStep.sql),
+      renameTableCall: (rename) => new RenameTableCall(rename.from, rename.to).renderTypeScript(),
+      contract: options.contract,
+      defaultNamespaceId: UNBOUND_NAMESPACE_ID,
+    });
+    if (caseChangeConflicts.length > 0) {
+      return plannerFailure(caseChangeConflicts);
+    }
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
 
     const result = planIssues({
@@ -153,7 +194,7 @@ export class SqliteMigrationPlanner
     // Codec-emitted calls already conform to `OpFactoryCall` — render +
     // toOp + importRequirements ride directly through the same emit path
     // as structural ops, no `RawSqlCall` wrap.
-    const calls = [...result.value.calls, ...fieldEventOps];
+    const calls = [...replacedIndexes.calls, ...result.value.calls, ...fieldEventOps];
 
     const destination: SqliteMigrationDestinationInfo = {
       storageHash: options.contract.storage.storageHash,

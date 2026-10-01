@@ -1,5 +1,8 @@
+// use prisma-8
+
 model TestModel {
   id      Int      @id
   string  String?
   decimal Decimal?
+  @@map("testModel")
 }

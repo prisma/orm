@@ -1,8 +1,8 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { rangeToPslSpan } from '@internal/psl-parser';
 import { parse, SourceFile } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
+  mapInterpreterDiagnostic,
   mapInterpreterDiagnostics,
   mapParseDiagnostics,
   ParseDiagnosticSeverity,
@@ -11,7 +11,7 @@ import {
 describe('mapParseDiagnostics', () => {
   it('passes the parser range through unchanged', () => {
     const source = 'model {';
-    const { diagnostics } = parse(source);
+    const { diagnostics } = parse(source, 'language-server-test.psl');
     expect(diagnostics.length).toBeGreaterThan(0);
 
     const mapped = mapParseDiagnostics(diagnostics);
@@ -27,7 +27,7 @@ describe('mapParseDiagnostics', () => {
   });
 
   it('returns an empty array for a clean parse', () => {
-    const { diagnostics } = parse('model User {\n  id Int @id\n}\n');
+    const { diagnostics } = parse('model User {\n  id Int @id\n}\n', 'language-server-test.psl');
     expect(diagnostics).toHaveLength(0);
     expect(mapParseDiagnostics(diagnostics)).toEqual([]);
   });
@@ -35,7 +35,40 @@ describe('mapParseDiagnostics', () => {
 
 describe('mapInterpreterDiagnostics', () => {
   const text = 'model User {\n  id Int @id\n  posts Post[]\n}\n';
-  const sourceFile = new SourceFile(text);
+  const sourceFile = new SourceFile('diagnostic-mapping-test.psl', text);
+
+  it('maps single warnings and errors consistently with the array mapper', () => {
+    const warning: ContractSourceDiagnostic = {
+      code: 'WARN',
+      message: 'warning',
+      sourceId: sourceFile.filename,
+      severity: 'warning',
+    };
+    const error: ContractSourceDiagnostic = {
+      code: 'ERROR',
+      message: 'error',
+      sourceId: sourceFile.filename,
+    };
+    const mapped = [
+      mapInterpreterDiagnostic(warning, sourceFile),
+      mapInterpreterDiagnostic(error, sourceFile),
+    ];
+    expect(mapped).toEqual([
+      {
+        code: 'WARN',
+        message: 'warning',
+        severity: 2,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      },
+      {
+        code: 'ERROR',
+        message: 'error',
+        severity: 1,
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+      },
+    ]);
+    expect(mapInterpreterDiagnostics([warning, error], sourceFile)).toEqual(mapped);
+  });
 
   it('maps a span to a 0-based LSP range (hand-computed)', () => {
     // Offsets 28..33 sit on the third line ("  posts Post[]"), landing on
@@ -43,6 +76,7 @@ describe('mapInterpreterDiagnostics', () => {
     const diagnostic: ContractSourceDiagnostic = {
       code: 'PSL_UNRESOLVED_RELATION',
       message: 'relation target not found',
+      sourceId: 'diagnostic-mapping-test.psl',
       span: {
         start: { offset: 28, line: 3, column: 3 },
         end: { offset: 33, line: 3, column: 8 },
@@ -61,10 +95,10 @@ describe('mapInterpreterDiagnostics', () => {
 
   it('inverts rangeToPslSpan for a span produced from a real source file', () => {
     const range = { start: { line: 2, character: 2 }, end: { line: 2, character: 7 } };
-    const span = rangeToPslSpan(range, sourceFile);
+    const span = sourceFile.rangeToPslSpan(range);
 
     const [mapped] = mapInterpreterDiagnostics(
-      [{ code: 'PSL_DEMO', message: 'demo', span }],
+      [{ code: 'PSL_DEMO', message: 'demo', sourceId: 'diagnostic-mapping-test.psl', span }],
       sourceFile,
     );
 
@@ -73,7 +107,13 @@ describe('mapInterpreterDiagnostics', () => {
 
   it('anchors a span-less diagnostic at document start instead of dropping it', () => {
     const [mapped] = mapInterpreterDiagnostics(
-      [{ code: 'PSL_SPANLESS', message: 'no span available' }],
+      [
+        {
+          code: 'PSL_SPANLESS',
+          message: 'no span available',
+          sourceId: 'diagnostic-mapping-test.psl',
+        },
+      ],
       sourceFile,
     );
 

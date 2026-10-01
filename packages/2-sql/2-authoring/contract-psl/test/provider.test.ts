@@ -62,6 +62,61 @@ describe('prismaContract provider helper', () => {
       const contract = prismaContract('./prisma/my-schema.prisma', baseOptions);
       expect(contract.output).toBe('./prisma/my-schema.json');
     });
+
+    it('derives output from the static prefix directory of a glob', () => {
+      const contract = prismaContract('./prisma/**/*.prisma', baseOptions);
+      expect(contract.output).toBe('./prisma/contract.json');
+    });
+
+    it('derives output from the static prefix directory of a single-star glob', () => {
+      const contract = prismaContract('./prisma/*.prisma', baseOptions);
+      expect(contract.output).toBe('./prisma/contract.json');
+    });
+
+    it('derives a bare contract.json for a rootless glob', () => {
+      const contract = prismaContract('**/*.prisma', baseOptions);
+      expect(contract.output).toBe('contract.json');
+    });
+
+    it('derives the same output from a backslash-separated glob as its forward-slash twin', () => {
+      const forwardSlash = prismaContract('./prisma/**/*.prisma', baseOptions);
+      const backslash = prismaContract('.\\prisma\\**\\*.prisma', baseOptions);
+      expect(backslash.output).toBe(forwardSlash.output);
+      expect(backslash.output).toBe('./prisma/contract.json');
+    });
+  });
+
+  describe('the data types of the stack it is loaded with', () => {
+    it('reads a number default through the cast its column type declares', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-data-types-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      await writeFile(
+        schemaPath,
+        `// use prisma-8
+
+model Account {
+  id      Int    @id
+  balance BigInt @default(42)
+}
+`,
+        'utf-8',
+      );
+
+      process.chdir(tempDir);
+      const config = prismaContract('./schema.prisma', baseOptions);
+      const result = await config.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath] }),
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(
+        unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Account']?.columns[
+          'balance'
+        ]?.default,
+      ).toEqual({ kind: 'literal', value: '42' });
+    });
   });
 
   describe('defaultControlPolicy specifier precedence', () => {
@@ -71,7 +126,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 }
 `,
@@ -98,7 +154,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 }
 `,
@@ -134,7 +191,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   email String
 }
@@ -164,7 +222,7 @@ describe('prismaContract provider helper', () => {
             public: {
               entries: {
                 table: {
-                  user: expect.any(Object),
+                  User: expect.any(Object),
                 },
               },
             },
@@ -180,7 +238,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(configDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   email String
 }
@@ -203,7 +262,7 @@ describe('prismaContract provider helper', () => {
             public: {
               entries: {
                 table: {
-                  user: expect.any(Object),
+                  User: expect.any(Object),
                 },
               },
             },
@@ -218,7 +277,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   posts Post[]
 }
@@ -272,7 +332,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   things Unknown[]
 }
@@ -290,18 +351,21 @@ model Post {
       if (result.ok) return;
 
       expect(result.failure.summary).toBe('PSL to SQL contract interpretation failed');
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: './schema.prisma',
-            message: expect.stringContaining('Unknown'),
-            span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
-            }),
-          }),
-        ]),
-      );
+      expect(
+        result.failure.diagnostics.map(({ code, message, sourceId, span }) => ({
+          code,
+          message,
+          sourceId,
+          line: span?.start.line,
+        })),
+      ).toEqual([
+        {
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "Unknown"',
+          sourceId: schemaPath,
+          line: 4,
+        },
+      ]);
     });
 
     it('returns diagnostics when navigation list fields declare unsupported attributes', async () => {
@@ -310,7 +374,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   posts Post[] @unique
 }
@@ -338,10 +403,10 @@ model Post {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             message: expect.stringContaining('User.posts'),
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -356,7 +421,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 `,
         'utf-8',
@@ -374,7 +440,7 @@ model Post {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNTERMINATED_BLOCK',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             span: expect.objectContaining({
               start: expect.objectContaining({ line: expect.any(Number) }),
             }),
@@ -389,7 +455,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 }
 model User {
@@ -411,7 +478,7 @@ model User {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_DUPLICATE_DECLARATION',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
           }),
         ]),
       );
@@ -423,7 +490,8 @@ model User {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Dup {
+        `// use prisma-8
+model Dup {
   id Int @id
 }
 model Dup {
@@ -445,9 +513,10 @@ model Other {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const codes = result.failure.diagnostics.map((d) => d.code);
-      expect(codes).toContain('PSL_DUPLICATE_DECLARATION');
-      expect(codes).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+      expect(result.failure.diagnostics.map((d) => d.code)).toEqual([
+        'PSL_DUPLICATE_DECLARATION',
+        'PSL_UNRESOLVED_REFERENCE',
+      ]);
     });
   });
 
@@ -458,7 +527,8 @@ model Other {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Document {
+        `// use prisma-8
+model Document {
   id Int @id
   embedding pgvector.Vector(length: 1536)
 }
@@ -480,9 +550,9 @@ model Other {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -495,7 +565,8 @@ model Other {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Document {
+        `// use prisma-8
+model Document {
   id Int @id
   embedding pgvector.Vector(length: 1536)
 }
@@ -520,7 +591,7 @@ model Other {
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       expect(unboundTables(storage)).toMatchObject({
-        document: {
+        Document: {
           columns: {
             embedding: {
               codecId: 'pg/vector@1',
@@ -545,7 +616,8 @@ model Other {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `types {
+        `// use prisma-8
+types {
   Embedding1536 = Bytes @pgvector.column(length: 1536)
 }
 
@@ -578,7 +650,7 @@ model Document {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             message: expect.stringContaining('pgvector.column'),
           }),
         ]),
@@ -593,12 +665,13 @@ model Document {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   cuid2 String @default(cuid(2))
   uuidV7 String @default(uuid(7))
   nanoid16 String @default(nanoid(16))
-  dbExpr String @default(dbgenerated("gen_random_uuid()"))
+  dbExpr String @default(sql\`gen_random_uuid()\`)
 }
 `,
         'utf-8',
@@ -617,15 +690,15 @@ model Document {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'user', column: 'cuid2' },
+              ref: { namespace: 'public', entry: 'User', field: 'cuid2' },
               onCreate: { kind: 'generator', id: 'cuid2' },
             },
             {
-              ref: { namespace: 'public', table: 'user', column: 'nanoid16' },
+              ref: { namespace: 'public', entry: 'User', field: 'nanoid16' },
               onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
             },
             {
-              ref: { namespace: 'public', table: 'user', column: 'uuidV7' },
+              ref: { namespace: 'public', entry: 'User', field: 'uuidV7' },
               onCreate: { kind: 'generator', id: 'uuidv7' },
             },
           ],
@@ -636,7 +709,7 @@ model Document {
           public: {
             entries: {
               table: {
-                user: {
+                User: {
                   columns: {
                     dbExpr: {
                       default: {
@@ -661,7 +734,8 @@ model Document {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   cuidValue String @default(cuid())
 }
@@ -683,9 +757,9 @@ model Document {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -700,7 +774,8 @@ model Document {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   externalId String @default(uuid())
 }
@@ -738,7 +813,11 @@ model Document {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
       const schemaPath = join(tempDir, 'schema.prisma');
-      await writeFile(schemaPath, 'model User {\n  id Int @id\n  data Bytes\n}\n', 'utf-8');
+      await writeFile(
+        schemaPath,
+        '// use prisma-8\nmodel User {\n  id Int @id\n  data Bytes\n}\n',
+        'utf-8',
+      );
 
       process.chdir(tempDir);
       const contract = prismaContract('./schema.prisma', baseOptions);
@@ -746,6 +825,7 @@ model Document {
       const result = await contract.source.load(
         createPostgresTestContext({
           authoringContributions: {
+            dataTypes: {},
             field: {},
             type: {
               Int: {
@@ -763,13 +843,9 @@ model Document {
       );
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          }),
-        ]),
-      );
+      expect(result.failure.diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+        { code: 'PSL_UNRESOLVED_REFERENCE', message: 'Cannot find type "Bytes"' },
+      ]);
     });
   });
 
@@ -778,7 +854,11 @@ model Document {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
       const schemaPath = join(tempDir, 'schema.prisma');
-      await writeFile(schemaPath, 'model User {\n  id Int @id\n  name String\n}\n', 'utf-8');
+      await writeFile(
+        schemaPath,
+        '// use prisma-8\nmodel User {\n  id Int @id\n  name String\n}\n',
+        'utf-8',
+      );
 
       process.chdir(tempDir);
       const contract = prismaContract('./schema.prisma', baseOptions);
@@ -792,7 +872,7 @@ model Document {
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       expect(unboundTables(storage)).toMatchObject({
-        user: {
+        User: {
           columns: {
             id: { codecId: 'pg/int4@1', nativeType: 'int4' },
             name: { codecId: 'pg/text@1', nativeType: 'text' },
@@ -806,29 +886,26 @@ model Document {
     it('returns PSL_SCHEMA_READ_FAILED diagnostics when schema file is missing', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
+      const missingSchemaPath = join(tempDir, 'missing.prisma');
 
       process.chdir(tempDir);
       const contract = prismaContract('./missing.prisma', baseOptions);
       const result = await contract.source.load(
-        createPostgresTestContext({ resolvedInputs: [join(tempDir, 'missing.prisma')] }),
+        createPostgresTestContext({ resolvedInputs: [missingSchemaPath] }),
       );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
 
-      expect(result.failure.summary).toBe('Failed to read Prisma schema at "./missing.prisma"');
+      expect(result.failure.summary).toBe('Failed to read Prisma schema files');
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_SCHEMA_READ_FAILED',
-            sourceId: './missing.prisma',
+            sourceId: missingSchemaPath,
           }),
         ]),
       );
-      expect(result.failure.meta).toMatchObject({
-        schemaPath: './missing.prisma',
-        absoluteSchemaPath: expect.stringMatching(/missing\.prisma$/),
-      });
     });
   });
 });

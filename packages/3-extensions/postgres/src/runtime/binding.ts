@@ -1,3 +1,4 @@
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
@@ -36,7 +37,7 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
-function validatePostgresUrl(url: string): string {
+export function validatePostgresUrl(url: string): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
     throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a non-empty string', {
@@ -124,5 +125,10 @@ export function resolveOptionalPostgresBinding(
     return undefined;
   }
 
-  return resolvePostgresBinding(options as PostgresBindingInput);
+  return resolvePostgresBinding(
+    blindCast<
+      PostgresBindingInput,
+      'provided-count validation narrows optional binding fields to one binding input'
+    >(options),
+  );
 }

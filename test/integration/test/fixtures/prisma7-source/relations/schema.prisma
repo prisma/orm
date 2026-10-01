@@ -1,0 +1,138 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema", "views"]
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit"]
+}
+
+enum Role {
+  USER  @map("user")
+  ADMIN
+
+  @@map("user_role")
+  @@schema("public")
+}
+
+enum AuditAction {
+  CREATE
+  DELETE
+
+  @@schema("audit")
+}
+
+model User {
+  id          Int       @id
+  email       String    @unique
+  legacy      String?   @ignore
+  posts       Post[]
+  edited      Post[]    @relation("PostEditor")
+  profile     Profile?
+  settings    Settings?
+  favorites   Post[]    @relation("Favorites")
+  followers   User[]    @relation("Follows")
+  following   User[]    @relation("Follows")
+  legacyOwned Post[]    @relation("LegacyOwner") @ignore
+  reviews     Review[]  @relation("ReviewAuthor")
+
+  @@schema("public")
+}
+
+model Post {
+  id            Int     @id
+  slug          String  @unique
+  title         String
+  category      String
+  hashed        String
+  authorId      Int
+  author        User    @relation(fields: [authorId], references: [id])
+  editorId      Int?
+  editor        User?   @relation("PostEditor", fields: [editorId], references: [id])
+  legacyOwnerId Int?    @ignore
+  legacyOwner   User?   @relation("LegacyOwner", fields: [legacyOwnerId], references: [id]) @ignore
+  tags          Tag[]
+  fans          User[]  @relation("Favorites")
+  labels        Label[]
+
+  @@unique([title, category])
+  @@schema("public")
+}
+
+model Tag {
+  id    Int    @id
+  name  String @unique
+  posts Post[]
+
+  @@schema("public")
+}
+
+model Profile {
+  id     Int    @id
+  bio    String
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model Settings {
+  id     Int   @id
+  theme  String
+  userId Int?  @unique
+  user   User? @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model Composite {
+  a        Int
+  b        String
+  children CompositeChild[]
+
+  @@id([a, b])
+  @@schema("audit")
+}
+
+model AuditLog {
+  id     Int         @id
+  action AuditAction
+  at     DateTime    @db.Timestamptz(3)
+
+  @@map("audit_log")
+  @@schema("audit")
+}
+
+model LegacyThing {
+  id Int @id
+
+  @@ignore
+  @@schema("public")
+}
+
+model Review {
+  id       Int   @id
+  authorId Int
+  author   User? @relation("ReviewAuthor", fields: [authorId], references: [id])
+
+  @@schema("public")
+}
+
+model CompositeChild {
+  id         Int        @id
+  compositeA Int?
+  compositeB String
+  composite  Composite? @relation(fields: [compositeA, compositeB], references: [a, b])
+
+  @@schema("audit")
+}
+
+model Label {
+  id    Int    @id
+  name  String
+  posts Post[]
+
+  @@schema("audit")
+}

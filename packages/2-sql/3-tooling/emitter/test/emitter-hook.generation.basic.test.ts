@@ -885,7 +885,7 @@ describe('sql-target-family-hook', () => {
 
     const types = generateContractDts(ir, sqlEmission, [], testHashes);
     expect(types).toContain('readonly type: "bm25"');
-    expect(types).toContain('readonly options: { readonly keyField: "id"');
+    expect(types).toContain('readonly keyField: "id"');
     expect(types).toContain('readonly name: "search_idx"');
     expect(types).toContain('readonly column: "description"');
     expect(types).toContain('readonly tokenizer: "simple"');
@@ -1002,7 +1002,7 @@ describe('sql-target-family-hook', () => {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'tags', column: 'id' },
+              ref: { namespace: 'public', entry: 'tags', field: 'id' },
               onCreate: { kind: 'generator', id: 'uuidv4' },
             },
           ],

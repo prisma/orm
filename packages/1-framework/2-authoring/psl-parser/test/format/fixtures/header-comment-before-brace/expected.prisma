@@ -1,0 +1,22 @@
+datasource db { // the main database
+  provider = "postgresql"
+}
+
+model User { // one row per account
+  id Int @id
+}
+
+enum Role { // account roles
+  USER
+}
+
+types { // shared aliases
+  Email = String
+}
+
+namespace billing { // invoicing
+  model Invoice { // one row per invoice
+    // issued monthly
+    id Int @id
+  }
+}

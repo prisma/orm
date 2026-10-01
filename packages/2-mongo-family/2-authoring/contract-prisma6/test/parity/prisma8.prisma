@@ -1,0 +1,29 @@
+// use prisma-8
+
+model User {
+  id    ObjectId @id @map("_id")
+  posts Post[]
+}
+
+model Post {
+  id        ObjectId               @id @map("_id")
+  title     String
+  views     Int64
+  likes     Int64Number
+  rank      Int32
+  note      String
+  pinned    Bool
+  score     Double
+  day       Date
+  blob      Binary
+  legacyRef ObjectId
+  total     Int64
+  extra     Json
+  meta      Json
+  authorId  ObjectId
+  author    User                   @relation(fields: [authorId], references: [id])
+  createdAt temporal.createdAt()
+  updatedAt temporal.updatedAt()
+
+  @@index([authorId])
+}

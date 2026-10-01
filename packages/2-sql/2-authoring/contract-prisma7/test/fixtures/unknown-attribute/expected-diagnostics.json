@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Model \"User\": attribute \"@@fulltext\" is not supported yet by the Prisma 7 contract source."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_ATTRIBUTE",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"User.email\": attribute \"@shardKey\" is not supported yet by the Prisma 7 contract source."
+  }
+]

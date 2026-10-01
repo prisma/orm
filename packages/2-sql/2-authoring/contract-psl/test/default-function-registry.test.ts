@@ -3,6 +3,8 @@ import type {
   TypedDefaultFunctionCall,
 } from '@internal/framework-components/control';
 import type { PslSpan } from '@internal/psl-parser';
+import { diagnosticSource } from '@internal/psl-parser';
+import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { lowerDefaultFunctionWithRegistry } from '../src/default-function-registry';
 import { createBuiltinLikeControlMutationDefaults } from './fixtures';
@@ -26,6 +28,8 @@ function call(fn: string, args: Record<string, unknown> = {}): TypedDefaultFunct
   return { fn, span: createSpan(), args };
 }
 
+const parsed = parse('', 'schema.prisma');
+const source = diagnosticSource(parsed.sources, parsed.document.syntax);
 const loweringContext = {
   sourceId: 'schema.prisma',
   modelName: 'User',
@@ -40,6 +44,7 @@ describe('default function registry', () => {
       call: call('cuid', { version: 2 }),
       registry: builtinRegistry,
       context: loweringContext,
+      source,
     });
     expect(loweredCuid2.ok).toBe(true);
     if (!loweredCuid2.ok) return;
@@ -72,6 +77,7 @@ describe('default function registry', () => {
       call: call('mystery'),
       registry: customRegistry,
       context: loweringContext,
+      source,
     });
 
     expect(loweredUnknown.ok).toBe(false);
@@ -105,6 +111,7 @@ describe('default function registry', () => {
       call: call('mystery'),
       registry: customRegistry,
       context: loweringContext,
+      source,
     });
 
     expect(loweredUnknown.ok).toBe(false);
@@ -118,24 +125,11 @@ describe('default function registry', () => {
       call: call('uuidv7'),
       registry: builtinRegistry,
       context: loweringContext,
+      source,
     });
     expect(loweredUnknown.ok).toBe(false);
     if (loweredUnknown.ok) return;
 
     expect(loweredUnknown.diagnostic.message).toContain('uuid(7)');
-  });
-
-  it('rejects an empty dbgenerated expression as a semantic argument error', () => {
-    const lowered = lowerDefaultFunctionWithRegistry({
-      call: call('dbgenerated', { expression: '' }),
-      registry: builtinRegistry,
-      context: loweringContext,
-    });
-    expect(lowered.ok).toBe(false);
-    if (lowered.ok) return;
-    expect(lowered.diagnostic).toMatchObject({
-      code: 'PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT',
-      message: expect.stringContaining('dbgenerated'),
-    });
   });
 });

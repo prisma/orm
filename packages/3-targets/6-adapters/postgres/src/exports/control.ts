@@ -1,7 +1,8 @@
 import type { SqlControlAdapterDescriptor } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
+import { assemblePostgresCodecRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypeEntries } from '@internal/target-postgres/data-types';
 import { escapeLiteral, qualifyName, quoteIdentifier } from '@internal/target-postgres/sql-utils';
-import { assemblePostgresCodecRegistry } from '../core/codec-lookup';
 import { PostgresControlAdapter } from '../core/control-adapter';
 import {
   createPostgresDefaultFunctionRegistry,
@@ -12,7 +13,11 @@ import { postgresAdapterDescriptorMeta } from '../core/descriptor-meta';
 
 const postgresAdapterDescriptor: SqlControlAdapterDescriptor<'postgres'> = {
   ...postgresAdapterDescriptorMeta,
-  authoring: { type: postgresAuthoringTypes, valueObjectStorageType: 'Jsonb' },
+  authoring: {
+    type: postgresAuthoringTypes,
+    dataTypes: postgresDataTypeEntries(),
+    valueObjectStorageType: 'Jsonb',
+  },
   controlMutationDefaults: {
     defaultFunctionRegistry: createPostgresDefaultFunctionRegistry(),
     generatorDescriptors: createPostgresMutationDefaultGeneratorDescriptors(),
@@ -30,11 +35,11 @@ const postgresAdapterDescriptor: SqlControlAdapterDescriptor<'postgres'> = {
 
 export default postgresAdapterDescriptor;
 
-export { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
-export { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 export {
   createPostgresBuiltinCodecLookup,
   createPostgresCodecRegistryWithBuiltins,
-} from '../core/codec-lookup';
+} from '@internal/target-postgres/codecs';
+export { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
+export { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
 export { PostgresControlAdapter } from '../core/control-adapter';
 export { escapeLiteral, qualifyName, quoteIdentifier };

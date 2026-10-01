@@ -3,6 +3,7 @@ import type { MigrationMetadata, MigrationPackage } from '@internal/framework-co
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
 import { basename, dirname, join, resolve } from 'pathe';
+import type { SnapshotContentVerifier } from './contract-snapshot-store';
 import { readContractSnapshotJsonTolerant } from './contract-snapshot-store';
 import {
   errorDirectoryExists,
@@ -26,6 +27,12 @@ const MAX_SLUG_LENGTH = 64;
 
 export interface ReadMigrationPackageOptions {
   readonly migrationsDir: string;
+  /**
+   * Content check for the package's end-contract snapshot; a snapshot whose
+   * content does not reproduce its address is treated as absent by the
+   * tolerant read (the strict store reads report it loudly).
+   */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
 }
 
 function hasErrnoCode(error: unknown, code: string): boolean {
@@ -236,6 +243,7 @@ export async function readMigrationPackage(
   const endContractJson = await readContractSnapshotJsonTolerant(
     options.migrationsDir,
     metadata.to,
+    options.verifySnapshotContent,
   );
   const pkg: OnDiskMigrationPackage = {
     dirName: basename(absoluteDir),

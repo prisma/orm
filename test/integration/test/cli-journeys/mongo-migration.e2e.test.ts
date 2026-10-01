@@ -43,6 +43,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { fixtureAppDir } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  latestMigrationToHash,
   migrationStatusAppSpace,
   parseJsonOutput,
   parseMigrationStatusJson,
@@ -256,7 +257,12 @@ describe('Journey: Mongo migration authoring (offline)', { timeout: timeouts.spi
     const emit1 = await runContractEmit(ctx);
     expect(emit1.exitCode, `contract emit additive: ${emit1.stderr}`).toBe(0);
 
-    const newResult = await runMigrationNew(ctx, ['--name', 'add-name-index']);
+    const newResult = await runMigrationNew(ctx, [
+      '--name',
+      'add-name-index',
+      '--from',
+      latestMigrationToHash(ctx),
+    ]);
     expect(newResult.exitCode, `migration new: ${newResult.stdout}\n${newResult.stderr}`).toBe(0);
 
     const migrationDir = findMigrationDirBySlug(ctx, 'add_name_index');
@@ -376,7 +382,12 @@ describe('Journey: Mongo migration authoring (live database)', {
     const emit1 = await runContractEmit(ctx);
     expect(emit1.exitCode, `contract emit additive: ${emit1.stderr}`).toBe(0);
 
-    const newResult = await runMigrationNew(ctx, ['--name', 'normalize-names']);
+    const newResult = await runMigrationNew(ctx, [
+      '--name',
+      'normalize-names',
+      '--from',
+      latestMigrationToHash(ctx),
+    ]);
     expect(newResult.exitCode, `migration new: ${newResult.stdout}\n${newResult.stderr}`).toBe(0);
 
     const migrationDir = findMigrationDirBySlug(ctx, 'normalize_names');

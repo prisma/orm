@@ -157,7 +157,6 @@ describe('Postgres rich AST lowering', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'infix',
         template: '{{self}} <=> {{arg0}}',
       },
     });

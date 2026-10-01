@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite
 // `issues/29174-jsonb-parameter-regression` (postgres matrix entry):
 //
@@ -10,4 +12,5 @@
 model User {
   id         String @id @default(cuid(2))
   properties Json
+  @@map("user")
 }

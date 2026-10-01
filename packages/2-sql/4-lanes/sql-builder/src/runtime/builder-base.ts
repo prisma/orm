@@ -1,6 +1,11 @@
 import type { PlanMeta } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
-import type { AnnotationValue, OperationKind } from '@internal/framework-components/runtime';
+import type {
+  AnnotationValue,
+  AppliedMutationDefault,
+  MutationDefaultsOptions,
+  OperationKind,
+} from '@internal/framework-components/runtime';
 import type { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { SqlOperationEntry } from '@internal/sql-operations';
 import {
@@ -8,6 +13,8 @@ import {
   type AnyExpression as AstExpression,
   collectOrderedParamRefs,
   IdentifierRef,
+  isOrderByDirection,
+  isOrderByNulls,
   type LimitOffsetValue,
   OrderByItem,
   ProjectionItem,
@@ -17,11 +24,7 @@ import {
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
-import type {
-  AppliedMutationDefault,
-  MutationDefaultsOptions,
-  SqlAggregateDescriptorRegistry,
-} from '@internal/sql-relational-core/query-lane-context';
+import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import type {
@@ -364,7 +367,20 @@ export function resolveOrderBy(
   ctx: BuilderContext,
   useAggregateFns: boolean,
 ): OrderByItem {
-  const dir = options?.direction ?? 'asc';
+  const direction = options?.direction ?? 'asc';
+  const nulls = options?.nulls;
+  if (!isOrderByDirection(direction)) {
+    throw structuredError('ORM.ARGUMENT_INVALID', 'orderBy direction must be "asc" or "desc"', {
+      meta: { direction: String(direction) },
+    });
+  }
+  if (nulls !== undefined && !isOrderByNulls(nulls)) {
+    throw structuredError('ORM.ARGUMENT_INVALID', 'orderBy nulls must be "first" or "last"', {
+      meta: { nulls: String(nulls) },
+    });
+  }
+  const toOrderByItem = (expr: AstExpression): OrderByItem =>
+    new OrderByItem(expr, direction, nulls);
 
   if (typeof arg === 'string') {
     const combined = orderByScopeOf(scope, rowFields);
@@ -376,8 +392,7 @@ export function resolveOrderBy(
           meta: { column: arg },
         },
       );
-    const expr = IdentifierRef.of(arg);
-    return dir === 'asc' ? OrderByItem.asc(expr) : OrderByItem.desc(expr);
+    return toOrderByItem(IdentifierRef.of(arg));
   }
 
   if (typeof arg === 'function') {
@@ -386,7 +401,7 @@ export function resolveOrderBy(
       ? createAggregateFunctions(ctx.queryOperationTypes, ctx.rawCodecInferer, ctx.aggregates)
       : createFunctions(ctx.queryOperationTypes, ctx.rawCodecInferer);
     const result = (arg as ExprCallback)(createFieldProxy(combined), fns);
-    return dir === 'asc' ? OrderByItem.asc(result.buildAst()) : OrderByItem.desc(result.buildAst());
+    return toOrderByItem(result.buildAst());
   }
 
   throw structuredError('ORM.ARGUMENT_INVALID', 'Invalid orderBy argument');

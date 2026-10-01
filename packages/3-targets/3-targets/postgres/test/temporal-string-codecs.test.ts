@@ -28,19 +28,53 @@ const UNREPRESENTABLE_VALUES = [
   'Thu Jan 02 03:04:05.123456 2026 PST',
 ] as const;
 
+const OTHER_DATE_STYLES = [
+  '02.01.2026',
+  '01/02/2026 03:04:05.123456 CET',
+  'Thu Jan 02 03:04:05.123456 2026 PST',
+] as const;
+
 const CODECS = [
-  { id: PG_DATE_STRING_CODEC_ID, descriptor: pgDateStringDescriptor, nativeType: 'date' },
+  {
+    id: PG_DATE_STRING_CODEC_ID,
+    descriptor: pgDateStringDescriptor,
+    nativeType: 'date',
+    standardJson: [
+      ['2026-01-02', '2026-01-02'],
+      ['0044-03-15 BC', '-000043-03-15'],
+      ['infinity', 'infinity'],
+    ],
+    refusedJson: ['02.01.2026', '2026-01-02 03:04:05'],
+  },
   {
     id: PG_TIMESTAMP_STRING_CODEC_ID,
     descriptor: pgTimestampStringDescriptor,
     nativeType: 'timestamp without time zone',
+    standardJson: [
+      ['2026-01-02 03:04:05.123456', '2026-01-02T03:04:05.123456'],
+      ['12026-01-02 03:04:05', '+012026-01-02T03:04:05'],
+      ['-infinity', '-infinity'],
+    ],
+    refusedJson: ['01/02/2026 03:04:05.123456 CET', '2026-01-02 03:04:05.123456+00'],
   },
   {
     id: PG_TIMESTAMPTZ_STRING_CODEC_ID,
     descriptor: pgTimestamptzStringDescriptor,
     nativeType: 'timestamp with time zone',
+    standardJson: [
+      ['2026-01-02 03:04:05.123456+00', '2026-01-02T03:04:05.123456Z'],
+      ['0044-03-15 00:00:00+00 BC', '-000043-03-15T00:00:00Z'],
+      ['infinity', 'infinity'],
+    ],
+    refusedJson: ['Thu Jan 02 03:04:05.123456 2026 PST', '12026-01-02 03:04:05'],
   },
-  { id: PG_TIME_STRING_CODEC_ID, descriptor: pgTimeStringDescriptor, nativeType: 'time' },
+  {
+    id: PG_TIME_STRING_CODEC_ID,
+    descriptor: pgTimeStringDescriptor,
+    nativeType: 'time',
+    standardJson: [['03:04:05.123000', '03:04:05.123']],
+    refusedJson: ['24:00:00', 'infinity'],
+  },
 ] as const;
 
 async function withoutTemporalGlobal<T>(body: () => Promise<T>): Promise<T> {
@@ -57,7 +91,7 @@ async function withoutTemporalGlobal<T>(body: () => Promise<T>): Promise<T> {
 }
 
 describe('representation-explicit temporal string codecs', () => {
-  for (const { id, descriptor, nativeType } of CODECS) {
+  for (const { id, descriptor, nativeType, standardJson, refusedJson } of CODECS) {
     describe(id, () => {
       const codec = descriptor.factory({})(instanceCtx);
 
@@ -65,11 +99,33 @@ describe('representation-explicit temporal string codecs', () => {
         expect(codec.id).toBe(id);
       });
 
-      it.each(UNREPRESENTABLE_VALUES)('forwards %s unchanged in every direction', async (value) => {
-        expect(await codec.encode(value, callCtx)).toBe(value);
-        expect(await codec.decode(value, callCtx)).toBe(value);
-        expect(codec.encodeJson(value)).toBe(value);
-        expect(codec.decodeJson(value)).toBe(value);
+      it.each(UNREPRESENTABLE_VALUES)('forwards %s unchanged on the wire', async (value) => {
+        expect({
+          encoded: await codec.encode(value, callCtx),
+          decoded: await codec.decode(value, callCtx),
+        }).toEqual({ encoded: value, decoded: value });
+      });
+
+      it.each(OTHER_DATE_STYLES)(
+        'refuses to read %s from JSON, which only a session in another DateStyle writes',
+        (value) => {
+          expect(() => codec.decodeJson(value)).toThrow(
+            expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }),
+          );
+        },
+      );
+
+      it.each(standardJson.map(([value, json]) => ({ value, json })))(
+        'writes $value to JSON in canonical form $json',
+        ({ value, json }) => {
+          expect(codec.encodeJson(value)).toBe(json);
+        },
+      );
+
+      it.each(refusedJson)('refuses to write %s to JSON, as its data type does', (value) => {
+        expect(() => codec.encodeJson(value)).toThrow(
+          expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
+        );
       });
 
       it('declares no target types, so introspection ownership stays with the temporal codecs', () => {

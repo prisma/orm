@@ -1,0 +1,38 @@
+[
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Clock.day\": @updatedAt is not supported on this column, because Prisma 8 has no generator for column type \"date\" yet. Remove @updatedAt: Prisma 7's next migration is empty, but neither client then fills the value, so both require it on create and leave it unchanged on update."
+  },
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Clock.time\": @updatedAt is not supported on this column, because Prisma 8 has no generator for column type \"time\" yet. Remove @updatedAt: Prisma 7's next migration is empty, but neither client then fills the value, so both require it on create and leave it unchanged on update."
+  },
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Clock.zoned\": @updatedAt is not supported on this column, because Prisma 8 has no generator for column type \"timetz\" yet. Remove @updatedAt: Prisma 7's next migration is empty, but neither client then fills the value, so both require it on create and leave it unchanged on update."
+  },
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"Clock.optional\": @updatedAt is not supported on this column, because Prisma 8 has no generator for column type \"date\" yet. Remove @updatedAt: Prisma 7's next migration is empty, but neither client then fills the value, so it stays empty unless a client writes it, and updates leave it unchanged."
+  },
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"Clock.defaulted\": @updatedAt is not supported on this column, because Prisma 8 has no generator for column type \"date\" yet. Remove @updatedAt: Prisma 7's next migration is empty. Its @default(now()) still sets the value on create, and neither client changes it on update."
+  },
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Clock.optionalDefaulted\": @updatedAt is not supported on this column, because Prisma 8 has no generator for column type \"time\" yet. Remove @updatedAt: Prisma 7's next migration is empty. Its @default(now()) still sets the value on create, and neither client changes it on update."
+  }
+]

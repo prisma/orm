@@ -16,7 +16,14 @@ interface AgreementCase {
   readonly literal: string;
 }
 
+const DATE_CASE: AgreementCase = {
+  codecId: 'pg/timestamptz-date@1',
+  typeParams: PRECISION,
+  literal: "timestamptz '2026-01-02 03:04:05.123456+00'",
+};
+
 const AGREEMENT_CASES: readonly AgreementCase[] = [
+  DATE_CASE,
   { codecId: 'pg/date-string@1', literal: "date '2026-01-02'" },
   { codecId: 'pg/date-temporal@1', literal: "date '2026-01-02'" },
   {
@@ -108,6 +115,24 @@ describe('temporal flat and nested reads agree', () => {
       const { flat, nested } = await readBothWays(entry);
 
       expect(nested).toBe(flat);
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it.each(['UTC', 'Asia/Tokyo', 'America/New_York'])(
+    'decodes flat and nested Date values to the same milliseconds in %s',
+    async (zone) => {
+      const { flat, nested } = await readBothWays(DATE_CASE, [`SET TimeZone = '${zone}'`]);
+      const codec = postgresCodecDescriptorRegistry
+        .descriptorFor(DATE_CASE.codecId)!
+        .factory(PRECISION)({ name: VALUE_COLUMN });
+      expect({
+        flat: await codec.decode(flat, {}),
+        nested: codec.decodeJson(nested),
+      }).toEqual({
+        flat: new Date('2026-01-02T03:04:05.123Z'),
+        nested: new Date('2026-01-02T03:04:05.123Z'),
+      });
     },
     timeouts.spinUpPpgDev,
   );

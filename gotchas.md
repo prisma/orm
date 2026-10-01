@@ -17,6 +17,10 @@ The capture workflow is documented in [`.claude/skills/record-gotchas/SKILL.md`]
 - [Demo fixture contract snapshots fail to deserialize during `migrate` (PN-CLI-4003)](#demo-fixture-contract-snapshots-fail-to-deserialize-during-migrate-pn-cli-4003)
 - [`migration plan` silently planned from an empty database when no `db` ref existed (resolved)](#migration-plan-silently-planned-from-an-empty-database-when-no-db-ref-existed-resolved)
 - [`migration plan --from db` fails with MIGRATION.NO_TARGET once a rollback cycle exists](#migration-plan---from-db-fails-with-migrationno_target-once-a-rollback-cycle-exists)
+- [`DateTime` columns come back as `Temporal.PlainDateTime` and Node 24 has no `Temporal`](#datetime-columns-come-back-as-temporalplaindatetime-and-node-24-has-no-temporal)
+- [`@prisma/client@7`'s peer on `prisma` makes `prisma` resolve to Prisma 7 beside Prisma 8](#prismaclient7s-peer-on-prisma-makes-prisma-resolve-to-prisma-7-beside-prisma-8)
+- [pnpm's `no-downgrade` trust policy refuses `prisma@7.10.0`](#pnpms-no-downgrade-trust-policy-refuses-prisma7100)
+- [Every Prisma 7 command needs `--config prisma7.config.ts` once Prisma 8 owns `prisma.config.ts`](#every-prisma-7-command-needs---config-prisma7configts-once-prisma-8-owns-prismaconfigts)
 
 ---
 
@@ -112,3 +116,93 @@ The same command with `--from 20260707T1005_init` (a migration directory name) s
 **References.**
 - Plan origin resolution: [`packages/1-framework/3-tooling/cli/src/control-api/operations/plan-resolution.ts`](packages/1-framework/3-tooling/cli/src/control-api/operations/plan-resolution.ts)
 - Related UX note: the public rollbacks docs (prisma/web#8025) currently tell users to pass `--from <dir>` after any rollback because of this.
+
+---
+
+## `DateTime` columns come back as `Temporal.PlainDateTime` and Node 24 has no `Temporal`
+
+**Filed upstream:** pending — authored in a session without Linear access; please file in [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) and replace this line.
+**Product:** Prisma 8
+**Version:** workspace `8.0.0-rc.11`, Node 24.13
+**First hit:** `examples/prisma7-adoption`, reading a Prisma 7 `DateTime @updatedAt` column through the Prisma 8 ORM
+
+**Symptom.** The first read of a `DateTime` column (Postgres `timestamp(3)`, codec `pg/timestamp-temporal@1`) fails with `RUNTIME.TEMPORAL_UNAVAILABLE`, and a write to an `@updatedAt` column fails the same way, because the codec and the generator construct `Temporal` values and Node 24 ships no global `Temporal`.
+
+**Cause.** Prisma 8's temporal codecs return `Temporal.PlainDateTime` (`timestamp`) and `Temporal.Instant` (`timestamptz`); nothing in the client installs a polyfill. A Prisma 7 user expects a `Date`.
+
+**Workaround.** `import 'temporal-polyfill/full/global'` before the client is created (the example does it at the top of `src/db.ts`), or author the column with the `*String` presets to receive PostgreSQL's text.
+
+**Reproduction.**
+1. `cd examples/prisma7-adoption && pnpm db:start`, then `pnpm v7:migrate && pnpm emit && pnpm sign && pnpm seed`.
+2. Remove the polyfill import from `src/db.ts` and run `pnpm start`.
+
+**References.**
+- Workaround source: [`examples/prisma7-adoption/src/db.ts`](examples/prisma7-adoption/src/db.ts)
+- Codec: [`packages/3-targets/3-targets/postgres/src/core/temporal-codec-helpers.ts`](packages/3-targets/3-targets/postgres/src/core/temporal-codec-helpers.ts)
+
+---
+
+## `@prisma/client@7`'s peer on `prisma` makes `prisma` resolve to Prisma 7 beside Prisma 8
+
+**Filed upstream:** pending — authored in a session without Linear access; please file in [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) and replace this line.
+**Product:** Prisma 8
+**Version:** `@prisma/client@7.10.0`, `@prisma/prisma7@7.10.0`, pnpm 10.27
+**First hit:** `examples/prisma7-adoption`, running `prisma contract emit` after installing Prisma 7 as the upgrade guide describes
+
+**Symptom.** `pnpm prisma --version` in the project prints `prisma : 7.10.0`, and `prisma contract emit` fails as an unknown Prisma 7 command, even though the guide's phase 1 replaced `prisma` with `@prisma/prisma7` (binary `prisma7`).
+
+**Cause.** `@prisma/client@7.10.0` declares `prisma` as a peer dependency (`"prisma": "*"`). pnpm installs missing peers automatically, and the only `prisma` it can find is Prisma 7's, a dependency of `@prisma/prisma7`, so `node_modules/.bin/prisma` becomes Prisma 7.
+
+**Workaround.** Keep an explicit Prisma 8 `prisma` dev dependency (the guide's `prisma@latest`; inside this repository the workspace alias `"prisma": "workspace:@internal/cli@..."`). A direct dependency's bin wins and the peer is satisfied by it.
+
+**Reproduction.**
+1. In a project with `@prisma/prisma7` and `@prisma/client` at 7.10.0 and no `prisma` dev dependency, `pnpm install`.
+2. `pnpm prisma --version` prints Prisma 7.
+
+**References.**
+- Workaround source: [`examples/prisma7-adoption/package.json`](examples/prisma7-adoption/package.json)
+
+---
+
+## pnpm's `no-downgrade` trust policy refuses `prisma@7.10.0`
+
+**Filed upstream:** pending — authored in a session without Linear access; please file in [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) and replace this line.
+**Product:** Prisma 8
+**Version:** `prisma@7.10.0` (dependency of `@prisma/prisma7@7.10.0`), pnpm 10.27
+**First hit:** `examples/prisma7-adoption`, first `pnpm install` after adding Prisma 7
+
+**Symptom.** `ERR_PNPM_TRUST_DOWNGRADE  High-risk trust downgrade for "prisma@7.10.0" (possible package takeover)`; the install stops.
+
+**Cause.** With `trustPolicy: no-downgrade`, pnpm refuses a version with weaker trust evidence than any earlier-published one. Earlier `prisma` releases carried provenance attestation; 7.10.0 (published 2026-08-25) does not, so a Prisma 7 user on pnpm with that policy cannot install the version the upgrade guide names without an exemption.
+
+**Workaround.** Add the exact version to `trustPolicyExclude` in `pnpm-workspace.yaml` with a comment, as this repository does. Remove the entry once a `prisma` 7.x release carries provenance again.
+
+**Reproduction.**
+1. `trustPolicy: no-downgrade` in `pnpm-workspace.yaml`; add `@prisma/prisma7@7.10.0` as a dev dependency.
+2. `pnpm install`.
+
+**References.**
+- Workaround source: [`pnpm-workspace.yaml`](pnpm-workspace.yaml)
+
+---
+
+## Every Prisma 7 command needs `--config prisma7.config.ts` once Prisma 8 owns `prisma.config.ts`
+
+**Filed upstream:** pending — authored in a session without Linear access; please file in [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) and replace this line.
+**Product:** Prisma 8
+**Version:** `@prisma/prisma7@7.10.0`
+**First hit:** `examples/prisma7-adoption`, running `prisma7 migrate deploy` after renaming the config as the upgrade guide describes
+
+**Symptom.** `prisma7 migrate deploy` loads `prisma.config.ts`, which is now Prisma 8's file, and fails on its shape (`definePrismaConfig` with an `orm` section is not a Prisma 7 config).
+
+**Cause.** The `prisma7` binary is the Prisma 7 CLI with a different name; it still discovers `prisma.config.ts` by default. The guide renames the file to `prisma7.config.ts` but its script examples (`prisma7 generate`, `prisma7 migrate dev`) do not pass `--config`.
+
+**Workaround.** Pass `--config prisma7.config.ts` on every Prisma 7 command; the example's `v7:*` scripts do.
+
+**Reproduction.**
+1. A project with both config files, as the guide's phases 1 and 2 leave it.
+2. `pnpm prisma7 migrate status` without `--config`.
+
+**References.**
+- Workaround source: [`examples/prisma7-adoption/package.json`](examples/prisma7-adoption/package.json)
+

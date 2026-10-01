@@ -6,6 +6,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  dataTypeId,
 } from '@internal/framework-components/codec';
 import { FunctionCallExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -59,6 +60,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -77,6 +79,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
 }
 
 class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -103,6 +106,7 @@ class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
 const genericDescriptor = new GenericVectorDescriptor();
 const directDescriptor = new DirectVectorDescriptor();
 const adaptedDescriptor = postgresCodec(genericDescriptor, {
+  dataType: dataTypeId('demo/fixture'),
   nativeType(params) {
     expectTypeOf(params).toEqualTypeOf<VectorParams>();
     return `vector(${params.length})`;
@@ -157,8 +161,40 @@ test('postgresCodec requires explicit native and scalar projection behavior', ()
   postgresCodec(genericDescriptor, { nativeType: () => 'vector' });
 });
 
+class TextCodec extends CodecImpl<'demo/text@1', readonly ['equality'], string, string> {
+  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+    return value;
+  }
+  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return wire;
+  }
+  encodeJson(value: string): JsonValue {
+    return value;
+  }
+  decodeJson(json: JsonValue): string {
+    return String(json);
+  }
+}
+
+test('a factory option builds a codec of the family codec it adapts', () => {
+  postgresCodec(genericDescriptor, {
+    dataType: dataTypeId('demo/fixture'),
+    nativeType: () => 'vector',
+    jsonProjection: (expression) => expression,
+    factory: (descriptor, params) => () => new VectorCodec(descriptor, params.length),
+  });
+  postgresCodec(genericDescriptor, {
+    dataType: dataTypeId('demo/fixture'),
+    nativeType: () => 'vector',
+    jsonProjection: (expression) => expression,
+    // @ts-expect-error -- the adapted descriptor's factory promises the family codec, so the option cannot build another
+    factory: (descriptor) => () => new TextCodec(descriptor),
+  });
+});
+
 // @ts-expect-error -- direct descriptors must implement scalar JSON projection
 class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/missing-json@1' as const;
   override readonly traits: readonly CodecTrait[] = [];
   override readonly targetTypes: readonly string[] = [];
@@ -173,6 +209,7 @@ class MissingJsonProjection extends PostgresCodecDescriptor<VectorParams> {
 
 // @ts-expect-error -- direct descriptors must implement native type resolution
 class MissingNativeType extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/missing-native@1' as const;
   override readonly traits: readonly CodecTrait[] = [];
   override readonly targetTypes: readonly string[] = [];

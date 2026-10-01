@@ -1,0 +1,10 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model OutOfRange {
+  id    Int   @id
+  count Int   @default(100000000000000099)
+  small Int   @default(100000) @db.SmallInt
+  ints  Int[] @default([1, 100000000000000099])
+}

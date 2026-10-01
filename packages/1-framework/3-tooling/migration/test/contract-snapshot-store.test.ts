@@ -4,7 +4,6 @@ import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   contractSnapshotDir,
-  readContractSnapshotDts,
   readContractSnapshotJson,
   readContractSnapshotJsonTolerant,
   writeContractSnapshot,
@@ -228,53 +227,6 @@ describe('readContractSnapshotJsonTolerant', () => {
 
     await expect(readContractSnapshotJsonTolerant(migrationsDir, STORAGE_HASH)).rejects.toThrow(
       expect.objectContaining({ code: 'EISDIR' }),
-    );
-  });
-});
-
-describe('readContractSnapshotDts', () => {
-  let migrationsDir: string;
-
-  beforeEach(async () => {
-    migrationsDir = await mkdtemp(join(tmpdir(), 'contract-snapshot-store-'));
-  });
-
-  afterEach(async () => {
-    await rm(migrationsDir, { recursive: true, force: true });
-  });
-
-  it('reads back written contract.d.ts content', async () => {
-    await writeContractSnapshot(migrationsDir, STORAGE_HASH, {
-      contractJson: contractFixture(STORAGE_HASH),
-      contractDts: 'export type Contract = { field: string };',
-    });
-
-    const dts = await readContractSnapshotDts(migrationsDir, STORAGE_HASH);
-
-    expect(dts).toBe('export type Contract = { field: string };\n');
-  });
-
-  it('throws MIGRATION.CONTRACT_SNAPSHOT_MISSING naming the .d.ts path when the dir has contract.json but no contract.d.ts', async () => {
-    const dir = contractSnapshotDir(migrationsDir, STORAGE_HASH);
-    await mkdir(dir, { recursive: true });
-    await writeFile(
-      join(dir, 'contract.json'),
-      `${JSON.stringify(contractFixture(STORAGE_HASH))}\n`,
-    );
-
-    const expectedPath = join(dir, 'contract.d.ts');
-
-    await expect(readContractSnapshotDts(migrationsDir, STORAGE_HASH)).rejects.toThrow(
-      expect.objectContaining({
-        code: 'MIGRATION.CONTRACT_SNAPSHOT_MISSING',
-        why: expect.stringContaining(expectedPath),
-      }),
-    );
-  });
-
-  it('throws MIGRATION.CONTRACT_SNAPSHOT_MISSING when the whole entry is absent', async () => {
-    await expect(readContractSnapshotDts(migrationsDir, STORAGE_HASH)).rejects.toThrow(
-      expect.objectContaining({ code: 'MIGRATION.CONTRACT_SNAPSHOT_MISSING' }),
     );
   });
 });

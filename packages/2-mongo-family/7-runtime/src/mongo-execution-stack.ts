@@ -1,6 +1,6 @@
+import type { ContractExecutionSection } from '@internal/contract/types';
 import {
   createExecutionStack,
-  type ExecutionStack,
   type RuntimeAdapterDescriptor,
   type RuntimeAdapterInstance,
   type RuntimeDriverDescriptor,
@@ -10,17 +10,27 @@ import {
   type RuntimeTargetDescriptor,
   type RuntimeTargetInstance,
 } from '@internal/framework-components/execution';
-import { runtimeError } from '@internal/framework-components/runtime';
+import {
+  applyMutationDefaults,
+  assertMutationDefaultGeneratorsAvailable,
+  collectMutationDefaultGenerators,
+  type MutationDefaultGeneratorContributor,
+  type MutationDefaults,
+  type MutationDefaultsOptions,
+  runtimeError,
+} from '@internal/framework-components/runtime';
 import type { MongoCodec } from '@internal/mongo-codec';
 import { type MongoCodecRegistry, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoAdapter } from '@internal/mongo-lowering';
+import { blindCast } from '@internal/utils/casts';
 
 /**
  * Mongo-specific static contributions a runtime descriptor declares.
  *
  * Mirrors `SqlStaticContributions` in shape: a `codecs()` getter that yields a `MongoCodecRegistry` populated with this contributor's codecs. The registry is then walked by `createMongoExecutionContext` and folded into the single per-execution registry the runtime reads from at decode time.
  */
-export interface MongoStaticContributions {
+export interface MongoStaticContributions
+  extends Pick<MutationDefaultGeneratorContributor, 'mutationDefaultGenerators'> {
   readonly codecs: () => MongoCodecRegistry;
 }
 
@@ -91,7 +101,10 @@ export function createMongoExecutionStack<TTargetId extends string = 'mongo'>(op
     driver: options.driver,
     extensions: options.extensions,
   });
-  return stack as ExecutionStack<'mongo', TTargetId> as MongoExecutionStack<TTargetId>;
+  return blindCast<
+    MongoExecutionStack<TTargetId>,
+    'createExecutionStack keeps the Mongo descriptors it was given'
+  >(stack);
 }
 
 /**
@@ -107,11 +120,12 @@ export interface MongoCodecLookup {
 /**
  * Per-execution context aggregated from a `MongoExecutionStack`.
  *
- * Carries the user's contract, a read-only lookup over the codec registry composed from every stack contributor, and a back-reference to the stack itself so the runtime can reach the adapter without users threading it explicitly.
+ * Carries the user's contract, a read-only lookup over the codec registry composed from every stack contributor, a back-reference to the stack itself so the runtime can reach the adapter without users threading it explicitly, and `applyMutationDefaults`, which fills the contract's execution defaults from the composed generators.
  *
- * Mirrors SQL's `ExecutionContext` in role; Mongo's flavour is leaner because there are no parameterised codecs, JSON-schema validators, or mutation-default generators in scope yet.
+ * Mirrors SQL's `ExecutionContext` in role; Mongo's flavour is leaner because there are no parameterised codecs or JSON-schema validators in scope yet.
  */
-export interface MongoExecutionContext<TContract = unknown, TTargetId extends string = 'mongo'> {
+export interface MongoExecutionContext<TContract = unknown, TTargetId extends string = 'mongo'>
+  extends MutationDefaults {
   readonly contract: TContract;
   readonly codecs: MongoCodecLookup;
   readonly stack: MongoExecutionStack<TTargetId>;
@@ -133,6 +147,10 @@ export function createMongoExecutionContext<
     ...options.stack.extensions,
   ];
 
+  const generators = collectMutationDefaultGenerators(contributors);
+  const execution = executionOf(options.contract);
+  assertMutationDefaultGeneratorsAvailable(execution, generators);
+
   for (const contributor of contributors) {
     const contributed = contributor.codecs();
     for (const codec of iterateCodecs(contributed)) {
@@ -153,7 +171,16 @@ export function createMongoExecutionContext<
     contract: options.contract,
     codecs: registry,
     stack: options.stack,
+    applyMutationDefaults: (mutation: MutationDefaultsOptions) =>
+      applyMutationDefaults(execution, generators, mutation),
   });
+}
+
+function executionOf(contract: unknown): ContractExecutionSection | undefined {
+  return blindCast<
+    { readonly execution?: ContractExecutionSection } | null | undefined,
+    'the execution context receives a validated contract, whose execution section (when present) has the framework shape'
+  >(contract)?.execution;
 }
 
 function* iterateCodecs(registry: MongoCodecRegistry): Iterable<MongoCodec<string>> {

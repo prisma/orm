@@ -1,11 +1,12 @@
-import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
+import type { BlockSpecContext } from '../block-spec/types';
 import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type { AttributeCtx, AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './types';
 
 export interface AttributeSpecContext {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }
 
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
@@ -25,4 +26,6 @@ export interface AttributeSpecNamespace {
   readonly field: Readonly<Record<string, FieldAttributeSpecFactory>>;
 }
 
-export type BlockAttributeSpecFactory = () => AttributeSpec<never, AttributeCtx>;
+export type BlockAttributeSpecFactory = (
+  ctx: BlockSpecContext,
+) => AttributeSpec<never, AttributeCtx>;

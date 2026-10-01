@@ -4,4 +4,5 @@ model user {
   id    Char(36)  @id @default(uuid())
   email String
   settings String?
+  @@map("user")
 }

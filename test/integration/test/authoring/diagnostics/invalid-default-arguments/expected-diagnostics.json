@@ -12,7 +12,7 @@
       "startLine": 6
     },
     {
-      "code": "PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT",
+      "code": "PSL_INVALID_ATTRIBUTE_SYNTAX",
       "sourceId": "./schema.prisma",
       "startLine": 7
     }

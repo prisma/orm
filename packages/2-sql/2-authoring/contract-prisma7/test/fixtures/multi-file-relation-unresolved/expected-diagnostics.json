@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "c-note.prisma",
+    "line": 3,
+    "message": "Backrelation field \"Note.user\" has no matching FK-side relation on model \"User\". Add @relation(fields: [...], references: [...]) on the FK-side relation."
+  }
+]

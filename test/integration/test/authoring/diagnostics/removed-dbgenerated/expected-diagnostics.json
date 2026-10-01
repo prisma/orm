@@ -1,0 +1,11 @@
+{
+  "failureSummary": "PSL to SQL contract interpretation failed",
+  "diagnostics": [
+    {
+      "code": "PSL_UNKNOWN_DEFAULT_FUNCTION",
+      "sourceId": "./schema.prisma",
+      "startLine": 5,
+      "message": "Default function \"dbgenerated\" was removed. Write the SQL as a tagged literal: @default(sql`<expression>`). Supported functions: autoincrement(), cuid(2), nanoid(), nanoid(<2-255>), now(), ulid(), uuid(), uuid(4), uuid(7)."
+    }
+  ]
+}

@@ -21,6 +21,7 @@ import {
   resolveRecordedPath,
 } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { errorNoInvariantPath } from '@internal/migration-tools/errors';
 import { findPathWithDecision } from '@internal/migration-tools/migration-graph';
 import { ifDefined } from '@internal/utils/defined';
@@ -63,6 +64,8 @@ export interface ExecuteMigrateOptions<TFamilyId extends string, TTargetId exten
   readonly migrationsDir: string;
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly targetId: TTargetId;
+  /** Content check for contract snapshots the aggregate loader resolves. */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
   /**
    * Optional app-space ref override. When provided, the app space's
    * graph-walk targets this hash instead of `space.headRef.hash`.
@@ -137,6 +140,7 @@ export async function executeMigrate<TFamilyId extends string, TTargetId extends
     appContract: contract,
     extensions,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
   };
   const loaded = await buildContractSpaceAggregate(loadInputs);
   if (!loaded.ok) {

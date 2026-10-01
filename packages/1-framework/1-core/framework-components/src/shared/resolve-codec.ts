@@ -1,7 +1,7 @@
 import { blindCast } from '@internal/utils/casts';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
-import type { CodecInstanceContext, CodecRef } from './codec-types';
+import type { CodecInstanceContext, CodecLookupWithDescriptors, CodecRef } from './codec-types';
 import { runtimeError } from './runtime-error';
 
 export const CONTRACT_CODEC_DESCRIPTOR_MISSING = 'CONTRACT.CODEC_DESCRIPTOR_MISSING' as const;
@@ -17,31 +17,56 @@ export function resolveCodecDescriptorOrThrow(
   ref: CodecRef,
   code: 'CONTRACT.CODEC_DESCRIPTOR_MISSING' | 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
 ): AnyCodecDescriptor {
-  const descriptor = descriptorFor(ref.codecId);
-  if (!descriptor) {
-    throw runtimeError(code, `No codec descriptor registered for codecId '${ref.codecId}'.`, {
-      codecId: ref.codecId,
-    });
-  }
-  return descriptor;
+  return descriptorFor(ref.codecId) ?? codecDescriptorMissing(ref, code);
+}
+
+/** Throws the error for a codec reference no descriptor has, under the plane's `code`. */
+export function codecDescriptorMissing(
+  ref: CodecRef,
+  code: 'CONTRACT.CODEC_DESCRIPTOR_MISSING' | 'RUNTIME.CODEC_DESCRIPTOR_MISSING',
+): never {
+  throw runtimeError(code, `No codec descriptor registered for codecId '${ref.codecId}'.`, {
+    codecId: ref.codecId,
+  });
+}
+
+function isAbsentOrEmpty(typeParams: CodecRef['typeParams']): boolean {
+  return (
+    typeParams === undefined ||
+    (typeof typeParams === 'object' &&
+      typeParams !== null &&
+      !Array.isArray(typeParams) &&
+      Object.keys(typeParams).length === 0)
+  );
 }
 
 /**
  * Validates `ref.typeParams` against `descriptor.paramsSchema`.
  *
- * Parameterized codecs that omit `typeParams` have it normalized to `{}` before
- * validation (mirrors `ast-codec-resolver.ts` semantics). Throws
- * `RUNTIME.TYPE_PARAMS_INVALID` when the validator returns a `Promise` or
- * reports issues.
+ * A codec without a `paramsSchema` takes no params: it accepts absent or empty
+ * `typeParams` (a bare native-type alias carries `{}`) and rejects anything else.
+ * A parameterized codec whose ref omits `typeParams` validates `{}` (mirrors
+ * `ast-codec-resolver.ts` semantics). Throws `RUNTIME.TYPE_PARAMS_INVALID` when
+ * params are given to a codec without params, or when the validator returns a
+ * `Promise` or reports issues.
  */
 export function validateCodecTypeParams(descriptor: AnyCodecDescriptor, ref: CodecRef): unknown {
-  const normalized =
-    descriptor.isParameterized && ref.typeParams === undefined ? { ...ref, typeParams: {} } : ref;
+  const schema = descriptor.paramsSchema;
+  if (schema === undefined) {
+    if (!isAbsentOrEmpty(ref.typeParams)) {
+      throw runtimeError(
+        'RUNTIME.TYPE_PARAMS_INVALID',
+        `Invalid typeParams for codec '${ref.codecId}': unexpected typeParams for non-parameterized codec`,
+        { codecId: ref.codecId, typeParams: ref.typeParams },
+      );
+    }
+    return undefined;
+  }
 
   const result = blindCast<
     { value: unknown } | { issues: ReadonlyArray<{ message: string }> } | Promise<unknown>,
     'Standard Schema validate returns unknown; the spec guarantees this union shape'
-  >(descriptor.paramsSchema['~standard'].validate(normalized.typeParams));
+  >(schema['~standard'].validate(ref.typeParams ?? {}));
 
   if (result instanceof Promise) {
     throw runtimeError(
@@ -77,4 +102,17 @@ export function materializeCodec(
 ): Codec {
   const validated = validateCodecTypeParams(descriptor, ref);
   return descriptor.factory(validated)(ctx);
+}
+
+/**
+ * Builds the codec a codec reference names with the reference's type parameters, so a parameterized codec checks values against them. `undefined` when no descriptor has the id.
+ */
+export function codecForRef(
+  lookup: Pick<CodecLookupWithDescriptors, 'descriptorFor'>,
+  ref: CodecRef,
+): Codec | undefined {
+  const descriptor = lookup.descriptorFor(ref.codecId);
+  return descriptor === undefined
+    ? undefined
+    : materializeCodec(descriptor, ref, { name: ref.codecId });
 }

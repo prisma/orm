@@ -41,7 +41,6 @@ function lowerEmail(column: ColumnRef, ...args: Array<AnyOperationArg>) {
     returns: stringReturn,
     lowering: {
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'lower({{self}})',
     },
   });

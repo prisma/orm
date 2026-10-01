@@ -8,7 +8,22 @@ import type { MongoCodecRegistry } from '@internal/mongo-codec';
 import type { Document, MongoValue } from '@internal/mongo-value';
 import { MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
+import { isInternalError } from '@internal/utils/internal-error';
 import { isStructuredError } from '@internal/utils/structured-error';
+
+/**
+ * A value the driver serializes as one BSON value rather than a document: a `Date`, `RegExp` or `Uint8Array`, or an instance of a `bson` class, recognised by its `_bsontype` tag because the driver's classes come from its own load of `bson`. A plain object carrying a `_bsontype` key is a stored subdocument, not a class.
+ */
+function isWireScalar(value: object): boolean {
+  if (value instanceof Date || value instanceof RegExp || value instanceof Uint8Array) return true;
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return (
+    prototype !== Object.prototype &&
+    prototype !== null &&
+    typeof Reflect.get(value, '_bsontype') === 'string'
+  );
+}
 
 /**
  * Resolves a `MongoValue` (which may contain `MongoParamRef` leaves) into the
@@ -23,7 +38,8 @@ import { isStructuredError } from '@internal/utils/structured-error';
  * (mirroring SQL's `wrapEncodeFailure` shape) with `{ label, codec }` details
  * and the original error attached on `cause`. A structured envelope (any error
  * with a dotted `code`, per `isStructuredError`) is re-thrown verbatim so
- * codec-raised envelopes and nested resolvers don't get double-wrapped.
+ * codec-raised envelopes and nested resolvers don't get double-wrapped, and
+ * so is an `InternalError`.
  *
  * `ctx: CodecCallContext` is forwarded verbatim to every
  * `codec.encode(value, ctx)` call. The same `ctx` reference is also passed
@@ -70,10 +86,7 @@ export async function resolveValue(
     }
     return value.value;
   }
-  if (value === null || typeof value !== 'object') {
-    return value;
-  }
-  if (value instanceof Date) {
+  if (value === null || typeof value !== 'object' || isWireScalar(value)) {
     return value;
   }
   if (Array.isArray(value)) {
@@ -108,8 +121,7 @@ async function resolveDraftSlot(
   if (value instanceof MongoParamRef) {
     return resolveValue(value, codecs, ctx);
   }
-  if (value === null || typeof value !== 'object') return value;
-  if (value instanceof Date) return value;
+  if (value === null || typeof value !== 'object' || isWireScalar(value)) return value;
   if (Array.isArray(value)) {
     const tasks = Promise.all(value.map((v: unknown) => resolveDraftSlot(v, codecs, ctx)));
     return raceAgainstAbort(tasks, ctx.signal, 'encode');
@@ -154,16 +166,25 @@ function paramRefLabel(ref: MongoParamRef, codecId: string): string {
   return ref.name ?? codecId;
 }
 
+/**
+ * Every encode failure names the parameter, or the field and collection when the ORM supplied them. A codec's own `RUNTIME.ENCODE_FAILED` keeps its code and details, with the label added; any other structured envelope and an `InternalError` pass through unchanged; everything else is wrapped in a `RUNTIME.ENCODE_FAILED` envelope. The original error is the `cause`.
+ */
 function wrapEncodeFailure(error: unknown, ref: MongoParamRef, codecId: string): never {
-  if (isStructuredError(error)) {
+  if (isInternalError(error)) throw error;
+  const codecDetails = isStructuredError(error) ? error.meta : undefined;
+  if (isStructuredError(error) && error.code !== 'RUNTIME.ENCODE_FAILED') {
     throw error;
   }
   const label = paramRefLabel(ref, codecId);
   const message = error instanceof Error ? error.message : String(error);
+  const subject =
+    ref.name !== undefined && ref.collection !== undefined
+      ? `field ${ref.name} in collection '${ref.collection}'`
+      : `parameter ${label}`;
   const wrapped = runtimeError(
     'RUNTIME.ENCODE_FAILED',
-    `Failed to encode parameter ${label} with codec '${codecId}': ${message}`,
-    { label, codec: codecId },
+    `Failed to encode ${subject} with codec '${codecId}': ${message}`,
+    { ...codecDetails, label, ...ifDefined('collection', ref.collection), codec: codecId },
   );
   wrapped.cause = error;
   throw wrapped;

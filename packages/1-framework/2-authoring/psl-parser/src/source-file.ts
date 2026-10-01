@@ -1,3 +1,7 @@
+import type { PslSpan } from '@internal/framework-components/psl-ast';
+import { InternalError } from '@internal/utils/internal-error';
+import type { SyntaxNode } from './syntax/red';
+
 const CARRIAGE_RETURN = 13;
 const LINE_FEED = 10;
 
@@ -12,10 +16,12 @@ export interface Range {
 }
 
 export class SourceFile {
+  readonly #filename: string;
   readonly #text: string;
   readonly #lineStarts: readonly number[];
 
-  constructor(text: string) {
+  constructor(filename: string, text: string) {
+    this.#filename = filename;
     this.#text = text;
     const lineStarts: number[] = [0];
     for (let offset = 0; offset < text.length; offset++) {
@@ -24,6 +30,10 @@ export class SourceFile {
       }
     }
     this.#lineStarts = lineStarts;
+  }
+
+  get filename(): string {
+    return this.#filename;
   }
 
   get text(): string {
@@ -79,6 +89,25 @@ export class SourceFile {
     return clamp(lineStart + position.character, lineStart, lineEnd);
   }
 
+  offsetToPslPosition(offset: number): PslSpan['start'] {
+    const position = this.positionAt(offset);
+    return { offset, line: position.line + 1, column: position.character + 1 };
+  }
+
+  rangeToPslSpan(range: Range): PslSpan {
+    return {
+      start: this.offsetToPslPosition(this.offsetAt(range.start)),
+      end: this.offsetToPslPosition(this.offsetAt(range.end)),
+    };
+  }
+
+  pslSpanToRange(span: PslSpan): Range {
+    return {
+      start: this.positionAt(span.start.offset),
+      end: this.positionAt(span.end.offset),
+    };
+  }
+
   #lineStartAt(line: number): number {
     return this.#lineStarts[line] ?? 0;
   }
@@ -100,6 +129,55 @@ export class SourceFile {
       }
     }
     return low;
+  }
+}
+
+export class PslSources {
+  readonly #sourcesByRoot = new Map<SyntaxNode, SourceFile>();
+
+  constructor(entries: Iterable<readonly [SyntaxNode, SourceFile]>) {
+    for (const [root, sourceFile] of entries) {
+      this.#sourcesByRoot.set(root, sourceFile);
+    }
+  }
+
+  /**
+   * A new registry uniting this one with `others` — e.g. the per-document
+   * `PslSources` registries `parse()` returns for each member of a
+   * multi-file schema, united into the one registry `buildSymbolTable` and
+   * the interpreters expect.
+   */
+  merge(...others: readonly PslSources[]): PslSources {
+    return new PslSources([
+      ...this.#sourcesByRoot,
+      ...others.flatMap((other) => [...other.#sourcesByRoot]),
+    ]);
+  }
+
+  sourceFileNamed(filename: string): SourceFile {
+    let match: SourceFile | undefined;
+    for (const sourceFile of this.#sourcesByRoot.values()) {
+      if (sourceFile.filename !== filename) continue;
+      if (match !== undefined && match.text !== sourceFile.text) {
+        throw new InternalError(
+          `Ambiguous PSL diagnostic filename "${filename}": registered sources have different text`,
+        );
+      }
+      match = sourceFile;
+    }
+    if (match === undefined) {
+      throw new InternalError(`No SourceFile registered for PSL diagnostic filename "${filename}"`);
+    }
+    return match;
+  }
+
+  sourceFileFor(node: SyntaxNode): SourceFile {
+    const root = node.root();
+    const sourceFile = this.#sourcesByRoot.get(root);
+    if (sourceFile === undefined) {
+      throw new InternalError('No SourceFile registered for PSL syntax root');
+    }
+    return sourceFile;
   }
 }
 

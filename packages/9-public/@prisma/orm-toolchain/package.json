@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-toolchain",
-  "version": "8.0.0-rc.9",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-framework": "workspace:8.0.0-rc.9",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
     "@vercel/detect-agent": "^1.2.4",
     "arktype": "catalog:",
     "c12": "^3.3.4",
@@ -29,26 +29,27 @@
     "prettier": "^3.9.6",
     "string-width": "^8.2.2",
     "strip-ansi": "^7.2.0",
+    "tinyglobby": "catalog:",
     "vscode-languageserver": "catalog:",
     "vscode-languageserver-textdocument": "catalog:",
     "wrap-ansi": "^10.0.0"
   },
   "devDependencies": {
-    "@internal/cli": "workspace:8.0.0-rc.9",
-    "@internal/cli-telemetry": "workspace:8.0.0-rc.9",
-    "@internal/config-loader": "workspace:8.0.0-rc.9",
-    "@internal/emitter": "workspace:8.0.0-rc.9",
-    "@internal/language-server": "workspace:8.0.0-rc.9",
-    "@internal/migration-tools": "workspace:8.0.0-rc.9",
-    "@internal/publish-surface": "workspace:8.0.0-rc.9",
-    "@repo/tsconfig": "workspace:8.0.0-rc.9",
-    "@repo/tsdown": "workspace:8.0.0-rc.9",
-    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.9",
+    "@internal/cli": "workspace:8.0.0-rc.14",
+    "@internal/cli-telemetry": "workspace:8.0.0-rc.14",
+    "@internal/config-loader": "workspace:8.0.0-rc.14",
+    "@internal/emitter": "workspace:8.0.0-rc.14",
+    "@internal/language-server": "workspace:8.0.0-rc.14",
+    "@internal/migration-tools": "workspace:8.0.0-rc.14",
+    "@internal/publish-surface": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
+    "@internal/vite-plugin-contract-emit": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/cli-engine": "0.3.0",
+    "@prisma/cli-engine": "0.6.2",
     "typescript": ">=5.9",
     "vite": "^7.0.0 || ^8.0.0"
   },

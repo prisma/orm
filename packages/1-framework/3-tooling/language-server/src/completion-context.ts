@@ -1,17 +1,21 @@
 import {
-  AttributeArgAst,
+  ArrayLiteralAst,
   AttributeArgListAst,
   any,
   type BracedBlock,
   CompositeTypeDeclarationAst,
   type DocumentAst,
+  type ExpressionAst,
   FieldAttributeAst,
   FieldDeclarationAst,
+  FunctionCallAst,
   GenericBlockDeclarationAst,
+  IdentifierAst,
   KeyValuePairAst,
   ModelAttributeAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
+  ObjectLiteralExprAst,
   type Position,
   type QualifiedNameAst,
   type SourceFile,
@@ -21,6 +25,16 @@ import {
   type TokenAtOffset,
   TypesBlockAst,
 } from '@internal/psl-parser/syntax';
+import {
+  type AttributeArgumentPathStep,
+  argumentAtCursor,
+  argumentSiblings,
+  attributeCursor,
+  betweenDelimiters,
+  isWithinAttributeOrOpenArguments,
+  listElementAtCursor,
+  recordFieldAtCursor,
+} from './attribute-syntax-context';
 
 export interface ClassifyPslCompletionContextInput {
   readonly document: DocumentAst;
@@ -67,30 +81,49 @@ export interface GenericBlockValueCompletionContext {
   readonly replacementStartOffset: number;
 }
 
-export interface FieldAttributeNameCompletionContext {
-  readonly kind: 'fieldAttributeName';
+interface CompletionReplacement {
   readonly offset: number;
   readonly replacementStartOffset: number;
-  readonly attribute: FieldAttributeAst;
+  readonly replacementEndOffset: number;
+}
+
+interface AttributeNamePosition extends CompletionReplacement {
+  readonly hasArgumentList: boolean;
+}
+
+interface FieldAttributeOwner {
+  readonly ownerKind: 'field';
   readonly field: FieldDeclarationAst;
   readonly model: ModelDeclarationAst;
 }
 
-export interface ModelAttributeNameCompletionContext {
-  readonly kind: 'modelAttributeName';
-  readonly offset: number;
-  readonly replacementStartOffset: number;
-  readonly attribute: ModelAttributeAst;
+interface ModelAttributeOwner {
+  readonly ownerKind: 'model';
   readonly model: ModelDeclarationAst;
 }
 
-export interface BlockAttributeNameCompletionContext {
-  readonly kind: 'blockAttributeName';
-  readonly offset: number;
-  readonly replacementStartOffset: number;
-  readonly attribute: ModelAttributeAst;
+interface BlockAttributeOwner {
+  readonly ownerKind: 'block';
   readonly block: GenericBlockDeclarationAst;
   readonly blockKeyword: string;
+}
+
+export interface FieldAttributeNameCompletionContext
+  extends FieldAttributeOwner,
+    AttributeNamePosition {
+  readonly kind: 'fieldAttributeName';
+}
+
+export interface ModelAttributeNameCompletionContext
+  extends ModelAttributeOwner,
+    AttributeNamePosition {
+  readonly kind: 'modelAttributeName';
+}
+
+export interface BlockAttributeNameCompletionContext
+  extends BlockAttributeOwner,
+    AttributeNamePosition {
+  readonly kind: 'blockAttributeName';
 }
 
 export type AttributeNameCompletionContext =
@@ -98,39 +131,97 @@ export type AttributeNameCompletionContext =
   | FieldAttributeNameCompletionContext
   | ModelAttributeNameCompletionContext;
 
-export interface FieldAttributeNamedKeyCompletionContext {
+export interface AttributeArgumentPosition extends CompletionReplacement {
+  readonly attributeName: string;
+  readonly path: readonly AttributeArgumentPathStep[];
+}
+
+export interface AttributeNamedKeyPosition extends AttributeArgumentPosition {
+  readonly existingNamedKeys: readonly string[];
+  readonly hasColon: boolean;
+}
+
+export interface AttributeArgumentSlotPosition extends AttributeNamedKeyPosition {
+  readonly positionalIndex: number;
+}
+
+export interface AttributeValuePosition extends AttributeArgumentPosition {
+  readonly syntax: 'scalar' | 'functionName';
+}
+
+export interface FieldAttributeNamedKeyCompletionContext
+  extends FieldAttributeOwner,
+    AttributeNamedKeyPosition {
   readonly kind: 'fieldAttributeNamedKey';
-  readonly offset: number;
-  readonly replacementStartOffset: number;
-  readonly attributeName: string;
-  readonly attribute: FieldAttributeAst;
-  readonly field: FieldDeclarationAst;
-  readonly model: ModelDeclarationAst;
 }
 
-export interface ModelAttributeNamedKeyCompletionContext {
+export interface ModelAttributeNamedKeyCompletionContext
+  extends ModelAttributeOwner,
+    AttributeNamedKeyPosition {
   readonly kind: 'modelAttributeNamedKey';
-  readonly offset: number;
-  readonly replacementStartOffset: number;
-  readonly attributeName: string;
-  readonly attribute: ModelAttributeAst;
-  readonly model: ModelDeclarationAst;
 }
 
-export interface BlockAttributeNamedKeyCompletionContext {
+export interface BlockAttributeNamedKeyCompletionContext
+  extends BlockAttributeOwner,
+    AttributeNamedKeyPosition {
   readonly kind: 'blockAttributeNamedKey';
-  readonly offset: number;
-  readonly replacementStartOffset: number;
-  readonly attributeName: string;
-  readonly attribute: ModelAttributeAst;
-  readonly block: GenericBlockDeclarationAst;
-  readonly blockKeyword: string;
 }
+
+export interface FieldAttributeArgumentSlotCompletionContext
+  extends FieldAttributeOwner,
+    AttributeArgumentSlotPosition {
+  readonly kind: 'fieldAttributeArgumentSlot';
+}
+
+export interface ModelAttributeArgumentSlotCompletionContext
+  extends ModelAttributeOwner,
+    AttributeArgumentSlotPosition {
+  readonly kind: 'modelAttributeArgumentSlot';
+}
+
+export interface BlockAttributeArgumentSlotCompletionContext
+  extends BlockAttributeOwner,
+    AttributeArgumentSlotPosition {
+  readonly kind: 'blockAttributeArgumentSlot';
+}
+
+export type AttributeArgumentSlotCompletionContext =
+  | FieldAttributeArgumentSlotCompletionContext
+  | ModelAttributeArgumentSlotCompletionContext
+  | BlockAttributeArgumentSlotCompletionContext;
 
 export type AttributeNamedKeyCompletionContext =
   | BlockAttributeNamedKeyCompletionContext
   | FieldAttributeNamedKeyCompletionContext
   | ModelAttributeNamedKeyCompletionContext;
+
+export interface FieldAttributeValueCompletionContext
+  extends FieldAttributeOwner,
+    AttributeValuePosition {
+  readonly kind: 'fieldAttributeValue';
+}
+
+export interface ModelAttributeValueCompletionContext
+  extends ModelAttributeOwner,
+    AttributeValuePosition {
+  readonly kind: 'modelAttributeValue';
+}
+
+export interface BlockAttributeValueCompletionContext
+  extends BlockAttributeOwner,
+    AttributeValuePosition {
+  readonly kind: 'blockAttributeValue';
+}
+
+export type AttributeValueCompletionContext =
+  | FieldAttributeValueCompletionContext
+  | ModelAttributeValueCompletionContext
+  | BlockAttributeValueCompletionContext;
+
+export type AttributeArgumentCompletionContext =
+  | AttributeNamedKeyCompletionContext
+  | AttributeArgumentSlotCompletionContext
+  | AttributeValueCompletionContext;
 
 export type DeclarationKeywordCompletionScope = 'document' | 'namespace';
 
@@ -147,7 +238,7 @@ export interface UnsupportedPslCompletionContext {
 
 export type PslCompletionContext =
   | AttributeNameCompletionContext
-  | AttributeNamedKeyCompletionContext
+  | AttributeArgumentCompletionContext
   | DeclarationKeywordCompletionContext
   | GenericBlockKeyCompletionContext
   | GenericBlockValueCompletionContext
@@ -182,7 +273,7 @@ export function classifyPslCompletionContext(
 
   const attributeClassifierInput = {
     offset,
-    node: at.leftBiased()?.parent ?? at.rightBiased()?.parent,
+    node: attributeAnchor(at),
     replacementStartOffset,
   };
   const attributeContext =
@@ -418,7 +509,7 @@ interface AttributeClassifierInput {
 
 function classifyFieldAttribute(input: AttributeClassifierInput): PslCompletionContext | undefined {
   const attribute = input.node?.findAncestor(FieldAttributeAst.cast);
-  if (attribute === undefined || attribute.syntax.isOutside(input.offset)) {
+  if (attribute === undefined || !isWithinAttributeOrOpenArguments(attribute, input.offset)) {
     return undefined;
   }
   const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
@@ -426,29 +517,13 @@ function classifyFieldAttribute(input: AttributeClassifierInput): PslCompletionC
   if (field === undefined || model === undefined) {
     return UNSUPPORTED;
   }
-  if (isAttributeNamePosition(attribute, input.offset)) {
-    return {
-      kind: 'fieldAttributeName',
-      offset: input.offset,
-      replacementStartOffset: input.replacementStartOffset,
-      attribute,
-      field,
-      model,
-    };
-  }
-  const attributeName = attributeNamedKeyName(attribute, input.offset);
-  if (attributeName === undefined) {
-    return UNSUPPORTED;
-  }
-  return {
-    kind: 'fieldAttributeNamedKey',
-    offset: input.offset,
-    replacementStartOffset: input.replacementStartOffset,
-    attributeName,
-    attribute,
-    field,
-    model,
-  };
+  const owner: FieldAttributeOwner = { ownerKind: 'field', field, model };
+  return classifyAttributePosition(attribute, input, {
+    name: (position) => ({ kind: 'fieldAttributeName', ...position, ...owner }),
+    namedKey: (position) => ({ kind: 'fieldAttributeNamedKey', ...position, ...owner }),
+    argumentSlot: (position) => ({ kind: 'fieldAttributeArgumentSlot', ...position, ...owner }),
+    value: (position) => ({ kind: 'fieldAttributeValue', ...position, ...owner }),
+  });
 }
 
 function classifyGenericBlockAttribute(
@@ -463,29 +538,13 @@ function classifyGenericBlockAttribute(
   if (blockKeyword === undefined || blockKeyword.length === 0) {
     return UNSUPPORTED;
   }
-  if (isAttributeNamePosition(attribute, input.offset)) {
-    return {
-      kind: 'blockAttributeName',
-      offset: input.offset,
-      replacementStartOffset: input.replacementStartOffset,
-      attribute,
-      block,
-      blockKeyword,
-    };
-  }
-  const attributeName = attributeNamedKeyName(attribute, input.offset);
-  if (attributeName === undefined) {
-    return UNSUPPORTED;
-  }
-  return {
-    kind: 'blockAttributeNamedKey',
-    offset: input.offset,
-    replacementStartOffset: input.replacementStartOffset,
-    attributeName,
-    attribute,
-    block,
-    blockKeyword,
-  };
+  const owner: BlockAttributeOwner = { ownerKind: 'block', block, blockKeyword };
+  return classifyAttributePosition(attribute, input, {
+    name: (position) => ({ kind: 'blockAttributeName', ...position, ...owner }),
+    namedKey: (position) => ({ kind: 'blockAttributeNamedKey', ...position, ...owner }),
+    argumentSlot: (position) => ({ kind: 'blockAttributeArgumentSlot', ...position, ...owner }),
+    value: (position) => ({ kind: 'blockAttributeValue', ...position, ...owner }),
+  });
 }
 
 function classifyModelAttribute(input: AttributeClassifierInput): PslCompletionContext | undefined {
@@ -497,97 +556,193 @@ function classifyModelAttribute(input: AttributeClassifierInput): PslCompletionC
   if (model === undefined) {
     return undefined;
   }
-  if (isAttributeNamePosition(attribute, input.offset)) {
-    return {
-      kind: 'modelAttributeName',
-      offset: input.offset,
-      replacementStartOffset: input.replacementStartOffset,
-      attribute,
-      model,
-    };
-  }
-  const attributeName = attributeNamedKeyName(attribute, input.offset);
-  if (attributeName === undefined) {
-    return UNSUPPORTED;
-  }
-  return {
-    kind: 'modelAttributeNamedKey',
-    offset: input.offset,
-    replacementStartOffset: input.replacementStartOffset,
-    attributeName,
-    attribute,
-    model,
-  };
+  const owner: ModelAttributeOwner = { ownerKind: 'model', model };
+  return classifyAttributePosition(attribute, input, {
+    name: (position) => ({ kind: 'modelAttributeName', ...position, ...owner }),
+    namedKey: (position) => ({ kind: 'modelAttributeNamedKey', ...position, ...owner }),
+    argumentSlot: (position) => ({ kind: 'modelAttributeArgumentSlot', ...position, ...owner }),
+    value: (position) => ({ kind: 'modelAttributeValue', ...position, ...owner }),
+  });
 }
 
 function activeModelAttribute(input: AttributeClassifierInput): ModelAttributeAst | undefined {
   const attribute = input.node?.findAncestor(ModelAttributeAst.cast);
-  if (attribute === undefined || attribute.syntax.isOutside(input.offset)) {
+  if (attribute === undefined || !isWithinAttributeOrOpenArguments(attribute, input.offset)) {
     return undefined;
   }
   return attribute;
 }
 
-function isAttributeNamePosition(
-  attribute: FieldAttributeAst | ModelAttributeAst,
-  offset: number,
-): boolean {
-  const argList = attribute.argList();
-  return !argList?.syntax.isInside(offset);
+function attributeAnchor(at: TokenAtOffset): SyntaxNode | undefined {
+  const token = at.leftBiased() ?? at.rightBiased();
+  return token === undefined ? undefined : skipTriviaToken(token, 'prev')?.parent;
 }
 
-function attributeNamedKeyName(
+interface AttributeContextFactory {
+  readonly name: (position: AttributeNamePosition) => AttributeNameCompletionContext;
+  readonly namedKey: (position: AttributeNamedKeyPosition) => AttributeNamedKeyCompletionContext;
+  readonly argumentSlot: (
+    position: AttributeArgumentSlotPosition,
+  ) => AttributeArgumentSlotCompletionContext;
+  readonly value: (position: AttributeValuePosition) => AttributeValueCompletionContext;
+}
+
+interface AttributeCursor extends CompletionReplacement {
+  readonly attributeName: string;
+  readonly preceding: SyntaxToken | undefined;
+  readonly factory: AttributeContextFactory;
+}
+
+function classifyAttributePosition(
   attribute: FieldAttributeAst | ModelAttributeAst,
-  offset: number,
-): string | undefined {
-  const argList = attribute.argList();
-  if (argList === undefined || argList.syntax.isOutside(offset)) {
-    return undefined;
-  }
-  const rparen = argList.rparen();
-  if (rparen !== undefined && offset >= rparen.endOffset) {
-    return undefined;
-  }
-  for (const arg of argList.args()) {
-    const colon = arg.colon();
-    if (
-      colon !== undefined &&
-      offset > colon.offset &&
-      offset >= arg.syntax.offset &&
-      offset <= arg.syntax.endOffset
-    ) {
-      return undefined;
-    }
-  }
-  const token = attribute.syntax.tokenAtOffset(offset).leftBiased();
-  if (token?.kind === 'Colon') {
-    return undefined;
-  }
-  const node = token?.parent;
-  const activeArg = node?.findAncestor(AttributeArgAst.cast);
-  if (activeArg === undefined && node?.kind !== 'AttributeArgList') {
-    return undefined;
-  }
-  if (activeArg !== undefined) {
-    const colon = activeArg.colon();
-    if (colon !== undefined && offset > colon.offset) {
-      return undefined;
-    }
-    const value = activeArg.value();
-    if (
-      colon === undefined &&
-      value !== undefined &&
-      value.syntax.kind !== 'Identifier' &&
-      value.syntax.isInside(offset)
-    ) {
-      return undefined;
-    }
+  input: AttributeClassifierInput,
+  factory: AttributeContextFactory,
+): PslCompletionContext {
+  const args = attribute.argList();
+  if (args === undefined || input.offset < args.syntax.offset) {
+    return factory.name({
+      offset: input.offset,
+      replacementStartOffset: input.replacementStartOffset,
+      replacementEndOffset: attribute.name()?.syntax.endOffset ?? input.offset,
+      hasArgumentList: args !== undefined,
+    });
   }
   const attributeName = attribute.name()?.identifier()?.name();
-  if (attributeName === undefined) {
-    return undefined;
+  if (attributeName === undefined) return UNSUPPORTED;
+  const at = attribute.syntax.tokenAtOffset(input.offset);
+  const right = at.rightBiased();
+  const token = isValueToken(right) ? right : at.leftBiased();
+  const replaceToken = isValueToken(token);
+  return classifyAttributeArguments(
+    {
+      offset: input.offset,
+      replacementStartOffset: replaceToken ? token.offset : input.offset,
+      replacementEndOffset: replaceToken ? token.endOffset : input.offset,
+      attributeName,
+      preceding: attributeCursor(attribute, input.offset).preceding,
+      factory,
+    },
+    args,
+    [],
+  );
+}
+
+function argumentPosition(
+  cursor: AttributeCursor,
+  path: readonly AttributeArgumentPathStep[],
+): AttributeArgumentPosition {
+  return {
+    offset: cursor.offset,
+    replacementStartOffset: cursor.replacementStartOffset,
+    replacementEndOffset: cursor.replacementEndOffset,
+    attributeName: cursor.attributeName,
+    path,
+  };
+}
+
+function classifyAttributeArguments(
+  cursor: AttributeCursor,
+  args: AttributeArgListAst | FunctionCallAst,
+  path: readonly AttributeArgumentPathStep[],
+): PslCompletionContext {
+  if (!betweenDelimiters(cursor.offset, args.lparen(), args.rparen())) return UNSUPPORTED;
+  const active = argumentAtCursor(cursor, args);
+  const { precedingPositionalCount: positionalIndex, otherNamedKeys: existingNamedKeys } =
+    argumentSiblings(args, active, cursor.offset);
+  const position = argumentPosition(cursor, path);
+  if (active === undefined) {
+    return followsSeparator(cursor, ['LParen', 'Comma'])
+      ? cursor.factory.argumentSlot({
+          ...position,
+          positionalIndex,
+          existingNamedKeys,
+          hasColon: false,
+        })
+      : UNSUPPORTED;
   }
-  return attributeName;
+  const colon = active.colon();
+  if (colon !== undefined) {
+    if (cursor.offset <= colon.offset)
+      return cursor.factory.namedKey({ ...position, existingNamedKeys, hasColon: true });
+    const name = active.name()?.name();
+    return name === undefined
+      ? UNSUPPORTED
+      : classifyAttributeExpression(cursor, active.value(), [
+          ...path,
+          { kind: 'namedArgument', name },
+        ]);
+  }
+  const value = active.value();
+  if (
+    value === undefined ||
+    (value instanceof IdentifierAst && value.syntax.isInside(cursor.offset))
+  ) {
+    return cursor.factory.argumentSlot({
+      ...position,
+      positionalIndex,
+      existingNamedKeys,
+      hasColon: false,
+    });
+  }
+  return classifyAttributeExpression(cursor, value, [
+    ...path,
+    { kind: 'positionalArgument', index: positionalIndex },
+  ]);
+}
+
+function classifyAttributeExpression(
+  cursor: AttributeCursor,
+  expression: ExpressionAst | undefined,
+  path: readonly AttributeArgumentPathStep[],
+): PslCompletionContext {
+  if (expression === undefined)
+    return cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
+  if (expression instanceof ArrayLiteralAst) {
+    if (!betweenDelimiters(cursor.offset, expression.lbracket(), expression.rbracket()))
+      return UNSUPPORTED;
+    const element = listElementAtCursor(cursor, expression);
+    return element !== undefined || followsSeparator(cursor, ['LBracket', 'Comma'])
+      ? classifyAttributeExpression(cursor, element, [...path, { kind: 'listElement' }])
+      : UNSUPPORTED;
+  }
+  if (expression instanceof ObjectLiteralExprAst) {
+    const closing = expression.rbrace();
+    if (closing !== undefined && cursor.offset >= closing.endOffset) return UNSUPPORTED;
+    const field = recordFieldAtCursor(cursor, expression);
+    return field !== undefined
+      ? classifyAttributeExpression(cursor, field.value(), [...path, { kind: 'recordValue' }])
+      : UNSUPPORTED;
+  }
+  if (expression instanceof FunctionCallAst) {
+    const opening = expression.lparen();
+    if (opening !== undefined && cursor.offset > opening.offset) {
+      const name = expression.name();
+      const identifier = name?.identifier()?.name();
+      return identifier !== undefined && name?.isSimpleName(identifier) === true
+        ? classifyAttributeArguments(cursor, expression, [
+            ...path,
+            { kind: 'functionCall', name: identifier },
+          ])
+        : UNSUPPORTED;
+    }
+    return expression.name()?.syntax.isInside(cursor.offset) === true
+      ? cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'functionName' })
+      : UNSUPPORTED;
+  }
+  return expression.syntax.isOutside(cursor.offset)
+    ? UNSUPPORTED
+    : cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
+}
+
+function isValueToken(token: SyntaxToken | undefined): token is SyntaxToken {
+  return (
+    token !== undefined &&
+    (token.kind === 'Ident' || token.kind === 'StringLiteral' || token.kind === 'NumberLiteral')
+  );
+}
+
+function followsSeparator(cursor: AttributeCursor, kinds: readonly string[]): boolean {
+  return kinds.includes(cursor.preceding?.kind ?? '');
 }
 
 function classifyGenericBlockParameter(input: {

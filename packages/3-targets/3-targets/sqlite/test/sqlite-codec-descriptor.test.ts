@@ -6,6 +6,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecRef,
+  dataTypeId,
 } from '@internal/framework-components/codec';
 import {
   ColumnRef,
@@ -78,6 +79,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -108,6 +110,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
 }
 
 class DirectVectorDescriptor extends SqliteCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -180,6 +183,7 @@ describe('SqliteCodecDescriptor', () => {
 describe('sqliteCodec', () => {
   it('preserves the wrapped descriptor contract and materialization behavior', () => {
     const descriptor = sqliteCodec(genericVectorDescriptor, {
+      dataType: dataTypeId('demo/fixture'),
       jsonProjection: (expression, params) =>
         FunctionCallExpr.of('project_generic_vector', [expression, LiteralExpr.of(params.length)]),
     });

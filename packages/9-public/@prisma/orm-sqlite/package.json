@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-sqlite",
-  "version": "8.0.0-rc.9",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,16 +16,17 @@
     "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.9",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.9",
-    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.9",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.9",
-    "pathe": "^2.0.3"
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.14",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
+    "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.14",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
+    "pathe": "^2.0.3",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/sqlite": "workspace:8.0.0-rc.9",
-    "@repo/tsconfig": "workspace:8.0.0-rc.9",
-    "@repo/tsdown": "workspace:8.0.0-rc.9",
+    "@internal/sqlite": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -83,6 +84,7 @@
     "./family/ir": "./dist/family__ir.mjs",
     "./family/migration": "./dist/family__migration.mjs",
     "./family/pack": "./dist/family__pack.mjs",
+    "./family/psl-build": "./dist/family__psl-build.mjs",
     "./family/psl-infer": "./dist/family__psl-infer.mjs",
     "./family/runtime": "./dist/family__runtime.mjs",
     "./family/verify": "./dist/family__verify.mjs",
@@ -100,6 +102,7 @@
     "./family-contract/pack-types": "./dist/family-contract__pack-types.mjs",
     "./family-contract/referential-action-sql": "./dist/family-contract__referential-action-sql.mjs",
     "./family-contract/resolve-storage-table": "./dist/family-contract__resolve-storage-table.mjs",
+    "./family-contract/sql-expression": "./dist/family-contract__sql-expression.mjs",
     "./family-contract/types": "./dist/family-contract__types.mjs",
     "./family-contract/validators": "./dist/family-contract__validators.mjs",
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
@@ -133,6 +136,7 @@
     "./target/contract-free": "./dist/target__contract-free.mjs",
     "./target/control": "./dist/target__control.mjs",
     "./target/control-tables": "./dist/target__control-tables.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/migration": "./dist/target__migration.mjs",
@@ -161,6 +165,7 @@
     "./utils/simplify-deep": "./dist/utils__simplify-deep.mjs",
     "./utils/structured-error": "./dist/utils__structured-error.mjs",
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
+    "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"

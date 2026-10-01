@@ -1,5 +1,4 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
 
@@ -18,9 +17,9 @@ export function isCodecTrait(value: unknown): value is CodecTrait {
  *
  * `(codecId, typeParams?)` is the single fact the runtime needs to materialize a codec via `descriptorFor(codecId).factory(typeParams)(ctx)`. The pair is content-keyed: two refs with the same `codecId` and structurally equal `typeParams` (regardless of object key ordering) resolve to the same memoized {@link Codec} instance.
  *
- * `typeParams` is `JsonValue`-constrained so the ref survives JSON serialization (relevant for AST-embedded migration ops). Non-parameterized codecs leave `typeParams` undefined; the descriptor's `paramsSchema` validates the value at the JSON boundary.
+ * `typeParams` is `JsonValue`-constrained so the ref survives JSON serialization (relevant for AST-embedded migration ops). Non-parameterized codecs leave `typeParams` undefined or empty; a parameterized codec's `paramsSchema` validates the value at the JSON boundary.
  *
- * `many` marks a scalar-array (list-typed) column. When `true`, the encode/decode paths map the element codec over the JS array rather than applying the codec to the whole value. The element codec id is `codecId`; the driver owns the array wire framing (`{…}`) in both directions. Absent for scalar columns.
+ * `many` marks a scalar-array (list-typed) column. When `true`, the encode/decode paths map the element codec over array elements rather than applying the codec to the whole value. The element codec id is `codecId`; each family or target owns how its stored list frame is traversed. For Postgres, inbound list framing is target-owned while outbound parameters still rely on the driver/library's array serialization under the adapter-emitted SQL type context. Absent for scalar columns.
  *
  * Family-agnostic by design — both SQL and Mongo AST nodes carry `codec: CodecRef | undefined`, and the resolver is the only dispatch path that survives serialization.
  */
@@ -48,7 +47,7 @@ export interface CodecCallContext {
 /**
  * Codec-id-keyed read surface threaded into emit and authoring paths.
  *
- * - `get(id)` returns a representative {@link Codec} instance for the codec id (used by `family.deserializeContract` for `decodeJson` of literal column defaults). For parameterized codecs whose factory requires concrete params, this may return `undefined` — use `CodecRegistry.forCodecRef` instead.
+ * - `get(id)` returns a representative {@link Codec} instance for the codec id (used where a caller reads or encodes a value by codec id and the codec takes no type parameters). For parameterized codecs whose factory requires concrete params, this may return `undefined` — use `CodecRegistry.forCodecRef` instead.
  * - `targetTypesFor(id)` exposes the codec-id-keyed `targetTypes` metadata the runtime instance no longer carries (TML-2357). Returns the same array `CodecDescriptor.targetTypes` would; for Mongo (whose registration doesn't yet resolve through the unified descriptor map — TML-2324) the family-side assembly populates this directly from the contributor's codec metadata.
  * - `renderOutputTypeFor(id, params)` exposes the codec-id-keyed `renderOutputType` renderer the runtime instance no longer carries. Returns `undefined` when the codec doesn't render a custom type or when the codec id is unknown.
  */
@@ -64,16 +63,14 @@ export interface CodecLookup {
     value: JsonValue,
     side: 'output' | 'input',
   ): string | undefined;
+}
+
+/** A {@link CodecLookup} that resolves codec descriptors, which building a column's codec with its type parameters needs. */
+export interface CodecLookupWithDescriptors extends CodecLookup {
   /**
-   * Codec-id-keyed descriptor accessor. Returns the full registered
-   * {@link AnyCodecDescriptor} for `id`, or `undefined` if no descriptor is
-   * registered. Optional so existing lookups need not provide it; a consumer
-   * that needs more than the derived per-id readers above — e.g. an
-   * authoring-time hook a target-specific descriptor exposes but this
-   * framework interface does not model generically — fetches the descriptor
-   * itself and narrows it with its own structural predicate.
+   * The registered {@link AnyCodecDescriptor} for `id`, or `undefined` if none is registered. A consumer that needs more than the per-id readers above, such as a column's codec built with its type parameters or an authoring hook a target's descriptor exposes, fetches the descriptor itself. It answers from the same registrations as `get`.
    */
-  descriptorFor?(id: string): AnyCodecDescriptor | undefined;
+  descriptorFor(id: string): AnyCodecDescriptor | undefined;
 }
 
 /**
@@ -89,11 +86,12 @@ export interface CodecLookup {
  *   always returns `undefined` — the method exists so the object structurally satisfies the SQL
  *   `ContractCodecRegistry` interface.
  */
-export interface CodecRegistry extends CodecLookup {
+export interface CodecRegistry extends CodecLookupWithDescriptors {
   forCodecRef(ref: CodecRef): Codec;
   forColumn(namespaceId: string, table: string, column: string): Codec | undefined;
 }
 
+/** A lookup with no codecs. It has no `descriptorFor`, so a stub that adds codecs to it through `get` cannot pass for a lookup of descriptors that answers nothing. */
 export const emptyCodecLookup: CodecLookup = {
   get: () => undefined,
   targetTypesFor: () => undefined,
@@ -110,23 +108,3 @@ export const emptyCodecLookup: CodecLookup = {
 export interface CodecInstanceContext {
   readonly name: string;
 }
-
-/**
- * Standard Schema validator for `void` params. Accepts only `undefined` (or absent input); rejects any other value so a contract that tries to thread `typeParams` through a non-parameterized codec id fails fast at the JSON boundary instead of silently coercing the value away. Used by the framework-supplied non-parameterized descriptor synthesizer.
- */
-export const voidParamsSchema: StandardSchemaV1<void> = {
-  '~standard': {
-    version: 1,
-    vendor: 'prisma',
-    validate: (input) =>
-      input === undefined
-        ? { value: undefined }
-        : {
-            issues: [
-              {
-                message: 'unexpected typeParams for non-parameterized codec (void params expected)',
-              },
-            ],
-          },
-  },
-};

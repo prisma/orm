@@ -1,6 +1,6 @@
 name: Feature request
 description: Suggest a new feature or enhancement.
-labels: ["enhancement", "needs-triage"]
+labels: ["kind/feature"]
 body:
   - type: markdown
     attributes:
@@ -9,8 +9,8 @@ body:
 
         Before filing, please check that:
 
-        - There isn't already an [open issue](https://github.com/prisma/prisma/issues?q=is%3Aissue) covering the same idea.
-        - The feature fits the [project's contract-first direction](https://github.com/prisma/prisma/blob/main/README.md). Suggestions that conflict with the architecture (e.g. "emit imperative client code") are unlikely to land — that doesn't mean we don't want to hear them, but please understand they may be declined.
+        - There isn't already an [open issue](https://github.com/prisma/orm/issues?q=is%3Aissue) covering the same idea.
+        - The feature fits the [project's contract-first direction](https://github.com/prisma/orm/blob/main/README.md). Suggestions that conflict with the architecture (e.g. "emit imperative client code") are unlikely to land — that doesn't mean we don't want to hear them, but please understand they may be declined.
 
         If your idea is large enough that it would meaningfully change the public API, expect that landing it will likely require a brief design discussion in the issue before any PR is opened.
 

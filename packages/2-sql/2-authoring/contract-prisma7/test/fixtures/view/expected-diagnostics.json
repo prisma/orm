@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_VIEW_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 5,
+    "message": "View \"ActiveUsers\" is not supported; Prisma 8 has no views. Remove the view or replace it with a model over the underlying table."
+  }
+]

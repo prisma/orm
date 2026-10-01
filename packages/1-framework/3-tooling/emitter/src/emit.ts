@@ -60,7 +60,7 @@ export async function emit(
     profileHash,
   };
   const contractDtsRaw = generateContractDts(
-    contract,
+    options.deserializeContract(canonicalized),
     targetFamily,
     codecTypeImports ?? [],
     contractTypeHashes,

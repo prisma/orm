@@ -53,7 +53,6 @@ describe('paradedb operations', () => {
       expect(ast).toBeInstanceOf(OperationExpr);
       expect(ast.lowering).toEqual({
         targetFamily: 'sql',
-        strategy: 'function',
         template: `{{self}} ${op} {{arg0}}`,
       });
     }
@@ -64,7 +63,6 @@ describe('paradedb operations', () => {
     );
     expect(scoreAst.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'pdb.score({{self}})',
     });
 
@@ -82,7 +80,6 @@ describe('paradedb operations', () => {
       );
       expect(ast.lowering).toEqual({
         targetFamily: 'sql',
-        strategy: 'function',
         template: `{{self}}::pdb.${pdbType}({{arg0}})`,
       });
       // typmod cast args must be inline literals (PG rejects parameterized typmods).
@@ -99,7 +96,6 @@ describe('paradedb operations', () => {
     expect(proximityAst).toBeInstanceOf(OperationExpr);
     expect(proximityAst.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: '({{self}} ## {{arg0}} ## {{arg1}})',
     });
     expect(proximityAst.args?.[0]?.kind).toBe('literal'); // distance literal
@@ -113,7 +109,6 @@ describe('paradedb operations', () => {
 
     expect(ast.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: '({{self}} ## {{arg0}} ## {{arg1}} ##> {{arg2}} ##> {{arg3}})',
     });
     // arg0 = distance literal (##), arg2 = distance literal (##>).

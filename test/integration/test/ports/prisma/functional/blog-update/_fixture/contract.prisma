@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/blog-update (postgres matrix entry).
 //
@@ -42,6 +44,7 @@ model User {
   profile     Profile?
   wakesUpAt   DateTime? @default(now())
   lastLoginAt DateTime? @default(now())
+  @@map("user")
 }
 
 model Profile {
@@ -52,6 +55,7 @@ model Profile {
   userId         String    @unique
   goesToBedAt    DateTime? @default(now())
   goesToOfficeAt DateTime? @default(now())
+  @@map("profile")
 }
 
 model Post {
@@ -66,4 +70,5 @@ model Post {
   author          User?     @relation(fields: [authorId], references: [id])
   lastReviewedAt  DateTime? @default(now())
   lastPublishedAt DateTime? @default(now())
+  @@map("post")
 }

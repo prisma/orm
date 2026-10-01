@@ -1,0 +1,23 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id      String   @id @default(auto()) @map("_id") @db.ObjectId
+  address Address
+  history Address[]
+  backup  Address?
+}
+
+type Address {
+  street  String
+  zip     String?
+  ownerId String  @db.ObjectId
+  geo     Geo
+}
+
+type Geo {
+  lat Float
+  lng Float
+}

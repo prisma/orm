@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"User.email\" is marked @ignore, but its @unique uses it, and Prisma 7 still creates the unique index that includes its column. Remove @ignore from \"User.email\"; Prisma 7's next migration is then empty, and the field appears in the Prisma 7 client again."
+  }
+]

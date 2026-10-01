@@ -31,18 +31,18 @@ function buildColumnDescriptorMap() {
 
 function interpretWithRealPacks(schema: string) {
   const scalarColumnDescriptors = buildColumnDescriptorMap();
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
+  const { document, sources } = parse(schema, 'real-packs-parity.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
   return interpretPslDocumentToSqlContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    documents: [document],
+    symbolTable,
+    sources,
     target: postgresPack,
     scalarColumnDescriptors,
+    dataTypeLookup: stack.dataTypeLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     authoringContributions: stack.authoringContributions,
     composedExtensionContracts: new Map(),
@@ -78,7 +78,7 @@ describe('TS and PSL authoring parity with real packs', () => {
                 embedding: field.namedType(types.Embedding1536).optional(),
               },
             }).sql({
-              table: 'document',
+              table: 'Document',
             }),
           },
         };
@@ -119,7 +119,7 @@ model Document {
               embedding: field.column(type.pgvector.Vector(1536)).optional(),
             },
           }).sql({
-            table: 'document',
+            table: 'Document',
           }),
         },
       }),
@@ -149,7 +149,7 @@ model Document {
             id: field.column(int4Column).id(),
             aal: field.column(pg.enum(AalLevel)).optional(),
           },
-        }).sql({ table: 'session' }),
+        }).sql({ table: 'Session' }),
       },
     });
 
@@ -187,7 +187,7 @@ model Document {
             id: field.column(int4Column).id(),
             aal: field.column(pg.enum(AalLevel)).optional(),
           },
-        }).sql({ table: 'session' }),
+        }).sql({ table: 'Session' }),
       },
     });
 

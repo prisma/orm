@@ -23,7 +23,9 @@ test('an undeclared key is not on db.sql or db.orm', () => {
   db.orm.auth;
 });
 
-test('prepare callback receives the flat (unbound-facet) sql surface', () => {
-  type PrepareSql = Parameters<Parameters<SqliteClient<Contract>['prepare']>[1]>[0];
-  expectTypeOf<PrepareSql['users']>().toEqualTypeOf<TableProxy<Contract, '__unbound__', 'users'>>();
+test('prepare callback captures the flat sql surface', async () => {
+  await db.prepare({}, (params) => {
+    expectTypeOf(params).toEqualTypeOf<Record<never, never>>();
+    return db.sql.users.select('id').build();
+  });
 });

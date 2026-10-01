@@ -8,6 +8,7 @@ import {
 import type { CodecTypes } from '../types/codec-types';
 import type { QueryOperationTypes } from '../types/operation-types';
 import { pgvectorAuthoringTypes } from './authoring';
+import { pgvectorDataTypes } from './data-types';
 import { pgvectorCodecRegistry } from './registry';
 
 const pgvectorTypeId = 'pg/vector@1' as const;
@@ -29,7 +30,6 @@ export function pgvectorQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '{{self}} <=> {{arg0}}',
           },
         });
@@ -48,7 +48,6 @@ export function pgvectorQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '1 - ({{self}} <=> {{arg0}})',
           },
         });
@@ -71,6 +70,7 @@ const pgvectorPackMetaBase = {
   authoring: {
     type: pgvectorAuthoringTypes,
   },
+  dataTypes: pgvectorDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: Array.from(pgvectorCodecRegistry.values()),

@@ -12,11 +12,13 @@
  */
 
 import type { Contract } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -27,6 +29,8 @@ import { PostgresContractSerializer } from '../src/core/postgres-contract-serial
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
+
 const assembled = assembleAuthoringContributions([
   {
     authoring: {
@@ -36,6 +40,20 @@ const assembled = assembleAuthoringContributions([
     },
   },
 ]);
+
+function blockResolutionBinder(
+  symbolTable: Parameters<typeof interpretExtensionBlocks>[0]['symbolTable'],
+  sources: Parameters<typeof interpretExtensionBlocks>[0]['sources'],
+) {
+  return createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  }).binder;
+}
 
 const postgresTarget = {
   kind: 'target' as const,
@@ -52,18 +70,26 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
   ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
 ]);
 
-function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable, diagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+function interpretWithSymbolDiagnostics(source: string) {
+  const { document, sources } = parse(source, 'psl-rls-operations.test.psl');
+  const { symbolTable, diagnostics: collectionDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
-  expect(diagnostics).toEqual([]);
-  return interpretPslDocumentToSqlContract({
+  const diagnostics = [
+    ...collectionDiagnostics,
+    ...interpretExtensionBlocks({
+      symbolTable,
+      sources,
+      pslBlockDescriptors: assembled.pslBlockDescriptors,
+      binder: blockResolutionBinder(symbolTable, sources),
+    }).diagnostics,
+  ];
+  const result = interpretPslDocumentToSqlContract({
+    documents: [document],
+    dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresTarget,
     scalarColumnDescriptors: scalarTypeDescriptors,
     authoringContributions: assembled,
@@ -71,6 +97,13 @@ function interpret(source: string) {
     createNamespace: postgresCreateNamespace,
     capabilities: { sql: { scalarList: true } },
   });
+  return { result, symbolTableDiagnostics: diagnostics };
+}
+
+function interpret(source: string) {
+  const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(source);
+  expect(symbolTableDiagnostics).toEqual([]);
+  return result;
 }
 
 function onlyPolicy(source: string): PostgresRlsPolicy {
@@ -247,22 +280,21 @@ ${MODEL}
   });
 });
 
-describe('wrong-predicate-for-operation is a load-time error', () => {
-  // The predicate the operation does not take is rejected in the lowering
-  // (`lowerRlsPolicyFromBlock`), which pushes a diagnostic and produces no
-  // entity — so the interpret result fails rather than silently dropping it.
+describe('wrong-predicate-for-operation is an unknown fixed key', () => {
   function expectWrongPredicate(source: string, predicate: string): void {
-    const result = interpret(source);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
+    const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(source);
+    expect(symbolTableDiagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_RLS_PREDICATE_NOT_FOR_OPERATION',
-          message: expect.stringContaining(`\`${predicate}\``),
+          code: 'PSL_EXTENSION_UNKNOWN_PARAMETER',
+          message: expect.stringContaining(`"${predicate}"`),
         }),
       ]),
     );
+    if (result.ok) {
+      const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+      expect(Object.keys(ns.policy)).toEqual([]);
+    }
   }
 
   it('using on policy_insert is rejected', () => {
@@ -354,4 +386,35 @@ ${UNMARKED}
       );
     });
   }
+});
+
+describe('omitted supported predicates stay accepted', () => {
+  it('policy_update with neither using nor withCheck lowers with both absent', () => {
+    const policy = onlyPolicy(`
+namespace public {
+${MODEL}
+  policy_update p_upd {
+    target = profile
+    roles  = [app_user]
+  }
+}
+`);
+    expect(policy.operation).toBe('update');
+    expect(policy.using).toBeUndefined();
+    expect(policy.withCheck).toBeUndefined();
+  });
+
+  it('policy_select without using lowers with the predicate absent', () => {
+    const policy = onlyPolicy(`
+namespace public {
+${MODEL}
+  policy_select p_read {
+    target = profile
+    roles  = [app_user]
+  }
+}
+`);
+    expect(policy.operation).toBe('select');
+    expect(policy.using).toBeUndefined();
+  });
 });

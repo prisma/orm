@@ -1,0 +1,7 @@
+// use prisma-8
+
+model User {
+  id    Int    @id
+  token String @default(dbgenerated("gen_random_uuid()"))
+  @@map("user")
+}

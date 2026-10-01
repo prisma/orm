@@ -788,17 +788,17 @@
                   "ref": {
                     "type": "object",
                     "properties": {
-                      "column": {
+                      "entry": {
+                        "type": "string"
+                      },
+                      "field": {
                         "type": "string"
                       },
                       "namespace": {
                         "type": "string"
-                      },
-                      "table": {
-                        "type": "string"
                       }
                     },
-                    "required": ["column", "namespace", "table"],
+                    "required": ["entry", "field", "namespace"],
                     "additionalProperties": false
                   },
                   "onCreate": {

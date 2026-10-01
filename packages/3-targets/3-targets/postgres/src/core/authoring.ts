@@ -1,5 +1,4 @@
 import {
-  temporalAuthoringPresets,
   temporalCodecPresetWithPrecision,
   temporalStringAuthoringPresets,
 } from '@internal/family-sql/control';
@@ -12,17 +11,37 @@ import type {
   AuthoringModelAttributeDescriptorNamespace,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
-  PslExtensionBlock,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
+import { temporalAuthoringPresets } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
-import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
-import { blockAttribute, leafDiagnostic, modelAttribute, str } from '@internal/psl-parser';
+import type {
+  InferBlock,
+  ModelAttributeSpecFactory,
+  PslBlockSpecDescriptor,
+} from '@internal/psl-parser';
+import {
+  blockAttribute,
+  bool,
+  entityRef,
+  fieldRef,
+  identifier,
+  leafDiagnostic,
+  list,
+  mapBlock,
+  modelAttribute,
+  oneOf,
+  optional,
+  str,
+  structBlock,
+} from '@internal/psl-parser';
 import type {
   EntityHandleLoweringInput,
   LoweredPackEntity,
   ResolvedEntityHandleRef,
   ResolvedPslModelRefs,
+  SqlPslEntityPlacementOutput,
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
@@ -30,9 +49,20 @@ import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-sche
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { PG_ENUM_CODEC_ID } from './codec-ids';
+import {
+  PG_ENUM_CODEC_ID,
+  PG_TIMESTAMP_STRING_CODEC_ID,
+  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+} from './codec-ids';
 import { postgresError } from './errors';
-import { INSTANT_NOW_GENERATOR_ID } from './instant-now-generator';
+import {
+  isFullTextIndexableCodec,
+  renderFullTextIndexExpression,
+} from './full-text-index-expression';
+import { postgresNowGeneratorIds } from './now-generators';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
@@ -43,18 +73,26 @@ import {
   PostgresRlsPolicySchema,
   PostgresRoleSchema,
 } from './postgres-validators';
-import { computeContentHash, POLICY_OPERATION_PREDICATES } from './rls/canonicalize';
+import { computeContentHash } from './rls/canonicalize';
+import {
+  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+  type FullTextSearchLanguage,
+  POSTGRES_TEXT_SEARCH_LANGUAGES,
+} from './text-search-languages';
 
 // Contributed diagnostic codes, declared once as typed consts — the
 // `ContributedPslDiagnosticCode` type is the only thing enforcing the
 // `PSL_` prefix convention, so the declared-const form (the
 // `sql-attribute-specs.ts` convention) is the settled spelling for pack
 // codes; inline string literals bypass it.
-const PSL_RLS_PREDICATE_NOT_FOR_OPERATION: ContributedPslDiagnosticCode =
-  'PSL_RLS_PREDICATE_NOT_FOR_OPERATION';
 const PSL_POLICY_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_POLICY_INVALID_MAP';
-const PSL_NATIVE_ENUM_BARE_MEMBER: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_BARE_MEMBER';
-const PSL_EXTENSION_INVALID_VALUE: ContributedPslDiagnosticCode = 'PSL_EXTENSION_INVALID_VALUE';
+const PSL_FULL_TEXT_INDEX_ONE_FIELD: ContributedPslDiagnosticCode = 'PSL_FULL_TEXT_INDEX_ONE_FIELD';
+const PSL_FULL_TEXT_INDEX_REQUIRES_NAME: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_REQUIRES_NAME';
+const PSL_FULL_TEXT_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_NAME_XOR_MAP';
+const PSL_FULL_TEXT_INDEX_TEXT_FIELD: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_TEXT_FIELD';
 const PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE: ContributedPslDiagnosticCode =
   'PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE';
 const PSL_NATIVE_ENUM_MISSING_MEMBERS: ContributedPslDiagnosticCode =
@@ -73,6 +111,8 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
 export const postgresAuthoringTypes = {
   BigIntNumber: {
     kind: 'typeConstructor',
+    documentation:
+      'A PostgreSQL 64-bit integer represented as a JavaScript number within its safe integer range.',
     output: {
       codecId: 'pg/int8number@1',
       nativeType: 'int8',
@@ -80,6 +120,8 @@ export const postgresAuthoringTypes = {
   },
   UnboundedInt: {
     kind: 'typeConstructor',
+    documentation:
+      'An arbitrary-precision integer stored as PostgreSQL numeric and represented as bigint.',
     output: {
       codecId: 'pg/unboundedint@1',
       nativeType: 'numeric',
@@ -96,77 +138,108 @@ export const postgresAuthoringTypes = {
   },
 } as const satisfies AuthoringTypeNamespace;
 
-export interface RlsPolicyExtensionBlock extends PslExtensionBlock {
+const policyTargetParam = {
+  type: entityRef({ kind: 'model' }),
+  documentation: 'The model protected by this policy; it must declare @@rls.',
+};
+const policyRolesParam = {
+  type: optional(list(oneOf(entityRef({ kind: 'block', keyword: 'role' }), identifier()))),
+  documentation: 'The database roles to which this policy applies.',
+};
+const policyUsingParam = {
+  type: optional(str()),
+  documentation: 'A SQL predicate controlling which rows this policy permits.',
+};
+const policyWithCheckParam = {
+  type: optional(str()),
+  documentation: 'A SQL predicate checking rows being written by this policy.',
+};
+const policyPermissiveParam = {
+  type: optional(bool()),
+  documentation:
+    'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
+};
+
+export function policyUsingOnlySpec() {
+  return structBlock({
+    parameters: {
+      target: policyTargetParam,
+      roles: policyRolesParam,
+      using: policyUsingParam,
+      permissive: policyPermissiveParam,
+    },
+  });
+}
+
+export function policyWithCheckOnlySpec() {
+  return structBlock({
+    parameters: {
+      target: policyTargetParam,
+      roles: policyRolesParam,
+      withCheck: policyWithCheckParam,
+      permissive: policyPermissiveParam,
+    },
+  });
+}
+
+export function policyBothPredicatesSpec() {
+  return structBlock({
+    parameters: {
+      target: policyTargetParam,
+      roles: policyRolesParam,
+      using: policyUsingParam,
+      withCheck: policyWithCheckParam,
+      permissive: policyPermissiveParam,
+    },
+  });
+}
+
+type PolicyBlockValues = InferBlock<ReturnType<typeof policyBothPredicatesSpec>>;
+
+export interface RlsPolicyExtensionBlock extends ParsedPslExtensionBlock<PolicyBlockValues> {
   readonly namespaceId: string;
-  /**
-   * Model refs the family interpreter resolved from the block's descriptor-
-   * declared `refKind: 'model'` parameters before invoking this factory
-   * (keyed by parameter name). An unresolved required ref is the
-   * interpreter's diagnostic; the factory is never called with one missing.
-   */
   readonly resolvedModelRefs?: ResolvedPslModelRefs;
 }
 
+export function roleSpec() {
+  return structBlock({ parameters: {} });
+}
+
+export function nativeEnumSpec() {
+  return mapBlock({
+    value: { type: str(), documentation: 'The member value stored in the database enum type.' },
+  });
+}
+
+type NativeEnumValues = InferBlock<ReturnType<typeof nativeEnumSpec>>;
+
 /** A parsed `role` block annotated with its lexical namespace id by the interpreter. */
-export interface RoleExtensionBlock extends PslExtensionBlock {
+export interface RoleExtensionBlock extends ParsedPslExtensionBlock {
   readonly namespaceId: string;
 }
 
 /**
- * Maps a `policy_<op>` keyword to the RLS operation it authors. The keyword
- * IS the operation (per the project's rejection of a `policy { operation = … }`
- * conditional block).
+ * The block keyword that authors each row-level security operation. The keyword is the operation, so
+ * a policy block has no `operation` parameter. The reader looks a block's operation up here, and
+ * `contract infer` and `contract print` look up the keyword to write.
  */
-const POLICY_KEYWORD_OPERATION: Readonly<Record<string, RlsPolicyOperation>> = {
-  policy_select: 'select',
-  policy_insert: 'insert',
-  policy_update: 'update',
-  policy_delete: 'delete',
-  policy_all: 'all',
-};
+export const POLICY_BLOCK_KEYWORDS = {
+  select: 'policy_select',
+  insert: 'policy_insert',
+  update: 'policy_update',
+  delete: 'policy_delete',
+  all: 'policy_all',
+} as const satisfies Readonly<Record<RlsPolicyOperation, string>>;
 
-function readValueParam(block: PslExtensionBlock, key: string): string | undefined {
-  const param = block.parameters[key];
-  return param?.kind === 'value' ? param.raw : undefined;
+function isRlsPolicyOperation(value: string): value is RlsPolicyOperation {
+  return Object.hasOwn(POLICY_BLOCK_KEYWORDS, value);
 }
 
-function readListRefParams(block: PslExtensionBlock, key: string): string[] {
-  const param = block.parameters[key];
-  if (param?.kind !== 'list') return [];
-  return param.items.flatMap((item) => (item.kind === 'ref' ? [item.identifier] : []));
-}
-
-/**
- * Unwraps a quoted PSL string argument, inverting the printer's
- * `escapePslString` escapes (`\\`, `\"`, `\n`, `\r`). An unknown escape
- * sequence is kept verbatim, matching the printer-side `unescapePslString`
- * convention.
- */
-function unwrapQuotedString(raw: string): string {
-  if (!(raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2)) {
-    return raw;
-  }
-  const inner = raw.slice(1, -1);
-  let result = '';
-  for (let i = 0; i < inner.length; i++) {
-    if (inner[i] !== '\\' || i + 1 >= inner.length) {
-      result += inner[i];
-      continue;
-    }
-    const next = inner[i + 1];
-    if (next === '\\' || next === '"') {
-      result += next;
-    } else if (next === 'n') {
-      result += '\n';
-    } else if (next === 'r') {
-      result += '\r';
-    } else {
-      result += '\\';
-      result += next;
-    }
-    i++;
-  }
-  return result;
+/** The operation a `policy_<operation>` block keyword authors, or `undefined` for another keyword. */
+function policyOperationOfKeyword(keyword: string): RlsPolicyOperation | undefined {
+  return Object.keys(POLICY_BLOCK_KEYWORDS)
+    .filter(isRlsPolicyOperation)
+    .find((operation) => POLICY_BLOCK_KEYWORDS[operation] === keyword);
 }
 
 /**
@@ -216,53 +289,21 @@ function lowerRlsPolicyFromBlock(
   ctx: AuthoringEntityContext,
 ): PostgresRlsPolicy | undefined {
   const prefix = block.name;
-  const operation = POLICY_KEYWORD_OPERATION[block.keyword] ?? 'select';
-  // The interpreter resolves the descriptor-declared `target` model ref to
-  // its storage table name before invoking this factory (an unresolved or
-  // missing required ref is the interpreter's diagnostic), so a lookup miss
-  // here is structurally impossible.
-  const tableName = block.resolvedModelRefs?.['target']?.tableName;
+  const operation = policyOperationOfKeyword(block.keyword) ?? 'select';
+  const target = block.resolvedModelRefs?.['target'];
   assertDefined(
-    tableName,
-    `lowerRlsPolicyFromBlock: policy "${block.name}" reached the factory without a resolved \`target\` ref; the interpreter resolves same-namespace model refs before invoking entity factories.`,
+    target,
+    `lowerRlsPolicyFromBlock: policy "${block.name}" reached the factory without a projected \`target\` coordinate; the interpreter projects checked model references before invoking entity factories.`,
   );
-  const roles = [...readListRefParams(block, 'roles')].sort();
-
-  const usingRaw = readValueParam(block, 'using');
-  const withCheckRaw = readValueParam(block, 'withCheck');
-
-  // Reject a predicate the operation does not take (e.g. `using` on INSERT, or
-  // `withCheck` on SELECT/DELETE). The descriptor's param set already omits it,
-  // but the generic descriptor validator is not wired into the SQL-family
-  // interpreter, so the lowering enforces the per-operation predicate matrix
-  // directly — a wrong predicate is a load-time diagnostic, not a silent drop.
-  const support = POLICY_OPERATION_PREDICATES[operation];
-  const rejectPredicate = (predicate: 'using' | 'withCheck'): undefined => {
-    ctx.diagnostics?.push({
-      code: PSL_RLS_PREDICATE_NOT_FOR_OPERATION,
-      message: `\`${block.keyword}\` policy "${block.name}" does not take a \`${predicate}\` predicate; the ${operation.toUpperCase()} operation uses ${support.using ? '`using`' : '`withCheck`'}${support.using && support.withCheck ? ' and `withCheck`' : ' only'}.`,
-      sourceId: ctx.sourceId ?? 'unknown',
-      span: block.parameters[predicate]?.span ?? block.span,
-    });
-    return undefined;
-  };
-  if (usingRaw !== undefined && !support.using) return rejectPredicate('using');
-  if (withCheckRaw !== undefined && !support.withCheck) return rejectPredicate('withCheck');
-
-  const using = usingRaw !== undefined ? unwrapQuotedString(usingRaw) : undefined;
-  const withCheck = withCheckRaw !== undefined ? unwrapQuotedString(withCheckRaw) : undefined;
-
-  const permissiveRaw = readValueParam(block, 'permissive');
-  if (permissiveRaw !== undefined && permissiveRaw !== 'true' && permissiveRaw !== 'false') {
-    ctx.diagnostics?.push({
-      code: PSL_EXTENSION_INVALID_VALUE,
-      message: `\`${block.keyword}\` policy "${block.name}" \`permissive\` must be \`true\` or \`false\`, got ${permissiveRaw}.`,
-      sourceId: ctx.sourceId ?? 'unknown',
-      span: block.parameters['permissive']?.span ?? block.span,
-    });
-    return undefined;
-  }
-  const permissive = permissiveRaw !== 'false';
+  const roles =
+    block.values.roles === undefined
+      ? []
+      : block.values.roles
+          .map((role) => (typeof role === 'string' ? role : role.declaration.name))
+          .sort();
+  const using = block.values.using;
+  const withCheck = block.values.withCheck;
+  const permissive = block.values.permissive ?? true;
 
   // `@@map("physical name")` adopts an EXACT-named policy: the lowered
   // entity's name is the map value verbatim — no prefix, no content hash,
@@ -276,8 +317,8 @@ function lowerRlsPolicyFromBlock(
     ctx.warnings?.push(exactNameBodyWarning('policy', exactName));
     return new PostgresRlsPolicy({
       naming: { kind: 'exact', name: exactName },
-      tableName,
-      namespaceId: block.namespaceId,
+      tableName: target.tableName,
+      namespaceId: target.namespaceId,
       operation,
       roles,
       using,
@@ -288,8 +329,8 @@ function lowerRlsPolicyFromBlock(
 
   return buildRlsPolicyEntity({
     prefix,
-    tableName,
-    namespaceId: block.namespaceId,
+    tableName: target.tableName,
+    namespaceId: target.namespaceId,
     operation,
     roles,
     ...ifDefined('using', using),
@@ -298,18 +339,17 @@ function lowerRlsPolicyFromBlock(
   });
 }
 
-/**
- * Lowers a `native_enum { memberName = "value" … @@map("type_name") }` block
- * into a {@link PostgresNativeEnum}. Members must be authored as explicit
- * `key = "value"` pairs — a bare (value-less) member is a diagnostic, not
- * accepted (authoring-design.md §2.1). The parsed `memberName` is only used
- * to duplicate-check and report diagnostics; the lowered entity carries just
- * the member values (a native enum is value-only — the member "name" isn't
- * a separate authoring concept from the value). `typeName` comes from
- * `@@map` or defaults to the block name verbatim.
- */
+const policyEntityTypeOutput = {
+  factory: lowerRlsPolicyFromBlock,
+  pslPlacement: (entity: PostgresRlsPolicy) => ({ namespaceId: entity.namespaceId }),
+} satisfies AuthoringEntityTypeFactoryOutput<
+  RlsPolicyExtensionBlock,
+  PostgresRlsPolicy | undefined
+> &
+  SqlPslEntityPlacementOutput;
+
 function lowerNativeEnumFromBlock(
-  block: PslExtensionBlock,
+  block: ParsedPslExtensionBlock<NativeEnumValues>,
   ctx: AuthoringEntityContext,
 ): PostgresNativeEnum | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
@@ -329,54 +369,19 @@ function lowerNativeEnumFromBlock(
   let memberError = false;
   const seenValues = new Set<string>();
   const members: string[] = [];
-  for (const [memberName, paramValue] of Object.entries(block.parameters)) {
-    if (paramValue.kind === 'bare') {
-      diagnostics?.push({
-        code: PSL_NATIVE_ENUM_BARE_MEMBER,
-        message: `native_enum "${block.name}" member "${memberName}" has no value; members must be authored as "${memberName} = \\"value\\""`,
-        sourceId,
-        span: paramValue.span,
-      });
-      memberError = true;
-      continue;
-    }
-    if (paramValue.kind !== 'value') continue;
-
-    let jsonValue: unknown;
-    try {
-      jsonValue = JSON.parse(paramValue.raw);
-    } catch {
-      diagnostics?.push({
-        code: PSL_EXTENSION_INVALID_VALUE,
-        message: `native_enum "${block.name}" member "${memberName}" value "${paramValue.raw}" is not valid JSON`,
-        sourceId,
-        span: paramValue.span,
-      });
-      memberError = true;
-      continue;
-    }
-    if (typeof jsonValue !== 'string') {
-      diagnostics?.push({
-        code: PSL_EXTENSION_INVALID_VALUE,
-        message: `native_enum "${block.name}" member "${memberName}" value must be a string`,
-        sourceId,
-        span: paramValue.span,
-      });
-      memberError = true;
-      continue;
-    }
-    if (seenValues.has(jsonValue)) {
+  for (const [memberName, value] of Object.entries(block.values)) {
+    if (seenValues.has(value)) {
       diagnostics?.push({
         code: PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE,
-        message: `native_enum "${block.name}": duplicate member value "${jsonValue}"`,
+        message: `native_enum "${block.name}": duplicate member value "${value}"`,
         sourceId,
-        span: paramValue.span,
+        span: block.parameterSpans[memberName] ?? block.span,
       });
       memberError = true;
       continue;
     }
-    seenValues.add(jsonValue);
-    members.push(jsonValue);
+    seenValues.add(value);
+    members.push(value);
   }
 
   if (memberError) return undefined;
@@ -410,7 +415,10 @@ const nativeEnumEntityTypeOutput = {
     kind: 'valueSet' as const,
     values: [...entity.members],
   }),
-} satisfies AuthoringEntityTypeFactoryOutput<PslExtensionBlock, PostgresNativeEnum | undefined> &
+} satisfies AuthoringEntityTypeFactoryOutput<
+  ParsedPslExtensionBlock<NativeEnumValues>,
+  PostgresNativeEnum | undefined
+> &
   SqlValueSetDerivingEntityTypeOutput;
 
 /**
@@ -458,9 +466,7 @@ export const postgresAuthoringEntityTypes = {
     kind: 'entity',
     discriminator: 'policy',
     validatorSchema: PostgresRlsPolicySchema,
-    output: {
-      factory: lowerRlsPolicyFromBlock,
-    },
+    output: policyEntityTypeOutput,
   },
   native_enum: {
     kind: 'entity',
@@ -483,38 +489,14 @@ export const postgresAuthoringEntityTypes = {
  * portability use `uuidString` / `id.uuidv4String` / `id.uuidv7String` from
  * the family pack instead.
  */
-/**
- * Shared parameter descriptors for the five `policy_<op>` PSL block
- * keywords. All five share the `policy` discriminator — the parser
- * dispatches by keyword (see the framework's PSL-block SPI), and every
- * keyword's factory lowers to `PostgresRlsPolicy` via `lowerRlsPolicyFromBlock`.
- *
- * The `roles` list uses `scope:'cross-space'` because same-namespace
- * role ref resolution requires PSL namespace entries keyed by `refKind`
- * (i.e. `'role'`), which in turn requires the role block discriminator to
- * equal `'role'`. Aligning discriminator with refKind is tracked for
- * slice 4 (cross-space roles). Until then cross-space passes validation
- * unconditionally and the authored role names flow through unchanged.
- */
-const policyTargetParam = {
-  kind: 'ref',
-  refKind: 'model',
-  scope: 'same-namespace',
-  required: true,
-} as const;
-const policyRolesParam = {
-  kind: 'list',
-  of: { kind: 'ref', refKind: 'role', scope: 'cross-space' },
-} as const;
-const policyPredicateParam = { kind: 'value', codecId: 'pg/text@1', required: true } as const;
-const policyPermissiveParam = { kind: 'value', codecId: 'pg/bool@1' } as const;
 // A policy may only target an RLS-controlled model: the model named by
 // `target` must declare `@@rls`, or the load fails with a diagnostic naming
 // the model and the policy prefix.
 const policyRequiresRls = { parameter: 'target', attribute: 'rls' } as const;
 
 const policyMapAttribute = blockAttribute('map', {
-  positional: [{ key: 'name', type: str() }],
+  documentation: 'Maps this row-level security policy to its PostgreSQL policy name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty PostgreSQL policy name.' }],
   refine: (parsed, ctx, attributeNode) =>
     parsed.name === ''
       ? [
@@ -531,107 +513,71 @@ const policyMapAttribute = blockAttribute('map', {
 const policyBlockAttributes = { map: () => policyMapAttribute };
 
 const nativeEnumMapAttribute = blockAttribute('map', {
-  positional: [{ key: 'name', type: str() }],
+  documentation: 'Maps this native enum to its PostgreSQL type name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The PostgreSQL enum type name.' }],
 });
 
 export const postgresAuthoringPslBlockDescriptors = {
-  // The predicate param set per keyword mirrors Postgres: SELECT/DELETE take
-  // USING only; INSERT takes WITH CHECK only; UPDATE/ALL take both. The
-  // per-operation predicate matrix is enforced in `lowerRlsPolicyFromBlock`
-  // (a wrong predicate for the operation is a load-time diagnostic there),
-  // since the generic descriptor validator is not wired into the SQL-family
-  // interpreter.
-  policy_select: {
+  [POLICY_BLOCK_KEYWORDS.select]: {
     kind: 'pslBlock',
-    keyword: 'policy_select',
+    keyword: POLICY_BLOCK_KEYWORDS.select,
+    documentation: 'Defines a row-level security policy controlling which rows can be selected.',
     discriminator: 'policy',
     name: { required: true },
-    parameters: {
-      target: policyTargetParam,
-      roles: policyRolesParam,
-      using: policyPredicateParam,
-      permissive: policyPermissiveParam,
-    },
+    spec: policyUsingOnlySpec,
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
-  },
-  policy_delete: {
+  } satisfies PslBlockSpecDescriptor,
+  [POLICY_BLOCK_KEYWORDS.delete]: {
     kind: 'pslBlock',
-    keyword: 'policy_delete',
+    keyword: POLICY_BLOCK_KEYWORDS.delete,
+    documentation: 'Defines a row-level security policy controlling which rows can be deleted.',
     discriminator: 'policy',
     name: { required: true },
-    parameters: {
-      target: policyTargetParam,
-      roles: policyRolesParam,
-      using: policyPredicateParam,
-      permissive: policyPermissiveParam,
-    },
+    spec: policyUsingOnlySpec,
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
-  },
-  policy_insert: {
+  } satisfies PslBlockSpecDescriptor,
+  [POLICY_BLOCK_KEYWORDS.insert]: {
     kind: 'pslBlock',
-    keyword: 'policy_insert',
+    keyword: POLICY_BLOCK_KEYWORDS.insert,
+    documentation: 'Defines a row-level security policy checking rows being inserted.',
     discriminator: 'policy',
     name: { required: true },
-    parameters: {
-      target: policyTargetParam,
-      roles: policyRolesParam,
-      withCheck: policyPredicateParam,
-      permissive: policyPermissiveParam,
-    },
+    spec: policyWithCheckOnlySpec,
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
-  },
-  policy_update: {
+  } satisfies PslBlockSpecDescriptor,
+  [POLICY_BLOCK_KEYWORDS.update]: {
     kind: 'pslBlock',
-    keyword: 'policy_update',
+    keyword: POLICY_BLOCK_KEYWORDS.update,
+    documentation:
+      'Defines a row-level security policy controlling row visibility and checks for updates.',
     discriminator: 'policy',
     name: { required: true },
-    parameters: {
-      target: policyTargetParam,
-      roles: policyRolesParam,
-      using: policyPredicateParam,
-      withCheck: policyPredicateParam,
-      permissive: policyPermissiveParam,
-    },
+    spec: policyBothPredicatesSpec,
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
-  },
-  policy_all: {
+  } satisfies PslBlockSpecDescriptor,
+  [POLICY_BLOCK_KEYWORDS.all]: {
     kind: 'pslBlock',
-    keyword: 'policy_all',
+    keyword: POLICY_BLOCK_KEYWORDS.all,
+    documentation: 'Defines a row-level security policy applying to all operations.',
     discriminator: 'policy',
     name: { required: true },
-    parameters: {
-      target: policyTargetParam,
-      roles: policyRolesParam,
-      using: policyPredicateParam,
-      withCheck: policyPredicateParam,
-      permissive: policyPermissiveParam,
-    },
+    spec: policyBothPredicatesSpec,
     requiresModelAttribute: policyRequiresRls,
     attributes: policyBlockAttributes,
-  },
-  /**
-   * PSL block descriptor for `native_enum`.
-   *
-   * Reuses the existing variadic-block mechanism (the same shape the SQL
-   * family's `enum` block ships): the body is an open `memberName = "value"`
-   * list. `variadicParameters: true` opens the block to arbitrary keys
-   * beyond the declared (empty) `parameters` set — the lowering factory
-   * (`lowerNativeEnumFromBlock`) turns the variadic entries into ordered
-   * members and rejects a bare (value-less) member.
-   */
+  } satisfies PslBlockSpecDescriptor,
   native_enum: {
     kind: 'pslBlock',
     keyword: 'native_enum',
+    documentation: 'Defines a PostgreSQL enum type with named string-valued members.',
     discriminator: 'native_enum',
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: nativeEnumSpec,
     attributes: { map: () => nativeEnumMapAttribute },
-  },
+  } satisfies PslBlockSpecDescriptor,
   /**
    * PSL block descriptor for `role` (e.g. `role anon {}`). Name-only, no
    * parameters and no body content. Declared inside `namespace unbound { }`
@@ -641,15 +587,98 @@ export const postgresAuthoringPslBlockDescriptors = {
   role: {
     kind: 'pslBlock',
     keyword: 'role',
+    documentation:
+      'Declares an existing database role in namespace unbound for use in security policies.',
     discriminator: 'role',
     name: { required: true },
-    parameters: {},
-  },
+    spec: roleSpec,
+  } satisfies PslBlockSpecDescriptor,
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 
-const postgresRlsSpec = modelAttribute('rls', {});
+const postgresRlsSpec = modelAttribute('rls', {
+  documentation: 'Enables PostgreSQL row-level security on this model’s table.',
+});
 
 const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
+
+const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
+
+const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
+  documentation:
+    'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The single field to index.',
+    },
+  ],
+  named: {
+    language: {
+      type: optional(
+        oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
+      ),
+      documentation:
+        'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
+    },
+    name: {
+      type: optional(str()),
+      documentation: 'The index name. Mutually exclusive with `map`.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database index name. Mutually exclusive with `name`.',
+    },
+    where: {
+      type: optional(str()),
+      documentation: 'The SQL predicate restricting rows included in a partial index.',
+    },
+  },
+  refine: (value, ctx, attributeNode) => {
+    const diagnostics = [];
+    if (value.fields.length !== 1) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          'The full-text operations work on one column; declare one `@@fullTextIndex` per column',
+          PSL_FULL_TEXT_INDEX_ONE_FIELD,
+        ),
+      );
+    }
+    if (value.name === undefined && value.map === undefined) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          '`@@fullTextIndex` requires a `name` or `map` argument (a default name cannot be derived from an expression)',
+          PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+        ),
+      );
+    }
+    if (value.name !== undefined && value.map !== undefined) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          '`@@fullTextIndex` takes at most one of `name` and `map`',
+          PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
+        ),
+      );
+    }
+    return diagnostics;
+  },
+});
+
+const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = () => postgresFullTextIndexSpec;
+
+type PostgresFullTextIndexParsed = {
+  readonly fields: readonly string[];
+  readonly language?: FullTextSearchLanguage;
+  readonly name?: string;
+  readonly map?: string;
+  readonly where?: string;
+};
 
 /**
  * `@@` model attributes contributed by the Postgres target pack.
@@ -672,6 +701,45 @@ export const postgresAuthoringModelAttributes = {
         namespaceId: ctx.namespaceId,
       }),
     }),
+  },
+  fullTextIndex: {
+    kind: 'modelAttribute',
+    attribute: 'fullTextIndex',
+    spec: postgresFullTextIndexSpecFactory,
+    repeatable: true,
+    lower: (parsed: PostgresFullTextIndexParsed, ctx: AuthoringModelAttributeContext) => {
+      const fieldName = parsed.fields[0];
+      invariant(
+        fieldName !== undefined && parsed.fields.length === 1,
+        `@@fullTextIndex on "${ctx.modelName}" lowered with ${parsed.fields.length} fields`,
+      );
+      const columnName = ctx.fieldStorageName(fieldName);
+      const codecId = ctx.fieldCodecId(fieldName);
+      // A relation field parses as a field reference but stores no value, so it
+      // reaches here with neither a column nor a codec.
+      if (columnName === undefined || codecId === undefined || !isFullTextIndexableCodec(codecId)) {
+        ctx.diagnostics?.push({
+          code: PSL_FULL_TEXT_INDEX_TEXT_FIELD,
+          message: `\`@@fullTextIndex\` indexes a text column, but "${ctx.modelName}.${fieldName}" is ${codecId === undefined ? 'not a stored scalar field' : `stored as \`${codecId}\``}.`,
+          sourceId: ctx.sourceId ?? 'unknown',
+        });
+        return undefined;
+      }
+      return {
+        index: {
+          expression: renderFullTextIndexExpression(
+            parsed.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+            columnName,
+          ),
+          type: 'gin',
+          options: undefined,
+          where: parsed.where,
+          unique: undefined,
+          name: parsed.name,
+          map: parsed.map,
+        },
+      };
+    },
   },
 } as const satisfies AuthoringModelAttributeDescriptorNamespace;
 
@@ -740,32 +808,50 @@ export const postgresAuthoringFieldPresets = {
     },
   },
   temporal: {
-    .../* @__PURE__ */ temporalAuthoringPresets({
-      codecId: 'pg/timestamptz-temporal@1',
+    createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
+    }).createdAt,
+    updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
+    }).updatedAt,
+    timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
+    }),
+    .../* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+      nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     .../* @__PURE__ */ temporalStringAuthoringPresets({
-      codecId: 'pg/timestamptz-string@1',
+      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
     timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp-temporal@1',
+      codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
       nativeType: 'timestamp',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_TEMPORAL_CODEC_ID],
     }),
     timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz-temporal@1',
+      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
       nativeType: 'timestamptz',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp-string@1',
+      codecId: PG_TIMESTAMP_STRING_CODEC_ID,
       nativeType: 'timestamp',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_STRING_CODEC_ID],
     }),
     timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz-string@1',
+      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
   },
   uuidNative: {

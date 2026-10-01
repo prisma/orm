@@ -1,6 +1,6 @@
 import type { ControlPolicy } from '@internal/contract/types';
 import type { ForeignKeyDefaultsState } from '@internal/contract-authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   ExtensionPackRef,
   FamilyPackRef,
@@ -50,6 +50,7 @@ type ModelLike = {
   };
   readonly __attributes: ModelAttributesSpec | undefined;
   readonly __sql: SqlStageSpec | undefined;
+  readonly __duplicateNames: undefined;
   buildAttributesSpec(): ModelAttributesSpec | undefined;
   buildSqlSpec(): SqlStageSpec | undefined;
 };
@@ -77,7 +78,7 @@ type ContractDefinition<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: Types;
   readonly models?: Models;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   readonly enums?: Enums;
   readonly entities?: readonly PackEntityHandle[];
 };
@@ -103,7 +104,7 @@ type ContractScaffold<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: never;
   readonly models?: never;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   readonly enums?: Enums;
   readonly entities?: readonly PackEntityHandle[];
 };
@@ -380,7 +381,7 @@ type BoundDefinitionInput<
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly types?: Types;
   readonly models?: Models;
-  readonly codecLookup?: CodecLookup;
+  readonly codecLookup?: CodecLookupWithDescriptors;
   readonly enums?: Record<string, EnumTypeHandle>;
   readonly entities?: readonly PackEntityHandle[];
 };

@@ -1,0 +1,27 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        Int    @id
+  favorites Post[] @relation("Favorites")
+}
+
+model Post {
+  id   Int    @id
+  fans User[] @relation("Favorites")
+  tags Tag[]
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[]
+}
+
+model Favorites {
+  id Int @id
+}
+
+model PostToTag {
+  id Int @id
+}

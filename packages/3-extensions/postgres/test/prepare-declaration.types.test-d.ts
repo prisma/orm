@@ -19,10 +19,10 @@ test('the fixture codec map is not any', () => {
 });
 
 test('a declaration binds each declared id to its codec input type', async () => {
-  const prepared = await db.prepare({ id: 'pg/int4@1', email: 'pg/text@1' }, (_sql, params) => {
+  const prepared = await db.prepare({ id: 'pg/int4@1', email: 'pg/text@1' }, (params) => {
     expectTypeOf(params.id.returnType.codecId).toEqualTypeOf<'pg/int4@1'>();
     expectTypeOf(params.email.returnType.codecId).toEqualTypeOf<'pg/text@1'>();
-    return null as never;
+    return db.sql.public.users.select('id').build();
   });
 
   type Params = Parameters<typeof prepared.query>[1];

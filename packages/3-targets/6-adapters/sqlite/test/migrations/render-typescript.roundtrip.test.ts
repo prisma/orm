@@ -17,6 +17,7 @@ import { promisify } from 'node:util';
 import { APP_SPACE_ID, storageHashHex } from '@internal/framework-components/control';
 import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { col, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { createSqliteBuiltinCodecLookup } from '@internal/target-sqlite/codecs';
 import {
   AddColumnCall,
   CreateIndexCall,
@@ -30,7 +31,6 @@ import { renderOps } from '@internal/target-sqlite/render-ops';
 import { timeouts } from '@repo/test-utils';
 import { join, resolve } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { SqliteControlAdapter } from '../../src/exports/control';
 
 const execFileAsync = promisify(execFile);
@@ -162,7 +162,6 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
       new AddColumnCall('user', {
         name: 'nickname',
         typeSql: 'TEXT',
-        defaultSql: '',
         nullable: true,
       }),
       new CreateIndexCall('user', 'user_email_idx', ['email']),
@@ -256,8 +255,14 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
         tableName: 'user',
         contractTable: {
           columns: [
-            { name: 'id', typeSql: 'INTEGER', defaultSql: '', nullable: false },
-            { name: 'email', typeSql: 'TEXT', defaultSql: '', nullable: true },
+            { name: 'id', typeSql: 'INTEGER', nullable: false },
+            {
+              name: 'email',
+              typeSql: 'TEXT',
+              default: { kind: 'literal', value: 'nobody' },
+              codecRef: { codecId: 'sqlite/text@1' },
+              nullable: true,
+            },
           ],
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -271,6 +276,7 @@ describe('TypeScriptRenderableSqliteMigration round-trip', () => {
             description: 'verify "email" nullability on "user"',
             sql: "SELECT COUNT(*) > 0 FROM pragma_table_info('user') WHERE name = 'email' AND \"notnull\" = 0",
           },
+          { description: 'verify "email" default on "user"', columnDefault: 'email' },
         ],
         operationClass: 'widening',
       }),

@@ -63,7 +63,10 @@ export class MongoTargetContractSerializer extends MongoContractSerializerBase<M
     for (const [nsId, ns] of Object.entries(storage.namespaces)) {
       const collectionsOut: Record<string, JsonObject> = {};
       for (const [collName, coll] of Object.entries(ns.entries.collection ?? {})) {
-        collectionsOut[collName] = JSON.parse(JSON.stringify(coll)) as JsonObject;
+        collectionsOut[collName] = blindCast<
+          JsonObject,
+          'a collection IR node serializes to a JSON-safe collection object'
+        >(JSON.parse(JSON.stringify(coll)));
       }
       const valueSetOut: Record<string, JsonObject> = {};
       for (const [vsName, vs] of Object.entries(ns.entries.valueSet ?? {})) {

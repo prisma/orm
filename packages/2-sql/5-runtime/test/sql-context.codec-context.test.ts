@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { CodecDescriptor } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
 import type { Codec, SqlCodecInstanceContext } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
@@ -22,9 +22,10 @@ describe('buildContractCodecRegistry — per-column codec instance context', () 
     const instances: Array<{ ctx: SqlCodecInstanceContext; codec: Codec }> = [];
     const codecDescriptor: CodecDescriptor<void> = {
       codecId: 'test/captures-ctx@1',
+      dataType: dataTypeId('test/captures-ctx'),
       traits: [],
       targetTypes: ['captures'],
-      paramsSchema: voidParamsSchema,
+      paramsSchema: undefined,
       isParameterized: false,
       // Family-agnostic descriptor slot; SQL-side test consumer reads `usedAt` so the factory parameter is typed as the SQL-extended context. The cast through `unknown` mirrors what production SQL extensions do (see pgvector's family-agnostic factory cast).
       factory: ((_params: undefined) => (ctx: SqlCodecInstanceContext) => {
@@ -128,6 +129,7 @@ describe('buildContractCodecRegistry — forCodecRef content-keyed cache', () =>
     let factoryCalls = 0;
     const codecDescriptor: CodecDescriptor<{ length: number }> = {
       codecId: 'pgvector/vector@1',
+      dataType: dataTypeId('pgvector/vector'),
       traits: ['equality'],
       targetTypes: ['vector'],
       paramsSchema: {
@@ -383,9 +385,10 @@ describe('buildContractCodecRegistry — forColumn delegates to forCodecRef', ()
     const instances: Array<{ ctx: SqlCodecInstanceContext; codec: Codec }> = [];
     const codecDescriptor: CodecDescriptor<void> = {
       codecId: 'test/shared@1',
+      dataType: dataTypeId('test/shared'),
       traits: [],
       targetTypes: ['shared'],
-      paramsSchema: voidParamsSchema,
+      paramsSchema: undefined,
       isParameterized: false,
       factory: ((_params: undefined) => (ctx: SqlCodecInstanceContext) => {
         const codec: Codec = {

@@ -3,15 +3,15 @@ import { CliStructuredError } from '@internal/errors/control';
 import { placeholder } from '@internal/errors/migration';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { postgresCodec } from '@internal/target-postgres/codec-descriptor';
+import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import { pgTable } from '@internal/target-postgres/contract-free';
 import { dataTransform } from '@internal/target-postgres/data-transform';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createPostgresCodecRegistryWithBuiltins } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 import { encodeControlQueryParams } from '../../src/core/control-codecs';
 
@@ -226,13 +226,15 @@ const transformingCodec: Codec = {
 
 const transformingCodecDescriptor: AnyCodecDescriptor = {
   codecId: TEST_CODEC_ID,
+  dataType: dataTypeId('demo/fixture'),
   traits: [],
   targetTypes: ['text'],
-  paramsSchema: voidParamsSchema,
+  paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => transformingCodec,
 };
 const transformingDescriptor = postgresCodec(transformingCodecDescriptor, {
+  dataType: dataTypeId('demo/fixture'),
   nativeType: () => 'text',
   jsonProjection: (expression: ProjectionExpr) => expression,
 });

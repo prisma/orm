@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { defineContract, field, model, rel } from '../src/contract-builder';
 import { ContractModelBuilder } from '../src/contract-dsl';
+import { buildContractDefinition } from '../src/contract-lowering';
 import { modelsOf } from './contract-test-helpers';
 import { columnDescriptor } from './helpers/column-descriptor';
 
@@ -179,6 +180,57 @@ describe('cross-space belongsTo relation lowering', () => {
     expect(on?.['targetFields']).toEqual(['id']);
     const to = userRelation?.['to'] as Record<string, unknown> | undefined;
     expect(to?.['model']).toBe('User');
+  });
+});
+
+/**
+ * Synthetic supabase OrderItem handle whose `.sql()` stage is a factory
+ * function, so the handle carries no statically readable table name.
+ */
+function buildSyntheticSupabaseOrderItem() {
+  return new ContractModelBuilder(
+    {
+      modelName: 'OrderItem' as const,
+      namespace: 'auth',
+      fields: {
+        id: field.column(int4Column).id(),
+        sku: field.column(textColumn),
+      },
+      relations: {},
+    },
+    undefined,
+    undefined,
+    'supabase' as const,
+  ).sql(() => ({ table: 'order_items' }));
+}
+
+describe('cross-space belongsTo relation with no statically readable target table', () => {
+  it('leaves the target table unset instead of fabricating one from the model name', () => {
+    const ExtOrderItem = buildSyntheticSupabaseOrderItem();
+
+    const LineNote = model('LineNote', {
+      fields: {
+        id: field.column(int4Column).id(),
+        orderItemId: field.column(int4Column),
+      },
+    }).relations({
+      orderItem: rel.belongsTo(ExtOrderItem, { from: 'orderItemId', to: 'id' }),
+    });
+
+    const definition = buildContractDefinition({
+      family: bareFamilyPack,
+      target: postgresTargetPack,
+      createNamespace: createTestSqlNamespace,
+      extensions: { supabase: supabasePack },
+      models: { LineNote },
+    });
+
+    const relation = definition.models.find((m) => m.modelName === 'LineNote')?.relations?.[0];
+    expect(relation).toMatchObject({ toModel: 'OrderItem', spaceId: 'supabase' });
+    expect({ toTable: relation?.toTable, childTable: relation?.on.childTable }).toEqual({
+      toTable: undefined,
+      childTable: undefined,
+    });
   });
 });
 

@@ -1,0 +1,25 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model CompositeKey {
+  a Int
+  b Int @ignore
+
+  @@id([a, b])
+}
+
+model FieldKey {
+  id Int @id @ignore
+  x  Int @unique
+}
+
+model Indexed {
+  id Int @id
+  a  Int
+  b  Int @ignore
+  c  Int @unique @ignore
+
+  @@unique([a, b])
+  @@index([b])
+}

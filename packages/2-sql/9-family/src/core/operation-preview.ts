@@ -21,11 +21,11 @@ function isDdlStatement(sqlStatement: string): boolean {
 function hasExecuteSteps(
   operation: MigrationPlanOperation,
 ): operation is MigrationPlanOperation & { readonly execute: readonly SqlExecuteStep[] } {
-  const candidate = operation as unknown as Record<string, unknown>;
-  if (!('execute' in candidate) || !Array.isArray(candidate['execute'])) {
+  const execute = Reflect.get(operation, 'execute');
+  if (!Array.isArray(execute)) {
     return false;
   }
-  return candidate['execute'].every(
+  return execute.every(
     (step: unknown) => typeof step === 'object' && step !== null && 'sql' in step,
   );
 }

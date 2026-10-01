@@ -10,13 +10,17 @@ export type {
   DiffSubjectGranularity,
   MigratableTargetDescriptor,
   OperationPreviewCapable,
+  PslContractBuildCapable,
+  PslContractDocument,
   PslContractInferCapable,
+  PslSourceSettings,
   SchemaSubjectClassifierCapable,
   SchemaViewCapable,
 } from '../control/control-capabilities';
 export {
   hasMigrations,
   hasOperationPreview,
+  hasPslContractBuild,
   hasPslContractInfer,
   hasSchemaSubjectClassifier,
   hasSchemaView,
@@ -95,13 +99,17 @@ export type {
   AssembledAuthoringContributions,
   ControlStack,
   CreateControlStackInput,
+  DataTypeInvariantInput,
 } from '../control/control-stack';
 export {
   assembleAuthoringContributions,
+  assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
+  assembleDataTypes,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,
+  enforceDataTypeInvariants,
   extractCodecLookup,
   extractCodecTypeImports,
   extractComponentIds,
@@ -127,6 +135,7 @@ export type {
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
 export type {
+  ControlDefaultRegistries,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
@@ -138,3 +147,12 @@ export type {
   SourceSpan,
   TypedDefaultFunctionCall,
 } from '../shared/mutation-default-types';
+export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
+export {
+  canonicalizeTaggedLiteralBody,
+  describeTaggedLiteralFailure,
+  resolvePslBacktickEscapes,
+  resolveTemplateTagEscapes,
+  TAGGED_LITERAL_MAX_BYTES,
+} from '../shared/tagged-literal';
+export { timestampNowControlDescriptor } from '../shared/temporal-presets';

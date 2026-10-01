@@ -1,0 +1,401 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Spellings": {
+            "storage": {
+              "table": "Spellings",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "leadingZeros": {
+                  "column": "leadingZeros"
+                },
+                "negativeZero": {
+                  "column": "negativeZero"
+                },
+                "leadingZeroFraction": {
+                  "column": "leadingZeroFraction"
+                },
+                "bareLeadingZeros": {
+                  "column": "bareLeadingZeros"
+                },
+                "bareNegativeZero": {
+                  "column": "bareNegativeZero"
+                },
+                "bareLeadingZeroFraction": {
+                  "column": "bareLeadingZeroFraction"
+                },
+                "long": {
+                  "column": "long"
+                },
+                "tiny": {
+                  "column": "tiny"
+                },
+                "zerosBare": {
+                  "column": "zerosBare"
+                },
+                "zerosScaled": {
+                  "column": "zerosScaled"
+                },
+                "bigLong": {
+                  "column": "bigLong"
+                },
+                "bigNegativeZero": {
+                  "column": "bigNegativeZero"
+                },
+                "bigLeadingZeros": {
+                  "column": "bigLeadingZeros"
+                },
+                "mixed": {
+                  "column": "mixed"
+                },
+                "bigMixed": {
+                  "column": "bigMixed"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "leadingZeros": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": false
+              },
+              "negativeZero": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": false
+              },
+              "leadingZeroFraction": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": false
+              },
+              "bareLeadingZeros": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false
+              },
+              "bareNegativeZero": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false
+              },
+              "bareLeadingZeroFraction": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false
+              },
+              "long": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false
+              },
+              "tiny": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false
+              },
+              "zerosBare": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": false
+              },
+              "zerosScaled": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "nullable": false
+              },
+              "bigLong": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "bigNegativeZero": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "bigLeadingZeros": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "mixed": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "bigMixed": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": true,
+                "many": true
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Spellings": {
+      "namespace": "public",
+      "model": "Spellings"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "b983cac96e710181388b1680adfb3a1ef360e5e166f3bbe86929b9470a30c2c6",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Spellings": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "leadingZeros": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "7"
+                  }
+                },
+                "negativeZero": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  }
+                },
+                "leadingZeroFraction": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "0.10"
+                  }
+                },
+                "bareLeadingZeros": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "7"
+                  }
+                },
+                "bareNegativeZero": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  }
+                },
+                "bareLeadingZeroFraction": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "0.10"
+                  }
+                },
+                "long": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "12345678901234567890.123456789"
+                  }
+                },
+                "tiny": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "0.000000000000000001"
+                  }
+                },
+                "zerosBare": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.50"
+                  }
+                },
+                "zerosScaled": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.50"
+                  }
+                },
+                "bigLong": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "9007199254740993"
+                  }
+                },
+                "bigNegativeZero": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "0"
+                  }
+                },
+                "bigLeadingZeros": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "7"
+                  }
+                },
+                "mixed": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "literal",
+                    "value": [
+                      "7",
+                      "0",
+                      "0.10",
+                      "12345678901234567890.123456789",
+                      "0.000000000000000001",
+                      "1.50"
+                    ]
+                  }
+                },
+                "bigMixed": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "literal",
+                    "value": ["9007199254740993", "0", "7"]
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

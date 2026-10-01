@@ -13,6 +13,7 @@ model User {
   profile Jsonb?
   embedding Embedding?
   createdAt DateTime @default(now())
+  @@map("user")
 }
 
 model Post {
@@ -21,4 +22,5 @@ model Post {
   title String
   rating Float?
   user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  @@map("post")
 }

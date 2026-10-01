@@ -1,7 +1,6 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { type } from 'arktype';
 import { dirname, join } from 'pathe';
 import { redactSecrets } from '../commands/init/redact-secrets';
 
@@ -32,17 +31,60 @@ export async function emitScaffoldedContract(
   overrides: EmitOverrides = {},
 ): Promise<void> {
   const binPath = resolveProjectBin(ctx.cwd, overrides);
-  const result = await runCaptured(process.execPath, [binPath, 'contract', 'emit'], ctx.cwd);
+  const result = await runCaptured(
+    process.execPath,
+    [binPath, 'contract', 'emit', '--json'],
+    ctx.cwd,
+  );
   if (result.exitCode !== 0) {
-    const output =
-      envelopeError(result.stdout) ??
-      (result.stderr.trim().length > 0 ? result.stderr : result.stdout);
     const cause =
       result.exitCode === null
         ? `was killed by signal ${result.signal ?? 'unknown'}`
         : `exited with code ${result.exitCode}`;
-    throw new Error(`\`prisma contract emit\` ${cause}: ${redactSecrets(tail(output))}`);
+    const detail =
+      errorFromEnvelope(result.stdout) ?? tail(firstNonEmpty(result.stderr, result.stdout));
+    throw new Error(`\`prisma contract emit\` ${cause}: ${redactSecrets(detail)}`);
   }
+}
+
+function firstNonEmpty(preferred: string, fallback: string): string {
+  return preferred.trim().length > 0 ? preferred : fallback;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * The child ran with `--json`, so its settlement is a `result` event on
+ * stdout whose envelope carries the structured error. That is the cause worth
+ * quoting; stderr ends with whatever the child said last, which is often an
+ * unrelated notice.
+ */
+function errorFromEnvelope(stdout: string): string | undefined {
+  for (const line of stdout.split('\n').reverse()) {
+    let event: unknown;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!isRecord(event) || event['kind'] !== 'result' || !isRecord(event['envelope'])) {
+      continue;
+    }
+    const error = event['envelope']['error'];
+    if (!isRecord(error)) {
+      continue;
+    }
+    const code = typeof error['code'] === 'string' ? error['code'] : undefined;
+    const summary = typeof error['summary'] === 'string' ? error['summary'] : undefined;
+    const why = typeof error['why'] === 'string' ? ` — ${error['why']}` : '';
+    if (code === undefined && summary === undefined) {
+      continue;
+    }
+    return `${[code, summary].filter((part) => part !== undefined).join(': ')}${why}`;
+  }
+  return undefined;
 }
 
 function resolveProjectBin(cwd: string, overrides: EmitOverrides): string {
@@ -109,32 +151,6 @@ function runCaptured(
       resolve({ exitCode: code, signal, stdout, stderr });
     });
   });
-}
-
-const FailedResultLine = type({
-  kind: "'result'",
-  envelope: { error: { code: 'string', summary: 'string' } },
-});
-
-/**
- * With its output captured, the child writes its terminal result envelope on
- * stdout, so a failed run names its error there — while stderr can hold
- * nothing but an unrelated notice, such as the agent-skills reminder.
- */
-function envelopeError(stdout: string): string | undefined {
-  for (const line of stdout.trim().split('\n').reverse()) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    const result = FailedResultLine(parsed);
-    if (!(result instanceof type.errors)) {
-      return `${result.envelope.error.code}: ${result.envelope.error.summary}`;
-    }
-  }
-  return undefined;
 }
 
 function tail(text: string): string {

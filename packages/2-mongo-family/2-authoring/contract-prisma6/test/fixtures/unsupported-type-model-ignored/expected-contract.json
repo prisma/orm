@@ -1,0 +1,53 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "User": {
+      "namespace": "__unbound__",
+      "model": "User"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "User": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {},
+            "storage": {
+              "collection": "User"
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "22e0a650dbe5eb696b0425beefc3bd4ff62ea446dfc3bedb692848fc2eedeee1",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "User": {
+              "kind": "mongo-collection"
+            }
+          }
+        }
+      }
+    }
+  }
+}

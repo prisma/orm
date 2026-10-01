@@ -1,3 +1,7 @@
+import {
+  temporalAuthoringPresets,
+  temporalCodecPreset,
+} from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
 import {
   temporalCodecPresetMirrors,
@@ -5,9 +9,8 @@ import {
 } from '../../2-authoring/contract-psl/test/fixtures';
 import { sqlTimestampPresetMirror } from '../../2-authoring/contract-ts/test/temporal-preset-mirror';
 import {
-  temporalAuthoringPresets,
-  temporalCodecPreset,
   temporalCodecPresetWithPrecision,
+  temporalStringAuthoringPresets,
 } from '../src/core/timestamp-now-generator';
 
 const TIMESTAMP_NOW_PHASE = { kind: 'generator', id: 'timestampNow' };
@@ -76,7 +79,32 @@ describe('temporalCodecPreset', () => {
 });
 
 describe('temporalAuthoringPresets', () => {
-  it('is unchanged by the per-codec preset factories', () => {
+  it.each([temporalAuthoringPresets, temporalStringAuthoringPresets])(
+    'uses the supplied generator for both timestamps',
+    (factory) => {
+      const presets = factory({
+        codecId: 'pg/timestamptz@1',
+        nativeType: 'timestamptz',
+        generatorId: 'dateNow',
+      });
+      expect(Object.values(presets).map((preset) => preset.output)).toEqual([
+        {
+          codecId: 'pg/timestamptz@1',
+          nativeType: 'timestamptz',
+          executionDefaults: { onCreate: { kind: 'generator', id: 'dateNow' } },
+        },
+        {
+          codecId: 'pg/timestamptz@1',
+          nativeType: 'timestamptz',
+          executionDefaults: {
+            onCreate: { kind: 'generator', id: 'dateNow' },
+            onUpdate: { kind: 'generator', id: 'dateNow' },
+          },
+        },
+      ]);
+    },
+  );
+  it('generates createdAt on create and updatedAt on create and update', () => {
     expect(
       temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }),
     ).toEqual({
@@ -85,7 +113,7 @@ describe('temporalAuthoringPresets', () => {
         output: {
           codecId: 'pg/timestamptz-temporal@1',
           nativeType: 'timestamptz',
-          default: { kind: 'function', expression: 'now()' },
+          executionDefaults: { onCreate: TIMESTAMP_NOW_PHASE },
         },
       },
       updatedAt: {

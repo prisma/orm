@@ -1,4 +1,8 @@
-import { domainModelsAtDefaultNamespace, type PlanMeta } from '@internal/contract/types';
+import {
+  domainModelsAtDefaultNamespace,
+  domainValueObjectsAtDefaultNamespace,
+  type PlanMeta,
+} from '@internal/contract/types';
 import type {
   AnyMongoTypeMaps,
   ExtractMongoCodecTypes,
@@ -832,7 +836,12 @@ export class PipelineChain<
         domainModelsAtDefaultNamespace(contractNarrow.domain)[modelName],
       );
       resultShape = model
-        ? computePipelineResultShape(this.#state.stages, contractModelToMongoResultShape(model))
+        ? computePipelineResultShape(
+            this.#state.stages,
+            contractModelToMongoResultShape(model, {
+              valueObjects: domainValueObjectsAtDefaultNamespace(contractNarrow.domain) ?? {},
+            }),
+          )
         : { kind: 'unknown' as const };
     }
     return {

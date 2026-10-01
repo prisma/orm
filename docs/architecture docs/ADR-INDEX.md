@@ -5,7 +5,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## Core Architecture
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 001 | Migrations as Edges | Defines migrations as contract-to-contract transitions rather than sequential SQL files | [ADR 001 - Migrations as Edges.md](adrs/ADR%20001%20-%20Migrations%20as%20Edges.md) |
 | 002 | Plans are Immutable | Establishes Plans as immutable, auditable objects with contract hash and references | [ADR 002 - Plans are Immutable.md](adrs/ADR%20002%20-%20Plans%20are%20Immutable.md) |
 | 003 | One Query One Statement | Ensures Plans map to single SQL statements for predictability and guardrails | [ADR 003 - One Query One Statement.md](adrs/ADR%20003%20-%20One%20Query%20One%20Statement.md) |
@@ -18,7 +18,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## Contract & Schema
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 006 | Dual Authoring Modes | Supports both PSL-first and TS-first authoring with identical canonical artifacts | [ADR 006 - Dual Authoring Modes.md](adrs/ADR%20006%20-%20Dual%20Authoring%20Modes.md) |
 | 007 | Types Only Emission | Emits only TypeScript declarations, no runtime client code generation | [ADR 007 - Types Only Emission.md](adrs/ADR%20007%20-%20Types%20Only%20Emission.md) |
 | 008 | Dev Auto Emit CI Explicit Emit | Removes explicit generate step in development via plugins, requires explicit emit in CI | [ADR 008 - Dev Auto Emit CI Explicit Emit.md](adrs/ADR%20008%20-%20Dev%20Auto%20Emit%20CI%20Explicit%20Emit.md) |
@@ -35,11 +35,15 @@ This document provides a comprehensive index of all Architectural Decision Recor
 | 246 | Option arguments and select templates for authoring helpers | Adds a shared `option` argument kind (bare token in PSL, literal union in TS; one type across block parameters and helper arguments) and a `select` template node — registration-validated against the option's values — so preset vocabulary never leaks generator ids. An undefined execution-defaults phase omits the phase; an empty resolved `typeParams` omits the key — the two rules carry each other, and the `updatedAt()` ≡ `timestamptz(now, now)` shorthand is test-enforced, not structural. Per-codec preset name = codec base name. Records which check protects which surface (PSL validator vs TS literal union; the TS surface has no runtime validation) and which protects which argument object (weak type vs excess-property). | [ADR 246 - Option arguments and select templates for authoring helpers.md](adrs/ADR%20246%20-%20Option%20arguments%20and%20select%20templates%20for%20authoring%20helpers.md) |
 | 249 | Central attribute-spec registry | Registers every model-level and field-level PSL attribute of both families in one place, keyed by level and name, as a spec *factory* over a framework-owned construction-time context (`AttributeSpecContext` / `FieldAttributeSpecContext`) — the uniform signature is what lets the language server invoke the same factories the interpreters run. `assembleAttributeSpecs` merges family built-ins with [ADR 236](adrs/ADR%20236%20-%20Target-contributed%20model%20attributes.md)'s model-attribute descriptors into frozen plain records and restores the factory types core erases (they return `AttributeSpec<never>`, because `refine` makes `Out` contravariant and `unknown` would reject every spec that refines). Registry keys drive unknown-attribute diagnostics at field and model level in both families; block attributes are declared on `AuthoringPslBlockDescriptor.attributes` and parsed by the kit. | [ADR 249 - Central attribute-spec registry.md](adrs/ADR%20249%20-%20Central%20attribute-spec%20registry.md) |
 | 250 | Models and views are emitted from the contract | `contract.d.ts` gains a `Models` namespace (one member per model, `<ns>_<Model>`, plus `<ns>_Any<Base>` for each polymorphic base) and a type-only `models` constant; relations are typed as the related member with a phantom `RelationKeys` key so `Scalars<M>` names a default fetch's row and `Shape<M, Spec>` names an application data structure derived from the model, and both ORM collections carry `_row` so `ResultType` names any query's result. To-one nullability is a family hook (SQL reads foreign keys and column nullability; Mongo takes the nullable default); name collisions and non-identifier names are emitter errors | [ADR 250 - Models and views are emitted from the contract.md](adrs/ADR%20250%20-%20Models%20and%20views%20are%20emitted%20from%20the%20contract.md) |
+| 253 | PSL red-root source ownership | A PSL parse registers the actual returned red document root with a named `SourceFile`; post-parse diagnostics resolve filenames from the node's owning root through `PslSources`, with no unnamed parse mode or singleton fallback. Output diagnostics may still serialize a `sourceId`, but it originates from `SourceFile.filename`; file-read errors and Prisma7 compatibility plumbing are explicit exceptions. | [ADR 253 - PSL red-root source ownership.md](adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md) |
+| 254 | Data types and casts | A data type is the type of a value Prisma stores or passes to the database, most often a database type made first-class, registered per target or extension by id (`pg/int8`, `pg/jsonb`), owning its DDL name and aliases, its parameters and their rendering, its canonical contract form, and its casts from other types; a codec is one representation of a data type and several may share one; a written value has a type of its own (a number takes the narrowest target integer type that holds it, so it never rounds; the `json` tag returns the JSON type) and is admitted when the column's type is its type or casts from it; enum members are references; `sql` is the tag of `sql/expression`, which the SQL family defines and registers, the one type a family registers; no family-level database types and no central convertibility rule. Replaces the PSL half of ADR 184 | [ADR 254 - Data types and casts.md](adrs/ADR%20254%20-%20Data%20types%20and%20casts.md) |
+| 255 | Block specs bind top-level block values | A contributed top-level block declares its member-value grammar as a block spec built from the shared argument combinators — `structBlock` for closed key sets, `mapBlock` (with an optional bare-member sentinel) for arbitrary keys, `jsonValue()` for native JSON literals, `InferBlock` deriving the factory input type. Declarations are collected completely before any block is interpreted; only successful typed envelopes (`ParsedPslExtensionBlock`) are published and lowered, parsed AST is never stringified, and the print shape is constructed only by producers without an AST. SQL projects selected model references onto storage coordinates and lets factory outputs opt into destination placement via `pslPlacement`. Supersedes ADR 126's parameter-kind tables and descriptor-data validation. | [ADR 255 - Block specs bind top-level block values.md](adrs/ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md) |
+| 257 | Scalar types are named after the target on every surface | A scalar type's PSL name, TypeScript helper and codec id share one token taken from the codec id (`mongo/int32@1` → `Int32`, `field.int32()`), so a name says what the target stores; codec ids never rename. `Json` (the JSON-representable subset) and MongoDB's `Bson` (any BSON value) are the encoding-named exceptions. A renamed PSL name stays one release line as a deprecated alias that warns through the contract source's warning channel; a reserved mechanism covers a codec id that must change | [ADR 257 - Scalar types are named after the target on every surface.md](adrs/ADR%20257%20-%20Scalar%20types%20are%20named%20after%20the%20target%20on%20every%20surface.md) |
 
 ## Query System
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 011 | Unified Plan Model | Establishes common Plan structure across all query lanes with AST, SQL, and metadata | [ADR 011 - Unified Plan Model.md](adrs/ADR%20011%20-%20Unified%20Plan%20Model.md) |
 | 012 | Raw SQL Escape Hatch | **Plan construction superseded by ADR 247.** Provides safe raw SQL execution with required annotations and verification; the annotation schema stands, the AST-less plan shape does not | [ADR 012 - Raw SQL Escape Hatch.md](adrs/ADR%20012%20-%20Raw%20SQL%20Escape%20Hatch.md) |
 | 013 | Lane Agnostic Plan Identity | Ensures Plan identity and hashing work consistently across all query lanes | [ADR 013 - Lane Agnostic Plan Identity.md](adrs/ADR%20013%20-%20Lane%20Agnostic%20Plan%20Identity.md) |
@@ -52,19 +56,22 @@ This document provides a comprehensive index of all Architectural Decision Recor
 | 180 | Dot-path field accessor | Callable string accessor (`u("homeAddress.city")`) for value object fields and Mongo update operators; unified `FieldAccessor` used by both read and write callbacks in the Mongo query builder | [ADR 180 - Dot-path field accessor.md](adrs/ADR%20180%20-%20Dot-path%20field%20accessor.md) |
 | 201 | State-machine pattern for typed DSL builders | Three-class state machine (`CollectionHandle` → `FilteredCollection` → `PipelineChain`) with phantom marker types gating conditional terminals; pattern used in `mongo-query-builder`, candidate for reuse in a typed SQL query builder | [ADR 201 - State-machine pattern for typed DSL builders.md](adrs/ADR%20201%20-%20State-machine%20pattern%20for%20typed%20DSL%20builders.md) |
 | 247 | Whole-query raw SQL is the fragment mechanism at statement position | A `raw-query` node in `AnyQueryAst` sharing the fragment tag's parts representation; `.returnsRow(spec)` / `.affectedCount()` terminators, a hybrid row spec (contract column refs or explicit codec ids), embeddable iff row-returning (so data-modifying CTEs compose), strict-on-missing / drop-surplus decode. Supersedes ADR 012's AST-less plan construction | [ADR 247 - Whole-query raw SQL is the fragment mechanism at statement position.md](adrs/ADR%20247%20-%20Whole-query%20raw%20SQL%20is%20the%20fragment%20mechanism%20at%20statement%20position.md) |
+| 255 | Relation ordering lowers to correlated subqueries | A SQL ORM `orderBy` can order by a to-one relation's field or a to-many relation's `count(predicate?)`; each lowers to a correlated scalar subquery built from the same join `some`/`every`/`none` use, so the main query gains no join. `OrderByItem` carries `nulls` placement rendered per adapter; `cursor()` and `DISTINCT ON` refuse orders that are not plain columns | [ADR 255 - Relation ordering lowers to correlated subqueries.md](adrs/ADR%20255%20-%20Relation%20ordering%20lowers%20to%20correlated%20subqueries.md) |
 
 ## Runtime & Execution
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 014 | Runtime Hook API | Defines composable hook system for Plan lifecycle events and plugin integration | [ADR 014 - Runtime Hook API.md](adrs/ADR%20014%20-%20Runtime%20Hook%20API.md) |
 | 015 | ORM as Optional Extension | Establishes ORM layer as optional extension built on core DSL primitives | [ADR 015 - ORM as Optional Extension.md](adrs/ADR%20015%20-%20ORM%20as%20Optional%20Extension.md) |
 | 016 | Adapter SPI for Lowering | Defines stable adapter interface for SQL lowering and dialect-specific behavior | [ADR 016 - Adapter SPI for Lowering.md](adrs/ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md) |
 | 030 | Result decoding & codecs registry | Establishes codec registry for type-safe result decoding and parameter encoding | [ADR 030 - Result decoding & codecs registry.md](adrs/ADR%20030%20-%20Result%20decoding%20&%20codecs%20registry.md) |
 | 031 | Adapter capability discovery & negotiation | Defines capability discovery and negotiation flow between adapters and runtime | [ADR 031 - Adapter capability discovery & negotiation.md](adrs/ADR%20031%20-%20Adapter%20capability%20discovery%20&%20negotiation.md) |
 | 155 | Driver/Codec boundary and lowering responsibilities | Separates lowering vs codec encoding/decoding vs driver transport; standardizes codec↔driver boundary values as `string \| Uint8Array \| null` | [ADR 155 - Driver Codec Boundary and Lowering Responsibilities.md](adrs/ADR%20155%20-%20Driver%20Codec%20Boundary%20and%20Lowering%20Responsibilities.md) |
+| 251 | Target-owned Postgres list framing | Moves inbound Postgres list framing to the target so builtin and enum arrays share one raw-text parse path before scalar element decoding; records the outbound asymmetry and guarded driver array-OID set | [ADR 251 - Target-owned Postgres list framing.md](adrs/ADR%20251%20-%20Target-owned%20Postgres%20list%20framing.md) |
 | 157 | Execution enums | Defines execution-plane enum behavior derived from explicit storage enforcement; builds on ADR 155 and ADR 156 | [ADR 157 - Execution enums.md](adrs/ADR%20157%20-%20Execution%20enums.md) |
 | 158 | Execution mutation defaults | Defines execution-plane mutation defaults (`execution.mutations.defaults`) and a section-owned hashing model to avoid marker churn | [ADR 158 - Execution mutation defaults.md](adrs/ADR%20158%20-%20Execution%20mutation%20defaults.md) |
+| 256 | Mutation-default generators are a framework runtime concern | The generator contract (`{ id, generate(params?), stability }`), the `'field'` / `'row'` / `'query'` stabilities and their caches, the availability check at execution-context creation, and the apply loop live once in `@internal/framework-components/runtime` and serve every family; a key present in `values` is explicit whatever its value; `buildExecutionSection` sorts and hashes the section for every authoring path | [ADR 256 - Mutation-default generators are a framework runtime concern.md](adrs/ADR%20256%20-%20Mutation-default%20generators%20are%20a%20framework%20runtime%20concern.md) |
 | 168 | Postgres JSON and JSONB typed columns | Adds first-class PostgreSQL `json`/`jsonb` codec and column support with Standard Schema-based typed emission in `contract.d.ts` | [ADR 168 - Postgres JSON and JSONB typed columns.md](adrs/ADR%20168%20-%20Postgres%20JSON%20and%20JSONB%20typed%20columns.md) |
 | 186 | Codec-dispatched type rendering | Codecs own TypeScript type rendering via `renderOutputType` and `FieldOutputTypes`; removes `EmissionSpi.generateModelsType?` override and legacy renderer infrastructure | [ADR 186 - Codec-dispatched type rendering.md](adrs/ADR%20186%20-%20Codec-dispatched%20type%20rendering.md) |
 | 169 | Declared applicability for mutation default generators | Records the decision to validate generator/column compatibility via contributor-declared applicability and to assemble generator implementations via composed registries | [ADR 169 - Declared applicability for mutation default generators.md](adrs/ADR%20169%20-%20Declared%20applicability%20for%20mutation%20default%20generators.md) |
@@ -81,7 +88,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## Migration System
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 028 | Migration Structure & Operations | Defines migration file structure, on-disk formats, schemas, and operations for working with migration graphs | [ADR 028 - Migration Structure & Operations.md](adrs/ADR%20028%20-%20Migration%20Structure%20%26%20Operations.md) |
 | 037 | Transactional DDL Fallback | Specifies fallback behavior when adapters lack full transactional DDL support | [ADR 037 - Transactional DDL Fallback.md](adrs/ADR%20037%20-%20Transactional%20DDL%20Fallback.md) |
 | 038 | Operation idempotency classification & enforcement | Defines idempotency classification and enforcement for migration operations | [ADR 038 - Operation idempotency classification & enforcement.md](adrs/ADR%20038%20-%20Operation%20idempotency%20classification%20&%20enforcement.md) |
@@ -106,7 +113,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## Guardrails & CI
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 022 | Lint Rule Taxonomy | Defines taxonomy and classification system for lint rules and violations | [ADR 022 - Lint Rule Taxonomy.md](adrs/ADR%20022%20-%20Lint%20Rule%20Taxonomy.md) |
 | 023 | Budget Evaluation | Establishes query budget evaluation and enforcement mechanisms | [ADR 023 - Budget Evaluation.md](adrs/ADR%20023%20-%20Budget%20Evaluation.md) |
 | 024 | Telemetry Schema | Defines telemetry schema and privacy controls for runtime observability | [ADR 024 - Telemetry Schema.md](adrs/ADR%20024%20-%20Telemetry%20Schema.md) |
@@ -116,7 +123,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## Extensions & Packs
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 017 | Extension Compatibility Policy | Establishes compatibility policy for extensions and alternate runtimes | [ADR 017 - Extension Compatibility Policy.md](adrs/ADR%20017%20-%20Extension%20Compatibility%20Policy.md) |
 | 104 | PSL extension namespacing & syntax | Defines namespaced PSL extension syntax and mapping to contract JSON | [ADR 104 - PSL extension namespacing & syntax.md](adrs/ADR%20104%20-%20PSL%20extension%20namespacing%20&%20syntax.md) |
 | 105 | Contract extension encoding | Specifies canonical extension section structure in contract JSON | [ADR 105 - Contract extension encoding.md](adrs/ADR%20105%20-%20Contract%20extension%20encoding.md) |
@@ -129,23 +136,24 @@ This document provides a comprehensive index of all Architectural Decision Recor
 | 117 | Extension capability keys | Defines canonical capability keys and reserved namespaces | [ADR 117 - Extension capability keys.md](adrs/ADR%20117%20-%20Extension%20capability%20keys.md) |
 | 118 | Bundle inclusion policy for packs | Establishes bundle inclusion policy and security constraints for packs | [ADR 118 - Bundle inclusion policy for packs.md](adrs/ADR%20118%20-%20Bundle%20inclusion%20policy%20for%20packs.md) |
 | 121 | Contract.d.ts structure and relation typing | Complete specification for Tables, Models, and Relations namespaces with proper relation field typing | [ADR 121 - Contract.d.ts structure and relation typing.md](adrs/ADR%20121%20-%20Contract.d.ts%20structure%20and%20relation%20typing.md) |
-| 126 | PSL top-level block SPI | Defines SPI for packs to register new top-level blocks (views, enums, etc.) with parsing, validation, and deterministic emission | [ADR 126 - PSL top-level block SPI.md](adrs/ADR%20126%20-%20PSL%20top-level%20block%20SPI.md) |
+| 126 | PSL top-level block SPI | Defines SPI for packs to register new top-level blocks (views, enums, etc.); its parameter value-kind tables and descriptor-data validation are superseded by [ADR 255](adrs/ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md) | [ADR 126 - PSL top-level block SPI.md](adrs/ADR%20126%20-%20PSL%20top-level%20block%20SPI.md) |
+| 129 | Tagged literals write values of data types | A qualified name followed by a string literal in backticks or quotes; the tag names the data type of the text; backtick strings only after a tag; one canonicalization for PSL and TypeScript; a tag is unprefixed when the family or a target owns its data type, by the rule in ADR 254; `sql` is the tag of the data type `sql/expression` and has no prefixed aliases; `` @default(sql`...`) `` is stored as the ordinary function-kind column default | [ADR 129 - Template-Tagged Literals for Extensions.md](adrs/ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md) |
 | 153 | Extension Package Naming Convention | Standardizes on `extension-*` prefix exclusively for extension pack npm names | [ADR 153 - Extension Package Naming Convention.md](adrs/ADR%20153%20-%20Extension%20Package%20Naming%20Convention.md) |
 | 214 | Extension operator surface: namespaced replacement operators and the predicate/helper split | Pattern for extension operators whose codec output cannot back a framework built-in's wire semantics: declare zero of the relevant traits + ship namespaced replacements. Predicate operators register as column methods through the operation registry; non-predicate operators (sort comparators, SELECT-expression accessors) ship as free-standing helper functions. Cipherstash is the canonical worked example. | [ADR 214 - Extension operator surface namespaced replacement operators.md](adrs/ADR%20214%20-%20Extension%20operator%20surface%20namespaced%20replacement%20operators.md) |
 
 ## Adapters & Targets
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 065 | Adapter capability schema & negotiation v1 | Defines adapter capability schema and negotiation protocol | [ADR 065 - Adapter capability schema & negotiation v1.md](adrs/ADR%20065%20-%20Adapter%20capability%20schema%20&%20negotiation%20v1.md) |
 | 068 | Error mapping to RuntimeError | Establishes stable mapping from engine/driver errors to RuntimeError envelope | [ADR 068 - Error mapping to RuntimeError.md](adrs/ADR%20068%20-%20Error%20mapping%20to%20RuntimeError.md) |
-| 207 | Per-environment facade asymmetry | Records why `postgres()` (long-lived) and `postgresServerless()` (per-request) ship asymmetric runtime-bound surfaces — same authoring surface, different lifecycle ergonomics — and rejects AsyncLocalStorage / single-facade / per-product alternatives | [ADR 207 - Per-environment facade asymmetry.md](adrs/ADR%20207%20-%20Per-environment%20facade%20asymmetry.md) |
+| 207 | A serverless Postgres connection has the same query interface as a `postgres()` client | `postgres()` returns a client that serves every request from a pool; `postgresServerless()` returns a serverless client that holds no database connection, and each `postgres.connect({ url })` on it returns a connection that has every member of a client except `connect` and owns one database connection, which `await using` closes when the request ends | [ADR 207 - A serverless Postgres connection has the same query interface as a postgres client.md](adrs/ADR%20207%20-%20A%20serverless%20Postgres%20connection%20has%20the%20same%20query%20interface%20as%20a%20postgres%20client.md) |
 | 248 | PostgreSQL floor lowered to 15 | Amends ADR 222: the minimum supported PostgreSQL server version is 15 (previously 17), declared in `@internal/target-postgres`'s `package.json#prismaNext.minServerVersion`, mirrored by the CLI's `MIN_SERVER_VERSION`, and held equal by a drift test; 15 is the oldest version CI exercises, and nothing emitted or read needs more than 12 | [ADR 248 - PostgreSQL floor lowered to 15.md](adrs/ADR%20248%20-%20PostgreSQL%20floor%20lowered%20to%2015.md) |
 
 ## Development & Tooling
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 026 | Conformance Kit Certification | Defines conformance testing levels and certification requirements | [ADR 026 - Conformance Kit Certification.md](adrs/ADR%20026%20-%20Conformance%20Kit%20Certification.md) |
 | 027 | Error Envelope Stable Codes | Establishes stable error codes and envelope structure for consistent error handling | [ADR 027 - Error Envelope Stable Codes.md](adrs/ADR%20027%20-%20Error%20Envelope%20Stable%20Codes.md) |
 | 032 | Dev Auto Emit Integration | Specifies development tool integration for automatic contract emission | [ADR 032 - Dev Auto Emit Integration.md](adrs/ADR%20032%20-%20Dev%20Auto%20Emit%20Integration.md) |
@@ -158,7 +166,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## No-Emit Workflow
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 096 | TS-authored contract parity & purity rules | Ensures TS-authored contracts produce identical artifacts to PSL-first mode | [ADR 096 - TS-authored contract parity & purity rules.md](adrs/ADR%20096%20-%20TS-authored%20contract%20parity%20&%20purity%20rules.md) |
 | 097 | Tooling runs on canonical JSON only | Ensures tools consume canonical JSON artifacts, not TS source code | [ADR 097 - Tooling runs on canonical JSON only.md](adrs/ADR%20097%20-%20Tooling%20runs%20on%20canonical%20JSON%20only.md) |
 | 098 | Runtime accepts contract object or JSON | Defines runtime API for accepting both TS objects and JSON artifacts | [ADR 098 - Runtime accepts contract object or JSON.md](adrs/ADR%20098%20-%20Runtime%20accepts%20contract%20object%20or%20JSON.md) |
@@ -168,7 +176,7 @@ This document provides a comprehensive index of all Architectural Decision Recor
 ## Migration Advisors
 
 | ADR | Title | Description | Link |
-|-----|-------|-------------|------|
+| ----- | ------- | ------------- | ------ |
 | 101 | Advisors Framework | Establishes uniform API for computing and surfacing migration advisories | [ADR 101 - Advisors Framework.md](adrs/ADR%20101%20-%20Advisors%20Framework.md) |
 | 102 | Squash-first policy & squash advisor | Defines policy for keeping migration graphs small through regular baselines | [ADR 102 - Squash-first policy & squash advisor.md](adrs/ADR%20102%20-%20Squash-first%20policy%20&%20squash%20advisor.md) |
 | 122 | Database Initialization & Adoption | Covers greenfield, brownfield-conservative, and brownfield-incremental adoption strategies including introspection, multi-service namespacing, and incremental contract expansion | [ADR 122 - Database Initialization & Adoption.md](adrs/ADR%20122%20-%20Database%20Initialization%20%26%20Adoption.md) |

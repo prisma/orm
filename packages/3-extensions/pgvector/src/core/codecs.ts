@@ -19,6 +19,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  refuseJsonValue,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -26,9 +27,11 @@ import {
   definePostgresCodecs,
   PostgresCodecDescriptor,
 } from '@internal/target-postgres/codec-descriptor';
+import { counted } from '@internal/utils/text';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from './constants';
+import { pgvectorVector } from './data-types';
 import { pgVectorError } from './errors';
 
 type VectorConversionCode = 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED';
@@ -140,14 +143,21 @@ export class PgVectorCodec extends CodecImpl<
   }
 
   decodeJson(json: JsonValue): number[] {
-    if (!Array.isArray(json)) {
-      throw pgVectorError('RUNTIME.DECODE_FAILED', 'Vector database JSON value must be an array', {
-        meta: { codecId: VECTOR_CODEC_ID },
-      });
+    if (!Array.isArray(json) || json.length !== this.length) return this.refuseJson(json);
+    const numbers: number[] = [];
+    for (const element of json) {
+      if (typeof element !== 'number' || !Number.isFinite(element)) return this.refuseJson(json);
+      numbers.push(element);
     }
-    const value = [...json];
-    this.assertVector(value, 'RUNTIME.DECODE_FAILED');
-    return value;
+    return numbers;
+  }
+
+  private refuseJson(json: JsonValue): never {
+    return refuseJsonValue(
+      VECTOR_CODEC_ID,
+      `an array of ${counted(this.length, 'finite number')}`,
+      json,
+    );
   }
 }
 
@@ -178,6 +188,7 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return jsonArrayFromVectorElements(expression);
   }
+  override readonly dataType = pgvectorVector.id;
   override readonly codecId = VECTOR_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;

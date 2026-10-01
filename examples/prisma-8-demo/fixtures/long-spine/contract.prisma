@@ -11,4 +11,5 @@ model user {
   tags String?
   category String?
   settings String?
+  @@map("user")
 }

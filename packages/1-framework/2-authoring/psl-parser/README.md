@@ -4,20 +4,22 @@ Reusable PSL parser for Prisma 8.
 
 ## Overview
 
-`@internal/psl-parser` parses Prisma Schema Language (PSL) source into a deterministic CST with source spans and stable machine-readable diagnostics, then offers shared symbol-table resolution for the target-agnostic semantics every PSL interpreter needs. Normalization to contract IR and emit integration stay in downstream target packages.
+`@internal/psl-parser` parses Prisma Schema Language (PSL) source into a deterministic CST with source spans and stable machine-readable diagnostics, then offers shared symbol-table resolution for the target-agnostic semantics every PSL interpreter needs. Normalization to contract IR and emit integration stay in downstream target packages. Source provenance is owned by the returned red syntax root; see [ADR 253 — PSL red-root source ownership](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md).
 
 In the provider-based authoring model, PSL providers call `parse` to obtain the CST and then `buildSymbolTable` to obtain a scope-aware view, before returning `Result<Contract, ContractSourceDiagnostics>` to the framework emit pipeline.
 
 ## Responsibilities
 
-- Parse PSL source text (`schema` + `sourceId`) with deterministic ordering.
+- Parse PSL source text with a required explicit filename and deterministic ordering.
 - Return AST nodes with source spans for models, fields, enums, and `types { ... }`.
 - Preserve raw PSL relation action tokens (for example `Cascade`) without semantic normalization.
-- Return stable diagnostics (`code`, `message`, `span`, `sourceId`) for invalid and unsupported constructs.
+- Return PSL-owned parser, symbol, attribute-kit, and SQL/Mongo semantic diagnostics as `{ filename, code, message, range }`, with optional `data`, zero-based file-local ranges, and filenames derived from the owning syntax node through `PslSources`. No source object is retained in emitted diagnostics. `PslDiagnosticCollector.toExternal()` translates them at interpreter output boundaries, preserving order alongside untouched external contribution diagnostics. Existing unlocated public errors retain their envelope through `pushUnlocated`, while still carrying an owned range internally. Provider seeding uses the same `mapPslDiagnostics` conversion.
 - Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
 - Parse attributes generically (namespaced or not), including optional argument lists; target semantics live downstream.
 - Emit attribute nodes with explicit target (`field` / `model` / `namedType`), attribute name, and parsed argument list with spans.
-- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics, target-supplied scalar/type-alias classification, and descriptor-driven generic-block reconstruction.
+- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics and named-type binding resolution, without interpreting blocks.
+- Provide typed block-value and block-attribute interpretation against registered block specs for consumers to run after collection with the snapshot's binder; consumers own diagnostic reporting.
+- Answer "which declaration does this name denote" for every consumer, once, through the binder — the sole voice of resolution failures.
 
 ## Attributes (generic parsing boundary)
 
@@ -28,6 +30,7 @@ In the provider-based authoring model, PSL providers call `parse` to obtain the 
 - Arguments are parsed into positional/named entries with preserved raw values and source spans.
 - The parser owns **syntax + structure + spans**, not semantics.
 - Example: `@default(uuid(7))` is preserved as a positional argument value `uuid(7)`; semantic lowering is handled downstream.
+- A value may be a dotted member path such as `address.city` in `@@index([address.city])`: a `PathExpr` node, read with `PathExprAst.path()`. A dotted callee is the same `PathExpr`, so `address.city` has one shape whether or not it is called (`address.city(sort: Asc)`, read with `FunctionCallAst.memberPath()`); a bare callee (`now()`) is a `QualifiedName`, read with `FunctionCallAst.name()`. `FunctionCallAst.path()` returns every segment either way. The syntax cannot tell a namespace-qualified function (`pg.now()`) from a called field path, so the parser does not try: each reader decides whether it accepts a path, and what it names.
 
 Interpretation/validation (for example `@internal/sql-contract-psl`) is responsible for:
 
@@ -38,39 +41,132 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
 
 ## Public API
 
-- `parse(schema)` in `src/parse.ts` (also at `@internal/psl-parser/syntax`) — the CST parser: returns the `DocumentAst`, its backing `SourceFile`, and syntactic diagnostics. The recursive-descent / lossless-CST path supersedes the legacy `parsePslDocument`.
-- `buildSymbolTable({ document, sourceFile, scalarTypes, pslBlockDescriptors })` in `src/symbol-table.ts` — a pure, fault-tolerant pass over a parsed CST `DocumentAst` that returns a scope-aware `SymbolTable` (top-level namespaces / scalars / type-aliases / blocks / models / composite-types as keyed records discriminated by `kind`, namespace members and block fields nested under their owner, every symbol carrying its CST AST `node` plus its declaration `span`) plus its own duplicate-name diagnostics (`PSL_DUPLICATE_DECLARATION`, first-wins, colliding across kinds within one scope). `scalarTypes` is supplied by the target to classify `types { ... }` bindings, while `pslBlockDescriptors` is supplied from authoring contributions so generic/extension blocks can be reconstructed once into `BlockSymbol.block`. The pass also **resolves** the field/named-type read set once: each `FieldSymbol` carries the split type (`typeName`/`typeNamespaceId`/`typeContractSpaceId`), `optional`/`list`, `typeConstructor?`, rendered `attributes`, and `malformedType?` (set, with a `PSL_INVALID_QUALIFIED_TYPE` diagnostic, when the type is over-qualified); `ScalarSymbol`/`TypeAliasSymbol` carry the resolved binding (`baseType`/`typeConstructor`/`isConstructor`). Interpreters consume this resolved shape directly — there is no per-package field/attribute view layer.
-- `readResolvedAttribute(s)` / `readResolvedConstructorCall` + the span maps
-  (`nodePslSpan`, `rangeToPslSpan`, `keywordPslSpan`) in `src/resolve.ts` — the
-  shared CST read helpers `buildSymbolTable` uses and that consumers (e.g.
-  enum-block reconstruction) reuse, with `PslSpan` spans.
-- `reconstructExtensionBlock` / `findBlockDescriptor` /
-  `validateExtensionBlockFromSymbol` in `src/extension-block.ts` — reconstruct a
-  descriptor-driven `PslExtensionBlock` from a CST `GenericBlockDeclarationAst`
-  (a `BlockSymbol`) and run the framework's standalone `validateExtensionBlock`
-  over it, building the ref-resolution context from the symbol table.
+- `parse(source, filename, options)` in `src/parse.ts` (also at `@internal/psl-parser/syntax`) — the CST parser: returns the `DocumentAst`, a `PslSources` registry for resolving nodes to their named `SourceFile`, and syntactic diagnostics. The recursive-descent / lossless-CST path supersedes the legacy `parsePslDocument`. An `enum` member may carry attributes. `options.grammar` names the grammar the file is written in, `prisma-8` by default. In the `prisma-7` grammar a `view` body parses as model fields; in `prisma-8` it parses as `key = value` entries. A PSL contract source declares its grammar in `parserOptions`, and every tool that parses its files passes it on. The Prisma 7 and Prisma 6 sources declare `prisma-7`, since Prisma 6 schemas use the same grammar. `PslParserOptions` and `PslGrammar` live in `@internal/config` beside the source provider that declares them, because a core package cannot import the parser; only the parser reads the grammar value. Each reader decides whether it accepts what was parsed.
+- `buildSymbolTable({ documents, sources })` in `src/symbol-table.ts` — a pure, fault-tolerant pass over an ordered `readonly DocumentAst[]` that returns `{ symbolTable, diagnostics }`, with a scope-aware `SymbolTable` (top-level namespaces / named types / blocks / models / composite-types as keyed records discriminated by `kind`, namespace members and block fields nested under their owner, declaration symbols carrying their CST AST `node` plus declaration `span`, and namespace symbols retaining every authored node and span in `declarations`) plus its own source-associated diagnostics (the same `ParseDiagnostic` shape as parser errors: `filename`, `code`, `message`, and a file-local `range`). Duplicate names are first-wins across documents and kinds within one scope (`PSL_DUPLICATE_DECLARATION`); repeated namespaces reopen the same scope, retaining distinct members and diagnosing duplicate member names across declarations and documents. Every supplied document root must be registered in the shared `sources`, even for empty documents. An empty collection returns an empty scope. Single-file callers pass `documents: [document]`; no file discovery is performed. Collection interprets no blocks: every block symbol keeps its syntax `node`, `keyword`, `name`, and `span`, no source text is rendered from the AST, and consumers resolve registered blocks with `interpretExtensionBlocks` over the snapshot's binder. The pass also **resolves** the field/named-type read set once: each `FieldSymbol` carries the split type (`typeName`/`typeNamespaceId`/`typeContractSpaceId`), `optional`/`list`, `typeConstructor?`, rendered `attributes`, and `malformedType?` (set, with a `PSL_INVALID_QUALIFIED_TYPE` diagnostic, when the type is over-qualified); `NamedTypeSymbol` carries the resolved binding (`baseType`/`typeConstructor`/`isConstructor`). Interpreters consume this resolved shape directly — there is no per-package field/attribute view layer.
+- `createBinder({ sources, symbolTable, typeConstructors, attributeSpecs })` in `src/binder.ts` — the name resolver. It returns `{ binder, diagnostics }`, mirroring `buildSymbolTable`: resolution runs eagerly over the symbol table at creation, and the returned diagnostics are complete when the factory returns. Queries are map reads and say nothing about when resolution ran. See [the binder section below](#binder).
+- `referencedModel` / `modelAttributeContext` / `fieldAttributeContext` in `src/binder-context.ts` — build the ADR 249 parse-time attribute contexts from a binder. `resolveReferencedModel` becomes one map read (`symbolForNode(typeReferenceNode(field))`, narrowed to a model) instead of a resolver each consumer supplies for itself, and the context carries the binder itself so the reference combinators stop raising their own existence diagnostics. See [attribute contexts and the single voice](#attribute-contexts-and-the-single-voice).
+- `readResolvedAttribute(s)` / `readResolvedConstructorCall` + the span maps (`nodePslSpan`, `keywordPslSpan`) in `src/resolve.ts` — the shared CST read helpers `buildSymbolTable` uses and that downstream consumers reuse, with `PslSpan` spans derived from `PslSources`. Pure coordinate conversion lives on `SourceFile`: resolve the file with `sources.sourceFileFor(node.syntax)` and call `sourceFile.rangeToPslSpan(range)`, `sourceFile.offsetToPslPosition(offset)`, or `sourceFile.pslSpanToRange(span)`.
+- Block specs in `src/block-spec/` — `structBlock` / `mapBlock` constructors, `InferBlock`, the parser-facing `PslBlockSpecDescriptor` view with `blockSpecFactoryOf`, and `interpretExtensionBlocks({ symbolTable, sources, pslBlockDescriptors, binder })`, the canonical resolution consumers run against a collected table with the snapshot's binder (it returns `{ parsedBlocks, diagnostics }`; the caller owns reporting, and unresolved references speak in the binder's voice); `findBlockDescriptor` in `src/extension-block.ts` looks a keyword up in a descriptor namespace. The shared `jsonValue()` rule reads native JSON-compatible literals from the expression AST.
 - `parseQuotedStringLiteral` / `getPositionalArgument` in `src/attribute-helpers.ts`.
-- AST/diagnostic/span types live in `@internal/framework-components/psl-ast`
-  and are re-exported from this package's root entry for convenience.
+- `isPslIdentifier(text)` in `src/tokenizer.ts`: whether the tokenizer reads the text as one identifier. Code that writes PSL checks a name with it before writing the name where PSL reads an identifier.
+- `NAME_THE_PSL_SOURCE_LOSES` in `src/name-the-psl-source-loses.ts`: the name `__proto__`, which is lost when a PSL file is read: the parser keeps block members, and the PSL contract sources keep other names, as keys of plain objects. Code that writes PSL refuses this name wherever a PSL source reads a name, `@map` and `@@map` included.
+- Rules both PSL readers apply, at `@internal/psl-parser/interpret`: `claimedBlockKeywords` and `unsupportedBlockDiagnostic` (`src/unclaimed-blocks.ts`) report a generic block whose keyword no composed descriptor claims; `enumMemberAttributeDiagnostics` (`src/enum-member-attributes.ts`) reports an attribute on an enum member; `src/relation-backrelations.ts` holds the back-relation pairing rules.
+- Legacy AST/span types live in `@internal/framework-components/psl-ast` and are re-exported from this package's root entry. The attribute kit's `PslDiagnostic` lives in `src/diagnostic.ts`; framework contribution diagnostics retain their separate external contract.
 - Subpath exports:
   - `@internal/psl-parser/syntax`
   - `@internal/psl-parser/tokenizer`
+
+## Binder
+
+The binder is the single authority on which declaration a name denotes. Every consumer asks it rather than scanning the symbol table itself, so one scoping rule and one diagnostic voice serve the SQL and Mongo interpreters, the attribute-spec contexts, and the language server alike. Given `pslBlockDescriptors`, the same eager pass also binds the reference-kinded rules of every registered generic block's value entries and `@@` attribute arguments, so one binder per snapshot covers attributes and block entries.
+
+```ts
+const { binder, diagnostics } = createBinder({
+  sources,
+  symbolTable,
+  typeConstructors,
+  attributeSpecs,
+});
+
+binder.declaredSymbol(modelDeclarationNode); // declaration node -> the symbol it declares
+binder.symbolForNode(typeReferenceNode(field)); // reference node -> what it denotes
+```
+
+The two questions are kept apart deliberately, as Roslyn separates `GetDeclaredSymbol` from `GetSymbolInfo`: `declaredSymbol` answers for the node that *introduces* a name, `symbolForNode` for a node that *mentions* one.
+
+### Scope chain
+
+An unqualified reference resolves in exactly this order:
+
+1. the **declaring namespace** — the namespace the referring declaration itself sits in;
+2. the **top level**;
+3. the **contributed types** — the type-position names the configured target and its extensions contribute, built from the injected `typeConstructors` registry.
+
+That third scope holds names nobody declared in a schema: the scalars, type constructors and field presets a target and its composed extension packs bring, in contrast with the models, composite types and named types the documents themselves declare.
+
+**Sibling namespaces are never consulted.** A schema declaration shadowing a contributed type (a `model Uuid` over a contributed `Uuid`) wins **silently** — shadowing is not a diagnostic. A qualified `ns.Name` is looked up in that PSL namespace, then in the type-constructor namespace of the same name (`pgvector.Vector`), and nowhere else.
+
+Qualified references resolve at whole-`QualifiedName` granularity: in `app.Item`, the segments `app` and `Item` do not resolve separately — the one `QualifiedName` node carries the one resolution.
+
+### Resolution kinds
+
+`symbolForNode` returns `undefined` for a node that is not a reference the binder tracks, and otherwise one of:
+
+| Kind | Denotes |
+| --- | --- |
+| `model` / `compositeType` / `namedType` / `block` | a user declaration; `block` covers `enum` and every other descriptor-driven block, which may be a field's type but never an `@@base` target |
+| `contributedType` | a scalar, type constructor or field preset from the injected registry |
+| `field` | a field named by an attribute argument (`@@index([a])`, `@relation(fields:, references:)`) |
+| `attributeSpec` | the spec an attribute's name denotes |
+| `crossSpace` | a reference into another contract space, resolvable only where that space is known — an explicit kind, and deliberately **not** a diagnostic |
+| `unresolved` | nothing of that name is in scope; the binder has emitted a diagnostic for it |
+
+A field whose type is malformed (`malformedType`) is skipped entirely: no resolution, no diagnostic, no cascade.
+
+### Diagnostics
+
+The binder owns resolution failures and nothing else. Failures come back under `PSL_UNRESOLVED_REFERENCE` (an unknown type, field, or entity name) and `PSL_UNRESOLVED_ATTRIBUTE` (an unknown attribute name), located by filename and range through `PslSources`. Converted consumers adopt these codes and **never re-emit their own** — the same rule the symbol table set for `PSL_DUPLICATE_DECLARATION`. Shape failures (arity, argument type, malformed literals) remain the spec combinators' voice; they are not resolution. References bind to first-wins symbols, and the binder never restates a duplicate-declaration diagnostic the symbol table already made.
+
+For `oneOf`, binding tries alternatives in order and publishes only the first successful binding attempt's references and diagnostics. Earlier attempts are discarded when another succeeds; unresolved-reference diagnostics are reported only when every attempt fails. Binding never calls a spec's `parse` function. Every non-reference leaf, including fixed identifiers, literals, and rejecting specs, succeeds as a binding no-op regardless of the expression's value. For example, `oneOf(entityRef(...), identifier())` leaves an undeclared name unbound without an unresolved-reference diagnostic. Interpretation independently decides whether an alternative accepts the value.
+
+Lists and records require a traversable array or object expression and recursively bind its actual children. Function calls require a matching unqualified callee to select their signature; positional and named arguments use the same parameter matching as attributes. An argument without a matching parameter or expression fails the call's binding attempt. A container succeeds only when all child binding attempts succeed. A non-container expression fails a container attempt without a diagnostic, allowing a later reference alternative to resolve it. The binder does not check scalar constraints, list uniqueness, entity selectors, or required argument counts; those remain interpretation's responsibility.
+
+### Attribute contexts and the single voice
+
+`modelAttributeContext` / `fieldAttributeContext` put the whole `Binder` on the parse-time context. `ModelAttributeCtx` **requires** it, so every context that can reach a reference combinator carries one by construction — there is no binder-less path to fall back to and no dual behavior to reason about.
+
+`fieldRef` and `referencedFieldRef` resolve solely through it: they read the argument's resolution out of the binder (`symbolForNode(argumentNode)` — a map read of results already computed at creation, never a second resolution) and
+
+- return the bound field's name when the binder resolved a field;
+- return the written name for a `crossSpace` reference, which is deferred by design;
+- **fail the argument, carrying no diagnostics of their own**, when the binder bound nothing or bound something that is not a field. An unresolved reference has already been reported by the binder; an absent binding can instead mean a non-reference alternative succeeded. A failed argument fails its attribute rather than quietly yielding a short list or a missing key.
+
+`entityRef` reads the committed resolution, fails without diagnostics for absent or unresolved bindings, checks the declaration against its selector, and returns the matching declaration and namespace. Selector checks happen only during interpretation, not binding.
+
+Shape and arity stay the combinator's voice — "Expected a field name", "Expected a list of field name", wrong argument counts. Only *existence* belongs to the binder. The split is the point: resolution is the binder's, shape is the spec's, and no schema error is ever reported twice.
+
+`AttributeCtx` carries the binder for block values and block attributes as well. They use the same alternative-binding behavior as model and field attributes.
+
+This lookup rests on red-node identity (below): the combinator receives the very `SyntaxNode` the binder keyed its result under.
+
+The binder on the context must be built over the same snapshot — the same symbol table and `PslSources` — and registries as interpretation. This requirement is not enforced by reference parsers.
+
+The binder stores one final resolution per syntax node. `symbolForNode(node)` exposes only committed references, not per-kind results from rejected trials. An unsuccessful committed lookup has an explicit `unresolved` result. Raw identifier fallbacks and malformed field types have no binding. Reference parsers treat absent bindings as normal failures (`notOk([])`), allowing interpreter alternatives to proceed; there is no missing-binder invariant exception.
+
+### Snapshot lifetime
+
+The binder is snapshot-scoped: an edit produces a new document, symbol table, and binder, and the old set is dropped whole. There is no invalidation protocol.
+
+The contributed-type scope is the exception — it is configuration-derived, not document-derived, and is shared across snapshots. That sharing is keyed by the **object identity of the `typeConstructors` registry** the caller passes: pass the same registry object and two binders share one scope; rebuild the registry on every parse and sharing silently degrades to a per-snapshot scope. Resolution stays correct either way, but the guarantee is gone, so hold the registry alongside the configuration it came from.
+
+### Node identity
+
+Binder side tables are keyed by red `SyntaxNode` identity, which the red layer guarantees within a snapshot: `SyntaxNode.childAt(index)` caches each child wrapper in its parent's slot on first access, so every traversal reaching the same position — `children()`, `firstChild`, `nextSibling`, `ancestors()`, `tokenAtOffset`, `coveringElement` — returns the identical object (Roslyn's `GetRed` design, single-threaded). Red nodes are therefore sound `WeakMap` keys. Green nodes are not: they are position-free and shareable, so a green-keyed cache would go stale silently. Never key a cache on a green node, and never use a span as a cross-snapshot key.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   PSL[PSL source text] --> Parse[parse]
-  Parse --> CST[DocumentAst + SourceFile]
+  Parse --> CST[DocumentAst + PslSources]
   Parse --> ParseDiagnostics[Parser diagnostics]
+  CST --> SourceLookup[node -> SourceFile]
   CST --> Symbols[buildSymbolTable]
-  Scalars[target scalarTypes] --> Symbols
-  Descriptors[pslBlockDescriptors] --> Symbols
   Symbols --> SymbolTable[SymbolTable]
   Symbols --> SymbolDiagnostics[Symbol-table diagnostics]
-  SymbolTable --> Interpreter[Target PSL interpreter]
+  SymbolTable --> Binder[createBinder]
+  TypeConstructors[typeConstructors] --> Binder
+  AttributeSpecs[attributeSpecs] --> Binder
+  Binder --> BinderQueries[declaredSymbol / symbolForNode]
+  Binder --> BinderDiagnostics[Resolution diagnostics]
+  SymbolTable --> Blocks[interpretExtensionBlocks]
+  Descriptors[pslBlockDescriptors] --> Blocks
+  Blocks --> Interpreter[Target PSL interpreter]
+  SymbolTable --> Interpreter
+  BinderQueries --> Interpreter
   ParseDiagnostics --> Provider[Provider diagnostic seeding]
   SymbolDiagnostics --> Provider
+  BinderDiagnostics --> Provider
 ```
 
 ## Package Boundaries

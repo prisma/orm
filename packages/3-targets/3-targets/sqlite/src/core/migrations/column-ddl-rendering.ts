@@ -3,21 +3,24 @@ import {
   DdlColumn,
   type DdlTableConstraint,
   ForeignKeyConstraint,
-  FunctionColumnDefault,
-  LiteralColumnDefault,
   PrimaryKeyConstraint,
   UniqueConstraint,
 } from '@internal/sql-relational-core/ast';
-import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import {
+  contractDefaultRefusal,
+  type SqlColumnIR,
+  type SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
-import { assertNever, InternalError } from '@internal/utils/internal-error';
+import { ifDefined } from '@internal/utils/defined';
+import { InternalError } from '@internal/utils/internal-error';
 import { sqliteError } from '../errors';
-import type { SqliteColumnSpec } from './operations/shared';
-import { buildColumnDefaultSql, buildColumnTypeSql } from './planner-ddl-builders';
+import { type SqliteColumnSpec, sqliteDefaultToDdlColumnDefault } from './operations/shared';
+import { buildColumnTypeSql } from './planner-ddl-builders';
 
 /**
- * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql` /
- * `buildColumnDefaultSql` expect, from a column node's own stamped codec
+ * Reconstructs the `StorageColumn`-shaped fields `buildColumnTypeSql`
+ * expects, from a column node's own stamped codec
  * identity (`codecRef` / `codecBaseNativeType`, Decision 5) — never the
  * contract. SQLite's type renderer only uppercases the resolved base type
  * (no parameterized expansion, no named-type quoting), so `typeRef` is
@@ -52,31 +55,28 @@ function columnLike(
           >(column.codecRef.typeParams),
         }
       : {}),
-    ...(column.resolvedDefault !== undefined ? { default: column.resolvedDefault } : {}),
+    // DDL writes the default as authored; `resolvedDefault` exists for the diff comparison only.
+    ...ifDefined('default', plannableDefault(column)),
   };
 }
 
-function sqliteDefaultToDdlColumnDefault(
-  columnDefault: StorageColumn['default'],
-): DdlColumn['default'] {
-  if (!columnDefault) return undefined;
-  switch (columnDefault.kind) {
-    case 'literal':
-      return new LiteralColumnDefault(columnDefault.value);
-    case 'function':
-      // `autoincrement()` is not a DEFAULT clause — SQLite encodes it as
-      // `INTEGER PRIMARY KEY AUTOINCREMENT` inline on the column. Skip it
-      // here; the renderer also has a defensive guard for the same case.
-      if (columnDefault.expression === 'autoincrement()') return undefined;
-      return new FunctionColumnDefault(columnDefault.expression);
-    default: {
-      const exhaustive: never = columnDefault;
-      return assertNever(
-        exhaustive,
-        `sqliteDefaultToDdlColumnDefault: unhandled kind "${blindCast<{ kind: string }, 'exhaustiveness: surface the unhandled default kind'>(exhaustive).kind}"`,
-      );
-    }
+/**
+ * The default DDL writes. A contract default the column's data type refuses, which a contract
+ * emitted by an earlier version can hold, is refused rather than written.
+ */
+function plannableDefault(column: SqlColumnIR): StorageColumn['default'] {
+  const columnDefault = column.authoredDefault ?? column.resolvedDefault;
+  const refusal = contractDefaultRefusal(
+    columnDefault,
+    column.dataType?.toCanonicalForm,
+    (column.many ?? column.codecRef?.many) === true,
+  );
+  if (refusal !== undefined) {
+    throw sqliteError('CONTRACT.DEFAULT_INVALID', `Column "${column.name}": ${refusal}`, {
+      meta: { reason: 'default-not-canonical', column: column.name },
+    });
   }
+  return columnDefault;
 }
 
 /**
@@ -107,11 +107,12 @@ export function isInlineAutoincrementPrimaryKeyNode(
 export function columnSpecFromNode(column: SqlColumnIR, inline: boolean): SqliteColumnSpec {
   const like = columnLike(column);
   const typeSql = buildColumnTypeSql(like, {});
-  const defaultSql = buildColumnDefaultSql(like.default);
   return {
     name: column.name,
     typeSql,
-    defaultSql,
+    ...(inline
+      ? {}
+      : { ...ifDefined('default', like.default), ...ifDefined('codecRef', column.codecRef) }),
     nullable: column.nullable,
     ...(inline ? { inlineAutoincrementPrimaryKey: true } : {}),
   };

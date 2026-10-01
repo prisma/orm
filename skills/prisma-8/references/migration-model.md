@@ -55,6 +55,7 @@ pnpm prisma migration ref delete <name>
 | Command | Ref advancement |
 |---|---|
 | `db init` / `db update` (default URL) | Implicitly advance `db` (override the name with `--advance-ref <name>`; suppressed whenever `--db` is passed without `--advance-ref`, regardless of the URL — even `--db $DATABASE_URL` pointing at the default database) |
+| `db sign` | Advances `db` after a successful signature (override the name with `--advance-ref <name>`; `--no-advance-ref` skips it, writing no ref and no snapshot); an existing ref is overwritten and the previous hash is reported in the human output (the JSON `advancedRef` carries name and hash only). `--db` does **not** suppress it, unlike init/update: sign never mutates the schema, and adoption is normally done via `--db` |
 | `db migrate --advance-ref <name>` | The **only** apply-time advancement |
 | plain `db migrate` | **Never advances anything** — deliberate: deploy and CI applies must not infer dev intent |
 | `migration plan` | Never advances anything — chaining discipline is yours |
@@ -66,9 +67,13 @@ pnpm prisma migration ref delete <name>
 
 1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | ./path | @empty>` — `@empty` names the empty database deliberately. The reserved forms `@db` and `@contract` exist in the shared ref grammar but do not resolve here: `migration plan` is offline, so `@db` (the live marker) has nothing to read, and `@contract` needs a contract hash the plan resolver does not pass. Use them with `db migrate --show` / `migration status`, not with `plan`.
 2. No `--from` → the `db` ref (`migrations/app/refs/db.json`).
-3. No `db` ref → **greenfield: the plan starts from the empty database.**
+3. No `db` ref → **greenfield: the plan starts from the empty database.** On an empty graph the human output adds a muted notice beneath the summary — `No db ref set — planning from an empty database. Run db init, db update, or db sign if a database already exists.` — and the JSON document carries `fromDefaulted: true`, so this case is distinguishable from an explicit `--from @empty`.
 
 It is **offline** — it never consults a database, never reads a marker (which is why `--from @db` is not an option here). Whatever the refs on disk say is what it believes. The destination defaults to the emitted `contract.json` (`--to` overrides).
+
+When the origin came from the `db` ref by default and that node **already has an outgoing migration**, the plan still succeeds but warns: planning from there forks the graph. Pass `--from` to name the origin deliberately if that is what you want.
+
+**`migration new` picks its origin the same way, with one difference.** With `--from <hash-or-prefix>` it uses that migration's `to` hash. Without `--from`: the `db` ref (which must be a graph node), else greenfield on an empty graph, else `MIGRATION.PLAN_ORIGIN_UNKNOWN`. The difference: on an empty graph that has a `db` ref, `migration plan` writes the baseline (auto-baseline above) while `migration new` refuses with `MIGRATION.HASH_NOT_IN_GRAPH` and tells you to run `migration plan` first. Neither command ever chains from "the newest migration on disk" — there is no such node.
 
 The human output names the resolved origin on its `from:` line. **`from: (baseline)` means the origin resolved to nothing — the plan starts from an empty database** and will contain a create for every object in the contract.
 
@@ -78,7 +83,7 @@ The human output names the resolved origin on its `from:` line. **`from: (baseli
 
 **A plan whose origin is the empty contract while migrations already exist on disk is almost always a mistake.** A full-create migration cannot do what you meant: a database that has the prior migrations applied refuses it (`MIGRATION.PATH_UNREACHABLE` — no path from its marker to the new plan's destination), and running its create statements against any populated schema fails outright. The CLI refuses this at plan time: when origin resolution falls all the way through (no `--from`, no `db` ref) and migrations exist, `migration plan` stops with `MIGRATION.PLAN_ORIGIN_UNKNOWN` instead of writing the package — the error's suggestions are the three exits below; do not reflexively take the `--from @empty` one, pick by intent.
 
-How the fall-through happens: a project that never runs `db init` / `db update` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to the empty origin. Running the dev loop with an explicit `--db` has the same effect: `db init` / `db update` with that flag never advance the ref, whatever URL it carries. The first time that is correct (it is the baseline; an empty migration graph plans silently); every later time it is the trap the refusal catches.
+How the fall-through happens: a project that never runs `db init` / `db update` / `db sign` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to the empty origin. Running the dev loop with an explicit `--db` has the same effect: `db init` / `db update` with that flag never advance the ref, whatever URL it carries (`db sign` is the exception — it advances the ref with or without `--db`). The first time that is correct (it is the baseline; an empty migration graph plans with only the muted notice); every later time it is the trap the refusal catches.
 
 **Recognize a from-empty plan** that was produced anyway (an explicit `--from @empty`, or an older CLI without the refusal), at either layer:
 
@@ -131,14 +136,14 @@ The concept: a database that predates Prisma 8 enters the system by describing i
 pnpm prisma contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma
 # review and re-author, then:
 pnpm prisma contract emit
-pnpm prisma db sign
+pnpm prisma db sign --db "$DATABASE_URL"                # advances the db ref even with --db
 ```
 
-After adoption the graph is still empty. Before the next schema change ships, author the baseline (deploy-first loop above) or start the dev loop — otherwise the first real plan lands in the trap.
+By default `db sign` sets the `db` ref to the signed contract's hash and stores its snapshot, so the next `migration plan` chains from the adopted schema (`--advance-ref <name>` writes another ref instead, and `--no-advance-ref` writes none; after either, set the `db` ref yourself with `migration ref set db <hash>` or pass `--from` on the next plan): the graph is still empty at that point, so the plan auto-emits the baseline `null → signed-hash`, plus a delta `signed-hash → contract` once the contract has moved on from the signed one. No baseline is written at sign time. If the graph is already non-empty and the signed hash is not a graph node, the next plan refuses with `MIGRATION.HASH_NOT_IN_GRAPH`, exactly as after `db update`.
 
 ## Workflow — retrofit a database that has no on-disk migrations
 
-The concept: the database exists and its marker is accurate (hash **M**) — it was built by `db update` in another checkout, by a deploy pipeline, or adopted via `db sign` — but the migration graph doesn't reach M. The goal is to **make the graph reach the marker's hash**: once a baseline `null → M` exists, applying against the marked database is clean by construction — the runner starts at the marker, so the baseline never executes; only real deltas past M run.
+The concept: the database exists and its marker is accurate (hash **M**) — it was built by `db update` or signed with `db sign` in another checkout, or built by a deploy pipeline — but the migration graph doesn't reach M. (A database adopted with `db sign` in *this* checkout already has its ref set; retrofit is for the case where the ref was never set here.) The goal is to **make the graph reach the marker's hash**: once a baseline `null → M` exists, applying against the marked database is clean by construction — the runner starts at the marker, so the baseline never executes; only real deltas past M run.
 
 - **It's your dev database.** Run `db update` (default URL; no-op on the DB when the contract already matches) — it advances the `db` ref and stores the contract snapshot. The next `migration plan` auto-emits the baseline plus your delta. This is just the dev loop's dev → ship transition.
 - **It's a deployed database you must not touch.** Build the baseline offline, at the deployed contract state:
@@ -151,8 +156,8 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 
 ## Common Pitfalls
 
-1. **Assuming `migration plan` chains from the newest migration on disk.** It never does. The origin is `--from`, else the `db` ref, else empty. If neither exists, you get a from-scratch plan with no warning.
-2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` advance implicitly, and only `--advance-ref` advances at apply time.
+1. **Assuming `migration plan` or `migration new` chains from the newest migration on disk.** Neither does. The origin is `--from`, else the `db` ref. With neither, only an empty graph plans from scratch (with the muted `No db ref set` notice); once migrations exist, both commands refuse with `MIGRATION.PLAN_ORIGIN_UNKNOWN`.
+2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` / `db sign` advance implicitly, and only `--advance-ref` advances at apply time.
 3. **Expecting a deploy to update refs.** Deploys write the database's marker; the files under `migrations/app/refs/` only change when you change them.
 4. **Reading `from: (baseline)` as informational.** Over a non-empty migrations directory it is the trap announcing itself. Stop and pick an exit before applying or committing.
 5. **`migration ref set` with a hash no on-disk migration produces.** A ref target must be the `to` hash of an on-disk migration bundle. A hash outside the graph is refused (`MIGRATION.HASH_NOT_IN_GRAPH`); a from-only graph node is refused with `MIGRATION.REF_SET_BUNDLE_NOT_FOUND`, whose fix text points at fixtures and is unhelpful here. Either way: plan the edge whose `to` is the hash first (baseline or delta), then set the ref.
@@ -169,6 +174,6 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 - [ ] Read the plan output's `from:` line and confirmed it names that origin — not `(baseline)` over an existing graph.
 - [ ] In a deploy-first project: baseline authored and committed before the first deploy; every later plan chained via the `db` ref or `--from`.
 - [ ] After each plan in a loop where nothing advances refs: advanced the `db` ref (`migration ref set db <to-hash>`) or resolved to pass `--from` next time.
-- [ ] For a marked database with no on-disk migrations: made the graph reach the marker's hash (auto-baseline via `db update`, or an offline baseline plan) before planning deltas.
+- [ ] For a marked database with no on-disk migrations: made the graph reach the marker's hash (auto-baseline via `db update` or `db sign`, or an offline baseline plan) before planning deltas.
 - [ ] Did NOT expect plain `db migrate`, `migration plan`, or a deploy to advance any ref.
 - [ ] Did NOT apply or commit a `from: (baseline)` plan without confirming the empty origin was the intent.

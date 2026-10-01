@@ -1,10 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ColumnRef, IdentifierRef, LiteralExpr, OperationExpr, ParamRef } from '../src/ast/types';
-import { buildOperation, codecOf, type Expression, toExpr } from '../src/expression';
+import { buildOperation, codecOf, type Expression, isExpression, toExpr } from '../src/expression';
 
 const infixLowering = {
   targetFamily: 'sql',
-  strategy: 'infix',
   template: '{{self}} ILIKE {{arg0}}',
 } as const;
 
@@ -27,6 +26,31 @@ describe('toExpr', () => {
       buildAst: () => column,
     };
     expect(toExpr(expression)).toBe(column);
+  });
+
+  it('accepts unmarked wrappers with callable buildAst', () => {
+    const ast = LiteralExpr.of('hello');
+    const buildAst = vi.fn(() => ast);
+    const value = { buildAst, returnType: { codecId: 'pg/text@1', nullable: false } };
+    expect(toExpr(value)).toBe(ast);
+    expect(codecOf(value)).toEqual({ codecId: 'pg/text@1' });
+    expect(isExpression(value)).toBe(true);
+    expect(buildAst).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    null,
+    undefined,
+    42,
+    'hello',
+    () => LiteralExpr.of('hello'),
+    {},
+    { buildAst: 'not callable' },
+  ])('rejects non-object or non-callable wrappers: %o', (value) => {
+    expect(isExpression(value)).toBe(false);
+    expect(toExpr(value, { codecId: 'pg/jsonb@1' })).toEqual(
+      ParamRef.of(value, { codec: { codecId: 'pg/jsonb@1' } }),
+    );
   });
 
   it('throws for null and undefined without codec', () => {
@@ -67,14 +91,15 @@ describe('toExpr', () => {
 });
 
 describe('codecOf', () => {
-  it('reads codec from an Expression wrapper that carries codec metadata directly', () => {
-    const codec = { codecId: 'pg/text@1' };
-    const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> & {
+  it('preserves the full returnType codec instead of falling back to codecId', () => {
+    const codec = { codecId: 'pgvector/vector@1', typeParams: { length: 1536 } };
+    const expr: Expression<{
+      codecId: 'pgvector/vector@1';
+      nullable: false;
       codec: typeof codec;
-    } = {
-      returnType: { codecId: 'pg/text@1', nullable: false },
-      buildAst: () => IdentifierRef.of('email'),
-      codec,
+    }> = {
+      returnType: { codecId: 'pgvector/vector@1', nullable: false, codec },
+      buildAst: () => IdentifierRef.of('embedding'),
     };
     expect(codecOf(expr)).toEqual(codec);
   });
@@ -93,6 +118,10 @@ describe('codecOf', () => {
       buildAst: () => LiteralExpr.of('foo'),
     };
     expect(codecOf(expr)).toEqual({ codecId: 'pg/text@1' });
+  });
+
+  it('returns undefined for wrappers without codec metadata', () => {
+    expect(codecOf({ buildAst: () => LiteralExpr.of('hello') })).toBeUndefined();
   });
 
   it('returns undefined for raw values', () => {
@@ -140,7 +169,7 @@ describe('buildOperation', () => {
       method: 'length',
       args: [self],
       returns: { codecId: 'pg/int4@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'length({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'length({{self}})' },
     });
 
     const op = expression.buildAst() as OperationExpr;
@@ -154,7 +183,7 @@ describe('buildOperation', () => {
       method: 'upper',
       args: [self],
       returns: { codecId: 'pg/text@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'upper({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'upper({{self}})' },
     });
     expect(expression.buildAst()).toBe(expression.buildAst());
   });
@@ -164,7 +193,7 @@ describe('buildOperation', () => {
       method: 'upper',
       args: [ColumnRef.of('t', 'c')],
       returns: { codecId: 'pg/text@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'upper({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'upper({{self}})' },
     });
     expect(toExpr(inner)).toBe(inner.buildAst());
   });

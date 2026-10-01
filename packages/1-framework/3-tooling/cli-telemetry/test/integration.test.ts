@@ -14,8 +14,8 @@ let projectDir: string;
 
 /**
  * Build a `prisma.config.mjs` source string with the minimum
- * descriptor shape that `validateConfig` (from
- * `@internal/config/config-validation`) accepts. The integration
+ * descriptor shape that the `orm` config schema (`ormConfigSchema` in
+ * `@internal/config-loader`) accepts. The integration
  * test exercises the full c12 + validator pipeline in the detached
  * child, so the fixture has to be structurally valid.
  */

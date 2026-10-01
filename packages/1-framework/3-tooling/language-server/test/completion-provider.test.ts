@@ -3,46 +3,77 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeNamespace,
+  DataTypeAuthoringEntry,
 } from '@internal/framework-components/authoring';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
+  type ControlMutationDefaultRegistry,
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
   blockAttribute,
   buildSymbolTable,
+  entityRef,
   type FieldAttributeSpecContext,
   fieldAttribute,
+  identifier,
   int,
+  jsonValue,
+  mapBlock,
   modelAttribute,
+  oneOf,
   optional,
   str,
+  structBlock,
 } from '@internal/psl-parser';
 import { parse, type SourceFile } from '@internal/psl-parser/syntax';
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
-import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type CompletionItem,
+  CompletionItemKind,
+  CompletionItemTag,
+  InsertTextFormat,
+} from 'vscode-languageserver';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
 const emptySnippetPlaceholder1 = '$' + '{1:}';
-const emptySnippetPlaceholder2 = '$' + '{2:}';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const orderFixtureAttribute = fieldAttribute('orderFixture', {
-  named: { zebra: int(), alpha: int(), middle: int() },
+  documentation: 'Accepts named values in declaration order rather than alphabetical order.',
+  named: {
+    zebra: { type: int(), documentation: 'The first declared value.' },
+    alpha: { type: int(), documentation: 'The second declared value.' },
+    middle: { type: int(), documentation: 'The third declared value.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { enabled: optional(str()), mode: str() },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+    mode: { type: str(), documentation: 'The security mode.' },
+  },
 });
 const auditAttribute = blockAttribute('audit', {
-  named: { reason: optional(str()), level: int() },
+  documentation: 'Configures auditing for this block.',
+  named: {
+    reason: { type: optional(str()), documentation: 'The reason for auditing.' },
+    level: { type: int(), documentation: 'The audit level.' },
+  },
 });
 
 const attributeContributions = assembleAuthoringContributions([
@@ -55,8 +86,12 @@ const attributeContributions = assembleAuthoringContributions([
           orderFixture: () => orderFixtureAttribute,
           ownerAware: (ctx: FieldAttributeSpecContext) =>
             fieldAttribute('ownerAware', {
+              documentation: 'Selects a key based on the declaring model’s fields.',
               named: {
-                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: str(),
+                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: {
+                  type: str(),
+                  documentation: 'The value for the owner-specific key.',
+                },
               },
             }),
         },
@@ -81,19 +116,45 @@ const attributeContributions = assembleAuthoringContributions([
   },
 ]);
 const controlMutationDefaults = assembleControlMutationDefaults([]);
+const policySpec = () =>
+  structBlock({
+    parameters: {
+      on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+      where: { type: optional(str()), documentation: 'The policy predicate.' },
+      mode: {
+        type: optional(
+          oneOf(
+            identifier('permissive', { documentation: 'Combined with OR.' }),
+            identifier('restrictive', { documentation: 'Combined with AND.' }),
+          ),
+        ),
+        documentation: '',
+      },
+      using: { type: optional(str()), documentation: '' },
+    },
+  });
+
 const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   policy: {
     kind: 'pslBlock',
     keyword: 'policy',
+    documentation: 'Defines a security policy.',
     discriminator: 'fixture-policy',
     name: { required: true },
-    parameters: {
-      on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
-      mode: { kind: 'option', values: ['permissive', 'restrictive'] },
-      using: { kind: 'value', codecId: 'fixture/text@1' },
-    },
+    spec: policySpec,
     attributes: { audit: () => auditAttribute },
+  },
+  inventory: {
+    kind: 'pslBlock',
+    keyword: 'inventory',
+    documentation: 'An arbitrary-key block.',
+    discriminator: 'fixture-inventory',
+    name: { required: true },
+    spec: () =>
+      mapBlock({
+        value: { type: jsonValue(), documentation: 'The entry value.' },
+        allowBare: true,
+      }),
   },
   access: {
     audit: {
@@ -101,9 +162,12 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
       keyword: 'audit',
       discriminator: 'fixture-audit',
       name: { required: true },
-      parameters: {
-        on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      },
+      spec: () =>
+        structBlock({
+          parameters: {
+            on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+          },
+        }),
     },
   },
 };
@@ -142,7 +206,10 @@ const candidateSource = [
 
 function complete(
   markedFieldSource: string,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
+  options: {
+    readonly clientSupportsSnippets?: boolean;
+    readonly clientSupportsTriggerParameterHintsCommand?: boolean;
+  } = {},
 ) {
   return completeWithSource({
     markedSource: `${candidateSource}\n${markedFieldSource}`,
@@ -150,6 +217,8 @@ function complete(
     authoringContributions: attributeContributions,
     controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
+    clientSupportsTriggerParameterHintsCommand:
+      options.clientSupportsTriggerParameterHintsCommand === true,
   });
 }
 
@@ -168,6 +237,23 @@ interface ActualSqlBlockModule {
   readonly sqlFamilyPslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
 }
 
+interface ActualPostgresDefaultsModule {
+  createPostgresDefaultFunctionRegistry(): ControlMutationDefaultRegistry;
+}
+
+interface ActualPostgresDataTypesModule {
+  postgresDataTypeEntries(): Readonly<Record<string, DataTypeAuthoringEntry>>;
+}
+
+interface ActualSqliteDataTypesModule {
+  sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthoringEntry>>;
+}
+
+interface ActualSqlExpressionModule {
+  readonly SQL_EXPRESSION_DATA_TYPE_ID: string;
+  readonly sqlExpressionAuthoringEntry: DataTypeAuthoringEntry;
+}
+
 interface ActualMongoAttributeModule {
   readonly mongoAttributeSpecs: AttributeSpecNamespace;
 }
@@ -183,16 +269,15 @@ function completeWithSource(input: {
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
   readonly clientSupportsSnippets?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
+  readonly scalarTypes?: readonly string[];
 }) {
   const cursorOffset = input.markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
   const source = `${input.markedSource.slice(0, cursorOffset)}${input.markedSource.slice(cursorOffset + 1)}`;
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
-    pslBlockDescriptors: input.pslBlockDescriptors,
-  });
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources });
   const context = classifyPslCompletionContext({
     document,
     sourceFile,
@@ -204,7 +289,7 @@ function completeWithSource(input: {
       context,
       sourceFile,
       candidates: {
-        scalarTypes,
+        scalarTypes: input.scalarTypes ?? scalarTypes,
         pslBlockDescriptors: input.pslBlockDescriptors,
         symbolTable,
         ...(input.authoringContributions === undefined
@@ -215,6 +300,8 @@ function completeWithSource(input: {
           : { controlMutationDefaults: input.controlMutationDefaults }),
       },
       clientSupportsSnippets: input.clientSupportsSnippets === true,
+      clientSupportsTriggerParameterHintsCommand:
+        input.clientSupportsTriggerParameterHintsCommand === true,
     }),
     sourceFile,
     cursorOffset,
@@ -273,13 +360,21 @@ function actualAuthoringContributions(stack: CompletionTestStack): typeof attrib
 function completeWithActualStack(
   markedSource: string,
   stack: CompletionTestStack,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
+  options: {
+    readonly clientSupportsSnippets?: boolean;
+    readonly controlMutationDefaults?: typeof controlMutationDefaults;
+    readonly dataTypes?: Readonly<Record<string, DataTypeAuthoringEntry>>;
+  } = {},
 ) {
+  const contributions = actualAuthoringContributions(stack);
   return completeWithSource({
     markedSource,
     pslBlockDescriptors: stack.pslBlockDescriptors,
-    authoringContributions: actualAuthoringContributions(stack),
-    controlMutationDefaults,
+    authoringContributions:
+      options.dataTypes === undefined
+        ? contributions
+        : { ...contributions, dataTypes: options.dataTypes },
+    controlMutationDefaults: options.controlMutationDefaults ?? controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
   });
 }
@@ -315,15 +410,17 @@ describe('providePslCompletionItems', () => {
       'types',
       'namespace',
       'audit',
+      'inventory',
       'policy',
     ]);
     expect(items.map((item) => item.detail)).toEqual([
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
+      'Defines a data model.',
+      'Defines a reusable composite type.',
+      'Defines reusable named types.',
+      'Groups declarations belonging to the same database schema or database.',
       'Generic block keyword',
-      'Generic block keyword',
+      'An arbitrary-key block.',
+      'Defines a security policy.',
     ]);
     expect(items[0]).toMatchObject({
       kind: CompletionItemKind.Keyword,
@@ -348,6 +445,7 @@ describe('providePslCompletionItems', () => {
       'types',
       'namespace',
       'audit',
+      'inventory',
       'policy',
     ]);
     expect(items[0]).toMatchObject({
@@ -365,7 +463,13 @@ describe('providePslCompletionItems', () => {
   it('returns namespace-body declaration keywords without document-only native keywords', () => {
     const { items } = complete(['namespace feature {', '  |', '}'].join('\n'));
 
-    expect(items.map((item) => item.label)).toEqual(['model', 'type', 'audit', 'policy']);
+    expect(items.map((item) => item.label)).toEqual([
+      'model',
+      'type',
+      'audit',
+      'inventory',
+      'policy',
+    ]);
     expect(items.map((item) => item.label)).not.toContain('types');
     expect(items.map((item) => item.label)).not.toContain('namespace');
   });
@@ -375,7 +479,13 @@ describe('providePslCompletionItems', () => {
       ['namespace feature {', '  po|', '}'].join('\n'),
     );
 
-    expect(items.map((item) => item.label)).toEqual(['model', 'type', 'audit', 'policy']);
+    expect(items.map((item) => item.label)).toEqual([
+      'model',
+      'type',
+      'audit',
+      'inventory',
+      'policy',
+    ]);
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       filterText: 'policy',
       textEdit: {
@@ -393,17 +503,55 @@ describe('providePslCompletionItems', () => {
 
     expect(items.find((item) => item.label === 'model')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}` },
     });
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `policy ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: {
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block keys and attributes}\n}`,
+      },
     });
   });
+
+  it.each([true, false])(
+    'inserts a body placeholder without pre-filled keys, snippets=%s',
+    (snippets) => {
+      const { items } = completeWithSource({
+        markedSource: '|',
+        clientSupportsSnippets: snippets,
+        pslBlockDescriptors: {
+          security: {
+            policy: {
+              kind: 'pslBlock',
+              keyword: 'policy',
+              discriminator: 'policy',
+              name: { required: true },
+              spec: policySpec,
+              attributes: { audit: () => auditAttribute },
+            },
+          },
+        },
+      });
+      const item = completionItemByLabel(items, 'policy');
+      expect(item.textEdit?.newText).toBe(
+        snippets
+          ? [
+              `policy ${nameSnippetPlaceholder} {`,
+              '  $' + '{0:// Block keys and attributes}',
+              '}',
+            ].join('\n')
+          : 'policy ',
+      );
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+    },
+  );
 
   it('returns registry-backed attribute name completions as function items', () => {
     const fieldItems = complete(['model Post {', '  id Int @|', '}'].join('\n')).items;
     expect(fieldItems.map((item) => item.label)).toEqual(['marker', 'orderFixture', 'ownerAware']);
+    expect(fieldItems.find((item) => item.label === 'marker')?.detail).toBe(
+      'Attaches a named marker to a target.',
+    );
     expect(fieldItems.map((item) => item.kind)).toEqual([
       CompletionItemKind.Function,
       CompletionItemKind.Function,
@@ -434,12 +582,9 @@ describe('providePslCompletionItems', () => {
     const markedSource = ['model User {', '  id Int @|', '}'].join('\n');
     const cursorOffset = markedSource.indexOf('|');
     const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
-    const { document, sourceFile } = parse(source);
-    const { table: symbolTable } = buildSymbolTable({
-      document,
-      sourceFile,
-      pslBlockDescriptors,
-    });
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const sourceFile = sources.sourceFileFor(document.syntax);
+    const { symbolTable } = buildSymbolTable({ documents: [document], sources });
     const context = classifyPslCompletionContext({
       document,
       sourceFile,
@@ -467,11 +612,15 @@ describe('providePslCompletionItems', () => {
             field: {
               first: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('first', {});
+                return fieldAttribute('first', {
+                  documentation: 'Marks the first contributed field attribute.',
+                });
               },
               second: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('second', {});
+                return fieldAttribute('second', {
+                  documentation: 'Marks the second contributed field attribute.',
+                });
               },
             },
             model: {},
@@ -509,7 +658,7 @@ describe('providePslCompletionItems', () => {
         start: sourceFile.positionAt(cursorOffset - 'pr'.length),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'priority',
+      newText: 'priority: ',
     });
   });
 
@@ -550,17 +699,37 @@ describe('providePslCompletionItems', () => {
     expect(item).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}")`,
+        newText: `marker("\${1:target}", name: "\${2:name}")`,
       },
     });
     expect(applyCompletionItem({ sourceFile, item })).toEqual(
       [
         candidateSource,
         'model Post {',
-        `  id Int @marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}") // keep`,
+        `  id Int @marker("\${1:target}", name: "\${2:name}") // keep`,
         '}',
       ].join('\n'),
     );
+  });
+
+  it.each([false, true])('gates argument snippet hints on client support: %s', (supported) => {
+    for (const [source, snippets, hints] of [
+      ['model Post { id Int @mar| }', true, true],
+      ['model Post { id Int @mar| }', false, false],
+      ['model Post { id Int @mar|ker("x") }', true, false],
+      ['|', true, false],
+    ] as const) {
+      const { items } = complete(source, {
+        clientSupportsSnippets: snippets,
+        clientSupportsTriggerParameterHintsCommand: supported,
+      });
+      const item = completionItemByLabel(items, source === '|' ? 'model' : 'marker');
+      expect(item.command).toEqual(
+        supported && hints
+          ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+          : undefined,
+      );
+    }
   });
 
   it('keeps plain contributed attribute completion free of snippet syntax', () => {
@@ -640,13 +809,15 @@ describe('providePslCompletionItems', () => {
         start: sourceFile.positionAt(cursorOffset - 'ma'.length),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'map',
+      newText: 'map: ',
     });
 
     expect(
-      completeWithActualStack(['model Post {', '  id Int @default(|)', '}'].join('\n'), stack)
-        .items,
-    ).toEqual([]);
+      completeWithActualStack(
+        ['model Post {', '  id Int @default(|)', '}'].join('\n'),
+        stack,
+      ).items.map((item) => item.label),
+    ).toEqual(['true', 'false']);
 
     const mapCompletion = completeWithActualStack(
       ['model Post {', '  id Int @ma| // keep', '}'].join('\n'),
@@ -656,10 +827,10 @@ describe('providePslCompletionItems', () => {
     const mapItem = completionItemByLabel(mapCompletion.items, 'map');
     expect(mapItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `map("${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `map("\${1:name}")` },
     });
     expect(applyCompletionItem({ sourceFile: mapCompletion.sourceFile, item: mapItem })).toEqual(
-      ['model Post {', `  id Int @map("${emptySnippetPlaceholder1}") // keep`, '}'].join('\n'),
+      ['model Post {', `  id Int @map("\${1:name}") // keep`, '}'].join('\n'),
     );
 
     const checkCompletion = completeWithActualStack(
@@ -670,17 +841,14 @@ describe('providePslCompletionItems', () => {
     const checkItem = completionItemByLabel(checkCompletion.items, 'check');
     expect(checkItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `check(expression: "${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `check(expression: "\${1:expression}")` },
     });
     expect(
       applyCompletionItem({ sourceFile: checkCompletion.sourceFile, item: checkItem }),
     ).toEqual(
-      [
-        'model Post {',
-        '  id Int',
-        `  @@check(expression: "${emptySnippetPlaceholder1}") // keep`,
-        '}',
-      ].join('\n'),
+      ['model Post {', '  id Int', `  @@check(expression: "\${1:expression}") // keep`, '}'].join(
+        '\n',
+      ),
     );
   }, 5_000);
 
@@ -754,10 +922,10 @@ describe('providePslCompletionItems', () => {
     const mapItem = completionItemByLabel(mapCompletion.items, 'map');
     expect(mapItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `map("${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `map("\${1:name}")` },
     });
     expect(applyCompletionItem({ sourceFile: mapCompletion.sourceFile, item: mapItem })).toEqual(
-      ['model Post {', `  id String @map("${emptySnippetPlaceholder1}") // keep`, '}'].join('\n'),
+      ['model Post {', `  id String @map("\${1:name}") // keep`, '}'].join('\n'),
     );
   }, 5_000);
 
@@ -917,7 +1085,7 @@ describe('providePslCompletionItems', () => {
     expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
     expect(items.map((item) => item.detail)).toEqual([
       'Generic block parameter',
-      'Generic block parameter',
+      'The policy predicate.',
       'Generic block parameter',
       'Generic block parameter',
     ]);
@@ -948,6 +1116,12 @@ describe('providePslCompletionItems', () => {
     });
   });
 
+  it('uses generic block parameter documentation with a fallback for undocumented parameters', () => {
+    const { items } = complete('policy Rule { | }');
+    expect(completionItemByLabel(items, 'where').detail).toBe('The policy predicate.');
+    expect(completionItemByLabel(items, 'on').detail).toBe('Generic block parameter');
+  });
+
   it('still offers the in-progress key while excluding an already-present sibling key', () => {
     const { items } = complete(['policy Rule {', '  where = "x"', '  on|', '}'].join('\n'));
 
@@ -960,11 +1134,364 @@ describe('providePslCompletionItems', () => {
     expect(items).toEqual([]);
   });
 
+  it('offers no key candidates for an arbitrary-key block spec', () => {
+    const { items } = complete(['inventory Stock {', '  |', '}'].join('\n'));
+
+    expect(items).toEqual([]);
+  });
+
+  it('keeps key completion available inside an invalid block', () => {
+    const { items } = complete(
+      ['policy Rule {', '  bogus = "not a declared key"', '  |', '}'].join('\n'),
+    );
+
+    expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
+  });
+
+  it('binds the spec with the resolved block symbol and never invokes rule parsing', () => {
+    const factoryContexts: unknown[] = [];
+    const throwingRule = {
+      kind: 'str' as const,
+      label: 'string',
+      value: undefined,
+      parse: () => {
+        throw new Error('metadata inspection must not invoke rule parsing');
+      },
+    };
+    const { items } = completeWithSource({
+      markedSource: ['guard Rule {', '  |', '}'].join('\n'),
+      pslBlockDescriptors: {
+        guard: {
+          kind: 'pslBlock',
+          keyword: 'guard',
+          discriminator: 'fixture-guard',
+          name: { required: true },
+          spec: (ctx: unknown) => {
+            factoryContexts.push(ctx);
+            return structBlock({
+              parameters: {
+                shield: { type: throwingRule, documentation: 'The shield key.' },
+              },
+            });
+          },
+        },
+      },
+    });
+
+    expect(items.map((item) => item.label)).toEqual(['shield']);
+    expect(items[0]?.detail).toBe('The shield key.');
+    expect(factoryContexts).toHaveLength(1);
+    for (const raw of factoryContexts) {
+      const ctx = raw as { symbols: unknown; block: { name: string } };
+      expect(ctx.block.name).toBe('Rule');
+    }
+  });
+
+  it.each(['|', '[|]', '{ nested: | }', '[{ nested: [|] }]'])(
+    'completes recursive JSON values at %s',
+    (value) => {
+      const { items } = completeWithSource({
+        markedSource: `model Post { value String @jsonFixture(${value}) }`,
+        pslBlockDescriptors: {},
+        authoringContributions: assembleAuthoringContributions([
+          {
+            id: 'json-fixture',
+            authoring: {
+              attributeSpecs: {
+                field: {
+                  jsonFixture: () =>
+                    fieldAttribute('jsonFixture', {
+                      documentation: '',
+                      positional: [{ key: 'value', type: jsonValue(), documentation: '' }],
+                    }),
+                },
+                model: {},
+              },
+            },
+          },
+        ]),
+        controlMutationDefaults,
+      });
+      expect(items.map((item) => item.label)).toEqual(['true', 'false', 'null']);
+    },
+  );
+
   it('returns an empty list for unsupported classifier contexts', () => {
     const { items } = complete(['model Post {', '  // @|', '}'].join('\n'));
 
     expect(items).toEqual([]);
   });
+
+  it('uses registered scalar documentation for completion details', () => {
+    const { items } = completeWithSource({
+      markedSource: 'model Post { value | }',
+      pslBlockDescriptors: {},
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'documented-scalars',
+          authoring: {
+            type: {
+              String: {
+                kind: 'typeConstructor',
+                documentation: 'Variable-length Unicode text.',
+                output: { codecId: 'fixture/text@1', nativeType: 'text' },
+              },
+            },
+          },
+        },
+      ]),
+      controlMutationDefaults,
+    });
+    expect(completionItemByLabel(items, 'String').detail).toBe('Variable-length Unicode text.');
+    expect(completionItemByLabel(items, 'Int').detail).toBe('Configured scalar type');
+  });
+
+  it(
+    'lists deprecated Mongo scalar names last, tagged deprecated, naming the replacement',
+    async () => {
+      const { mongoScalarAuthoringTypes } = await importFromPackageRoot<{
+        readonly mongoScalarAuthoringTypes: AuthoringTypeNamespace;
+      }>('../../../3-mongo-target/2-mongo-adapter/src/exports/control.ts');
+      const { items } = completeWithSource({
+        markedSource: 'model Post { value | }',
+        pslBlockDescriptors: {},
+        scalarTypes: Object.keys(mongoScalarAuthoringTypes),
+        authoringContributions: assembleAuthoringContributions([
+          { id: 'mongo-scalars', authoring: { type: mongoScalarAuthoringTypes } },
+        ]),
+        controlMutationDefaults,
+      });
+      const scalars = [...items]
+        .filter((item) => item.kind === CompletionItemKind.Keyword)
+        .sort((a, b) => (a.sortText ?? '').localeCompare(b.sortText ?? ''));
+      const current = ['Int32', 'Double', 'Bool', 'Date'];
+      const deprecated = [
+        ['Int', 'Int32'],
+        ['Float', 'Double'],
+        ['Boolean', 'Bool'],
+        ['DateTime', 'Date'],
+      ] as const;
+
+      expect(
+        scalars
+          .slice(-4)
+          .map((item) => item.label)
+          .sort(),
+      ).toEqual(deprecated.map(([name]) => name).sort());
+      for (const name of current) {
+        expect(completionItemByLabel(items, name)).not.toHaveProperty('tags');
+      }
+      for (const [name, replacement] of deprecated) {
+        expect(completionItemByLabel(items, name)).toMatchObject({
+          tags: [CompletionItemTag.Deprecated],
+          detail: expect.stringContaining(`Deprecated: use ${replacement}`),
+        });
+      }
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it('uses actual SQL enum metadata and rejects an empty enum without invented values', async () => {
+    const stack = await actualSqlStack();
+    const names = (schema: string) =>
+      completeWithActualStack(schema, stack).items.map((item) => item.label);
+    expect(names('enum Mood { Happy Sad }\nmodel Post { mood Mood @default(|) }')).toEqual([
+      'Happy',
+      'Sad',
+    ]);
+    expect(names('enum Mood {}\nmodel Post { mood Mood @default(|) }')).toEqual([]);
+    expect(
+      names(
+        'enum Mood { Top }\nnamespace scoped { enum Mood { Scoped }\nmodel Post { mood scoped.Mood @default(|) } }',
+      ),
+    ).toEqual(['Scoped']);
+    const degraded = names('enum Mood { Happy Happy }\nmodel Post { mood Mood @default(|) }');
+    expect(degraded).toEqual(['Happy']);
+  }, 5_000);
+
+  it('uses actual adapter default-function signatures through the SQL factory', async () => {
+    const stack = await actualSqlStack();
+    const defaults = await importFromPackageRoot<ActualPostgresDefaultsModule>(
+      '../../../3-targets/6-adapters/postgres/src/core/control-mutation-defaults.ts',
+    );
+    const options = {
+      controlMutationDefaults: {
+        ...controlMutationDefaults,
+        defaultFunctionRegistry: defaults.createPostgresDefaultFunctionRegistry(),
+      },
+    };
+    const source = (args: string) => `model Post { value String @default(${args}) }`;
+    const candidates = completeWithActualStack(source('|'), stack, options).items;
+    expect(candidates.map((item) => item.label)).toEqual([
+      'true',
+      'false',
+      'autoincrement',
+      'now',
+      'uuid',
+      'cuid',
+      'ulid',
+      'nanoid',
+    ]);
+    expect(
+      completeWithActualStack(source('uuid(|)'), stack, options).items.map((item) => item.label),
+    ).toEqual(['4', '7']);
+    expect(
+      completeWithActualStack(source('cuid(|)'), stack, options).items.map((item) => item.label),
+    ).toEqual(['2']);
+    expect(completeWithActualStack(source('nanoid(|)'), stack, options).items).toEqual([]);
+    const snippetItems = completeWithActualStack(source('|'), stack, {
+      ...options,
+      clientSupportsSnippets: true,
+    }).items;
+    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe(
+      `uuid(${emptySnippetPlaceholder1})`,
+    );
+    expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
+      'cuid($' + '{1:version})',
+    );
+  }, 5_000);
+
+  it('offers each registered tag inside @default( with its own documentation', async () => {
+    const stack = await actualSqlStack();
+    const [postgres, sqlite, family] = await Promise.all([
+      importFromPackageRoot<ActualPostgresDataTypesModule>(
+        '../../../3-targets/3-targets/postgres/src/exports/data-types.ts',
+      ),
+      importFromPackageRoot<ActualSqliteDataTypesModule>(
+        '../../../3-targets/3-targets/sqlite/src/exports/data-types.ts',
+      ),
+      importFromPackageRoot<ActualSqlExpressionModule>(
+        '../../../2-sql/1-core/contract/src/exports/sql-expression.ts',
+      ),
+    ]);
+    const withFamilyEntry = (
+      targetEntries: Readonly<Record<string, DataTypeAuthoringEntry>>,
+    ): Readonly<Record<string, DataTypeAuthoringEntry>> => ({
+      [family.SQL_EXPRESSION_DATA_TYPE_ID]: family.sqlExpressionAuthoringEntry,
+      ...targetEntries,
+    });
+    const complete = (
+      dataTypes: Readonly<Record<string, DataTypeAuthoringEntry>>,
+      clientSupportsSnippets: boolean,
+    ) =>
+      completeWithActualStack('model Post { value String @default(|) }', stack, {
+        clientSupportsSnippets,
+        controlMutationDefaults,
+        dataTypes,
+      }).items.map((item) => ({
+        label: item.label,
+        detail: item.detail,
+        newText: item.textEdit?.newText,
+        insertTextFormat: item.insertTextFormat,
+      }));
+    const postgresEntries = withFamilyEntry(postgres.postgresDataTypeEntries());
+    const documentationOf = (
+      entries: Readonly<Record<string, DataTypeAuthoringEntry>>,
+      tag: string,
+    ) =>
+      Object.values(entries).find(
+        (entry) => entry.written.kind === 'tag' && entry.written.tag === tag,
+      )?.documentation;
+    const value = (label: string) => ({
+      label,
+      detail: 'PSL argument value',
+      newText: label,
+      insertTextFormat: undefined,
+    });
+    const tag = (
+      entries: Readonly<Record<string, DataTypeAuthoringEntry>>,
+      label: string,
+      snippet: boolean,
+    ) => ({
+      label,
+      detail: documentationOf(entries, label),
+      newText: snippet ? `${label}\`$1\`` : label,
+      insertTextFormat: snippet ? InsertTextFormat.Snippet : undefined,
+    });
+
+    expect(complete(postgresEntries, true)).toEqual([
+      value('true'),
+      value('false'),
+      tag(postgresEntries, 'sql', true),
+      tag(postgresEntries, 'json', true),
+    ]);
+    const sqliteEntries = withFamilyEntry(sqlite.sqliteDataTypeEntries());
+    expect(complete(sqliteEntries, true)).toEqual([
+      value('true'),
+      value('false'),
+      tag(sqliteEntries, 'sql', true),
+      tag(sqliteEntries, 'json', true),
+    ]);
+    expect(complete(postgresEntries, false)).toEqual([
+      value('true'),
+      value('false'),
+      tag(postgresEntries, 'sql', false),
+      tag(postgresEntries, 'json', false),
+    ]);
+
+    // Each tag carries the text of the tag it names, not every registered tag's text.
+    expect(documentationOf(postgresEntries, 'json')).not.toBe(
+      documentationOf(postgresEntries, 'sql'),
+    );
+  }, 5_000);
+
+  it('uses distinct local and referenced fields through actual SQL relation specs', async () => {
+    const stack = await actualSqlStack();
+    const schema = (args: string) =>
+      `model Target { topOnly Int }\nnamespace remote { model Target { remoteOnly Int } }\nmodel Owner { ownOnly Int\n relation remote.Target @relation(${args}) }`;
+    expect(
+      completeWithActualStack(schema('fields: [|]'), stack).items.map((item) => item.label),
+    ).toEqual(['ownOnly']);
+    expect(
+      completeWithActualStack(schema('references: [|]'), stack).items.map((item) => item.label),
+    ).toEqual(['remoteOnly']);
+    expect(
+      completeWithActualStack(schema('onDelete: |'), stack).items.map((item) => item.label),
+    ).toEqual(['NoAction', 'Restrict', 'Cascade', 'SetNull', 'SetDefault']);
+  }, 5_000);
+
+  it('uses actual Mongo field-named functions and keeps distinct snippet edits', async () => {
+    const stack = await actualMongoStack();
+    const schema = (args: string) => `model Post { title String\n slug String\n @@index(${args}) }`;
+    const plain = completeWithActualStack(schema('[|]'), stack).items;
+    expect(plain.map((item) => item.label)).toEqual(['title', 'slug', 'wildcard']);
+    const snippets = completeWithActualStack(schema('[|]'), stack, {
+      clientSupportsSnippets: true,
+    }).items;
+    expect(snippets.map((item) => [item.label, item.textEdit?.newText])).toEqual([
+      ['title', 'title'],
+      ['slug', 'slug'],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
+      ['title', 'title(sort: $' + '{1:sort})'],
+      ['slug', 'slug(sort: $' + '{1:sort})'],
+    ]);
+    expect(
+      completeWithActualStack(schema('[title(|)]'), stack).items.map((item) => item.label),
+    ).toEqual(['sort']);
+    expect(
+      completeWithActualStack(schema('[title(sort: |)]'), stack).items.map((item) => item.label),
+    ).toEqual(['Asc', 'Desc']);
+    expect(completeWithActualStack(schema('[wildcard(|)]'), stack).items).toEqual([]);
+    expect(
+      completeWithActualStack(schema('[title], type: |'), stack).items.map((item) => item.label),
+    ).toEqual(['1', '-1', '"text"', '"2dsphere"', '"2d"', '"hashed"']);
+  }, 5_000);
+
+  it('scopes actual Mongo dynamic function names to the declaring namespace model', async () => {
+    const stack = await actualMongoStack();
+    const schema =
+      'model Post { topOnly String }\nnamespace scoped { model Post { scopedOnly String\n @@index([|]) } }';
+    expect(
+      completeWithActualStack(schema, stack, { clientSupportsSnippets: true }).items.map((item) => [
+        item.label,
+        item.textEdit?.newText,
+      ]),
+    ).toEqual([
+      ['scopedOnly', 'scopedOnly'],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
+      ['scopedOnly', 'scopedOnly(sort: $' + '{1:sort})'],
+    ]);
+  }, 5_000);
 
   it('does not return generic block symbols as model field type candidates', () => {
     const { items } = complete(['model Post {', '  audit |', '}'].join('\n'));

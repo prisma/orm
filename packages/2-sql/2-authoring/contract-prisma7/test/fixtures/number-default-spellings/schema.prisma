@@ -1,0 +1,22 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Spellings {
+  id                      Int       @id
+  leadingZeros            Decimal   @default(007)
+  negativeZero            Decimal   @default(-0)
+  leadingZeroFraction     Decimal   @default(00.10)
+  bareLeadingZeros        Decimal   @default(007) @db.Decimal
+  bareNegativeZero        Decimal   @default(-0) @db.Decimal
+  bareLeadingZeroFraction Decimal   @default(00.10) @db.Decimal
+  long                    Decimal   @default(12345678901234567890.123456789) @db.Decimal
+  tiny                    Decimal   @default(0.000000000000000001) @db.Decimal
+  zerosBare               Decimal   @default(1.50) @db.Decimal
+  zerosScaled             Decimal   @default(1.50) @db.Decimal(10, 2)
+  bigLong                 BigInt    @default(9007199254740993)
+  bigNegativeZero         BigInt    @default(-0)
+  bigLeadingZeros         BigInt    @default(007)
+  mixed                   Decimal[] @default([007, -0, 00.10, 12345678901234567890.123456789, 0.000000000000000001, 1.50]) @db.Decimal
+  bigMixed                BigInt[]  @default([9007199254740993, -0, 007])
+}

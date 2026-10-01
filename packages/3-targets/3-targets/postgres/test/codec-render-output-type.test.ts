@@ -1,4 +1,4 @@
-import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
+import type { AnyCodecDescriptorTemplate } from '@internal/framework-components/codec';
 import { sqlCharDescriptor, sqlVarcharDescriptor } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
@@ -18,7 +18,7 @@ import {
 
 // `renderOutputType` is a `CodecDescriptor`-side concern after the SQL `Codec` narrow (TML-2357). Tests read the renderer from the descriptor directly.
 function rendererFor(
-  descriptor: AnyCodecDescriptor,
+  descriptor: AnyCodecDescriptorTemplate,
 ): ((typeParams: Record<string, unknown>) => string | undefined) | undefined {
   return descriptor.renderOutputType as
     | ((typeParams: Record<string, unknown>) => string | undefined)

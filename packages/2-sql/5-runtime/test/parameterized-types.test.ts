@@ -1,6 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { CodecDescriptor, CodecInstanceContext } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { SqlStorage, type SqlStorageTypeEntry } from '@internal/sql-contract/types';
 import type { Codec, SqlCodecInstanceContext } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
@@ -129,6 +130,7 @@ describe('parameterized types', () => {
       const parameterizedDescriptors: RuntimeParameterizedCodecDescriptor<{ length: number }>[] = [
         {
           codecId: 'pg/vector@1',
+          dataType: dataTypeId('pg/vector'),
           traits: [],
           targetTypes: ['vector'],
           paramsSchema: options?.paramsSchema ?? vectorParamsSchema,
@@ -251,6 +253,7 @@ describe('parameterized types', () => {
       const parameterizedDescriptors: RuntimeParameterizedCodecDescriptor<{ length: number }>[] = [
         {
           codecId: 'pg/vector@1',
+          dataType: dataTypeId('pg/vector'),
           traits: [],
           targetTypes: ['vector'],
           paramsSchema,
@@ -375,6 +378,7 @@ describe('parameterized types', () => {
       const parameterizedDescriptors: RuntimeParameterizedCodecDescriptor<{ length: number }>[] = [
         {
           codecId: 'pg/vector@1',
+          dataType: dataTypeId('pg/vector'),
           traits: [],
           targetTypes: ['vector'],
           paramsSchema: arktype({ length: 'number' }),
@@ -462,6 +466,7 @@ describe('parameterized types', () => {
           [
             {
               codecId: 'pg/vector@1',
+              dataType: dataTypeId('pg/vector'),
               traits: [],
               targetTypes: ['vector'],
               paramsSchema: vectorParamsSchema,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
@@ -15,6 +15,29 @@ const tickets = [
 ] as const;
 
 describe('ordering by a native enum column', () => {
+  it(
+    'prepared grouped results retain enum keys and ordinary aggregate parity',
+    () =>
+      withEnumOrderBy(async ({ db, client }) => {
+        await db.public.Ticket.createAndCount([...tickets]);
+        const grouped = db.public.Ticket.groupBy('status').orderBy((ticket) => ticket.status.asc());
+        const prepared = await client.prepare({}, () =>
+          grouped.prepared.aggregate((agg) => ({ total: agg.count() })),
+        );
+        expectTypeOf<ReturnType<typeof prepared.query>>().toEqualTypeOf<
+          Promise<Array<{ status: 'open' | 'closed'; total: number }>>
+        >();
+        const expected = [
+          { status: 'open', total: 2 },
+          { status: 'closed', total: 2 },
+        ];
+        expect(await prepared.query(client.runtime(), {})).toEqual(expected);
+        expect(await grouped.aggregate((agg) => ({ total: agg.count() }))).toEqual(expected);
+        expect(await prepared.query(client.runtime(), {})).toEqual(expected);
+      }),
+    timeouts.spinUpPpgDev,
+  );
+
   it(
     'sorts ascending in declaration order',
     () =>

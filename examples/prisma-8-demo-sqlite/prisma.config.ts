@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-sqlite/config';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './prisma/contract.ts',
     output: './src/prisma',

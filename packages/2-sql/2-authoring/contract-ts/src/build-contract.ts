@@ -1,5 +1,5 @@
 import {
-  computeExecutionHash,
+  buildExecutionSection,
   computeProfileHash,
   computeStorageHash,
 } from '@internal/contract/hashing';
@@ -22,12 +22,7 @@ import {
   type StorageHashBase,
   type ValueSetRef,
 } from '@internal/contract/types';
-import {
-  type CapabilityMatrix,
-  type EnumTypeHandle,
-  mergeCapabilityMatrices,
-  resolveToOneRelationNullable,
-} from '@internal/contract-authoring';
+import { type EnumTypeHandle, resolveToOneRelationNullable } from '@internal/contract-authoring';
 import type {
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
@@ -38,7 +33,13 @@ import {
   flushAuthoringWarnings,
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookupWithDescriptors,
+  type ColumnTypeDescriptor,
+  codecForRef,
+} from '@internal/framework-components/codec';
+import { mergeCapabilityMatrices } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
@@ -58,6 +59,7 @@ import {
   applyFkDefaults,
   CheckConstraint,
   Index,
+  resolvedTypeParams,
   type SqlNamespaceInput,
   SqlStorage,
   type SqlStorageInput,
@@ -75,58 +77,202 @@ import {
   computeCheckContentHash,
   derivedCheckPrefixes,
 } from '@internal/sql-schema-ir/naming';
+import { invariant } from '@internal/utils/assertions';
+import { canonicalStringify } from '@internal/utils/canonical-stringify';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import type {
-  ContractDefinition,
-  FieldNode,
-  ModelNode,
-  RelationNode,
-  ValueObjectFieldNode,
+import { isStructuredError, type StructuredError } from '@internal/utils/structured-error';
+import {
+  type AuthoredColumnDefault,
+  type ContractDefinition,
+  type FieldNode,
+  isValueObjectMember,
+  type ModelNode,
+  type RelationNode,
+  type ScalarMemberNode,
+  storedAsListColumn,
+  type ValueObjectFieldNode,
+  type ValueObjectMemberNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
 import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
-type DomainFieldRef =
-  | { readonly kind: 'scalar'; readonly many?: boolean }
-  | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
+/**
+ * The codec that encodes one column's default, built with the column's own `typeParams`, because a parameterized codec checks its params when it encodes and reads a default. Only a column has params; every other encode site takes the representative instance.
+ */
+function columnCodec(
+  codecId: string,
+  typeParams: Record<string, unknown> | undefined,
+  codecLookup?: CodecLookupWithDescriptors,
+): Codec | undefined {
+  if (codecLookup === undefined) return undefined;
+  return codecForRef(codecLookup, {
+    codecId,
+    ...ifDefined(
+      'typeParams',
+      typeParams === undefined
+        ? undefined
+        : blindCast<JsonValue, 'typeParams are validated by the codec paramsSchema'>(typeParams),
+    ),
+  });
+}
 
-function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLookup): JsonValue {
-  const codec = codecLookup?.get(codecId);
+/** Encodes a value the contract stores, and reads it back with the codec, which refuses a value its column would not hold. */
+function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
-    return codec.encodeJson(value);
+    const json = codec.encodeJson(value);
+    codec.decodeJson(json);
+    return json;
   }
   return blindCast<
     JsonValue,
-    'no codec lookup at build time: literal/enum member value is already JSON-safe'
+    'the build was given no codec for this value, so it is stored as authored; the caller answers for it being JSON'
   >(value);
 }
 
+interface ColumnDefaultSite {
+  readonly modelName: string;
+  readonly fieldName: string;
+  readonly codecId: string;
+}
+
+function defaultRefusal(
+  site: ColumnDefaultSite,
+  cause: unknown,
+  elementPosition?: number,
+): StructuredError {
+  const subject =
+    elementPosition === undefined ? 'default' : `default (element ${elementPosition})`;
+  const reason = cause instanceof Error ? cause.message : String(cause);
+  return contractError(
+    'CONTRACT.DEFAULT_INVALID',
+    `Field "${site.modelName}.${site.fieldName}" has a ${subject} that its codec refuses: ${reason}`,
+    {
+      cause,
+      meta: {
+        modelName: site.modelName,
+        fieldName: site.fieldName,
+        codecId: site.codecId,
+        reason: 'codec-refused-default',
+        ...ifDefined('elementPosition', elementPosition),
+      },
+    },
+  );
+}
+
+function encodeDefaultValue(
+  value: unknown,
+  codec: Codec | undefined,
+  site: ColumnDefaultSite,
+  elementPosition?: number,
+): JsonValue {
+  try {
+    return encodeViaCodec(value, codec);
+  } catch (cause) {
+    if (cause instanceof InternalError) throw cause;
+    throw defaultRefusal(site, cause, elementPosition);
+  }
+}
+
+function codecForDefault(
+  codecLookup: CodecLookupWithDescriptors | undefined,
+  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
+  site: ColumnDefaultSite,
+): Codec | undefined {
+  if (codecLookup === undefined) return undefined;
+  const codec = buildCodecForDefault(codecLookup, resolveCodec, site);
+  if (codec === undefined) {
+    throw contractError(
+      'CONTRACT.DEFAULT_INVALID',
+      `Field "${site.modelName}.${site.fieldName}" has a default, but no pack in the contract declares its codec "${site.codecId}", so the default cannot be checked. List the pack that owns the codec in \`extensions\`.`,
+      {
+        meta: {
+          modelName: site.modelName,
+          fieldName: site.fieldName,
+          codecId: site.codecId,
+          reason: 'codec-not-found',
+        },
+      },
+    );
+  }
+  return codec;
+}
+
+function buildCodecForDefault(
+  codecLookup: CodecLookupWithDescriptors,
+  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
+  site: ColumnDefaultSite,
+): Codec | undefined {
+  try {
+    return resolveCodec(codecLookup);
+  } catch (cause) {
+    if (!isStructuredError(cause) || cause.code !== 'RUNTIME.TYPE_PARAMS_INVALID') throw cause;
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      `Field "${site.modelName}.${site.fieldName}" has type parameters that its codec does not accept: ${cause.message}`,
+      {
+        cause,
+        meta: {
+          modelName: site.modelName,
+          fieldName: site.fieldName,
+          codecId: site.codecId,
+          reason: 'type-params-invalid',
+        },
+      },
+    );
+  }
+}
+
 function encodeColumnDefault(
-  defaultInput: ColumnDefault,
-  codecId: string,
-  codecLookup?: CodecLookup,
+  defaultInput: AuthoredColumnDefault,
+  codecLookup: CodecLookupWithDescriptors | undefined,
+  resolveCodec: (codecLookup: CodecLookupWithDescriptors) => Codec | undefined,
+  site: ColumnDefaultSite,
   many = false,
 ): ColumnDefault {
   if (defaultInput.kind === 'function') {
     return { kind: 'function', expression: defaultInput.expression };
   }
-  if (many) {
-    if (!Array.isArray(defaultInput.value)) {
-      throw new InternalError(
-        `Literal default on a list column must be an array; received ${typeof defaultInput.value}. ` +
-          'A scalar default on a list field must be rejected at the authoring surface.',
-      );
-    }
+  if ('canonical' in defaultInput && defaultInput.canonical === true) {
     return {
       kind: 'literal',
-      value: defaultInput.value.map((element) => encodeViaCodec(element, codecId, codecLookup)),
+      value: blindCast<
+        ColumnDefault extends { kind: 'literal'; value: infer V } ? V : never,
+        'a text contract source stores the canonical form its data type produced'
+      >(defaultInput.value),
+    };
+  }
+  if (many) {
+    if (!Array.isArray(defaultInput.value)) {
+      throw contractError(
+        'CONTRACT.DEFAULT_INVALID',
+        `Field "${site.modelName}.${site.fieldName}" is a list field, so its default is an array; received ${typeof defaultInput.value}. Call .many() before .default().`,
+        {
+          meta: {
+            modelName: site.modelName,
+            fieldName: site.fieldName,
+            codecId: site.codecId,
+            reason: 'list-default-not-array',
+          },
+        },
+      );
+    }
+    const codec = codecForDefault(codecLookup, resolveCodec, site);
+    return {
+      kind: 'literal',
+      value: defaultInput.value.map((element, index) =>
+        encodeDefaultValue(element, codec, site, index + 1),
+      ),
     };
   }
   return {
     kind: 'literal',
-    value: encodeViaCodec(defaultInput.value, codecId, codecLookup),
+    value: encodeDefaultValue(
+      defaultInput.value,
+      codecForDefault(codecLookup, resolveCodec, site),
+      site,
+    ),
   };
 }
 
@@ -154,7 +300,8 @@ function assertStorageSemantics(
     if (
       typeof registration !== 'object' ||
       registration === null ||
-      !Array.isArray((registration as { entries?: unknown }).entries)
+      !('entries' in registration) ||
+      !Array.isArray(registration.entries)
     ) {
       throw contractError(
         'CONTRACT.PACK_CONTRIBUTION_INVALID',
@@ -162,7 +309,10 @@ function assertStorageSemantics(
         { meta: { packId: pack.id, contribution: 'indexTypes', reason: 'invalid-shape' } },
       );
     }
-    for (const entry of (registration as IndexTypeRegistration<IndexTypeMap>).entries) {
+    for (const entry of blindCast<
+      IndexTypeRegistration<IndexTypeMap>,
+      'checked above to be an object with an entries array; each entry is validated when registered'
+    >(registration).entries) {
       indexTypeRegistry.register(entry);
     }
   }
@@ -215,12 +365,6 @@ function assertTargetTableMatches(
       },
     );
   }
-}
-
-function isValueObjectField(
-  field: FieldNode | ValueObjectFieldNode,
-): field is ValueObjectFieldNode {
-  return 'valueObjectName' in field;
 }
 
 /**
@@ -329,15 +473,117 @@ function resolveCheckExpressionRenderer(
   return hasCheckExpressionRenderer(authoring) ? authoring.renderCheckExpressions : undefined;
 }
 
+/** Whether TypeScript gives the value a literal type: a primitive, or an array or plain object of them. */
+function hasLiteralType(value: unknown): boolean {
+  if (['string', 'number', 'boolean', 'bigint'].includes(typeof value)) return true;
+  if (Array.isArray(value)) return value.every(hasLiteralType);
+  if (typeof value !== 'object' || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return (
+    (prototype === Object.prototype || prototype === null) &&
+    Object.values(value).every(hasLiteralType)
+  );
+}
+
+/**
+ * Refuses a member whose codec reads its stored value back as a different value from the one written.
+ * The contract's types name the member as written, while the runtime reads the stored value, so the
+ * two must be the same value. A member with no literal type has nothing to contradict. The caller
+ * has already read the stored value back once, so the codec takes it.
+ */
+function assertStoredAsWritten(
+  enumName: string,
+  member: { readonly name: string; readonly value: unknown },
+  stored: JsonValue,
+  codec: Codec,
+): void {
+  if (!hasLiteralType(member.value)) return;
+  const readBack = codec.decodeJson(stored);
+  if (
+    hasLiteralType(readBack) &&
+    canonicalStringify(readBack) === canonicalStringify(member.value)
+  ) {
+    return;
+  }
+  const writeAs = hasLiteralType(readBack) ? canonicalStringify(readBack) : JSON.stringify(stored);
+  throw contractError(
+    'CONTRACT.ENUM_INVALID',
+    `enumType("${enumName}"): member "${member.name}" is written ${canonicalStringify(member.value)}, but the column stores ${JSON.stringify(stored)}. Write the member as ${writeAs}.`,
+    { meta: { enumName, member: member.name, reason: 'member-not-stored-as-written' } },
+  );
+}
+
+/** A member's value in the form the enum's codec stores it. A member the codec refuses is a `CONTRACT.ENUM_INVALID` naming the enum and the member. */
+function encodeEnumMember(
+  handle: EnumTypeHandle,
+  member: { readonly name: string; readonly value: unknown },
+  codec: Codec | undefined,
+): JsonValue {
+  try {
+    return encodeViaCodec(member.value, codec);
+  } catch (cause) {
+    if (cause instanceof InternalError) throw cause;
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw contractError(
+      'CONTRACT.ENUM_INVALID',
+      `enumType("${handle.enumName}") member "${member.name}" has a value its codec ${handle.codecId} refuses: ${reason}`,
+      {
+        fix: 'Give the member a value the codec takes, or type the enum with a codec that takes it.',
+        cause,
+        meta: {
+          enumName: handle.enumName,
+          member: member.name,
+          codecId: handle.codecId,
+          reason: 'codec-refused-member',
+        },
+      },
+    );
+  }
+}
+
+/**
+ * Each member's value in the form the enum's codec stores it, read back by the codec. A member the
+ * codec refuses, a member written differently from how it is stored, and two members that store the
+ * same value are each a `CONTRACT.ENUM_INVALID` naming the members at fault.
+ */
+function encodeEnumMembers(
+  handle: EnumTypeHandle,
+  codecLookup: CodecLookupWithDescriptors | undefined,
+): readonly { readonly name: string; readonly value: JsonValue }[] {
+  const codec = codecLookup?.get(handle.codecId);
+  const memberByStoredValue = new Map<string, string>();
+  return handle.enumMembers.map((member) => {
+    const value = encodeEnumMember(handle, member, codec);
+    if (codec !== undefined) assertStoredAsWritten(handle.enumName, member, value, codec);
+    const key = canonicalStringify(value);
+    const earlier = memberByStoredValue.get(key);
+    if (earlier !== undefined) {
+      throw contractError(
+        'CONTRACT.ENUM_INVALID',
+        `enumType("${handle.enumName}"): members "${earlier}" and "${member.name}" both store ${JSON.stringify(value)}. Member values must be unique as the column stores them.`,
+        {
+          meta: {
+            enumName: handle.enumName,
+            members: [earlier, member.name],
+            reason: 'duplicate-member-value',
+          },
+        },
+      );
+    }
+    memberByStoredValue.set(key, member.name);
+    return { name: member.name, value };
+  });
+}
+
 /**
  * The member values a membership check must enforce, encoded exactly as the
  * column stores them. Membership predicates support strings and finite numbers.
  */
 function checkMemberValues(
   handle: EnumTypeHandle,
-  codecLookup: CodecLookup | undefined,
+  codecLookup: CodecLookupWithDescriptors | undefined,
 ): readonly (string | number)[] {
-  const encoded = handle.values.map((value) => encodeViaCodec(value, handle.codecId, codecLookup));
+  const encoded = encodeEnumMembers(handle, codecLookup).map((member) => member.value);
   const values: (string | number)[] = [];
   for (const value of encoded) {
     if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
@@ -456,11 +702,8 @@ function resolveColumnTypeQualifier(
 }
 
 /**
- * Applies the target's `qualifyColumnType` hook to a scalar column descriptor
- * at construction, so the storage column and the domain field (which derives
- * its `type.typeParams` from the storage column) are both built already
- * qualified in a single pass. A descriptor whose codec the target leaves
- * unchanged passes through untouched.
+ * Applies the target's `qualifyColumnType` hook to a scalar column descriptor.
+ * A descriptor whose codec the target leaves unchanged passes through untouched.
  */
 function qualifyColumnDescriptor(
   descriptor: ColumnTypeDescriptor,
@@ -562,9 +805,6 @@ function mergeColumnAndAttachedEntities(
   return result;
 }
 
-const JSONB_CODEC_ID = 'pg/jsonb@1';
-const JSONB_NATIVE_TYPE = 'jsonb';
-
 function resolveModelNamespaceId(
   model: ModelNode,
   modelNameToNamespaceId: ReadonlyMap<string, string>,
@@ -665,71 +905,90 @@ function targetColumnsForJunction(targetModel: ModelNode, fieldName: string): re
 
 function buildStorageColumn(
   field: FieldNode | ValueObjectFieldNode,
-  storageValueSetRef: ValueSetRef | undefined,
-  codecLookup?: CodecLookup,
+  enumRefs: EnumValueSetRefs | undefined,
+  modelName: string,
+  storageTypes: Record<string, StorageTypeInstance>,
+  codecLookup?: CodecLookupWithDescriptors,
 ): StorageColumn {
-  if (isValueObjectField(field)) {
-    const encodedDefault =
-      field.default !== undefined
-        ? encodeColumnDefault(field.default, JSONB_CODEC_ID, codecLookup)
-        : undefined;
-
-    return {
-      nativeType: JSONB_NATIVE_TYPE,
-      codecId: JSONB_CODEC_ID,
-      nullable: field.nullable,
-      ...ifDefined('default', encodedDefault),
-    };
-  }
-
-  const codecId = field.descriptor.codecId;
+  const { descriptor } = field;
+  const codecId = descriptor.codecId;
+  const isListColumn = storedAsListColumn({
+    list: field.many === true,
+    typedByValueObject: isValueObjectMember(field),
+  });
+  const noCheck = isValueObjectMember(field) ? undefined : field.noCheck;
   const encodedDefault =
     field.default !== undefined
-      ? encodeColumnDefault(field.default, codecId, codecLookup, field.many === true)
+      ? encodeColumnDefault(
+          field.default,
+          codecLookup,
+          (lookup) => columnCodec(codecId, resolvedTypeParams(descriptor, storageTypes), lookup),
+          { modelName, fieldName: field.fieldName, codecId },
+          isListColumn,
+        )
       : undefined;
 
-  // `storageValueSetRef` (derived from an `enumTypeHandle`) takes precedence
-  // when present — the established domain-enum path. `field.descriptor.valueSet`
-  // is the fallback: set by an entity-ref type constructor (e.g. `pg.enum(Ref)`)
-  // that resolved the field's type against a value-set-deriving entity with no
-  // domain enum involved. A field carries at most one of the two in practice.
-  const valueSet = storageValueSetRef ?? field.descriptor.valueSet;
+  invariant(
+    enumRefs === undefined || descriptor.valueSet === undefined,
+    `Field "${modelName}.${field.fieldName}" is typed by a domain enum and also carries a storage value set from its type constructor.`,
+  );
+  const valueSet = enumRefs?.storage ?? descriptor.valueSet;
 
   return {
-    nativeType: field.descriptor.nativeType,
+    nativeType: descriptor.nativeType,
     codecId,
     nullable: field.nullable,
-    ...(field.many ? { many: true as const } : {}),
-    ...(field.noCheck !== undefined ? { noCheck: [...field.noCheck].sort() } : {}),
-    ...ifDefined('typeParams', field.descriptor.typeParams),
+    ...ifDefined('many', isListColumn ? (true as const) : undefined),
+    ...ifDefined('noCheck', noCheck && [...noCheck].sort()),
+    ...ifDefined('typeParams', descriptor.typeParams),
     ...ifDefined('default', encodedDefault),
-    ...ifDefined('typeRef', field.descriptor.typeRef),
+    ...ifDefined('typeRef', descriptor.typeRef),
     ...ifDefined('valueSet', valueSet),
   };
 }
 
+interface EnumValueSetRefs {
+  readonly domain: ValueSetRef;
+  readonly storage: ValueSetRef;
+}
+
+/**
+ * The refs of a field typed by an authored enum: the domain enum and its storage value set. Authored enums are registered in the default namespace, whatever namespace the field's model is in.
+ */
+function enumValueSetRefs(
+  enumHandle: EnumTypeHandle | undefined,
+  defaultNamespaceId: string,
+): EnumValueSetRefs | undefined {
+  if (enumHandle === undefined) return undefined;
+  const common = { namespaceId: defaultNamespaceId, entityName: enumHandle.enumName };
+  return {
+    domain: { plane: 'domain', entityKind: 'enum', ...common },
+    storage: { plane: 'storage', entityKind: 'valueSet', ...common },
+  };
+}
+
 function buildDomainField(
-  field: FieldNode | ValueObjectFieldNode,
-  column: StorageColumn,
-  domainValueSetRef: ValueSetRef | undefined,
+  field: ScalarMemberNode | ValueObjectMemberNode,
+  defaultNamespaceId: string,
+  storageTypes: Record<string, StorageTypeInstance>,
 ): ContractField {
-  if (isValueObjectField(field)) {
+  if (isValueObjectMember(field)) {
     return {
       type: { kind: 'valueObject', name: field.valueObjectName },
       nullable: field.nullable,
-      ...(field.many ? { many: true } : {}),
+      ...ifDefined('many', field.many ? (true as const) : undefined),
     };
   }
 
   return {
     type: {
       kind: 'scalar',
-      codecId: column.codecId,
-      ...ifDefined('typeParams', column.typeParams),
+      codecId: field.descriptor.codecId,
+      ...ifDefined('typeParams', resolvedTypeParams(field.descriptor, storageTypes)),
     },
-    nullable: column.nullable,
-    ...(field.many ? { many: true } : {}),
-    ...ifDefined('valueSet', domainValueSetRef),
+    nullable: field.nullable,
+    ...ifDefined('many', field.many ? (true as const) : undefined),
+    ...ifDefined('valueSet', enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId)?.domain),
   };
 }
 
@@ -907,7 +1166,7 @@ function columnsProducingCheckPrefix(
 
 export function buildSqlContractFromDefinition(
   definition: ContractDefinition,
-  codecLookup?: CodecLookup,
+  codecLookup?: CodecLookupWithDescriptors,
 ): Contract<SqlStorage> {
   const target = definition.target.targetId;
   const defaultNamespaceId = definition.target.defaultNamespaceId;
@@ -963,7 +1222,6 @@ export function buildSqlContractFromDefinition(
     const columns: Record<string, StorageColumn> = {};
     const fieldToColumn: Record<string, string> = {};
     const domainFields: Record<string, ContractField> = {};
-    const domainFieldRefs: Record<string, DomainFieldRef> = {};
     const checksForTable: CheckConstraint[] = [];
     // Enforcement is derived only for tables Prisma 8 owns: the contract
     // describes an external schema, it does not prescribe enforcement for it.
@@ -995,7 +1253,7 @@ export function buildSqlContractFromDefinition(
         if (field.nullable) {
           throw contractError(
             'CONTRACT.DEFAULT_INVALID',
-            `Field "${semanticModel.modelName}.${field.fieldName}" cannot be nullable when executionDefaults are present.`,
+            `Field "${semanticModel.modelName}.${field.fieldName}" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().`,
             {
               meta: {
                 modelName: semanticModel.modelName,
@@ -1007,28 +1265,7 @@ export function buildSqlContractFromDefinition(
         }
       }
 
-      const enumHandle = !isValueObjectField(field) ? field.enumTypeHandle : undefined;
-      // Authored enums are always registered under the contract's defaultNamespaceId
-      // (see the enum registration loop below), so refs must point there regardless
-      // of which namespace the consuming model lives in.
-      const storageValueSetRef: ValueSetRef | undefined =
-        enumHandle !== undefined
-          ? {
-              plane: 'storage',
-              entityKind: 'valueSet',
-              namespaceId: defaultNamespaceId,
-              entityName: enumHandle.enumName,
-            }
-          : undefined;
-      const domainValueSetRef: ValueSetRef | undefined =
-        enumHandle !== undefined
-          ? {
-              plane: 'domain',
-              entityKind: 'enum',
-              namespaceId: defaultNamespaceId,
-              entityName: enumHandle.enumName,
-            }
-          : undefined;
+      const enumHandle = !isValueObjectMember(field) ? field.enumTypeHandle : undefined;
 
       // A field authored through a deferred entity-ref column helper (e.g.
       // `pg.enum(handle)`) carries `descriptor.entityRef`: the referenced
@@ -1041,12 +1278,9 @@ export function buildSqlContractFromDefinition(
       // which schema-qualifies a native-enum column's type name for its
       // namespace. Keying off the codec id (inside the hook) catches both the
       // TS `pg.enum(handle)` path (via `entityRef`) and the PSL `pg.enum(Ref)`
-      // path (resolved inline in the interpreter, no `entityRef`). Because the
-      // storage column is built from this qualified descriptor and the domain
-      // field derives its `type.typeParams` from that column, both come out
-      // qualified in this single pass.
-      let resolvedField: FieldNode | ValueObjectFieldNode = field;
-      if (!isValueObjectField(field)) {
+      // path (resolved inline in the interpreter, no `entityRef`).
+      let resolvedField = field;
+      if (!isValueObjectMember(field)) {
         let descriptor = field.descriptor;
         const entityRef = descriptor.entityRef;
         if (entityRef !== undefined) {
@@ -1059,7 +1293,7 @@ export function buildSqlContractFromDefinition(
         }
       }
 
-      if (!isValueObjectField(resolvedField) && resolvedField.noCheck !== undefined) {
+      if (!isValueObjectMember(resolvedField) && resolvedField.noCheck !== undefined) {
         const { noCheck: authoredNoCheck, ...withoutNoCheck } = resolvedField;
         // A non-`managed` table derives no checks, so an opt-out there is a
         // tolerated no-op (never persisted): policy may also be stamped
@@ -1079,7 +1313,13 @@ export function buildSqlContractFromDefinition(
           : withoutNoCheck;
       }
 
-      const column = buildStorageColumn(resolvedField, storageValueSetRef, codecLookup);
+      const column = buildStorageColumn(
+        resolvedField,
+        enumValueSetRefs(enumHandle, defaultNamespaceId),
+        semanticModel.modelName,
+        definition.storageTypes ?? {},
+        codecLookup,
+      );
       columns[field.columnName] = column;
       fieldToColumn[field.fieldName] = field.columnName;
 
@@ -1091,7 +1331,7 @@ export function buildSqlContractFromDefinition(
       // IS the storage-level enforcement — including array columns, since the
       // target enforces membership on every element of a native-typed array.
       if (renderCheckExpressions !== undefined && derivesChecks) {
-        const waivedKinds = !isValueObjectField(resolvedField) ? resolvedField.noCheck : undefined;
+        const waivedKinds = !isValueObjectMember(resolvedField) ? resolvedField.noCheck : undefined;
         checksForTable.push(
           ...lowerRenderedChecks(
             tableName,
@@ -1106,21 +1346,15 @@ export function buildSqlContractFromDefinition(
         );
       }
 
-      domainFields[field.fieldName] = buildDomainField(field, column, domainValueSetRef);
-
-      if (isValueObjectField(field)) {
-        domainFieldRefs[field.fieldName] = {
-          kind: 'valueObject',
-          name: field.valueObjectName,
-          ...(field.many ? { many: true } : {}),
-        };
-      } else if (field.many) {
-        domainFieldRefs[field.fieldName] = { kind: 'scalar', many: true };
-      }
+      domainFields[field.fieldName] = buildDomainField(
+        resolvedField,
+        defaultNamespaceId,
+        definition.storageTypes ?? {},
+      );
 
       if (executionDefaultPhases) {
         executionDefaults.push({
-          ref: { namespace: namespaceId, table: tableName, column: field.columnName },
+          ref: { namespace: namespaceId, entry: tableName, field: field.columnName },
           ...ifDefined('onCreate', executionDefaultPhases.onCreate),
           ...ifDefined('onUpdate', executionDefaultPhases.onUpdate),
         });
@@ -1344,6 +1578,10 @@ export function buildSqlContractFromDefinition(
         relation.toNamespaceId,
         'Relation',
       );
+      invariant(
+        relation.toTable !== undefined,
+        `Relation "${semanticModel.modelName}.${relation.fieldName}" is local but carries no target table; only cross-space relations may leave it unset.`,
+      );
       assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
 
       const targetColumnToField = new Map(
@@ -1443,13 +1681,13 @@ export function buildSqlContractFromDefinition(
   const rawStorageTypes = definition.storageTypes ?? {};
   const documentTypes: Record<string, StorageTypeInstance> = Object.fromEntries(
     Object.entries(rawStorageTypes).map(([name, entry]) => {
-      if ((entry as { kind?: unknown }).kind === 'codec-instance') return [name, entry];
+      if ('kind' in entry && entry.kind === 'codec-instance') return [name, entry];
       return [
         name,
         toStorageTypeInstance({
           codecId: entry.codecId,
           nativeType: entry.nativeType,
-          typeParams: (entry as { typeParams?: Record<string, unknown> }).typeParams ?? {},
+          typeParams: ('typeParams' in entry ? entry.typeParams : undefined) ?? {},
         }),
       ];
     }),
@@ -1480,12 +1718,10 @@ export function buildSqlContractFromDefinition(
       domainSlot = {};
       domainEnumsByNs[nsId] = domainSlot;
     }
+    const storedMembers = encodeEnumMembers(handle, codecLookup);
     domainSlot[enumName] = {
       codecId: handle.codecId,
-      members: handle.enumMembers.map((m) => ({
-        name: m.name,
-        value: encodeViaCodec(m.value, handle.codecId, codecLookup),
-      })),
+      members: storedMembers,
     };
 
     let storageSlot = storageValueSetsByNs[nsId];
@@ -1495,7 +1731,7 @@ export function buildSqlContractFromDefinition(
     }
     storageSlot[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) => encodeViaCodec(v, handle.codecId, codecLookup)),
+      values: storedMembers.map((member) => member.value),
     };
   }
 
@@ -1542,25 +1778,13 @@ export function buildSqlContractFromDefinition(
     : computeStorageHash({
         target,
         targetFamily,
-        storage: storageWithoutHash as Record<string, unknown>,
+        storage: blindCast<
+          Record<string, unknown>,
+          'the storage envelope is a plain object of namespaces; hashing reads it as a record'
+        >(storageWithoutHash),
         ...sqlContractCanonicalizationHooks,
       });
   const storage = new SqlStorage({ ...storageWithoutHash, storageHash });
-
-  const executionSection =
-    executionDefaults.length > 0
-      ? {
-          mutations: {
-            defaults: executionDefaults.sort((a, b) => {
-              const tableCompare = a.ref.table.localeCompare(b.ref.table);
-              if (tableCompare !== 0) {
-                return tableCompare;
-              }
-              return a.ref.column.localeCompare(b.ref.column);
-            }),
-          },
-        }
-      : undefined;
 
   const extensionNamespaces = definition.extensions
     ? Object.values(definition.extensions).map((pack) => pack.id)
@@ -1575,15 +1799,10 @@ export function buildSqlContractFromDefinition(
     }
   }
 
-  const extensionPackCapabilitySources = definition.extensions
-    ? Object.values(definition.extensions).map(
-        (pack) => pack.capabilities as CapabilityMatrix | undefined,
-      )
-    : [];
-  const capabilities = mergeCapabilityMatrices(
-    definition.target.capabilities as CapabilityMatrix | undefined,
-    ...extensionPackCapabilitySources,
-  );
+  const capabilities = mergeCapabilityMatrices({}, [
+    definition.target,
+    ...Object.values(definition.extensions ?? {}),
+  ]);
   // Internal `profileHash` computation is unchanged from `origin/main`: it
   // continues to fingerprint the author-declared capability subset. With
   // `capabilities` removed from the `defineContract` input that subset is
@@ -1594,12 +1813,11 @@ export function buildSqlContractFromDefinition(
     capabilities: {},
   });
 
-  const executionWithHash = executionSection
-    ? {
-        ...executionSection,
-        executionHash: computeExecutionHash({ target, targetFamily, execution: executionSection }),
-      }
-    : undefined;
+  const executionWithHash = buildExecutionSection({
+    target,
+    targetFamily,
+    defaults: executionDefaults,
+  });
 
   const valueObjects: Record<string, ContractValueObject> | undefined =
     definition.valueObjects && definition.valueObjects.length > 0
@@ -1610,20 +1828,7 @@ export function buildSqlContractFromDefinition(
               fields: Object.fromEntries(
                 vo.fields.map((f) => [
                   f.fieldName,
-                  isValueObjectField(f)
-                    ? {
-                        type: { kind: 'valueObject' as const, name: f.valueObjectName },
-                        nullable: f.nullable,
-                        ...(f.many ? { many: true } : {}),
-                      }
-                    : {
-                        type: {
-                          kind: 'scalar' as const,
-                          codecId: f.descriptor.codecId,
-                          ...ifDefined('typeParams', f.descriptor.typeParams),
-                        },
-                        nullable: f.nullable,
-                      },
+                  buildDomainField(f, defaultNamespaceId, definition.storageTypes ?? {}),
                 ]),
               ),
             },

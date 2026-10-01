@@ -15,7 +15,10 @@ import {
 } from '@internal/mongo-query-ast/control';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { deserializeMongoOps, serializeMongoOps } from '../src/core/mongo-ops-serializer';
+import {
+  deserializeMongoOps,
+  serializeMongoOps,
+} from '../src/core/migrations/mongo-ops-serializer';
 
 function asDdlOp(op: AnyMongoMigrationOperation): MongoMigrationPlanOperation {
   if (op.operationClass === 'data') {

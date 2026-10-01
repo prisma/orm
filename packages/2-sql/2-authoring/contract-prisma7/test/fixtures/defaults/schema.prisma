@@ -1,0 +1,31 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER  @map("user")
+  ADMIN
+
+  @@map("user_role")
+}
+
+model Defaults {
+  id              Int      @id @default(autoincrement())
+  bigSequence     BigInt   @default(autoincrement())
+  createdAt       DateTime @default(now())
+  createdAtTz     DateTime @default(now()) @db.Timestamptz(6)
+  generated       String   @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  stringLiteral   String   @default("hello")
+  intLiteral      Int      @default(42)
+  bigIntLiteral   BigInt   @default(9007199254740993)
+  floatLiteral    Float    @default(1.5)
+  decimalLiteral  Decimal  @default(12.34)
+  booleanLiteral  Boolean  @default(true)
+  dateTimeLiteral DateTime @default("2024-01-01T00:00:00.000Z")
+  jsonLiteral     Json     @default("{\"a\":1}")
+  bytesLiteral    Bytes    @default("aGVsbG8=")
+  stringList      String[] @default(["a", "b"])
+  intList         Int[]    @default([1, 2])
+  enumMember      Role     @default(USER)
+  enumList        Role[]   @default([ADMIN])
+}

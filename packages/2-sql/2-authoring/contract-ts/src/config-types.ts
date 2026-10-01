@@ -100,7 +100,7 @@ export function typescriptContractFromPath(
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {
           throw new InternalError(
-            'typescriptContractFromPath: context.resolvedInputs is empty. The CLI config loader should populate it positional-matched with source.inputs.',
+            'typescriptContractFromPath: context.resolvedInputs is empty. The CLI config loader should populate it from source.inputs.',
           );
         }
         const mod = await import(pathToFileURL(absolutePath).href);

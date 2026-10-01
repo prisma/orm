@@ -1,10 +1,10 @@
 import 'dotenv/config';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import pgvector from '@prisma/orm-extension-pgvector/control';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 import { engagementStatsControl } from './src/extensions/engagement-stats';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './prisma/contract.ts',
     output: './src/prisma',

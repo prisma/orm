@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-postgres",
-  "version": "8.0.0-rc.9",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -13,29 +13,29 @@
     "build": "tsdown",
     "prepack": "node ../../../../scripts/sync-package-skills.ts @prisma/orm-postgres",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen skills",
-    "test": "vitest run"
+    "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.9",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.9",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.9",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.9",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.14",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.14",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.14",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.14",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
+    "arktype": "catalog:",
     "pathe": "^2.0.3",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@internal/postgres": "workspace:8.0.0-rc.9",
-    "@repo/tsconfig": "workspace:8.0.0-rc.9",
-    "@internal/publish-surface": "workspace:8.0.0-rc.9",
-    "@repo/tsdown": "workspace:8.0.0-rc.9",
+    "@internal/postgres": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
+    "temporal-polyfill": "^1.0.4",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {
@@ -48,7 +48,6 @@
     "./adapter/adapter": "./dist/adapter__adapter.mjs",
     "./adapter/column-types": "./dist/adapter__column-types.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
-    "./adapter/operation-types": "./dist/adapter__operation-types.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./adapter/sql-renderer": "./dist/adapter__sql-renderer.mjs",
     "./adapter/types": "./dist/adapter__types.mjs",
@@ -90,6 +89,7 @@
     "./family/ir": "./dist/family__ir.mjs",
     "./family/migration": "./dist/family__migration.mjs",
     "./family/pack": "./dist/family__pack.mjs",
+    "./family/psl-build": "./dist/family__psl-build.mjs",
     "./family/psl-infer": "./dist/family__psl-infer.mjs",
     "./family/runtime": "./dist/family__runtime.mjs",
     "./family/verify": "./dist/family__verify.mjs",
@@ -107,6 +107,7 @@
     "./family-contract/pack-types": "./dist/family-contract__pack-types.mjs",
     "./family-contract/referential-action-sql": "./dist/family-contract__referential-action-sql.mjs",
     "./family-contract/resolve-storage-table": "./dist/family-contract__resolve-storage-table.mjs",
+    "./family-contract/sql-expression": "./dist/family-contract__sql-expression.mjs",
     "./family-contract/types": "./dist/family-contract__types.mjs",
     "./family-contract/validators": "./dist/family-contract__validators.mjs",
     "./family-contract/value-set-derivation-hook": "./dist/family-contract__value-set-derivation-hook.mjs",
@@ -142,14 +143,17 @@
     "./target/contract-free": "./dist/target__contract-free.mjs",
     "./target/control": "./dist/target__control.mjs",
     "./target/data-transform": "./dist/target__data-transform.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/diff-database-schema": "./dist/target__diff-database-schema.mjs",
     "./target/errors": "./dist/target__errors.mjs",
+    "./target/full-text": "./dist/target__full-text.mjs",
     "./target/issue-planner": "./dist/target__issue-planner.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/native-type-normalizer": "./dist/target__native-type-normalizer.mjs",
     "./target/op-factory-call": "./dist/target__op-factory-call.mjs",
+    "./target/operation-types": "./dist/target__operation-types.mjs",
     "./target/pack": "./dist/target__pack.mjs",
     "./target/planner": "./dist/target__planner.mjs",
     "./target/planner-ddl-builders": "./dist/target__planner-ddl-builders.mjs",
@@ -181,6 +185,7 @@
     "./utils/simplify-deep": "./dist/utils__simplify-deep.mjs",
     "./utils/structured-error": "./dist/utils__structured-error.mjs",
     "./utils/suppress-idle-connection-errors": "./dist/utils__suppress-idle-connection-errors.mjs",
+    "./utils/text": "./dist/utils__text.mjs",
     "./utils/types": "./dist/utils__types.mjs",
     "./vite-plugin-contract-emit": "./dist/vite-plugin-contract-emit.mjs",
     "./package.json": "./package.json"

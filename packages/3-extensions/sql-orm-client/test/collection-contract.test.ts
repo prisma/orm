@@ -9,12 +9,13 @@ import {
   resolveModelRelations,
   resolveModelTableName,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveThrough,
   resolveUpsertConflictColumns,
 } from '../src/collection-contract';
 import {
+  buildCompositeForeignKeyContract,
   buildExecutionDefaultJunctionContract,
   buildMixedPolyContract,
   getTestContract,
@@ -102,8 +103,8 @@ describe('collection-contract capability detection', () => {
       relatedNamespaceId: 'public',
       relatedTableName: 'posts',
       localTableName: 'users',
-      targetColumn: 'user_id',
-      localColumn: 'id',
+      targetColumns: ['user_id'],
+      localColumns: ['id'],
       cardinality: '1:N',
     });
   });
@@ -192,8 +193,16 @@ describe('collection-contract capability detection', () => {
     expect(() => resolveModelTableName(contract, 'public', 'UnknownModel')).toThrow(
       'Model "UnknownModel" has invalid or missing storage.table in namespace "public"',
     );
-    expect(resolvePrimaryKeyColumn(contract, 'public', 'users')).toBe('id');
-    expect(resolvePrimaryKeyColumn(contract, 'public', 'unknown_table')).toBe('id');
+  });
+
+  it('resolvePrimaryKeyColumns() returns every primary-key column and throws without one', () => {
+    const composite = buildCompositeForeignKeyContract();
+
+    expect(resolvePrimaryKeyColumns(getTestContract(), 'public', 'users')).toEqual(['id']);
+    expect(resolvePrimaryKeyColumns(composite, 'public', 'customers')).toEqual(['tenant_id', 'id']);
+    expect(() => resolvePrimaryKeyColumns(composite, 'public', 'unknown_table')).toThrow(
+      'Table "unknown_table" in namespace "public" has no primary key',
+    );
   });
 
   it('resolveModelTableName() reads from storage.table and throws for invalid values', () => {

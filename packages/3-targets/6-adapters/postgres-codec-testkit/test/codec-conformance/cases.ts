@@ -186,6 +186,40 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   { codecId: 'pg/bool@1', label: 'true', value: true },
   { codecId: 'pg/bit@1', label: 'single bit', value: '1' },
+  // Values at the limit their type parameters set, which decodeJson checks. The harness stores a value in a
+  // column of the codec's native type without its type parameters, and a bare char or bit holds one character
+  // or bit, so type-params.integration.test.ts covers those two.
+  {
+    codecId: 'sql/varchar@1',
+    label: 'text at its declared length',
+    value: 'abc',
+    typeParams: { length: 3 },
+  },
+  {
+    codecId: 'sql/varchar@1',
+    label: 'characters beyond the basic plane at its declared length',
+    value: '\u{1F600}\u{1F600}\u{1F600}',
+    typeParams: { length: 3 },
+  },
+  {
+    codecId: 'pg/varchar@1',
+    label: 'text at its declared length',
+    value: 'ab',
+    typeParams: { length: 2 },
+  },
+  {
+    codecId: 'pg/varbit@1',
+    label: 'bits under their declared length',
+    value: '101',
+    typeParams: { length: 4 },
+  },
+  {
+    codecId: 'pg/numeric@1',
+    label: 'decimal at its declared precision and scale',
+    value: '-999.99',
+    typeParams: { precision: 5, scale: 2 },
+  },
+  { codecId: 'pg/int@1', label: 'int4 upper bound', value: 2147483647 },
   { codecId: 'pg/varbit@1', label: 'bit string', value: '1010' },
   { codecId: 'pg/bytea@1', label: 'byte string', value: new Uint8Array([0, 1, 255]) },
   // RFC 2045 base64 breaks every 76 characters, which is 57 bytes in. A value
@@ -201,10 +235,10 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
-  // value itself rather than as text. `encodeJson` renders it through `toString()` and the
-  // projection renders whatever PostgreSQL emits for the column: the same moment in time, but not
-  // necessarily the same characters. A case agrees here only where those two spellings happen to
-  // coincide, which is a fact about spelling rather than about the value surviving the round trip.
+  // value itself rather than as text. `encodeJson` writes the data type's canonical form and the
+  // projection renders whatever PostgreSQL emits for the column; the harness compares the two in
+  // canonical form. A `Temporal` value is not deep-equal to its copy, so these cases give the
+  // round trip its own equality.
   {
     codecId: 'pg/date-temporal@1',
     label: 'calendar date',
@@ -215,8 +249,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
     typeParams: { precision: 6 },
-    // The projection emits `2026-01-02 03:04:05.123456`; toString() spells the same wall-clock
-    // reading with a T. Both are correct, so the round trip is what there is to check.
     valueEquality: plainDateTimesEqual,
   },
   {
@@ -224,10 +256,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision at UTC',
     value: Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
     typeParams: { precision: 6 },
-    // The projection emits `2026-01-02 03:04:05.123456+00`; toString() spells the same instant with
-    // a T and a trailing Z. The disagreement is permanent and correct, which is why this is a
-    // round-trip case rather than a marked one — a marker would assert forever that a working
-    // system is broken.
     valueEquality: instantsEqual,
   },
   {
@@ -235,6 +263,14 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: Temporal.PlainTime.from('03:04:05.123456'),
     typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-date@1',
+    label: 'millisecond precision at UTC',
+    value: new Date('2026-01-02T03:04:05.123Z'),
+    typeParams: { precision: 3 },
+    valueEquality: (left, right) =>
+      left instanceof Date && right instanceof Date && left.getTime() === right.getTime(),
   },
   // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written
   // the way the server writes it — space separator, two-digit offset, microseconds. That is now
@@ -266,6 +302,35 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '03:04:05+00',
     setupSql: HOSTILE_TEMPORAL_SESSION,
   },
+  // Text PostgreSQL writes with ` BC`, with an offset that has seconds, and to a precision below six digits, read back
+  // as PostgreSQL wrote it.
+  { codecId: 'pg/date-string@1', label: 'a year before Christ', value: '0044-03-15 BC' },
+  {
+    codecId: 'pg/timestamp-string@1',
+    label: 'a year before Christ',
+    value: '0044-03-15 12:00:00 BC',
+    typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'a year before Christ at UTC',
+    value: '0044-03-15 12:00:00+00 BC',
+    typeParams: { precision: 6 },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'an offset with seconds, in the local mean time of Amsterdam',
+    value: '1800-01-01 00:17:30+00:17:30',
+    typeParams: { precision: 6 },
+    setupSql: ["SET TimeZone = 'Europe/Amsterdam'"],
+  },
+  {
+    codecId: 'pg/time-string@1',
+    label: 'millisecond precision',
+    value: '12:34:56.123',
+    typeParams: { precision: 3 },
+  },
+  { codecId: 'pg/timetz@1', label: 'an offset with seconds', value: '12:00:00+01:30:15' },
   // An interval's application value is its three stored fields. A month has no
   // fixed length, so `{ months: 1 }` and `{ days: 30 }` stay distinct rather than
   // collapsing through a common epoch; the ISO string is the JSON side only.
@@ -318,6 +383,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '123e4567-e89b-12d3-a456-426614174000',
   },
   { codecId: 'pg/inet@1', label: 'ipv4 address', value: '192.168.0.1' },
+  { codecId: 'pg/tsquery@1', label: 'tsquery in its canonical form', value: "'zebra' & !'graze'" },
   { codecId: 'pg/text-array@1', label: 'string array', value: ['a', 'b'] },
   {
     codecId: 'pg/text-array@1',
@@ -340,6 +406,30 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   { codecId: 'pg/float4@1', label: 'float not exactly representable', value: 0.1 },
   { codecId: 'pg/int2@1', label: 'int2 upper bound', value: 32767 },
   { codecId: 'pg/int2@1', label: 'int2 lower bound', value: -32768 },
+  { codecId: 'pg/float8@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'pg/float8@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'pg/float8@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'pg/float4@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'pg/float4@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'pg/float4@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'pg/float@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'pg/float@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'pg/float@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'sql/float@1', label: 'not a number', value: Number.NaN },
+  { codecId: 'sql/float@1', label: 'positive infinity', value: Number.POSITIVE_INFINITY },
+  { codecId: 'sql/float@1', label: 'negative infinity', value: Number.NEGATIVE_INFINITY },
+  { codecId: 'pg/int4@1', label: 'int4 upper bound', value: 2147483647 },
+  { codecId: 'pg/int4@1', label: 'int4 lower bound', value: -2147483648 },
+  { codecId: 'sql/int@1', label: 'int4 lower bound', value: -2147483648 },
+  { codecId: 'pg/bool@1', label: 'false', value: false },
+  { codecId: 'pg/inet@1', label: 'ipv6 address', value: '::1' },
+  { codecId: 'pg/inet@1', label: 'network with a prefix length', value: '10.0.0.0/8' },
+  { codecId: 'pg/varbit@1', label: 'empty bit string', value: '' },
+  { codecId: 'pg/text-array@1', label: 'empty array', value: [] },
+  { codecId: 'pg/text-array@1', label: 'NULL element', value: ['a', null] },
+  { codecId: 'pg/text@1', label: 'empty text', value: '' },
+  { codecId: 'pg/date-string@1', label: 'infinity', value: 'infinity' },
+  { codecId: 'pg/timestamptz-string@1', label: 'negative infinity', value: '-infinity' },
   {
     codecId: 'pg/jsonb@1',
     label: 'document whose keys jsonb reorders',
@@ -408,6 +498,12 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   {
     codecId: 'pg/inet@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/tsquery@1',
     label: 'null',
     value: undefined,
     nullValue: true,
@@ -516,6 +612,13 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'null',
     value: undefined,
     typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/timestamptz-date@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 3 },
     nullValue: true,
   },
   {

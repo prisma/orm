@@ -555,6 +555,34 @@ describe('MTI variant mutation guards', () => {
     );
   });
 
+  it('createAll() with the skip option throws for MTI variants', async () => {
+    const { collection } = createReturningMixedPolyCollection();
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    expect(() =>
+      narrowed.createAll([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'The onConflict option is not supported on variant "Feature" of model "Task" because the variant is stored in its own table. Call createAll(rows) without the option; a duplicate row then makes the call fail.',
+      }),
+    );
+  });
+
+  it('createAndCount() with the skip option keeps the createAndCount() message for MTI variants', async () => {
+    const { collection } = createReturningMixedPolyCollection();
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    await expect(
+      narrowed.createAndCount([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
+    ).rejects.toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message:
+          'createAndCount() is not supported for MTI variant "Feature" on model "Task". Use createAll() instead.',
+      }),
+    );
+  });
+
   it('upsert() throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
     const narrowed = collection.variant('Feature' as never) as typeof collection;
@@ -592,6 +620,41 @@ describe('STI variant upsert (discriminator auto-injection)', () => {
 });
 
 describe('MTI variant create (two-INSERT orchestration)', () => {
+  it.each([1, 2])('shares a defaults cache across both tables and all %i rows', async (count) => {
+    const contract = withReturningCapability(buildMixedPolyContract());
+    const baseContext = getTestContext();
+    const applyMutationDefaults = vi.fn(baseContext.applyMutationDefaults);
+    const context = { ...baseContext, contract, applyMutationDefaults };
+    const runtime = createMockRuntime();
+    const collection = new Collection({ runtime, context }, 'Task', { namespaceId: 'public' });
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const input = Array.from({ length: count }, (_, index) => ({
+      title: `Feature ${index}`,
+      priority: index,
+    }));
+    const results = input.flatMap((row, index) => [
+      [{ id: index + 1, title: row.title, type: 'feature' }],
+      [{ id: index + 1, priority: row.priority }],
+    ]);
+    runtime.setNextResults(results);
+
+    await narrowed.createAll(input as never).toArray();
+
+    const calls = applyMutationDefaults.mock.calls.map(([options]) => options);
+    expect(calls.map(({ entry }) => entry)).toEqual(input.flatMap(() => ['tasks', 'features']));
+    const cache = calls[0]!.defaultValueCache;
+    expect(cache).toBeInstanceOf(Map);
+    for (const call of calls) {
+      expect(call.defaultValueCache).toBe(cache);
+    }
+
+    applyMutationDefaults.mockClear();
+    runtime.setNextResults(results);
+    await narrowed.createAll(input as never).toArray();
+    expect(applyMutationDefaults.mock.calls[0]![0].defaultValueCache).toBeInstanceOf(Map);
+    expect(applyMutationDefaults.mock.calls[0]![0].defaultValueCache).not.toBe(cache);
+  });
+
   it('executes two INSERTs: base table then variant table', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
     runtime.setNextResults([

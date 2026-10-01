@@ -2,9 +2,8 @@
 
 The one package a SQLite application installs. It wires the framework, the SQL family, and the SQLite target into a single lazy client, and brings the rest of the stack along as exact-pinned dependencies:
 
-```jsonc
-// package.json
-{ "dependencies": { "@prisma/orm-sqlite": "0.16.0" } }
+```sh
+pnpm add @prisma/orm-sqlite
 ```
 
 ```

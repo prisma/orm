@@ -88,6 +88,42 @@ describe('ast/insert', () => {
     expect(insertAst.onConflict?.action?.kind).toBe('do-nothing');
   });
 
+  it('stores targetless do-nothing on-conflict actions', () => {
+    const onConflict = InsertOnConflict.doNothing();
+
+    expect(onConflict.columns).toEqual([]);
+    expect(onConflict.action.kind).toBe('do-nothing');
+  });
+
+  it('carries a targetless on-conflict through the insert AST', () => {
+    const insertAst = InsertAst.into(table('user'))
+      .withRows([{ id: param(0, 'id') }])
+      .withOnConflict(InsertOnConflict.doNothing());
+
+    expect(insertAst.onConflict?.columns).toEqual([]);
+    expect(insertAst.onConflict?.action.kind).toBe('do-nothing');
+  });
+
+  it('rewrite preserves a targetless on-conflict', () => {
+    const insertAst = InsertAst.into(table('user'))
+      .withRows([{ id: param(0, 'id') }])
+      .withOnConflict(InsertOnConflict.doNothing());
+
+    const rewritten = insertAst.rewrite({ columnRef: (ref) => ref });
+
+    expect(rewritten.onConflict?.columns).toEqual([]);
+    expect(rewritten.onConflict?.action.kind).toBe('do-nothing');
+  });
+
+  it('collectParamRefs returns row params for a targetless on-conflict', () => {
+    const rowId = param('u1', 'id');
+    const insertAst = InsertAst.into(table('user'))
+      .withRows([{ id: rowId }])
+      .withOnConflict(InsertOnConflict.doNothing());
+
+    expect(insertAst.collectParamRefs()).toEqual([rowId]);
+  });
+
   it('collectParamRefs returns row params then onConflict set params', () => {
     const rowId = param('u1', 'id');
     const rowEmail = param('a@b.com', 'email');

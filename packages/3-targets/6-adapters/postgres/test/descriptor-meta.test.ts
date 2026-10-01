@@ -1,6 +1,7 @@
+import { postgresNativeAuthoringTypes } from '@internal/target-postgres/control';
 import { describe, expect, it } from 'vitest';
-import { postgresNativeAuthoringTypes } from '../src/core/control-mutation-defaults';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
+import postgresRuntimeAdapterDescriptor from '../src/exports/runtime';
 
 const storage = postgresAdapterDescriptorMeta.types.storage;
 
@@ -181,6 +182,19 @@ describe('expandNativeType hooks via descriptor-meta', () => {
         expand({ nativeType: 'numeric', typeParams: { precision: 10, scale: 1.5 } }),
       ).toThrow('Invalid "scale" type parameter');
     });
+
+    it('takes the precision and scale PostgreSQL takes at their limits', () => {
+      expect([
+        expand({ nativeType: 'numeric', typeParams: { precision: 1000, scale: -1000 } }),
+        expand({ nativeType: 'numeric', typeParams: { precision: 1, scale: 1000 } }),
+      ]).toEqual(['numeric(1000,-1000)', 'numeric(1,1000)']);
+    });
+
+    it('refuses a precision above the 1000 PostgreSQL takes', () => {
+      expect(() => expand({ nativeType: 'numeric', typeParams: { precision: 1001 } })).toThrow(
+        'Invalid "precision" type parameter for "numeric": expected an integer from 1 to 1000, got 1001',
+      );
+    });
   });
 
   describe('identityHooks', () => {
@@ -252,4 +266,16 @@ describe('precision bounds agree between authoring and expansion', () => {
       ).toBe(`${nativeType}(${minimum})`);
     },
   );
+});
+
+describe('postgres adapter query operations', () => {
+  // Postgres built-in operations moved to @internal/target-postgres; the adapter contributes none,
+  // so a stale slot here would register them twice.
+  it('the runtime descriptor contributes no query operations', () => {
+    expect(postgresRuntimeAdapterDescriptor.queryOperations).toBeUndefined();
+  });
+
+  it('the descriptor meta declares no query-operation type import', () => {
+    expect(postgresAdapterDescriptorMeta.types).not.toHaveProperty('queryOperationTypes');
+  });
 });

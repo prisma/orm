@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/20261-group-by-shortcut (postgres matrix entry).
 //
@@ -10,4 +12,5 @@ model Round {
   id       String @id @default(cuid(2))
   teamName String
   points   Int
+  @@map("round")
 }

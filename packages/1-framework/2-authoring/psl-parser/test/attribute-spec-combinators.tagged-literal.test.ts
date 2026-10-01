@@ -1,0 +1,122 @@
+import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
+import type { FieldAttributeCtx } from '../src/exports';
+import { taggedLiteral } from '../src/exports';
+import { Cursor, parse, parseAttribute } from '../src/parse';
+import { PslSources } from '../src/source-file';
+import { buildSymbolTable } from '../src/symbol-table';
+import { FieldAttributeAst } from '../src/syntax/ast/attributes';
+import type { ExpressionAst } from '../src/syntax/ast/expressions';
+import { createSyntaxTree } from '../src/syntax/red';
+
+function makeCtx(sources: PslSources): FieldAttributeCtx {
+  const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: modelSources,
+  });
+  const selfModel = symbolTable.topLevel.models['M'];
+  if (!selfModel) throw new Error('expected model M in the symbol table');
+  const field = selfModel.fields['id'];
+  if (!field) throw new Error('expected field id on model M');
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
+}
+
+function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCtx } {
+  const cursor = new Cursor('schema.prisma', `@x(${exprSource})`);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
+  if (!node) throw new Error('expected a field attribute');
+  const first = [...(node.argList()?.args() ?? [])][0];
+  const expr = first?.value();
+  if (!expr) throw new Error('expected an argument expression');
+  return { expr, ctx: makeCtx(new PslSources([[root, cursor.sourceFile]])) };
+}
+
+describe('taggedLiteral', () => {
+  const type = taggedLiteral(['json', 'postgis.geometry'], {
+    documentation: 'A JSON document or a geometry.',
+  });
+
+  it('labels itself with the first tag', () => {
+    expect(type.kind).toBe('taggedLiteral');
+    expect(type.label).toBe('json`...`');
+    expect(type.tags).toEqual(['json', 'postgis.geometry']);
+    expect(type.documentation).toBe('A JSON document or a geometry.');
+  });
+
+  it('returns the tag, the canonicalized body, and the span of the whole literal', () => {
+    const { expr, ctx } = argOf('postgis.geometry`\n  POINT(0 0)\n`');
+    const result = type.parse(expr, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({
+        tag: 'postgis.geometry',
+        canonicalization: { ok: true, body: 'POINT(0 0)' },
+        span: { start: { offset: 3, line: 1, column: 4 }, end: { offset: 35, line: 3, column: 2 } },
+      });
+    }
+  });
+
+  it('accepts a double-quoted string', () => {
+    const { expr, ctx } = argOf('json"[1]"');
+    expect(type.parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { tag: 'json', canonicalization: { ok: true, body: '[1]' } },
+    });
+  });
+
+  it('accepts a tag it does not list, leaving the tag check to lowering', () => {
+    const { expr, ctx } = argOf('sql`x`');
+    expect(type.parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { tag: 'sql', canonicalization: { ok: true, body: 'x' } },
+    });
+  });
+
+  it('rejects an argument that is not a tagged literal with the generic code', () => {
+    for (const source of ['"sql"', 'sql', 'sql()', '42']) {
+      const { expr, ctx } = argOf(source);
+      const result = type.parse(expr, ctx);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.failure).toHaveLength(1);
+        expect(result.failure[0]).toMatchObject({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Expected a tagged literal',
+        });
+      }
+    }
+  });
+
+  it('passes a body containing a dollar-brace sequence through verbatim', () => {
+    const { expr, ctx } = argOf('sql`a $' + '{x} b`');
+    expect(type.parse(expr, ctx)).toMatchObject({
+      ok: true,
+      value: { canonicalization: { ok: true, body: 'a $' + '{x} b' } },
+    });
+  });
+
+  it('returns a failed canonicalization for lowering to report', () => {
+    const nul = argOf('sql`a\0b`');
+    expect(type.parse(nul.expr, nul.ctx)).toMatchObject({
+      ok: true,
+      value: { canonicalization: { ok: false, reason: 'nul', offset: 1 } },
+    });
+    const large = argOf(`sql\`${'a'.repeat(65537)}\``);
+    expect(type.parse(large.expr, large.ctx)).toMatchObject({
+      ok: true,
+      value: { canonicalization: { ok: false, reason: 'too-large' } },
+    });
+  });
+});

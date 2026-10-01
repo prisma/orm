@@ -1,5 +1,6 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import type { ArgType, AttributeCtx, FieldAttributeCtx, ModelAttributeCtx } from '../src/exports';
 import {
   bool,
@@ -15,6 +16,7 @@ import {
   modelAttribute,
   nodePslSpan,
   num,
+  numLiteral,
   oneOf,
   optional,
   record,
@@ -22,47 +24,103 @@ import {
   str,
 } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
-import type { SourceFile } from '../src/source-file';
+import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst, ModelAttributeAst } from '../src/syntax/ast/attributes';
-import type { ExpressionAst } from '../src/syntax/ast/expressions';
+import { ArrayLiteralAst, type ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
 
-function makeCtx(sourceFile: SourceFile): FieldAttributeCtx {
-  const { document, sourceFile: modelSource } = parse('model M {\n  id Int @id\n}\n');
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile: modelSource,
-    pslBlockDescriptors: {},
+function makeCtx(sources: PslSources): FieldAttributeCtx {
+  const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: modelSources,
   });
-  const selfModel = table.topLevel.models['M'];
+  const selfModel = symbolTable.topLevel.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
-  return {
-    sourceId: 'schema.prisma',
-    sourceFile,
-    selfModel,
-    field,
-    resolveReferencedModel: () => undefined,
-  };
+  const { binder } = createBinder({
+    sources: modelSources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  return { sources, symbols: symbolTable, selfModel, field, binder };
+}
+
+function schemaArg(schema: string, attribute: string, argName?: string) {
+  const { document, sources } = parse(schema, 'schema.psl');
+  const registry = new PslSources([[document.syntax, sources.sourceFileFor(document.syntax)]]);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: registry,
+  });
+  const model = symbolTable.topLevel.models['Post'];
+  if (!model) throw new Error('expected model Post');
+  const field = model.fields['author'];
+  if (!field) throw new Error('expected field author');
+  const { binder } = createBinder({
+    sources: registry,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: {
+      model: {},
+      field: {
+        [attribute]: () =>
+          fieldAttribute(attribute, {
+            documentation: 'fixture',
+            positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+            named: {
+              fields: { type: list(fieldRef()), documentation: 'fixture' },
+              references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+            },
+          }),
+      },
+    },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+  });
+  for (const node of field.node.attributes()) {
+    if (node.name()?.path().join('.') !== attribute) continue;
+    for (const arg of node.argList()?.args() ?? []) {
+      if (arg.name()?.name() !== argName) continue;
+      const value = arg.value();
+      const array = value === undefined ? undefined : ArrayLiteralAst.cast(value.syntax);
+      const element = Array.from(array?.elements() ?? [])[0];
+      if (element === undefined) throw new Error('expected a list element');
+      return {
+        expr: element,
+        ctx: { sources: registry, symbols: symbolTable, selfModel: model, field, binder },
+      };
+    }
+  }
+  throw new Error('expected the attribute argument');
 }
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCtx } {
-  const cursor = new Cursor(`@x(${exprSource})`);
-  const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+  const cursor = new Cursor('schema.prisma', `@x(${exprSource})`);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
   if (!node) throw new Error('expected a field attribute');
   const first = [...(node.argList()?.args() ?? [])][0];
   const expr = first?.value();
   if (!expr) throw new Error('expected an argument expression');
-  return { expr, ctx: makeCtx(cursor.sourceFile) };
+  return { expr, ctx: makeCtx(new PslSources([[root, cursor.sourceFile]])) };
 }
 
 function modelAttrOf(source: string): { node: ModelAttributeAst; ctx: ModelAttributeCtx } {
-  const cursor = new Cursor(source);
-  const node = ModelAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+  const cursor = new Cursor('schema.prisma', source);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = ModelAttributeAst.cast(root);
   if (!node) throw new Error('expected a model attribute');
-  return { node, ctx: makeCtx(cursor.sourceFile) };
+  return { node, ctx: makeCtx(new PslSources([[root, cursor.sourceFile]])) };
 }
 
 describe('str', () => {
@@ -134,10 +192,24 @@ describe('str', () => {
 });
 
 describe('identifier', () => {
+  it('retains value documentation without changing exact-case parsing', () => {
+    const action = identifier('Cascade', {
+      documentation: 'Propagates the change to referencing rows.',
+    });
+    expect(action).toMatchObject({
+      name: 'Cascade',
+      label: 'Cascade',
+      documentation: 'Propagates the change to referencing rows.',
+    });
+    const { expr, ctx } = argOf('cascade');
+    expect(action.parse(expr, ctx).ok).toBe(false);
+  });
   it('matches a bare identifier equal to the pinned name', () => {
     const { expr, ctx } = argOf('Cascade');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('Cascade');
@@ -146,7 +218,9 @@ describe('identifier', () => {
   it('rejects a bare identifier with a different name', () => {
     const { expr, ctx } = argOf('Cascade');
 
-    const result = identifier('NoAction').parse(expr, ctx);
+    const result = identifier('NoAction', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -158,7 +232,9 @@ describe('identifier', () => {
   it('rejects a quoted string with the same characters', () => {
     const { expr, ctx } = argOf('"Cascade"');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -167,7 +243,9 @@ describe('identifier', () => {
   it('rejects a number token', () => {
     const { expr, ctx } = argOf('1');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -332,6 +410,40 @@ describe('num', () => {
   });
 });
 
+describe('numLiteral', () => {
+  it.each([
+    ['a decimal with more digits than a JS number holds', '12345678901234567890.123456789'],
+    ['a decimal JS would print with an exponent', '0.000000000000000001'],
+    ['trailing zeros', '1.50'],
+    ['a negative decimal', '-1.25'],
+    ['an integer beyond 2^53', '9007199254740993'],
+    ['a keyword number', '-Infinity'],
+  ])('keeps %s as written', (_name, source) => {
+    const { expr, ctx } = argOf(source);
+
+    const result = numLiteral().parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ text: source });
+  });
+
+  it('rejects a string literal carrying digits', () => {
+    const { expr, ctx } = argOf('"1.50"');
+
+    const result = numLiteral().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.message).toBe('Expected a number literal');
+    }
+  });
+
+  it('carries the kind and label of an unrestricted number', () => {
+    expect(numLiteral()).toMatchObject({ kind: 'num', label: 'number', value: undefined });
+  });
+});
+
 describe('json', () => {
   it('parses a quoted JSON object string into a record', () => {
     const { expr, ctx } = argOf('"{\\"a\\": 1}"');
@@ -437,7 +549,12 @@ describe('bool', () => {
 
 describe('modelAttribute', () => {
   it('fixes the spec level to model', () => {
-    const spec = modelAttribute('demo', { positional: [{ key: 'k', type: int() }] });
+    const spec = modelAttribute('demo', {
+      documentation: 'Declares a model attribute for argument binding.',
+      positional: [
+        { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     expect(spec.level).toBe('model');
     expect(spec.name).toBe('demo');
@@ -445,7 +562,12 @@ describe('modelAttribute', () => {
 
   it('binds a model-attribute node through interpretAttribute', () => {
     const { node, ctx } = modelAttrOf('@@demo(7)');
-    const spec = modelAttribute('demo', { positional: [{ key: 'k', type: int() }] });
+    const spec = modelAttribute('demo', {
+      documentation: 'Declares a model attribute for argument binding.',
+      positional: [
+        { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -455,7 +577,12 @@ describe('modelAttribute', () => {
 
   it('surfaces a leaf diagnostic when a model-attribute argument fails to parse', () => {
     const { node, ctx } = modelAttrOf('@@demo("nope")');
-    const spec = modelAttribute('demo', { positional: [{ key: 'k', type: int() }] });
+    const spec = modelAttribute('demo', {
+      documentation: 'Declares a model attribute for argument binding.',
+      positional: [
+        { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -472,11 +599,13 @@ describe('oneOf', () => {
     const { expr, ctx } = argOf('Cascade');
     const first: ArgType<'first', AttributeCtx> = {
       kind: 'str',
+      value: undefined,
       label: 'first',
       parse: () => ok('first'),
     };
     const second: ArgType<'second', AttributeCtx> = {
       kind: 'str',
+      value: undefined,
       label: 'second',
       parse: () => ok('second'),
     };
@@ -490,7 +619,10 @@ describe('oneOf', () => {
   it('matches whichever alternative accepts the argument', () => {
     const { expr, ctx } = argOf('SetNull');
 
-    const result = oneOf(identifier('Cascade'), identifier('SetNull')).parse(expr, ctx);
+    const result = oneOf(
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      identifier('SetNull', { documentation: 'An accepted identifier in this test grammar.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('SetNull');
@@ -514,7 +646,10 @@ describe('oneOf', () => {
   it('names each function when every function-call alternative fails', () => {
     const { expr, ctx } = argOf('unknown()');
 
-    const result = oneOf(funcCall('now', {}), funcCall('uuid', {})).parse(expr, ctx);
+    const result = oneOf(
+      funcCall('now', { documentation: 'Calls the named value generator.' }),
+      funcCall('uuid', { documentation: 'Calls the named value generator.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -526,13 +661,20 @@ describe('oneOf', () => {
   it('emits a single aggregate diagnostic anchored to the arg node when every alternative fails', () => {
     const { expr, ctx } = argOf('WeirdAction');
 
-    const result = oneOf(identifier('Cascade'), identifier('SetNull')).parse(expr, ctx);
+    const result = oneOf(
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      identifier('SetNull', { documentation: 'An accepted identifier in this test grammar.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).toEqual(nodePslSpan(expr.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources
+          .sourceFileFor(expr.syntax)
+          .pslSpanToRange(nodePslSpan(expr.syntax, ctx.sources)),
+      );
       expect(result.failure[0]?.message).toContain('Cascade');
       expect(result.failure[0]?.message).toContain('SetNull');
     }
@@ -540,47 +682,56 @@ describe('oneOf', () => {
 });
 
 describe('fieldRef', () => {
-  it('resolves a field that exists on the self model', () => {
-    const { expr, ctx } = argOf('id');
+  it('resolves a field the binder bound on the self model', () => {
+    const { expr, ctx } = schemaArg(
+      'model User {\n  id Int\n}\nmodel Post {\n  authorId Int\n  author User @relation(fields: [authorId])\n}',
+      'relation',
+      'fields',
+    );
 
     const result = fieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('id');
+    if (result.ok) expect(result.value).toBe('authorId');
   });
 
-  it('emits an existence diagnostic for a field missing from the self model', () => {
-    const { expr, ctx } = argOf('ghostField');
+  it('fails without a diagnostic when the binder bound nothing', () => {
+    const { expr, ctx } = schemaArg(
+      'model User {\n  id Int\n}\nmodel Post {\n  authorId Int\n  author User @relation(fields: [ghostField])\n}',
+      'relation',
+      'fields',
+    );
 
     const result = fieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure).toHaveLength(1);
-      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-    }
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
-  it('resolves a field against the referenced model when it is in scope', () => {
-    const { expr, ctx } = argOf('id');
-    const referencedCtx: FieldAttributeCtx = {
-      ...ctx,
-      resolveReferencedModel: () => ctx.selfModel,
-    };
+  it('resolves a referenced field the binder bound on the target model', () => {
+    const { expr, ctx } = schemaArg(
+      'model User {\n  id Int\n}\nmodel Post {\n  authorId Int\n  author User @relation(references: [id])\n}',
+      'relation',
+      'references',
+    );
 
-    const result = referencedFieldRef().parse(expr, referencedCtx);
+    const result = referencedFieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('id');
   });
 
-  it('carries a referenced name through when the referenced model is out of scope', () => {
-    const { expr, ctx } = argOf('ghostField');
+  it('carries a cross-space referenced name through without a diagnostic', () => {
+    const { expr, ctx } = schemaArg(
+      'model Post {\n  authorId Int\n  author auth:User @relation(references: [id])\n}',
+      'relation',
+      'references',
+    );
 
     const result = referencedFieldRef().parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('ghostField');
+    if (result.ok) expect(result.value).toBe('id');
   });
 
   it('labels both scopes as a field name', () => {
@@ -599,19 +750,51 @@ describe('fieldRef', () => {
 });
 
 describe('entityRef', () => {
-  it('parses a bare identifier into its model name', () => {
-    const { expr, ctx } = argOf('Task');
+  function referenceArg(value: string) {
+    const { document, sources } = parse(`model M {\n id Int @x(${value})\n}`, 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+    });
+    const selfModel = symbolTable.topLevel.models['M'];
+    const field = selfModel?.fields['id'];
+    const attribute = field?.node.attributes()[Symbol.iterator]().next().value;
+    const expr = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
+    if (!selfModel || !expr) throw new Error('Missing reference argument');
+    const { binder } = createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: {},
+      attributeSpecs: {
+        model: {},
+        field: {
+          x: () =>
+            fieldAttribute('x', {
+              documentation: 'fixture',
+              positional: [
+                { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'fixture' },
+              ],
+            }),
+        },
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
+    });
+    return { expr, ctx: { sources, symbols: symbolTable, selfModel, binder } };
+  }
 
-    const result = entityRef().parse(expr, ctx);
+  it('parses a bare identifier into its resolved model', () => {
+    const { expr, ctx } = referenceArg('M');
+    const reference = { declaration: ctx.selfModel, namespace: undefined };
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('Task');
+    if (result.ok) expect(result.value).toEqual(reference);
   });
 
   it('rejects a quoted string literal', () => {
-    const { expr, ctx } = argOf('"Task"');
+    const { expr, ctx } = referenceArg('"Task"');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -621,18 +804,18 @@ describe('entityRef', () => {
   });
 
   it('rejects a number token', () => {
-    const { expr, ctx } = argOf('42');
+    const { expr, ctx } = referenceArg('42');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
   });
 
   it('rejects an array literal', () => {
-    const { expr, ctx } = argOf('[Task]');
+    const { expr, ctx } = referenceArg('[Task]');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -831,7 +1014,10 @@ describe('funcCall', () => {
   it('accepts a nullary call whose callee matches the pinned name', () => {
     const { expr, ctx } = argOf('now()');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });
@@ -840,7 +1026,10 @@ describe('funcCall', () => {
   it('rejects a call whose callee differs from the pinned name', () => {
     const { expr, ctx } = argOf('uuid()');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -852,7 +1041,10 @@ describe('funcCall', () => {
   it('rejects a bare identifier', () => {
     const { expr, ctx } = argOf('now');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -864,7 +1056,10 @@ describe('funcCall', () => {
   it('rejects a string literal', () => {
     const { expr, ctx } = argOf('"now"');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -873,7 +1068,10 @@ describe('funcCall', () => {
   it('rejects an array literal', () => {
     const { expr, ctx } = argOf('[1]');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -882,7 +1080,10 @@ describe('funcCall', () => {
   it('rejects a namespaced callee', () => {
     const { expr, ctx } = argOf('foo.now()');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -892,7 +1093,14 @@ describe('funcCall', () => {
 describe('funcCall with a signature', () => {
   const nanoid = () =>
     funcCall('nanoid', {
-      positional: [{ key: 'size', type: optional(int({ min: 2, max: 255 })) }],
+      documentation: 'Calls the named value generator.',
+      positional: [
+        {
+          key: 'size',
+          type: optional(int({ min: 2, max: 255 })),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
     });
 
   it('binds a positional argument through the signature into the typed record', () => {
@@ -942,12 +1150,16 @@ describe('funcCall with a signature', () => {
 
 describe('combinator code through interpretAttribute', () => {
   it('emits a leaf diagnostic carrying the unified attribute code', () => {
-    const cursor = new Cursor('@rel(1)');
-    const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+    const cursor = new Cursor('schema.prisma', '@rel(1)');
+    const root = createSyntaxTree(parseAttribute(cursor));
+    const node = FieldAttributeAst.cast(root);
     if (!node) throw new Error('expected a field attribute');
-    const ctx = makeCtx(cursor.sourceFile);
+    const ctx = makeCtx(new PslSources([[root, cursor.sourceFile]]));
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: str() }],
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        { key: 'name', type: str(), documentation: 'The value bound to this positional slot.' },
+      ],
     });
 
     const result = interpretAttribute(node, spec, ctx);

@@ -20,3 +20,19 @@ export function expectInvalidAttributeSyntax<Success>(
   expect(diagnostic.message).toMatch(message);
   return diagnostic;
 }
+
+export function expectUnresolvedReference<Success>(
+  result: Result<Success, ContractSourceDiagnostics>,
+  message: RegExp,
+): ContractSourceDiagnostic {
+  expect(result.ok).toBe(false);
+  if (result.ok) throw new Error('Expected interpretation to fail');
+  const diagnostics = result.failure.diagnostics.filter(
+    (diagnostic) => diagnostic.code === 'PSL_UNRESOLVED_REFERENCE',
+  );
+  expect(diagnostics).toHaveLength(1);
+  const diagnostic = diagnostics[0];
+  if (!diagnostic) throw new Error('Expected PSL_UNRESOLVED_REFERENCE diagnostic');
+  expect(diagnostic.message).toMatch(message);
+  return diagnostic;
+}

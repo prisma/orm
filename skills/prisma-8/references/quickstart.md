@@ -219,7 +219,7 @@ Then run the snippet from *Your first arc* above against the `User` model. When 
 
 ## Workflow — Brownfield-DB (existing database, no contract)
 
-The concept: against an existing database with no PN contract, `contract infer` walks the live schema (tables, columns, indexes — including expression and partial ones — constraints, and RLS enablement + policies) and writes a PSL contract that describes it. Where authoring would generate a CHECK constraint the database does not carry (the element-non-null check on a list column), infer emits `@noCheck(elementNotNull)` on that field, so the contract declares exactly what the database enforces. The reverse gap is closed too: a hand-written CHECK constraint the database enforces that authoring would never have generated comes back as `@@check(expression: <reprint>, map: "<name>")`, so it is a declared object from the first pull instead of an invisible extra a later destructive plan could drop. That inferred check warns (`PN_EXACT_NAME_BODY_COMPARISON`) the next time you run `contract emit` — expected, not a defect: the warning fires on any `map:` body regardless of who wrote it, and the comparison stays sound because both sides are Postgres's own reprint. The result is a *starting point*, not the final contract — review and clean it up, then `db sign` to record the current contract hash as the marker (instead of letting `db init` try to recreate the schema from scratch).
+The concept: against an existing database with no PN contract, `contract infer` walks the live schema (tables, columns, indexes — including expression and partial ones — constraints, and RLS enablement + policies) and writes a PSL contract that describes it. Where authoring would generate a CHECK constraint the database does not carry (the element-non-null check on a list column), infer emits `@noCheck(elementNotNull)` on that field, so the contract declares exactly what the database enforces. The reverse gap is closed too: a hand-written CHECK constraint the database enforces that authoring would never have generated comes back as `@@check(expression: <reprint>, map: "<name>")`, so it is a declared object from the first pull instead of an invisible extra a later destructive plan could drop. That inferred check warns (`PN_EXACT_NAME_BODY_COMPARISON`) the next time you run `contract emit` — expected, not a defect: the warning fires on any `map:` body regardless of who wrote it, and the comparison stays sound because both sides are Postgres's own reprint. The result is a *starting point*, not the final contract — review and clean it up, then `db sign` to record the current contract hash as the marker (instead of letting `db init` try to recreate the schema from scratch). By default `db sign` also sets the `db` ref and stores the contract snapshot, so the next `migration plan` chains from the adopted schema — even when the database is named with `--db`. `--advance-ref <name>` writes another ref instead and `--no-advance-ref` writes none; in either case the next plan needs `--from` or a `db` ref you set yourself.
 
 ```bash
 mkdir my-app && cd my-app
@@ -247,7 +247,7 @@ Then re-emit and sign:
 
 ```bash
 pnpm prisma contract emit
-pnpm prisma db sign
+pnpm prisma db sign     # writes the marker and sets the db ref
 pnpm prisma db verify   # exit 0 immediately after a pull; exit 4 with findings if the DB drifts later
 ```
 
@@ -289,7 +289,7 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 
 ## What Prisma 8 doesn't do yet
 
-- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Prisma 6/7 / Sequelize / TypeORM / Kysely / Knex / a raw driver. Workaround: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
+- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Sequelize / TypeORM / Kysely / Knex / a raw driver. A Prisma 6 MongoDB schema and a Prisma 7 Postgres schema are the exception: they can be the contract source as they are (`prisma6Schema` / `prisma7Schema`, see `references/contract.md`). For the others: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
 - **`prisma db push`-style production sync.** `db update` is the quick development path; for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
 - **Studio / GUI database browser.** Use `prisma db schema` for a CLI tree-style summary of the live DB. If you need an interactive UI, file a feature request via the `references/feedback.md` skill.
 
@@ -309,9 +309,9 @@ This skill is intentionally body-only; `prisma orm init --help`, `contract infer
 - [ ] **First-touch orientation:** read `prisma.config.ts`, the contract source, `db.ts`, and `.env` before proposing anything — didn't assume what the scaffold tool / teammate left in place.
 - [ ] **Greenfield path:** ran `prisma orm init` from the project directory — no positional project-name argument.
 - [ ] **All paths (application projects):** the project ended up in the canonical `src/prisma/contract.{prisma,ts}` + `src/prisma/db.ts` + `migrations/app/` layout (what `init` scaffolds by default). An extension or aggregate-root package keeps its own `src/contract.{prisma,ts}` + `migrations/<timestamp>_<slug>/` layout — do not relocate it.
-- [ ] **Brownfield path:** ran `contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma`, reviewed the result, then `contract emit` + `db sign`.
+- [ ] **Brownfield path:** ran `contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma`, reviewed the result, then `contract emit` + `db sign` (which by default also sets the `db` ref, so the next `migration plan` chains from the adopted schema; not with `--no-advance-ref` or `--advance-ref <name>`).
 - [ ] Set `DATABASE_URL` in `.env` and confirmed the value is reachable.
-- [ ] Initialised the DB (`db init` greenfield / first-touch orientation) or signed the marker (`db sign` brownfield).
+- [ ] Initialised the DB (`db init` greenfield / first-touch orientation) or signed the marker (`db sign` brownfield — by default sets the `db` ref too, with or without `--db`).
 - [ ] Did NOT hand-edit `contract.json` or `contract.d.ts`.
 - [ ] Did NOT set `DATABASE_URL` in `prisma.config.ts`.
 - [ ] Confirmed the user understands what the *next* skill is for their workflow (typically `references/queries.md` for more queries, then `references/contract.md` when they're ready to extend the schema).

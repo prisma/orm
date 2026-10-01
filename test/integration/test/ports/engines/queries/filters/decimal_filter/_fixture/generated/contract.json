@@ -19,7 +19,11 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/numeric@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
                 }
               },
               "id": {
@@ -108,6 +112,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

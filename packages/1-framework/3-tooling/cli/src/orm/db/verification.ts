@@ -8,26 +8,29 @@ import type {
 } from '@internal/framework-components/control';
 import { createControlStack, issueOutcome } from '@internal/framework-components/control';
 import { castAs } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import type { Block, TreeNode } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction, Result } from '@prisma/cli-engine/protocol';
-import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
+import { type CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   errorConfigValidation,
   errorContractValidationFailed,
   errorDatabaseConnectionRequired,
   errorDriverRequired,
   errorFileNotFound,
-  errorUnexpected,
 } from '../../utils/cli-errors';
-import { sanitizeErrorMessage } from '../../utils/command-helpers';
+import { chooseAction, runCommandAction } from '../../utils/next-actions';
 import { contractPathFor, displayPath } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 
-/** The contract both verification commands read, and where it was read from. */
+/**
+ * The contract both verification commands read, and where it was read from.
+ * `json` is the parsed file as read, for commands that also store it.
+ */
 export interface EmittedContract {
   readonly contract: Contract;
+  readonly json: Record<string, unknown>;
   readonly path: string;
   readonly displayPath: string;
 }
@@ -42,7 +45,7 @@ export async function readEmittedContract(inputs: {
   readonly cwd: string;
   readonly commandName: string;
 }): Promise<Result<EmittedContract, CliStructuredError>> {
-  const path = contractPathFor(inputs.config, inputs.cwd);
+  const path = contractPathFor(inputs.config);
   if (path === undefined) {
     return notOk(
       normalizeError(
@@ -67,17 +70,17 @@ export async function readEmittedContract(inputs: {
               why: `Contract file not found at ${path}`,
               fix: `Run \`{bin} contract emit\` to generate ${relativePath}, or update \`contract.output\` in prisma.config.ts`,
             })
-          : errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+          : errorFromCaught(error, (message) => `Failed to read contract file: ${message}`),
       ),
     );
   }
 
   const familyInstance = inputs.config.family.create(createControlStack(inputs.config));
   try {
+    const json = castAs<Record<string, unknown>>(JSON.parse(content));
     return ok({
-      contract: familyInstance.deserializeContract(castAs<unknown>(JSON.parse(content))),
+      contract: familyInstance.deserializeContract(json),
+      json,
       path,
       displayPath: relativePath,
     });
@@ -125,84 +128,19 @@ export function requireVerifyConnection(inputs: {
 }
 
 /**
- * A failure the verification could not recover from — a dropped connection, a
- * driver throw — as a settlement the user can act on. Connection strings are
- * stripped from the prose whichever path the value took. A driver error
- * carrying `ECONNREFUSED`, `ENOTFOUND` or a SQLSTATE has a `code` and takes
- * the first path, and its message is exactly the one likely to quote the URL.
+ * A failure the verification could not recover from — a dropped connection, a driver throw — as a settlement the user can act on, reported as every command reports what it caught, without the connection string.
  */
 export function verificationThrow(inputs: {
   readonly error: unknown;
   readonly invocation: string;
   readonly connection: string;
 }): CliStructuredError {
-  const { error } = inputs;
-  const message = error instanceof Error ? error.message : String(error);
-  const carriesCode = typeof error === 'object' && error !== null && 'code' in error;
-  const normalized = carriesCode
-    ? normalizeError(error)
-    : normalizeError(
-        errorUnexpected(message, {
-          why: `Unexpected error during ${inputs.invocation}: ${message}`,
-        }),
-      );
-  return withoutConnectionString(normalized, inputs.connection);
-}
-
-/**
- * The same envelope with the connection string stripped from every field the
- * settlement serializes: the prose, each next action's strings, and every
- * string reachable through `meta`. A driver error quotes the URL wherever it
- * pleases, so nothing user-facing passes through unstripped.
- */
-function withoutConnectionString(
-  error: CliStructuredError,
-  connection: string,
-): CliStructuredError {
-  const clean = (text: string): string => sanitizeErrorMessage(text, connection);
-  return new CliStructuredError(error.code, clean(error.message), {
-    severity: error.severity,
-    nextActions: error.nextActions.map((action) => cleanNextAction(action, clean)),
-    ...ifDefined('why', error.why === undefined ? undefined : clean(error.why)),
-    ...ifDefined('where', error.where),
-    ...ifDefined('meta', error.meta === undefined ? undefined : cleanMetaRecord(error.meta, clean)),
-    ...ifDefined('docsUrl', error.docsUrl),
-    cause: error.cause,
-  });
-}
-
-function cleanNextAction(action: NextAction, clean: (text: string) => string): NextAction {
-  return {
-    kind: action.kind,
-    label: clean(action.label),
-    ...ifDefined('command', action.command === undefined ? undefined : clean(action.command)),
-    ...ifDefined('commands', action.commands?.map(clean)),
-    ...ifDefined('url', action.url === undefined ? undefined : clean(action.url)),
-    ...ifDefined('reason', action.reason === undefined ? undefined : clean(action.reason)),
-  };
-}
-
-function cleanMetaValue(value: unknown, clean: (text: string) => string): unknown {
-  if (typeof value === 'string') {
-    return clean(value);
-  }
-  if (Array.isArray(value)) {
-    return value.map((entry) => cleanMetaValue(entry, clean));
-  }
-  if (typeof value === 'object' && value !== null) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, cleanMetaValue(entry, clean)]),
-    );
-  }
-  return value;
-}
-
-function cleanMetaRecord(
-  meta: Record<string, unknown>,
-  clean: (text: string) => string,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(meta).map(([key, value]) => [key, cleanMetaValue(value, clean)]),
+  return normalizeError(
+    errorFromCaught(
+      inputs.error,
+      (message) => `Unexpected error during ${inputs.invocation}: ${message}`,
+      { connection: inputs.connection },
+    ),
   );
 }
 
@@ -214,7 +152,8 @@ const OUTCOME_LABEL: Record<ExpectationFailureReason, string> = {
 
 /** What a diff issue says, in the words the commander shell used. */
 export function issueLabel(issue: SchemaDiffIssue): string {
-  return `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
+  const label = `${OUTCOME_LABEL[issueOutcome(issue)]}: ${issue.path.join('/')}`;
+  return issue.explanation === undefined ? label : `${label}. ${issue.explanation}`;
 }
 
 function issueNodes(issues: readonly SchemaDiffIssue[], status: 'error' | 'warn'): TreeNode[] {
@@ -273,7 +212,9 @@ export function schemaVerdictDiagnostic(inputs: {
     code: dotted ? code : 'CONTRACT.VERIFY_FAILED',
     severity: 'error',
     summary: inputs.result.summary,
-    ...(issues.length === 0 ? {} : { why: `The live schema differs: ${issues.join('; ')}.` }),
+    ...(issues.length === 0
+      ? {}
+      : { why: sentence(`The live schema differs: ${issues.join('; ')}`) }),
     nextActions: inputs.nextActions,
     meta: {
       ...(inputs.space === undefined ? {} : { space: inputs.space }),
@@ -281,4 +222,43 @@ export function schemaVerdictDiagnostic(inputs: {
       ...(dotted || code === undefined ? {} : { code }),
     },
   };
+}
+
+function sentence(text: string): string {
+  return text.endsWith('.') ? text : `${text}.`;
+}
+
+/**
+ * What to do about schema drift. An issue with an explanation means the emitted contract holds a
+ * value its type refuses. Only re-emitting fixes that, and the re-emitted contract has a new hash,
+ * so that is the one action offered.
+ */
+export function schemaDriftNextActions(inputs: {
+  readonly verb: 'sign' | 'verify';
+  readonly contractRef: string | undefined;
+  readonly issues: readonly SchemaDiffIssue[];
+}): readonly NextAction[] {
+  const { verb, contractRef } = inputs;
+  const retryAfterEmit =
+    contractRef === undefined
+      ? `${verb} again`
+      : `${verb} the emitted contract instead of "${contractRef}"`;
+  const drift = [
+    runCommandAction(
+      `Change the database to match the contract, then ${verb} again`,
+      contractRef === undefined ? '{bin} db update' : `{bin} db update --to "${contractRef}"`,
+    ),
+    chooseAction(
+      `Or change the contract source to describe the database as it is, re-run contract emit, then ${retryAfterEmit}`,
+    ),
+  ];
+  const contractRefused = inputs.issues.some((issue) => issue.explanation !== undefined);
+  return contractRefused
+    ? [
+        runCommandAction(
+          'Re-emit the contract, which stores the refused default as its type holds it',
+          '{bin} contract emit',
+        ),
+      ]
+    : drift;
 }

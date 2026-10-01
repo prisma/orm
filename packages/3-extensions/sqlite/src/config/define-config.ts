@@ -1,6 +1,9 @@
 import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { PrismaNextConfig } from '@internal/config/config-types';
-import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
+import {
+  defineConfig as coreDefineConfig,
+  defaultContractOutputPath,
+} from '@internal/config/config-types';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -24,20 +27,12 @@ export interface SqliteConfigOptions {
   };
 }
 
-function deriveOutputPath(contractPath: string): string {
-  const ext = extname(contractPath);
-  if (ext.length === 0) {
-    return `${contractPath}.json`;
-  }
-  return `${contractPath.slice(0, -ext.length)}.json`;
-}
-
 export function defineConfig(options: SqliteConfigOptions): PrismaNextConfig<'sql', 'sqlite'> {
   const extensions = options.extensions ?? [];
   const output =
     options.output !== undefined
       ? join(options.output, 'contract.json')
-      : deriveOutputPath(options.contract);
+      : defaultContractOutputPath(options.contract);
   const ext = extname(options.contract);
 
   const contractConfig =

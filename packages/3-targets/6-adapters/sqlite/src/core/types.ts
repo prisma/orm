@@ -1,13 +1,7 @@
 import type { Contract } from '@internal/contract/types';
-import type { CodecRegistry } from '@internal/framework-components/codec';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { LoweredStatement } from '@internal/sql-relational-core/ast';
-import type {
-  AnySqliteCodecDescriptor,
-  SqliteCodecDescriptorRegistry,
-} from '@internal/target-sqlite/codec-descriptor';
-
-export type SqliteCodecRegistry = CodecRegistry & SqliteCodecDescriptorRegistry;
+import type { AnySqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
 
 export interface SqliteAdapterOptions {
   readonly profileId?: string;

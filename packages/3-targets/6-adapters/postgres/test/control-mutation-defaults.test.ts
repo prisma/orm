@@ -4,14 +4,17 @@ import {
   instantiateAuthoringTypeConstructor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
+import {
+  postgresNativeAuthoringTypes,
+  postgresScalarAuthoringTypes,
+} from '@internal/target-postgres/control';
+import { postgresDataTypeEntries } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createPostgresDefaultFunctionRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
   postgresAuthoringTypes,
-  postgresNativeAuthoringTypes,
-  postgresScalarAuthoringTypes,
 } from '../src/core/control-mutation-defaults';
 import postgresAdapterDescriptor from '../src/exports/control';
 import runtimeAdapterDescriptor from '../src/exports/runtime';
@@ -36,16 +39,28 @@ describe('createPostgresDefaultFunctionRegistry', () => {
 
   it('contains all builtin default function entries', () => {
     expect([...registry.keys()]).toEqual(
-      expect.arrayContaining([
-        'autoincrement',
-        'now',
-        'uuid',
-        'cuid',
-        'ulid',
-        'nanoid',
-        'dbgenerated',
-      ]),
+      expect.arrayContaining(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']),
     );
+  });
+
+  it('retains declaration documentation in the opaque function registry', () => {
+    expect(registry.get('now')?.signature).toMatchObject({
+      documentation: 'Uses the current database timestamp as the default value.',
+    });
+    expect(registry.get('uuid')?.signature).toMatchObject({
+      documentation: 'Generates a UUID when a value is not supplied.',
+      positional: [
+        {
+          key: 'version',
+          documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+          type: { kind: 'oneOf', optional: true },
+        },
+      ],
+    });
+  });
+
+  it('registers no named gen_random_uuid function; raw database functions use sql`...`', () => {
+    expect(registry.has('gen_random_uuid')).toBe(false);
   });
 
   it('lowers autoincrement() to a storage default', () => {
@@ -132,79 +147,6 @@ describe('createPostgresDefaultFunctionRegistry', () => {
     });
   });
 
-  it('lowers dbgenerated("expr") to storage default', () => {
-    const handler = registry.get('dbgenerated')!;
-    const result = handler.lower({
-      call: makeCall('dbgenerated', { expression: 'gen_random_uuid()' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({
-      ok: true,
-      value: {
-        kind: 'storage',
-        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
-      },
-    });
-  });
-
-  it('rejects dbgenerated with empty string', () => {
-    const handler = registry.get('dbgenerated')!;
-    const result = handler.lower({
-      call: makeCall('dbgenerated', { expression: '' }),
-      context: stubContext,
-    });
-    expect(result).toMatchObject({ ok: false });
-  });
-
-  describe('dbgenerated keeps the raw expression verbatim, never resolving it', () => {
-    // `lowerDbgenerated` must not resolve the raw SQL text — a literal-shaped
-    // expression (e.g. `'{}'::jsonb`) is normalized once, at SchemaIR
-    // construction on the expected side (`contractToSchemaIR`'s
-    // target-supplied `resolveDefault` hook), not here. Rewriting here would
-    // also discard the user's original expression for cases like
-    // `nextval('my_seq')`, whose DDL must keep referencing the named sequence.
-    const handler = createPostgresDefaultFunctionRegistry().get('dbgenerated')!;
-
-    function lower(expression: string) {
-      return handler.lower({
-        call: makeCall('dbgenerated', { expression }),
-        context: stubContext,
-      });
-    }
-
-    it('keeps a jsonb literal expression as a function, unresolved', () => {
-      const expression = "'{}'::jsonb";
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-
-    it('keeps a text[] literal expression as a function, unresolved', () => {
-      const expression = "'{}'::text[]";
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-
-    it('keeps gen_random_uuid() a function', () => {
-      const expression = 'gen_random_uuid()';
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-
-    it("keeps nextval(...) a function, unchanged (doesn't adopt the normalizer's autoincrement() rewrite)", () => {
-      const expression = "nextval('seq'::regclass)";
-      expect(lower(expression)).toMatchObject({
-        ok: true,
-        value: { kind: 'storage', defaultValue: { kind: 'function', expression } },
-      });
-    });
-  });
-
   it('lowers uuid(4) explicitly to uuidv4 execution generator', () => {
     const handler = registry.get('uuid')!;
     const result = handler.lower({
@@ -285,12 +227,16 @@ describe('postgresScalarAuthoringTypes', () => {
     ['Bytes', 'pg/bytea@1'],
   ] as const;
 
-  it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
+  it('pins every base scalar as a zero-arg type constructor with its native type', () => {
     expect(Object.keys(namespace).sort()).toEqual(expectedScalars.map(([name]) => name).sort());
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
-        output: { codecId, nativeType: codecLookup.targetTypesFor(codecId)?.[0] },
+        documentation: expect.stringMatching(/\S/),
+        output: {
+          codecId,
+          nativeType: codecLookup.targetTypesFor(codecId)?.[0],
+        },
       });
     }
   });
@@ -328,6 +274,7 @@ describe('postgresNativeAuthoringTypes', () => {
       DateString: { codecId: 'pg/date-string@1', nativeType: 'date' },
       TimestampString: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp' },
       TimestamptzString: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
+      TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       TimeString: { codecId: 'pg/time-string@1', nativeType: 'time' },
     });
   });
@@ -375,5 +322,22 @@ describe('postgresNativeAuthoringTypes', () => {
         [-1],
       ),
     ).toThrow('must be >= 0');
+  });
+});
+
+describe('the adapter descriptor authoring data types', () => {
+  const registered = postgresAdapterDescriptor.authoring?.dataTypes ?? {};
+
+  it('registers the entries the target declares', () => {
+    expect(Object.keys(registered)).toEqual(Object.keys(postgresDataTypeEntries()));
+  });
+
+  it('registers the json tag and leaves sql/expression and its tag to the family', () => {
+    expect({
+      hasSqlExpression: Object.hasOwn(registered, 'sql/expression'),
+      tags: Object.values(registered).flatMap((entry) =>
+        entry.written.kind === 'tag' ? [entry.written.tag] : [],
+      ),
+    }).toEqual({ hasSqlExpression: false, tags: ['json'] });
   });
 });

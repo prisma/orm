@@ -1,7 +1,7 @@
 {
   "name": "@internal/config-loader",
   "private": true,
-  "version": "8.0.0-rc.9",
+  "version": "8.0.0-rc.14",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,23 +16,27 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.9",
-    "@internal/emitter": "workspace:8.0.0-rc.9",
-    "@internal/errors": "workspace:8.0.0-rc.9",
-    "@internal/utils": "workspace:8.0.0-rc.9",
+    "@internal/config": "workspace:8.0.0-rc.14",
+    "@internal/emitter": "workspace:8.0.0-rc.14",
+    "@internal/errors": "workspace:8.0.0-rc.14",
+    "@internal/utils": "workspace:8.0.0-rc.14",
+    "arktype": "^2.2.2",
     "c12": "^3.3.4",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.9",
-    "@repo/tsconfig": "workspace:8.0.0-rc.9",
-    "@repo/tsdown": "workspace:8.0.0-rc.9",
+    "@prisma/cli-engine": "0.6.2",
+    "@repo/test-utils": "workspace:8.0.0-rc.14",
+    "@repo/tsconfig": "workspace:8.0.0-rc.14",
+    "@repo/tsdown": "workspace:8.0.0-rc.14",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/cli-engine": "0.6.2",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

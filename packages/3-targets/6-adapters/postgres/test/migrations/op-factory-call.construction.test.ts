@@ -7,6 +7,7 @@
  */
 
 import { col, fn, primaryKey } from '@internal/sql-relational-core/contract-free';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import {
   AddColumnCall,
   CreateSchemaCall,
@@ -14,7 +15,6 @@ import {
   DataTransformCall,
 } from '@internal/target-postgres/op-factory-call';
 import { describe, expect, it } from 'vitest';
-import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import { PostgresControlAdapter } from '../../src/core/control-adapter';
 
 const testAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());

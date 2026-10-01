@@ -1,0 +1,269 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "audit": {
+        "models": {
+          "AuditLog": {
+            "storage": {
+              "table": "audit_log",
+              "namespaceId": "audit",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "action": {
+                  "column": "action"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "action": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "audit.AuditAction"
+                  }
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      },
+      "public": {
+        "models": {
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "role": {
+                  "column": "role"
+                },
+                "roleOpt": {
+                  "column": "roleOpt"
+                },
+                "roleList": {
+                  "column": "roleList"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "role": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                },
+                "nullable": false
+              },
+              "roleOpt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                },
+                "nullable": true
+              },
+              "roleList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                },
+                "nullable": true,
+                "many": true
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    },
+    "audit_log": {
+      "namespace": "audit",
+      "model": "AuditLog"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "e9e8943dccdeb6d3d102d35a84b8fdf0aefdeebd6e81c6f34b45aea056f4132c",
+    "namespaces": {
+      "audit": {
+        "id": "audit",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "audit_log": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "action": {
+                  "nativeType": "audit.AuditAction",
+                  "codecId": "pg/enum@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "audit.AuditAction"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "audit",
+                    "entityName": "AuditAction"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          },
+          "native_enum": {
+            "AuditAction": {
+              "kind": "postgres-enum",
+              "typeName": "AuditAction",
+              "members": ["CREATE", "DELETE"]
+            }
+          },
+          "valueSet": {
+            "AuditAction": {
+              "kind": "valueSet",
+              "values": ["CREATE", "DELETE"]
+            }
+          }
+        }
+      },
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "User": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "role": {
+                  "nativeType": "user_role",
+                  "codecId": "pg/enum@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Role"
+                  }
+                },
+                "roleOpt": {
+                  "nativeType": "user_role",
+                  "codecId": "pg/enum@1",
+                  "nullable": true,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Role"
+                  }
+                },
+                "roleList": {
+                  "nativeType": "user_role",
+                  "codecId": "pg/enum@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Role"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          },
+          "native_enum": {
+            "user_role": {
+              "kind": "postgres-enum",
+              "typeName": "user_role",
+              "members": ["user", "ADMIN"]
+            },
+            "Unused": {
+              "kind": "postgres-enum",
+              "typeName": "Unused",
+              "members": ["A", "B"]
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": ["user", "ADMIN"]
+            },
+            "Unused": {
+              "kind": "valueSet",
+              "values": ["A", "B"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

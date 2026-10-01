@@ -1,13 +1,17 @@
+// use prisma-8
+
 model User {
   id               Int               @id @default(autoincrement())
   votes            Vote[]
   userToObjectives UserToObjective[]
+  @@map("user")
 }
 
 model Objective {
   id               Int               @id @default(autoincrement())
   name             String            @unique
   userToObjectives UserToObjective[] @relation("UserObjectives")
+  @@map("objective")
 }
 
 model UserToObjective {
@@ -18,6 +22,7 @@ model UserToObjective {
   votes       Vote[]
 
   @@id([userId, objectiveId])
+  @@map("userToObjective")
 }
 
 model Vote {
@@ -29,4 +34,5 @@ model Vote {
   userObjective UserToObjective @relation(fields: [objectiveId, followerId], references: [userId, objectiveId], onDelete: NoAction, onUpdate: NoAction)
 
   @@id([userId, objectiveId])
+  @@map("vote")
 }

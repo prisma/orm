@@ -339,8 +339,10 @@ describe('init prompts', () => {
           target: 'postgres',
           authoring: 'psl',
           schemaPath: 'src/prisma/contract.prisma',
+          filesRenamed: [],
           packagesInstalled: { status: 'skipped', deps: [], devDeps: [] },
           contractEmitted: false,
+          prisma7: null,
         });
       },
       timeouts.coldTransformImport,

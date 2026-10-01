@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite
 // `0-legacy-ports/optional-relation-filters`
 // (packages/client/tests/functional/0-legacy-ports/optional-relation-filters,
@@ -21,6 +23,7 @@ model User {
   id    String @id
   email String @unique
   bio   Bio?
+  @@map("user")
 }
 
 model Bio {
@@ -28,4 +31,5 @@ model Bio {
   text   String?
   user   User?   @relation(fields: [userId], references: [id])
   userId String? @unique
+  @@map("bio")
 }

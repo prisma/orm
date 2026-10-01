@@ -1,4 +1,10 @@
 export type { JsonValue } from '../core/codec-helpers';
+export {
+  assembleSqliteCodecRegistry,
+  createSqliteBuiltinCodecLookup,
+  createSqliteCodecRegistryWithBuiltins,
+  type SqliteCodecRegistry,
+} from '../core/codec-registry';
 export type {
   SqliteBigintDescriptor,
   SqliteBigintNumberDescriptor,

@@ -183,7 +183,7 @@ describe('uuid native presets', () => {
       expect(col.nativeType).toBe('uuid');
 
       const defaults = json.execution?.mutations.defaults ?? [];
-      const idDefault = defaults.find((d) => d.ref.table === 'widget' && d.ref.column === 'id');
+      const idDefault = defaults.find((d) => d.ref.entry === 'widget' && d.ref.field === 'id');
       expect(idDefault?.onCreate).toEqual({ kind: 'generator', id: 'uuidv4' });
     });
 
@@ -207,7 +207,7 @@ describe('uuid native presets', () => {
 
       const json = JSON.parse(JSON.stringify(contract)) as typeof contract;
       const defaults = json.execution?.mutations.defaults ?? [];
-      const idDefault = defaults.find((d) => d.ref.table === 'widget' && d.ref.column === 'id');
+      const idDefault = defaults.find((d) => d.ref.entry === 'widget' && d.ref.field === 'id');
       expect(idDefault?.onCreate).toEqual({ kind: 'generator', id: 'uuidv7' });
     });
   });

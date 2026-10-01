@@ -1,10 +1,11 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import { ok } from '@prisma/cli-engine/protocol';
 import { dirname, relative, resolve } from 'pathe';
 import { executeContractEmit as executeContractEmitOperation } from '../../control-api/operations/contract-emit';
-import { ormConfigSection } from '../config-section';
+import { sourceWarningDiagnostic } from '../../control-api/operations/load-contract-source';
 import { defineOrmCommand } from '../define-command';
 import { controlProgressReporter } from '../progress';
 
@@ -101,6 +102,9 @@ export function createContractEmitCommand({ executeContractEmit }: ContractEmitC
         ...ifDefined('outputPath', outputPath),
       });
 
+      const diagnostics = (result.sourceWarnings ?? []).flatMap(
+        (warning) => sourceWarningDiagnostic(warning, ctx.cwd) ?? [],
+      );
       if (result.validationWarning !== undefined) {
         ctx.report({ kind: 'message', severity: 'warn', text: result.validationWarning });
       }
@@ -120,7 +124,9 @@ export function createContractEmitCommand({ executeContractEmit }: ContractEmitC
         text: `Total time: ${document.timings.total}ms`,
       });
 
-      return ok(ctx.present({ data: document }, emitPresentations({ document, cwd: ctx.cwd })));
+      return ok(
+        ctx.present({ data: document, diagnostics }, emitPresentations({ document, cwd: ctx.cwd })),
+      );
     },
   });
 }

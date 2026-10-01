@@ -10,7 +10,7 @@ import type {
   MongoWindowField,
 } from '@internal/mongo-query-ast/execution';
 import { isExprArray, isRecordArgs } from '@internal/mongo-query-ast/execution';
-import type { Document } from '@internal/mongo-value';
+import { type Document, MongoParamRef } from '@internal/mongo-value';
 import { blindCast } from '@internal/utils/casts';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { resolveValue } from './resolve-value';
@@ -122,6 +122,9 @@ const aggExprLoweringVisitor: MongoAggExprVisitor<unknown> = {
 };
 
 function needsLiteralWrap(value: unknown): boolean {
+  if (value instanceof MongoParamRef) {
+    return true;
+  }
   if (typeof value === 'string' && value.startsWith('$')) {
     return true;
   }

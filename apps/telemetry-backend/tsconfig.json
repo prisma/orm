@@ -5,6 +5,12 @@
     "lib": ["ES2022"],
     "types": ["bun", "node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "prisma.config.ts", "vitest.config.ts"],
+  "include": [
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "prisma.config.ts",
+    "vitest.config.ts"
+  ],
   "exclude": ["dist"]
 }

@@ -1,6 +1,6 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { StringLiteralExprAst } from '../../syntax/ast/expressions';
 import type { AttributeCtx, JsonArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';

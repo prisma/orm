@@ -106,6 +106,8 @@ describe('idle connection errors', () => {
     client.emit('error', new Error('connection terminated unexpectedly'));
     await connection.release();
 
-    await expect(driver.acquireConnection()).rejects.toThrow(/not connected|connection lost/i);
+    await expect(driver.acquireConnection()).rejects.toThrow(
+      'Postgres connection lost or closed. Call connect(binding) to reconnect.',
+    );
   });
 });

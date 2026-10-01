@@ -4,9 +4,19 @@ import { hasMigrations } from '@internal/framework-components/control';
 import type { NoInvariantPathStructuralEdge } from '@internal/migration-tools/errors';
 import type { MigrationEdge, MigrationGraph } from '@internal/migration-tools/graph';
 import { APP_SPACE_ID, spaceMigrationDirectory } from '@internal/migration-tools/spaces';
+import { ifDefined } from '@internal/utils/defined';
+import type { NextAction } from '@internal/utils/structured-error';
 import { relative, resolve } from 'pathe';
 import type { ControlClient } from '../control-api/types';
 import { CliStructuredError, errorRuntime } from './cli-errors';
+import {
+  hasUrlScheme,
+  passwordQueryValues,
+  redactUrlCredentials,
+  urlUserinfo,
+} from './url-credentials';
+
+const PASSWORD_QUERY_KEY = /password/i;
 
 /**
  * Resolves the absolute path to contract.json from the config.
@@ -43,8 +53,7 @@ export function resolveContractPath(config: { contract?: { output?: string } }):
  * the result is computed against it.
  */
 export function resolveMigrationPaths(
-  configOption: string | undefined,
-  config: { migrations?: { dir?: string } },
+  config: { baseDir?: string; migrations?: { dir?: string } },
   cwd: string,
 ): {
   configPath: string;
@@ -54,12 +63,10 @@ export function resolveMigrationPaths(
   appMigrationsRelative: string;
   refsDir: string;
 } {
-  const resolvedConfigPath = configOption ? resolve(cwd, configOption) : undefined;
-  const configPath = resolvedConfigPath ? relative(cwd, resolvedConfigPath) : 'prisma.config.ts';
-  const migrationsDir = resolve(
-    resolvedConfigPath ? resolve(resolvedConfigPath, '..') : cwd,
-    config.migrations?.dir ?? 'migrations',
-  );
+  const configPath = 'prisma.config.ts';
+  // A validated config carries the directory absolute; a config handed in
+  // raw by a programmatic caller is anchored on its baseDir, else on cwd.
+  const migrationsDir = resolve(config.baseDir ?? cwd, config.migrations?.dir ?? 'migrations');
   const migrationsRelative = relative(cwd, migrationsDir);
   const appMigrationsDir = spaceMigrationDirectory(migrationsDir, APP_SPACE_ID);
   const appMigrationsRelative = relative(cwd, appMigrationsDir);
@@ -198,7 +205,8 @@ export async function readContractEnvelope(config: {
 
 /**
  * Masks credentials in a database connection URL.
- * Handles standard URLs (username + password + query params) and libpq-style key=value strings.
+ * Handles standard URLs (username + password + query params), URLs `new URL` rejects (such as
+ * multi-host URLs), and libpq-style key=value strings.
  */
 export function maskConnectionUrl(url: string): string {
   try {
@@ -211,16 +219,13 @@ export function maskConnectionUrl(url: string): string {
     }
     // Also mask password in query parameters (e.g., ?password=secret, ?sslpassword=secret)
     for (const key of [...parsed.searchParams.keys()]) {
-      if (/password/i.test(key)) {
+      if (PASSWORD_QUERY_KEY.test(key)) {
         parsed.searchParams.set(key, '****');
       }
     }
     return parsed.toString();
   } catch {
-    // Fallback for libpq-style key=value connection strings (e.g., "host=localhost password=secret user=admin")
-    return url
-      .replace(/password\s*=\s*\S+/gi, 'password=****')
-      .replace(/user\s*=\s*\S+/gi, 'user=****');
+    return hasUrlScheme(url) ? redactUrlCredentials(url) : maskKeyValueCredentials(url);
   }
 }
 
@@ -232,23 +237,71 @@ export function sanitizeErrorMessage(message: string, connectionUrl?: string): s
   if (!connectionUrl) {
     return message;
   }
-  try {
-    const parsed = new URL(connectionUrl);
-    // Replace the full URL (with and without trailing slash)
-    let sanitized = message;
-    sanitized = sanitized.replaceAll(connectionUrl, maskConnectionUrl(connectionUrl));
-    // Also replace the password and username individually if they appear
-    if (parsed.password) {
-      sanitized = sanitized.replaceAll(parsed.password, '****');
-    }
-    if (parsed.username) {
-      sanitized = sanitized.replaceAll(parsed.username, '****');
-    }
-    return sanitized;
-  } catch {
-    // For libpq-style strings, mask password and user values in the message
-    return message
-      .replace(/password\s*=\s*\S+/gi, 'password=****')
-      .replace(/user\s*=\s*\S+/gi, 'user=****');
+  const secrets = connectionUrlSecrets(connectionUrl);
+  if (secrets === undefined) {
+    return maskKeyValueCredentials(message);
   }
+  let sanitized = message.replaceAll(connectionUrl, maskConnectionUrl(connectionUrl));
+  for (const secret of secrets.filter(Boolean).sort(longestFirst)) {
+    sanitized = sanitized.replaceAll(secret, '****');
+  }
+  return sanitized;
+}
+
+/** A next action with the connection string removed from each of its strings. */
+export function nextActionWithoutConnectionString(
+  action: NextAction,
+  connectionUrl: string,
+): NextAction {
+  const clean = (text: string): string => sanitizeErrorMessage(text, connectionUrl);
+  return {
+    kind: action.kind,
+    label: clean(action.label),
+    ...ifDefined('command', action.command === undefined ? undefined : clean(action.command)),
+    ...ifDefined('commands', action.commands?.map(clean)),
+    ...ifDefined('url', action.url === undefined ? undefined : clean(action.url)),
+    ...ifDefined('reason', action.reason === undefined ? undefined : clean(action.reason)),
+  };
+}
+
+/** `meta` with the connection string removed from every string it holds, however deeply nested. */
+export function metaWithoutConnectionString(
+  meta: Record<string, unknown>,
+  connectionUrl: string,
+): Record<string, unknown> {
+  const clean = (value: unknown): unknown => {
+    if (typeof value === 'string') return sanitizeErrorMessage(value, connectionUrl);
+    if (Array.isArray(value)) return value.map(clean);
+    if (typeof value === 'object' && value !== null) {
+      return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, clean(entry)]));
+    }
+    return value;
+  };
+  return Object.fromEntries(Object.entries(meta).map(([key, value]) => [key, clean(value)]));
+}
+
+function connectionUrlSecrets(connectionUrl: string): string[] | undefined {
+  try {
+    const { username, password, searchParams } = new URL(connectionUrl);
+    const queryPasswords = [...searchParams]
+      .filter(([key]) => PASSWORD_QUERY_KEY.test(key))
+      .map(([, value]) => value);
+    return [username, password, ...queryPasswords];
+  } catch {
+    if (!hasUrlScheme(connectionUrl)) {
+      return undefined;
+    }
+    const { username, password } = urlUserinfo(connectionUrl);
+    return [username, password, ...passwordQueryValues(connectionUrl)];
+  }
+}
+
+function longestFirst(a: string, b: string): number {
+  return b.length - a.length;
+}
+
+function maskKeyValueCredentials(text: string): string {
+  return text
+    .replace(/password\s*=\s*\S+/gi, 'password=****')
+    .replace(/user\s*=\s*\S+/gi, 'user=****');
 }

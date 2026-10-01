@@ -280,7 +280,8 @@ export type SqlPlannerConflictKind =
   | 'foreignKeyConflict'
   | 'missingButNonAdditive'
   | 'unsupportedOperation'
-  | 'controlPolicySuppressedCall';
+  | 'controlPolicySuppressedCall'
+  | 'tableNameCaseChanged';
 
 export interface SqlPlannerConflictLocation {
   readonly namespaceId?: string;

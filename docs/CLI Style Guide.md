@@ -135,15 +135,16 @@ This is a deliberate divergence from clig.dev §Arguments §Confirmation. AI age
 
 - `db update`: when the plan includes destructive ops, asks the user to type the database name; `--no-interactive --confirm <database>` applies without a prompt. The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id.
 - `init`: re-running `init` in a directory with a generated `prisma.config.ts` asks the user to type the directory's basename; `-y` alone is not sufficient to authorise overwriting generated files. (The commander-era `--force` retired with the commander shell in the S5 cutover; the engine-hosted `init` uses the consent form above.)
-- `db sign`: the `--force` this guide lists in its flags was never implemented. When overwriting a marker with a different hash grows a switch, it takes the consent form above.
+- `db sign`: overwriting a marker that holds a different hash happens without consent (the previous hash is reported). This is an intentional exception to the rule above: `db sign` verifies the live schema against the contract before writing, so the overwrite only ever records a contract the database already satisfies. If that ever grows a switch, it takes the consent form above — not a `--force`.
 
 ## Config & Environment
 - Config file names: `prisma.config.ts|.mjs|.js` (ESM); optional CJS fallback.
 - Discovery precedence: `--config <path>` > `PRISMA_CONFIG` > nearest `prisma.config.*` in CWD (no upward search).
+- Relative paths inside the config file (`contract` source inputs, `contract.output`, `migrations.dir`) are relative to the config file that wrote them, not to CWD, so `--config ./sub/prisma.config.ts` reads and writes under `sub/`.
 - Precedence: flags > config > defaults.
 - Env policy: the CLI does not auto‑load `.env`. Apps may do so in `prisma.config.*` and pass values (e.g., `db.connection`).
 - Contract source: defined in config; no flag override.
-- Contract output directory: `--output-path <dir>` on `contract emit` sets the directory where `contract.json` and `contract.d.ts` are written. The filenames are canonical and not user-controlled. Precedence: `--output-path` flag > `output` in config > derived default (directory of the contract source file). The path is resolved relative to CWD. Extension wrappers (`defineConfig` from `@internal/mongo` and `@internal/postgres`) expose an `output?: string` option that maps directly to this config field.
+- Contract output directory: `--output-path <dir>` on `contract emit` sets the directory where `contract.json` and `contract.d.ts` are written. The filenames are canonical and not user-controlled. Precedence: `--output-path` flag > `output` in config > derived default (directory of the contract source file). The flag is resolved relative to CWD; `output` in config, like every relative path in `prisma.config.ts`, is resolved relative to the config file that wrote it, whichever directory the command runs from. Extension wrappers (`defineConfig` from `@internal/mongo` and `@internal/postgres`) expose an `output?: string` option that maps directly to this config field.
 - Migration directory: defined in config; no flag override.
 - DB Connection: `--db=<URL>` or `config.db.connection`.
 
@@ -240,16 +241,19 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `--marker-only` cannot be combined with `--schema-only` or `--strict` (exit code 2, `CLI.INVALID_VERIFY_MODE`). `--schema-only --strict` is valid.
   - Non‑interactive; single JSON with `--json`.
 - `db sign` (canonical):
-  - Runs the same verify phase first, then writes/updates the marker row.
-  - Missing marker → insert; same hash → no‑op; different hash → never overwrite unless `--force`.
-  - Options: `--force`, `--dry-run`, `--include-contract-json`, `--app-tag`, `--canonical-version`.
+  - Runs the schema verification that `db verify --schema-only` runs (non-strict) and skips the marker checks, since the database being signed usually has no marker yet; a failing verification refuses to sign and writes nothing (exit code 4, the verify findings as the document).
+  - On success writes or updates the marker: missing marker → insert; same hash → no‑op; different hash → overwrite, reporting the previous hash.
+  - Then writes the signed contract into the snapshot store and advances the `db` ref to the signed hash (`--advance-ref <name>` picks another ref). Unlike `db init` / `db update`, `--db` does not suppress this — signing never mutates the schema, and adoption normally runs against the real database via `--db`. `--no-advance-ref` signs without writing any ref or snapshot; combining it with `--advance-ref` is `CLI.ADVANCE_REF_ARG_CONFLICT` (exit code 2). Human output names the advanced ref and, when it existed, the previous hash; JSON carries `advancedRef: { name, hash }` or `null`.
+  - No migration package is written.
+  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, `<dir>^`, or `./path`; the positional accepts only the first four; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - Exit codes: 0 signed; 2 the command could not run (unresolvable contract reference, no emitted contract, unreachable database, conflicting flags); 4 verification refused.
 
 ## Init Flow
 - `prisma orm init` is the greenfield-app entry point (distinct from `prisma db init`, which adopts an existing database).
 - Prompts: target (Postgres or Mongo, default Postgres) and schema location (default `prisma/contract.prisma`). The contract output path is derived from the schema path (replace extension with `.json`); no separate prompt.
 - Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`, `package.json#packageManager`, falls back to npm), installs the target facade package as a dependency and `@prisma/cli` (from the `next` dist-tag) plus `@prisma/cli-engine` as dev dependencies, then runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
 - Scaffolds (all colocated; no `src/prisma/` split):
-  - `prisma.config.ts` at the project root — the engine envelope: `defineConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
+  - `prisma.config.ts` at the project root — the engine envelope: `definePrismaConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
   - `prisma/contract.prisma` (PSL) — starter schema with two related models so the user has something to query immediately.
   - `prisma/db.ts` — runtime client (e.g. `postgres<Contract>({ contractJson })`) typed against the emitted contract.
   - `prisma/contract.json` and `prisma/contract.d.ts` — emitted by the post-install `contract emit` step.
@@ -270,7 +274,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 - Per‑command examples:
   - `contract emit`: `--contract <path>`, `--out <dir>`, `--show-sql`, `--show-diff`.
   - `migration plan`: `--out <dir>`, `--show-sql`, `--show-diff`, `--max-sql-lines <n>`, `--yes`.
-  - `db sign`: `--include-contract-json`, `--app-tag`, `--canonical-version`, `--force`, `--dry-run`.
+  - `db sign`: `[contract]` / `--contract <ref>`, `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
 
 ## Rationale
 - Predictable, human‑oriented text with clear errors; mirror determinism and actionable messages while avoiding heavy codegen.

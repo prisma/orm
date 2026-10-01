@@ -1,22 +1,33 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import type {
-  ContributedPslDiagnosticCode,
-  PslDiagnostic,
-} from '@internal/framework-components/psl-ast';
+  AuthoringContributions,
+  AuthoringFieldNamespace,
+  AuthoringModelAttributeDescriptor,
+  AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeConstructorDescriptor,
+  AuthoringTypeNamespace,
+} from '@internal/framework-components/authoring';
+import { isAuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
+import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
   ArgType,
   AttributeCtx,
   AttributeSpec,
   AttributeSpecContext,
   AttributeSpecNamespace,
+  Binder,
+  DescribeUnsupportedAttribute,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
   FuncCallSig,
   InferAttr,
   ModelAttributeCtx,
+  ModelAttributeSpecFactory,
   ModelSymbol,
+  NumLiteral,
+  ParsedTaggedLiteral,
+  PslDiagnostic,
   PslSpan,
   RejectingArgType,
   SymbolTable,
@@ -24,6 +35,8 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  createBinder,
+  diagnosticSource,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -34,87 +47,150 @@ import {
   list,
   modelAttribute,
   nodePslSpan,
-  num,
+  numLiteral,
   oneOf,
   optional,
+  type PslDiagnosticCollector,
   record,
   referencedFieldRef,
   str,
+  taggedLiteral,
 } from '@internal/psl-parser';
-import type { FieldAttributeAst, ModelAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
+import type {
+  AstNode,
+  FieldAttributeAst,
+  ModelAttributeAst,
+  PslSources,
+} from '@internal/psl-parser/syntax';
+import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
-
-export function findModelAttributeNode(
-  model: ModelSymbol,
-  name: string,
-): ModelAttributeAst | undefined {
-  for (const attribute of model.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
-
-export function findFieldAttributeNode(
-  field: FieldSymbol,
-  name: string,
-): FieldAttributeAst | undefined {
-  for (const attribute of field.node.attributes()) {
-    if (attribute.name()?.isSimpleName(name) === true) return attribute;
-  }
-  return undefined;
-}
+import { removedDbgeneratedMessage } from './default-function-registry';
+import { getAttribute } from './psl-attribute-parsing';
 
 function buildModelAttributeCtx(input: {
+  readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
+  readonly binder: Binder;
 }): ModelAttributeCtx {
   return {
-    sourceId: input.sourceId,
-    sourceFile: input.sourceFile,
+    sources: input.sources,
     selfModel: input.selfModel,
+    binder: input.binder,
+    symbols: input.symbols,
   };
 }
 
 function buildFieldAttributeCtx(input: {
+  readonly symbols: SymbolTable;
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
-  readonly resolveReferencedModel?: (() => ModelSymbol | undefined) | undefined;
+  readonly sources: PslSources;
+  readonly binder: Binder;
 }): FieldAttributeCtx {
   return {
-    sourceId: input.sourceId,
-    sourceFile: input.sourceFile,
+    sources: input.sources,
     selfModel: input.selfModel,
-    resolveReferencedModel: input.resolveReferencedModel ?? (() => undefined),
     field: input.field,
+    binder: input.binder,
+    symbols: input.symbols,
   };
+}
+
+function fieldPresetsAsTypeNames(
+  namespace: AuthoringFieldNamespace | undefined,
+): AuthoringTypeNamespace {
+  if (namespace === undefined) return {};
+  const result: Record<string, AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace> = {};
+  for (const [name, value] of Object.entries(namespace)) {
+    result[name] = isAuthoringFieldPresetDescriptor(value)
+      ? { kind: 'typeConstructor', output: { codecId: value.output.codecId } }
+      : fieldPresetsAsTypeNames(value);
+  }
+  return result;
+}
+
+export function modelAttributeSpecsFrom(
+  modelAttributesByName: ReadonlyMap<string, AuthoringModelAttributeDescriptor>,
+): Readonly<Record<string, ModelAttributeSpecFactory>> {
+  const result: Record<string, ModelAttributeSpecFactory> = Object.create(null);
+  for (const [name, descriptor] of modelAttributesByName) {
+    result[name] = blindCast<
+      ModelAttributeSpecFactory,
+      'contributed model-attribute descriptors carry an ADR-231 attribute-spec factory by construction'
+    >(descriptor.spec);
+  }
+  return result;
+}
+
+export function createSqlBinder(input: {
+  readonly symbolTable: SymbolTable;
+  readonly sources: PslSources;
+  readonly authoringContributions?: AuthoringContributions | undefined;
+  readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
+  readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
+  readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace | undefined;
+  readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
+  readonly contributedModelAttributeSpecs?:
+    | Readonly<Record<string, ModelAttributeSpecFactory>>
+    | undefined;
+}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
+  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
+  for (const [name, descriptor] of input.scalarColumnDescriptors ?? []) {
+    scalars[name] = { kind: 'typeConstructor', output: { codecId: descriptor.codecId } };
+  }
+  return createBinder({
+    sources: input.sources,
+    symbolTable: input.symbolTable,
+    ...(input.pslBlockDescriptors === undefined
+      ? {}
+      : { pslBlockDescriptors: input.pslBlockDescriptors }),
+    typeConstructors: {
+      ...scalars,
+      ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
+      ...(input.authoringContributions?.type ?? {}),
+    },
+    attributeSpecs: {
+      model: Object.assign(
+        Object.create(null),
+        sqlAttributeSpecs.model,
+        input.contributedModelAttributeSpecs,
+      ),
+      field: sqlAttributeSpecs.field,
+    },
+    controlMutationDefaults: input.controlMutationDefaults ?? {
+      defaultFunctionRegistry: new Map(),
+      dataTypeEntries: {},
+    },
+    describeUnsupportedAttribute: input.describeUnsupportedAttribute,
+  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse
 // failures into `diagnostics`. Returns the typed value, or `undefined` on
 // failure so the caller can apply its own default/absence handling.
 export function interpretModelAttribute<Out>(input: {
+  readonly symbols: SymbolTable;
   readonly node: ModelAttributeAst;
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly sources: PslSources;
+  readonly binder: Binder;
+  readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
     input.spec,
     buildModelAttributeCtx({
+      symbols: input.symbols,
       selfModel: input.model,
-      sourceFile: input.sourceFile,
-      sourceId: input.sourceId,
+      sources: input.sources,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...result.failure);
     return undefined;
   }
   return result.value;
@@ -124,44 +200,77 @@ export function interpretModelAttribute<Out>(input: {
 // failures into `diagnostics`. Returns the typed value, or `undefined` on
 // failure so the caller can apply its own default/absence handling.
 export function interpretFieldAttribute<Out>(input: {
+  readonly symbols: SymbolTable;
   readonly node: FieldAttributeAst;
   readonly spec: AttributeSpec<Out, FieldAttributeCtx>;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
-  readonly resolveReferencedModel?: () => ModelSymbol | undefined;
+  readonly sources: PslSources;
+  readonly binder: Binder;
+  readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
     input.spec,
     buildFieldAttributeCtx({
+      symbols: input.symbols,
       selfModel: input.model,
       field: input.field,
-      sourceFile: input.sourceFile,
-      sourceId: input.sourceId,
-      resolveReferencedModel: input.resolveReferencedModel,
+      sources: input.sources,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...result.failure);
     return undefined;
   }
   return result.value;
 }
 
-const mapModelSpec = modelAttribute('map', { positional: [{ key: 'name', type: str() }] });
-const mapFieldSpec = fieldAttribute('map', { positional: [{ key: 'name', type: str() }] });
+function validateMappedName(
+  value: { readonly name: string },
+  ctx: AttributeCtx,
+  attributeNode: AstNode,
+): readonly PslDiagnostic[] {
+  return value.name === ''
+    ? [leafDiagnostic(ctx, attributeNode, 'Mapped name must not be empty')]
+    : [];
+}
 
-type DefaultArgValue = string | number | boolean | (string | number | boolean)[] | TypedFuncCall;
+const mapModelSpec = modelAttribute('map', {
+  documentation: 'Maps this model to a database table name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty database table name.' }],
+  refine: validateMappedName,
+});
+const mapFieldSpec = fieldAttribute('map', {
+  documentation: 'Maps this field to a database column name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty database column name.' }],
+  refine: validateMappedName,
+});
+
+type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral;
+
+type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFuncCall;
 
 function scalarDefaultArms(
   isList: boolean,
-  registry: ControlMutationDefaultRegistry,
+  registries: ControlDefaultRegistries,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
-  const literal = () => oneOf(str(), num(), bool());
-  const funcArms = [...registry.entries()].map(([name, entry]) =>
+  // One arm per distinct documentation, so each tag's completion and signature help carries the
+  // text of the tag it names rather than every registered tag's text run together.
+  const tagsByDocumentation = new Map<string, string[]>();
+  for (const entry of Object.values(registries.dataTypeEntries)) {
+    if (entry.written.kind !== 'tag') continue;
+    const tags = tagsByDocumentation.get(entry.documentation);
+    if (tags === undefined) tagsByDocumentation.set(entry.documentation, [entry.written.tag]);
+    else tags.push(entry.written.tag);
+  }
+  const tagArms = () =>
+    [...tagsByDocumentation].map(([documentation, tags]) => taggedLiteral(tags, { documentation }));
+  // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses.
+  const literal = () => oneOf(str(), numLiteral(), bool(), ...tagArms());
+  const listArm = () => list(literal(), { label: `list of (${literal().label})` });
+  const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
       name,
       blindCast<
@@ -170,7 +279,39 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  return isList ? [list(literal()), ...funcArms] : [str(), num(), bool(), ...funcArms];
+  // A scalar column takes a list literal too: a codec such as `pg/vector@1` declares a list of
+  // element types, and its value is written as a PSL list on a column that is not a list.
+  return isList
+    ? [listArm(), ...funcArms, ...tagArms()]
+    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms(), listArm()];
+}
+
+/**
+ * The `@default` value arms, with a `dbgenerated(...)` call reported as removed before the arms
+ * are tried, so the author is told what replaced it instead of being shown the list of arms.
+ */
+function defaultValueArm(
+  arms: readonly [
+    ArgType<DefaultArgValue, AttributeCtx>,
+    ...ArgType<DefaultArgValue, AttributeCtx>[],
+  ],
+  registry: ControlDefaultRegistries['defaultFunctionRegistry'],
+) {
+  const value = oneOf(...arms);
+  return {
+    ...value,
+    parse: (arg: Parameters<typeof value.parse>[0], ctx: AttributeCtx) =>
+      FunctionCallAst.cast(arg.syntax)?.path().join('.') === 'dbgenerated'
+        ? notOk<readonly PslDiagnostic[]>([
+            leafDiagnostic(
+              ctx,
+              arg,
+              removedDbgeneratedMessage(registry),
+              'PSL_UNKNOWN_DEFAULT_FUNCTION',
+            ),
+          ])
+        : value.parse(arg, ctx),
+  };
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {
@@ -189,15 +330,26 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  return Object.keys(block.block.parameters);
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of block.node.entries()) {
+    const key = entry.key()?.name();
+    if (key === undefined || seen.has(key)) continue;
+    seen.add(key);
+    names.push(key);
+  }
+  return names;
 }
 
 function enumDefaultArms(
   members: readonly string[],
+  enumName: string,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const [first, ...rest] = members;
   if (first === undefined) return [noEnumMember()];
-  return [identifier(first), ...rest.map((name) => identifier(name))];
+  const member = (name: string) =>
+    identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` });
+  return [member(first), ...rest.map(member)];
 }
 
 function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
@@ -205,14 +357,40 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const valueArms =
     members === undefined
       ? scalarDefaultArms(ctx.field.list, ctx.controlMutationDefaults)
-      : enumDefaultArms(members);
-  return fieldAttribute('default', { positional: [{ key: 'value', type: oneOf(...valueArms) }] });
+      : enumDefaultArms(members, ctx.field.typeName);
+  return fieldAttribute('default', {
+    documentation: 'Supplies a default value when this field is omitted from a mutation.',
+    positional: [
+      {
+        key: 'value',
+        type: defaultValueArm(valueArms, ctx.controlMutationDefaults.defaultFunctionRegistry),
+        documentation:
+          'A literal, enum member, or registered default function compatible with this field.',
+      },
+    ],
+  });
 }
 
-const idFieldSpec = fieldAttribute('id', { named: { map: optional(str()) } });
-const uniqueFieldSpec = fieldAttribute('unique', { named: { map: optional(str()) } });
+const idFieldSpec = fieldAttribute('id', {
+  documentation: 'Makes this field the primary key of the table.',
+  named: {
+    map: { type: optional(str()), documentation: 'The database primary-key constraint name.' },
+  },
+});
+const uniqueFieldSpec = fieldAttribute('unique', {
+  documentation: 'Requires values in this field to be unique.',
+  named: { map: { type: optional(str()), documentation: 'The database unique-constraint name.' } },
+});
 
-const noCheckKindArgument = () => oneOf(identifier('membership'), identifier('elementNotNull'));
+const noCheckKindArgument = () =>
+  oneOf(
+    identifier('membership', {
+      documentation: 'Waives the generated check that values belong to the declared domain enum.',
+    }),
+    identifier('elementNotNull', {
+      documentation: 'Waives the generated check that scalar-list elements are non-null.',
+    }),
+  );
 
 /**
  * `@noCheck` waives generated CHECK constraints on one column: bare for every
@@ -221,9 +399,19 @@ const noCheckKindArgument = () => oneOf(identifier('membership'), identifier('el
  * necessarily a duplicate and fails as excess arity.
  */
 const noCheckFieldSpec = fieldAttribute('noCheck', {
+  documentation:
+    'Waives generated CHECK constraints for this column. With no arguments, waives every generated kind.',
   positional: [
-    { key: 'first', type: optional(noCheckKindArgument()) },
-    { key: 'second', type: optional(noCheckKindArgument()) },
+    {
+      key: 'first',
+      type: optional(noCheckKindArgument()),
+      documentation: 'The first generated check kind to waive: `membership` or `elementNotNull`.',
+    },
+    {
+      key: 'second',
+      type: optional(noCheckKindArgument()),
+      documentation: 'A second, distinct generated check kind to waive.',
+    },
   ],
   refine: (value, ctx, attributeNode) => {
     if (value.first !== undefined && value.first === value.second) {
@@ -234,12 +422,28 @@ const noCheckFieldSpec = fieldAttribute('noCheck', {
 });
 
 const idModelSpec = modelAttribute('id', {
-  positional: [{ key: 'fields', type: list(fieldRef(), { allowEmpty: false, unique: true }) }],
-  named: { map: optional(str()) },
+  documentation: 'Declares a compound primary key for this table.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The ordered, nonempty list of distinct primary-key fields.',
+    },
+  ],
+  named: {
+    map: { type: optional(str()), documentation: 'The database primary-key constraint name.' },
+  },
 });
 const uniqueModelSpec = modelAttribute('unique', {
-  positional: [{ key: 'fields', type: list(fieldRef(), { allowEmpty: false, unique: true }) }],
-  named: { map: optional(str()) },
+  documentation: 'Requires the combination of these fields to be unique.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The ordered, nonempty list of distinct fields in the unique constraint.',
+    },
+  ],
+  named: { map: { type: optional(str()), documentation: 'The database unique-constraint name.' } },
 });
 
 // `@@index` cross-argument diagnostic codes — contributed by this package
@@ -252,17 +456,40 @@ export const PSL_INDEX_EXPRESSION_REQUIRES_NAME: ContributedPslDiagnosticCode =
 export const PSL_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode = 'PSL_INDEX_NAME_XOR_MAP';
 
 const indexModelSpec = modelAttribute('index', {
+  documentation:
+    'Declares a database index over fields or a SQL expression, optionally restricted by a predicate.',
   positional: [
-    { key: 'fields', type: optional(list(fieldRef(), { allowEmpty: false, unique: true })) },
+    {
+      key: 'fields',
+      type: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
+      documentation:
+        'The ordered list of distinct indexed fields. Mutually exclusive with `expression`.',
+    },
   ],
   named: {
-    expression: optional(str()),
-    where: optional(str()),
-    unique: optional(bool()),
-    name: optional(str()),
-    map: optional(str()),
-    type: optional(str()),
-    options: optional(record(str())),
+    expression: {
+      type: optional(str()),
+      documentation:
+        'The SQL index expression. Requires `name` or `map` and cannot be combined with a fields list.',
+    },
+    where: {
+      type: optional(str()),
+      documentation: 'The SQL predicate restricting rows included in a partial index.',
+    },
+    unique: { type: optional(bool()), documentation: 'Whether the index enforces uniqueness.' },
+    name: {
+      type: optional(str()),
+      documentation: 'The index name. Mutually exclusive with `map`.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database index name. Mutually exclusive with `name`.',
+    },
+    type: { type: optional(str()), documentation: 'The target-specific index access method.' },
+    options: {
+      type: optional(record(str())),
+      documentation: 'Target-specific index options. Requires an explicit `type`.',
+    },
   },
   refine: (value, ctx, attributeNode) => {
     const diagnostics: PslDiagnostic[] = [];
@@ -323,10 +550,17 @@ export const PSL_CHECK_EXPRESSION_EMPTY: ContributedPslDiagnosticCode =
 export const PSL_CHECK_ON_STI_VARIANT: ContributedPslDiagnosticCode = 'PSL_CHECK_ON_STI_VARIANT';
 
 const checkModelSpec = modelAttribute('check', {
+  documentation: 'Declares a named database CHECK constraint on this table.',
   named: {
-    expression: str(),
-    name: optional(str()),
-    map: optional(str()),
+    expression: { type: str(), documentation: 'The nonempty SQL predicate checked for each row.' },
+    name: {
+      type: optional(str()),
+      documentation: 'The constraint name. Exactly one of `name` and `map` is required.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database constraint name. Exactly one of `name` and `map` is required.',
+    },
   },
   refine: (value, ctx, attributeNode) => {
     const diagnostics: PslDiagnostic[] = [];
@@ -365,33 +599,61 @@ const checkModelSpec = modelAttribute('check', {
 });
 
 const controlModelSpec = modelAttribute('control', {
+  documentation: 'Sets how schema management treats this model’s storage.',
   positional: [
     {
       key: 'policy',
+      documentation:
+        'The storage control policy: `managed`, `tolerated`, `external`, or `observed`.',
       type: oneOf(
-        identifier('managed'),
-        identifier('tolerated'),
-        identifier('external'),
-        identifier('observed'),
+        identifier('managed', {
+          documentation:
+            'Verifies the declared shape strictly and allows migrations to create, alter, or drop the storage object.',
+        }),
+        identifier('tolerated', {
+          documentation:
+            'Verifies declared columns while allowing extra columns. Migrations may create missing storage, but never alter or drop existing storage.',
+        }),
+        identifier('external', {
+          documentation: 'Verifies declared storage without creating, altering, or dropping it.',
+        }),
+        identifier('observed', {
+          documentation:
+            'Reports storage differences as warnings rather than verification failures and never emits migration operations.',
+        }),
       ),
     },
   ],
 });
 
 const discriminatorModelSpec = modelAttribute('discriminator', {
-  positional: [{ key: 'field', type: fieldRef() }],
-});
-const baseModelSpec = modelAttribute('base', {
+  documentation: 'Selects the field that identifies inheritance variants of this model.',
   positional: [
-    { key: 'base', type: entityRef() },
-    { key: 'value', type: str() },
+    { key: 'field', type: fieldRef(), documentation: 'The discriminator field on this model.' },
   ],
 });
+function baseModelSpec() {
+  return modelAttribute('base', {
+    documentation: 'Declares this model as a variant of a base model.',
+    positional: [
+      {
+        key: 'base',
+        type: entityRef({ kind: 'model' }),
+        documentation: 'The base model to inherit from.',
+      },
+      {
+        key: 'value',
+        type: str(),
+        documentation: 'The discriminator value identifying this variant.',
+      },
+    ],
+  });
+}
 
 function relationAttributeSpan(ctx: FieldAttributeCtx): PslSpan {
-  const node = findFieldAttributeNode(ctx.field, 'relation');
+  const node = getAttribute(ctx.field.attributes, 'relation')?.node;
   if (node !== undefined) {
-    return nodePslSpan(node.syntax, ctx.sourceFile);
+    return nodePslSpan(node.syntax, ctx.sources);
   }
   return ctx.field.span;
 }
@@ -407,8 +669,7 @@ function relationInvariants(
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: `Relation field "${ctx.selfModel.name}.${ctx.field.name}" requires fields and references arguments`,
-        sourceId: ctx.sourceId,
-        span: relationAttributeSpan(ctx),
+        ...diagnosticSource(ctx.sources, ctx.field.node.syntax).at(relationAttributeSpan(ctx)),
       },
     ];
   }
@@ -417,23 +678,67 @@ function relationInvariants(
 
 const referentialActionArgument = () =>
   oneOf(
-    identifier('NoAction'),
-    identifier('Restrict'),
-    identifier('Cascade'),
-    identifier('SetNull'),
-    identifier('SetDefault'),
+    identifier('NoAction', {
+      documentation:
+        'Rejects a change that would violate the foreign key when the constraint is checked; checking may be deferred when supported and configured.',
+    }),
+    identifier('Restrict', {
+      documentation:
+        'Rejects deleting or updating a referenced row while referencing rows remain, without deferring the check.',
+    }),
+    identifier('Cascade', {
+      documentation:
+        'Propagates deletion or key updates of a referenced row to its referencing rows.',
+    }),
+    identifier('SetNull', {
+      documentation:
+        'Sets referencing foreign-key fields to null when the referenced row is deleted or its key changes. The fields must allow null.',
+    }),
+    identifier('SetDefault', {
+      documentation:
+        'Sets referencing foreign-key fields to their defaults when the referenced row is deleted or its key changes. The resulting values must satisfy the foreign key.',
+    }),
   );
 
 const relationFieldSpec = fieldAttribute('relation', {
-  positional: [{ key: 'name', type: optional(str()) }],
+  documentation:
+    'Defines the relation name, foreign-key fields, and referential actions for this relation.',
+  positional: [
+    {
+      key: 'name',
+      type: optional(str()),
+      documentation: 'The relation name used to pair both sides. May also be supplied by name.',
+    },
+  ],
   named: {
-    name: optional(str()),
-    fields: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
-    references: optional(list(referencedFieldRef(), { allowEmpty: false, unique: true })),
-    map: optional(str()),
-    onDelete: optional(referentialActionArgument()),
-    onUpdate: optional(referentialActionArgument()),
-    index: optional(bool()),
+    name: {
+      type: optional(str()),
+      documentation:
+        'The relation name used to pair both sides. Cannot also be supplied positionally.',
+    },
+    fields: {
+      type: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
+      documentation:
+        'The ordered local foreign-key fields. Must be supplied together with `references`.',
+    },
+    references: {
+      type: optional(list(referencedFieldRef(), { allowEmpty: false, unique: true })),
+      documentation:
+        'The corresponding fields on the referenced model. Must be supplied together with `fields`.',
+    },
+    map: { type: optional(str()), documentation: 'The database foreign-key constraint name.' },
+    onDelete: {
+      type: optional(referentialActionArgument()),
+      documentation: 'The referential action when a referenced row is deleted.',
+    },
+    onUpdate: {
+      type: optional(referentialActionArgument()),
+      documentation: 'The referential action when a referenced key is updated.',
+    },
+    index: {
+      type: optional(bool()),
+      documentation: 'Whether to create an index for the relation’s foreign-key fields.',
+    },
   },
   refine: relationInvariants,
 });
@@ -443,7 +748,7 @@ export type SqlRelationOutput = InferAttr<typeof relationFieldSpec>;
 export function modelSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }): AttributeSpecContext {
   return {
     symbols: input.symbols,
@@ -456,7 +761,7 @@ export function fieldSpecContext(input: {
   readonly symbols: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }): FieldAttributeSpecContext {
   return {
     symbols: input.symbols,
@@ -475,7 +780,7 @@ export const sqlAttributeSpecs = {
     check: () => checkModelSpec,
     control: () => controlModelSpec,
     discriminator: () => discriminatorModelSpec,
-    base: () => baseModelSpec,
+    base: baseModelSpec,
   },
   field: {
     map: () => mapFieldSpec,

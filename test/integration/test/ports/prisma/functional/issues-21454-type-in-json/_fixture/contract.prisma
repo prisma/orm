@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/21454-$type-in-json (postgres matrix entry).
 //
@@ -12,4 +14,5 @@
 model Test {
   id   String @id @default(cuid(2))
   json Json
+  @@map("test")
 }

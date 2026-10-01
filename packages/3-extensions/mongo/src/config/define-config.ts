@@ -1,18 +1,23 @@
-import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/adapter-mongo/codec-ids';
 import mongoAdapter from '@internal/adapter-mongo/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
-import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
+import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
+import {
+  defineConfig as coreDefineConfig,
+  defaultContractOutputPath,
+} from '@internal/config/config-types';
 import mongoDriver from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { mongoContract } from '@internal/mongo-contract-psl/provider';
 import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-types';
+import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
+import { prisma6MongoBinding } from '@internal/target-mongo/prisma6-binding';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
 export interface MongoConfigOptions {
-  readonly contract: string;
+  /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma6Schema(...)`. */
+  readonly contract: string | ContractConfig;
   readonly output?: string;
   readonly db?: {
     readonly connection?: string;
@@ -23,29 +28,36 @@ export interface MongoConfigOptions {
   };
 }
 
-function deriveOutputPath(contractPath: string): string {
-  const ext = extname(contractPath);
-  if (ext.length === 0) {
-    return `${contractPath}.json`;
+function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
+  return extname(contractPath) === '.ts'
+    ? typescriptContractFromPath(contractPath, output)
+    : mongoContract(contractPath, {
+        output,
+        enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
+        formerScalarCodecIds: prisma6MongoBinding.scalarCodecIds,
+      });
+}
+
+function resolveContractConfig(options: MongoConfigOptions): ContractConfig {
+  const explicitOutput =
+    options.output !== undefined ? join(options.output, 'contract.json') : undefined;
+  if (typeof options.contract === 'string') {
+    return contractConfigFromPath(
+      options.contract,
+      explicitOutput ?? defaultContractOutputPath(options.contract),
+    );
   }
-  return `${contractPath.slice(0, -ext.length)}.json`;
+  const firstInput = options.contract.source.inputs?.[0];
+  const output =
+    explicitOutput ??
+    options.contract.output ??
+    (firstInput !== undefined ? defaultContractOutputPath(firstInput) : undefined);
+  return { ...options.contract, ...ifDefined('output', output) };
 }
 
 export function defineConfig(options: MongoConfigOptions): PrismaNextConfig<'mongo', 'mongo'> {
   const extensions = options.extensions ?? [];
-  const output =
-    options.output !== undefined
-      ? join(options.output, 'contract.json')
-      : deriveOutputPath(options.contract);
-  const ext = extname(options.contract);
-
-  const contractConfig =
-    ext === '.ts'
-      ? typescriptContractFromPath(options.contract, output)
-      : mongoContract(options.contract, {
-          output,
-          enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
-        });
+  const contractConfig = resolveContractConfig(options);
 
   return coreDefineConfig({
     family: mongoFamilyDescriptor,

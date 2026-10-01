@@ -3,10 +3,12 @@
 model User {
   id Int @id
   posts Post[] @relation("UserPosts")
+  @@map("user")
 }
 
 model Post {
   id Int @id
   userId Int
   user User @relation("UserPosts", fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  @@map("post")
 }

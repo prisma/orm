@@ -5,12 +5,12 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { ok } from '@internal/utils/result';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
+import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 /**
  * `db update --to <bundle>` resolves the destination contract through the
@@ -22,6 +22,7 @@ import { createTestProjectDir } from '../utils/test-project-dir';
 const mocks = {
   connect: vi.fn(),
   dbUpdate: vi.fn(),
+  renderContractDts: vi.fn(),
   close: vi.fn(),
 };
 
@@ -30,6 +31,7 @@ const commands = createBinCommands(
     ({
       connect: mocks.connect,
       dbUpdate: mocks.dbUpdate,
+      renderContractDts: mocks.renderContractDts,
       close: mocks.close,
     }) as unknown as ControlClient,
 );
@@ -52,6 +54,9 @@ beforeEach(() => {
   mocks.connect.mockReset().mockResolvedValue(undefined);
   mocks.close.mockReset().mockResolvedValue(undefined);
   mocks.dbUpdate.mockReset();
+  mocks.renderContractDts
+    .mockReset()
+    .mockResolvedValue(ok({ contractDts: 'export type Contract = unknown;\n' }));
 });
 
 interface Fixture {
@@ -63,6 +68,7 @@ interface Fixture {
 async function setupFixture(): Promise<Fixture> {
   const cwd = createTestProjectDir('orm-db-update-to');
   tempDirs.push(cwd);
+  writeProjectManifest(cwd);
   const endContract = {
     storage: { storageHash: HASH_B },
     schemaVersion: '1.0.0',
@@ -129,7 +135,7 @@ function ormConfig(cwd: string): Record<string, unknown> {
 }
 
 function harness(cwd: string) {
-  return createTestCli({ commands, groups: BIN_GROUPS, config: { orm: ormConfig(cwd) } });
+  return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: ormConfig(cwd) });
 }
 
 describe('db update --to bundle resolution', () => {
@@ -186,6 +192,9 @@ describe('db update --to bundle resolution', () => {
     expect(run.exitCode).toBe(0);
     const callContract = mocks.dbUpdate.mock.calls[0]![0].contract as Record<string, unknown>;
     expect(callContract).toEqual(endContract);
+    expect(mocks.renderContractDts).toHaveBeenCalledWith(
+      expect.objectContaining({ contract: endContract }),
+    );
     expect(run.presented?.data).toEqual({
       ok: true,
       mode: 'plan',

@@ -1,12 +1,15 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
+  type AnyCodecDescriptorTemplate,
   type Codec,
   type CodecDescriptor,
   CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
+  type DataTypeId,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -52,22 +55,44 @@ export abstract class SqliteCodecDescriptor<P = void>
   }
 }
 
-type DescriptorParams<D extends AnyCodecDescriptor> =
-  D extends CodecDescriptor<infer P> ? P : never;
+type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
+  D extends CodecDescriptorTemplate<infer P> ? P : never;
 
-export interface SqliteCodecOptions<P> {
+/** The codec the family descriptor's factory builds, which a `factory` option's codec extends. */
+type DescriptorCodec<D extends AnyCodecDescriptorTemplate> = ReturnType<ReturnType<D['factory']>>;
+
+export interface SqliteCodecOptions<
+  P,
+  C extends Codec<string, readonly CodecTrait[], unknown, unknown> = Codec<
+    string,
+    readonly CodecTrait[],
+    unknown,
+    unknown
+  >,
+> {
+  /** The data type the adapted codec represents here. A template names none; this target does. */
+  readonly dataType: DataTypeId;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
+  /**
+   * Builds the codec in place of the adapted one, where SQLite stores fewer values than the family codec reads: a subclass of the family codec that adds SQLite's own rule.
+   */
+  readonly factory?: (
+    descriptor: SqliteCodecDescriptor<P>,
+    params: P,
+  ) => (ctx: CodecInstanceContext) => C;
 }
 
-export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptor> = Pick<
+export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
   D,
-  keyof CodecDescriptor<DescriptorParams<D>>
+  keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
+  Pick<CodecDescriptor, 'dataType'> &
   Pick<AnySqliteCodecDescriptor, 'descriptorKind' | 'projectJson'>;
 
-class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteCodecDescriptor<
-  DescriptorParams<D>
-> {
+class SqliteCodecDescriptorAdapter<
+  D extends AnyCodecDescriptorTemplate,
+> extends SqliteCodecDescriptor<DescriptorParams<D>> {
+  override readonly dataType: DataTypeId;
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly targetTypes: readonly string[];
@@ -84,6 +109,7 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
     private readonly options: SqliteCodecOptions<DescriptorParams<D>>,
   ) {
     super();
+    this.dataType = options.dataType;
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
@@ -112,7 +138,9 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
   override readonly factory = (
     params: DescriptorParams<D>,
   ): ((ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>) =>
-    this.descriptor.factory(params);
+    this.options.factory === undefined
+      ? this.descriptor.factory(params)
+      : this.options.factory(this, params);
 
   protected override jsonProjection(
     expression: ProjectionExpr,
@@ -122,9 +150,9 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
   }
 }
 
-export function sqliteCodec<D extends AnyCodecDescriptor>(
+export function sqliteCodec<D extends AnyCodecDescriptorTemplate>(
   descriptor: D,
-  options: SqliteCodecOptions<DescriptorParams<D>>,
+  options: SqliteCodecOptions<DescriptorParams<D>, DescriptorCodec<D>>,
 ): AdaptedSqliteCodecDescriptor<D> {
   return blindCast<
     AdaptedSqliteCodecDescriptor<D>,
@@ -152,11 +180,12 @@ export function isSqliteCodecDescriptor(value: unknown): value is AnySqliteCodec
     Array.isArray(value.targetTypes) &&
     value.targetTypes.every((targetType) => typeof targetType === 'string') &&
     'paramsSchema' in value &&
-    isObjectLike(value.paramsSchema) &&
-    '~standard' in value.paramsSchema &&
-    isObjectLike(value.paramsSchema['~standard']) &&
-    'validate' in value.paramsSchema['~standard'] &&
-    typeof value.paramsSchema['~standard'].validate === 'function' &&
+    (value.paramsSchema === undefined ||
+      (isObjectLike(value.paramsSchema) &&
+        '~standard' in value.paramsSchema &&
+        isObjectLike(value.paramsSchema['~standard']) &&
+        'validate' in value.paramsSchema['~standard'] &&
+        typeof value.paramsSchema['~standard'].validate === 'function')) &&
     'isParameterized' in value &&
     typeof value.isParameterized === 'boolean' &&
     'factory' in value &&

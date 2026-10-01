@@ -1,0 +1,11 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model OtherTypes {
+  id      Int      @id
+  name    String   @default(5)
+  payload Bytes    @default(1234)
+  at      DateTime @default(0)
+  flag    Boolean  @default(1)
+}

@@ -3,6 +3,7 @@ import {
   isBackedByColumnKeys,
 } from '@internal/sql-contract/foreign-key-materialization';
 import type { SqlForeignKeyIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { InternalError } from '@internal/utils/internal-error';
 import { deriveBackRelationFieldName, deriveRelationFieldName, pluralize } from './name-transforms';
 import type { RelationField } from './printer-config';
 
@@ -48,12 +49,15 @@ export function inferRelations(
     for (const fk of table.foreignKeys) {
       const childTableName = table.name;
       const parentTableName = fk.referencedTable;
-      const childUsed = usedFieldNames.get(childTableName) as Set<string>;
+      const childUsed = usedFieldNames.get(childTableName);
+      if (childUsed === undefined) {
+        throw new InternalError(`Missing inferred field-name set for table "${childTableName}"`);
+      }
       const childModelName = modelNameMap.get(childTableName) ?? childTableName;
       const parentModelName = modelNameMap.get(parentTableName) ?? parentTableName;
       const pairKey = `${childTableName}→${parentTableName}`;
       const isSelfRelation = childTableName === parentTableName;
-      const needsRelationName = (fkCountByPair.get(pairKey) as number) > 1 || isSelfRelation;
+      const needsRelationName = (fkCountByPair.get(pairKey) ?? 0) > 1 || isSelfRelation;
 
       const isOneToOne = detectOneToOne(fk, table);
 

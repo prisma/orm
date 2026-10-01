@@ -9,17 +9,13 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { isDdlNode } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
+import type { PostgresCodecRegistry } from '@internal/target-postgres/codecs';
+import { createPostgresCodecRegistryWithBuiltins } from '@internal/target-postgres/codecs';
 import type { PostgresDdlNode } from '@internal/target-postgres/ddl';
 import { adapterError } from './adapter-errors';
-import { createPostgresCodecRegistryWithBuiltins } from './codec-lookup';
 import { PostgresControlAdapter } from './control-adapter';
 import { renderLoweredSql } from './sql-renderer';
-import type {
-  PostgresAdapterOptions,
-  PostgresCodecRegistry,
-  PostgresContract,
-  PostgresLoweredStatement,
-} from './types';
+import type { PostgresAdapterOptions, PostgresContract, PostgresLoweredStatement } from './types';
 
 const defaultCapabilities = Object.freeze({
   postgres: {
@@ -37,6 +33,8 @@ const defaultCapabilities = Object.freeze({
     lateral: true,
     scalarList: true,
     checkConstraint: true,
+    insertOnConflictSkip: true,
+    insertOnConflictWithoutTarget: true,
   },
 });
 

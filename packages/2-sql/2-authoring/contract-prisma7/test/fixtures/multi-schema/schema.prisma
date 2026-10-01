@@ -1,0 +1,24 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit"]
+}
+
+model User {
+  id Int @id
+
+  @@schema("public")
+}
+
+model Composite {
+  a Int
+  b String
+
+  @@id([a, b])
+  @@schema("audit")
+}
+
+model Plain {
+  id Int @id
+
+  @@schema("public")
+}

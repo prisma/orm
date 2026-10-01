@@ -1,5 +1,6 @@
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import type { AggregateDescriptor } from '@internal/framework-components/components';
 import { SqlStorage } from '@internal/sql-contract/types';
 import { applicationDomainOf } from '@repo/test-utils';
@@ -37,6 +38,7 @@ const testContract: Contract<SqlStorage> = {
 
 const numericCodecDescriptor: AnyCodecDescriptor = {
   codecId: 'test/int@1',
+  dataType: dataTypeId('test/int'),
   traits: ['numeric', 'order'],
   targetTypes: ['int'],
   isParameterized: false,

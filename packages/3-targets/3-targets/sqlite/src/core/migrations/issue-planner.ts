@@ -531,7 +531,7 @@ function emptySchemaIR(): SqlSchemaIR {
   return new SqlSchemaIR({ tables: {} });
 }
 
-function conflictForDisallowedCall(
+export function conflictForDisallowedCall(
   call: SqliteOpFactoryCall,
   allowed: readonly string[],
 ): SqlPlannerConflict {
@@ -541,6 +541,7 @@ function conflictForDisallowedCall(
     kind: conflictKindForCall(call),
     summary,
     why: 'Use `migration new` to author a custom migration for this change.',
+    refusedOperationClass: call.operationClass,
     ...(location ? { location } : {}),
   };
 }

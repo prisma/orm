@@ -179,7 +179,7 @@ describe('emit command', () => {
         error: { code: 'CLI.CONFIG_SECTION_INVALID', summary: expect.any(String) },
       });
       expect(envelope?.diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'CONFIG.VALIDATION_FAILED' })]),
+        expect.arrayContaining([expect.objectContaining({ code: 'CLI.CONFIG_FIELD_INVALID' })]),
       );
     } finally {
       documentSetup.cleanup();
@@ -551,7 +551,8 @@ describe('emit command: additional fixtures', () => {
     try {
       writeFileSync(
         join(testSetup.testDir, 'schema.prisma'),
-        `model Post {
+        `// use prisma-8
+model Post {
   id Int @id
   data Unsupported
 }
@@ -576,6 +577,7 @@ describe('emit command: additional fixtures', () => {
         composedExtensionContracts: new Map(),
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
+        dataTypeLookup: stack.dataTypeLookup,
         controlMutationDefaults: stack.controlMutationDefaults,
         resolvedInputs: contractConfig!.source.inputs ?? [],
         capabilities: stack.capabilities,
@@ -586,17 +588,16 @@ describe('emit command: additional fixtures', () => {
         throw new Error('Expected source provider to fail for unsupported field type');
       }
       expect(sourceResult.failure.summary).toBe('PSL to SQL contract interpretation failed');
-      expect(sourceResult.failure.diagnostics).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: './schema.prisma',
-            span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
-            }),
+      expect(sourceResult.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: 'Cannot find type "Unsupported"',
+          sourceId: join(testSetup.testDir, 'schema.prisma'),
+          span: expect.objectContaining({
+            start: expect.objectContaining({ line: 4 }),
           }),
-        ]),
-      );
+        }),
+      ]);
 
       const run = await runOnEngine(testSetup, ['contract', 'emit', '--json']);
       expect(run.exitCode).toBe(2);
@@ -613,14 +614,16 @@ describe('emit command: additional fixtures', () => {
       });
 
       const reported = JSON.stringify(envelope);
-      expect(reported).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+      expect(reported).toContain('PSL_UNRESOLVED_REFERENCE');
+      expect(reported).toContain(JSON.stringify('Cannot find type "Unsupported"'));
+      expect(reported).not.toContain('PSL_UNSUPPORTED_FIELD_TYPE');
       expect(reported).toContain('schema.prisma');
     } finally {
       testSetup.cleanup();
     }
   });
 
-  it('rejects plain-object configs that were not created by defineConfig', {
+  it('rejects plain-object configs that were not created by definePrismaConfig', {
     timeout: timeouts.typeScriptCompilation,
   }, async () => {
     const testSetup = setupIntegrationTestDirectoryFromFixtures(
@@ -656,7 +659,9 @@ describe('emit command: additional fixtures', () => {
     try {
       writeFileSync(
         join(testSetup.testDir, 'contract.prisma'),
-        `model User {
+        `// use prisma-8
+
+model User {
   id    ObjectId @id @map("_id")
   name  String
   email String

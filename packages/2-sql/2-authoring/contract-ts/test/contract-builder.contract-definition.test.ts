@@ -1,4 +1,7 @@
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  CodecLookupWithDescriptors,
+} from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -6,6 +9,7 @@ import { buildSqlContractFromDefinition } from '../src/contract-builder';
 import { modelsOf } from './contract-test-helpers';
 import { crossRef, documentScopedTypes } from './cross-ref-helpers';
 import { unboundTables } from './unbound-tables';
+import { withDescriptors } from './with-descriptors';
 
 const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -187,7 +191,7 @@ describe('shared contract definition lowering', () => {
   });
 
   it('encodes literal defaults through codecLookup during storage lowering', () => {
-    const codecLookup: CodecLookup = {
+    const codecLookup: CodecLookupWithDescriptors = withDescriptors({
       get: (id) => {
         if (id !== 'pg/timestamptz-temporal@1') {
           return undefined;
@@ -204,7 +208,7 @@ describe('shared contract definition lowering', () => {
       },
       targetTypesFor: (id) => (id === 'pg/timestamptz-temporal@1' ? ['timestamptz'] : undefined),
       renderOutputTypeFor: () => undefined,
-    };
+    });
 
     const contract = buildSqlContractFromDefinition(
       {
@@ -242,6 +246,75 @@ describe('shared contract definition lowering', () => {
     });
   });
 
+  it("encodes a parameterized column's default through a codec built with the column's typeParams", () => {
+    // A codec whose encoding answers for its params, as `pg/vector@1` does: it refuses a value
+    // whose length is not the length the column declares.
+    const descriptor = {
+      codecId: 'test/vector@1',
+      traits: ['equality'],
+      targetTypes: ['vector'],
+      isParameterized: true,
+      paramsSchema: {
+        '~standard': { version: 1, vendor: 'test', validate: (value: unknown) => ({ value }) },
+      },
+      factory: (params: { readonly length: number }) => () => ({
+        id: 'test/vector@1',
+        encode: async (value: unknown) => value,
+        decode: async (wire: unknown) => wire,
+        encodeJson: (value: unknown) => {
+          if (!Array.isArray(value) || value.length !== params.length) {
+            throw new Error(`length mismatch: expected ${params.length}, got ${String(value)}`);
+          }
+          return [...value];
+        },
+        decodeJson: (json: unknown) => json,
+      }),
+    } as unknown as AnyCodecDescriptor;
+
+    const codecLookup: CodecLookupWithDescriptors = {
+      // The representative instance carries no params, as the control stack's does, so a build that
+      // used it in place of the column's own codec refuses every value.
+      get: (id) =>
+        id === 'test/vector@1' ? descriptor.factory({ length: 0 })({ name: id }) : undefined,
+      descriptorFor: (id) => (id === 'test/vector@1' ? descriptor : undefined),
+      targetTypesFor: (id) => (id === 'test/vector@1' ? ['vector'] : undefined),
+      renderOutputTypeFor: () => undefined,
+    };
+
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Document',
+            tableName: 'document',
+            fields: [
+              {
+                fieldName: 'embedding',
+                columnName: 'embedding',
+                descriptor: {
+                  codecId: 'test/vector@1',
+                  nativeType: 'vector',
+                  typeParams: { length: 3 },
+                },
+                nullable: false,
+                default: { kind: 'literal', value: [0.5, 0.25, 0.125] },
+              },
+            ],
+          },
+        ],
+      },
+      codecLookup,
+    );
+
+    expect(unboundTables(contract.storage)['document']?.columns['embedding']?.default).toEqual({
+      kind: 'literal',
+      value: [0.5, 0.25, 0.125],
+    });
+  });
+
   it('builds phase-specific execution defaults', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,
@@ -272,7 +345,7 @@ describe('shared contract definition lowering', () => {
 
     expect(contract.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'app_user', column: 'updated_at' },
+        ref: { namespace: 'public', entry: 'app_user', field: 'updated_at' },
         onCreate: { kind: 'generator', id: 'timestampNow' },
         onUpdate: { kind: 'generator', id: 'timestampNow' },
       },
@@ -450,7 +523,9 @@ describe('shared contract definition lowering', () => {
           },
         ],
       }),
-    ).toThrow('Field "User.id" cannot be nullable when executionDefaults are present.');
+    ).toThrow(
+      'Field "User.id" is filled on write by a generated default (a preset such as temporal.createdAt() or an id generator), so it cannot be optional; remove .optional().',
+    );
   });
 
   it('rejects nullable identity fields', () => {

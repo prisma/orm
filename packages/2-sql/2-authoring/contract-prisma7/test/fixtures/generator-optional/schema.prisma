@@ -1,0 +1,8 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Generated {
+  id      Int     @id
+  uuidOpt String? @default(uuid())
+}

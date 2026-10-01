@@ -2,6 +2,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { defineContract, field, model, rel } from '../src/contract-builder';
+import { sql } from '../src/sql-default-literal';
 
 import { columnDescriptor } from './helpers/column-descriptor';
 import { unboundTables } from './unbound-tables';
@@ -50,7 +51,7 @@ function buildPortableContract<TTarget extends string>(target: PortableTargetPac
     fields: {
       id: field.column(uuidColumn).id({ name: 'app_user_pkey' }),
       email: field.column(textColumn).unique({ name: 'app_user_email_key' }),
-      createdAt: field.column(portableTimestampColumn).defaultSql('CURRENT_TIMESTAMP'),
+      createdAt: field.column(portableTimestampColumn).default(sql`CURRENT_TIMESTAMP`),
     },
   }).sql({
     table: 'app_user',

@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Block, Presentations } from '@prisma/cli-engine';
@@ -8,20 +9,23 @@ import {
   ok,
 } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
-import { resolveRefAdvancementFields } from '../../control-api/operations/ref-advancement';
-import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import {
-  CliStructuredError,
-  errorContractValidationFailed,
-  errorUnexpected,
-} from '../../utils/cli-errors';
-import { closeQuietly, sanitizeErrorMessage } from '../../utils/command-helpers';
+  buildRefAdvancementFields,
+  type ContractIR,
+  computeRefAdvancementName,
+  NO_REF_ADVANCEMENT,
+  preflightRefAdvancement,
+} from '../../control-api/operations/ref-advancement';
+import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { closeQuietly } from '../../utils/command-helpers';
 import { mapDbUpdateFailure } from '../../utils/db-update-failure';
 import type { MigrationCommandResult } from '../../utils/formatters/migrations';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -174,6 +178,25 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         snapshotContractPath = resolved.value.contractJsonPath;
       }
 
+      const refName = computeRefAdvancementName({
+        ...ifDefined('advanceRef', args.flags.advanceRef),
+        ...ifDefined('db', args.flags.db),
+      });
+      let advancement: { readonly name: string; readonly contractIR: ContractIR } | null = null;
+      if (refName !== null) {
+        const preflight = await preflightRefAdvancement({
+          name: refName,
+          contractJson,
+          contractJsonPath: snapshotContractPath,
+          projectDir: baseDirFor(ctx.config),
+          client,
+        });
+        if (!preflight.ok) {
+          return notOk(normalizeError(preflight.failure));
+        }
+        advancement = { name: refName, contractIR: preflight.value };
+      }
+
       const mode = args.flags.dryRun ? 'plan' : 'apply';
       let document: MigrationCommandResult;
       try {
@@ -237,25 +260,26 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           result.value.mode === 'apply'
             ? (result.value.marker?.storageHash ?? result.value.destination.storageHash)
             : result.value.destination.storageHash;
-        const advancement = await resolveRefAdvancementFields({
-          ...ifDefined('advanceRef', args.flags.advanceRef),
-          ...ifDefined('db', args.flags.db),
-          refsDir,
-          migrationsDir,
-          contractJson,
-          contractJsonPath: snapshotContractPath,
-          mode: result.value.mode,
-          hash: advancementHash,
-        });
-        if (!advancement.ok) {
-          return notOk(normalizeError(advancement.failure));
+        const advanced =
+          advancement === null
+            ? ok(NO_REF_ADVANCEMENT)
+            : await buildRefAdvancementFields({
+                name: advancement.name,
+                refsDir,
+                migrationsDir,
+                contractIR: advancement.contractIR,
+                mode: result.value.mode,
+                hash: advancementHash,
+              });
+        if (!advanced.ok) {
+          return notOk(normalizeError(advanced.failure));
         }
 
         document = updateDocument({
           value: result.value,
           targetId: ctx.config.target.targetId,
-          advancedRef: advancement.value.advancedRef,
-          plannedAdvanceRef: advancement.value.plannedAdvanceRef,
+          advancedRef: advanced.value.advancedRef,
+          plannedAdvanceRef: advanced.value.plannedAdvanceRef,
           startedAt,
         });
       } catch (error) {
@@ -265,10 +289,11 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         if (error instanceof EngineStructuredError) {
           throw error;
         }
-        if (CliStructuredError.is(error)) {
-          return notOk(normalizeError(error));
-        }
-        if (isStructuredError(error) && error.code === 'CONTRACT.VALIDATION_FAILED') {
+        if (
+          !CliStructuredError.is(error) &&
+          isStructuredError(error) &&
+          error.code === 'CONTRACT.VALIDATION_FAILED'
+        ) {
           return notOk(
             normalizeError(
               errorContractValidationFailed(`Contract validation failed: ${error.message}`, {
@@ -277,14 +302,10 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
             ),
           );
         }
-        const safeMessage = sanitizeErrorMessage(
-          error instanceof Error ? error.message : String(error),
-          typeof dbConnection === 'string' ? dbConnection : undefined,
-        );
         return notOk(
           normalizeError(
-            errorUnexpected(safeMessage, {
-              why: `Unexpected error during db update: ${safeMessage}`,
+            errorFromCaught(error, (message) => `Unexpected error during db update: ${message}`, {
+              connection: typeof dbConnection === 'string' ? dbConnection : undefined,
             }),
           ),
         );

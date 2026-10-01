@@ -1,4 +1,6 @@
 import type { ContractMarkerRecord } from '@internal/contract/types';
+import { blindCast } from '@internal/utils/casts';
+import type { JsonValue } from '@internal/utils/json';
 import { type } from 'arktype';
 import { sqlFamilyError } from './errors';
 
@@ -25,7 +27,10 @@ function parseMeta(meta: unknown): Record<string, unknown> {
     return {};
   }
 
-  return result as Record<string, unknown>;
+  return blindCast<
+    Record<string, unknown>,
+    'MetaSchema validates the value as a string-keyed record before returning it'
+  >(result);
 }
 
 /**
@@ -33,11 +38,15 @@ function parseMeta(meta: unknown): Record<string, unknown> {
  * Postgres uses `jsonb` and returns an already-parsed value. Normalize both
  * here so `ContractMarkerRecord.contractJson` is always the structured form.
  */
-function parseContractJson(value: unknown): unknown {
+function parseContractJson(value: unknown): JsonValue | null {
   if (value === null || value === undefined) return null;
-  if (typeof value !== 'string') return value;
+  if (typeof value !== 'string') {
+    return blindCast<JsonValue, 'database JSON column value is already parsed JSON data'>(value);
+  }
   try {
-    return JSON.parse(value);
+    return blindCast<JsonValue, 'JSON.parse returns the parsed JSON payload from the marker row'>(
+      JSON.parse(value),
+    );
   } catch {
     return null;
   }

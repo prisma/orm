@@ -70,7 +70,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'infix',
         template: '{{self}} <=> {{arg0}}',
       },
     });
@@ -102,7 +101,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'cosine_similarity({{self}}, {{arg0}}, {{arg1}}, {{arg2}})',
       },
     });
@@ -141,7 +139,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/bool', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'contains({{self}}, {{arg0}})',
       },
     });
@@ -165,7 +162,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'pg/text@1', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'echo({{self}}, {{arg0}})',
       },
     });
@@ -185,7 +181,6 @@ describe('Operation lowering', () => {
       returns: { codecId: 'core/bool', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'partial({{self}}, {{arg0}}, {{arg1}})',
       },
     });

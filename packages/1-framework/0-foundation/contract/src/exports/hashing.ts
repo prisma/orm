@@ -1,3 +1,4 @@
+export { buildExecutionSection } from '../build-execution-section';
 export {
   type CanonicalizeContractOptions,
   canonicalizeContract,

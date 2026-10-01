@@ -32,6 +32,7 @@ function buildSourceContext(
     composedExtensionContracts: new Map(),
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs,
     capabilities: stack.capabilities,

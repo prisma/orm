@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -23,19 +24,27 @@ import {
   hasPslContractInfer,
   hasSchemaView,
 } from '@internal/framework-components/control';
+import {
+  type ImportSpecifierResolver,
+  keepInternalSpecifiers,
+} from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
-
 import { assertFrameworkComponentsCompatible } from '../utils/framework-components';
+import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
 import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
+import { loadContractSourceWithStack } from './operations/load-contract-source';
 import { executeMigrate } from './operations/migrate';
 
+import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type {
   ControlActionName,
   ControlClient,
@@ -84,10 +93,13 @@ class ControlClientImpl implements ControlClient {
   > | null = null;
   private initialized = false;
   private readonly defaultConnection: unknown;
+  /** One per client so the verified-hash memo spans operations (e.g. db update's pre-plan + consented apply). */
+  private readonly snapshotVerifier: SnapshotContentVerifier | undefined;
 
   constructor(options: ControlClientOptions) {
     this.options = options;
     this.defaultConnection = options.connection;
+    this.snapshotVerifier = snapshotVerifierFor(options);
   }
 
   init(): void {
@@ -148,8 +160,12 @@ class ControlClientImpl implements ControlClient {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: required for runtime connection type flexibility
-    this.driver = await this.stack.driver.create(resolvedConnection as any);
+    this.driver = await this.stack.driver.create(
+      blindCast<
+        Parameters<typeof this.stack.driver.create>[0],
+        'Connection shape is validated by the selected driver at runtime'
+      >(resolvedConnection),
+    );
   }
 
   async close(): Promise<void> {
@@ -414,6 +430,7 @@ class ControlClientImpl implements ControlClient {
       migrationsDir: options.migrationsDir,
       targetId: this.options.target.targetId,
       extensions: this.options.extensions ?? [],
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -453,6 +470,7 @@ class ControlClientImpl implements ControlClient {
       extensions: this.options.extensions ?? [],
       ...ifDefined('acceptDataLoss', options.acceptDataLoss),
       ...ifDefined('consent', options.consent),
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -473,6 +491,7 @@ class ControlClientImpl implements ControlClient {
       mode: options.strict ? 'strict' : 'lenient',
       skipSchema: options.skipSchema,
       skipMarker: options.skipMarker,
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -529,6 +548,7 @@ class ControlClientImpl implements ControlClient {
       ...ifDefined('refHash', options.refHash),
       ...ifDefined('refInvariants', options.refInvariants),
       ...ifDefined('refName', options.refName),
+      ...ifDefined('verifySnapshotContent', this.snapshotVerifier),
       ...ifDefined('onProgress', onProgress),
     });
   }
@@ -612,7 +632,7 @@ class ControlClientImpl implements ControlClient {
       throw new InternalError('Family instance was not initialized. This is a bug.');
     }
 
-    let contractRaw: unknown;
+    const sourceWarnings: ContractSourceDiagnostic[] = [];
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -620,65 +640,28 @@ class ControlClientImpl implements ControlClient {
       label: 'Resolving contract source...',
     });
 
-    try {
-      const stack = this.stack!;
-      const sourceContext = {
-        composedExtensions: stack.extensions.map((p) => p.id),
-        composedExtensionContracts: stack.extensionContracts,
-        authoringContributions: stack.authoringContributions,
-        codecLookup: stack.codecLookup,
-        controlMutationDefaults: stack.controlMutationDefaults,
-        resolvedInputs: contractConfig.source.inputs ?? [],
-        capabilities: stack.capabilities,
-      };
-      const providerResult = await contractConfig.source.load(sourceContext);
-      if (!providerResult.ok) {
-        onProgress?.({
-          action: 'emit',
-          kind: 'spanEnd',
-          spanId: 'resolveSource',
-          outcome: 'error',
-        });
-
-        return notOk({
-          code: 'CONTRACT_SOURCE_INVALID',
-          summary: providerResult.failure.summary,
-          why: providerResult.failure.summary,
-          meta: providerResult.failure.meta,
-          diagnostics: providerResult.failure,
-        });
-      }
-      contractRaw = providerResult.value;
-
-      onProgress?.({
-        action: 'emit',
-        kind: 'spanEnd',
-        spanId: 'resolveSource',
-        outcome: 'ok',
-      });
-    } catch (error) {
-      onProgress?.({
-        action: 'emit',
-        kind: 'spanEnd',
-        spanId: 'resolveSource',
-        outcome: 'error',
-      });
-
-      const message = error instanceof Error ? error.message : String(error);
+    const loaded = await loadContractSourceWithStack({
+      stack: this.stack!,
+      source: contractConfig.source,
+      cwd: undefined,
+      reportWarning: (diagnostic) => {
+        sourceWarnings.push(diagnostic);
+      },
+    });
+    onProgress?.({
+      action: 'emit',
+      kind: 'spanEnd',
+      spanId: 'resolveSource',
+      outcome: loaded.ok ? 'ok' : 'error',
+    });
+    if (!loaded.ok) {
+      const { error, sourceDiagnostics } = loaded.failure;
       return notOk({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: 'Failed to resolve contract source',
-        why: message,
-        diagnostics: {
-          summary: 'Contract source provider threw an exception',
-          diagnostics: [
-            {
-              code: 'PROVIDER_THROW',
-              message,
-            },
-          ],
-        },
-        meta: undefined,
+        summary: sourceDiagnostics?.summary ?? error.message,
+        why: error.why,
+        meta: sourceDiagnostics?.meta,
+        ...ifDefined('diagnostics', sourceDiagnostics),
       });
     }
 
@@ -691,17 +674,7 @@ class ControlClientImpl implements ControlClient {
     });
 
     try {
-      // Blind cast: `contractRaw` is the unverified provider
-      // payload — `enrichContract` only adds capability + extension
-      // metadata onto whatever shape it receives. The structural
-      // check happens immediately afterwards via
-      // `familyInstance.deserializeContract`, which is the
-      // seam-of-record and the only thing that may surface
-      // structural errors to the caller.
-      const enrichedIR = enrichContract(
-        contractRaw as unknown as Contract,
-        this.frameworkComponents ?? [],
-      );
+      const enrichedIR = enrichContract(loaded.value, this.frameworkComponents ?? []);
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);
 
       let deserializedContract: Contract;
@@ -723,16 +696,7 @@ class ControlClientImpl implements ControlClient {
         });
       }
 
-      const result = await emitContractArtifacts(
-        deserializedContract,
-        this.stack!,
-        this.options.family.emission,
-        {
-          serializeContract: (contract) =>
-            this.options.target.contractSerializer.serializeContract(contract),
-          ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),
-        },
-      );
+      const result = await this.emitArtifacts(deserializedContract, keepInternalSpecifiers);
 
       onProgress?.({
         action: 'emit',
@@ -747,6 +711,7 @@ class ControlClientImpl implements ControlClient {
         profileHash: result.profileHash,
         contractJson: result.contractJson,
         contractDts: result.contractDts,
+        ...ifDefined('sourceWarnings', sourceWarnings.length > 0 ? sourceWarnings : undefined),
       });
     } catch (error) {
       onProgress?.({
@@ -763,5 +728,58 @@ class ControlClientImpl implements ControlClient {
         meta: undefined,
       });
     }
+  }
+
+  async renderContractDts(options: RenderContractDtsOptions): Promise<RenderContractDtsResult> {
+    this.init();
+    if (!this.familyInstance) {
+      throw new InternalError('Family instance was not initialized. This is a bug.');
+    }
+
+    let contract: Contract;
+    try {
+      contract = this.familyInstance.deserializeContract(options.contract);
+    } catch (error) {
+      return notOk({
+        code: 'CONTRACT_VALIDATION_FAILED',
+        summary: 'Contract validation failed',
+        why: error instanceof Error ? error.message : String(error),
+        cause: error,
+      });
+    }
+
+    try {
+      const { contractDts } = await this.emitArtifacts(
+        contract,
+        options.resolveImportSpecifier ?? keepInternalSpecifiers,
+      );
+      return ok({ contractDts });
+    } catch (error) {
+      return notOk({
+        code: 'RENDER_FAILED',
+        summary: 'Failed to render contract types',
+        why: error instanceof Error ? error.message : String(error),
+        cause: error,
+      });
+    }
+  }
+
+  private emitArtifacts(
+    contract: Contract,
+    resolveImportSpecifier: ImportSpecifierResolver,
+  ): ReturnType<typeof emitContractArtifacts> {
+    const familyInstance = this.familyInstance;
+    if (!familyInstance) {
+      throw new InternalError('Family instance was not initialized. This is a bug.');
+    }
+    const { contractSerializer } = this.options.target;
+    return emitContractArtifacts(contract, this.stack!, this.options.family.emission, {
+      serializeContract: (c) => contractSerializer.serializeContract(c),
+      deserializeContract: (json) => familyInstance.deserializeContract(json),
+      resolveImportSpecifier,
+      ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
+      ...ifDefined('sortStorage', contractSerializer.sortStorage),
+      ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),
+    });
   }
 }

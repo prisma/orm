@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { LedgerEntryRecord } from '@internal/contract/types';
 import type {
   AggregateContractSpace,
@@ -8,13 +9,14 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, Result } from '@prisma/cli-engine/protocol';
-import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
+import { type CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
 import type {
   MigrationStatusResult,
   MigrationStatusSpace,
   StatusDiagnosticJson,
 } from '../../commands/json/schemas';
 import { createControlClient } from '../../control-api/client';
+import { errorFromCaught } from '../../control-api/operations/caught-errors';
 import {
   buildReadAggregate,
   loadContractRawSafely,
@@ -38,7 +40,7 @@ import {
 } from '../../control-api/operations/migration-status-overlay';
 import { resolveContractRef } from '../../control-api/operations/ref-resolution';
 import { readMigrationRefs } from '../../control-api/operations/refs';
-import { errorUnexpected, requireLiveDatabase } from '../../utils/cli-errors';
+import { requireLiveDatabase } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl, readContractEnvelope } from '../../utils/command-helpers';
 import { renderMigrationGraphLegend } from '../../utils/formatters/migration-graph-labels';
 import { TONE_MIGRATION_GRAPH_PALETTE } from '../../utils/formatters/migration-graph-palette';
@@ -51,7 +53,6 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';
@@ -101,11 +102,9 @@ async function readDatabaseState(inputs: {
   } catch (error) {
     return notOk(
       normalizeError(
-        CliStructuredError.is(error)
-          ? error
-          : errorUnexpected(error instanceof Error ? error.message : String(error), {
-              why: `Failed to read database state: ${error instanceof Error ? error.message : String(error)}`,
-            }),
+        errorFromCaught(error, (message) => `Failed to read database state: ${message}`, {
+          connection: typeof inputs.connection === 'string' ? inputs.connection : undefined,
+        }),
       ),
     );
   } finally {
@@ -244,7 +243,7 @@ export const migrationStatusCommand = defineOrmCommand({
   },
   needs: { config: ormConfigSection },
   handler: async (args, ctx) => {
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
     const dbConnection = args.flags.db ?? ctx.config.db?.connection;
     const hasDriver = ctx.config.driver !== undefined;
     const usingFromOverride = args.flags.from !== undefined;
@@ -261,7 +260,7 @@ export const migrationStatusCommand = defineOrmCommand({
       }
     }
 
-    const refsResult = await readMigrationRefs(appRefsDirFor(ctx.config, ctx.cwd));
+    const refsResult = await readMigrationRefs(appRefsDirFor(ctx.config));
     if (!refsResult.ok) {
       return notOk(normalizeError(refsResult.failure));
     }
@@ -276,7 +275,7 @@ export const migrationStatusCommand = defineOrmCommand({
     const { aggregate, contractHash } = loaded.value;
 
     const contractConfig = {
-      contract: ifDefined('output', contractPathFor(ctx.config, ctx.cwd)),
+      contract: ifDefined('output', contractPathFor(ctx.config)),
     };
     try {
       await readContractEnvelope(contractConfig);

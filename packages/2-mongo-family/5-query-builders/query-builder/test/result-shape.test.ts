@@ -35,11 +35,86 @@ describe('contractModelToMongoResultShape', () => {
     });
   });
 
-  it('maps value-object field to unknown', () => {
+  it('maps a value-object field to a document of its own fields, nested value objects too', () => {
+    const namespace = contract.domain.namespaces.__unbound__!;
+    const shape = contractModelToMongoResultShape(namespace.models['Customer'], {
+      valueObjects: namespace.valueObjects,
+    });
+    if (shape.kind !== 'document') throw new Error('expected document');
+    const address = {
+      street: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+      city: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+      zip: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true },
+      geo: {
+        kind: 'document',
+        nullable: false,
+        fields: {
+          lat: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false },
+          lng: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false },
+        },
+      },
+    };
+    expect({ address: shape.fields['address'], workAddress: shape.fields['workAddress'] }).toEqual({
+      address: { kind: 'document', nullable: false, fields: address },
+      workAddress: { kind: 'document', nullable: true, fields: address },
+    });
+  });
+
+  it('maps a list of value objects to an array of documents', () => {
+    const shape = contractFieldToMongoFieldShape(
+      { type: { kind: 'valueObject', name: 'Point' }, nullable: false, many: true },
+      {
+        Point: {
+          fields: { x: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false } },
+        },
+      },
+    );
+    expect(shape).toEqual({
+      kind: 'array',
+      nullable: false,
+      element: {
+        kind: 'document',
+        nullable: false,
+        fields: { x: { kind: 'leaf', codecId: 'mongo/double@1', nullable: false } },
+      },
+    });
+  });
+
+  it('stops at a value object that contains itself', () => {
+    const shape = contractFieldToMongoFieldShape(
+      { type: { kind: 'valueObject', name: 'Node' }, nullable: false },
+      {
+        Node: {
+          fields: {
+            label: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+            child: { type: { kind: 'valueObject', name: 'Node' }, nullable: true },
+          },
+        },
+      },
+    );
+    expect(shape).toEqual({
+      kind: 'document',
+      nullable: false,
+      fields: {
+        label: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+        child: { kind: 'unknown' },
+      },
+    });
+  });
+
+  it('maps a value-object field to unknown when no value objects are given', () => {
     const model = contract.domain.namespaces.__unbound__!.models['Customer'];
     const shape = contractModelToMongoResultShape(model);
     if (shape.kind !== 'document') throw new Error('expected document');
     expect(shape.fields['address']?.kind).toBe('unknown');
+  });
+
+  it('describes an included relation with the shape it is given', () => {
+    const model = contract.domain.namespaces.__unbound__!.models['Order'];
+    const included = { kind: 'leaf', codecId: 'mongo/string@1', nullable: true } as const;
+    const shape = contractModelToMongoResultShape(model, { includes: { customer: included } });
+    if (shape.kind !== 'document') throw new Error('expected document');
+    expect(shape.fields['customer']).toEqual(included);
   });
 
   it('restricts fields with selection', () => {

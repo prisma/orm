@@ -1,0 +1,297 @@
+{
+  "schemaVersion": "1",
+  "targetFamily": "sql",
+  "target": "postgres",
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "roots": {
+    "t": {
+      "model": "T",
+      "namespace": "public"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "T": {
+            "fields": {
+              "active": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/bool@1",
+                  "kind": "scalar"
+                }
+              },
+              "count": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "docs": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "meta": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/jsonb@1",
+                  "kind": "scalar"
+                }
+              },
+              "name": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
+              "price": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/numeric@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                }
+              },
+              "ratio": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/float8@1",
+                  "kind": "scalar"
+                }
+              },
+              "scores": {
+                "many": true,
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "small": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int2@1",
+                  "kind": "scalar"
+                }
+              }
+            },
+            "relations": {},
+            "storage": {
+              "fields": {
+                "active": {
+                  "column": "active"
+                },
+                "count": {
+                  "column": "count"
+                },
+                "docs": {
+                  "column": "docs"
+                },
+                "id": {
+                  "column": "id"
+                },
+                "meta": {
+                  "column": "meta"
+                },
+                "name": {
+                  "column": "name"
+                },
+                "price": {
+                  "column": "price"
+                },
+                "ratio": {
+                  "column": "ratio"
+                },
+                "scores": {
+                  "column": "scores"
+                },
+                "small": {
+                  "column": "small"
+                }
+              },
+              "namespaceId": "public",
+              "table": "t"
+            }
+          }
+        }
+      }
+    }
+  },
+  "storage": {
+    "namespaces": {
+      "public": {
+        "entries": {
+          "table": {
+            "t": {
+              "checks": [
+                {
+                  "expression": "array_position(\"docs\", NULL) IS NULL",
+                  "name": "t_docs_elem_not_null_3ecbeb56",
+                  "prefix": "t_docs_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"scores\", NULL) IS NULL",
+                  "name": "t_scores_elem_not_null_0d0de0bd",
+                  "prefix": "t_scores_elem_not_null"
+                }
+              ],
+              "columns": {
+                "active": {
+                  "codecId": "pg/bool@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  },
+                  "nativeType": "bool",
+                  "nullable": false
+                },
+                "count": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 100000
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "docs": {
+                  "codecId": "pg/jsonb@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": [{}, []]
+                  },
+                  "many": true,
+                  "nativeType": "jsonb",
+                  "nullable": false
+                },
+                "id": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "expression": "autoincrement()",
+                    "kind": "function"
+                  },
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "meta": {
+                  "codecId": "pg/jsonb@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": {
+                      "plan": "free",
+                      "seats": 1
+                    }
+                  },
+                  "nativeType": "jsonb",
+                  "nullable": false
+                },
+                "name": {
+                  "codecId": "pg/text@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "anonymous"
+                  },
+                  "nativeType": "text",
+                  "nullable": false
+                },
+                "price": {
+                  "codecId": "pg/numeric@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": "1.50"
+                  },
+                  "nativeType": "numeric",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 10,
+                    "scale": 2
+                  }
+                },
+                "ratio": {
+                  "codecId": "pg/float8@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 1.5
+                  },
+                  "nativeType": "float8",
+                  "nullable": false
+                },
+                "scores": {
+                  "codecId": "pg/int4@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": [1, 2]
+                  },
+                  "many": true,
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "small": {
+                  "codecId": "pg/int2@1",
+                  "default": {
+                    "kind": "literal",
+                    "value": 100
+                  },
+                  "nativeType": "int2",
+                  "nullable": false
+                }
+              },
+              "foreignKeys": [],
+              "indexes": [],
+              "primaryKey": {
+                "columns": ["id"]
+              },
+              "uniques": []
+            }
+          }
+        },
+        "id": "public"
+      }
+    },
+    "storageHash": "c91c217ab456dda315f745cf463fbb656b2af3bc48d42ea9ee3aba401f74c34e"
+  },
+  "capabilities": {
+    "postgres": {
+      "distinctOn": true,
+      "jsonAgg": true,
+      "lateral": true,
+      "limit": true,
+      "orderBy": true,
+      "returning": true
+    },
+    "sql": {
+      "checkConstraint": true,
+      "defaultInInsert": true,
+      "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
+      "lateral": true,
+      "returning": true,
+      "scalarList": true
+    }
+  },
+  "extensions": {},
+  "meta": {},
+  "_generated": {
+    "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
+  }
+}

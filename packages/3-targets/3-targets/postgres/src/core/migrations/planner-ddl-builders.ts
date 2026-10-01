@@ -2,9 +2,9 @@ import type { CodecControlHooks } from '@internal/family-sql/control';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { isPgEnumParams } from '../codecs';
+import { postgresDateTimeDdlText } from '../date-time-ddl-text';
 import { postgresError } from '../errors';
-import { escapeLiteral, quoteIdentifier, quoteQualifiedName } from '../sql-utils';
-import type { PostgresColumnDefault } from '../types';
+import { escapeLiteral, quoteQualifiedName } from '../sql-utils';
 import { resolveColumnTypeMetadata } from './planner-type-resolution';
 
 /**
@@ -26,22 +26,6 @@ function assertSafeNativeType(nativeType: string): void {
 }
 
 /**
- * Sanity check against accidental SQL injection from malformed contract files.
- * Rejects semicolons, SQL comment tokens, and dollar-quoting.
- * Not a comprehensive security boundary — the contract is developer-authored.
- */
-function assertSafeDefaultExpression(expression: string): void {
-  if (expression.includes(';') || /--|\/\*|\$\$|\bSELECT\b/i.test(expression)) {
-    throw postgresError(
-      'CONTRACT.DEFAULT_INVALID',
-      `Unsafe default expression in contract: "${expression}". ` +
-        'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
-      { meta: { expression } },
-    );
-  }
-}
-
-/**
  * Renders the SQL type for a column in DDL context.
  *
  * @param allowPseudoTypes - When true (default), autoincrement integer columns
@@ -49,7 +33,10 @@ function assertSafeDefaultExpression(expression: string): void {
  *   like ALTER COLUMN TYPE where pseudo-types are invalid.
  */
 export function buildColumnTypeSql(
-  column: StorageColumn,
+  column: Pick<
+    StorageColumn,
+    'nativeType' | 'codecId' | 'many' | 'typeParams' | 'typeRef' | 'default'
+  >,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,
   storageTypes: Record<string, StorageTypeInstance> = {},
   allowPseudoTypes = true,
@@ -135,45 +122,32 @@ function expandParameterizedTypeSql(
   return expanded !== column.nativeType ? expanded : null;
 }
 
-/** Autoincrement columns use SERIAL types, so this returns empty for them. */
-export function buildColumnDefaultSql(
-  columnDefault: PostgresColumnDefault | undefined,
-  column?: Pick<StorageColumn, 'many' | 'nativeType'>,
-): string {
-  if (!columnDefault) {
-    return '';
-  }
+/**
+ * The column a default is written for: its type as SQL, whether it is a list, and its data type,
+ * which decides the text a date or time value is written as. The value arrives in canonical form.
+ */
+type DefaultColumn = Pick<StorageColumn, 'many' | 'nativeType'> & {
+  readonly dataTypeId?: string | undefined;
+};
 
-  switch (columnDefault.kind) {
-    case 'literal':
-      return `DEFAULT ${renderDefaultLiteral(columnDefault.value, column)}`;
-    case 'function': {
-      if (columnDefault.expression === 'autoincrement()') {
-        return '';
-      }
-      assertSafeDefaultExpression(columnDefault.expression);
-      return `DEFAULT (${columnDefault.expression})`;
-    }
-    case 'sequence':
-      return `DEFAULT nextval('${escapeLiteral(quoteIdentifier(columnDefault.name))}'::regclass)`;
+export function renderDefaultLiteral(value: unknown, column?: DefaultColumn): string {
+  if (column?.many && Array.isArray(value)) {
+    return renderArrayLiteralDefault(value, column.nativeType, column.dataTypeId);
   }
+  const isJsonColumn = column?.nativeType === 'json' || column?.nativeType === 'jsonb';
+  if (isJsonColumn && typeof value === 'object' && value !== null && !(value instanceof Date)) {
+    return `'${escapeLiteral(JSON.stringify(value))}'::${column.nativeType}`;
+  }
+  return renderScalarLiteral(value, column?.dataTypeId);
 }
 
-export function renderDefaultLiteral(
-  value: unknown,
-  column?: Pick<StorageColumn, 'many' | 'nativeType'>,
-): string {
-  const isJsonColumn = column?.nativeType === 'json' || column?.nativeType === 'jsonb';
-
-  if (column?.many && Array.isArray(value)) {
-    return renderArrayLiteralDefault(value);
-  }
-
+/** A date or time value is written through the one function every DDL path uses for it. */
+function renderScalarLiteral(value: unknown, dataTypeId: string | undefined): string {
   if (value instanceof Date) {
     return `'${escapeLiteral(value.toISOString())}'`;
   }
   if (typeof value === 'string') {
-    return `'${escapeLiteral(value)}'`;
+    return `'${escapeLiteral(postgresDateTimeDdlText(value, dataTypeId))}'`;
   }
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
@@ -181,17 +155,25 @@ export function renderDefaultLiteral(
   if (value === null) {
     return 'NULL';
   }
-  const json = JSON.stringify(value);
-  if (isJsonColumn) {
-    return `'${escapeLiteral(json)}'::${column.nativeType}`;
-  }
-  return `'${escapeLiteral(json)}'`;
+  return `'${escapeLiteral(JSON.stringify(value))}'`;
 }
 
-function renderArrayLiteralDefault(elements: unknown[]): string {
+/**
+ * An `ARRAY[...]` of quoted elements has type `text[]`, which Postgres does not assign to a list of
+ * numbers, decimals, timestamps or enums, so the constructor is cast to the list type. Each element
+ * is the text Postgres reads for its type: an `int8` or `numeric` value as decimal text, a date or
+ * time value in its type's canonical form. `nativeType` is the element type or the list type,
+ * written as SQL, so a user-defined type name arrives already quoted.
+ */
+function renderArrayLiteralDefault(
+  elements: unknown[],
+  nativeType: string,
+  dataTypeId: string | undefined,
+): string {
   if (elements.length === 0) {
     return "'{}'";
   }
-  const rendered = elements.map((el) => renderDefaultLiteral(el)).join(', ');
-  return `ARRAY[${rendered}]`;
+  const rendered = `ARRAY[${elements.map((el) => renderScalarLiteral(el, dataTypeId)).join(', ')}]`;
+  if (nativeType === '') return rendered;
+  return `${rendered}::${nativeType.endsWith('[]') ? nativeType : `${nativeType}[]`}`;
 }

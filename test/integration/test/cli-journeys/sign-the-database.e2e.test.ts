@@ -3,9 +3,10 @@
  *
  * First half: a database created "by another tool" carries an expression index, a
  * partial index, a unique expression index, and two RLS policies (one
- * PERMISSIVE, one RESTRICTIVE) on an RLS-enabled table. `contract infer` →
- * emit → `db verify` reports ZERO issues → `db update --dry-run` plans ZERO
- * operations.
+ * PERMISSIVE, one RESTRICTIVE) on an RLS-enabled table. `db sign` against the
+ * base contract is refused and suggests changing either side; then
+ * `contract infer` → emit → `db verify` reports ZERO issues →
+ * `db update --dry-run` plans ZERO operations.
  *
  * Second half: from that signed contract, one index and one policy transition
  * from `map:` to the wire spelling (bodies verbatim) → the widening plan
@@ -107,13 +108,30 @@ describe('sign a database this toolchain has never seen, then transition to wire
   let inferredPsl: string;
 
   it(
-    'infer → emit → verify zero issues → sign → dry-run zero ops',
+    'sign refused → infer → emit → verify zero issues → sign → dry-run zero ops',
     async () => {
       ctx = setupJourney({
         connectionString: db.connectionString,
         createTempDir,
         contractMode: 'psl',
       });
+
+      const emitBase = await runContractEmit(ctx);
+      expect(emitBase.exitCode, `2.0: emit base\n${stripAnsi(emitBase.stderr)}`).toBe(0);
+      const refused = await runDbSign(ctx, ['--json']);
+      expect(refused.exitCode, `2.0: db sign refused\n${stripAnsi(refused.stderr)}`).toBe(4);
+      expect(refused.presented?.diagnostics[0]?.nextActions, '2.0: next actions').toEqual([
+        {
+          kind: 'run-command',
+          label: 'Change the database to match the contract, then sign again',
+          command: 'prisma-test db update',
+        },
+        {
+          kind: 'user-choice',
+          label:
+            'Or change the contract source to describe the database as it is, re-run contract emit, then sign again',
+        },
+      ]);
 
       // Infer captures the full surface.
       const infer = await runContractInfer(ctx);

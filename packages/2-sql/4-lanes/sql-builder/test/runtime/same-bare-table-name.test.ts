@@ -1,3 +1,4 @@
+import type { MutationDefaultsOptions } from '@internal/framework-components/runtime';
 import type {
   InsertAst,
   ProjectionItem,
@@ -135,17 +136,13 @@ describe('same bare table name across namespaces', () => {
   // builder forwarded `namespace`, the matcher saw `namespace === undefined` and
   // either applied the wrong namespace's default or none at all.
   function namespacedDefaultsDb() {
-    const applyMutationDefaults = (options: {
-      readonly table: string;
-      readonly namespace?: string;
-      readonly values: Record<string, unknown>;
-    }) => {
-      if (options.table !== 'users') return [];
+    const applyMutationDefaults = (options: MutationDefaultsOptions) => {
+      if (options.entry !== 'users') return [];
       if (options.namespace === 'public' && !('email_addr' in options.values)) {
-        return [{ column: 'email_addr', value: 'public-default' }];
+        return [{ field: 'email_addr', value: 'public-default' }];
       }
       if (options.namespace === 'auth' && !('token_col' in options.values)) {
-        return [{ column: 'token_col', value: 'auth-default' }];
+        return [{ field: 'token_col', value: 'auth-default' }];
       }
       return [];
     };

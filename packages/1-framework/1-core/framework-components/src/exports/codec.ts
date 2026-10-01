@@ -8,17 +8,23 @@
 
 export type { Codec } from '../shared/codec';
 export { CodecImpl } from '../shared/codec';
-export type { AnyCodecDescriptor, CodecDescriptor } from '../shared/codec-descriptor';
-export { CodecDescriptorImpl } from '../shared/codec-descriptor';
+export type {
+  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
+  CodecDescriptor,
+  CodecDescriptorTemplate,
+} from '../shared/codec-descriptor';
+export { CodecDescriptorImpl, CodecDescriptorTemplateImpl } from '../shared/codec-descriptor';
 export type {
   CodecCallContext,
   CodecInstanceContext,
   CodecLookup,
+  CodecLookupWithDescriptors,
   CodecRef,
   CodecRegistry,
   CodecTrait,
 } from '../shared/codec-types';
-export { emptyCodecLookup, voidParamsSchema } from '../shared/codec-types';
+export { emptyCodecLookup } from '../shared/codec-types';
 export type {
   ColumnHelperFor,
   ColumnHelperForStrict,
@@ -26,9 +32,41 @@ export type {
   ColumnTypeDescriptor,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
+export type {
+  Cast,
+  DataType,
+  DataTypeId,
+  DataTypeLookup,
+  DataTypeSpec,
+  ListCast,
+  ToCanonicalForm,
+} from '../shared/data-type';
+export {
+  createDataTypeLookup,
+  dataType,
+  dataTypeId,
+} from '../shared/data-type';
+export type { BigIntRange, IntegerRange } from '../shared/decode-json';
+export {
+  decodeJsonBoolean,
+  decodeJsonFloat,
+  decodeJsonInteger,
+  decodeJsonIntegerText,
+  decodeJsonMatching,
+  decodeJsonString,
+  encodeJsonFloat,
+  INT32_RANGE,
+  INT64_RANGE,
+  isIntegerIn,
+  isNonFiniteText,
+  refuseJsonValue,
+  SAFE_INTEGER_BIGINT_RANGE,
+  SAFE_INTEGER_RANGE,
+} from '../shared/decode-json';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,
+  codecForRef,
   materializeCodec,
   resolveCodecDescriptorOrThrow,
   validateCodecTypeParams,

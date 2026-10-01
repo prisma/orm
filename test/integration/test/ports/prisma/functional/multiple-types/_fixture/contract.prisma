@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `multiple-types`
 // (packages/client/tests/functional/multiple-types, postgres matrix entry):
 //
@@ -22,4 +24,5 @@ model TestModel {
   bool   Boolean?
   dt     DateTime?
   dec    Decimal?
+  @@map("testModel")
 }

@@ -1,8 +1,8 @@
 import type { CodecRegistry } from '@internal/framework-components/codec';
 import type { AnySqliteCodecDescriptor } from '@internal/target-sqlite/codec-descriptor';
+import type { SqliteCodecRegistry } from '@internal/target-sqlite/codecs';
 import { createSqliteAdapter } from '../src/core/adapter';
 import { SqliteControlAdapter } from '../src/core/control-adapter';
-import type { SqliteCodecRegistry } from '../src/core/types';
 
 declare const descriptor: AnySqliteCodecDescriptor;
 declare const coherentRegistry: SqliteCodecRegistry;

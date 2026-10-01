@@ -1,9 +1,9 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { positional } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefDeleteResult } from '../../control-api/operations/ref';
 import { executeRefDeleteCommand } from '../../control-api/operations/ref';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 

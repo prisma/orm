@@ -1,0 +1,14 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id       Int  @id
+  authorId Int  @ignore
+  author   User @relation(fields: [authorId], references: [id])
+}

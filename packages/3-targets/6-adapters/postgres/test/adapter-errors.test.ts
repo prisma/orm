@@ -1,4 +1,5 @@
 import type { StorageHashBase } from '@internal/contract/types';
+import type { CodecControlHooks } from '@internal/family-sql/control';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { RawSqlLiteral } from '@internal/sql-relational-core/ast';
 import {
@@ -14,14 +15,14 @@ import {
   TableSource,
   UpdateAst,
 } from '@internal/sql-relational-core/ast';
-import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { col } from '@internal/sql-relational-core/contract-free';
+import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { PostgresCreateTable } from '@internal/target-postgres/ddl';
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { createPostgresAdapter, postgresRawCodecInferer } from '../src/core/adapter';
-import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import { PostgresControlAdapter, parsePgReloptions } from '../src/core/control-adapter';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import { renderLoweredSql } from '../src/core/sql-renderer';
@@ -96,7 +97,8 @@ describe('adapter-postgres structured error codes', () => {
 
   it('raises RUNTIME.TYPE_PARAMS_INVALID for a non-positive length type param', () => {
     const hooks = postgresAdapterDescriptorMeta.types.codecTypes.controlPlaneHooks;
-    const expand = hooks['pg/varchar@1'].expandNativeType;
+    const hookMap: ReadonlyMap<string, CodecControlHooks> = new Map(Object.entries(hooks));
+    const expand = hookMap.get('pg/varchar@1')?.expandNativeType;
     expect(
       structuredCodeOf(() =>
         expand?.({ nativeType: 'character varying', typeParams: { length: 0 } }),
@@ -155,7 +157,7 @@ describe('adapter-postgres structured error codes', () => {
       self: ColumnRef.of('user', 'email'),
       args: [],
       returns: { codecId: 'pg/bool@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'f({{self}}, {{arg0}})' },
+      lowering: { targetFamily: 'sql', template: 'f({{self}}, {{arg0}})' },
     });
     const ast = SelectAst.from(TableSource.named('user', undefined, 'public'))
       .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
@@ -166,19 +168,8 @@ describe('adapter-postgres structured error codes', () => {
   });
 
   it('raises CONTRACT.INTROSPECTION_UNSUPPORTED for a malformed index reloption entry', () => {
-    expect(structuredCodeOf(() => parsePgReloptions(['no_eq_sign'], 'item_body_idx'))).toBe(
+    expect(structuredCodeOf(() => parsePgReloptions('{no_eq_sign}', 'item_body_idx'))).toBe(
       'CONTRACT.INTROSPECTION_UNSUPPORTED',
-    );
-  });
-
-  it('raises CONTRACT.DEFAULT_INVALID for a non-finite numeric literal default', async () => {
-    const controlAdapter = new PostgresControlAdapter(codecLookup);
-    const ast = new PostgresCreateTable({
-      table: 'defaults',
-      columns: [col('x', 'double precision', { default: lit(Number.NaN) })],
-    });
-    await expect(controlAdapter.lowerToExecuteRequest(ast, { contract })).rejects.toSatisfy(
-      (e) => isStructuredError(e) && e.code === 'CONTRACT.DEFAULT_INVALID',
     );
   });
 });

@@ -6,7 +6,7 @@ export type ResolvedColumnTypeMetadata = Pick<
 >;
 
 export function resolveColumnTypeMetadata(
-  column: StorageColumn,
+  column: Pick<StorageColumn, 'nativeType' | 'codecId' | 'typeParams' | 'typeRef'>,
   storageTypes: Readonly<Record<string, StorageTypeInstance>>,
 ): ResolvedColumnTypeMetadata {
   if (!column.typeRef) {

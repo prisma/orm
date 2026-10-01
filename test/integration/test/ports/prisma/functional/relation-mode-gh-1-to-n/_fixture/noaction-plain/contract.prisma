@@ -1,18 +1,23 @@
+// use prisma-8
+
 model UserOneToMany {
   id            String @id
   posts         PostOneToMany[]
   postOptionals PostOptionalOneToMany[]
   enabled       Boolean?
+  @@map("userOneToMany")
 }
 
 model PostOneToMany {
   id       String        @id
   author   UserOneToMany @relation(fields: [authorId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   authorId String
+  @@map("postOneToMany")
 }
 
 model PostOptionalOneToMany {
   id       String         @id
   author   UserOneToMany? @relation(fields: [authorId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   authorId String?
+  @@map("postOptionalOneToMany")
 }

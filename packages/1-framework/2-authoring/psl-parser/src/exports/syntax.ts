@@ -1,7 +1,7 @@
 export type { ParseDiagnostic, ParseResult } from '../parse';
 export { parse } from '../parse';
 export type { Position, Range } from '../source-file';
-export { SourceFile } from '../source-file';
+export { PslSources, SourceFile } from '../source-file';
 export {
   AttributeArgListAst,
   FieldAttributeAst,
@@ -25,17 +25,20 @@ export {
   NamespaceDeclarationAst,
   TypesBlockAst,
 } from '../syntax/ast/declarations';
-export type { ExpressionAst } from '../syntax/ast/expressions';
+export type { ExpressionAst, StringLiteralQuote } from '../syntax/ast/expressions';
 export {
   ArrayLiteralAst,
   AttributeArgAst,
   BooleanLiteralExprAst,
   castExpression,
+  dottedPathsIn,
   FunctionCallAst,
   NumberLiteralExprAst,
   ObjectFieldAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   StringLiteralExprAst,
+  TaggedLiteralExprAst,
 } from '../syntax/ast/expressions';
 // AST wrappers
 export { IdentifierAst } from '../syntax/ast/identifier';

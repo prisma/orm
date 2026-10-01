@@ -144,6 +144,16 @@
                 "nullable": true,
                 "type": {
                   "codecId": "pg/vector@1",
+                  "kind": "scalar",
+                  "typeParams": {
+                    "length": 1536
+                  }
+                }
+              },
+              "expiresAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -256,6 +266,9 @@
                 },
                 "embedding": {
                   "column": "embedding"
+                },
+                "expiresAt": {
+                  "column": "expiresAt"
                 },
                 "id": {
                   "column": "id"
@@ -781,6 +794,15 @@
                   "nullable": true,
                   "typeRef": "Embedding1536"
                 },
+                "expiresAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "(now() + '7 days'::interval)",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
@@ -846,6 +868,13 @@
                 }
               ],
               "indexes": [
+                {
+                  "expression": "to_tsvector('english', \"title\")",
+                  "name": "post_title_search_724b05e5",
+                  "prefix": "post_title_search",
+                  "type": "gin",
+                  "unique": false
+                },
                 {
                   "columns": [
                     "userId"
@@ -1126,7 +1155,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8abaa3b97115767c5fee67bcd90de0cec3ac1f14a59875c2f5d22887ba435f89",
+    "storageHash": "06b2dc7bf45a1c5bf00ae3a80653b88fc0146101673e2a029b2c7db290833284",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",
@@ -1139,7 +1168,7 @@
     }
   },
   "execution": {
-    "executionHash": "e592be8e097b3e2b4958da0b3ed54265d1bfa0523295fa03e03af2364cccbd08",
+    "executionHash": "eb9bffd4c01945792e83de10d571b20df42f5bf40405ec8c642c6592f7dc4655",
     "mutations": {
       "defaults": [
         {
@@ -1148,9 +1177,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "post"
+            "entry": "post",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1159,9 +1188,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "tag"
+            "entry": "tag",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1170,9 +1199,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "task"
+            "entry": "task",
+            "field": "id",
+            "namespace": "public"
           }
         },
         {
@@ -1181,9 +1210,9 @@
             "kind": "generator"
           },
           "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "user"
+            "entry": "user",
+            "field": "id",
+            "namespace": "public"
           }
         }
       ]
@@ -1203,6 +1232,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

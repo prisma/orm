@@ -1,25 +1,30 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeCtx,
-  FieldAttributeCtx,
   FieldAttributeSpecFactory,
   FieldSymbol,
-  ModelAttributeCtx,
   ModelAttributeSpecFactory,
   ModelSymbol,
+  Param,
 } from '@internal/psl-parser';
+import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
+import { getAttribute } from '../src/psl-attribute-parsing';
 import {
+  createSqlBinder,
   fieldSpecContext,
-  findFieldAttributeNode,
   interpretFieldAttribute,
+  interpretModelAttribute,
   modelSpecContext,
   sqlAttributeSpecs,
 } from '../src/sql-attribute-specs';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import { buildSymbolTableInput, createBuiltinLikeControlMutationDefaults } from './fixtures';
 
-const controlMutationDefaults = createBuiltinLikeControlMutationDefaults().defaultFunctionRegistry;
+const controlMutationDefaults = {
+  ...createBuiltinLikeControlMutationDefaults(),
+  dataTypeEntries: fixtureDataTypeSupport.entries,
+};
 
 function project(schema: string, modelName: string) {
   const input = buildSymbolTableInput(schema);
@@ -34,35 +39,6 @@ function field(model: ModelSymbol, name: string): FieldSymbol {
   return found;
 }
 
-interface ListMetadata<T, Ctx extends AttributeCtx> extends ArgType<readonly T[], Ctx> {
-  readonly kind: 'list';
-  readonly of: ArgType<T, Ctx>;
-  readonly allowEmpty: boolean;
-  readonly unique: boolean;
-}
-
-interface RecordMetadata<T, Ctx extends AttributeCtx> extends ArgType<Record<string, T>, Ctx> {
-  readonly kind: 'record';
-  readonly of: ArgType<T, Ctx>;
-}
-
-interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'oneOf';
-  readonly alternatives: readonly ArgType<unknown, Ctx>[];
-}
-
-interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
-  readonly kind: 'funcCall';
-  readonly name: string;
-  readonly signature: {
-    readonly positional?: readonly {
-      readonly key: string;
-      readonly type: ArgType<unknown, AttributeCtx>;
-    }[];
-    readonly named?: Readonly<Record<string, ArgType<unknown, AttributeCtx>>>;
-  };
-}
-
 function positionalType<Ctx extends AttributeCtx>(spec: {
   readonly positional: readonly { readonly type: ArgType<unknown, Ctx> }[];
 }): ArgType<unknown, Ctx> {
@@ -72,59 +48,94 @@ function positionalType<Ctx extends AttributeCtx>(spec: {
 }
 
 function namedType<Ctx extends AttributeCtx>(
-  spec: { readonly named: Readonly<Record<string, ArgType<unknown, Ctx>>> },
+  spec: { readonly named: Readonly<Record<string, Param<unknown, Ctx>>> },
   key: string,
 ): ArgType<unknown, Ctx> {
   const type = spec.named[key];
   if (type === undefined) throw new Error(`spec declares named argument ${key}`);
+  return type.type;
+}
+
+function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
+  if (type.kind !== 'list') throw new Error('argument is a list');
   return type;
 }
 
-function listMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): ListMetadata<T, Ctx> {
-  if (type.kind !== 'list') throw new Error('argument is a list');
-  return type as unknown as ListMetadata<T, Ctx>;
-}
-
-function recordMetadata<T, Ctx extends AttributeCtx>(
-  type: ArgType<unknown, Ctx>,
-): RecordMetadata<T, Ctx> {
+function recordMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'record') throw new Error('argument is a record');
-  return type as unknown as RecordMetadata<T, Ctx>;
+  return type;
 }
 
-function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): OneOfMetadata<Ctx> {
+function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {
   if (type.kind !== 'oneOf') throw new Error('argument is oneOf');
-  return type as unknown as OneOfMetadata<Ctx>;
+  return type;
 }
 
 function interpretDefault(schema: string, fieldName: string) {
-  const { symbolTable, sourceFile, sourceId, model } = project(schema, 'Post');
+  const { symbolTable, sources, model } = project(schema, 'Post');
   const target = field(model, fieldName);
-  const node = findFieldAttributeNode(target, 'default');
+  const node = getAttribute(target.attributes, 'default')?.node;
   if (node === undefined) throw new Error('no @default on field');
-  const diagnostics: ContractSourceDiagnostic[] = [];
+  const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
+    symbols: symbolTable,
     node,
     spec: sqlAttributeSpecs.field.default(
-      fieldSpecContext({ symbols: symbolTable, model, field: target, controlMutationDefaults }),
+      fieldSpecContext({
+        symbols: symbolTable,
+        model,
+        field: target,
+        controlMutationDefaults,
+      }),
     ),
     model,
     field: target,
-    sourceFile,
-    sourceId,
+    sources,
+    binder: createSqlBinder({ symbolTable, sources }).binder,
     diagnostics,
   });
-  return { value, diagnostics };
+  return { value, diagnostics: diagnostics.toExternal() };
 }
+
+describe('checked base factory', () => {
+  it('returns the forward-declared local base identity', () => {
+    const input = buildSymbolTableInput(`model Base { id Int @id }
+namespace scoped {
+  model Variant { @@base(Base, "variant") }
+  model Base { id String @id }
+}`);
+    const namespace = input.symbolTable.topLevel.namespaces['scoped'];
+    const model = namespace?.models['Variant'];
+    if (!namespace || !model) throw new Error('missing variant');
+    const node = getAttribute(model.attributes, 'base')?.node;
+    if (!node) throw new Error('missing base attribute');
+    const diagnostics = createPslDiagnosticCollector(input.sources);
+    const value = interpretModelAttribute({
+      node,
+      symbols: input.symbolTable,
+      spec: sqlAttributeSpecs.model.base(),
+      model,
+      sources: input.sources,
+      binder: createSqlBinder({ symbolTable: input.symbolTable, sources: input.sources }).binder,
+      diagnostics,
+    });
+    expect(diagnostics.toExternal()).toEqual([]);
+    expect(value?.base.declaration).toBe(namespace.models['Base']);
+    expect(value?.base.namespace).toBe(namespace);
+    expect(value?.value).toBe('variant');
+  });
+});
 
 describe('sqlAttributeSpecs', () => {
   const { symbolTable, model } = project(
     'model Post {\n  id Int @id\n  tags String[]\n}\n',
     'Post',
   );
-  const modelCtx = modelSpecContext({ symbols: symbolTable, model, controlMutationDefaults });
+  const modelCtx = modelSpecContext({
+    symbols: symbolTable,
+    model,
+    controlMutationDefaults,
+  });
   const fieldCtx = fieldSpecContext({
     symbols: symbolTable,
     model,
@@ -197,8 +208,8 @@ describe('sqlAttributeSpecs', () => {
 
   it('exposes SQL relation field-reference metadata from the actual factory', () => {
     const spec = sqlAttributeSpecs.field.relation();
-    const fields = listMetadata<string, FieldAttributeCtx>(namedType(spec, 'fields'));
-    const references = listMetadata<string, FieldAttributeCtx>(namedType(spec, 'references'));
+    const fields = listMetadata(namedType(spec, 'fields'));
+    const references = listMetadata(namedType(spec, 'references'));
 
     expect(fields).toMatchObject({ kind: 'list', optional: true });
     expect(fields.of).toMatchObject({ kind: 'fieldRef' });
@@ -212,15 +223,11 @@ describe('sqlAttributeSpecs', () => {
   });
 
   it('exposes SQL model container metadata from actual factories', () => {
-    const idFields = listMetadata<string, ModelAttributeCtx>(
-      positionalType(sqlAttributeSpecs.model.id()),
-    );
+    const idFields = listMetadata(positionalType(sqlAttributeSpecs.model.id()));
     expect(idFields).toMatchObject({ kind: 'list', allowEmpty: false, unique: true });
     expect(idFields.of).toMatchObject({ kind: 'fieldRef' });
 
-    const options = recordMetadata<string, ModelAttributeCtx>(
-      namedType(sqlAttributeSpecs.model.index(), 'options'),
-    );
+    const options = recordMetadata(namedType(sqlAttributeSpecs.model.index(), 'options'));
     expect(options).toMatchObject({ kind: 'record', optional: true });
     expect(options.of).toMatchObject({ kind: 'str', value: undefined });
   });
@@ -253,12 +260,16 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
-      'funcCall',
+      // One tagged-literal arm per distinct tag documentation: the sql tags, then json.
+      'taggedLiteral',
+      'taggedLiteral',
+      // A codec such as `pg/vector@1` declares a list of element types, so a scalar column takes a
+      // list literal too; the codec's declaration decides whether one is accepted.
+      'list',
     ]);
-    const uuid = value.alternatives.find(
-      (alt): alt is FuncCallMetadata<FieldAttributeCtx> =>
-        alt.kind === 'funcCall' && 'name' in alt && alt.name === 'uuid',
-    );
+    const uuid = value.alternatives
+      .filter((alt) => alt.kind === 'funcCall')
+      .find((alt) => alt.name === 'uuid');
     if (uuid === undefined) throw new Error('uuid default function arm is present');
     const versionType = uuid.signature.positional?.[0]?.type;
     if (versionType === undefined) throw new Error('uuid version argument is present');
@@ -270,6 +281,21 @@ describe('sqlAttributeSpecs.field.default', () => {
     ]);
   });
 
+  it('omits the tagged-literal arm when no tag is registered', () => {
+    const noTags = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field: field(model, 'id'),
+      controlMutationDefaults: {
+        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+        dataTypeEntries: {},
+      },
+    });
+    const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
+    expect(value.alternatives.map((alt) => alt.kind)).not.toContain('taggedLiteral');
+    expect(value.label).not.toContain('`...`');
+  });
+
   it('exposes list default alternatives without hiding registry function calls', () => {
     const listCtx = fieldSpecContext({
       symbols: symbolTable,
@@ -279,12 +305,25 @@ describe('sqlAttributeSpecs.field.default', () => {
     });
     const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(listCtx)));
 
-    const listDefault = listMetadata<unknown, FieldAttributeCtx>(value.alternatives[0] ?? value);
+    const listDefault = listMetadata(value.alternatives[0]);
     expect(listDefault).toMatchObject({ kind: 'list' });
     expect(listDefault.of).toMatchObject({ kind: 'oneOf' });
     expect(
-      value.alternatives.slice(1).map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
-    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
+      value.alternatives.filter((alt) => alt.kind === 'funcCall').map((alt) => alt.name),
+    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']);
+    expect(value.alternatives.filter((alt) => alt.kind === 'taggedLiteral')).toMatchObject([
+      {
+        label: 'sql`...`',
+        tags: ['sql'],
+        documentation:
+          "A SQL expression in the target database's language. Prisma passes it to the database unchanged.",
+      },
+      {
+        label: 'json`...`',
+        tags: ['json'],
+        documentation: 'Reads the text as a JSON document and stores it as the default value.',
+      },
+    ]);
   });
 
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {
@@ -386,21 +425,21 @@ model Post {
     ]);
   });
 
-  it('accepts scalar literals on a scalar field', () => {
-    const schema = 'model Post {\n  id Int @id\n  views Int @default(3)\n}\n';
-    expect(interpretDefault(schema, 'views')).toEqual({ value: { value: 3 }, diagnostics: [] });
+  it('accepts scalar literals on a scalar field, keeping a number as written', () => {
+    const schema = 'model Post {\n  id Int @id\n  price Decimal @default(1.50)\n}\n';
+    expect(interpretDefault(schema, 'price')).toEqual({
+      value: { value: { text: '1.50' } },
+      diagnostics: [],
+    });
   });
 
-  it('accepts a list literal on a list field and rejects a list on a scalar field', () => {
+  it('accepts a list literal on a list field and on a scalar field, where the codec decides', () => {
     expect(
       interpretDefault('model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n', 'tags'),
     ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
-    const rejected = interpretDefault(
-      'model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n',
-      'tag',
-    );
-    expect(rejected.value).toBeUndefined();
-    expect(rejected.diagnostics).toHaveLength(1);
+    expect(
+      interpretDefault('model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n', 'tag'),
+    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
   });
 
   it('accepts a registered default function and rejects an unregistered one', () => {

@@ -18,10 +18,6 @@ import {
   resolveAuthoringTemplateValue,
   validateAuthoringHelperArguments,
 } from '../src/shared/framework-authoring';
-import type {
-  PslExtensionBlock,
-  PslExtensionBlockParamValue,
-} from '../src/shared/psl-extension-block';
 
 describe('authoring template resolution', () => {
   const typeConstructor = {
@@ -142,7 +138,7 @@ describe('authoring template resolution', () => {
         [{ kind: 'object', properties: { label: { kind: 'string' } } }],
         [{}],
       ),
-    ).toThrow(/Missing required authoring helper argument at field\.test\[0\]\.label/);
+    ).toThrow('Authoring helper argument at field.test[0].label is missing');
   });
 
   it('rejects malformed helper argument values', () => {
@@ -493,13 +489,31 @@ describe('authoring template resolution', () => {
         [{ kind: 'option', values: ['now'] }],
         ['later'],
       ),
-    ).toThrow(/Authoring helper argument at field\.test\[0\] must be one of: now/);
+    ).toThrow('Authoring helper argument at field.test[0] must be "now"; received "later"');
   });
 
   it('rejects a non-string value for an option-kind argument', () => {
     expect(() =>
       validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: ['now'] }], [42]),
-    ).toThrow(/Authoring helper argument at field\.test\[0\] must be one of: now/);
+    ).toThrow('Authoring helper argument at field.test[0] must be "now"; received 42');
+  });
+
+  it('says an option that lists no values takes none', () => {
+    expect(() =>
+      validateAuthoringHelperArguments('field.test', [{ kind: 'option', values: [] }], ['now']),
+    ).toThrow('Authoring helper argument at field.test[0] takes no value; received "now"');
+  });
+
+  it('names a named argument and lists every value an option takes', () => {
+    expect(() =>
+      validateAuthoringHelperArguments(
+        'temporal.timestamp',
+        [{ name: 'onCreate', kind: 'option', values: ['now', 'never'], optional: true }],
+        ['later'],
+      ),
+    ).toThrow(
+      'Argument "onCreate" of temporal.timestamp must be one of "now", "never"; received "later"',
+    );
   });
 
   it('rejects a missing required option-kind argument', () => {
@@ -509,7 +523,7 @@ describe('authoring template resolution', () => {
         [{ kind: 'option', values: ['now'] }],
         [undefined],
       ),
-    ).toThrow(/Missing required authoring helper argument at field\.test\[0\]/);
+    ).toThrow('Authoring helper argument at field.test[0] is missing');
   });
 
   it('allows an omitted optional option-kind argument', () => {
@@ -971,86 +985,47 @@ describe('collectScalarTypeConstructors', () => {
 });
 
 describe('classifyEnumMemberType', () => {
-  const testSpan = {
-    start: { offset: 0, line: 1, column: 1 },
-    end: { offset: 0, line: 1, column: 1 },
-  };
-
-  function testBlock(parameters: Record<string, PslExtensionBlockParamValue>): PslExtensionBlock {
-    return {
-      kind: 'enum',
-      keyword: 'enum',
-      name: 'TestEnum',
-      parameters,
-      blockAttributes: [],
-      attributes: {},
-      span: testSpan,
-    };
-  }
-
-  const bare: PslExtensionBlockParamValue = { kind: 'bare', span: testSpan };
-  const value = (raw: string): PslExtensionBlockParamValue => ({
-    kind: 'value',
-    raw,
-    span: testSpan,
-  });
-  const ref: PslExtensionBlockParamValue = { kind: 'ref', identifier: 'Foo', span: testSpan };
-  const option: PslExtensionBlockParamValue = { kind: 'option', token: 'Foo', span: testSpan };
-  const list: PslExtensionBlockParamValue = { kind: 'list', items: [], span: testSpan };
-
-  it('classifies all-bare members as text', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: bare, User: bare }))).toBe('text');
+  it('classifies all-bare members (undefined values) as text', () => {
+    expect(classifyEnumMemberType({ Admin: undefined, User: undefined })).toBe('text');
   });
 
-  it('classifies all-string-value members as text', () => {
-    expect(
-      classifyEnumMemberType(testBlock({ Admin: value('"admin"'), User: value('"user"') })),
-    ).toBe('text');
+  it('classifies all-string members as text', () => {
+    expect(classifyEnumMemberType({ Admin: 'admin', User: 'user' })).toBe('text');
   });
 
-  it('classifies a mix of bare and string-value members as text', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: bare, User: value('"user"') }))).toBe('text');
+  it('classifies a mix of bare and string members as text', () => {
+    expect(classifyEnumMemberType({ Admin: undefined, User: 'user' })).toBe('text');
   });
 
-  it('classifies all-integer-value members as int', () => {
-    expect(classifyEnumMemberType(testBlock({ Low: value('1'), High: value('10') }))).toBe('int');
+  it('classifies all-integer members as int', () => {
+    expect(classifyEnumMemberType({ Low: 1, High: 10 })).toBe('int');
   });
 
   it('returns null for a float value', () => {
-    expect(classifyEnumMemberType(testBlock({ Low: value('1.5') }))).toBeNull();
+    expect(classifyEnumMemberType({ Low: 1.5 })).toBeNull();
   });
 
   it('returns null for a boolean value', () => {
-    expect(classifyEnumMemberType(testBlock({ Flag: value('true') }))).toBeNull();
+    expect(classifyEnumMemberType({ Flag: true })).toBeNull();
+  });
+
+  it('returns null for an explicit null value', () => {
+    expect(classifyEnumMemberType({ Empty: null })).toBeNull();
   });
 
   it('returns null for a mix of string and integer values', () => {
-    expect(
-      classifyEnumMemberType(testBlock({ Low: value('1'), High: value('"high"') })),
-    ).toBeNull();
+    expect(classifyEnumMemberType({ Low: 1, High: 'high' })).toBeNull();
   });
 
   it('returns null for a mix of bare and integer values', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: bare, Low: value('1') }))).toBeNull();
+    expect(classifyEnumMemberType({ Admin: undefined, Low: 1 })).toBeNull();
   });
 
-  it('returns null for a ref parameter', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: ref }))).toBeNull();
-  });
-
-  it('returns null for an option parameter', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: option }))).toBeNull();
-  });
-
-  it('returns null for a list parameter', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: list }))).toBeNull();
-  });
-
-  it('returns null for invalid JSON in a value parameter', () => {
-    expect(classifyEnumMemberType(testBlock({ Admin: value('notjson') }))).toBeNull();
+  it('returns null for a structured value', () => {
+    expect(classifyEnumMemberType({ Admin: { nested: true } })).toBeNull();
   });
 
   it('returns null for an enum with no members', () => {
-    expect(classifyEnumMemberType(testBlock({}))).toBeNull();
+    expect(classifyEnumMemberType({})).toBeNull();
   });
 });

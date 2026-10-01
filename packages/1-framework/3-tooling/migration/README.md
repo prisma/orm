@@ -76,7 +76,7 @@ graph TD
 | `./graph` | `MigrationGraph`, `MigrationEdge` |
 | `./io` | `writeMigrationPackage`, `readMigrationPackage`, `readMigrationsDir`, `formatMigrationDirName` |
 | `./hash` | `computeMigrationHash`, `verifyMigrationHash` |
-| `./migration-graph` | `reconstructGraph`, `findLeaf`, `findPath`, `detectCycles`, `detectOrphans` |
+| `./migration-graph` | `reconstructGraph`, `findPath`, `detectCycles`, `detectOrphans` |
 | `./errors` | `MigrationToolsError` |
 | `./constants` | `EMPTY_CONTRACT_HASH` |
 

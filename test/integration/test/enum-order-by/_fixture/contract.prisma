@@ -1,3 +1,5 @@
+// use prisma-8
+
 native_enum TicketStatus {
   OPEN   = "open"
   CLOSED = "closed"

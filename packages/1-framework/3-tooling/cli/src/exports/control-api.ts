@@ -22,7 +22,7 @@ export { createControlClient } from '../control-api/client';
 export { enrichContract } from '../control-api/contract-enrichment';
 // Client-free operations backing the migration/db command surface
 // (TML-3173, consolidate-clis slice 1b).
-export { mapCaughtMigrationError } from '../control-api/operations/caught-errors';
+export { errorFromCaught } from '../control-api/operations/caught-errors';
 export { mapContractAtError } from '../control-api/operations/contract-at-errors';
 export { executeContractEmit } from '../control-api/operations/contract-emit';
 export {
@@ -69,6 +69,10 @@ export {
   refuseMissingInvariantPath,
   refuseUnknownInvariants,
 } from '../control-api/operations/invariants';
+export {
+  type ContractSourceFailure,
+  loadContractSource,
+} from '../control-api/operations/load-contract-source';
 export {
   type ExecuteMigrateShowPlanOptions,
   executeMigrateShowPlan,
@@ -119,12 +123,19 @@ export {
   type ContractIR,
   computeRefAdvancementName,
   executeRefAdvancement,
+  NO_REF_ADVANCEMENT,
+  preflightRefAdvancement,
   type RefAdvancementFields,
-  readContractIR,
-  resolveRefAdvancementFields,
 } from '../control-api/operations/ref-advancement';
 export { resolveContractRef, resolveMigrationRef } from '../control-api/operations/ref-resolution';
 export { readMigrationRefs } from '../control-api/operations/refs';
+export type {
+  RenderContractDtsFailure,
+  RenderContractDtsFailureCode,
+  RenderContractDtsOptions,
+  RenderContractDtsResult,
+  RenderContractDtsSuccess,
+} from '../control-api/render-contract-dts';
 // CLI-specific types
 export type {
   ContractEmitOptions,

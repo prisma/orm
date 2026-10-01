@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/15044 (postgres matrix entry; allProviders).
 //
@@ -26,12 +28,14 @@ model User {
   id         String       @id @default(cuid(2))
   name       String
   walletLink WalletLink[]
+  @@map("user")
 }
 
 model Wallet {
   id         String       @id @default(cuid(2))
   name       String
   walletLink WalletLink[]
+  @@map("wallet")
 }
 
 model WalletLink {
@@ -41,4 +45,5 @@ model WalletLink {
   user     User   @relation(fields: [userId], references: [id])
   walletId String
   userId   String
+  @@map("walletLink")
 }

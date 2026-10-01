@@ -1,8 +1,11 @@
+// use prisma-8
+
 model TestModel {
   id       Int      @id
   str      String
   str_list String[]
   children Child[]
+  @@map("testModel")
 }
 
 model Child {
@@ -11,4 +14,5 @@ model Child {
   str_list String[]
   testId   Int
   test     TestModel @relation(fields: [testId], references: [id])
+  @@map("child")
 }

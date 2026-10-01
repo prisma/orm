@@ -139,7 +139,7 @@ Legend:
 | Change / drop default | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`changes a column default`) |
 | Escaped-string default idempotency | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`round-trips a string default with an apostrophe`) |
 | Postgres array / json / bigint defaults | 🟡 | — | — | |
-| `dbgenerated(...)` defaults | 🟡 | 🟡 | — | |
+| `dbgenerated(...)` defaults | ❌ | ❌ | — | Removed; raw SQL defaults are `` sql`...` `` tagged literals and render as `DEFAULT (<expression>)` (`packages/3-targets/6-adapters/postgres/test/migrations/authored-default-rendering.test.ts`, `packages/3-targets/6-adapters/sqlite/test/plan-diff-defaults.test.ts`). |
 
 ## Migrations — native types
 

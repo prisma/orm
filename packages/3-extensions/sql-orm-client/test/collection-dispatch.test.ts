@@ -1,7 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/ast';
-import { describe, expect, it, vi } from 'vitest';
+import { InternalError } from '@internal/utils/internal-error';
+import { describe, expect, it, onTestFinished, vi } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import { dispatchCollectionRows } from '../src/collection-dispatch';
 import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
@@ -31,8 +32,8 @@ function includeFor(
     relatedTableName: relation.relatedTableName,
     relatedNamespaceId: relation.relatedNamespaceId,
     localTableName: relation.localTableName,
-    targetColumn: relation.targetColumn,
-    localColumn: relation.localColumn,
+    targetColumns: relation.targetColumns,
+    localColumns: relation.localColumns,
     cardinality: relation.cardinality,
     nested,
     scalar: undefined,
@@ -141,6 +142,112 @@ describe('collection-dispatch', () => {
     ]);
     // The point of the test: 1 execution, not N+1.
     expect(runtime.executions).toHaveLength(1);
+  });
+
+  it('reuses include column bindings across parents without retaining them across executions', async () => {
+    const contract = withEmittedSqlCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection
+      .select('name')
+      .include('posts', (posts) => posts.select('title', 'views'));
+    const viewsCodec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
+    if (!viewsCodec) throw new Error('Missing views codec');
+    const decodeJson = vi.spyOn(viewsCodec, 'decodeJson');
+    const forColumn = vi.spyOn(collection.ctx.context.contractCodecs, 'forColumn');
+
+    for (let execution = 0; execution < 2; execution++) {
+      runtime.setNextResults([
+        [
+          { name: 'Alice', posts: [{ title: null, views: 1 }] },
+          {
+            name: 'Bob',
+            posts: [
+              { title: 'B', views: 2 },
+              { title: 'C', views: 3 },
+            ],
+          },
+        ],
+      ]);
+      const rows = await dispatchCollectionRows<Record<string, unknown>>({
+        context: collection.ctx.context,
+        runtime,
+        state: scoped.state,
+        tableName: scoped.tableName,
+        namespaceId: 'public',
+        modelName: scoped.modelName,
+      }).toArray();
+      expect(rows).toEqual([
+        { name: 'Alice', posts: [{ title: null, views: 1 }] },
+        {
+          name: 'Bob',
+          posts: [
+            { title: 'B', views: 2 },
+            { title: 'C', views: 3 },
+          ],
+        },
+      ]);
+      expect(forColumn).toHaveBeenCalledTimes((execution + 1) * 2);
+      expect(decodeJson).toHaveBeenCalledTimes((execution + 1) * 3);
+    }
+    expect(forColumn.mock.calls).toEqual([
+      ['public', 'posts', 'views'],
+      ['public', 'posts', 'title'],
+      ['public', 'posts', 'views'],
+      ['public', 'posts', 'title'],
+    ]);
+  });
+
+  it('preserves failure details when a later included value fails synchronous JSON decoding', async () => {
+    const contract = withEmittedSqlCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('views'));
+    const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
+    if (!codec) throw new Error('Missing views codec');
+    const cause = new Error('invalid views');
+    const decodeJson = vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
+      if (value === 2) throw cause;
+      return value;
+    });
+    runtime.setNextResults([[{ name: 'Alice', posts: [{ views: 1 }, { views: 2 }] }]]);
+    await expect(
+      dispatchCollectionRows<Record<string, unknown>>({
+        context: collection.ctx.context,
+        runtime,
+        state: scoped.state,
+        tableName: scoped.tableName,
+        namespaceId: 'public',
+        modelName: scoped.modelName,
+      }).toArray(),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      details: { table: 'posts', column: 'views', codec: 'pg/int4@1' },
+      cause,
+    });
+    expect(decodeJson.mock.calls).toEqual([[1], [2]]);
+  });
+
+  it('rethrows an InternalError from decoding an included value unchanged', async () => {
+    const contract = withEmittedSqlCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('views'));
+    const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
+    if (!codec) throw new Error('Missing views codec');
+    const original = new InternalError('codec invariant broke');
+    const decodeJson = vi.spyOn(codec, 'decodeJson').mockImplementation(() => {
+      throw original;
+    });
+    onTestFinished(() => decodeJson.mockRestore());
+    runtime.setNextResults([[{ name: 'Alice', posts: [{ views: 1 }] }]]);
+    await expect(
+      dispatchCollectionRows<Record<string, unknown>>({
+        context: collection.ctx.context,
+        runtime,
+        state: scoped.state,
+        tableName: scoped.tableName,
+        namespaceId: 'public',
+        modelName: scoped.modelName,
+      }).toArray(),
+    ).rejects.toBe(original);
   });
 
   it('dispatchCollectionRows() depth-2 nested include with emitted-shape capabilities fires a single SQL execution', async () => {

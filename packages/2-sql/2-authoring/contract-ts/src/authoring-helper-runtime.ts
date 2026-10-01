@@ -1,11 +1,10 @@
+import { assertSafeAuthoringHelperKey } from '@internal/contract-authoring';
 import type {
-  AuthoringFieldNamespace,
   AuthoringFieldPresetDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import {
   instantiateAuthoringTypeConstructor,
-  isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
@@ -30,18 +29,6 @@ export function isNamedConstraintOptionsLike(value: unknown): value is RuntimeNa
   return name === undefined || typeof name === 'string';
 }
 
-const blockedSegments = new Set(['__proto__', 'constructor', 'prototype']);
-
-function assertSafeHelperKey(key: string, path: readonly string[]): void {
-  if (blockedSegments.has(key)) {
-    throw contractError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Invalid authoring helper "${[...path, key].join('.')}". Helper path segments must not use "${key}".`,
-      { meta: { helperPath: [...path, key].join('.'), segment: key } },
-    );
-  }
-}
-
 export function createTypeHelpersFromNamespace(
   namespace: AuthoringTypeNamespace,
   path: readonly string[] = [],
@@ -49,7 +36,7 @@ export function createTypeHelpersFromNamespace(
   const helpers: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(namespace)) {
-    assertSafeHelperKey(key, path);
+    assertSafeAuthoringHelperKey(key, path);
     const currentPath = [...path, key];
 
     if (isAuthoringTypeConstructorDescriptor(value)) {
@@ -122,32 +109,4 @@ export function createFieldPresetHelper<Result>(options: {
       ...(namedConstraintOptions ? { namedConstraintOptions } : {}),
     });
   };
-}
-
-export function createFieldHelpersFromNamespace(
-  namespace: AuthoringFieldNamespace,
-  createLeafHelper: (options: {
-    readonly helperPath: string;
-    readonly descriptor: AuthoringFieldPresetDescriptor;
-  }) => (...rawArgs: readonly unknown[]) => unknown,
-  path: readonly string[] = [],
-): Record<string, unknown> {
-  const helpers: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(namespace)) {
-    assertSafeHelperKey(key, path);
-    const currentPath = [...path, key];
-
-    if (isAuthoringFieldPresetDescriptor(value)) {
-      helpers[key] = createLeafHelper({
-        helperPath: currentPath.join('.'),
-        descriptor: value,
-      });
-      continue;
-    }
-
-    helpers[key] = createFieldHelpersFromNamespace(value, createLeafHelper, currentPath);
-  }
-
-  return helpers;
 }

@@ -1,3 +1,4 @@
+import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { loadAppConfig } from '../src/app-config';
 import { ormClientBm25TopMatches } from '../src/orm-client/bm25-top-matches';
@@ -7,7 +8,7 @@ import { bm25TopByScore } from '../src/queries/bm25-top-by-score';
 
 const SKIP = process.env['DATABASE_URL'] === undefined;
 
-describe.skipIf(SKIP)('paradedb BM25 integration', () => {
+describe.skipIf(SKIP)('paradedb BM25 integration', { timeout: timeouts.databaseOperation }, () => {
   it('matchBm25 returns rows whose description matches the query', async () => {
     const { databaseUrl } = loadAppConfig();
     const runtime = await db.connect({ url: databaseUrl });

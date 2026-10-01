@@ -1,5 +1,6 @@
 import type { AggregateDescriptor } from './aggregate-descriptor';
 import type { AnyCodecDescriptor } from './codec-descriptor';
+import type { DataType } from './data-type';
 import type { AuthoringContributions } from './framework-authoring';
 import type { ControlMutationDefaults } from './mutation-default-types';
 import type { TypesImportSpec } from './types-import-spec';
@@ -54,6 +55,14 @@ export interface ComponentMetadata {
       readonly nativeType?: string;
     }>;
   };
+
+  /**
+   * Data types this component registers — the types its codecs represent, each with the casts that
+   * say which other types' values it takes. A sibling of `types` rather than a member of it,
+   * because `types` is copied into an extension's contract space and a cast is a function, which
+   * no contract holds. ADR 254.
+   */
+  readonly dataTypes?: ReadonlyArray<DataType>;
 
   /**
    * Optional pure-data authoring contributions exposed by this component.

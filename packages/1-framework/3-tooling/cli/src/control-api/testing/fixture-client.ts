@@ -13,6 +13,7 @@ import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { ok } from '@internal/utils/result';
 import type { ExecuteDbVerifyResult } from '../operations/db-verify';
+import type { RenderContractDtsOptions, RenderContractDtsResult } from '../render-contract-dts';
 import type {
   ControlClient,
   DbInitOptions,
@@ -66,6 +67,7 @@ export interface ControlClientFixtures {
   readonly getPslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly toOperationPreview: OperationPreview | undefined;
   readonly emit: EmitResult;
+  readonly renderContractDts: RenderContractDtsResult;
 }
 
 export interface FixtureControlClientCall {
@@ -211,6 +213,9 @@ export function defaultControlClientFixtures(): ControlClientFixtures {
       contractJson: `{"targetFamily":"${FIXTURE_FAMILY_ID}"}`,
       contractDts: `export type Contract = { targetFamily: "${FIXTURE_FAMILY_ID}" };`,
     }),
+    renderContractDts: ok({
+      contractDts: `export type Contract = { targetFamily: "${FIXTURE_FAMILY_ID}" };`,
+    }),
   };
 }
 
@@ -337,6 +342,10 @@ class FixtureControlClientImpl implements FixtureControlClient {
 
   async emit(options: EmitOptions): Promise<EmitResult> {
     return this.record('emit', options, this.fixtures.emit);
+  }
+
+  async renderContractDts(options: RenderContractDtsOptions): Promise<RenderContractDtsResult> {
+    return this.record('renderContractDts', options, this.fixtures.renderContractDts);
   }
 }
 

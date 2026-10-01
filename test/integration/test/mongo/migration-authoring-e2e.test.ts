@@ -1,7 +1,5 @@
-import { createMongoRunnerDeps, extractDb } from '@internal/adapter-mongo/control';
-import { MongoDriverImpl } from '@internal/driver-mongo';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import mongoControlDriver from '@internal/driver-mongo/control';
-import { createMongoFamilyInstance } from '@internal/family-mongo/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
@@ -27,13 +25,6 @@ import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive', 'data'] as const,
 };
-
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these integration tests.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 describe('Migration authoring round-trip (factory → serialize → deserialize → runner → DB)', {
   timeout: timeouts.spinUpMongoMemoryServer,
@@ -74,11 +65,7 @@ describe('Migration authoring round-trip (factory → serialize → deserialize 
     const controlDriver = await mongoControlDriver.create(replSet.getUri(dbName));
     try {
       const runner = new MongoMigrationRunner(
-        createMongoRunnerDeps(
-          controlDriver,
-          MongoDriverImpl.fromDb(extractDb(controlDriver)),
-          makeFamily(),
-        ),
+        new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
       );
       const destinationHash = 'authoring-test';
       const plan = {
@@ -335,11 +322,7 @@ describe('Migration authoring round-trip (factory → serialize → deserialize 
       const controlDriver2 = await mongoControlDriver.create(replSet.getUri(dbName));
       try {
         const runner = new MongoMigrationRunner(
-          createMongoRunnerDeps(
-            controlDriver2,
-            MongoDriverImpl.fromDb(extractDb(controlDriver2)),
-            makeFamily(),
-          ),
+          new MongoControlAdapterImpl().createRunnerDependencies(controlDriver2),
         );
         const destinationHashV2 = 'authoring-test-v2';
         const planV2 = {
@@ -388,11 +371,7 @@ describe('Migration authoring round-trip (factory → serialize → deserialize 
       const controlDriver3 = await mongoControlDriver.create(replSet.getUri(dbName));
       try {
         const runner = new MongoMigrationRunner(
-          createMongoRunnerDeps(
-            controlDriver3,
-            MongoDriverImpl.fromDb(extractDb(controlDriver3)),
-            makeFamily(),
-          ),
+          new MongoControlAdapterImpl().createRunnerDependencies(controlDriver3),
         );
         const destinationHashV3 = 'authoring-test-v3';
         const planV3 = {

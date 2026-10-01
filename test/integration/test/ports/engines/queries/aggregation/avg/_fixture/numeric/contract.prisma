@@ -1,6 +1,9 @@
+// use prisma-8
+
 model TestModel {
   id    Int    @id
   int   Int
   bInt  BigInt
   float Float
+  @@map("testModel")
 }

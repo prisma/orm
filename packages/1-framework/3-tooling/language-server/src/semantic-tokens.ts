@@ -21,10 +21,12 @@ import {
   NamespaceDeclarationAst,
   NumberLiteralExprAst,
   ObjectLiteralExprAst,
+  PathExprAst,
   type QualifiedNameAst,
   type SourceFile,
   StringLiteralExprAst,
   type SyntaxToken,
+  TaggedLiteralExprAst,
   type TypeAnnotationAst,
   TypesBlockAst,
 } from '@internal/psl-parser/syntax';
@@ -426,7 +428,12 @@ function collectExpression(
   }
 
   if (expression instanceof FunctionCallAst) {
-    collectTypeReference(expression.name(), source, tokens, namespace);
+    const memberPath = expression.memberPath();
+    if (memberPath === undefined) {
+      collectTypeReference(expression.name(), source, tokens, namespace);
+    } else {
+      collectMemberPath(memberPath, tokens);
+    }
     for (const arg of expression.args()) {
       collectAttributeArg(arg, source, tokens, namespace);
     }
@@ -448,7 +455,23 @@ function collectExpression(
     return;
   }
 
+  if (expression instanceof TaggedLiteralExprAst) {
+    return;
+  }
+
+  if (expression instanceof PathExprAst) {
+    collectMemberPath(expression, tokens);
+    return;
+  }
+
   collectIdentifierExpression(expression, source, tokens, namespace, context);
+}
+
+/** A member path such as `address.city` names fields, one per segment. */
+function collectMemberPath(path: PathExprAst, tokens: PendingSemanticToken[]): void {
+  for (const segment of path.segments()) {
+    addIdentifier(segment, 'property', tokens);
+  }
 }
 
 function collectIdentifierExpression(
@@ -526,10 +549,10 @@ function classifyTypeReference(
     return { tokenType: 'type' };
   }
 
-  const table = source.symbolTable;
+  const symbols = source.symbolTable;
   const namespaceName = path.length > 1 ? path[path.length - 2] : namespace;
   const namespaceScope =
-    namespaceName !== undefined ? table.topLevel.namespaces[namespaceName] : undefined;
+    namespaceName !== undefined ? symbols.topLevel.namespaces[namespaceName] : undefined;
 
   if (namespaceScope !== undefined) {
     if (Object.hasOwn(namespaceScope.models, name)) {
@@ -543,19 +566,19 @@ function classifyTypeReference(
     }
   }
 
-  if (Object.hasOwn(table.topLevel.models, name)) {
+  if (Object.hasOwn(symbols.topLevel.models, name)) {
     return { tokenType: 'class' };
   }
-  if (Object.hasOwn(table.topLevel.compositeTypes, name)) {
+  if (Object.hasOwn(symbols.topLevel.compositeTypes, name)) {
     return { tokenType: 'struct' };
   }
-  const namedType = table.topLevel.namedTypes[name];
+  const namedType = symbols.topLevel.namedTypes[name];
   if (namedType !== undefined) {
     return refinesScalarType(namedType, source.scalarTypes)
       ? { tokenType: 'type', modifierBitset: semanticTokenModifierBits.defaultLibrary }
       : { tokenType: 'type' };
   }
-  if (Object.hasOwn(table.topLevel.blocks, name)) {
+  if (Object.hasOwn(symbols.topLevel.blocks, name)) {
     return { tokenType: 'type' };
   }
 
@@ -566,8 +589,8 @@ function classifyTypeReference(
   return { tokenType: 'type' };
 }
 
-function isKnownNamespace(name: string, table: SymbolTable): boolean {
-  return Object.hasOwn(table.topLevel.namespaces, name);
+function isKnownNamespace(name: string, symbols: SymbolTable): boolean {
+  return Object.hasOwn(symbols.topLevel.namespaces, name);
 }
 
 function identifierSegments(name: QualifiedNameAst): readonly IdentifierSegment[] {

@@ -5,6 +5,7 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -97,6 +98,7 @@ function makeSupabaseExtensionContractUnbound(): Contract {
 }
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
@@ -155,7 +157,7 @@ namespace auth {
     if (!result.ok) return;
 
     const storage = result.value.storage as SqlStorage;
-    const postTable = storage.namespaces['public']!.entries.table?.['post'];
+    const postTable = storage.namespaces['public']!.entries.table?.['Post'];
     expect(postTable).toBeDefined();
 
     const fks: readonly ForeignKey[] = postTable?.foreignKeys ?? [];
@@ -178,7 +180,7 @@ namespace blog {
   model Post {
     id Int @id
     authorId Int
-    author User @relation(fields: [authorId], references: [id])
+    author public.User @relation(fields: [authorId], references: [id])
   }
 }
 `,
@@ -199,7 +201,7 @@ namespace blog {
     });
   });
 
-  it('lowers an unqualified relation to a model that lives in another namespace', () => {
+  it('refuses an unqualified relation to a model in a sibling namespace', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `namespace public {
   model Post {
@@ -221,16 +223,16 @@ namespace auth {
 
     const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-
-    const storage = result.value.storage as SqlStorage;
-    const postTable = storage.namespaces['public']!.entries.table?.['post'];
-    const fks: readonly ForeignKey[] = postTable?.foreignKeys ?? [];
-    expect(fks.length).toBe(1);
-    expect(fks[0]).toMatchObject({
-      target: { namespaceId: 'auth', tableName: 'user' },
-    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNRESOLVED_REFERENCE',
+          message: expect.stringContaining('Cannot find type "User"'),
+        }),
+      ]),
+    );
   });
 
   it('lowers the same bare table name in two namespaces with differing columns and a cross-namespace FK', () => {
@@ -290,40 +292,6 @@ namespace auth {
       namespace: 'auth',
       model: 'User',
     });
-  });
-
-  it('emits PSL_INVALID_RELATION_TARGET when qualifier names a non-existent namespace', () => {
-    const document = symbolTableInputFromParseArgs({
-      schema: `namespace public {
-  model Post {
-    id Int @id
-    userId Int
-    user wrong.User @relation(fields: [userId], references: [id])
-  }
-}
-
-namespace auth {
-  model User {
-    id Int @id
-  }
-}
-`,
-      sourceId: 'schema.prisma',
-    });
-
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_INVALID_RELATION_TARGET',
-          message: expect.stringContaining('wrong.User'),
-        }),
-      ]),
-    );
   });
 });
 

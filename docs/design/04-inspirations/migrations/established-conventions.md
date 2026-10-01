@@ -310,7 +310,7 @@ Surveyed systems mostly handle #2 via a `--fake`-style flag bolted onto the appl
 Two explicit verbs, neither conflated with `migrate`:
 
 - **`db init`** — case #1. Lay down structure. Live, may mutate. Handles greenfield and brownfield-incremental.
-- **`db sign [<contract>]`** *(explicit: `db sign --contract <contract>`)* — case #2. **Verifies** that the live DB satisfies the contract, then writes the contract hash into the marker. **Refuses if it doesn't satisfy** (unlike `--fake`, which trusts the operator blindly). No structural mutation. Default with no argument: the current `contract.json`.
+- **`db sign [<contract>]`** *(explicit: `db sign --contract <contract>`)* — case #2. **Verifies** that the live DB satisfies the contract, then writes the contract hash into the marker and, by default, advances the `db` ref to it (`--no-advance-ref` skips the ref). **Refuses if it doesn't satisfy** (unlike `--fake`, which trusts the operator blindly). No structural mutation. Default with no argument: the current `contract.json`.
 
 ### Verdict
 

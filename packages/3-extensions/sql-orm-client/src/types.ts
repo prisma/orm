@@ -10,13 +10,14 @@ import type {
 } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
-  BinaryExpr,
   type BinaryOp,
   type CodecRef,
   type CodecTrait,
+  type LimitOffsetValue,
   ListExpression,
   NullCheckExpr,
-  OrderByItem,
+  type OrderByItem,
+  type OrderByNulls,
   ParamRef,
   type AggregateFn as SqlAggregateFn,
 } from '@internal/sql-relational-core/ast';
@@ -24,6 +25,9 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { RowSelection } from './collection-internal-types';
+import { checkedOrderByItem } from './order-by-guards';
+import { predicateComparison } from './predicate-comparison';
+import { predicateExpression } from './predicate-expression';
 
 export interface IncludeScalar<Result> extends RowSelection<Result> {
   readonly kind: 'includeScalar';
@@ -71,8 +75,10 @@ export interface IncludeExpr {
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
   readonly localTableName: string;
-  readonly targetColumn: string;
-  readonly localColumn: string;
+  /** Target-side join columns, positionally paired with `localColumns`. */
+  readonly targetColumns: readonly string[];
+  /** Local-side join columns, positionally paired with `targetColumns`. */
+  readonly localColumns: readonly string[];
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly through?: IncludeThroughDescriptor;
   readonly nested: CollectionState;
@@ -88,8 +94,8 @@ export interface CollectionState {
   readonly distinct: readonly string[] | undefined;
   readonly distinctOn: readonly string[] | undefined;
   readonly selectedFields: readonly string[] | undefined;
-  readonly limit: number | undefined;
-  readonly offset: number | undefined;
+  readonly limit: LimitOffsetValue | undefined;
+  readonly offset: LimitOffsetValue | undefined;
   readonly variantName: string | undefined;
   /**
    * Annotations attached to this query at terminal-call time.
@@ -127,8 +133,8 @@ export function emptyState(): CollectionState {
  */
 export interface GroupPagingState {
   readonly orderBy: readonly OrderByItem[];
-  readonly limit: number | undefined;
-  readonly offset: number | undefined;
+  readonly limit: LimitOffsetValue | undefined;
+  readonly offset: LimitOffsetValue | undefined;
 }
 
 export function emptyGroupPagingState(): GroupPagingState {
@@ -186,20 +192,35 @@ export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly context: ExecutionContext<TContract>;
 }
 
-export type ComparisonMethodFns<T> = {
-  eq(value: T): AnyExpression;
-  neq(value: T): AnyExpression;
+type PredicateOperand<T, CodecId extends string> =
+  | T
+  | Expression<{ codecId: CodecId; nullable: false; many?: never }>;
+
+export type ComparisonMethodFns<T, CodecId extends string = never> = {
+  eq(value: T | Expression<{ codecId: CodecId; nullable: boolean; many?: never }>): AnyExpression;
+  neq(value: T | Expression<{ codecId: CodecId; nullable: boolean; many?: never }>): AnyExpression;
   gt(value: T): AnyExpression;
   lt(value: T): AnyExpression;
   gte(value: T): AnyExpression;
   lte(value: T): AnyExpression;
-  like(pattern: string): AnyExpression;
+  // LIKE takes a non-null string pattern, even when the field type T is nullable.
+  like(pattern: PredicateOperand<string, CodecId>): AnyExpression;
   in(values: readonly T[]): AnyExpression;
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
   isNotNull(): AnyExpression;
-  asc(): OrderByItem;
-  desc(): OrderByItem;
+  asc: Orderable['asc'];
+  desc: Orderable['desc'];
+};
+
+export type OrderOptions = {
+  readonly nulls?: OrderByNulls;
+};
+
+/** A value the collection can order by: `asc`/`desc`, optionally placing nulls first or last. */
+export type Orderable = {
+  asc(options?: OrderOptions): OrderByItem;
+  desc(options?: OrderOptions): OrderByItem;
 };
 
 /**
@@ -207,10 +228,10 @@ export type ComparisonMethodFns<T> = {
  *
  * - `traits: []` → always available (isNull, isNotNull)
  */
-export type ComparisonMethods<T, Traits> = {
+export type ComparisonMethods<T, Traits, CodecId extends string = never> = {
   [K in keyof ComparisonMethodsMeta as [ComparisonMethodsMeta[K]['traits'][number]] extends [Traits]
     ? K
-    : never]: ComparisonMethodFns<T>[K];
+    : never]: ComparisonMethodFns<PredicateOperand<T, CodecId>, CodecId>[K];
 };
 
 type QueryOperationReturnTraits<
@@ -318,7 +339,9 @@ type FieldOperations<
       : unknown
     : unknown;
 
-function param(codec: CodecRef | undefined, value: unknown): ParamRef {
+function param(codec: CodecRef | undefined, value: unknown): AnyExpression {
+  const expression = predicateExpression(value);
+  if (expression !== undefined) return expression;
   if (codec === undefined) return ParamRef.of(value);
   return ParamRef.of(value, { codec });
 }
@@ -343,13 +366,13 @@ function scalarComparisonMethod(op: BinaryOp) {
     if (value === null && (op === 'eq' || op === 'neq')) {
       return op === 'eq' ? NullCheckExpr.isNull(left) : NullCheckExpr.isNotNull(left);
     }
-    return new BinaryExpr(op, left, param(codec, value));
+    return predicateComparison(op, left, param(codec, value));
   }) satisfies MethodFactory;
 }
 
 function listComparisonMethod(op: BinaryOp) {
   return ((left, codec) => (values: readonly unknown[]) =>
-    new BinaryExpr(op, left, paramList(codec, values))) satisfies MethodFactory;
+    predicateComparison(op, left, paramList(codec, values))) satisfies MethodFactory;
 }
 
 /**
@@ -397,11 +420,11 @@ export const COMPARISON_METHODS_META = {
   },
   asc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.asc(left),
+    create: (left) => (options?: OrderOptions) => checkedOrderByItem('asc', left, options),
   },
   desc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.desc(left),
+    create: (left) => (options?: OrderOptions) => checkedOrderByItem('desc', left, options),
   },
   isNull: {
     traits: [],
@@ -440,6 +463,45 @@ export type RelationFilterAccessor<
   none(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): AnyExpression;
 };
 
+type RelationAccessorMethodName =
+  | keyof RelationFilterAccessor<Contract<SqlStorage>, never, string>
+  | 'count';
+
+type IsOrderable<Traits> = ['order'] extends [Traits] ? true : false;
+
+type OrderableFields<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string,
+> = {
+  [K in keyof FieldsOf<TContract, ModelName, NsId> & string as IsOrderable<
+    FieldTraits<TContract, ModelName, K, NsId>
+  > extends true
+    ? K
+    : never]: Orderable;
+};
+
+/**
+ * A to-one relation inside `where`/`orderBy`: the relation filters plus each orderable scalar field of the related model. A related field named like a relation method is not exposed.
+ */
+export type ToOneRelationAccessor<
+  TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
+  RelatedModelName extends string,
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> &
+  Omit<OrderableFields<TContract, RelatedModelName, RelatedNsId>, RelationAccessorMethodName>;
+
+/**
+ * A to-many relation inside `where`/`orderBy`: the relation filters plus `count`, which orders by the number of related rows matching an optional predicate.
+ */
+export type ToManyRelationAccessor<
+  TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
+  RelatedModelName extends string,
+> = RelationFilterAccessor<TContract, RelatedNsId, RelatedModelName> & {
+  count(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): Orderable;
+};
+
 type ScalarModelAccessor<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -451,7 +513,8 @@ type ScalarModelAccessor<
   }> &
     ComparisonMethods<
       FieldJsType<TContract, ModelName, K, NsId>,
-      FieldTraits<TContract, ModelName, K, NsId>
+      FieldTraits<TContract, ModelName, K, NsId>,
+      FieldCodecId<TContract, ModelName, K, NsId>
     > &
     FieldOperations<TContract, NsId, ModelName, K>;
 };
@@ -461,11 +524,22 @@ type RelationModelAccessor<
   ModelName extends string,
   NsId extends string = never,
 > = {
-  [K in RelationNames<TContract, ModelName, NsId>]: RelationFilterAccessor<
+  [K in RelationNames<TContract, ModelName, NsId>]: RelationCardinality<
     TContract,
-    RelationTargetNamespace<TContract, ModelName, K, NsId>,
-    RelatedModelName<TContract, ModelName, K, NsId> & string
-  >;
+    ModelName,
+    K,
+    NsId
+  > extends '1:1' | 'N:1'
+    ? ToOneRelationAccessor<
+        TContract,
+        RelationTargetNamespace<TContract, ModelName, K, NsId>,
+        RelatedModelName<TContract, ModelName, K, NsId> & string
+      >
+    : ToManyRelationAccessor<
+        TContract,
+        RelationTargetNamespace<TContract, ModelName, K, NsId>,
+        RelatedModelName<TContract, ModelName, K, NsId> & string
+      >;
 };
 
 export type ModelAccessor<
@@ -838,16 +912,15 @@ export type AggregateIncludeReducers<
         >;
       };
 
-export type HavingComparisonMethods<T> = Pick<
-  ComparisonMethods<T, 'equality' | 'order'>,
+export type HavingComparisonMethods<T, CodecId extends string = never> = Pick<
+  ComparisonMethods<T, 'equality' | 'order', CodecId>,
   'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte'
 >;
 
 /**
- * The value a HAVING comparison accepts. The comparison happens inside the
- * database, where the operand is an inlined numeric literal — so the
- * comparand stays `number` regardless of the result's application
- * representation. A field-taking metric compares as `number | null` — a
+ * Literal HAVING comparands stay `number` regardless of the result's application
+ * representation; prepared comparands carry the declared aggregate output codec.
+ * A field-taking metric compares as `number | null` — a
  * grouped value's SQL domain includes NULL; a no-input metric reads
  * nullability off its declared row, so `count()` compares as plain `number`.
  */
@@ -859,6 +932,10 @@ type HavingZeroArgComparand<Row> = Row extends {
     : number
   : never;
 
+type AggregateOutputCodecId<Row> = Row extends { readonly output: infer Id extends string }
+  ? Id
+  : never;
+
 type FieldHavingCall<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -866,7 +943,12 @@ type FieldHavingCall<
   NsId extends string,
 > = <FieldName extends AggregateFieldNames<TContract, ModelName, Op, NsId>>(
   field: FieldName,
-) => HavingComparisonMethods<number | null>;
+) => HavingComparisonMethods<
+  number | null,
+  AggregateOutputCodecId<
+    AggregateRowFor<TContract, Op, FieldCodecId<TContract, ModelName, FieldName, NsId>>
+  >
+>;
 
 type HavingMethod<
   TContract extends Contract<SqlStorage>,
@@ -876,10 +958,18 @@ type HavingMethod<
 > =
   HasZeroArgCall<TContract, Op> extends true
     ? {
-        (): HavingComparisonMethods<HavingZeroArgComparand<AggregateRowFor<TContract, Op, never>>>;
+        (): HavingComparisonMethods<
+          HavingZeroArgComparand<AggregateRowFor<TContract, Op, never>>,
+          AggregateOutputCodecId<AggregateRowFor<TContract, Op, never>>
+        >;
         <FieldName extends AggregateFieldNames<TContract, ModelName, Op, NsId>>(
           field: FieldName,
-        ): HavingComparisonMethods<number | null>;
+        ): HavingComparisonMethods<
+          number | null,
+          AggregateOutputCodecId<
+            AggregateRowFor<TContract, Op, FieldCodecId<TContract, ModelName, FieldName, NsId>>
+          >
+        >;
       }
     : FieldHavingCall<TContract, ModelName, Op, NsId>;
 
@@ -916,6 +1006,13 @@ export type ShorthandWhereFilter<
 > = Partial<{
   [K in keyof DefaultModelRow<TContract, ModelName, NsId> & string]:
     | DefaultModelRow<TContract, ModelName, NsId>[K]
+    | ('equality' extends FieldTraits<TContract, ModelName, K, NsId>
+        ? Expression<{
+            codecId: FieldCodecId<TContract, ModelName, K, NsId>;
+            nullable: boolean;
+            many?: never;
+          }>
+        : never)
     | null
     | undefined;
 }>;
@@ -1244,8 +1341,8 @@ type HasExecutionCreateDefault<
       // cannot borrow this namespace's default. With no namespace (`never`), fall
       // back to table/column matching.
       readonly ref: {
-        readonly table: ModelTableName<TContract, ModelName, NsId>;
-        readonly column: FieldColumnName<TContract, ModelName, FieldName, NsId>;
+        readonly entry: ModelTableName<TContract, ModelName, NsId>;
+        readonly field: FieldColumnName<TContract, ModelName, FieldName, NsId>;
       } & ([NsId] extends [never] ? unknown : { readonly namespace: NsId });
       readonly onCreate?: unknown;
     }

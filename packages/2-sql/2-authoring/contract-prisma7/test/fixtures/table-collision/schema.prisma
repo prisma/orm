@@ -1,0 +1,25 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id Int @id
+
+  @@map("people")
+}
+
+model Person {
+  id Int @id
+
+  @@map("people")
+}
+
+model Account {
+  id Int @id
+}
+
+model account {
+  id Int @id
+
+  @@map("Account")
+}

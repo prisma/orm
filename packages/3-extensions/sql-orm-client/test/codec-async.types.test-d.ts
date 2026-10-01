@@ -10,6 +10,7 @@
  * - **Negative tests**: no `Promise<T>` form leaks into a row-shape position (read or write). The ORM client uses one field type-map (rooted in `DefaultModelRow`); there is no read/write split for codec output types.
  */
 
+import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
 import { expectTypeOf, test } from 'vitest';
 import type { Collection } from '../src/collection';
 import type {
@@ -121,10 +122,16 @@ test('UniqueConstraintCriterion variants carry plain T for unique columns', () =
   expectTypeOf<{ readonly email: string }>().toExtend<UserUnique>();
 });
 
-test('ShorthandWhereFilter accepts plain T (or null/undefined) for filterable fields', () => {
-  expectTypeOf<UserWhere['name']>().toEqualTypeOf<string | null | undefined>();
-  expectTypeOf<UserWhere['email']>().toEqualTypeOf<string | null | undefined>();
-  expectTypeOf<UserWhere['id']>().toEqualTypeOf<number | null | undefined>();
+test('ShorthandWhereFilter literal inputs stay plain T alongside expressions', () => {
+  expectTypeOf<Exclude<UserWhere['name'], Expression<ScopeField>>>().toEqualTypeOf<
+    string | null | undefined
+  >();
+  expectTypeOf<Exclude<UserWhere['email'], Expression<ScopeField>>>().toEqualTypeOf<
+    string | null | undefined
+  >();
+  expectTypeOf<Exclude<UserWhere['id'], Expression<ScopeField>>>().toEqualTypeOf<
+    number | null | undefined
+  >();
 });
 
 test('no DefaultModelRow field position resolves to a Promise<T>', () => {

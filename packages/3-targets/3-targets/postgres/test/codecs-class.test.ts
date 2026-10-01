@@ -256,6 +256,10 @@ describe('codecs-class', () => {
     it('decode passes through already-decoded values', async () => {
       expect(await codec.decode({ key: 'value' }, callCtx)).toEqual({ key: 'value' });
     });
+
+    it('rejects invalid JSON text with SyntaxError', async () => {
+      await expect(codec.decode('{invalid', callCtx)).rejects.toThrow(SyntaxError);
+    });
   });
 
   describe('pg/jsonb@1', () => {
@@ -276,6 +280,10 @@ describe('codecs-class', () => {
     it('decode passes through already-decoded values', async () => {
       expect(await codec.decode([1, 2, 3], callCtx)).toEqual([1, 2, 3]);
     });
+
+    it('rejects invalid JSON text with SyntaxError', async () => {
+      await expect(codec.decode('{invalid', callCtx)).rejects.toThrow(SyntaxError);
+    });
   });
 
   describe('pg/uuid@1', () => {
@@ -294,6 +302,10 @@ describe('codecs-class', () => {
     it('round-trips through JSON identity', () => {
       expect(codec.encodeJson(SAMPLE_UUID)).toBe(SAMPLE_UUID);
       expect(codec.decodeJson(SAMPLE_UUID)).toBe(SAMPLE_UUID);
+    });
+
+    it('writes a uuid into JSON as the text Postgres prints for it', () => {
+      expect(codec.encodeJson('{550E8400-E29B41D4-A716-446655440000}')).toBe(SAMPLE_UUID);
     });
   });
 

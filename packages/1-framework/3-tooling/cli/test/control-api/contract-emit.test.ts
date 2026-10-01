@@ -32,10 +32,11 @@ function mockConfigWithContract(contractOverrides: Record<string, unknown>) {
 }
 
 function createSourceProvider(load: () => Promise<unknown>): {
+  readonly format: 'typescript';
   readonly inputs?: readonly string[];
   load: () => Promise<unknown>;
 } {
-  return { load };
+  return { format: 'typescript', load };
 }
 
 function createMockContract(): Contract {
@@ -149,6 +150,7 @@ describe('executeContractEmit', () => {
     {
       label: 'rejects non-provider source object',
       source: { invalid: true },
+      expectedCode: undefined,
       expectedSubstring: 'valid source provider object',
     },
     {
@@ -157,13 +159,27 @@ describe('executeContractEmit', () => {
         ok: false,
         failure: {
           summary: 'Provider parse failed',
-          diagnostics: [{ code: 'PSL_PARSE_ERROR', message: 'Unexpected token' }],
+          diagnostics: [
+            { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'schema.prisma' },
+          ],
           meta: { sourceId: 'schema.prisma' },
         },
       })),
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'Provider parse failed',
     },
+    ...[undefined, 42].map((sourceId) => ({
+      label: `rejects diagnostic with invalid sourceId ${sourceId}`,
+      source: createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Provider parse failed',
+          diagnostics: [{ code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId }],
+        },
+      })),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'each diagnostic must include a string sourceId',
+    })),
     {
       label: 'rejects malformed failure result',
       source: createSourceProvider(async () => ({ ok: false }) as unknown),
@@ -173,6 +189,18 @@ describe('executeContractEmit', () => {
     {
       label: 'rejects malformed success result',
       source: createSourceProvider(async () => ({ ok: true }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
+    {
+      label: 'rejects a success result whose value is undefined',
+      source: createSourceProvider(async () => ({ ok: true, value: undefined }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
+    {
+      label: 'rejects a success result whose value is null',
+      source: createSourceProvider(async () => ({ ok: true, value: null }) as unknown),
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'malformed success result',
     },
@@ -192,6 +220,187 @@ describe('executeContractEmit', () => {
         return true;
       });
     });
+  });
+
+  describe('a source that fails with diagnostics', () => {
+    const sourceDiagnostics = [
+      {
+        code: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
+        message: 'View "ActiveUsers" is not supported; Prisma 8 has no views.',
+        sourceId: 'prisma/schema.prisma',
+        span: {
+          start: { offset: 80, line: 9, column: 1 },
+          end: { offset: 90, line: 9, column: 11 },
+        },
+      },
+      { code: 'PSL.FIXTURE_SCHEMA_READ_FAILED', message: 'ENOENT', sourceId: 'prisma/schema' },
+      { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'prisma/models.prisma' },
+    ];
+
+    function emitFailure(): Promise<unknown> {
+      const source = createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Source interpretation failed',
+          diagnostics: sourceDiagnostics,
+          meta: { schemaPath: 'prisma/schema.prisma' },
+        },
+      }));
+      return executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ).then(
+        () => expect.unreachable('contract emit succeeded'),
+        (error: unknown) => error,
+      );
+    }
+
+    it('fails with CONTRACT.SOURCE_LOAD_FAILED', async () => {
+      expect(await emitFailure()).toMatchObject({
+        code: 'CONTRACT.SOURCE_LOAD_FAILED',
+        why: 'Source interpretation failed',
+        fix: 'Edit the source where each finding points, then run the command again.',
+      });
+    });
+
+    it('reports a dotted source code as the finding code, and wraps an undotted one', async () => {
+      expect(await emitFailure()).toHaveProperty('diagnostics', [
+        {
+          code: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
+          severity: 'error',
+          summary:
+            'prisma/schema.prisma:9:1 View "ActiveUsers" is not supported; Prisma 8 has no views.',
+          nextActions: [],
+          where: { path: 'prisma/schema.prisma', line: 9 },
+        },
+        {
+          code: 'PSL.FIXTURE_SCHEMA_READ_FAILED',
+          severity: 'error',
+          summary: 'prisma/schema ENOENT',
+          nextActions: [],
+          where: { path: 'prisma/schema' },
+        },
+        {
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+          severity: 'error',
+          summary: 'prisma/models.prisma PSL_PARSE_ERROR: Unexpected token',
+          nextActions: [],
+          where: { path: 'prisma/models.prisma' },
+          meta: { code: 'PSL_PARSE_ERROR' },
+        },
+      ]);
+    });
+
+    it('names a file under the working directory by its relative path', async () => {
+      const source = createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Source interpretation failed',
+          diagnostics: [
+            {
+              code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+              message: 'Field "P6.big" has type "BigInt"',
+              sourceId: `${tmpDir}/prisma/schema.prisma`,
+              span: {
+                start: { offset: 4, line: 5, column: 3 },
+                end: { offset: 7, line: 5, column: 6 },
+              },
+            },
+          ],
+        },
+      }));
+      const error = await executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ).then(
+        () => expect.unreachable('contract emit succeeded'),
+        (thrown: unknown) => thrown,
+      );
+      expect(error).toHaveProperty('diagnostics', [
+        expect.objectContaining({
+          summary:
+            'prisma/schema.prisma:5:3 PSL_UNSUPPORTED_FIELD_TYPE: Field "P6.big" has type "BigInt"',
+          where: { path: 'prisma/schema.prisma', line: 5 },
+        }),
+      ]);
+    });
+
+    it('keeps the raw diagnostics, their issues, and the provider meta in meta', async () => {
+      expect(await emitFailure()).toHaveProperty('meta', {
+        diagnostics: sourceDiagnostics,
+        issues: [
+          {
+            kind: 'PSL.FIXTURE_VIEW_UNSUPPORTED',
+            message:
+              'View "ActiveUsers" is not supported; Prisma 8 has no views. (prisma/schema.prisma:9:1)',
+          },
+          { kind: 'PSL.FIXTURE_SCHEMA_READ_FAILED', message: 'ENOENT (prisma/schema)' },
+          { kind: 'PSL_PARSE_ERROR', message: 'Unexpected token (prisma/models.prisma)' },
+        ],
+        providerMeta: { schemaPath: 'prisma/schema.prisma' },
+      });
+    });
+  });
+
+  describe('a source that reports a warning', () => {
+    const warning = {
+      code: 'PSL_DEPRECATED_SCALAR_NAME',
+      message:
+        'Scalar type "Int" is deprecated and will be removed; use "Int32" (stored as BSON int).',
+      sourceId: 'prisma/schema.prisma',
+      severity: 'warning' as const,
+    };
+
+    async function emitWith(load: (context: { reportWarning?: (d: unknown) => void }) => unknown) {
+      const outputJsonPath = join(tmpDir, 'src/prisma/contract.json');
+      const config = createSuccessfulConfig(outputJsonPath);
+      mockedEmit.mockResolvedValueOnce(createEmitResult('same'));
+      const result = await executeContractEmitWithMock(
+        emitOptions(
+          {
+            ...config,
+            contract: {
+              ...config.contract,
+              source: { load: async (context: never) => load(context) },
+            },
+          } as unknown as configLoader.PrismaNextConfig,
+          join(tmpDir, 'prisma.config.ts'),
+        ),
+      );
+      return { result, json: await readFile(outputJsonPath, 'utf-8') };
+    }
+
+    it('emits the same contract as a source that reports none, and returns the warning', async () => {
+      const withWarning = await emitWith((context) => {
+        context.reportWarning?.(warning);
+        return { ok: true, value: createMockContract() };
+      });
+      const withoutWarning = await emitWith(() => ({ ok: true, value: createMockContract() }));
+
+      expect(withWarning.json).toBe(withoutWarning.json);
+      expect(withWarning.result.sourceWarnings).toEqual([warning]);
+      expect(withoutWarning.result).not.toHaveProperty('sourceWarnings');
+    });
+  });
+
+  it('still fails a source whose diagnostics are all errors', async () => {
+    const source = createSourceProvider(async () => ({
+      ok: false,
+      failure: {
+        summary: 'Schema has 1 error',
+        diagnostics: [
+          {
+            code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+            message: 'bad',
+            sourceId: 'schema.prisma',
+            severity: 'error',
+          },
+        ],
+      },
+    }));
+    await expect(
+      executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ),
+    ).rejects.toMatchObject({ code: 'CONTRACT.SOURCE_LOAD_FAILED' });
   });
 
   it('passes deserializeContract output to emit, not the pre-hydration envelope', async () => {

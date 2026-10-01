@@ -172,6 +172,12 @@ describe('pg/bytea@1 codec runtime (direct instantiation)', () => {
     expect(Array.from(decoded)).toEqual([0x09, 0x08, 0x07]);
   });
 
+  it('decodes raw bytea hex text', async () => {
+    const decoded = await codec.decode('\\x010203', callCtx);
+    expect(decoded).toBeInstanceOf(Uint8Array);
+    expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+  });
+
   it('round-trips a payload through encodeJson / decodeJson', () => {
     const input = new Uint8Array([0xca, 0xfe]);
     const json = codec.encodeJson(input);
@@ -208,13 +214,17 @@ describe('pg/text-array@1 codec', () => {
     expect(json).not.toBe(input);
   });
 
-  it('decodeJson stringifies non-string array entries', () => {
-    expect(codec.decodeJson(['a', 1, true])).toEqual(['a', '1', 'true']);
-  });
-
-  it('decodeJson returns an empty array for a non-array JSON value', () => {
-    expect(codec.decodeJson('not-an-array')).toEqual([]);
-    expect(codec.decodeJson(null)).toEqual([]);
+  it.each([
+    ['an array holding a number or a boolean', ['a', 1, true]],
+    ['a string', 'not-an-array'],
+    ['null', null],
+  ])('decodeJson refuses %s', (_name, json) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        meta: expect.objectContaining({ codecId: 'pg/text-array@1' }),
+      }),
+    );
   });
 });
 

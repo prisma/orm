@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/relationMode-17255-mixed-actions
 // (postgres matrix entry, relationMode=foreignKeys).
@@ -30,11 +32,13 @@ model Main {
   aliceId String?
 
   bob Bob?
+  @@map("main")
 }
 
 model Alice {
   id        String @id
   manyMains Main[]
+  @@map("alice")
 }
 
 model Bob {
@@ -42,4 +46,5 @@ model Bob {
 
   main   Main   @relation(fields: [mainId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   mainId String @unique
+  @@map("bob")
 }

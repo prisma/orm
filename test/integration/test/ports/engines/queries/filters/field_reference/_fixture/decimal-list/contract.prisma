@@ -1,6 +1,9 @@
+// use prisma-8
+
 model TestModel {
   id        Int       @id
   dec       Decimal?
   dec_list  Decimal[]
   dec_list2 Decimal[]
+  @@map("testModel")
 }

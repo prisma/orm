@@ -1,0 +1,16 @@
+// use prisma-8
+
+model T {
+  id      Int      @id @default(autoincrement())
+  name    String   @default("anonymous")
+  small   SmallInt @default(100)
+  count   Int      @default(100000)
+  price   Numeric(10, 2) @default(1.50)
+  ratio   Float    @default(1.5)
+  active  Boolean  @default(true)
+  meta    Jsonb    @default(json`{ "plan": "free", "seats": 1 }`)
+  scores  Int[]    @default([1, 2])
+  docs    Jsonb[]  @default([json`{}`, json`[]`])
+
+  @@map("t")
+}

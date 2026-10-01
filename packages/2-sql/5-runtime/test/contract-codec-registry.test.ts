@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { CodecDescriptor, CodecInstanceContext } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
@@ -39,6 +39,7 @@ function createVectorExtensionDescriptor(): SqlRuntimeExtensionDescriptor<'postg
 
   const vectorDescriptor: RuntimeParameterizedCodecDescriptor<{ length: number }> = {
     codecId: 'pg/vector@1',
+    dataType: dataTypeId('pg/vector'),
     traits: ['equality'],
     targetTypes: ['vector'],
     paramsSchema: {
@@ -80,9 +81,10 @@ function createNonParameterizedExtensionDescriptor(): SqlRuntimeExtensionDescrip
 
   const scalarDescriptor: CodecDescriptor = {
     codecId: 'test/scalar@1',
+    dataType: dataTypeId('test/scalar'),
     traits: [],
     targetTypes: ['scalar'],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => scalarCodec,
   };

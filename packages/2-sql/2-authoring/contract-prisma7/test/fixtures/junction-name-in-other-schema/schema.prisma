@@ -1,0 +1,24 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["one", "two"]
+}
+
+model Post {
+  id   Int   @id
+  tags Tag[]
+
+  @@schema("one")
+}
+
+model Tag {
+  id    Int    @id
+  posts Post[]
+
+  @@schema("one")
+}
+
+model PostToTag {
+  id Int @id
+
+  @@schema("two")
+}

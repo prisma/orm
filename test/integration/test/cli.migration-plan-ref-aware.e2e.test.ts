@@ -143,14 +143,14 @@ function setupExtensionJourney(
   writeFileSync(
     ctx.configPath,
     `import postgresAdapter from '@internal/adapter-postgres/control';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import postgresDriver from '@internal/driver-postgres/control';
 import pgvector from '@internal/extension-pgvector/control';
 import sql from '@internal/family-sql/control';
 import postgres from '@internal/target-postgres/control';
 import { contract } from './contract';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: {
   family: sql,
   target: postgres,
@@ -159,6 +159,7 @@ export default defineConfig({
   extensions: [pgvector],
   contract: {
     source: {
+      format: 'typescript',
       load: async () => ({ ok: true as const, value: contract }),
     },
     output: 'output/contract.json',

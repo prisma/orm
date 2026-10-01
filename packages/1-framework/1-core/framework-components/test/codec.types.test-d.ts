@@ -22,7 +22,7 @@ import {
   type ColumnHelperForStrict,
   type ColumnSpec,
   column,
-  voidParamsSchema,
+  dataTypeId,
 } from '../src/exports/codec';
 
 class Int4FixtureCodec extends CodecImpl<'demo/int4@1', readonly ['equality'], number, number> {
@@ -41,10 +41,11 @@ class Int4FixtureCodec extends CodecImpl<'demo/int4@1', readonly ['equality'], n
 }
 
 class Int4FixtureDescriptor extends CodecDescriptorImpl<void> implements CodecDescriptor<void> {
+  override readonly dataType = dataTypeId('demo/int4');
   override readonly codecId = 'demo/int4@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly targetTypes: readonly string[] = ['int4'];
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => Int4FixtureCodec {
     return () => new Int4FixtureCodec(this);
   }
@@ -97,6 +98,7 @@ class VectorFixtureDescriptor
   extends CodecDescriptorImpl<VectorParams>
   implements CodecDescriptor<VectorParams>
 {
+  override readonly dataType = dataTypeId('demo/vector');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly targetTypes: readonly string[] = ['vector'];

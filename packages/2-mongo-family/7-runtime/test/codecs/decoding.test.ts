@@ -1,6 +1,8 @@
+import { decodeJsonString } from '@internal/framework-components/codec';
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { type MongoCodecRegistry, mongoCodec, newMongoCodecRegistry } from '@internal/mongo-codec';
 import type { MongoFieldShape, MongoResultShape } from '@internal/mongo-query-ast/execution';
+import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
 import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,6 +22,12 @@ function deferred<T>(): {
   return { promise, resolve, reject };
 }
 
+function cyclic(): Record<string, unknown> {
+  const value: Record<string, unknown> = {};
+  value['self'] = value;
+  return value;
+}
+
 function registryWithDefaults(): MongoCodecRegistry {
   const registry = newMongoCodecRegistry();
   registry.register(
@@ -27,6 +35,7 @@ function registryWithDefaults(): MongoCodecRegistry {
       typeId: 'mongo/string@1',
       encode: (v: string) => v,
       decode: (w: string) => w,
+      decodeJson: (json) => decodeJsonString('mongo/string@1', json),
     }),
   );
   registry.register(
@@ -34,6 +43,7 @@ function registryWithDefaults(): MongoCodecRegistry {
       typeId: 'mongo/objectId@1',
       encode: (v: string) => new ObjectId(v),
       decode: (w: { toHexString: () => string }) => w.toHexString(),
+      decodeJson: (json) => decodeJsonString('mongo/objectId@1', json),
     }),
   );
   return registry;
@@ -65,6 +75,7 @@ describe('decodeMongoRow', () => {
         typeId: 'test/spy@1',
         encode: (v: string) => v,
         decode: decodeSpy,
+        decodeJson: (json) => decodeJsonString('test/spy@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -76,8 +87,42 @@ describe('decodeMongoRow', () => {
     };
     const row = { a: null, b: undefined };
     const out = await decodeMongoRow(row, shape, registry, 'c');
-    expect(out).toEqual({ a: null, b: undefined });
+    expect(out).toStrictEqual({ a: null, b: null });
     expect(decodeSpy).not.toHaveBeenCalled();
+  });
+
+  it('reads a nullable field the stored document leaves out as null, at any depth', async () => {
+    const registry = registryWithDefaults();
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: {
+        name: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true },
+        tags: {
+          kind: 'array',
+          nullable: true,
+          element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+        },
+        address: {
+          kind: 'document',
+          nullable: true,
+          fields: { city: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true } },
+        },
+        home: {
+          kind: 'document',
+          nullable: false,
+          fields: { city: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true } },
+        },
+        title: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+      },
+    };
+    const out = await decodeMongoRow({ home: {} }, shape, registry, 'c');
+    expect(out).toStrictEqual({
+      name: null,
+      tags: null,
+      address: null,
+      home: { city: null },
+      title: undefined,
+    });
   });
 
   it('decodes array elements in lockstep with element shape', async () => {
@@ -127,6 +172,7 @@ describe('decodeMongoRow', () => {
           if (w === 'bad') throw new Error('boom');
           return w;
         },
+        decodeJson: (json) => decodeJsonString('throws-on-b@1', json),
       }),
     );
     const shapeThrow: MongoResultShape = {
@@ -201,7 +247,7 @@ describe('decodeMongoRow', () => {
     const nullOut = await decodeMongoRow({ nullableTags: null }, shape, registry, 'c');
     expect(nullOut).toEqual({ nullableTags: null });
     const undefOut = await decodeMongoRow({ nullableTags: undefined }, shape, registry, 'c');
-    expect(undefOut).toEqual({ nullableTags: undefined });
+    expect(undefOut).toStrictEqual({ nullableTags: null });
   });
 
   it('null and undefined at document-shaped slots short-circuit without recursion', async () => {
@@ -221,7 +267,7 @@ describe('decodeMongoRow', () => {
     const nullOut = await decodeMongoRow({ addr: null }, shape, registry, 'c');
     expect(nullOut).toEqual({ addr: null });
     const undefOut = await decodeMongoRow({ addr: undefined }, shape, registry, 'c');
-    expect(undefOut).toEqual({ addr: undefined });
+    expect(undefOut).toStrictEqual({ addr: null });
   });
 
   it('array field whose driver value is not an array is yielded as-is', async () => {
@@ -251,6 +297,7 @@ describe('decodeMongoRow', () => {
           // Codec authors throwing a non-Error happens — the wrapper has to render something for the message. The cast is a deliberate exercise of `wrapDecodeFailure`'s `error instanceof Error` false-branch (pure type-system: `throw` accepts `unknown`).
           throw 'string-error' as unknown as Error;
         },
+        decodeJson: (json) => decodeJsonString('throws-string@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -278,6 +325,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('boom');
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -292,9 +340,119 @@ describe('decodeMongoRow', () => {
     } catch (e) {
       if (!isRuntimeError(e)) throw e;
       const preview = (e.details as { wirePreview: string }).wirePreview;
-      // String([object Object]) = '[object Object]'.
-      expect(preview).toBe('[object Object]');
+      expect(preview).toBe('{"nested":1}');
     }
+  });
+
+  describe('a decode failure names the document it read', () => {
+    const throwingRegistry = () => {
+      const registry = newMongoCodecRegistry();
+      registry.register(
+        mongoCodec({
+          typeId: 'throws@1',
+          encode: (v: string) => v,
+          decode: () => {
+            throw new Error('boom');
+          },
+          decodeJson: (json) => decodeJsonString('throws@1', json),
+        }),
+      );
+      return registry;
+    };
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: { f: { kind: 'leaf', codecId: 'throws@1', nullable: false } },
+    };
+
+    it('by its ObjectId _id, and previews BSON values in the field', async () => {
+      const id = new ObjectId('65f0000000000000000000a1');
+      await expect(
+        decodeMongoRow(
+          { _id: id, f: { owner: id, at: new Date(0) } },
+          shape,
+          throwingRegistry(),
+          'items',
+        ),
+      ).rejects.toMatchObject({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          "Failed to decode field f of the document with _id 65f0000000000000000000a1 in collection 'items' with codec 'throws@1': boom",
+        details: {
+          documentId: '65f0000000000000000000a1',
+          wirePreview: '{"owner":"65f0000000000000000000a1","at":"1970-01-01T00:00:00.000Z"}',
+        },
+      });
+    });
+
+    it('nested in a command result, by that document`s _id and its own field path', async () => {
+      const id = new ObjectId('65f0000000000000000000a2');
+      const row: MongoFieldShape = {
+        kind: 'document',
+        nullable: false,
+        row: true,
+        fields: shape.fields,
+      };
+      const insertResult: MongoResultShape = {
+        kind: 'document',
+        fields: {
+          insertedIds: { kind: 'unknown' },
+          documents: { kind: 'array', nullable: false, element: row },
+        },
+      };
+      await expect(
+        decodeMongoRow(
+          { insertedIds: ['a', id], documents: [{ _id: 'a' }, { _id: id, f: 1 }] },
+          insertResult,
+          throwingRegistry(),
+          'items',
+        ),
+      ).rejects.toMatchObject({
+        message:
+          "Failed to decode field f of the document with _id 65f0000000000000000000a2 in collection 'items' with codec 'throws@1': boom",
+        details: { path: 'f', documentId: '65f0000000000000000000a2' },
+      });
+    });
+
+    it('by a numeric _id', async () => {
+      await expect(
+        decodeMongoRow({ _id: 7, f: 1 }, shape, throwingRegistry(), 'items'),
+      ).rejects.toMatchObject({
+        message:
+          "Failed to decode field f of the document with _id 7 in collection 'items' with codec 'throws@1': boom",
+        details: { documentId: '7' },
+      });
+    });
+
+    it('and previews a bigint the driver read with useBigInt64 as its digits and n', async () => {
+      await expect(
+        decodeMongoRow({ _id: 'a', f: { count: 2n ** 60n } }, shape, throwingRegistry(), 'items'),
+      ).rejects.toMatchObject({ details: { wirePreview: '{"count":"1152921504606846976n"}' } });
+    });
+
+    it.each([
+      ['a function', () => 1, '() => 1'],
+      ['a cyclic object', cyclic(), '[object Object]'],
+    ])(
+      'and previews %s, which JSON cannot write, as its String() text',
+      async (_kind, wire, preview) => {
+        await expect(
+          decodeMongoRow({ _id: 'a', f: wire }, shape, throwingRegistry(), 'items'),
+        ).rejects.toMatchObject({
+          code: 'RUNTIME.DECODE_FAILED',
+          details: { wirePreview: preview },
+        });
+      },
+    );
+
+    it('by a string _id, quoted', async () => {
+      await expect(
+        decodeMongoRow({ _id: 'order-7', f: 1 }, shape, throwingRegistry(), 'items'),
+      ).rejects.toMatchObject({
+        message:
+          "Failed to decode field f of the document with _id \"order-7\" in collection 'items' with codec 'throws@1': boom",
+        details: { documentId: '"order-7"' },
+      });
+    });
   });
 
   it('truncates long string wirePreviews to 100 chars with an ellipsis', async () => {
@@ -306,6 +464,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('boom');
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -408,6 +567,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw new Error('inner');
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -436,29 +596,68 @@ describe('decodeMongoRow', () => {
     }
   });
 
-  it('passes a structured RUNTIME.DECODE_FAILED envelope from a codec through unchanged', async () => {
-    const envelope = structuredError('RUNTIME.DECODE_FAILED', 'codec-owned decode envelope');
+  it('rethrows an InternalError from a codec unchanged', async () => {
+    const original = new InternalError('codec invariant broke');
     const registry = newMongoCodecRegistry();
     registry.register(
       mongoCodec({
-        typeId: 'structured@1',
+        typeId: 'throws@1',
         encode: (v: string) => v,
         decode: () => {
-          throw envelope;
+          throw original;
         },
+        decodeJson: (json) => decodeJsonString('throws@1', json),
+      }),
+    );
+    const shape: MongoResultShape = {
+      kind: 'document',
+      fields: { f: { kind: 'leaf', codecId: 'throws@1', nullable: false } },
+    };
+    await expect(decodeMongoRow({ f: 'wire' }, shape, registry, 'items')).rejects.toBe(original);
+  });
+
+  it('adds the collection and field to a structured RUNTIME.DECODE_FAILED from a codec, keeping its details', async () => {
+    const registry = newMongoCodecRegistry();
+    registry.register(
+      mongoCodec({
+        typeId: 'mongo/decimal128@1',
+        encode: (v: string) => v,
+        decode: (wire: unknown) => {
+          throw structuredError(
+            'RUNTIME.DECODE_FAILED',
+            'mongo/decimal128@1 wire value must be a Decimal128',
+            { meta: { codecId: 'mongo/decimal128@1', received: typeof wire } },
+          );
+        },
+        decodeJson: (json) => decodeJsonString('mongo/decimal128@1', json),
       }),
     );
     const shape: MongoResultShape = {
       kind: 'document',
       fields: {
-        f: { kind: 'leaf', codecId: 'structured@1', nullable: false },
+        price: { kind: 'leaf', codecId: 'mongo/decimal128@1', nullable: false },
       },
     };
     try {
-      await decodeMongoRow({ f: 'wire' }, shape, registry, 'items');
+      await decodeMongoRow({ price: 19.99 }, shape, registry, 'posts');
       expect.fail('expected throw');
     } catch (e) {
-      expect(e).toBe(envelope);
+      expect(isRuntimeError(e)).toBe(true);
+      if (!isRuntimeError(e)) return;
+      expect({ code: e.code, message: e.message, details: e.details }).toEqual({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          "Failed to decode field price in collection 'posts' with codec 'mongo/decimal128@1': mongo/decimal128@1 wire value must be a Decimal128",
+        details: {
+          codecId: 'mongo/decimal128@1',
+          received: 'number',
+          collection: 'posts',
+          path: 'price',
+          codec: 'mongo/decimal128@1',
+          wirePreview: '19.99',
+        },
+      });
+      expect(e.cause).toEqual(expect.objectContaining({ code: 'RUNTIME.DECODE_FAILED' }));
     }
   });
 
@@ -472,6 +671,7 @@ describe('decodeMongoRow', () => {
         decode: () => {
           throw envelope;
         },
+        decodeJson: (json) => decodeJsonString('structured-ext@1', json),
       }),
     );
     const shape: MongoResultShape = {
@@ -501,6 +701,7 @@ describe('decodeMongoRow', () => {
           callOrder.push('a-start');
           return dA.promise.then((s) => `${w}:${s}`);
         },
+        decodeJson: (json) => decodeJsonString('slow-a@1', json),
       }),
     );
     registry.register(
@@ -511,6 +712,7 @@ describe('decodeMongoRow', () => {
           callOrder.push('b-start');
           return dB.promise.then((s) => `${w}:${s}`);
         },
+        decodeJson: (json) => decodeJsonString('slow-b@1', json),
       }),
     );
     const shape: MongoResultShape = {

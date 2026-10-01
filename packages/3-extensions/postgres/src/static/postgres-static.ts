@@ -10,7 +10,7 @@ import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-r
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { blindCast } from '@internal/utils/casts';
 import { buildNamespacedNativeEnums, type NamespacedNativeEnums } from '../runtime/native-enums';
-import type { PostgresTargetId } from '../runtime/postgres';
+import type { PostgresTargetId } from '../runtime/postgres-target-id';
 
 export interface PostgresStaticContext<TContract extends Contract<SqlStorage>> {
   readonly context: ExecutionContext<TContract>;

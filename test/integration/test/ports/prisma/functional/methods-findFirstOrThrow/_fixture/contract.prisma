@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `methods/findFirstOrThrow`
 // (packages/client/tests/functional/methods/findFirstOrThrow, postgres matrix entry):
 //
@@ -18,6 +20,7 @@ model User {
   id    String @id @default(cuid(2))
   email String
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -25,4 +28,5 @@ model Post {
   title    String
   author   User   @relation(fields: [authorId], references: [id])
   authorId String
+  @@map("post")
 }

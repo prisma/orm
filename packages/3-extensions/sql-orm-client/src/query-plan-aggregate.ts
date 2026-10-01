@@ -20,6 +20,7 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { plainAggregateExpr, resolveAggregate } from './aggregate-codecs';
 import { assertDistinctOnCapability, resolvePolymorphismInfo } from './collection-contract';
+import { assertDistinctOnCompatibleOrder } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildAggregateInput, buildMtiJoins, buildStateWhere } from './query-plan-source';
@@ -69,9 +70,6 @@ function toAggregateProjection(
   return { expr, codec };
 }
 
-// ORM HAVING filters use literal binding (values inlined at plan-build time),
-// not parameterized binding. ParamRef is rejected because the ORM's grouped
-// collection API always produces literal comparisons for having() predicates.
 function validateGroupedComparable(value: AnyExpression): AnyExpression {
   switch (value.kind) {
     case 'param-ref':
@@ -80,6 +78,7 @@ function validateGroupedComparable(value: AnyExpression): AnyExpression {
         'ParamRef is not supported in grouped having expressions',
         { meta: { kind: value.kind } },
       );
+    case 'prepared-param-ref':
     case 'literal':
     case 'column-ref':
     case 'identifier-ref':
@@ -234,6 +233,7 @@ export function compileAggregate(
 
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(state.orderBy, state.distinctOn.length);
   }
 
   const hasPagination = state.limit !== undefined || state.offset !== undefined;
@@ -329,6 +329,7 @@ export function compileGroupedAggregate(
 
   if (preGroupState.distinctOn !== undefined && preGroupState.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnCompatibleOrder(preGroupState.orderBy, preGroupState.distinctOn.length);
   }
 
   const projection: ProjectionItem[] = [

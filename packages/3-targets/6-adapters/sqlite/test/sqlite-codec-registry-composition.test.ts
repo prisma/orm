@@ -6,7 +6,8 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
-  voidParamsSchema,
+  dataType,
+  dataTypeId,
 } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
@@ -34,22 +35,31 @@ import {
   SQLITE_BLOB_CODEC_ID,
   SQLITE_JSON_CODEC_ID,
 } from '@internal/target-sqlite/codec-ids';
-import { sqliteCodecDescriptorRegistry } from '@internal/target-sqlite/codecs';
+import {
+  assembleSqliteCodecRegistry,
+  createSqliteBuiltinCodecLookup,
+  createSqliteCodecRegistryWithBuiltins,
+  sqliteCodecDescriptorRegistry,
+} from '@internal/target-sqlite/codecs';
 import sqliteTargetControlDescriptor from '@internal/target-sqlite/control';
 import sqliteRuntimeTargetDescriptor from '@internal/target-sqlite/runtime';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { createSqliteAdapter } from '../src/core/adapter';
-import {
-  assembleSqliteCodecRegistry,
-  createSqliteBuiltinCodecLookup,
-  createSqliteCodecRegistryWithBuiltins,
-} from '../src/core/codec-lookup';
 import { sqliteAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 import type { SqliteContract } from '../src/core/types';
 import sqliteAdapterControlDescriptor from '../src/exports/control';
 import sqliteRuntimeAdapterDescriptor from '../src/exports/runtime';
+
+/** The data types the fixture codecs of one contribution represent, so assembly finds them. */
+/** A fixture codec's data type: its own id without the version. */
+const fixtureTypeId = (codecId: string) => dataTypeId(codecId.split('@')[0] ?? codecId);
+
+const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]) =>
+  [...new Set(descriptors.map((descriptor) => descriptor.dataType))]
+    .filter((id): id is string => id !== undefined)
+    .map((id) => dataType(id, {}));
 
 class TestCodec extends CodecImpl<string, readonly ['equality'], string, string> {
   constructor(
@@ -80,9 +90,10 @@ class TestCodec extends CodecImpl<string, readonly ['equality'], string, string>
 }
 
 class TestGenericDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
 
   constructor(
     override readonly codecId: string,
@@ -110,6 +121,7 @@ function sqliteDescriptor(options: {
     options.transform,
   );
   return sqliteCodec(descriptor, {
+    dataType: fixtureTypeId(options.codecId),
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       options.onProjection?.();
       return expression;
@@ -127,6 +139,7 @@ function runtimeExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'sqlite',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'sqlite' };
@@ -144,6 +157,7 @@ function controlExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'sqlite',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'sqlite' };

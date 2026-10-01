@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -6,22 +7,81 @@ import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
-  ['Int', 'mongo/int32@1'],
+  ['Int32', 'mongo/int32@1'],
   ['ObjectId', 'mongo/objectId@1'],
 ]);
 
-function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  const result = interpretPslDocumentToMongoContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'schema.prisma',
-    scalarTypeCodecIds,
-    controlMutationDefaults: new Map(),
+function interpret(schema: string) {
+  const { document, sources } = parse(schema, 'schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
   });
+  return interpretPslDocumentToMongoContract({
+    documents: [document],
+    symbolTable,
+    sources,
+    scalarTypeCodecIds,
+    controlMutationDefaults: {
+      dataTypeEntries: {},
+      defaultFunctionRegistry: new Map(),
+    },
+  });
+}
+
+function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
+  const result = interpret(schema);
   return result.ok ? [] : result.failure.diagnostics;
 }
+
+describe('wildcard scope is an unchecked identifier with independent field validation', () => {
+  it.each([
+    ['metadata', 'stored.$**'],
+    ['', '$**'],
+  ])('accepts scope %s without a matching model', (scope, path) => {
+    const result = interpret(`model Event {
+ id ObjectId @id @map("_id")
+ metadata String @map("stored")
+ @@map("events")
+ @@index([wildcard(${scope})])
+}`);
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.storage).toMatchObject({
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            entries: {
+              collection: {
+                events: {
+                  indexes: [expect.objectContaining({ keys: [{ field: path, direction: 1 }] })],
+                },
+              },
+            },
+          },
+        },
+      });
+  });
+
+  it.each(['missing', 'related'])('retains field/indexability validation for %s', (scope) => {
+    const diagnostics = diagnosticsOf(`model Related { id ObjectId @id @map("_id") }
+model Event {
+ id ObjectId @id @map("_id")
+ related Related
+ @@index([wildcard(${scope})])
+}`);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_INDEX_FIELD_NOT_FOUND',
+          message: expect.stringContaining(scope),
+        }),
+      ]),
+    );
+    expect(
+      diagnostics.some((diagnostic) => diagnostic.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX'),
+    ).toBe(false);
+  });
+});
 
 describe('field-level @id and @unique are interpreted against their specs', () => {
   it('rejects an argument on @id and no longer counts the field as the id', () => {
@@ -89,7 +149,7 @@ describe('unknown attribute names diagnose against the registered namespace', ()
       diagnosticsOf(`
         model Item {
           id        ObjectId @id @map("_id")
-          createdAt Int      @default(1)
+          createdAt Int32      @default(1)
         }
       `),
     ).toEqual([
@@ -117,19 +177,41 @@ describe('unknown attribute names diagnose against the registered namespace', ()
     ]);
   });
 
-  it('tells the user to delete @updatedAt because Mongo never lowers it', () => {
+  it('points @updatedAt at the temporal.updatedAt() preset', () => {
     expect(
       diagnosticsOf(`
         model Item {
           id        ObjectId @id @map("_id")
-          updatedAt Int      @updatedAt
+          updatedAt Int32      @updatedAt
         }
       `),
     ).toEqual([
       expect.objectContaining({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message:
-          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". Mongo lowers no automatic timestamp updates; delete the attribute and set the timestamp in application code.',
+          'Field "Item.updatedAt" uses unsupported attribute "@updatedAt". To fill the timestamp on create and update, use `temporal.updatedAt()` as the field type.',
+      }),
+    ]);
+  });
+
+  it('points @default(now()) at the temporal.createdAt() preset', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id        ObjectId @id @map("_id")
+          createdAt Int32    @default(now())
+          count     Int32    @default(0)
+        }
+      `),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message:
+          'Field "Item.createdAt" uses unsupported attribute "@default". To fill the timestamp on create, use `temporal.createdAt()` as the field type.',
+      }),
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        message: 'Field "Item.count" uses unsupported attribute "@default"',
       }),
     ]);
   });
@@ -176,5 +258,68 @@ describe('unknown attribute names diagnose against the registered namespace', ()
         }
       `),
     ).toEqual([]);
+  });
+});
+
+describe('an index path into a nested document', () => {
+  const nestedPathMessage = (path: string) =>
+    `Index field "${path}" on model "Item" is a path into a composite type; indexes on fields of a composite type are not supported yet. Index a top-level field of "Item" or remove the index.`;
+
+  it('refuses each dotted form with its own diagnostic, not a parse error', () => {
+    expect(
+      diagnosticsOf(`
+        type Geo {
+          lat String
+        }
+        type Address {
+          city String
+          geo  Geo
+        }
+        model Item {
+          id      ObjectId @id @map("_id")
+          title   String
+          address Address
+          @@index([title, address.city])
+          @@index([address.city(sort: Desc)])
+          @@unique([address.geo.lat])
+          @@textIndex([address.city])
+        }
+      `),
+    ).toEqual([
+      {
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+        sourceId: 'schema.prisma',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 13 }) }),
+      },
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+      }),
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.geo.lat'),
+      }),
+      expect.objectContaining({
+        code: 'PSL_INVALID_INDEX',
+        message: nestedPathMessage('address.city'),
+      }),
+    ]);
+  });
+
+  it('says a path through a field that is not a composite type names nothing', () => {
+    expect(
+      diagnosticsOf(`
+        model Item {
+          id    ObjectId @id @map("_id")
+          title String
+          @@index([title.value])
+          @@index([missing.city(sort: Desc)])
+        }
+      `).map((diagnostic) => diagnostic.message),
+    ).toEqual([
+      'Index field "title.value" on model "Item" is a dotted path, but "title" is not a field of "Item" whose type is a composite type, so the path names no field. List fields of "Item" by name.',
+      'Index field "missing.city" on model "Item" is a dotted path, but "missing" is not a field of "Item" whose type is a composite type, so the path names no field. List fields of "Item" by name.',
+    ]);
   });
 });

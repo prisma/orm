@@ -7,11 +7,13 @@ import {
   timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
 import {
+  autoincrement,
   defineContract,
   enumType,
   field,
   member,
   model,
+  now,
   rel,
 } from '@internal/postgres/contract-builder';
 
@@ -32,10 +34,10 @@ const enums = {
 
 const User = model('User', {
   fields: {
-    id: field.column(int4Column).defaultSql('autoincrement()').id(),
+    id: field.column(int4Column).default(autoincrement()).id(),
     email: field.namedType(types.Email).unique(),
     role: field.namedType(enums.Role),
-    createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzTemporalColumn).default(now()),
     isActive: field.column(boolColumn).default(true),
     profile: field.column(jsonbColumn).optional(),
   },
@@ -43,7 +45,7 @@ const User = model('User', {
 
 const Post = model('Post', {
   fields: {
-    id: field.column(int4Column).defaultSql('autoincrement()').id(),
+    id: field.column(int4Column).default(autoincrement()).id(),
     userId: field.column(int4Column),
     title: field.column(textColumn),
     rating: field.column(float8Column).optional(),

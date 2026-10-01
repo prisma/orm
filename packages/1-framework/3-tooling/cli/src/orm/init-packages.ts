@@ -16,6 +16,12 @@ export interface InstallOutcome {
   readonly failure: CliStructuredError | undefined;
   /** The development dependencies the pair installed, the engine spec included. */
   readonly devDeps: readonly string[];
+  /**
+   * The manager override that succeeded, when the pnpm fallback fired. A caller
+   * that offers to undo the install spells its command with this one: naming
+   * pnpm after the fallback did the work would undo nothing.
+   */
+  readonly manager: PackageManagerId | undefined;
   readonly warnings: readonly string[];
 }
 
@@ -218,11 +224,19 @@ export async function installProjectDependencies(ctx: {
   readonly packages: PackageOperations;
   readonly cwd: string;
   readonly deps: readonly string[];
-  readonly runtimePackage: string;
+  /**
+   * The installed runtime whose toolchain names the engine pin — `undefined`
+   * for an install that declares no development dependencies, and so carries
+   * no engine.
+   */
+  readonly runtimePackage: string | undefined;
   readonly devDeps: readonly string[];
   readonly catalogWarnings: readonly string[];
 }): Promise<InstallOutcome> {
   const install = async (request: InstallRequest): Promise<StepResult> => {
+    if (request.packages.length === 0) {
+      return { failure: undefined, skippedBuilds: undefined };
+    }
     const manifestBefore = readManifest(ctx.cwd);
     const result = await ctx.packages.install(request);
     if (result.ok) {
@@ -242,7 +256,11 @@ export async function installProjectDependencies(ctx: {
     if (runtimeDeps.failure !== undefined) {
       return { ...runtimeDeps, devDeps: [] };
     }
-    const devDeps = [...ctx.devDeps, engineDevDependencySpec(ctx.cwd, ctx.runtimePackage)];
+    const runtime = ctx.runtimePackage;
+    const devDeps =
+      runtime === undefined
+        ? [...ctx.devDeps]
+        : [...ctx.devDeps, engineDevDependencySpec(ctx.cwd, runtime)];
     const developmentDeps = await install({
       packages: devDeps,
       dev: true,
@@ -261,6 +279,7 @@ export async function installProjectDependencies(ctx: {
     return {
       failure: undefined,
       devDeps: first.devDeps,
+      manager: undefined,
       warnings:
         first.skippedBuilds === undefined
           ? ctx.catalogWarnings
@@ -268,7 +287,7 @@ export async function installProjectDependencies(ctx: {
     };
   }
   if (!pnpmLeakedASpecifier(first.failure)) {
-    return { failure: first.failure, devDeps: [], warnings: [] };
+    return { failure: first.failure, devDeps: [], manager: undefined, warnings: [] };
   }
 
   const retry = await pair('npm');
@@ -276,9 +295,19 @@ export async function installProjectDependencies(ctx: {
     // The npm failure is the one raised, but the pnpm failure that triggered
     // the retry is why npm ran at all — without it the user sees an npm error
     // with no trace of the first attempt.
-    return { failure: retry.failure, devDeps: [], warnings: [retriedWarning(first.failure)] };
+    return {
+      failure: retry.failure,
+      devDeps: [],
+      manager: undefined,
+      warnings: [retriedWarning(first.failure)],
+    };
   }
   // npm bypassed pnpm's resolver, so the workspace catalog is not what ended
   // up installed — saying otherwise alongside the fallback would contradict it.
-  return { failure: undefined, devDeps: retry.devDeps, warnings: [fallbackWarning(first.failure)] };
+  return {
+    failure: undefined,
+    devDeps: retry.devDeps,
+    manager: 'npm',
+    warnings: [fallbackWarning(first.failure)],
+  };
 }

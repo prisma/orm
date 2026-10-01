@@ -6,11 +6,11 @@ import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
 import type { Block } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const mocks = {
@@ -177,7 +177,7 @@ function ormConfig(cwd: string, overrides: Record<string, unknown> = {}): Record
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: config });
 }
 
 /** Flattens a drawing block's span lines into plain strings. */

@@ -73,7 +73,7 @@ Treat the rendered import lines as framework-managed on both targets:
 | `MIGRATION.HASH_MISMATCH` *Migration package is corrupt* | `db migrate` (or any read of the package) | `ops.json` / `migration.json` were edited without self-emitting. Run `node migrations/app/<dir>/migration.ts` to re-emit, then re-run `db migrate`. |
 | `MIGRATION.DESTRUCTIVE_CHANGES` | `db update` run non-interactively without consent | Re-run with `--confirm <database>` (the database name from the connection), or `--dry-run` to preview. |
 | `CONTRACT.MARKER_MISMATCH` | `db verify` (finding, exit 4) | The marker disagrees with the contract hash (**Postgres:** `prisma_contract.marker`; **Mongo:** `_prisma_migrations`). The DB is at a different contract version than the code thinks. Either run a migration forward, or — if the DB is correct and the marker is stale after a manual fix-up — run `db sign`. |
-| `CONTRACT.MARKER_MISSING` | `db verify` (finding, exit 4), runtime startup (warning) | The DB has no marker yet. Run `prisma db init --db <url>` to baseline an empty database, or `db update --db <url>` to apply the current contract directly. |
+| `CONTRACT.MARKER_MISSING` | `db verify` (finding, exit 4), runtime startup (warning) | The DB has no marker yet. Run `prisma db init --db <url>` to baseline an empty database, `db update --db <url>` to apply the current contract directly, or `db sign --db <url>` if the schema already matches the contract. |
 
 ## Decision — which path do you take?
 
@@ -99,7 +99,7 @@ pnpm prisma db verify --db $DATABASE_URL
 
 The `db` ref is a named pointer at `migrations/app/refs/db.json` — just `{ hash, invariants }`. It records which contract hash the project's dev database has been brought up to — the offline planner's stand-in for "where is my local DB?" without opening a connection at plan time. The contract it names resolves through the shared content-addressed store at `migrations/snapshots/<hex>/contract.json` by that hash, the same store every migration graph node resolves through.
 
-**What `db init` / `db update` write.** When run against the project's default `--db` URL (no explicit `--db` flag), both commands implicitly advance the `db` ref: they write-if-absent the post-command contract IR into the snapshot store, then write the ref's pointer. Override the ref name with `--advance-ref <name>`. When you pass `--db <non-default-url>`, ref advancement is suppressed unless `--advance-ref` is explicit — reconciling a different database is not the same as checkpointing this project's dev state.
+**What `db init` / `db update` / `db sign` write.** When run against the project's default `--db` URL (no explicit `--db` flag), `db init` and `db update` implicitly advance the `db` ref: they write-if-absent the post-command contract IR into the snapshot store, then write the ref's pointer. Override the ref name with `--advance-ref <name>`. When you pass `--db <non-default-url>`, ref advancement is suppressed unless `--advance-ref` is explicit — reconciling a different database is not the same as checkpointing this project's dev state. `db sign` also advances the `db` ref after a successful signature, writing the signed contract into the snapshot store first; `--advance-ref <name>` overrides the name, and `--db` does **not** suppress it — sign never mutates the schema, and adoption is normally done against the real database via `--db`. The only opt-out is `--no-advance-ref`, which signs without writing any ref or snapshot — what a CI or deployment pipeline, or a dev checkout re-signing a production database, usually wants.
 
 The on-disk layout is just the pointer:
 
@@ -108,7 +108,7 @@ migrations/app/refs/
 └── db.json                 # { "hash": "<hex>", "invariants": [] }
 ```
 
-**First `migration plan` after dev iteration.** `migration plan` defaults `--from` to the `db` ref (and, when no `db` ref exists at all, falls back to planning from an empty database with no warning — over a non-empty graph that fallback is almost always a mistake; see `references/migration-model.md` § *The trap*). When the on-disk migration graph is still **empty** and the `db` ref points at a non-null hash with a store entry (typical after one or more `db update` cycles), the planner emits **two** bundles instead of one:
+**First `migration plan` after dev iteration.** `migration plan` defaults `--from` to the `db` ref (and, when no `db` ref exists at all, falls back to planning from an empty database only while the migration graph is empty — the human output then adds a muted notice beneath the summary, `No db ref set — planning from an empty database. Run db init, db update, or db sign if a database already exists.`, and the JSON document carries `fromDefaulted: true`; over a non-empty graph there is no fallback: the command refuses with `MIGRATION.PLAN_ORIGIN_UNKNOWN`; see `references/migration-model.md` § *The trap*). When the on-disk migration graph is still **empty** and the `db` ref points at a non-null hash with a store entry (typical after one or more `db update` cycles), the planner emits **two** bundles instead of one:
 
 1. Baseline: `null → from-hash` (introduces `from-hash` as a graph node)
 2. Delta: `from-hash → current_contract`
@@ -358,9 +358,9 @@ On Postgres the operations are **methods on the `Migration` base class**, each t
 
 **Postgres** operations (representative set, all `this.<name>({...})`):
 
-- Tables: `createTable`, `dropTable`.
-- Columns: `addColumn` (`column: col(name, nativeType, { codecRef })`), `dropColumn`, `alterColumnType`, `setNotNull`, `dropNotNull`, `setDefault`, `dropDefault`.
-- Constraints: `addPrimaryKey`, `addForeignKey`, `addUnique`, `addCheckConstraint`, `renameCheckConstraint`, `dropCheckConstraint`, `dropConstraint`.
+- Tables: `createTable`, `renameTable`, `dropTable`. `renameTable` reads the migration's start and end contracts and returns the table rename plus a rename of every constraint and index named after the old table, so spread it: `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`.
+- Columns: `addColumn` (`column: col(name, nativeType, { codecRef })`), `dropColumn`, `alterColumnType`, `setNotNull`, `dropNotNull`, `setDefault` (`column: col(name, nativeType, { default: lit(value) or fn(expression), codecRef })`), `dropDefault`.
+- Constraints: `addPrimaryKey`, `addForeignKey`, `addUnique`, `addCheckConstraint`, `renameConstraint` (`kind`: `primaryKey`, `unique`, `foreignKey` or `checkConstraint`), `renameCheckConstraint`, `dropCheckConstraint`, `dropConstraint`.
 - Indexes: `createIndex`, `renameIndex`, `dropIndex`.
 - Enums: `createNativeEnumType`, `addNativeEnumValue`, `dropNativeEnumType`.
 - Row-level security: `enableRowLevelSecurity`, `disableRowLevelSecurity`, `createRlsPolicy`, `renameRlsPolicy`, `dropRlsPolicy`.
@@ -412,7 +412,7 @@ pnpm prisma db verify --db $DATABASE_URL
 
 ## Workflow — Re-sign the marker
 
-The concept: `db sign` rewrites the marker to the current contract hash. Use after a manual repair where the DB is the source of truth and the marker is stale. `db sign` performs a schema-verify first and refuses to sign a DB whose schema disagrees with the contract — so a successful sign always means the schema matches and the marker is now correct.
+The concept: `db sign` rewrites the marker to the current contract hash and moves the `db` ref to it (`--advance-ref <name>` overrides the ref name; `--db` does not suppress the ref write; `--no-advance-ref` skips it). Use after a manual repair where the DB is the source of truth and the marker is stale. `db sign` performs a schema-verify first and refuses to sign a DB whose schema disagrees with the contract — so a successful sign always means the schema matches and the marker is now correct.
 
 ```bash
 pnpm prisma db sign --db $DATABASE_URL
@@ -423,7 +423,7 @@ pnpm prisma db sign --db $DATABASE_URL
 The concept: drift means `db verify` reports the live DB schema doesn't match what the marker says it should be. Two valid moves, picked by which side is correct:
 
 - **The contract is right; the DB is wrong** → run a migration. Either `db update` (quick path, dev DB only) or `migration plan` + `db migrate` (everywhere else).
-- **The DB is right; the contract or marker is wrong** → edit the contract to match the DB (see `references/contract.md`), emit, then `db sign` to refresh the marker.
+- **The DB is right; the contract or marker is wrong** → edit the contract to match the DB (see `references/contract.md`), emit, then `db sign` to refresh the marker. The sign also moves the `db` ref to the signed hash; when the migration graph is non-empty and that hash is not a graph node, the next default `migration plan` refuses with `MIGRATION.HASH_NOT_IN_GRAPH` (see *The forgot-the-flag pitfall* above for the recovery).
 
 The diagnostic that reveals which side is right:
 

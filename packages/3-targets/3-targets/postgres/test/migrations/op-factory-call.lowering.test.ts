@@ -48,6 +48,7 @@ function recordingCheckLowerer(): { lowerer: ExecuteRequestLowerer; received: un
   const received: unknown[] = [];
   const lowerer: ExecuteRequestLowerer = {
     lower: () => Object.freeze({ sql: 'UNUSED', params: Object.freeze([]) }),
+    renderColumnDefault: async () => '',
     lowerToExecuteRequest: async (ast) => {
       received.push(ast);
       return Object.freeze({
@@ -312,56 +313,93 @@ describe('DropNotNullCall', () => {
 });
 
 describe('SetDefaultCall', () => {
-  it('lowers typed checks and sets the default clause verbatim', async () => {
-    const { lowerer, received } = recordingCheckLowerer();
-    const call = new SetDefaultCall('public', 'user', 'status', "DEFAULT 'pending'");
-    const op = await call.toOp(lowerer);
-
-    expect(received).toHaveLength(3);
-    expect(op.operationClass).toBe('additive');
-    expect(op.execute).toEqual([
-      {
-        description: 'set default on "status"',
-        sql: `ALTER TABLE "public"."user" ALTER COLUMN "status" SET DEFAULT 'pending'`,
-      },
-    ]);
-    expect(op.precheck).toEqual([
-      { description: 'ensure column "status" exists', sql: 'LOWERED 1', params: ['p1'] },
-    ]);
-    expect(op.postcheck).toEqual([
-      { description: 'verify column "status" has a default', sql: 'LOWERED 3', params: ['p3'] },
-    ]);
-    expect(call.label).toBe('Set default on "user"."status"');
+  const status = col('status', 'text', {
+    default: lit('pending'),
+    codecRef: { codecId: 'pg/text@1' },
   });
 
-  it('honors an explicit widening operationClass', async () => {
-    const { lowerer } = recordingCheckLowerer();
-    const call = new SetDefaultCall('public', 'user', 'status', "DEFAULT 'pending'", 'widening');
+  function renderingLowerer() {
+    const { lowerer, received } = recordingCheckLowerer();
+    const rendered: unknown[] = [];
+    const withDefaults: ExecuteRequestLowerer = {
+      ...lowerer,
+      renderColumnDefault: async (column, table) => {
+        rendered.push({ column, table });
+        return "DEFAULT 'pending'";
+      },
+    };
+    return { lowerer: withDefaults, received, rendered };
+  }
+
+  it('sets the default clause the adapter writes for the column, and lowers typed checks', async () => {
+    const { lowerer, received, rendered } = renderingLowerer();
+    const call = new SetDefaultCall('public', 'user', status);
     const op = await call.toOp(lowerer);
-    expect(op.operationClass).toBe('widening');
+
+    expect({
+      rendered,
+      checks: received.length,
+      operationClass: op.operationClass,
+      execute: op.execute,
+      precheck: op.precheck,
+      postcheck: op.postcheck,
+      label: call.label,
+    }).toEqual({
+      rendered: [{ column: status, table: 'user' }],
+      checks: 3,
+      operationClass: 'additive',
+      execute: [
+        {
+          description: 'set default on "status"',
+          sql: `ALTER TABLE "public"."user" ALTER COLUMN "status" SET DEFAULT 'pending'`,
+        },
+      ],
+      precheck: [
+        { description: 'ensure column "status" exists', sql: 'LOWERED 1', params: ['p1'] },
+      ],
+      postcheck: [
+        { description: 'verify column "status" has a default', sql: 'LOWERED 3', params: ['p3'] },
+      ],
+      label: 'Set default on "user"."status"',
+    });
+  });
+
+  it('checks no default afterwards when it changes one, since the old default would pass for the new one and the runner would skip the change', async () => {
+    const { lowerer } = renderingLowerer();
+    const call = new SetDefaultCall('public', 'user', status, 'widening');
+    const op = await call.toOp(lowerer);
+    expect({
+      operationClass: op.operationClass,
+      precheck: op.precheck,
+      postcheck: op.postcheck,
+    }).toEqual({
+      operationClass: 'widening',
+      precheck: [
+        { description: 'ensure column "status" exists', sql: 'LOWERED 1', params: ['p1'] },
+      ],
+      postcheck: [],
+    });
   });
 
   it('toOp() throws when no lowerer is provided', async () => {
-    const call = new SetDefaultCall('public', 'user', 'status', "DEFAULT 'pending'");
+    const call = new SetDefaultCall('public', 'user', status);
     await expect(async () => call.toOp()).rejects.toThrow('createPostgresMigrationPlanner');
   });
 
-  it('renders this.setDefault, including operationClass only when non-additive', () => {
-    const additive = new SetDefaultCall('public', 'user', 'status', "DEFAULT 'pending'");
-    expect(additive.renderTypeScript()).toBe(
-      'this.setDefault({ schema: "public", table: "user", column: "status", defaultSql: "DEFAULT \'pending\'" })',
-    );
-    const widening = new SetDefaultCall(
-      'public',
-      'user',
-      'status',
-      "DEFAULT 'pending'",
-      'widening',
-    );
-    expect(widening.renderTypeScript()).toBe(
-      'this.setDefault({ schema: "public", table: "user", column: "status", defaultSql: "DEFAULT \'pending\'", operationClass: "widening" })',
-    );
-    expect(additive.importRequirements()).toEqual([]);
+  it('renders this.setDefault with the column, including operationClass only when non-additive', () => {
+    const additive = new SetDefaultCall('public', 'user', status);
+    const widening = new SetDefaultCall('public', 'user', status, 'widening');
+    const column =
+      'col("status", "text", { default: lit("pending"), codecRef: { codecId: "pg/text@1" } })';
+    expect({
+      additive: additive.renderTypeScript(),
+      widening: widening.renderTypeScript(),
+      imports: additive.importRequirements().map((requirement) => requirement.symbol),
+    }).toEqual({
+      additive: `this.setDefault({ schema: "public", table: "user", column: ${column} })`,
+      widening: `this.setDefault({ schema: "public", table: "user", column: ${column}, operationClass: "widening" })`,
+      imports: ['col', 'lit'],
+    });
   });
 });
 

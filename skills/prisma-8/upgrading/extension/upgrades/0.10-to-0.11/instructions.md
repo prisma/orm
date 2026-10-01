@@ -146,7 +146,7 @@ interface ClientFacade {
 
 This is the surface that lets a short-lived script (`tsx my-script.ts`) release facade-owned connection resources and exit cleanly. Without it, a `pg.Pool` (or analogous keep-alive in SQLite / Mongo) keeps Node's event loop alive and the script hangs after its last query prints.
 
-If your extension exposes a facade in the same shape (e.g. you publish your own `postgresServerless()` or `someDriver()` factory that returns the same client object), add the equivalent surface. Three load-bearing properties:
+If your extension exposes a facade in the same shape (e.g. you publish your own `postgresServerless()` or `someDriver()` factory that returns the same client object), add the equivalent surface. Three properties the surface must have:
 
 1. **Ownership rule.** `close()` releases only the resources the facade *itself* constructed. A `{ url }` (or similar opaque-string) binding means the facade opened the connection — facade owns it, `close()` disposes it. A `{ pool }` / `{ client }` / `{ mongoClient }` (caller-supplied opaque-handle) binding means the caller owns it — `close()` leaves it untouched. The facade must capture this ownership decision at construction time and remember it.
 
