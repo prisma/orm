@@ -56,6 +56,8 @@ import {
   FileChangeType,
   type FoldingRange,
   FoldingRangeRequest,
+  type Hover,
+  HoverRequest,
   InitializedNotification,
   InitializeRequest,
   type InitializeResult,
@@ -828,6 +830,13 @@ function requestSignatureHelp(
   });
 }
 
+function requestHover(harness: Harness, uri: string, position: Position): Promise<Hover | null> {
+  return harness.client.sendRequest(HoverRequest.type, {
+    textDocument: { uri },
+    position,
+  });
+}
+
 function completionItems(
   result: CompletionItem[] | CompletionList | null,
 ): readonly CompletionItem[] {
@@ -1051,6 +1060,30 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(result.capabilities.signatureHelpProvider).toEqual({
       triggerCharacters: ['(', ','],
     });
+    expect(result.capabilities.hoverProvider).toBe(true);
+  });
+
+  it('serves hover content through the server for an opened document', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      ['// use prisma-8', 'model Us|er {', '  id Int', '}'].join('\n'),
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(await requestHover(harness, schemaUri, position)).toEqual({
+      contents: { kind: MarkupKind.Markdown, value: '```prisma\nmodel User\n```' },
+      range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+    });
+  });
+
+  it('returns no hover for an unopened document', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const { position } = sourceWithCursor(
+      ['// use prisma-8', 'model Us|er {', '  id Int', '}'].join('\n'),
+    );
+    expect(await requestHover(harness, schemaUri, position)).toBeNull();
   });
 
   it.each([

@@ -12,6 +12,7 @@ import {
   DocumentDiagnosticReportKind,
   type FoldingRange,
   type FullDocumentDiagnosticReport,
+  type Hover,
   type Position,
   type PublishDiagnosticsParams,
   type Range,
@@ -25,6 +26,7 @@ import { type ConfigResolution, resolveConfigInputs } from './config-resolution'
 import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
 import type { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
+import { providePslHover } from './hover';
 import { ProjectArtifacts } from './project-artifacts';
 import {
   isWatcherCacheEligible,
@@ -171,6 +173,23 @@ export class Project {
           symbolTable: data.artifacts.symbolTable(),
           binder: data.artifacts.binder(),
         },
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  async hover(uri: string, position: Position): Promise<Hover | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    try {
+      return providePslHover({
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        position,
+        binder: data.artifacts.binder(),
+        pslBlockDescriptors: data.controlStack.pslBlockDescriptors,
       });
     } catch {
       return null;
