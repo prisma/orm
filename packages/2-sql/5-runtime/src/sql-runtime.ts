@@ -104,7 +104,7 @@ export interface RuntimeOptions<TContract extends Contract<SqlStorage> = Contrac
   readonly middleware?: readonly SqlMiddleware[];
   readonly mode?: 'strict' | 'permissive';
   readonly log?: Log;
-  readonly closeRefusal: CloseRefusal | undefined;
+  readonly closeRefusal?: CloseRefusal | undefined;
 }
 
 /**
