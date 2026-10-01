@@ -162,6 +162,13 @@ export function providePslCompletionItems(
         : provideAttributeArgumentSlotCompletionItems(
             {
               context,
+              scope: input.candidates.binder.scopeAt(
+                'field' in context
+                  ? context.field.syntax
+                  : 'model' in context
+                    ? context.model.syntax
+                    : context.block.syntax,
+              ),
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerSuggestCommand:
@@ -185,6 +192,13 @@ export function providePslCompletionItems(
         : provideAttributeValueCompletionItems(
             {
               context,
+              scope: input.candidates.binder.scopeAt(
+                'field' in context
+                  ? context.field.syntax
+                  : 'model' in context
+                    ? context.model.syntax
+                    : context.block.syntax,
+              ),
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerParameterHintsCommand:

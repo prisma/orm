@@ -1337,6 +1337,57 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     await republished;
   });
 
+  it('refreshes entity-reference candidates after a declaration changes', async () => {
+    const reference = fieldAttribute('reference', {
+      documentation: 'References a model.',
+      positional: [
+        { key: 'target', type: entityRef({ kind: 'model' }), documentation: 'Target model.' },
+      ],
+    });
+    harness = startHarness(async (input) => {
+      const resolution = await resolveToSchemaWithAttributeContributions(input);
+      return {
+        ...resolution,
+        controlStack: {
+          ...resolution.controlStack,
+          authoringContributions: assembleAuthoringContributions([
+            {
+              id: 'entity-completion',
+              authoring: {
+                type: testTypeConstructors(scalarTypes),
+                attributeSpecs: { field: { reference: () => reference }, model: {} },
+              },
+            },
+          ]),
+        },
+      };
+    });
+    await harness.initialize();
+    const initial = sourceWithCursor(
+      '// use prisma-8\nmodel Owner { value String @reference(|) }\nmodel Before {}',
+    );
+    openDocument(harness, schemaUri, initial.source);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
+    expect(
+      completionItems(await requestCompletion(harness, schemaUri, initial.position)).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['Owner', 'Before']);
+
+    const updated = sourceWithCursor(
+      '// use prisma-8\nmodel Owner { value String @reference(|) }\nmodel After {}',
+    );
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: updated.source }],
+    });
+    expect(
+      completionItems(await requestCompletion(harness, schemaUri, updated.position)).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['Owner', 'After']);
+  });
+
   it('serves repeated reads without reparsing while no mutation intervenes', async () => {
     harness = startHarness(resolveToSchema);
     await harness.initialize();

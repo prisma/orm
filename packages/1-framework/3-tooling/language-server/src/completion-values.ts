@@ -1,4 +1,10 @@
-import type { ArgType, AttributeSpec } from '@internal/psl-parser';
+import {
+  type ArgType,
+  type AttributeSpec,
+  entityReference,
+  matchesSelector,
+  type Scope,
+} from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
@@ -21,6 +27,7 @@ interface CompletionInput<Position extends AttributeArgumentPosition> {
 interface ValueCompletionInput<Position extends AttributeArgumentPosition>
   extends CompletionInput<Position> {
   readonly fieldNames: (kind: 'fieldRef' | 'referencedFieldRef') => readonly string[];
+  readonly scope: Scope;
 }
 
 export function provideAttributeNamedKeyCompletionItems(
@@ -153,9 +160,16 @@ function valueItems(
     case 'fieldRef':
     case 'referencedFieldRef':
       return scalarItems(input, input.fieldNames(type.kind));
+    case 'entityRef': {
+      const names: string[] = [];
+      for (const [name, resolution] of input.scope.entries()) {
+        const reference = entityReference(resolution);
+        if (reference !== undefined && matchesSelector(reference, type.expected)) names.push(name);
+      }
+      return scalarItems(input, names);
+    }
     case 'list':
     case 'record':
-    case 'entityRef':
     case 'int':
     case 'json':
     case 'rejecting':
