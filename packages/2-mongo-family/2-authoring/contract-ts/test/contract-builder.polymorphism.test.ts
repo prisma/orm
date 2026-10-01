@@ -377,3 +377,35 @@ describe('mongo contract builder — polymorphic index scoping', () => {
     expect(message).toMatch(/bug/);
   });
 });
+
+describe('mongo contract builder — discriminator values', () => {
+  it('rejects variants that share a discriminator value', () => {
+    const Task = model('Task', {
+      collection: 'tasks',
+      fields: {
+        _id: field.objectId(),
+        type: field.string(),
+      },
+      discriminator: {
+        field: 'type',
+        variants: { Bug: { value: 'bug' }, OtherBug: { value: 'bug' } },
+      },
+    });
+    const Bug = model('Bug', { collection: 'tasks', base: Task, fields: {} });
+    const OtherBug = model('OtherBug', { collection: 'tasks', base: Task, fields: {} });
+
+    expect(() =>
+      defineContract({
+        family: mongoFamilyPack,
+        target: mongoTargetPack,
+        models: { Task, Bug, OtherBug },
+      }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.ARGUMENT_INVALID',
+        message:
+          'Discriminator value "bug" is used by both "Bug" and "OtherBug" on base model "Task".',
+      }),
+    );
+  });
+});
