@@ -45,7 +45,7 @@ hover.ts   providePslHover(input): Hover | null
 
 The returned `range` is the hovered token's range.
 
-**`///` reader** (`doc-comment.ts`):
+**`///` reader** (`docComment()` on the psl-parser AST classes `ModelDeclarationAst`, `CompositeTypeDeclarationAst`, `FieldDeclarationAst`, `NamedTypeDeclarationAst` and `GenericBlockDeclarationAst`, each implementing a `HasDocComment` interface; computed when called, nothing stored at parse time; amended 2026-10-02):
 1. Start from the declaration's syntax node and walk back through its preceding sibling tokens in the parent.
 2. Collect `Comment` tokens whose text starts with `///`. Only whitespace and single newlines may sit between them.
 3. Stop at a blank line (two newlines), at a `//` comment that is not `///`, or at any non-trivia element.
@@ -60,7 +60,8 @@ Everything here is the language server's hover path, from the request handler to
 ## Scope
 
 **In:**
-- `hover.ts`, `doc-comment.ts` and a declaration-line renderer in `packages/1-framework/3-tooling/language-server/src/`;
+- `hover.ts` and a declaration-line renderer in `packages/1-framework/3-tooling/language-server/src/`;
+- `HasDocComment` and `docComment()` on the five AST classes in `packages/1-framework/2-authoring/psl-parser/src/syntax/`, with psl-parser tests;
 - `project.ts` `hover()`;
 - `server.ts` capability and handler;
 - extracting the signature-label rendering in `signature-help.ts` so hover can reuse it, with no change to signature-help behaviour;

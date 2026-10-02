@@ -7,7 +7,7 @@
 
 The project has two stacked slices.
 
-1. The first adds `textDocument/hover` for everything the binder already resolves, and reads `///` doc comments. It changes only the language server.
+1. The first adds `textDocument/hover` for everything the binder already resolves, and reads `///` doc comments. It changes the language server, plus a `docComment()` method on the psl-parser AST classes. The binder is unchanged.
 2. The second adds the binder resolutions that only hover needs (`parameter`, `function`, `constant`, block `attribute`), plus the hover rendering for them.
 
 ## Composition

@@ -52,7 +52,7 @@ Two changes make this possible:
   - Function-call names resolve to `function`.
   - Fixed identifier values resolve to `constant`.
   - Block attributes resolve to `attribute`, the same way model and field attributes already do.
-- **`///` doc comments.** The parser already keeps `///` lines as `Comment` trivia in the parent node, just before the declaration they precede. The language server reads them back from the declaration node. The parser, the symbol table and the contract are unchanged.
+- **`///` doc comments.** The parser already keeps `///` lines as `Comment` trivia in the parent node, just before the declaration they precede. The strongly typed AST classes that can carry one gain a `docComment()` method, declared by a `HasDocComment` interface. It reads the trivia when called. Parsing, the symbol table and the contract are unchanged.
 
 ## Decisions
 
@@ -66,7 +66,7 @@ Two changes make this possible:
 
    Function and constant symbols are recorded inside `tryBindExpression`, so for a `oneOf` rule only the alternative that matches records them, the same way references are recorded today.
 4. **Composite-type attributes are not bound.** Neither family has attribute specs for composite types (SQL rejects them in `interpreter.ts`), so there is no documentation to show.
-5. **`///` documentation is read only by the language server.** Symbols, the symbol table and the contract do not carry it. Rejected for now:
+5. **`///` documentation is read through `docComment()` on the AST, and only the language server calls it for now.** The method is computed on call: parsing does not extract or store anything. A `HasDocComment` interface names the AST classes that carry one. Symbols, the symbol table and the contract do not carry it. (Amended 2026-10-02 by the operator: the reader lives on the AST classes, not as a language-server helper.) Rejected for now:
    - Documentation on symbols (option b). It would serve no consumer other than hover yet.
    - Emitting it into `contract.json` / `contract.d.ts` (option c). That is a separate feature with fixture churn.
 6. **Where `///` is read:** on models, composite types, fields, named types and blocks.
