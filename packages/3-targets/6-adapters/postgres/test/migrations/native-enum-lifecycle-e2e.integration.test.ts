@@ -29,13 +29,14 @@ import {
   type MigrationOperationPolicy,
 } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import {
   describeUnsupportedSqlAttribute,
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
-import { bindPslSchema } from '@internal/sql-contract-psl/test';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { createPostgresBuiltinCodecLookup } from '@internal/target-postgres/codecs';
 import { postgresScalarAuthoringTypes } from '@internal/target-postgres/control';
@@ -251,7 +252,7 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       // Carries the REAL Postgres target pack's authoring contributions
       // (`postgresTargetDescriptor.authoring`, including `qualifyColumnType` =
       // `postgresQualifyColumnType`), which schema-qualifies a `pg.enum` column's

@@ -5,11 +5,9 @@ import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { createControlStack } from '@internal/framework-components/control';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
-import {
-  bindPslSchema,
-  contractSourceContextFromControlStack,
-} from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { describe, expect, it } from 'vitest';
 
@@ -53,7 +51,7 @@ function emit(schema: string = REPRESENTATIVE_SCHEMA) {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
     }),
     bound.seedDiagnostics,
   );
@@ -221,7 +219,7 @@ describe('deprecated Mongo scalar names through the PSL contract source', () => 
         sources: bound.sources,
         symbolTable: bound.symbolTable,
         binder: bound.binder,
-        ...bound.contextInput,
+        ...mongoContextInput(bound.context),
       }),
       bound.seedDiagnostics,
     );

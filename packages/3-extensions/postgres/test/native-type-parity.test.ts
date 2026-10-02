@@ -4,11 +4,9 @@ import sql from '@internal/family-sql/control';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
-import {
-  bindPslSchema,
-  contractSourceContextFromControlStack,
-} from '@internal/sql-contract-psl/test';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import postgres from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPackRef from '@internal/target-postgres/pack';
@@ -37,7 +35,7 @@ function emit(schema: string) {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       target: postgresPackRef,
       createNamespace: postgresCreateNamespace,
     }),

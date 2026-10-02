@@ -17,13 +17,14 @@ import { assembleAuthoringContributions } from '@internal/framework-components/c
 import { buildSymbolTable, createBinder, interpretExtensionBlocks } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import {
   describeUnsupportedSqlAttribute,
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
-import { bindPslSchema } from '@internal/sql-contract-psl/test';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -125,7 +126,7 @@ function interpretWithSymbolDiagnostics(source: string) {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       target: postgresTarget,
       createNamespace: postgresCreateNamespace,
     }),

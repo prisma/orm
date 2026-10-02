@@ -13,8 +13,9 @@ import {
   interpretPslDocumentToMongoContract,
   mongoAttributeSpecs,
 } from '@internal/mongo-contract-psl';
-import { bindPslSchema } from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { timeouts } from '@repo/test-utils';
@@ -100,7 +101,7 @@ function interpret(
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
       enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },
     }),
     bound.seedDiagnostics,

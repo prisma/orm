@@ -3,11 +3,9 @@ import mongoDriver from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
-import {
-  bindPslSchema,
-  contractSourceContextFromControlStack,
-} from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { describe, expect, it } from 'vitest';
 
@@ -29,7 +27,7 @@ function interpret(schema: string) {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
     }),
     bound.seedDiagnostics,
   );

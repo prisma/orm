@@ -1,7 +1,8 @@
 import { pathToFileURL } from 'node:url';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
-import { bindPslSchema } from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { resolveConfigInputs } from '../../../../packages/1-framework/3-tooling/language-server/src/config-resolution';
@@ -39,7 +40,7 @@ describe('the language server and the provider agree on Mongo earlier-name wordi
         sources: bound.sources,
         symbolTable: bound.symbolTable,
         binder: bound.binder,
-        ...bound.contextInput,
+        ...mongoContextInput(bound.context),
       }),
       bound.seedDiagnostics,
     );

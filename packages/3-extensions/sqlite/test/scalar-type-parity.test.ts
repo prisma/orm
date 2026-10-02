@@ -5,11 +5,9 @@ import { collectScalarTypeConstructors } from '@internal/framework-components/au
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
-import {
-  bindPslSchema,
-  contractSourceContextFromControlStack,
-} from '@internal/sql-contract-psl/test';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import sqlitePackRef from '@internal/target-sqlite/pack';
@@ -50,7 +48,7 @@ function emit() {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       target: sqlitePackRef,
       createNamespace: sqliteCreateNamespace,
     }),

@@ -9,12 +9,13 @@ import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-com
 import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import {
   describeUnsupportedSqlAttribute,
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
-import { bindPslSchema } from '@internal/sql-contract-psl/test';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import postgresTargetControl from '@internal/target-postgres/control';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
@@ -111,7 +112,7 @@ function pslIndexes() {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       target: postgresPack,
       createNamespace: postgresCreateNamespace,
     }),

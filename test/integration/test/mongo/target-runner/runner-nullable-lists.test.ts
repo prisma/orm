@@ -5,12 +5,10 @@ import { createControlStack } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { MongoContract } from '@internal/mongo-contract';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
-import {
-  bindPslSchema,
-  contractSourceContextFromControlStack,
-} from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
@@ -61,7 +59,7 @@ beforeAll(async () => {
       symbolTable: bound.symbolTable,
       sources: bound.sources,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
     }),
     bound.seedDiagnostics,
   );

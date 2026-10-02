@@ -11,10 +11,11 @@ import {
   interpretPslDocumentToMongoContract,
   mongoAttributeSpecs,
 } from '@internal/mongo-contract-psl';
-import { bindPslSchema } from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import {
   MongoMigrationPlanner,
   MongoMigrationRunner,
@@ -154,7 +155,7 @@ function makeContractFromPsl(): MongoContract {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
     }),
     bound.seedDiagnostics,
   );

@@ -7,6 +7,7 @@ import type { Contract } from '@internal/contract/types';
 import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { Result } from '@internal/utils/result';
 import { expect } from 'vitest';
 import { describeUnresolvedMongoType } from '../src/describe-unresolved-type';
@@ -16,7 +17,7 @@ import {
   describeUnsupportedMongoAttribute,
   mongoAttributeSpecs,
 } from '../src/mongo-attribute-specs';
-import { bindPslSchema } from '../src/test';
+import { mongoContextInput } from '../src/test';
 
 /**
  * Builds the `ContractSourceContext` `createBinder` needs, from the
@@ -105,7 +106,7 @@ export function interpretMongoContract(
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
       ...(options.enumInferenceCodecs ? { enumInferenceCodecs: options.enumInferenceCodecs } : {}),
     }),
     bound.seedDiagnostics,

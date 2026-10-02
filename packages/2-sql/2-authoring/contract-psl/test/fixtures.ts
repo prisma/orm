@@ -40,6 +40,7 @@ import {
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import type { Result } from '@internal/utils/result';
@@ -48,7 +49,7 @@ import type { InterpretPslDocumentToSqlContractInput } from '../src/interpreter'
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
 import { sqlAttributeSpecs } from '../src/sql-attribute-specs';
-import { bindPslSchema } from '../src/test';
+import { sqlContextInput } from '../src/test';
 import { postgresCodecLookup } from './fixture-codec-descriptors';
 import { fixtureDataTypeSupport } from './fixture-data-types';
 
@@ -516,7 +517,7 @@ export function interpretSqlContract(
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       target: options.target,
       createNamespace: options.createNamespace,
       ...(options.composedExtensionPackRefs?.length

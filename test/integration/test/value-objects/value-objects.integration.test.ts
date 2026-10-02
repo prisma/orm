@@ -14,15 +14,16 @@ import {
   interpretPslDocumentToMongoContract,
   mongoAttributeSpecs,
 } from '@internal/mongo-contract-psl';
-import { bindPslSchema as bindMongoPslSchema } from '@internal/mongo-contract-psl/test';
+import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import { mongoOrm } from '@internal/mongo-orm';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
+import { bindPslSchema } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import {
   describeUnsupportedSqlAttribute,
   sqlAttributeSpecs,
 } from '@internal/sql-contract-psl/attribute-specs';
-import { bindPslSchema as bindSqlPslSchema } from '@internal/sql-contract-psl/test';
+import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
@@ -93,7 +94,7 @@ function interpretMongoPsl(schema: string) {
         { kind: 'typeConstructor' as const, output: { codecId, nativeType: codecId } },
       ]),
     );
-  const bound = bindMongoPslSchema(schema, {
+  const bound = bindPslSchema(schema, {
     sourceId: 'mongo-value-objects.prisma',
     context: {
       composedExtensions: [],
@@ -121,7 +122,7 @@ function interpretMongoPsl(schema: string) {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...mongoContextInput(bound.context),
     }),
     bound.seedDiagnostics,
   );
@@ -139,7 +140,7 @@ const postgresScalarAuthoringTypes = Object.fromEntries(
 
 function interpretSqlPsl(schema: string) {
   const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
-  const bound = bindSqlPslSchema(schema, {
+  const bound = bindPslSchema(schema, {
     sourceId: 'sql-value-objects.prisma',
     context: {
       composedExtensions: [],
@@ -169,7 +170,7 @@ function interpretSqlPsl(schema: string) {
       sources: bound.sources,
       symbolTable: bound.symbolTable,
       binder: bound.binder,
-      ...bound.contextInput,
+      ...sqlContextInput(bound.context),
       target: postgresTarget,
       createNamespace: postgresCreateNamespace,
     }),
