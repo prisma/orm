@@ -13,6 +13,8 @@ import {
   type FoldingRange,
   type FullDocumentDiagnosticReport,
   type Hover,
+  type Location,
+  type LocationLink,
   type Position,
   type PublishDiagnosticsParams,
   type Range,
@@ -23,6 +25,7 @@ import {
 import { classifyPslCompletionContext } from './completion-context';
 import { providePslCompletionItems } from './completion-provider';
 import { type ConfigResolution, resolveConfigInputs } from './config-resolution';
+import { provideDefinition } from './definition';
 import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
 import type { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
@@ -194,6 +197,26 @@ export class Project {
     } catch {
       return null;
     }
+  }
+
+  async definition(
+    uri: string,
+    position: Position,
+    linkSupport: boolean,
+  ): Promise<LocationLink[] | Location[] | null> {
+    const data = await this.#resolveMember(uri);
+    const document = data?.artifacts.document(uri);
+    if (data === undefined || document === undefined) return null;
+    return provideDefinition(
+      {
+        document: document.parse().document,
+        sourceFile: document.sourceFile,
+        sources: data.artifacts.sources,
+        binder: data.artifacts.binder(),
+      },
+      position,
+      linkSupport,
+    );
   }
 
   async foldingRanges(uri: string): Promise<FoldingRange[]> {
