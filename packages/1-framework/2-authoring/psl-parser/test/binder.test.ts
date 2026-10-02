@@ -385,6 +385,81 @@ describe('createBinder — declarations', () => {
   });
 });
 
+describe('createBinder — declaration-name resolutions', () => {
+  it('resolves a model, composite type, field, named type, and block name to the declared symbol', () => {
+    const { symbolTable, binder } = bind(
+      [
+        'types { Email = String }',
+        'type Address {',
+        '  street String',
+        '}',
+        'enum Role {',
+        '  Admin',
+        '}',
+        'model User {',
+        '  id Int',
+        '  address Address',
+        '  email Email',
+        '  role Role',
+        '}',
+      ].join('\n'),
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const address = symbolTable.topLevel.compositeTypes['Address']!;
+    const email = symbolTable.topLevel.namedTypes['Email']!;
+    const role = symbolTable.topLevel.blocks['Role']!;
+
+    expect(binder.symbolForNode(user.node.name()!.syntax)).toEqual({
+      kind: 'model',
+      symbol: user,
+    });
+    expect(binder.symbolForNode(address.node.name()!.syntax)).toEqual({
+      kind: 'compositeType',
+      symbol: address,
+    });
+    expect(binder.symbolForNode(user.fields['id']!.node.name()!.syntax)).toEqual({
+      kind: 'field',
+      symbol: user.fields['id'],
+    });
+    expect(binder.symbolForNode(email.node.name()!.syntax)).toEqual({
+      kind: 'namedType',
+      symbol: email,
+    });
+    expect(binder.symbolForNode(role.node.name()!.syntax)).toEqual({
+      kind: 'block',
+      symbol: role,
+    });
+  });
+
+  it('resolves a namespaced model name with its namespace', () => {
+    const { symbolTable, binder } = bind('namespace app {\n  model Item {\n    id Int\n  }\n}');
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const item = app.models['Item']!;
+    expect(binder.symbolForNode(item.node.name()!.syntax)).toEqual({
+      kind: 'model',
+      symbol: item,
+      namespace: app,
+    });
+  });
+
+  it('resolves a namespaced block name with its namespace', () => {
+    const { symbolTable, binder } = bind('namespace app {\n  enum Role {\n    Admin\n  }\n}');
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const role = app.blocks['Role']!;
+    expect(binder.symbolForNode(role.node.name()!.syntax)).toEqual({
+      kind: 'block',
+      symbol: role,
+      namespace: app,
+    });
+  });
+
+  it('does not resolve a namespace declaration name', () => {
+    const { symbolTable, binder } = bind('namespace app {\n  model Item {\n    id Int\n  }\n}');
+    const app = symbolTable.topLevel.namespaces['app']!;
+    expect(binder.symbolForNode(app.declarations[0].node.name()!.syntax)).toBeUndefined();
+  });
+});
+
 describe('createBinder — the scope chain', () => {
   it('prefers the declaring namespace over a top-level declaration of the same name', () => {
     const { symbolTable, binder, diagnostics } = bind(

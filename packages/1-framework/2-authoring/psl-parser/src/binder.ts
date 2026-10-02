@@ -216,17 +216,26 @@ function walkEntities(
   symbolTable: SymbolTable,
   stack: ScopeStack,
   binder: Binder,
-  visit: (entity: ModelSymbol | CompositeTypeSymbol) => void,
+  visit: (entity: ModelSymbol | CompositeTypeSymbol, namespace?: NamespaceSymbol) => void,
 ): void {
   const { topLevel } = symbolTable;
   for (const entity of Object.values(topLevel.models)) visit(entity);
   for (const entity of Object.values(topLevel.compositeTypes)) visit(entity);
   for (const namespace of Object.values(topLevel.namespaces)) {
     stack.push(binder.scopeAt(namespace.declarations[0].node.syntax));
-    for (const entity of Object.values(namespace.models)) visit(entity);
-    for (const entity of Object.values(namespace.compositeTypes)) visit(entity);
+    for (const entity of Object.values(namespace.models)) visit(entity, namespace);
+    for (const entity of Object.values(namespace.compositeTypes)) visit(entity, namespace);
     stack.pop();
   }
+}
+
+function declarationResolution(
+  entity: ModelSymbol | CompositeTypeSymbol,
+  namespace: NamespaceSymbol | undefined,
+): Resolution {
+  return entity.kind === 'model'
+    ? { kind: 'model', symbol: entity, ...(namespace === undefined ? {} : { namespace }) }
+    : { kind: 'compositeType', symbol: entity, ...(namespace === undefined ? {} : { namespace }) };
 }
 
 export function createBinder(input: CreateBinderInput): BinderResult {
@@ -279,6 +288,8 @@ function bind(options: BindingInputs): BinderResult {
   const baseScope = namedTypeBaseScope(symbolTable.topLevel, contributed);
   for (const symbol of Object.values(symbolTable.topLevel.namedTypes)) {
     declarations.set(symbol.node.syntax, symbol);
+    const declaredName = symbol.node.name()?.syntax;
+    if (declaredName !== undefined) references.set(declaredName, { kind: 'namedType', symbol });
     const name = symbol.node.typeAnnotation()?.name();
     const outcome = resolveTypeReference(name, baseScope);
     if (name === undefined || outcome === undefined) continue;
@@ -286,6 +297,8 @@ function bind(options: BindingInputs): BinderResult {
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
+    const declaredName = symbol.node.name()?.syntax;
+    if (declaredName !== undefined) references.set(declaredName, { kind: 'block', symbol });
   }
   for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
     const scope = namespaceScope(namespace, document);
@@ -295,16 +308,26 @@ function bind(options: BindingInputs): BinderResult {
     }
     for (const symbol of Object.values(namespace.blocks)) {
       declarations.set(symbol.node.syntax, symbol);
+      const declaredName = symbol.node.name()?.syntax;
+      if (declaredName !== undefined) {
+        references.set(declaredName, { kind: 'block', symbol, namespace });
+      }
     }
   }
 
   // Attributes are parsed in a second walk once every field type is bound.
   // @relation(references: [x]) reads the referenced model's fields, and that
   // model may be declared further down the file.
-  walkEntities(symbolTable, stack, binder, (entity) => {
+  walkEntities(symbolTable, stack, binder, (entity, namespace) => {
     declarations.set(entity.node.syntax, entity);
+    const declaredName = entity.node.name()?.syntax;
+    if (declaredName !== undefined) {
+      references.set(declaredName, declarationResolution(entity, namespace));
+    }
     for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
+      const fieldName = field.node.name()?.syntax;
+      if (fieldName !== undefined) references.set(fieldName, { kind: 'field', symbol: field });
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
       const outcome = resolveTypeReference(
