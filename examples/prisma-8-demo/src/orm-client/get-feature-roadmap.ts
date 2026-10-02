@@ -19,7 +19,7 @@ export async function ormClientGetFeatureRoadmap(
   return db.User.select('id', 'displayName')
     .include('tasks', (tasks) =>
       tasks
-        .variant('Feature')
+        .variant('feature')
         .where((feature) => feature.targetRelease.eq(targetRelease))
         .orderBy((feature) => feature.createdAt.asc()),
     )

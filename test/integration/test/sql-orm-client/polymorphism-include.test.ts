@@ -451,7 +451,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
             tasks
-              .variant('Bug')
+              .variant('bug')
               .where((task) => task.severity.eq('critical'))
               .select('id', 'title', 'type', 'severity')
               .orderBy((task) => task.id.asc()),
@@ -486,7 +486,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
             tasks
-              .variant('Feature')
+              .variant('feature')
               .where((task) => task.priority.gte(3))
               .select('id', 'title', 'type')
               .orderBy((task) => task.id.asc()),
@@ -519,7 +519,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
             tasks
-              .variant('Feature')
+              .variant('feature')
               .select('id', 'title', 'type')
               .orderBy((task) => task.id.asc()),
           )
@@ -620,7 +620,7 @@ describe('integration/polymorphism-include', () => {
         // (priority 1) and id=4 (priority 3), so `priority.desc()` yields 4
         // before 3.
         const rows = await tasks
-          .variant('Feature')
+          .variant('feature')
           .orderBy((task) => task.priority.desc())
           .all();
 
@@ -650,7 +650,7 @@ describe('integration/polymorphism-include', () => {
           .select('id', 'name')
           .orderBy((project) => project.id.asc())
           .include('tasks', (tasks) =>
-            tasks.variant('Feature').orderBy((task) => task.priority.desc()),
+            tasks.variant('feature').orderBy((task) => task.priority.desc()),
           )
           .all();
 
@@ -683,7 +683,7 @@ describe('integration/polymorphism-include', () => {
           .orderBy((account) => account.id.asc())
           .include('members', (members) =>
             members
-              .variant('Admin')
+              .variant('admin')
               .select('id', 'kind', 'role')
               .orderBy((member) => member.id.asc()),
           )

@@ -31,10 +31,10 @@
  *                              each task comes back shaped per its variant
  *                              (Bug: severity/stepsToRepro, Feature: priority/targetRelease)
  * - repo-bug-triage [severity] [limit]
- *                              Users with a `.variant('Bug')`-narrowed include,
+ *                              Users with a `.variant('bug')`-narrowed include,
  *                              filtered by the Bug-only `severity` column
  * - repo-feature-roadmap <targetRelease> [limit]
- *                              Users with a `.variant('Feature')`-narrowed include,
+ *                              Users with a `.variant('feature')`-narrowed include,
  *                              filtered by the Feature-only `targetRelease` column
  * - repo-post-tags <postId>    Include a post's tags (N:M read through the junction)
  * - repo-tag-posts <tagId>     Include a tag's posts (N:M read, reverse direction)

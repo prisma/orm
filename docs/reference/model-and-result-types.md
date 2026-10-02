@@ -82,10 +82,12 @@ Adding a schema later never renames an existing type.
 
 A polymorphic base emits three shapes: the base member, one member per variant, and an `Any<Base>` union of the variant members. The base's discriminator field is the union of the variant literals; each variant narrows it to its own literal and adds its own fields. A relation whose target is a polymorphic base is typed as the `Any<Base>` union, because the ORM returns the variant union for such an include.
 
+`.variant(value)` narrows a polymorphic collection to the variant whose discriminator value is `value`. It takes the value the variant declares (`'bug'` from `@@base(Task, "bug")`), not the variant's model name.
+
 ```ts
 type TaskType = Models.public_Task['type']; // 'bug' | 'feature' | 'epic'
 
-const bugs = db.orm.public.Task.variant('Bug');
+const bugs = db.orm.public.Task.variant('bug');
 type Bug = ResultType<typeof bugs>; // Scalars<Models.public_Bug>
 
 type AnyTask = ResultType<typeof db.orm.public.Task>; // Scalars<Models.public_AnyTask>

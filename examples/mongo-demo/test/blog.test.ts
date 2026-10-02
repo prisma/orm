@@ -217,13 +217,13 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
       },
     ]);
 
-    const articles = await orm.posts.variant('Article').all();
+    const articles = await orm.posts.variant('article').all();
     expect(articles).toHaveLength(2);
     for (const a of articles) {
       expect(a.kind).toBe('article');
     }
 
-    const tutorials = await orm.posts.variant('Tutorial').all();
+    const tutorials = await orm.posts.variant('tutorial').all();
     expect(tutorials).toHaveLength(1);
     expect(tutorials[0]).toMatchObject({ title: 'Tutorial One', kind: 'tutorial' });
   });

@@ -19,7 +19,7 @@ Reach for the ORM first; drop to `db.query` when the ORM can't express the shape
 |---|---|---|
 | Standard CRUD with reference relations | **ORM (`db.orm.<root>`)** | Collection-shaped; object `.where({ ... })`; `.create` / `.update` / `.delete` / `.upsert`. |
 | Eager-load a reference relation | **ORM `.include('<relation>')`** | Lowers to `$lookup`; composes with `.where` / `.select` / `.orderBy` / `.limit`. |
-| Polymorphic root (discriminated variants) | **ORM `.variant('<VariantName>')`** | Narrows to one variant and injects the discriminator filter. |
+| Polymorphic root (discriminated variants) | **ORM `.variant('<discriminator value>')`** | Narrows to the variant declaring that value and injects the discriminator filter. |
 | Field-level Mongo updates (`$push`, `$inc`, dot-path `$set`) | **ORM `.update((f) => [f.field.inc(1)])`** | Field-accessor callback; plain-object `.update({ ... })` for whole-field replacement. |
 | Aggregation pipeline (group, facet, `$lookup` with reshaping) | **Query builder (`db.query.from(...)`)** | Full pipeline surface; typed row shape through `.build()`. |
 | Typed cross-collection join in a pipeline | **Query builder `.lookup((from) => from('users').on(...).as('author'))`** | `$lookup` with compile-time foreign-root checking. |
@@ -51,11 +51,11 @@ const recent = await db.orm.posts
 
 For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@prisma/orm-mongo/query-ast/execution` (a façade-completeness gap; see *What Prisma 8 doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
 
-**Polymorphic roots.** When the contract declares variants on a model, narrow before querying:
+**Polymorphic roots.** When the contract declares variants on a model, narrow before querying. `.variant()` takes the discriminator value a variant declares (`"article"` from `@@base(Post, "article")`), not the variant's model name:
 
 ```typescript
-const articles = await db.orm.posts.variant('Article').all();
-const tutorials = await db.orm.posts.variant('Tutorial').where({ authorId }).all();
+const articles = await db.orm.posts.variant('article').all();
+const tutorials = await db.orm.posts.variant('tutorial').where({ authorId }).all();
 ```
 
 **Sorting and pagination.** `.orderBy({ field: 1 | -1 })` (Mongo sort directions). `.limit(n)` maps to `$limit`; `.offset(n)` maps to `$skip`.
