@@ -125,3 +125,14 @@ None.
 ## Amendment (after review on #30563)
 
 The describers moved from `authoring` contributions to the family descriptor's `pslDiagnostics`, copied into `ContractSourceContext.pslDiagnostics` by the CLI and the language server. The duplicate-contribution checks in `control-stack.ts` and the `AuthoringContributions` fields were removed. Sections above that describe the `authoring` route are superseded by this.
+
+Later operator decisions, also in #30563:
+
+- `interpretPslSqlSources` / `interpretPslMongoSources` were removed. `provider.load()` builds the symbol table and binder itself; tests build them through each family's `./test` `bindPslSchema` and pass `binder` explicitly.
+- Interpreters never look up names written in the schema. SQL `resolveFieldTypeDescriptor` and Mongo `resolveNonRelationField` switch on the binder resolution, so Mongo field-type resolution through the binder is in scope here, not a separate project. The binder binds a field preset name to the preset descriptor (`contributedTypes`).
+- New diagnostics: `PSL_PRESET_NOT_CALLED` and `PSL_TYPE_CONSTRUCTOR_NOT_CALLED`, reported by the interpreters. A resolved name SQL cannot store gets a specific `PSL_UNSUPPORTED_FIELD_TYPE` message instead of the catch-all. A schema whose only errors come from the binder gets the `Schema has N errors` summary.
+- `FieldAttributeSpecContext` carries the field's `typeResolution`; enum member validation takes the enum from it. The discriminator check identifies `String` by codec id from the resolution, so a named type based on `String` is accepted.
+- A named type's base resolves in a scope without the named types (`Uuid = Uuid` binds to the contributed `Uuid`).
+- `contract-prisma7` does not use the binder; it instantiates its mapped type constructors directly.
+- `@internal` API changes get no upgrade instructions; the fragment is `changes: []`.
+- One binder factory: `createBinder` derives its inputs from the context subset it needs; the language server uses it with or without an interpretation.
