@@ -581,6 +581,9 @@ export function resolveFieldTypeDescriptor(
     }
     case 'field':
     case 'attribute':
+    case 'parameter':
+    case 'function':
+    case 'constant':
       throw new InternalError(
         `The type of ${entityLabel} resolved to a ${resolution.kind}; a type reference never names one. This is a binder bug.`,
       );

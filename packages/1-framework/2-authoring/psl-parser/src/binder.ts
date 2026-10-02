@@ -17,6 +17,7 @@ import type {
 } from './attribute-spec/spec-context';
 import type {
   AttributeSpec,
+  BlockAttributeCtx,
   FieldAttributeCtx,
   FuncCallSig,
   InspectableArgType,
@@ -76,7 +77,8 @@ export const PSL_UNRESOLVED_REFERENCE =
 
 export type BoundSpec =
   | AttributeSpec<never, ModelAttributeCtx>
-  | AttributeSpec<never, FieldAttributeCtx>;
+  | AttributeSpec<never, FieldAttributeCtx>
+  | AttributeSpec<never, BlockAttributeCtx>;
 
 export interface AttributeSymbol {
   readonly kind: 'attribute';
