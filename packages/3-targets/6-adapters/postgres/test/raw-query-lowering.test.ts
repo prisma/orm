@@ -5,6 +5,7 @@ import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
 import { postgresRawCodecInferer } from '../src/core/adapter';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -43,7 +44,12 @@ const contract = new SqlContractSerializer().deserializeContract({
 const rawSql = createRawSql(postgresRawCodecInferer, { contract });
 
 function lower(plan: { readonly ast: Parameters<typeof renderLoweredSql>[0] }) {
-  return renderLoweredSql(plan.ast, contract, postgresCodecDescriptorRegistry);
+  return renderLoweredSql(
+    plan.ast,
+    contract,
+    postgresCodecDescriptorRegistry,
+    postgresAdapterCapabilities,
+  );
 }
 
 describe('raw-query postgres lowering', () => {

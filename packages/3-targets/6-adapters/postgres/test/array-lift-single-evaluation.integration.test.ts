@@ -26,6 +26,7 @@ import {
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { createContract, createDevDatabase, timeouts } from '@repo/test-utils';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -79,7 +80,12 @@ describe('array lift evaluates its source once', { concurrent: false }, () => {
         ),
       ),
     ]);
-    const { sql } = renderLoweredSql(select, contract, postgresCodecDescriptorRegistry);
+    const { sql } = renderLoweredSql(
+      select,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     await driver!.query(`DROP SEQUENCE IF EXISTS ${COUNTER}`);
     await driver!.query(`CREATE SEQUENCE ${COUNTER}`);
@@ -118,7 +124,12 @@ describe('array lift binds its source once in the rendered SQL', () => {
     const select = SelectAst.noFrom().withProjection([
       ProjectionItem.of('doc', new NativeJsonValueProjection(lifted).value),
     ]);
-    const { sql } = renderLoweredSql(select, contract, postgresCodecDescriptorRegistry);
+    const { sql } = renderLoweredSql(
+      select,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     // The structural half of the same claim: the source text appears once, so a
     // reader of the SQL can see the binding rather than inferring it.

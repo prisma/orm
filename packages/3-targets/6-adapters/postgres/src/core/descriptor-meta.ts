@@ -45,6 +45,7 @@ import {
 } from '@internal/target-postgres/codecs';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { adapterError } from './adapter-errors';
+import { postgresAdapterCapabilities } from './capabilities';
 
 // ============================================================================ Helper functions for reducing boilerplate ============================================================================
 
@@ -153,26 +154,7 @@ export const postgresAdapterDescriptorMeta = {
   targetId: 'postgres',
   id: 'postgres',
   version: '0.0.1',
-  capabilities: {
-    postgres: {
-      orderBy: true,
-      limit: true,
-      lateral: true,
-      jsonAgg: true,
-      returning: true,
-      distinctOn: true,
-    },
-    sql: {
-      enums: true,
-      returning: true,
-      defaultInInsert: true,
-      lateral: true,
-      scalarList: true,
-      checkConstraint: true,
-      insertOnConflictSkip: true,
-      insertOnConflictWithoutTarget: true,
-    },
-  },
+  capabilities: postgresAdapterCapabilities,
   dataTypes: postgresDataTypes,
   types: {
     aggregateDescriptors: postgresAggregateDescriptors,

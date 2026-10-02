@@ -11,6 +11,7 @@ import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codec
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import { TestSqlContractSerializer as SqlContractSerializer } from '../../../../2-sql/9-family/test/test-sql-contract-serializer';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -60,7 +61,12 @@ describe('RawExpr postgres lowering', () => {
     });
 
     const ast = selectWithWhere(rawExpr);
-    const lowered = renderLoweredSql(ast, contract, postgresCodecDescriptorRegistry);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     expect(lowered.sql).toContain('now()');
     expect(lowered.params).toHaveLength(0);
@@ -74,7 +80,12 @@ describe('RawExpr postgres lowering', () => {
     });
 
     const ast = selectWithWhere(rawExpr);
-    const lowered = renderLoweredSql(ast, contract, postgresCodecDescriptorRegistry);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     expect(lowered.sql).toContain('score > $1');
     expect(lowered.params).toHaveLength(1);
@@ -90,7 +101,12 @@ describe('RawExpr postgres lowering', () => {
     });
 
     const ast = selectWithWhere(rawExpr);
-    const lowered = renderLoweredSql(ast, contract, postgresCodecDescriptorRegistry);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     expect(lowered.sql).toContain('id BETWEEN $1 AND $2');
     expect(lowered.params).toHaveLength(2);
@@ -107,7 +123,12 @@ describe('RawExpr postgres lowering', () => {
     });
 
     const ast = selectWithWhere(rawExpr);
-    const lowered = renderLoweredSql(ast, contract, postgresCodecDescriptorRegistry);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     expect(lowered.sql).toContain('$1$2');
     expect(lowered.params).toHaveLength(2);
@@ -121,7 +142,12 @@ describe('RawExpr postgres lowering', () => {
     });
 
     const ast = selectWithWhere(rawExpr);
-    const lowered = renderLoweredSql(ast, contract, postgresCodecDescriptorRegistry);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     expect(lowered.sql).toContain('LENGTH("user"."id") > 0');
   });
@@ -134,7 +160,12 @@ describe('RawExpr postgres lowering', () => {
     });
 
     const ast = selectWithWhere(rawExpr);
-    const lowered = renderLoweredSql(ast, contract, postgresCodecDescriptorRegistry);
+    const lowered = renderLoweredSql(
+      ast,
+      contract,
+      postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
+    );
 
     expect(lowered.sql).toContain("status = 'active'");
     expect(lowered.params).toHaveLength(0);

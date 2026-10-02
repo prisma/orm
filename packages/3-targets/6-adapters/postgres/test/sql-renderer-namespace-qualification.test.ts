@@ -13,6 +13,7 @@ import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codec
 import { PostgresSchema } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
+import { postgresAdapterCapabilities } from '../src/core/capabilities';
 import { renderLoweredSql } from '../src/core/sql-renderer';
 import type { PostgresContract } from '../src/core/types';
 
@@ -54,6 +55,7 @@ describe('renderLoweredSql namespace qualification', () => {
       SelectAst.from(user).withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))]),
       publicContract,
       postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
     ).sql;
     expect(selectSql).toBe('SELECT "user"."id" AS "id" FROM "public"."user"');
 
@@ -61,6 +63,7 @@ describe('renderLoweredSql namespace qualification', () => {
       DeleteAst.from(user).withWhere(BinaryExpr.eq(ColumnRef.of('user', 'id'), LiteralExpr.of(1))),
       publicContract,
       postgresCodecDescriptorRegistry,
+      postgresAdapterCapabilities,
     ).sql;
     expect(deleteSql).toContain('DELETE FROM "public"."user"');
   });
