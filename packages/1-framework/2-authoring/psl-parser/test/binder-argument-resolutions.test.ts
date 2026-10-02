@@ -170,6 +170,63 @@ describe('createBinder — constants', () => {
       symbol: { kind: 'constant', name: 'Cascade', documentation: 'Cascading delete.' },
     });
   });
+
+  it('keeps only the matching alternative of a oneOf of fixed identifiers', () => {
+    const onDeleteSpec = fieldAttribute('relation', {
+      documentation: '',
+      named: {
+        onDelete: {
+          type: oneOf(
+            identifier('Cascade', { documentation: 'Cascading delete.' }),
+            identifier('Restrict', { documentation: 'Restrict delete.' }),
+          ),
+          documentation: '',
+        },
+      },
+    });
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  author User @relation(onDelete: Restrict)\n}',
+      binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
+    );
+    expect(diagnostics).toEqual([]);
+    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const attribute = [...field.node.attributes()][0]!;
+    const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
+    expect(binder.symbolForNode(valueNode)).toEqual({
+      kind: 'constant',
+      symbol: { kind: 'constant', name: 'Restrict', documentation: 'Restrict delete.' },
+    });
+  });
+
+  it('finds the matching fixed identifier regardless of its position among several alternatives', () => {
+    const onDeleteSpec = fieldAttribute('relation', {
+      documentation: '',
+      named: {
+        onDelete: {
+          type: oneOf(
+            identifier('NoAction', { documentation: 'No action.' }),
+            identifier('Restrict', { documentation: 'Restrict delete.' }),
+            identifier('Cascade', { documentation: 'Cascading delete.' }),
+            identifier('SetNull', { documentation: 'Set null.' }),
+            identifier('SetDefault', { documentation: 'Set default.' }),
+          ),
+          documentation: '',
+        },
+      },
+    });
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  author User @relation(onDelete: Cascade)\n}',
+      binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
+    );
+    expect(diagnostics).toEqual([]);
+    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const attribute = [...field.node.attributes()][0]!;
+    const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
+    expect(binder.symbolForNode(valueNode)).toEqual({
+      kind: 'constant',
+      symbol: { kind: 'constant', name: 'Cascade', documentation: 'Cascading delete.' },
+    });
+  });
 });
 
 describe('createBinder — block parameters and attributes', () => {

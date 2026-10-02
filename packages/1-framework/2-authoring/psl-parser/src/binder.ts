@@ -527,6 +527,17 @@ function tryBindExpression(
   const diagnostics = new Map<SyntaxNode, ParseDiagnostic>();
   switch (rule.kind) {
     case 'oneOf': {
+      const writtenIdentifier = IdentifierAst.cast(expression.syntax)?.name();
+      const exactIdentifierMatch =
+        writtenIdentifier === undefined
+          ? undefined
+          : rule.alternatives.find(
+              (alternative) =>
+                alternative.kind === 'identifier' && alternative.name === writtenIdentifier,
+            );
+      if (exactIdentifierMatch !== undefined) {
+        return tryBindExpression(exactIdentifierMatch, expression, ctx, modelContext);
+      }
       for (const alternative of rule.alternatives) {
         const trial = tryBindExpression(alternative, expression, ctx, modelContext);
         if (trial.matched) return trial;
