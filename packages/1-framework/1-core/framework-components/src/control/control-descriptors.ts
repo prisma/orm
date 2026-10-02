@@ -26,13 +26,6 @@ export interface ControlFamilyDescriptor<
   >,
 > extends FamilyDescriptor<TFamilyId> {
   readonly emission: EmissionSpi;
-  /**
-   * The family's PSL diagnostic describers. Type-erased because framework
-   * core cannot name psl-parser's `DescribeUnsupportedAttribute` /
-   * `DescribeUnresolvedType`; `@internal/psl-parser` restores them. A stack
-   * has exactly one family, so there is no duplicate-contribution case to
-   * guard against here, unlike the merged `authoring` namespaces.
-   */
   readonly pslDiagnostics?: {
     readonly describeUnsupportedAttribute?: unknown;
     readonly describeUnresolvedType?: unknown;

@@ -47,12 +47,6 @@ function buildInterpretInput(
   };
 }
 
-/**
- * `source.interpret` never reports binder diagnostics itself (that's
- * `load`'s job, seeding them the same way it seeds parse/symbol-table
- * diagnostics); call sites that exercise `interpret` directly — bypassing
- * `load` — must fold them in themselves to see what a real caller would.
- */
 function interpretViaSource(
   source: PslInterpretCapable,
   input: ReturnType<typeof buildInterpretInput>,

@@ -19,13 +19,6 @@ import {
 } from '../src/mongo-attribute-specs';
 import { mongoContextInput } from '../src/test';
 
-/**
- * Builds the `ContractSourceContext` `createBinder` needs, from the
- * same options `interpretMongoContract` callers already pass. Falls back to
- * the family's own built-ins (`mongoAttributeSpecs`,
- * `describeUnsupportedMongoAttribute`) for whatever a test doesn't override,
- * mirroring what the family binder used to do internally before it moved here.
- */
 function contextForInterpretOptions(
   options: Omit<
     Pick<
@@ -40,11 +33,6 @@ function contextForInterpretOptions(
   > & { readonly codecLookup?: CodecLookupWithDescriptors },
 ): ContractSourceContext {
   const authoring = options.authoringContributions;
-  // The family binder used to fold the caller's `scalarTypeCodecIds`
-  // into the binder's type constructors alongside `authoringContributions.type`.
-  // createBinder validates each scalar's output template, which needs
-  // a nativeType — discarded again immediately after, so any non-empty
-  // placeholder (the codecId itself) is fine.
   const scalarsFromCodecIds: Record<string, AuthoringTypeConstructorDescriptor> = {};
   for (const [name, codecId] of options.scalarTypeCodecIds ?? []) {
     scalarsFromCodecIds[name] = {
@@ -86,11 +74,6 @@ function contextForInterpretOptions(
   };
 }
 
-/**
- * Parses `schema`, builds its symbol table, and interprets it to a Mongo
- * contract in one call. `options` is `InterpretPslDocumentToMongoContractInput`
- * minus the parts this helper derives from `schema` itself.
- */
 export function interpretMongoContract(
   schema: string,
   options: Omit<

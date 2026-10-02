@@ -52,11 +52,6 @@ const authoringType = {
   Money: { kind: 'typeConstructor', output: { codecId: 'pg/numeric@1', nativeType: 'numeric' } },
 } as const;
 
-/**
- * Reduces a resolution to a compact, literal-friendly shape: `model` /
- * `field` / etc symbols carry a full AST node, which isn't practical to
- * author as an expected literal, so only the discriminating fields survive.
- */
 function normalize(resolution: unknown): unknown {
   const r = resolution as {
     readonly kind: string;

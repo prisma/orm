@@ -114,13 +114,9 @@ export type DescribeUnsupportedAttribute = (
 export interface UnresolvedTypeReference {
   readonly field: FieldSymbol;
   readonly owner: ModelSymbol | CompositeTypeSymbol;
-  /** The name as written, including any qualifier (e.g. `temporal.createdAtt`). */
   readonly written: string;
 }
 
-/**
- * Produces the message for a type reference the binder could not resolve at all. Returning `undefined` means "use the binder's default message" (`Cannot find type "…"`).
- */
 export type DescribeUnresolvedType = (unresolved: UnresolvedTypeReference) => string | undefined;
 
 export interface BinderContext

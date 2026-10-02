@@ -63,9 +63,6 @@ export interface ContractSourceContext {
    * Receives a warning the source reports while it still produces a contract, such as a deprecated name. Callers that show diagnostics supply it; a source reports through it when present and otherwise drops the warning.
    */
   readonly reportWarning?: (diagnostic: ContractSourceDiagnostic) => void;
-  /**
-   * The active family's PSL diagnostic describers, carried from `stack.family.pslDiagnostics` by the context builder. Type-erased because core cannot name psl-parser's `DescribeUnsupportedAttribute` / `DescribeUnresolvedType`; `@internal/psl-parser` restores them.
-   */
   readonly pslDiagnostics?:
     | {
         readonly describeUnsupportedAttribute?: unknown;

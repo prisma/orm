@@ -353,7 +353,7 @@ interface FieldTypeConstructorContext {
    * `lowerExtensionBlocksForNamespace` in the interpreter produces), keyed
    * by entries-slot discriminator then block name. Consulted only when a
    * type constructor's descriptor declares an `entityRefArg` (e.g.
-   * `pg.enum(Ref)`).
+   * `pg.enum(Ref)`); every other resolution path ignores it.
    */
   readonly namespaceExtensionEntities?:
     | Readonly<Record<string, Readonly<Record<string, unknown>>>>

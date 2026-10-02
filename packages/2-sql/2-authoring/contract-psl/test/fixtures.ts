@@ -434,18 +434,6 @@ export function symbolTableInputFromParseArgs(args: {
   });
 }
 
-/**
- * Parses `schema`, builds its symbol table, and interprets it to a SQL
- * contract in one call. `options` is `InterpretPslDocumentToSqlContractInput`
- * minus the parts this helper derives from `schema` itself.
- */
-/**
- * Builds the `ContractSourceContext` `createBinder` needs, from the
- * same options `interpretSqlContract` callers already pass. Falls back to
- * the family's own built-ins (`sqlAttributeSpecs`,
- * `describeUnsupportedSqlAttribute`) for whatever a test doesn't override,
- * mirroring what the family binder used to do internally before it moved here.
- */
 function contextForInterpretOptions(
   options: Pick<
     InterpretPslDocumentToSqlContractInput,
@@ -460,11 +448,6 @@ function contextForInterpretOptions(
   >,
 ): ContractSourceContext {
   const authoring = options.authoringContributions;
-  // The family binder used to fold the caller's `scalarColumnDescriptors`
-  // into the binder's type constructors alongside `authoringContributions.type`
-  // (production always derives the former from the latter, so they never
-  // diverged there; several test fixtures here pass a richer
-  // `scalarColumnDescriptors` without mirroring it into `authoringContributions.type`).
   const scalarsFromColumnDescriptors: Record<string, AuthoringTypeConstructorDescriptor> = {};
   for (const [name, descriptor] of options.scalarColumnDescriptors ?? []) {
     scalarsFromColumnDescriptors[name] = {

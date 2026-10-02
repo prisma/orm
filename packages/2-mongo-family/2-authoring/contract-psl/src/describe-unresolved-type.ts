@@ -6,12 +6,6 @@ import {
 import type { AssembledAuthoringContributions } from '@internal/framework-components/control';
 import type { DescribeUnresolvedType } from '@internal/psl-parser';
 
-/**
- * A Mongo scalar name an earlier Prisma schema used, with the current name it
- * maps to. Each of these has no live binding in the assembled `type`
- * namespace at all, so the binder never resolves it; this table lets the
- * "cannot find type" diagnostic still name the current replacement (#30521).
- */
 const EARLIER_MONGO_SCALAR_NAMES: Readonly<Record<string, string>> = {
   BigInt: 'Int64',
   Bytes: 'Binary',
@@ -36,16 +30,6 @@ function scalarTypesSentence(types: AuthoringTypeNamespace): string {
       }.`;
 }
 
-/**
- * Mongo's `describeUnresolvedType` contribution: a name from an earlier
- * Prisma (`BigInt`, `Bytes`, `Decimal`) gets the current name and its BSON
- * storage; any other bare, unqualified type name the binder cannot resolve
- * gets the generic unsupported-type message naming the registered scalar
- * types. A qualified reference (`ns.Name`) or a constructor-call reference to
- * an unregistered name (`Name()`) falls back to the binder's own plain
- * "Cannot find type" message instead, since neither names a scalar the
- * registered-types list would help identify.
- */
 export function describeUnresolvedMongoType(
   contributions: AssembledAuthoringContributions,
 ): DescribeUnresolvedType {

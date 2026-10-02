@@ -31,8 +31,6 @@ describe('the language server and the provider agree on Mongo earlier-name wordi
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    // Provider path: the same sequence `mongoContract`'s `load()` runs,
-    // against the same `context` the language server resolved.
     const bound = bindPslSchema(schema, { sourceId: uri, context: interpretation.context });
     const providerResult = withSeedDiagnostics(
       interpretPslDocumentToMongoContract({
@@ -53,8 +51,6 @@ describe('the language server and the provider agree on Mongo earlier-name wordi
       'Field "Post.value" has type "BigInt", which is not a Mongo scalar type; use "Int64" (stored as BSON long).',
     );
 
-    // Language-server path: `ProjectArtifacts` builds its own binder from the
-    // same context and reports the binder's diagnostics per document.
     const project = new ProjectArtifacts({
       ...resolution,
       onInterpretationError: () => {},
