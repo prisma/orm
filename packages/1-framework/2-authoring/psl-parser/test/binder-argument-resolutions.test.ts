@@ -227,6 +227,27 @@ describe('createBinder — constants', () => {
       symbol: { kind: 'constant', name: 'Cascade', documentation: 'Cascading delete.' },
     });
   });
+
+  it('records nothing for a fixed identifier that does not match', () => {
+    const onDeleteSpec = fieldAttribute('relation', {
+      documentation: '',
+      named: {
+        onDelete: {
+          type: identifier('Cascade', { documentation: 'Cascading delete.' }),
+          documentation: '',
+        },
+      },
+    });
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  author User @relation(onDelete: Other)\n}',
+      binderContext({ attributeSpecs: { field: { relation: () => onDeleteSpec }, model: {} } }),
+    );
+    expect(diagnostics).toEqual([]);
+    const field = symbolTable.topLevel.models['User']!.fields['author']!;
+    const attribute = [...field.node.attributes()][0]!;
+    const valueNode = [...attribute.argList()!.args()][0]!.value()!.syntax;
+    expect(binder.symbolForNode(valueNode)).toBeUndefined();
+  });
 });
 
 describe('createBinder — block parameters and attributes', () => {

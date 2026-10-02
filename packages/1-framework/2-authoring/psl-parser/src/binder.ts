@@ -527,17 +527,6 @@ function tryBindExpression(
   const diagnostics = new Map<SyntaxNode, ParseDiagnostic>();
   switch (rule.kind) {
     case 'oneOf': {
-      const writtenIdentifier = IdentifierAst.cast(expression.syntax)?.name();
-      const exactIdentifierMatch =
-        writtenIdentifier === undefined
-          ? undefined
-          : rule.alternatives.find(
-              (alternative) =>
-                alternative.kind === 'identifier' && alternative.name === writtenIdentifier,
-            );
-      if (exactIdentifierMatch !== undefined) {
-        return tryBindExpression(exactIdentifierMatch, expression, ctx, modelContext);
-      }
       for (const alternative of rule.alternatives) {
         const trial = tryBindExpression(alternative, expression, ctx, modelContext);
         if (trial.matched) return trial;
@@ -612,14 +601,14 @@ function tryBindExpression(
       return { matched, references, diagnostics };
     }
     case 'identifier': {
+      if (rule.name === undefined) return { matched: true, references, diagnostics };
       const node = expression.syntax;
       const value = IdentifierAst.cast(node)?.name();
-      if (value !== undefined && rule.name !== undefined && value === rule.name) {
-        references.set(node, {
-          kind: 'constant',
-          symbol: { kind: 'constant', name: rule.name, documentation: rule.documentation },
-        });
-      }
+      if (value !== rule.name) return { matched: false, references, diagnostics };
+      references.set(node, {
+        kind: 'constant',
+        symbol: { kind: 'constant', name: rule.name, documentation: rule.documentation },
+      });
       return { matched: true, references, diagnostics };
     }
     case 'entityRef': {

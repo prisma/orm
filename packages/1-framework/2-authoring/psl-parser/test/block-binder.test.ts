@@ -169,17 +169,30 @@ it('reports strict references once per entry or argument after all alternatives 
   });
 });
 
-it.each([
-  oneOf(reference, bool()),
-  oneOf(reference, num()),
-  oneOf(reference, str()),
-  oneOf(reference, identifier('Other', { documentation: 'other' })),
-])('treats non-reference leaf alternatives as successful binding no-ops for $label', (rule) => {
+it.each([oneOf(reference, bool()), oneOf(reference, num()), oneOf(reference, str())])(
+  'treats non-reference leaf alternatives as successful binding no-ops for $label',
+  (rule) => {
+    const { diagnostics } = bind(
+      'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
+      rule,
+    );
+    expect(diagnostics).toEqual([]);
+  },
+);
+
+it('reports the missing reference when a fixed identifier alternative does not match either', () => {
+  const rule = oneOf(reference, identifier('Other', { documentation: 'other' }));
   const { diagnostics } = bind(
     'policy P {\n target = Missing\n @@refs(Missing, targets: [Missing])\n}\nmodel M {\n @@refs(Missing, targets: [Missing])\n}',
     rule,
   );
-  expect(diagnostics).toEqual([]);
+  expect(diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual(
+    Array.from({ length: 5 }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+      data: { reference: 'entity' },
+    })),
+  );
 });
 
 it.each([identifier(), identifier('Missing', { documentation: 'missing' })])(
@@ -295,16 +308,28 @@ it('selects a matching block keyword after a mismatched entity selector', () => 
 it.each([
   { rule: oneOf(list(reference), list(num(2))), value: '[Missing]' },
   { rule: oneOf(list(reference), list(int({ min: 1 }))), value: '[Missing]' },
-  {
-    rule: oneOf(record(reference), record(identifier('Other', { documentation: 'other' }))),
-    value: '{ nested: Missing }',
-  },
 ])('ignores scalar constraints in container alternatives for $value', ({ rule, value }) => {
   const result = bind(
     `policy P {\n target = ${value}\n @@refs(${value})\n}\nmodel M {\n @@refs(${value})\n}`,
     rule,
   );
   expect(result.diagnostics).toEqual([]);
+});
+
+it('reports the missing reference when a record of fixed identifiers does not match either', () => {
+  const rule = oneOf(record(reference), record(identifier('Other', { documentation: 'other' })));
+  const value = '{ nested: Missing }';
+  const result = bind(
+    `policy P {\n target = ${value}\n @@refs(${value})\n}\nmodel M {\n @@refs(${value})\n}`,
+    rule,
+  );
+  expect(result.diagnostics.map(({ code, message, data }) => ({ code, message, data }))).toEqual(
+    Array.from({ length: 3 }, () => ({
+      code: 'PSL_UNRESOLVED_REFERENCE',
+      message: 'Cannot find entity "Missing"',
+      data: { reference: 'entity' },
+    })),
+  );
 });
 
 it('binds symbols without checking entity selectors', () => {
