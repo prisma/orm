@@ -1,7 +1,19 @@
 import type { Contract, NamespaceId } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type { IncludeRelationValue } from '../src/types';
+import type {
+  IncludeRefinementValue,
+  RowSelection,
+  RowWitness,
+  WithPagingState,
+  WithVariantState,
+  WithWhereState,
+} from '../src/collection-internal-types';
+import type {
+  CollectionTypeState,
+  DefaultCollectionTypeState,
+  IncludeRelationValue,
+} from '../src/types';
 
 type Int4Field = {
   readonly many: false;
@@ -66,4 +78,45 @@ test('a relation whose nullable is widened to boolean includes row | null', () =
   expectTypeOf<
     IncludeRelationValue<ContractWithAuthor<boolean>, 'Post', 'author', UserRow>
   >().toEqualTypeOf<UserRow | null>();
+});
+
+type RefinedAuthor<
+  Nullable extends boolean,
+  State extends CollectionTypeState,
+> = IncludeRefinementValue<
+  ContractWithAuthor<Nullable>,
+  'Post',
+  'author',
+  UserRow,
+  RowSelection<UserRow> & RowWitness<State>
+>;
+
+test('a refinement that only projects a required relation includes a non-null row', () => {
+  expectTypeOf<RefinedAuthor<false, DefaultCollectionTypeState>>().toEqualTypeOf<UserRow>();
+});
+
+test('a refinement that only projects an optional relation includes row | null', () => {
+  expectTypeOf<RefinedAuthor<true, DefaultCollectionTypeState>>().toEqualTypeOf<UserRow | null>();
+});
+
+test('a refinement with a where includes row | null on a required relation', () => {
+  expectTypeOf<
+    RefinedAuthor<false, WithWhereState<DefaultCollectionTypeState>>
+  >().toEqualTypeOf<UserRow | null>();
+});
+
+test('a refinement with a variant includes row | null on a required relation', () => {
+  expectTypeOf<
+    RefinedAuthor<false, WithVariantState<WithWhereState<DefaultCollectionTypeState>, 'Admin'>>
+  >().toEqualTypeOf<UserRow | null>();
+});
+
+test('a refinement with paging includes row | null on a required relation', () => {
+  expectTypeOf<
+    RefinedAuthor<false, WithPagingState<DefaultCollectionTypeState>>
+  >().toEqualTypeOf<UserRow | null>();
+});
+
+test('a refinement whose state is unknown includes row | null on a required relation', () => {
+  expectTypeOf<RefinedAuthor<false, CollectionTypeState>>().toEqualTypeOf<UserRow | null>();
 });
