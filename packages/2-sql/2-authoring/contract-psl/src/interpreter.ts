@@ -47,6 +47,7 @@ import type { Binder } from '@internal/psl-parser';
 import {
   type BlockSymbol,
   type CompositeTypeSymbol,
+  contributedTypeOf,
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
@@ -1615,14 +1616,14 @@ function isStringTyped(
   binder: Binder,
 ): boolean {
   const node = typeReferenceNode(field);
-  const resolution = node === undefined ? undefined : binder.symbolForNode(node);
-  const base = resolution?.kind === 'namedType' ? typeReferenceNode(resolution.symbol) : undefined;
-  const scalar = base === undefined ? resolution : binder.symbolForNode(base);
+  const scalar = contributedTypeOf(
+    node === undefined ? undefined : binder.symbolForNode(node),
+    binder,
+  );
   return (
     stringCodecId !== undefined &&
-    scalar?.kind === 'contributedType' &&
-    scalar.symbol.descriptor.kind === 'typeConstructor' &&
-    scalar.symbol.descriptor.output.codecId === stringCodecId
+    scalar?.descriptor.kind === 'typeConstructor' &&
+    scalar.descriptor.output.codecId === stringCodecId
   );
 }
 

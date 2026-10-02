@@ -57,6 +57,7 @@ import type {
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
+  contributedTypeOf,
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
@@ -328,14 +329,11 @@ function isStringTyped(
   stringCodecId: string | undefined,
   binder: Binder,
 ): boolean {
-  const resolution = fieldTypeResolution(field, binder);
-  const base = resolution?.kind === 'namedType' ? typeReferenceNode(resolution.symbol) : undefined;
-  const scalar = base === undefined ? resolution : binder.symbolForNode(base);
+  const scalar = contributedTypeOf(fieldTypeResolution(field, binder), binder);
   return (
     stringCodecId !== undefined &&
-    scalar?.kind === 'contributedType' &&
-    scalar.symbol.descriptor.kind === 'typeConstructor' &&
-    scalar.symbol.descriptor.output.codecId === stringCodecId
+    scalar?.descriptor.kind === 'typeConstructor' &&
+    scalar.descriptor.output.codecId === stringCodecId
   );
 }
 

@@ -110,6 +110,7 @@ export type {
   UnsupportedAttribute,
 } from '../binder';
 export {
+  contributedTypeOf,
   createBinder,
   PSL_UNRESOLVED_REFERENCE,
   typeReferenceNode,

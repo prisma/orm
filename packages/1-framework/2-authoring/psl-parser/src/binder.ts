@@ -26,6 +26,7 @@ import type {
 import { blockSpecFactoryOf } from './block-spec/descriptor';
 import {
   type ContributedTypeNamespace,
+  type ContributedTypeSymbol,
   contributedTypeScope,
   mergeContributedTypes,
 } from './contributed-type-scope';
@@ -151,6 +152,15 @@ export interface BinderResult {
 
 export function typeReferenceNode(symbol: FieldSymbol | NamedTypeSymbol): SyntaxNode | undefined {
   return symbol.node.typeAnnotation()?.name()?.syntax;
+}
+
+export function contributedTypeOf(
+  resolution: Resolution | undefined,
+  binder: Binder,
+): ContributedTypeSymbol | undefined {
+  const base = resolution?.kind === 'namedType' ? typeReferenceNode(resolution.symbol) : undefined;
+  const target = base === undefined ? resolution : binder.symbolForNode(base);
+  return target?.kind === 'contributedType' ? target.symbol : undefined;
 }
 
 class PslBinder implements Binder {

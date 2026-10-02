@@ -3,7 +3,12 @@ import type {
   AuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { type BinderContext, createBinder, typeReferenceNode } from '../src/binder';
+import {
+  type BinderContext,
+  contributedTypeOf,
+  createBinder,
+  typeReferenceNode,
+} from '../src/binder';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -59,7 +64,7 @@ function bindProject(text: string) {
     const node = field === undefined ? undefined : typeReferenceNode(field);
     return node === undefined ? undefined : binder.symbolForNode(node);
   };
-  return { resolve, diagnostics };
+  return { resolve, diagnostics, binder };
 }
 
 describe('createBinder — contributed types', () => {
@@ -113,6 +118,43 @@ describe('createBinder — contributed types', () => {
     expect(resolve('slug')).toMatchObject({
       kind: 'contributedType',
       symbol: { path: ['db', 'VarChar'], descriptor: varchar },
+    });
+  });
+
+  describe('contributedTypeOf', () => {
+    it('returns the contributed type a field resolves to', () => {
+      const { resolve, binder } = bindProject('model Post {\n  title String\n}');
+
+      expect(contributedTypeOf(resolve('title'), binder)).toEqual({
+        kind: 'contributedType',
+        name: 'String',
+        path: ['String'],
+        descriptor: text,
+      });
+    });
+
+    it('follows a named type to the contributed type of its base', () => {
+      const { resolve, binder } = bindProject(
+        'types {\n  Slug = db.VarChar(10)\n}\nmodel Post {\n  slug Slug\n}',
+      );
+
+      expect(resolve('slug')?.kind).toBe('namedType');
+      expect(contributedTypeOf(resolve('slug'), binder)).toEqual({
+        kind: 'contributedType',
+        name: 'VarChar',
+        path: ['db', 'VarChar'],
+        descriptor: varchar,
+      });
+    });
+
+    it('returns undefined for a resolution that is not a contributed type', () => {
+      const { resolve, binder } = bindProject(
+        'model Author {\n  id String\n}\nmodel Post {\n  author Author\n  missing Nope\n}',
+      );
+
+      expect(contributedTypeOf(resolve('author'), binder)).toBeUndefined();
+      expect(contributedTypeOf(resolve('missing'), binder)).toBeUndefined();
+      expect(contributedTypeOf(undefined, binder)).toBeUndefined();
     });
   });
 });
