@@ -41,7 +41,7 @@ function interpretPostgres(
     codecLookup: postgresCodecLookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     capabilities: { sql: { scalarList: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });
@@ -95,7 +95,7 @@ describe('interpretPslDocumentToSqlContract value-object storage', () => {
         },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         capabilities: { sql: {} },
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       });
@@ -194,11 +194,11 @@ model User {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       {
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "User.home": pg/jsonb has no cast from a list; it casts from pg/json',
+        message: 'Field "User.home": pg/jsonb has no cast from a list; write json`...`',
         sourceId: 'schema.prisma',
         span: {
-          start: { offset: 81, line: 7, column: 16 },
-          end: { offset: 93, line: 7, column: 28 },
+          start: { offset: 90, line: 7, column: 25 },
+          end: { offset: 92, line: 7, column: 27 },
         },
       },
     ]);

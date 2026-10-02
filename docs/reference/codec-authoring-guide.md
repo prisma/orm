@@ -492,8 +492,8 @@ A value is written either with a tag — a qualified name followed by a string i
   documentation: 'Text.',
 },
 [pgJson.id]: {
-  written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-  print: printJsonBody,
+  written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+  print: printJsonText,
   documentation: 'Reads the text as a JSON document and stores it as the default value.',
 },
 ```

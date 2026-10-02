@@ -51,7 +51,6 @@ export function testBuildContext(
         ...postgresNativeAuthoringTypes,
         ...extra.types,
       },
-      dataTypes: postgresDataTypeEntries(),
     },
     codecLookup: {
       get: () => undefined,
@@ -60,6 +59,9 @@ export function testBuildContext(
       descriptorFor: (codecId) =>
         extraCodecs.get(codecId) ?? postgresCodecDescriptorRegistry.descriptorFor(codecId),
     },
-    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+    dataTypes: {
+      entries: postgresDataTypeEntries(),
+      lookup: createDataTypeLookup(postgresDataTypes),
+    },
   };
 }

@@ -13,7 +13,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  dataTypes: fixtureDataTypeSupport,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -559,7 +559,7 @@ namespace public {
 }
 `,
       {
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
@@ -624,7 +624,7 @@ model Foo {
 }
 `,
         {
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          dataTypes: fixtureDataTypeSupport,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),
@@ -668,7 +668,7 @@ namespace auth {
 }
 `,
         {
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          dataTypes: fixtureDataTypeSupport,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),
@@ -713,7 +713,7 @@ namespace auth {
 }
 `,
         {
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          dataTypes: fixtureDataTypeSupport,
           target: postgresTarget,
           scalarColumnDescriptors: postgresScalarTypeDescriptors,
           composedExtensionContracts: new Map(),

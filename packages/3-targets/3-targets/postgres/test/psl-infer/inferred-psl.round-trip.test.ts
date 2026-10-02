@@ -123,7 +123,7 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+      dataTypes: { entries: assembled.dataTypes, lookup: createDataTypeLookup(postgresDataTypes) },
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     },

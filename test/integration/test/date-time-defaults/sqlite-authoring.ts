@@ -32,7 +32,7 @@ export async function authorSqliteContractFromPsl(pslSchema: string) {
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
+    dataTypes: sqliteStack.dataTypes,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,

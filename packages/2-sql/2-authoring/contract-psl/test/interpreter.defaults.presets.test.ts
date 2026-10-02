@@ -82,7 +82,7 @@ describe('interpretPslDocumentToSqlContract field-preset default lowering', () =
         controlMutationDefaults: builtinControlMutationDefaults,
         authoringContributions: sqliteTemporalContributions,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         capabilities: { sql: { scalarList: true } },
       },
     );

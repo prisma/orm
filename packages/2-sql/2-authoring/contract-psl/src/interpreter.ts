@@ -17,6 +17,7 @@ import type {
   AuthoringModelAttributeLoweringOutput,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringWarning,
+  DataTypeSupport,
   ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
@@ -24,10 +25,7 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringModelAttributeDescriptor,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   CapabilityMatrix,
   ExtensionPackRef,
@@ -110,7 +108,6 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
-import type { DataTypeSupport } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import {
   getAttribute,
@@ -160,8 +157,8 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly composedExtensions?: readonly string[];
   readonly composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[];
   readonly controlMutationDefaults?: ControlMutationDefaults;
-  /** The stack's data types; the PSL support for them travels in `authoringContributions`. ADR 254. */
-  readonly dataTypeLookup: DataTypeLookup;
+  /** The stack's data types with their authoring entries. ADR 254. */
+  readonly dataTypes: DataTypeSupport;
   readonly authoringContributions?: AuthoringContributions;
   /**
    * Extension contracts keyed by space ID. Required for cross-space FK
@@ -586,7 +583,7 @@ interface BuildModelNodeInput {
   readonly targetId: string;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly dataTypeSupport: DataTypeSupport;
+  readonly dataTypes: DataTypeSupport;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sources: PslSources;
@@ -697,7 +694,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     authoringContributions: input.authoringContributions,
     targetId: input.targetId,
     defaultFunctionRegistry: input.defaultFunctionRegistry,
-    dataTypeSupport: input.dataTypeSupport,
+    dataTypes: input.dataTypes,
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sources: input.sources,
@@ -1082,10 +1079,8 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: specFactory({
           symbols: input.symbolTable,
           model,
-          controlMutationDefaults: {
-            defaultFunctionRegistry: input.defaultFunctionRegistry,
-            dataTypeEntries: input.dataTypeSupport.entries,
-          },
+          controlMutationDefaults: { defaultFunctionRegistry: input.defaultFunctionRegistry },
+          dataTypes: input.dataTypes,
         }),
         model,
         symbols: input.symbolTable,
@@ -2049,7 +2044,7 @@ export function interpretPslDocumentToSqlContract(
   const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   const contributedModelSpecs = modelAttributeSpecsFrom(modelAttributesByName);
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
-  const { binder } = input;
+  const { binder, dataTypes } = input;
 
   const { topLevel } = input.symbolTable;
   const namespaceSymbols = Object.values(topLevel.namespaces);
@@ -2149,10 +2144,6 @@ export function interpretPslDocumentToSqlContract(
     input.composedExtensionContracts;
   const defaultFunctionRegistry: ControlMutationDefaultRegistry =
     input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
-  const dataTypeSupport: DataTypeSupport = {
-    entries: input.authoringContributions?.dataTypes ?? {},
-    lookup: input.dataTypeLookup,
-  };
   const generatorDescriptors = input.controlMutationDefaults?.generatorDescriptors ?? [];
   const generatorDescriptorById = new Map<string, MutationDefaultGeneratorDescriptor>();
   for (const descriptor of generatorDescriptors) {
@@ -2445,7 +2436,7 @@ export function interpretPslDocumentToSqlContract(
       targetId: input.target.targetId,
       authoringContributions: input.authoringContributions,
       defaultFunctionRegistry,
-      dataTypeSupport,
+      dataTypes,
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sources: input.sources,

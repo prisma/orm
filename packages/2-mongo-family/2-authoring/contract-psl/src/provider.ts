@@ -41,10 +41,8 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         binder: input.binder,
         seedDiagnostics: [],
         scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
-        controlMutationDefaults: {
-          ...context.controlMutationDefaults,
-          dataTypeEntries: context.authoringContributions.dataTypes,
-        },
+        controlMutationDefaults: context.controlMutationDefaults,
+        dataTypes: context.dataTypes,
         codecLookup: context.codecLookup,
         authoringContributions: context.authoringContributions,
         ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),

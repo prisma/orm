@@ -11,7 +11,7 @@ export type SqlContextInput = Pick<
   | 'controlMutationDefaults'
   | 'capabilities'
   | 'codecLookup'
-  | 'dataTypeLookup'
+  | 'dataTypes'
 >;
 
 export function sqlContextInput(context: ContractSourceContext): SqlContextInput {
@@ -25,6 +25,6 @@ export function sqlContextInput(context: ContractSourceContext): SqlContextInput
     controlMutationDefaults: context.controlMutationDefaults,
     capabilities: context.capabilities,
     codecLookup: context.codecLookup,
-    dataTypeLookup: context.dataTypeLookup,
+    dataTypes: context.dataTypes,
   };
 }

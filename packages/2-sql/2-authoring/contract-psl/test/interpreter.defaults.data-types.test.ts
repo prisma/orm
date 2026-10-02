@@ -27,8 +27,8 @@ function interpret(
   return interpretSqlContract(schema, {
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-    authoringContributions: { ...pgvectorAuthoringContributions, dataTypes },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    authoringContributions: pgvectorAuthoringContributions,
+    dataTypes: { entries: dataTypes, lookup: fixtureDataTypeSupport.lookup },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
@@ -123,67 +123,67 @@ describe('written defaults a column refuses', () => {
       'a number too wide for the column',
       'count Int @default(100000000000000099)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/int8; it casts from pg/int2',
+      'Field "N.count": pg/int4 has no cast from pg/int8; write a number',
     ],
     [
       'a number with a fraction on a whole-number column',
       'count Int @default(1.5)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
+      'Field "N.count": pg/int4 has no cast from pg/numeric; write a number',
     ],
     [
       'a quoted document on a jsonb column',
       'meta Jsonb @default("{}")',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.meta": pg/jsonb has no cast from pg/text; it casts from pg/json',
+      'Field "N.meta": pg/jsonb has no cast from pg/text; write json`...`',
     ],
     [
       'quoted digits on a numeric column',
       'price Decimal @default("1.50")',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.price": pg/numeric has no cast from pg/text; it casts from pg/int2, pg/int4, pg/int8',
+      'Field "N.price": pg/numeric has no cast from pg/text; write a number',
     ],
     [
       'quoted digits on an int column',
       'count Int @default("1")',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/text; it casts from pg/int2',
+      'Field "N.count": pg/int4 has no cast from pg/text; write a number',
     ],
     [
       'a JSON document on an int column',
       `count Int @default(${tagged('json', '1')})`,
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/json; it casts from pg/int2',
+      'Field "N.count": pg/int4 has no cast from pg/json; write a number',
     ],
     [
       'a written list on a column that holds one value',
       'count Int @default([1, 2])',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from a list; it casts from pg/int2',
+      'Field "N.count": pg/int4 has no cast from a list; write a number',
     ],
     [
       'text among a list of numbers',
       'scores Int[] @default([1, "x"])',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.scores" at element 2: pg/int4 has no cast from pg/text; it casts from pg/int2',
+      'Field "N.scores" at element 2: pg/int4 has no cast from pg/text; write a number',
     ],
     [
       'a written list on a jsonb column',
       'meta Jsonb @default([1, 2])',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.meta": pg/jsonb has no cast from a list; it casts from pg/json',
+      'Field "N.meta": pg/jsonb has no cast from a list; write json`...`',
     ],
     [
       'a non-finite word on a whole-number column',
       'count Int @default(NaN)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
+      'Field "N.count": pg/int4 has no cast from pg/numeric; write a number',
     ],
     [
       'a number on a column whose type takes only text',
       'payload Bytes @default(1234)',
       'PSL_VALUE_TYPE_INCOMPATIBLE',
-      'Field "N.payload": pg/bytea has no cast from pg/int2; it casts from pg/text',
+      'Field "N.payload": pg/bytea has no cast from pg/int2; write a quoted string',
     ],
     [
       'a single value on a list column',
@@ -226,7 +226,8 @@ describe('written defaults a column refuses', () => {
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-        message: 'Field "N.active": this target has no data type for a boolean value',
+        message:
+          'Field "N.active": This target has no data type for a boolean value; write sql`...`',
       }),
     ]);
   });
@@ -251,10 +252,47 @@ describe('written defaults a column refuses', () => {
 
   it('refuses a vector whose length does not match the column, with the codec message', () => {
     expect(diagnostics(model('  embed pgvector.Vector(3) @default([1, 2])'))).toEqual([
-      expect.objectContaining({
+      {
         code: 'PSL_INVALID_DEFAULT_LITERAL',
         message: 'Field "N.embed": Vector length mismatch: expected 3, got 2',
-      }),
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 50, line: 3, column: 28 },
+          end: { offset: 66, line: 3, column: 44 },
+        },
+      },
+    ]);
+  });
+
+  it('refuses an element the list cast does not take at the element, suggesting the forms of the types it takes', () => {
+    expect(diagnostics(model('  embed pgvector.Vector(3) @default([1, "x", 3])'))).toEqual([
+      {
+        code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
+        message:
+          'Field "N.embed" at element 2: pgvector/vector has no cast from a list holding pg/text; write a number',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 63, line: 3, column: 41 },
+          end: { offset: 66, line: 3, column: 44 },
+        },
+      },
+    ]);
+  });
+
+  it('refuses an unknown tag among the elements of a list read through a list cast, at the element', () => {
+    expect(
+      diagnostics(model(`  embed pgvector.Vector(3) @default([1, ${tagged('pg.json', '2')}, 3])`)),
+    ).toEqual([
+      {
+        code: 'PSL_UNKNOWN_LITERAL_TAG',
+        message:
+          'Field "N.embed" at element 2: Unknown literal tag "pg.json". Known tags: sql, json.',
+        sourceId: 'schema.prisma',
+        span: {
+          start: { offset: 63, line: 3, column: 41 },
+          end: { offset: 73, line: 3, column: 51 },
+        },
+      },
     ]);
   });
 
@@ -262,7 +300,7 @@ describe('written defaults a column refuses', () => {
     expect(diagnostics(model(`  meta Jsonb @default(${tagged('sqlite.sql', 'x')})`))).toEqual([
       expect.objectContaining({
         code: 'PSL_UNKNOWN_LITERAL_TAG',
-        message: 'Unknown literal tag "sqlite.sql". Known tags: sql, json.',
+        message: 'Field "N.meta": Unknown literal tag "sqlite.sql". Known tags: sql, json.',
       }),
     ]);
   });

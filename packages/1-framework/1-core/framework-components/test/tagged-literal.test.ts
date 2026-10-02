@@ -34,7 +34,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
     ['empty body stays empty', '', ''],
     ['whitespace-only body becomes empty', '  \n  ', ''],
   ])('%s', (_name, input, expected) => {
-    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, body: expected });
+    expect(canonicalizeTaggedLiteralBody(input)).toEqual({ ok: true, text: expected });
   });
 
   it('fails on a NUL character with its offset', () => {
@@ -44,7 +44,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
   it('accepts a body of exactly 65536 bytes', () => {
     expect(canonicalizeTaggedLiteralBody('a'.repeat(MAX_BYTES))).toEqual({
       ok: true,
-      body: 'a'.repeat(MAX_BYTES),
+      text: 'a'.repeat(MAX_BYTES),
     });
   });
 
@@ -78,7 +78,7 @@ describe('canonicalizeTaggedLiteralBody', () => {
     const indented = `  ${'a'.repeat(MAX_BYTES)}`;
     expect(canonicalizeTaggedLiteralBody(indented)).toEqual({
       ok: true,
-      body: 'a'.repeat(MAX_BYTES),
+      text: 'a'.repeat(MAX_BYTES),
     });
   });
 });
@@ -155,7 +155,7 @@ describe('printTaggedLiteral', () => {
     const raw = printed.slice('sql`'.length, -1);
     expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
       ok: true,
-      body: text,
+      text: text,
     });
   });
 
@@ -165,7 +165,7 @@ describe('printTaggedLiteral', () => {
     const raw = indented.slice('sql`'.length, -1);
     expect(canonicalizeTaggedLiteralBody(resolvePslBacktickEscapes(raw))).toEqual({
       ok: true,
-      body: text,
+      text: text,
     });
   });
 });

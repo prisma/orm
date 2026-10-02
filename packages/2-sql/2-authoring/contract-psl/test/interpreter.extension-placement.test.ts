@@ -100,7 +100,7 @@ function interpretWith(schema: string, contributions: AuthoringContributions) {
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     capabilities: { sql: { scalarList: true } },
     authoringContributions: contributions,
   });

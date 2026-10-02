@@ -14,6 +14,7 @@ import {
   mongoAttributeSpecs,
 } from '@internal/mongo-contract-psl';
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import { MONGO_INT32_CODEC_ID, MONGO_STRING_CODEC_ID } from '@internal/target-mongo/codec-ids';
@@ -90,7 +91,7 @@ function interpret(
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: overrides?.codecLookup ?? mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypes: EMPTY_DATA_TYPES,
       resolvedInputs: [],
       capabilities: {},
     },

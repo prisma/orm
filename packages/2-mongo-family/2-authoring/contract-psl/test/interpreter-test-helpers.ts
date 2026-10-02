@@ -4,8 +4,12 @@ import type {
   ContractSourceDiagnostics,
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import type { AuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
+import type {
+  AuthoringTypeConstructorDescriptor,
+  DataTypeSupport,
+} from '@internal/framework-components/authoring';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import type { Result } from '@internal/utils/result';
@@ -30,7 +34,10 @@ function contextForInterpretOptions(
       | 'reportWarning'
     >,
     'codecLookup'
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+  > & {
+    readonly codecLookup?: CodecLookupWithDescriptors;
+    readonly dataTypes?: DataTypeSupport;
+  },
 ): ContractSourceContext {
   const authoring = options.authoringContributions;
   const scalarsFromCodecIds: Record<string, AuthoringTypeConstructorDescriptor> = {};
@@ -62,7 +69,7 @@ function contextForInterpretOptions(
       renderOutputTypeFor: () => undefined,
       descriptorFor: () => undefined,
     },
-    dataTypeLookup: { has: () => false, get: () => undefined },
+    dataTypes: options.dataTypes ?? EMPTY_DATA_TYPES,
     controlMutationDefaults: {
       defaultFunctionRegistry:
         options.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
@@ -78,8 +85,11 @@ export function interpretMongoContract(
   schema: string,
   options: Omit<
     InterpretPslDocumentToMongoContractInput,
-    'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup'
-  > & { readonly codecLookup?: CodecLookupWithDescriptors },
+    'documents' | 'sources' | 'symbolTable' | 'binder' | 'codecLookup' | 'dataTypes'
+  > & {
+    readonly codecLookup?: CodecLookupWithDescriptors;
+    readonly dataTypes?: DataTypeSupport;
+  },
   sourceId = 'schema.prisma',
 ): Result<Contract, ContractSourceDiagnostics> {
   const bound = bindPslSchema(schema, { sourceId, context: contextForInterpretOptions(options) });

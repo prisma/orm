@@ -76,10 +76,12 @@ export const inferBuildContext: SqlPslBuildContext = {
       ...postgresScalarAuthoringTypes,
       ...postgresNativeAuthoringTypes,
     },
-    dataTypes: postgresDataTypeEntries(),
   },
   codecLookup: createPostgresBuiltinCodecLookup(),
-  dataTypeLookup: createDataTypeLookup(postgresDataTypes),
+  dataTypes: {
+    entries: postgresDataTypeEntries(),
+    lookup: createDataTypeLookup(postgresDataTypes),
+  },
 };
 
 /** Infers and prints PSL from a flat introspection fixture, with the header `contract infer` writes. */

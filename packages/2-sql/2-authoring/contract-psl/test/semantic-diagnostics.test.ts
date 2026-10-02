@@ -38,7 +38,7 @@ it('pushes owned default diagnostics with filename and range rather than a provi
     valueObjectDefault: undefined,
     generatorDescriptorById: new Map(),
     defaultFunctionRegistry: new Map(),
-    dataTypeSupport: fixtureDataTypeSupport,
+    dataTypes: fixtureDataTypeSupport,
     codecLookup: context.codecLookup,
     diagnostics,
   });

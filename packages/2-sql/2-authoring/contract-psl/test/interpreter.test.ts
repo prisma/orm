@@ -40,7 +40,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
-      | 'dataTypeLookup'
+      | 'dataTypes'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -51,7 +51,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       ...input,
     });
 
@@ -70,7 +70,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         composedExtensionContracts: new Map(),
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -133,7 +133,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -157,7 +157,7 @@ describe('interpretPslDocumentToSqlContract', () => {
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
         composedExtensionContracts: new Map(),
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         controlMutationDefaults: {
           defaultFunctionRegistry: new Map([
             [

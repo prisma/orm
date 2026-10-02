@@ -85,14 +85,14 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
-    authoringContributions: {
-      ...contributions,
-      dataTypes: {
+    authoringContributions: contributions,
+    dataTypes: {
+      entries: {
         ...fixtureDataTypeSupport.entries,
         ...('dataTypes' in contributions ? contributions.dataTypes : {}),
       },
+      lookup: fixtureDataTypeSupport.lookup,
     },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
     codecLookup: testCodecLookup,
     createNamespace: createTestSqlNamespace,
     enumInferenceCodecs: postgresEnumInferenceCodecs,

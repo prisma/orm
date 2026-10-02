@@ -71,7 +71,7 @@ async function authorSqliteContractFromPsl(pslSchema: string) {
     composedExtensionContracts: new Map(),
     authoringContributions: sqliteStack.authoringContributions,
     codecLookup: sqliteStack.codecLookup,
-    dataTypeLookup: sqliteStack.dataTypeLookup,
+    dataTypes: sqliteStack.dataTypes,
     controlMutationDefaults: sqliteStack.controlMutationDefaults,
     resolvedInputs: [schemaPath],
     capabilities: sqliteStack.capabilities,
@@ -222,7 +222,7 @@ describe('PSL number defaults on columns whose data type casts from no number', 
       diagnostics: [
         expect.objectContaining({
           code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
-          message: 'Field "Payload.data": pg/bytea has no cast from pg/int2; it casts from pg/text',
+          message: 'Field "Payload.data": pg/bytea has no cast from pg/int2; write a quoted string',
         }),
       ],
     });
@@ -237,7 +237,7 @@ describe('PSL number defaults on columns whose data type casts from no number', 
       expect.objectContaining({
         code: 'PSL_VALUE_TYPE_INCOMPATIBLE',
         message:
-          'Field "Event.at": sqlite/datetime has no cast from sqlite/integer; it casts from sqlite/text',
+          'Field "Event.at": sqlite/datetime has no cast from sqlite/integer; write a quoted string',
       }),
     ]);
   });

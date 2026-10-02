@@ -78,7 +78,7 @@ ${fields}
     codecLookup: postgresCodecLookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     capabilities: { sql: { scalarList: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });

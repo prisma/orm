@@ -61,7 +61,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  dataTypes: fixtureDataTypeSupport,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,

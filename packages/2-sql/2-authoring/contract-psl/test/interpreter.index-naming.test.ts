@@ -22,7 +22,7 @@ describe('index naming at PSL lowering', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       capabilities: { sql: { scalarList: true } },
     });
   }
@@ -78,7 +78,7 @@ describe('@@index matrix threading at PSL lowering', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       capabilities: { sql: { scalarList: true } },
     });
   }

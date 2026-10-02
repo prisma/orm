@@ -48,7 +48,7 @@ describe.each([
   });
 
   it('registers the family sql/expression data type and its authoring entry', () => {
-    expect(stack.dataTypeLookup.get(SQL_EXPRESSION_DATA_TYPE_ID)).toBe(sqlExpressionDataType);
+    expect(stack.dataTypes.lookup.get(SQL_EXPRESSION_DATA_TYPE_ID)).toBe(sqlExpressionDataType);
     expect(stack.authoringContributions.dataTypes[SQL_EXPRESSION_DATA_TYPE_ID]).toBe(
       sqlExpressionAuthoringEntry,
     );

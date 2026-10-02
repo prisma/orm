@@ -2,18 +2,14 @@ import sqliteAdapter from '@internal/adapter-sqlite/control';
 import sqliteDriver from '@internal/driver-sqlite/control';
 import sql from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema, contractSourceContextFromControlStack } from '@internal/psl-parser/test';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { sqlContextInput } from '@internal/sql-contract-psl/test';
 import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
-import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { describe, expect, it } from 'vitest';
-
-const sqliteDataTypeLookup = createDataTypeLookup(sqliteDataTypes);
 
 const stack = createControlStack({
   family: sql,
@@ -38,9 +34,7 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 function emit() {
   const bound = bindPslSchema(REPRESENTATIVE_SCHEMA, {
     sourceId: 'scalar-type-parity.test.psl',
-    context: contractSourceContextFromControlStack(stack, {
-      dataTypeLookup: sqliteDataTypeLookup,
-    }),
+    context: contractSourceContextFromControlStack(stack),
   });
   return withSeedDiagnostics(
     interpretPslDocumentToSqlContract({

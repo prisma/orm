@@ -440,7 +440,7 @@ function contextForInterpretOptions(
     | 'authoringContributions'
     | 'controlMutationDefaults'
     | 'codecLookup'
-    | 'dataTypeLookup'
+    | 'dataTypes'
     | 'composedExtensions'
     | 'composedExtensionContracts'
     | 'capabilities'
@@ -465,14 +465,14 @@ function contextForInterpretOptions(
       pslBlockDescriptors: authoring?.pslBlockDescriptors ?? {},
       modelAttributes: authoring?.modelAttributes ?? {},
       attributeSpecs: authoring?.attributeSpecs ?? sqlAttributeSpecs,
-      dataTypes: authoring?.dataTypes ?? {},
+      dataTypes: authoring?.dataTypes ?? options.dataTypes.entries,
       ...(authoring?.valueObjectStorageType === undefined
         ? {}
         : { valueObjectStorageType: authoring.valueObjectStorageType }),
     },
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     codecLookup: options.codecLookup ?? postgresCodecLookup,
-    dataTypeLookup: options.dataTypeLookup,
+    dataTypes: options.dataTypes,
     controlMutationDefaults: options.controlMutationDefaults ?? {
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
@@ -558,7 +558,7 @@ export function createPostgresTestContext(
     pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
     codecLookup: postgresCodecLookup,
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
     ...overrides,

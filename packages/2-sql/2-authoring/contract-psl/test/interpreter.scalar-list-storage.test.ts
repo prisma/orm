@@ -24,7 +24,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
         authoringContributions: { type: postgresScalarAuthoringTypes },
         composedExtensionContracts: new Map(),
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         capabilities: { sql: { scalarList: true } },
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       },

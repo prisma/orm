@@ -18,7 +18,7 @@ const baseInput = {
     type: postgresScalarAuthoringTypes,
     dataTypes: fixtureDataTypeSupport.entries,
   },
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  dataTypes: fixtureDataTypeSupport,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },

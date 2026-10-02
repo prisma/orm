@@ -11,8 +11,8 @@ import { SAFE_INTEGER_BIGINT_RANGE } from '@internal/framework-components/codec'
 import {
   createNumberClassifier,
   numeralText,
-  parseJsonBody,
-  printJsonBody,
+  parseJsonText,
+  printJsonText,
   signedRange,
 } from '@internal/sql-relational-core/ast';
 import { sqliteBigint, sqliteInteger, sqliteJson, sqliteReal, sqliteText } from './data-types';
@@ -52,8 +52,8 @@ export function sqliteDataTypeEntries(): Readonly<Record<string, DataTypeAuthori
       documentation: 'A number, whose type comes from its own size and precision.',
     },
     [sqliteJson.id]: {
-      written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-      print: printJsonBody,
+      written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+      print: printJsonText,
       documentation: 'Reads the text as a JSON document and stores it as the default value.',
     },
   };

@@ -12,10 +12,7 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 function interpret(schema: string) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
-    controlMutationDefaults: {
-      dataTypeEntries: {},
-      defaultFunctionRegistry: new Map(),
-    },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
   });
 }
 

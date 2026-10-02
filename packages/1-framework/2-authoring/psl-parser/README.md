@@ -74,12 +74,12 @@ if (reference !== undefined) binder.symbolForNode(reference);
 binder.scopeAt(modelDeclarationNode).entries();
 ```
 
-`context` is a `BinderContext`: the `authoringContributions`, `controlMutationDefaults` and `pslDiagnostics` fields of a `ContractSourceContext`, so the CLI passes its context as is and the language server builds one from its control stack. `createBinder` derives every binding input from it:
+`context` is a `BinderContext`: the `authoringContributions`, `controlMutationDefaults`, `dataTypes` and `pslDiagnostics` fields of a `ContractSourceContext`, so the CLI passes its context as is and the language server builds one from its control stack. `createBinder` derives every binding input from it:
 
 - the contributed types: the `type` and `field` contributions merged into one namespace tree of type constructors and field presets;
 - the attribute specs: the contributed `attributeSpecs` plus the specs of the `modelAttributes` descriptors;
 - the registered `pslBlockDescriptors`, so block references and block attribute arguments are bound;
-- the `@default` registries: `controlMutationDefaults.defaultFunctionRegistry` and the contributed `dataTypes`;
+- the `@default` registry `controlMutationDefaults.defaultFunctionRegistry`, and `dataTypes` (the stack's data types with their authoring entries), which every attribute-spec context receives;
 - the family's `describeUnsupportedAttribute` and `describeUnresolvedType` from `pslDiagnostics`, when present, to report unsupported attributes and unresolved types in the family's own terms.
 
 `pslDiagnostics` comes from the family descriptor (`ControlFamilyDescriptor.pslDiagnostics`). `@internal/config` and `@internal/framework-components` cannot name this package's types, so both fields are typed `unknown` there, and `createBinder` restores their types. Each field is a factory:

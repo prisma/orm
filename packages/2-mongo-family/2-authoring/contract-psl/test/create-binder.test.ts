@@ -3,7 +3,7 @@ import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
-import { buildSymbolTable, createBinder } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
@@ -127,7 +127,7 @@ describe('createBinder', () => {
         descriptorFor: () => undefined,
       },
       controlMutationDefaults: { defaultFunctionRegistry, generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypes: EMPTY_DATA_TYPES,
       resolvedInputs: [],
       capabilities: {},
     };

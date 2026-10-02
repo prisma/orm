@@ -6,15 +6,13 @@ import type { Contract } from '@internal/contract/types';
 import type {
   AuthoringEntityContext,
   AuthoringEntityTypeDescriptor,
+  DataTypeSupport,
 } from '@internal/framework-components/authoring';
 import {
   getAuthoringTypeConstructor,
   instantiateAuthoringEntityType,
 } from '@internal/framework-components/authoring';
-import type {
-  CodecLookupWithDescriptors,
-  DataTypeLookup,
-} from '@internal/framework-components/codec';
+import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -85,7 +83,7 @@ export interface InterpretPrisma7DocumentsInput {
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookupWithDescriptors;
-  readonly dataTypeLookup: DataTypeLookup;
+  readonly dataTypes: DataTypeSupport;
   readonly composedExtensions: readonly string[];
 }
 
@@ -1141,10 +1139,7 @@ function readField(args: ReadFieldArgs): void {
           codecId: resolved.descriptor.codecId,
           typeParams: resolved.descriptor.typeParams,
           codecLookup: input.codecLookup,
-          dataTypeSupport: {
-            entries: input.authoringContributions?.dataTypes ?? {},
-            lookup: input.dataTypeLookup,
-          },
+          dataTypes: input.dataTypes,
           literalForm: binding.literalDefaultForm(resolved.descriptor),
           enumMembers:
             enumDeclaration === undefined

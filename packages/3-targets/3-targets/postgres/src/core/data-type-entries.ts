@@ -14,8 +14,8 @@ import type { DataTypeAuthoringEntry } from '@internal/framework-components/auth
 import {
   createNumberClassifier,
   numeralText,
-  parseJsonBody,
-  printJsonBody,
+  parseJsonText,
+  printJsonText,
   signedRange,
 } from '@internal/sql-relational-core/ast';
 import { structuredError } from '@internal/utils/structured-error';
@@ -73,8 +73,8 @@ export function postgresDataTypeEntries(): Readonly<Record<string, DataTypeAutho
       documentation: 'A number, whose type comes from its own size and precision.',
     },
     [pgJson.id]: {
-      written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
-      print: printJsonBody,
+      written: { kind: 'tag', tag: 'json', parse: parseJsonText },
+      print: printJsonText,
       documentation: 'Reads the text as a JSON document and stores it as the default value.',
     },
   };

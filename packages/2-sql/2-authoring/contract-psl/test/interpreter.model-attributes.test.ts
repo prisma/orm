@@ -67,7 +67,7 @@ function interpretWith(schema: string, authoringContributions?: AuthoringContrib
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     controlMutationDefaults: builtinControlMutationDefaults,
     composedExtensionContracts: new Map(),
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     createNamespace,
     capabilities: { sql: { scalarList: true } },
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),

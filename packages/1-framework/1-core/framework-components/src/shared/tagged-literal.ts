@@ -1,9 +1,10 @@
 /**
- * Every failure `offset` is an index into the resolved text the function was
- * given, including `too-large`, whose limit is measured on the canonical body.
+ * `text` is the canonical value of the literal. Every failure `offset` is an
+ * index into the resolved body the function was given, including `too-large`,
+ * whose limit is measured on the canonical text.
  */
 export type TaggedLiteralCanonicalization =
-  | { readonly ok: true; readonly body: string }
+  | { readonly ok: true; readonly text: string }
   | {
       readonly ok: false;
       readonly reason: 'nul' | 'too-large';
@@ -64,7 +65,7 @@ interface Line {
 }
 
 /**
- * Turns the escape-resolved text of a tagged literal into its canonical body:
+ * Turns the escape-resolved body of a tagged literal into its canonical text:
  * newlines become `\n`, a blank first and last line are dropped, common leading
  * whitespace is removed, internal blank lines become empty, and no trailing
  * newline is added. Fails on a NUL character or when the result is larger than
@@ -92,7 +93,7 @@ export function canonicalizeTaggedLiteralBody(resolved: string): TaggedLiteralCa
   if (excess !== undefined) {
     return { ok: false, reason: 'too-large', offset: excess };
   }
-  return { ok: true, body: bodyLines.map((line) => line.text).join('\n') };
+  return { ok: true, text: bodyLines.map((line) => line.text).join('\n') };
 }
 
 function splitLines(text: string): Line[] {
@@ -115,7 +116,7 @@ function commonIndent(lines: readonly Line[]): number {
   return Number.isFinite(indent) ? indent : 0;
 }
 
-/** The resolved-text offset of the first character that pushes the body past `limit` bytes. */
+/** The resolved-body offset of the first character that pushes the text past `limit` bytes. */
 function offsetWhereBytesExceed(lines: readonly Line[], limit: number): number | undefined {
   let bytes = 0;
   for (const [index, line] of lines.entries()) {

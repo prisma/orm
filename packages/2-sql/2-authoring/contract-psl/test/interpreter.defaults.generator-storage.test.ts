@@ -36,7 +36,7 @@ describe('generator defaults never mutate storage — the type position is the o
 
   const interpret = (schema: string) =>
     interpretSqlContract(schema, {
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       target: postgresTarget,
       scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
       authoringContributions,

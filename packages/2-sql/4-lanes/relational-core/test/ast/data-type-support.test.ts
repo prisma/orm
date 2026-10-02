@@ -7,8 +7,8 @@ import {
   integerTextCanonicalForm,
   isNumeralText,
   numeralText,
-  parseJsonBody,
-  printJsonBody,
+  parseJsonText,
+  printJsonText,
   signedRange,
 } from '../../src/ast/data-type-support';
 
@@ -144,23 +144,23 @@ describe('createNumberClassifier', () => {
   });
 });
 
-describe('parseJsonBody and printJsonBody', () => {
+describe('parseJsonText and printJsonText', () => {
   it('reads a document and writes it back', () => {
-    expect(printJsonBody(parseJsonBody('{ "plan": "free" }'))).toBe('{"plan":"free"}');
+    expect(printJsonText(parseJsonText('{ "plan": "free" }'))).toBe('{"plan":"free"}');
   });
 
   it.each(['null', '[]', '1', '"x"'])('reads %s', (text) => {
-    expect(parseJsonBody(text)).toEqual(JSON.parse(text));
+    expect(parseJsonText(text)).toEqual(JSON.parse(text));
   });
 
   it('refuses a body that is not a JSON document', () => {
-    expect(() => parseJsonBody('{ plan }')).toThrow();
+    expect(() => parseJsonText('{ plan }')).toThrow();
   });
 
   it.each([
     ['a top-level number that overflows', '1e400', 'The value is Infinity'],
     ['a number nested in an array', '{ "a": [1, [2, -1e400]] }', 'a[1][1] is -Infinity'],
   ])('refuses %s, which JSON cannot write back', (_name, text, where) => {
-    expect(() => parseJsonBody(text)).toThrow(where);
+    expect(() => parseJsonText(text)).toThrow(where);
   });
 });

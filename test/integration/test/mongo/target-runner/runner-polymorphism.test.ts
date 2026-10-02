@@ -14,6 +14,7 @@ import {
 import { mongoContextInput } from '@internal/mongo-contract-psl/test';
 import type { AnyMongoMigrationOperation } from '@internal/mongo-query-ast/control';
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
+import { EMPTY_DATA_TYPES } from '@internal/psl-parser';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import { bindPslSchema } from '@internal/psl-parser/test';
 import {
@@ -144,7 +145,7 @@ function makeContractFromPsl(): MongoContract {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedMongoAttribute },
       codecLookup: mongoCodecLookup,
       controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
-      dataTypeLookup: { has: () => false, get: () => undefined },
+      dataTypes: EMPTY_DATA_TYPES,
       resolvedInputs: [],
       capabilities: {},
     },

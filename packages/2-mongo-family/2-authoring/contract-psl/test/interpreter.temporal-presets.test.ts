@@ -58,7 +58,7 @@ function interpret(
 ) {
   return interpretMongoContract(schema, {
     scalarTypeCodecIds,
-    controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
+    controlMutationDefaults: { defaultFunctionRegistry: new Map() },
     codecLookup,
     authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.reportWarning ? { reportWarning: options.reportWarning } : {}),

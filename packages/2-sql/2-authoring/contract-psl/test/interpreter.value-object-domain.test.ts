@@ -25,7 +25,7 @@ function interpretPostgres(schema: string) {
       dataTypes: fixtureDataTypeSupport.entries,
       valueObjectStorageType: 'Jsonb',
     },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     codecLookup: postgresCodecLookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,

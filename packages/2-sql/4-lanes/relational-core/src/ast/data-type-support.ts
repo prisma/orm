@@ -142,13 +142,13 @@ export function createNumberClassifier(
 }
 
 /**
- * Read a JSON body into the document it holds.
+ * Read JSON text into the document it holds.
  *
  * `JSON.parse` reads a numeral too large for a double as `Infinity`, and `JSON.stringify` writes
  * that back as `null`, so a document holding one would not be the document stored; it is refused
  * here instead, naming where the number is.
  */
-export function parseJsonBody(text: string): JsonValue {
+export function parseJsonText(text: string): JsonValue {
   let value: JsonValue;
   try {
     value = JSON.parse(text);
@@ -156,7 +156,7 @@ export function parseJsonBody(text: string): JsonValue {
     throw structuredError(
       'CONTRACT.INVALID_JSON_LITERAL',
       error instanceof Error ? error.message : String(error),
-      { why: 'The body is not a JSON document.', fix: 'Write a JSON document.' },
+      { why: 'The text is not a JSON document.', fix: 'Write a JSON document.' },
     );
   }
   const overflowed = nonFiniteNumberIn(value, '');
@@ -173,8 +173,8 @@ export function parseJsonBody(text: string): JsonValue {
   return value;
 }
 
-/** Write a document as the body of a JSON literal. */
-export function printJsonBody(value: JsonValue): string {
+/** Write a document as the text of a JSON literal. */
+export function printJsonText(value: JsonValue): string {
   return JSON.stringify(value);
 }
 

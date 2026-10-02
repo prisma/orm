@@ -17,7 +17,7 @@ function interpret(schema: string) {
     authoringContributions: { type: postgresScalarAuthoringTypes },
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     capabilities: { sql: { scalarList: true, checkConstraint: true } },
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
   });

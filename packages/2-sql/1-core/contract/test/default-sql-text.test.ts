@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { checkSqlDefaultBody, reservedSqlDefaultBody } from '../src/default-sql-body';
+import { checkSqlDefaultText, reservedSqlDefaultText } from '../src/default-sql-text';
 
-describe('reservedSqlDefaultBody', () => {
+describe('reservedSqlDefaultText', () => {
   it.each([
     ['now()', 'now'],
     [' now() ', 'now'],
     ['autoincrement()', 'autoincrement'],
     ['\n  autoincrement()\n', 'autoincrement'],
-  ] as const)('names the Prisma default function %j spells', (body, name) => {
-    expect(reservedSqlDefaultBody(body)).toBe(name);
+  ] as const)('names the Prisma default function %j is', (text, name) => {
+    expect(reservedSqlDefaultText(text)).toBe(name);
   });
 
   it.each([
@@ -19,12 +19,12 @@ describe('reservedSqlDefaultBody', () => {
     ["now() + interval '1 day'"],
     ['CURRENT_TIMESTAMP'],
     [''],
-  ])('passes %j as raw SQL', (body) => {
-    expect(reservedSqlDefaultBody(body)).toBeUndefined();
+  ])('passes %j as raw SQL', (text) => {
+    expect(reservedSqlDefaultText(text)).toBeUndefined();
   });
 });
 
-describe('checkSqlDefaultBody', () => {
+describe('checkSqlDefaultText', () => {
   it.each([
     ['gen_random_uuid()'],
     ["(now() + '00:03:00'::interval)"],
@@ -32,8 +32,8 @@ describe('checkSqlDefaultBody', () => {
     ['CURRENT_TIMESTAMP'],
     ['selected_at'],
     [''],
-  ])('accepts %j', (body) => {
-    expect(checkSqlDefaultBody(body)).toBeUndefined();
+  ])('accepts %j', (text) => {
+    expect(checkSqlDefaultText(text)).toBeUndefined();
   });
 
   it.each([
@@ -44,8 +44,8 @@ describe('checkSqlDefaultBody', () => {
     ['a subquery', '(select 1)'],
     ['an upper-case subquery', '(SELECT 1)'],
     ['the word select inside a SQL string literal', "'no select here'"],
-  ])('rejects %s', (_name, body) => {
-    expect(checkSqlDefaultBody(body)).toBe(
+  ])('rejects %s', (_name, text) => {
+    expect(checkSqlDefaultText(text)).toBe(
       'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
     );
   });

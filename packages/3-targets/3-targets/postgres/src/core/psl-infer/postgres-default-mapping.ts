@@ -5,7 +5,9 @@ import { postgresDataTypes } from '../data-types';
 
 export function createPostgresDefaultMapping(): DefaultMappingOptions {
   return {
-    dataTypeEntries: postgresDataTypeEntries(),
-    dataTypes: createDataTypeLookup(postgresDataTypes),
+    dataTypes: {
+      entries: postgresDataTypeEntries(),
+      lookup: createDataTypeLookup(postgresDataTypes),
+    },
   };
 }

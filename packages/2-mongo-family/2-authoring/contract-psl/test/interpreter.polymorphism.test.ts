@@ -63,7 +63,6 @@ function interpret(schema: string) {
     {
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
       controlMutationDefaults: {
-        dataTypeEntries: {},
         defaultFunctionRegistry: new Map(),
       },
       codecLookup: mongoCodecLookup,

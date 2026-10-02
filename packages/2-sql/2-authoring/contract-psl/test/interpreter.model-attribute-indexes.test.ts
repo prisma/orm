@@ -89,7 +89,7 @@ function interpret(schema: string, authoringContributions?: AuthoringContributio
     controlMutationDefaults: builtinControlMutationDefaults,
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
-    dataTypeLookup: fixtureDataTypeSupport.lookup,
+    dataTypes: fixtureDataTypeSupport,
     ...(authoringContributions !== undefined ? { authoringContributions } : {}),
   });
 }

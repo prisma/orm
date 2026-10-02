@@ -36,6 +36,7 @@ export type { AssembledAttributeSpecs } from '../attribute-spec/assemble';
 export { assembleAttributeSpecs } from '../attribute-spec/assemble';
 export { blockAttribute } from '../attribute-spec/block-attribute';
 export { bool } from '../attribute-spec/combinators/bool';
+export { dataTypeValue } from '../attribute-spec/combinators/data-type-value';
 export { leafDiagnostic } from '../attribute-spec/combinators/diagnostic';
 export { entityRef } from '../attribute-spec/combinators/entity-ref';
 export { fieldRef, referencedFieldRef } from '../attribute-spec/combinators/field-ref';
@@ -65,6 +66,7 @@ export type {
   FieldAttributeSpecFactory,
   ModelAttributeSpecFactory,
 } from '../attribute-spec/spec-context';
+export { EMPTY_DATA_TYPES } from '../attribute-spec/spec-context';
 export type {
   ArgType,
   ArgTypeKind,
@@ -73,6 +75,7 @@ export type {
   AttributeOut,
   AttributeSpec,
   BlockAttributeCtx,
+  DataTypeValueArgType,
   EntityRefArgType,
   FieldAttributeCtx,
   FixedIdentifierArgType,
@@ -89,6 +92,7 @@ export type {
   OutOf,
   Param,
   ParsedTaggedLiteral,
+  ParsedTypedValue,
   PositionalParam,
   PosOut,
   RejectingArgType,
@@ -190,3 +194,5 @@ export type {
 } from '../symbol-table';
 export { buildSymbolTable } from '../symbol-table';
 export { isPslIdentifier } from '../tokenizer';
+export type { WrittenScalarResult } from '../written-scalar';
+export { readWrittenScalar } from '../written-scalar';

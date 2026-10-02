@@ -350,7 +350,7 @@ describe('TS and PSL authoring parity', () => {
       controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
       authoringContributions: target.authoringContributions,
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -401,7 +401,7 @@ model Post {
         controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
         authoringContributions,
         createNamespace: createTestSqlNamespace,
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
         capabilities: { sql: { scalarList: true } },
       },
     );
@@ -476,7 +476,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -542,7 +542,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -614,7 +614,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -664,7 +664,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
       },
     );
     expect(pslContract.ok).toBe(true);
@@ -719,7 +719,7 @@ model Post {
         authoringContributions,
         createNamespace: createTestSqlNamespace,
         capabilities: { sql: { scalarList: true } },
-        dataTypeLookup: fixtureDataTypeSupport.lookup,
+        dataTypes: fixtureDataTypeSupport,
       },
     );
 
@@ -779,7 +779,7 @@ model Post {
           controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
           authoringContributions: postgresTimestampAuthoringContributions,
           createNamespace: createTestSqlNamespace,
-          dataTypeLookup: fixtureDataTypeSupport.lookup,
+          dataTypes: fixtureDataTypeSupport,
           capabilities: { sql: { scalarList: true } },
         },
       );

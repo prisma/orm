@@ -1,6 +1,6 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { parseMarkerRowSafely, withMarkerReadErrorHandling } from '@internal/errors/execution';
-import { checkSqlDefaultBody } from '@internal/family-sql/control';
+import { checkSqlDefaultText } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { parseContractMarkerRow } from '@internal/family-sql/verify';
 import type { CodecLookupWithDescriptors } from '@internal/framework-components/codec';
@@ -766,7 +766,7 @@ async function sqliteRenderDdlColumnDefault(
     // `CURRENT_TIMESTAMP` / `datetime('now')` to `now()`, so map it back to a
     // valid SQLite expression on the way out.
     if (def.expression === 'now()') return "DEFAULT (datetime('now'))";
-    if (checkSqlDefaultBody(def.expression) !== undefined) {
+    if (checkSqlDefaultText(def.expression) !== undefined) {
       throw structuredError(
         'CONTRACT.DEFAULT_INVALID',
         `Unsafe default expression in contract: "${def.expression}". ` +

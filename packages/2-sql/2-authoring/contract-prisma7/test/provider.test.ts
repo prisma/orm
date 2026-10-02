@@ -282,7 +282,7 @@ describe('prisma7Contract', () => {
     const result = await prisma7Contract('prisma/schema.prisma', postgres).source.load({
       ...context,
       codecLookup: withTextDefaultsCastToNull(context.codecLookup),
-      dataTypeLookup: withBrokenTextType(context.dataTypeLookup),
+      dataTypes: { ...context.dataTypes, lookup: withBrokenTextType(context.dataTypes.lookup) },
     });
     expect(result).toMatchObject({
       ok: false,

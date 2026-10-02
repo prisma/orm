@@ -13,7 +13,7 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 import { unboundTables } from './unbound-tables';
 
 const baseInput = {
-  dataTypeLookup: fixtureDataTypeSupport.lookup,
+  dataTypes: fixtureDataTypeSupport,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),

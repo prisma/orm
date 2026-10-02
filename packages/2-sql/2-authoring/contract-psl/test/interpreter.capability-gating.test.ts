@@ -28,7 +28,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
       scalarColumnDescriptors: sqliteScalarColumnDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       capabilities: sqliteCapabilities,
       controlMutationDefaults: builtinControlMutationDefaults,
     });
@@ -52,7 +52,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       capabilities: postgresCapabilities,
       controlMutationDefaults: builtinControlMutationDefaults,
     });
@@ -78,7 +78,7 @@ describe('interpretPslDocumentToSqlContract scalar-list capability gating', () =
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       capabilities: {},
       controlMutationDefaults: builtinControlMutationDefaults,
     });

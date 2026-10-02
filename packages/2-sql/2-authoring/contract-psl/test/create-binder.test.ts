@@ -125,7 +125,7 @@ describe('createBinder', () => {
       pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedSqlAttribute },
       codecLookup: postgresCodecLookup,
       controlMutationDefaults: controlMutationDefaultsBase,
-      dataTypeLookup: fixtureDataTypeSupport.lookup,
+      dataTypes: fixtureDataTypeSupport,
       resolvedInputs: [],
       capabilities: { sql: { scalarList: true } },
     };
