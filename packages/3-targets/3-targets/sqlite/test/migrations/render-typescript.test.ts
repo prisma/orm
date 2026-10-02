@@ -120,4 +120,15 @@ describe('renderCallsToTypeScript (sqlite)', () => {
       `this.createTable({ table: "t", columns: [col("created", "TEXT", { notNull: true, default: fn("datetime('now')") })] })`,
     );
   });
+
+  it('renders a function default holding both quote kinds as a template literal', () => {
+    const output = renderTypeScript(
+      [new CreateTableCall('t', [col('label', 'TEXT', { default: fn(`printf("%s", 'x')`) })])],
+      { from: null, to: TO_HASH, snapshotsImportPath: SNAPSHOTS_IMPORT_PATH },
+    );
+
+    expect(output).toContain(
+      'this.createTable({ table: "t", columns: [col("label", "TEXT", { default: fn(`printf("%s", \'x\')`) })] })',
+    );
+  });
 });

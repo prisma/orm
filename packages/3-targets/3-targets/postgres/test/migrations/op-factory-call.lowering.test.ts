@@ -1,7 +1,7 @@
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { opaqueSql } from '@internal/sql-relational-core/ast';
-import { col, lit } from '@internal/sql-relational-core/contract-free';
+import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import {
@@ -145,6 +145,17 @@ describe('AddColumnCall', () => {
       { moduleSpecifier: '@internal/postgres/migration', symbol: 'col' },
       { moduleSpecifier: '@internal/postgres/migration', symbol: 'lit' },
     ]);
+  });
+
+  it('renders a function default holding both quote kinds as a template literal', () => {
+    const call = new AddColumnCall(
+      'public',
+      'user',
+      col('label', 'text', { default: fn(`concat("prefix", 'user')`) }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      'this.addColumn({ schema: "public", table: "user", column: col("label", "text", { default: fn(`concat("prefix", \'user\')`) }) })',
+    );
   });
 });
 
@@ -414,6 +425,14 @@ describe('SetDefaultCall', () => {
       imports: ['col', 'lit'],
     });
   });
+
+  it('renders a default holding both quote kinds as a template literal', () => {
+    const meta = col('meta', 'jsonb', { default: fn(`'{"a": 1}'::jsonb`) });
+    const call = new SetDefaultCall('public', 'user', meta);
+    expect(call.renderTypeScript()).toBe(
+      'this.setDefault({ schema: "public", table: "user", column: col("meta", "jsonb", { default: fn(`\'{"a": 1}\'::jsonb`) }) })',
+    );
+  });
 });
 
 describe('DropDefaultCall', () => {
@@ -679,6 +698,19 @@ describe('CreateIndexCall', () => {
     expect(op.execute[0]?.sql).toBe('LOWERED 1');
     expect(call.renderTypeScript()).toBe(
       'this.createIndex({ schema: "public", table: "user", index: "user_email_eq", expression: "lower(email)", extras: { where: "deleted_at IS NULL", unique: true } })',
+    );
+  });
+
+  it('renders an expression and a where holding both quote kinds as template literals', () => {
+    const call = new CreateIndexCall(
+      'public',
+      'user',
+      'user_kind_idx',
+      { expression: `("kind" || 'x')` },
+      { where: `"kind" <> 'guest'` },
+    );
+    expect(call.renderTypeScript()).toBe(
+      'this.createIndex({ schema: "public", table: "user", index: "user_kind_idx", expression: `("kind" || \'x\')`, extras: { where: `"kind" <> \'guest\'` } })',
     );
   });
 });
@@ -1050,6 +1082,37 @@ describe('CreatePostgresRlsPolicyCall', () => {
         '  roles: ["app_user"],',
         '  using: "(tenant_id = 1)",',
         '  permissive: true,',
+        '} })',
+      ].join('\n'),
+    );
+  });
+
+  it('renders using and withCheck holding both quote kinds as template literals', () => {
+    const call = new CreatePostgresRlsPolicyCall(
+      'public',
+      'post',
+      new PostgresRlsPolicy({
+        naming: parseNaming('Members', undefined),
+        tableName: 'post',
+        namespaceId: 'public',
+        operation: 'all',
+        roles: ['app_user'],
+        using: `"status" = 'published'`,
+        withCheck: `"status" <> 'archived'`,
+        permissive: false,
+      }),
+    );
+    expect(call.renderTypeScript()).toBe(
+      [
+        'this.createRlsPolicy({ schema: "public", table: "post", policy: {',
+        '  naming: { kind: "exact", name: "Members" },',
+        '  tableName: "post",',
+        '  namespaceId: "public",',
+        '  operation: "all",',
+        '  roles: ["app_user"],',
+        '  using: `"status" = \'published\'`,',
+        '  withCheck: `"status" <> \'archived\'`,',
+        '  permissive: false,',
         '} })',
       ].join('\n'),
     );

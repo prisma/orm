@@ -9,6 +9,7 @@
  * strategies, mirroring the Postgres `ColumnSpec` pattern.
  */
 
+import type { ColumnDefault } from '@internal/contract/types';
 import { errorUnfilledPlaceholder } from '@internal/errors/migration';
 import type {
   MigrationOperationClass,
@@ -21,7 +22,14 @@ import type {
   DdlColumn,
   DdlTableConstraint,
 } from '@internal/sql-relational-core/ast';
-import { type ImportRequirement, jsonToTsSource, TsExpression } from '@internal/ts-render';
+import {
+  type ImportRequirement,
+  jsonToTsSource,
+  TsExpression,
+  tsArraySource,
+  tsObjectSource,
+  tsQuotedTextSource,
+} from '@internal/ts-render';
 import { ifDefined } from '@internal/utils/defined';
 import { columnExistsAst, indexExistsAst, tableExistsAst } from '../../contract-free/checks';
 import * as contractFreeDdl from '../../contract-free/ddl';
@@ -76,7 +84,7 @@ function renderDdlColumnDefault(def: AnyDdlColumnDefault | undefined): string {
   if (def.kind === 'literal') {
     return `lit(${jsonToTsSource(def.value)})`;
   }
-  return `fn(${jsonToTsSource(def.expression.text)})`;
+  return `fn(${tsQuotedTextSource(def.expression.text)})`;
 }
 
 function renderDdlColumnAsTsCall(column: DdlColumn): string {
@@ -404,16 +412,16 @@ export class RecreateTableCall extends SqliteOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    const args = {
-      tableName: this.tableName,
-      contractTable: this.contractTable,
-      schemaColumnNames: this.schemaColumnNames,
-      indexes: this.indexes,
-      summary: this.summary,
-      postchecks: this.postchecks,
-      operationClass: this.operationClass,
-    };
-    return `this.recreateTable(${jsonToTsSource(args)})`;
+    const args = tsObjectSource([
+      ['tableName', jsonToTsSource(this.tableName)],
+      ['contractTable', renderTableSpec(this.contractTable)],
+      ['schemaColumnNames', jsonToTsSource(this.schemaColumnNames)],
+      ['indexes', jsonToTsSource(this.indexes)],
+      ['summary', jsonToTsSource(this.summary)],
+      ['postchecks', tsArraySource(this.postchecks.map(renderPostcheck))],
+      ['operationClass', jsonToTsSource(this.operationClass)],
+    ]);
+    return `this.recreateTable(${args})`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -460,7 +468,7 @@ export class AddColumnCall extends SqliteOpFactoryCallNode {
   }
 
   renderTypeScript(): string {
-    return `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${jsonToTsSource(this.column)} })`;
+    return `this.addColumn({ table: ${jsonToTsSource(this.tableName)}, column: ${renderColumnSpec(this.column)} })`;
   }
 
   override importRequirements(): readonly ImportRequirement[] {
@@ -765,3 +773,63 @@ export type SqliteOpFactoryCall =
   | DropIndexCall
   | DataTransformCall
   | RawSqlCall;
+
+type RenderedSources<T> = { readonly [K in keyof T]-?: string | undefined };
+
+function definedSourceEntries(
+  sources: Readonly<Record<string, string | undefined>>,
+): readonly (readonly [key: string, source: string])[] {
+  return Object.entries(sources).flatMap(([key, source]) =>
+    source === undefined ? [] : [[key, source] as const],
+  );
+}
+
+function renderIfDefined(value: unknown): string | undefined {
+  return value === undefined ? undefined : jsonToTsSource(value);
+}
+
+function renderColumnSpec(column: SqliteColumnSpec): string {
+  const sources: RenderedSources<SqliteColumnSpec> = {
+    name: jsonToTsSource(column.name),
+    typeSql: jsonToTsSource(column.typeSql),
+    default: column.default === undefined ? undefined : renderSpecDefault(column.default),
+    codecRef: renderIfDefined(column.codecRef),
+    nullable: jsonToTsSource(column.nullable),
+    inlineAutoincrementPrimaryKey: renderIfDefined(column.inlineAutoincrementPrimaryKey),
+  };
+  return tsObjectSource(definedSourceEntries(sources));
+}
+
+function renderTableSpec(table: SqliteTableSpec): string {
+  const sources: RenderedSources<SqliteTableSpec> = {
+    columns: tsArraySource(table.columns.map(renderColumnSpec)),
+    primaryKey: renderIfDefined(table.primaryKey),
+    uniques: renderIfDefined(table.uniques),
+    foreignKeys: renderIfDefined(table.foreignKeys),
+  };
+  return tsObjectSource(definedSourceEntries(sources));
+}
+
+function renderSpecDefault(columnDefault: ColumnDefault): string {
+  if (columnDefault.kind === 'literal') return jsonToTsSource(columnDefault);
+  const sources: RenderedSources<typeof columnDefault> = {
+    kind: jsonToTsSource(columnDefault.kind),
+    expression: tsQuotedTextSource(columnDefault.expression),
+  };
+  return tsObjectSource(definedSourceEntries(sources));
+}
+
+function renderPostcheck(postcheck: RecreatePostcheck): string {
+  if ('sql' in postcheck) {
+    const sources: RenderedSources<typeof postcheck> = {
+      description: jsonToTsSource(postcheck.description),
+      sql: tsQuotedTextSource(postcheck.sql),
+    };
+    return tsObjectSource(definedSourceEntries(sources));
+  }
+  const sources: RenderedSources<typeof postcheck> = {
+    description: jsonToTsSource(postcheck.description),
+    columnDefault: jsonToTsSource(postcheck.columnDefault),
+  };
+  return tsObjectSource(definedSourceEntries(sources));
+}
