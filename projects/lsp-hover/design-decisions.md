@@ -39,3 +39,19 @@
 - Making mismatched fixed identifiers fail to match. That changes the no-op fallback that block value specs rely on.
 
 **Affected artefacts:** `slices/hover-arguments/spec.md` § Recording rules.
+
+## 4. A fixed identifier that does not match fails; this supersedes § 3 (2026-10-02, operator decision)
+
+**Trigger:** the operator rejected § 3's exact-match shortcut as confusing. The reviewer found F7: the shortcut can skip an earlier reference alternative that matches the same text.
+
+**Decision:**
+- In the binder, an `identifier(name)` rule with a fixed `name` matches only when the written identifier equals `name`, and then records a `constant`. Otherwise it fails to match, and the binder reports no diagnostic of its own.
+- Unrestricted `identifier()` still matches any identifier.
+- `oneOf` uses its normal first-match loop; the exact-match shortcut is removed.
+- `bool()`, `num()` and `str()` stay no-ops in the binder.
+- Value errors keep coming from the interpreter's `parse` (`Expected one of …`), so a mistake still gets one diagnostic.
+
+**Consequence:** in `block-binder.test.ts`, the cases using `identifier('Other')` alongside a missing reference now expect the binder's `Cannot find entity "Missing"`. No production `oneOf` changes behaviour: the only one mixing a reference and an identifier, postgres `authoring.ts`, uses unrestricted `identifier()`.
+
+**Rejected:**
+- The binder also reporting a diagnostic. It would duplicate the interpreter's error, would need its own `oneOf` aggregation, and raises the question of checking scalar values in the binder. It is deferred to its own change, together with removing the interpreter's check.

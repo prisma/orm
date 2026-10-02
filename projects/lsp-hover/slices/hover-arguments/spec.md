@@ -42,7 +42,8 @@ Recording rules:
 - **Named attribute-argument keys** are recorded where `bindArguments` resolves the parameter, keyed on the argument's name identifier.
 - **Named function-call keys and function names** are recorded inside `tryBindExpression`'s `funcCall` case, into the trial's `references`.
 - **Constants** are recorded inside `tryBindExpression` when an `identifier` rule with a fixed `name` matches the expression.
-- **Inside a `oneOf` rule**, an alternative that is a fixed identifier whose name equals the written identifier is chosen first. Otherwise the existing first match applies, and mismatched fixed identifiers stay no-op matches (design decision 3). Only the chosen alternative's records survive. Today the `oneOf` case copies only `unresolved` resolutions from failed trials; it must keep doing that, so a failed alternative never leaks `parameter`, `function` or `constant` records.
+- **A fixed `identifier(name)` rule** matches only when the written identifier equals `name`, and records a `constant`. Otherwise it fails to match, with no binder diagnostic. Unrestricted `identifier()` matches any identifier (design decision 4).
+- **Inside a `oneOf` rule**, the existing first-match loop applies. Only the matching alternative's records survive. Today the `oneOf` case copies only `unresolved` resolutions from failed trials; it must keep doing that, so a failed alternative never leaks `parameter`, `function` or `constant` records.
 - **Struct-block entry keys** are recorded in `bindBlock`, keyed on `entry.key()`. Map-mode blocks record nothing for keys.
 
 **Hover** (`language-server/src/hover.ts`). `narrowHoverResult` gains three cases: `parameter`, `function` and `constant`. Block-level attributes reuse the attribute case, with prefix `@@`. Rendering:
@@ -76,7 +77,7 @@ There is one outcome: every position that has contributed documentation now answ
 | Edge case | Disposition | Notes |
 | --- | --- | --- |
 | `semantic-tokens.ts` `collectIdentifierExpression` reads `symbolForNode` on identifier values. A new `constant` resolution goes to `classifyTypeReference`'s `default` (`type`) instead of the `undefined` path. | Semantic tokens must not change. | Today constants outside `fields:` / `references:` already classify as `type`. The `semantic-tokens` tests must pass unchanged; any difference halts the dispatch. |
-| `oneOf` alternatives (e.g. `onDelete: Cascade \| Restrict \| …`, or `funcCall` vs `str`). | Only the matching trial's records are kept. | See Recording rules. |
+| `oneOf` alternatives (e.g. `onDelete: Cascade \| Restrict \| …`, or `funcCall` vs `str`). | Only the matching trial's records are kept. A mismatched fixed identifier fails to match. | See Recording rules; `block-binder.test.ts` cases using `identifier('Other')` now expect the entity diagnostic. |
 
 ## Slice-specific done conditions
 
