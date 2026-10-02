@@ -37,24 +37,6 @@ function scalarTypesSentence(types: AuthoringTypeNamespace): string {
 }
 
 /**
- * The message for a field typed with a name that resolved to something Mongo
- * cannot store as a scalar (e.g. a `types {}` binding): not a scalar type, an
- * enum, a composite type, or a model, followed by the registered scalar
- * types. Used both for the binder's unresolved-type message (when the
- * written name is not an earlier Prisma name either) and for the
- * interpreter's own `PSL_UNSUPPORTED_FIELD_TYPE` when the binder resolved the
- * reference to something Mongo still cannot use.
- */
-export function mongoUnsupportedScalarTypeMessage(
-  types: AuthoringTypeNamespace,
-  ownerName: string,
-  fieldName: string,
-  typeName: string,
-): string {
-  return `Field "${ownerName}.${fieldName}" has type "${typeName}", which is not a scalar type, an enum, a composite type or a model. ${scalarTypesSentence(types)}`;
-}
-
-/**
  * Mongo's `describeUnresolvedType` contribution: a name from an earlier
  * Prisma (`BigInt`, `Bytes`, `Decimal`) gets the current name and its BSON
  * storage; any other bare, unqualified type name the binder cannot resolve
@@ -76,7 +58,7 @@ export function describeUnresolvedMongoType(
     const replacement = EARLIER_MONGO_SCALAR_NAMES[written];
     const replacementOutput = replacement === undefined ? undefined : scalars.get(replacement);
     if (replacement === undefined || replacementOutput === undefined) {
-      return mongoUnsupportedScalarTypeMessage(types, owner.name, field.name, written);
+      return `Field "${owner.name}.${field.name}" has type "${written}", which is not a scalar type, an enum, a composite type or a model. ${scalarTypesSentence(types)}`;
     }
     return `Field "${owner.name}.${field.name}" has type "${written}", which is not a Mongo scalar type; use "${replacement}" (stored as BSON ${replacementOutput.nativeType}).`;
   };

@@ -3,10 +3,7 @@ export {
   derivePolymorphicJsonSchema,
   type FieldValueSets,
 } from '../derive-json-schema';
-export {
-  describeUnresolvedMongoType,
-  mongoUnsupportedScalarTypeMessage,
-} from '../describe-unresolved-type';
+export { describeUnresolvedMongoType } from '../describe-unresolved-type';
 export {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,

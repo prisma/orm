@@ -181,9 +181,7 @@ export interface CollectResolvedFieldsInput {
   readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
   /** The value objects the composite types declare, by name. */
   readonly valueObjectTypes: ValueObjectTypes;
-  readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
-  readonly familyId: string;
   readonly targetId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly dataTypeSupport: DataTypeSupport;

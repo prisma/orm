@@ -579,7 +579,6 @@ interface BuildModelNodeInput {
   readonly valueObjectTypes: ValueObjectTypes;
   readonly enumTypeDescriptors: ReadonlyMap<BlockSymbol, ColumnDescriptor>;
   readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
-  readonly composedExtensions: Set<string>;
   /** Extension contracts keyed by space ID for cross-space FK table-name resolution. */
   readonly composedExtensionContracts: ReadonlyMap<string, Contract>;
   readonly familyId: string;
@@ -694,9 +693,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     enumTypeDescriptors: input.enumTypeDescriptors,
     namedTypeDescriptors: input.namedTypeDescriptors,
     valueObjectTypes: input.valueObjectTypes,
-    composedExtensions: input.composedExtensions,
     authoringContributions: input.authoringContributions,
-    familyId: input.familyId,
     targetId: input.targetId,
     defaultFunctionRegistry: input.defaultFunctionRegistry,
     dataTypeSupport: input.dataTypeSupport,
@@ -1505,9 +1502,6 @@ interface BuildValueObjectNodesInput {
   readonly namedTypeDescriptors: ReadonlyMap<NamedTypeSymbol, ColumnDescriptor>;
   /** The named types; a member typed by one takes its parameters inline. */
   readonly namedTypes: Record<string, StorageTypeInstance>;
-  readonly composedExtensions: ReadonlySet<string>;
-  readonly familyId: string;
-  readonly targetId: string;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
   /** Composite types are placed in the default namespace, so their members resolve against it. */
@@ -2420,9 +2414,6 @@ export function interpretPslDocumentToSqlContract(
     enumHandles,
     namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
     namedTypes: namedTypeResult.storageTypes,
-    composedExtensions,
-    familyId: input.target.familyId,
-    targetId: input.target.targetId,
     diagnostics,
     sources: input.sources,
     defaultNamespaceId,
@@ -2448,7 +2439,6 @@ export function interpretPslDocumentToSqlContract(
       valueObjectTypes,
       enumTypeDescriptors: allEnumTypeDescriptors,
       namedTypeDescriptors: namedTypeResult.namedTypeDescriptors,
-      composedExtensions,
       composedExtensionContracts,
       familyId: input.target.familyId,
       targetId: input.target.targetId,

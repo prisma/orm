@@ -157,8 +157,6 @@ interface ScalarNames {
     field: FieldSymbol,
     descriptor: AuthoringTypeConstructorDescriptor,
   ) => void;
-  /** Every enum the schema declares, including one whose own declaration failed and was already reported. */
-  readonly declaredEnums: ReadonlySet<string>;
 }
 
 /**
@@ -1319,11 +1317,6 @@ export function interpretPslDocumentToMongoContract(
       sources,
       reportWarning: input.reportWarning,
     }),
-    declaredEnums: new Set(
-      Object.values(symbolTable.topLevel.blocks)
-        .filter((block) => block.keyword === 'enum')
-        .map((block) => block.name),
-    ),
   };
   const { binder } = input;
   const { parsedBlocks, diagnostics: blockDiagnostics } = interpretExtensionBlocks({
