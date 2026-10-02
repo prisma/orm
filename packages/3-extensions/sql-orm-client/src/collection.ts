@@ -35,7 +35,6 @@ import {
   getColumnToFieldMap,
   getFieldToColumnMap,
   isToOneCardinality,
-  modelOf,
   type PolymorphismInfo,
   type PolymorphismVariantInfo,
   resolveFieldToColumn,
@@ -152,7 +151,8 @@ import {
   type VariantAwareIncludeRelationNames,
   type VariantAwareModelAccessor,
   type VariantModelRow,
-  type VariantNames,
+  type VariantNameForValue,
+  type VariantValues,
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
@@ -450,22 +450,22 @@ export class CollectionBase<
   }
 
   /**
-   * Narrow a polymorphic model to a specific variant. The returned
-   * collection has the variant's row shape and a discriminator filter
-   * is automatically applied. Chaining `.variant(...)` again replaces
-   * the previous variant filter.
+   * Narrow a polymorphic model to the variant declared with the given
+   * discriminator value. The returned collection has the variant's row
+   * shape and a discriminator filter is automatically applied. Chaining
+   * `.variant(...)` again replaces the previous variant filter.
    *
    * ```typescript
    * // Read only admin users (STI):
-   * const admins = await db.orm.User.variant('Admin').all();
+   * const admins = await db.orm.User.variant('admin').all();
    *
    * // Iterate the rows:
-   * for await (const admin of db.orm.User.variant('Admin').all()) {
+   * for await (const admin of db.orm.User.variant('admin').all()) {
    *   console.log(admin.role);
    * }
    *
    * // Insert under a variant — discriminator is injected automatically:
-   * await db.orm.User.variant('Admin').create({ name: 'Ada', role: 'super' });
+   * await db.orm.User.variant('admin').create({ name: 'Ada', role: 'super' });
    * ```
    */
   variant<V extends VariantNames<TContract, ModelName>, S extends CollectionTypeState = State>(
@@ -485,43 +485,34 @@ export class CollectionBase<
     VariantModelRow<TContract, ModelName, V>,
     WithVariantState<WithWhereState<State>, V>
   >;
-  variant<V extends VariantNames<TContract, ModelName>>(
-    variantName: V,
+  
+  variant<V extends VariantValues<TContract, ModelName>>(
+    value: V,
   ): Collection<
     TContract,
     ModelName,
-    VariantModelRow<TContract, ModelName, V>,
-    WithVariantState<WithWhereState<State>, V>
+    VariantModelRow<TContract, ModelName, VariantNameForValue<TContract, ModelName, V>>,
+    WithVariantState<WithWhereState<State>, VariantNameForValue<TContract, ModelName, V>>
   > {
-    type ReturnState = WithVariantState<WithWhereState<State>, V>;
-    const model = modelOf(this.contract, this.namespaceId, this.modelName);
-    const discriminator = model?.discriminator;
-    const variants = model?.variants;
+    type VariantName = VariantNameForValue<TContract, ModelName, V>;
+    const polyInfo = resolvePolymorphismInfo(this.contract, this.namespaceId, this.modelName);
+    const variantInfo = polyInfo?.variantsByValue.get(value);
 
-    if (!discriminator || !variants) {
-      return blindCast<
-        Collection<TContract, ModelName, VariantModelRow<TContract, ModelName, V>, ReturnState>,
-        'variant() preserves its declared static narrowing when runtime polymorphism metadata is absent'
-      >(this);
+    if (!polyInfo || !variantInfo) {
+      const declaredValues = [...(polyInfo?.variantsByValue.keys() ?? [])];
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        declaredValues.length === 0
+          ? `variant("${value}") cannot narrow model "${this.modelName}": it declares no discriminator values`
+          : `variant("${value}") cannot narrow model "${this.modelName}": the declared discriminator values are ${declaredValues.map((declared) => `"${declared}"`).join(', ')}`,
+        { meta: { modelName: this.modelName, value, declaredValues } },
+      );
     }
 
-    const variantEntry = variants[variantName];
-    if (!variantEntry) {
-      return blindCast<
-        Collection<TContract, ModelName, VariantModelRow<TContract, ModelName, V>, ReturnState>,
-        'variant() preserves its declared static narrowing when runtime metadata lacks the selected variant'
-      >(this);
-    }
-
-    const columnName = resolveFieldToColumn(
-      this.contract,
-      this.namespaceId,
-      this.modelName,
-      discriminator.field,
-    );
+    const columnName = polyInfo.discriminatorColumn;
     const filter = BinaryExpr.eq(
       ColumnRef.of(this.tableName, columnName),
-      LiteralExpr.of(variantEntry.value),
+      LiteralExpr.of(variantInfo.value),
     );
 
     const filtersWithoutPreviousVariant = this.state.variantName
@@ -536,9 +527,12 @@ export class CollectionBase<
         )
       : this.state.filters;
 
-    return this.#cloneWithRow<VariantModelRow<TContract, ModelName, V>, ReturnState>({
+    return this.#cloneWithRow<
+      VariantModelRow<TContract, ModelName, VariantName>,
+      WithVariantState<WithWhereState<State>, VariantName>
+    >({
       filters: [...filtersWithoutPreviousVariant, filter],
-      variantName,
+      variantName: variantInfo.modelName,
     });
   }
 

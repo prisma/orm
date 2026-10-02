@@ -246,7 +246,7 @@ test('polymorphic base discriminator is the union of variant literals', () => {
 });
 
 test('ResultType of a variant collection equals Scalars of the variant member', () => {
-  const bugs = poly.Task.variant('Bug');
+  const bugs = poly.Task.variant('bug');
   expectTypeOf<ResultType<typeof bugs>>().toEqualTypeOf<Scalars<PolyModels.public_Bug>>();
 });
 
@@ -267,7 +267,7 @@ test('ResultType of an include whose target is a polymorphic base equals Shape o
 });
 
 test('ResultType of a variant-only include on a variant collection equals Shape of the variant', () => {
-  const bugsWithAssignee = poly.Task.variant('Bug').include('assignee');
+  const bugsWithAssignee = poly.Task.variant('bug').include('assignee');
   expectTypeOf<ResultType<typeof bugsWithAssignee>>().toEqualTypeOf<
     Shape<PolyModels.public_Bug, { '+': 'assignee' }>
   >();
@@ -306,7 +306,7 @@ test('prepared terminals preserve complete emitted ordinary result types', () =>
     Promise<{ id: number; reviewer: { id: number } | null } | null>
   >();
 
-  const bugs = poly.Task.variant('Bug').include('assignee');
+  const bugs = poly.Task.variant('bug').include('assignee');
   expectTypeOf(bugs.prepared.all().consume).returns.toEqualTypeOf<
     AsyncIterableResult<Shape<PolyModels.public_Bug, { '+': 'assignee' }>>
   >();
