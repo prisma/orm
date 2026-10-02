@@ -154,7 +154,9 @@ function renderAttributeContent(symbol: AttributeSymbol): string {
 
 function renderContributedTypeContent(symbol: ContributedTypeSymbol): string {
   const fence = ['```prisma', renderContributedTypeLabel(symbol), '```'].join('\n');
-  return withDocumentation(fence, symbol.descriptor.documentation);
+  const documentation =
+    symbol.descriptor.kind === 'typeConstructor' ? symbol.descriptor.documentation : undefined;
+  return withDocumentation(fence, documentation);
 }
 
 function withDocumentation(fence: string, documentation: string | undefined): string {
