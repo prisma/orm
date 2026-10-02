@@ -5,14 +5,14 @@ import type {
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import type { ControlStack } from '@internal/framework-components/control';
 import type { Binder, SymbolTable } from '@internal/psl-parser';
-import { buildSymbolTable, createProjectBinder, mapPslDiagnostics } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, mapPslDiagnostics } from '@internal/psl-parser';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { InterpretPslDocumentToSqlContractInput } from './interpreter';
 
 /**
  * Derives the `ContractSourceContext` `bindPslSchema` (and
- * `createProjectBinder`) need from a `ControlStack` a test assembled with
+ * `createBinder`) need from a `ControlStack` a test assembled with
  * `createControlStack`. Mirrors the mapping `loadContractSourceWithStack`
  * applies in production, minus the parts only a running command has
  * (`resolvedInputs`, `reportWarning`).
@@ -67,7 +67,7 @@ export function bindPslSchema(
     documents,
     sources,
   });
-  const { binder, diagnostics: binderDiagnostics } = createProjectBinder({
+  const { binder, diagnostics: binderDiagnostics } = createBinder({
     symbolTable,
     sources,
     context,

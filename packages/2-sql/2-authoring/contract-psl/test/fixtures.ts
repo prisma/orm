@@ -439,7 +439,7 @@ export function symbolTableInputFromParseArgs(args: {
  * minus the parts this helper derives from `schema` itself.
  */
 /**
- * Builds the `ContractSourceContext` `createProjectBinder` needs, from the
+ * Builds the `ContractSourceContext` `createBinder` needs, from the
  * same options `interpretSqlContract` callers already pass. Falls back to
  * the family's own built-ins (`sqlAttributeSpecs`,
  * `describeUnsupportedSqlAttribute`) for whatever a test doesn't override,

@@ -21,6 +21,7 @@ import { mapBlock } from '../src/block-spec/constructors';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
 import { ArrayLiteralAst, FunctionCallAst } from '../src/syntax/ast/expressions';
+import { binderContext } from './support';
 
 const reference = entityRef({ kind: 'model' });
 
@@ -41,19 +42,19 @@ function bind(
     ...createBinder({
       sources,
       symbolTable,
-      contributedTypes: {},
-      controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-      attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
-      pslBlockDescriptors: {
-        policy: {
-          kind: 'pslBlock',
-          keyword: 'policy',
-          discriminator: 'policy',
-          name: { required: true },
-          spec: () => mapBlock({ value: { type: rule, documentation: 'target' } }),
-          attributes: { refs: () => blockAttribute('refs', parameters) },
+      context: binderContext({
+        attributeSpecs: { model: { refs: () => modelAttribute('refs', parameters) }, field: {} },
+        pslBlockDescriptors: {
+          policy: {
+            kind: 'pslBlock',
+            keyword: 'policy',
+            discriminator: 'policy',
+            name: { required: true },
+            spec: () => mapBlock({ value: { type: rule, documentation: 'target' } }),
+            attributes: { refs: () => blockAttribute('refs', parameters) },
+          },
         },
-      },
+      }),
     }),
   };
 }
@@ -358,18 +359,18 @@ it('resolves a field after an entity lookup fails', () => {
   const result = createBinder({
     sources,
     symbolTable,
-    contributedTypes: {},
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    attributeSpecs: {
-      model: {},
-      field: {
-        pick: () =>
-          fieldAttribute('pick', {
-            documentation: 'pick',
-            positional: [{ key: 'value', type: rule, documentation: 'value' }],
-          }),
+    context: binderContext({
+      attributeSpecs: {
+        model: {},
+        field: {
+          pick: () =>
+            fieldAttribute('pick', {
+              documentation: 'pick',
+              positional: [{ key: 'value', type: rule, documentation: 'value' }],
+            }),
+        },
       },
-    },
+    }),
   });
   const selfModel = symbolTable.topLevel.models['M']!;
   const field = selfModel.fields['value']!;

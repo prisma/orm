@@ -1,7 +1,16 @@
+import type { ContractSourceContext } from '@internal/config/config-types';
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import type { ControlDefaultRegistries } from '@internal/framework-components/control';
+import type {
+  ControlDefaultRegistries,
+  ControlMutationDefaults,
+} from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
+import {
+  assembleAttributeSpecs,
+  resolveDescribeUnresolvedType,
+  resolveDescribeUnsupportedAttribute,
+} from './attribute-spec/assemble';
 import type {
   AttributeSpecNamespace,
   BlockAttributeSpecFactory,
@@ -15,7 +24,11 @@ import type {
   PositionalParam,
 } from './attribute-spec/types';
 import { blockSpecFactoryOf } from './block-spec/descriptor';
-import { type ContributedTypeNamespace, contributedTypeScope } from './contributed-type-scope';
+import {
+  type ContributedTypeNamespace,
+  contributedTypeScope,
+  mergeContributedTypes,
+} from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
@@ -109,7 +122,18 @@ export interface UnresolvedTypeReference {
  */
 export type DescribeUnresolvedType = (unresolved: UnresolvedTypeReference) => string | undefined;
 
-export interface CreateBinderOptions {
+export interface BinderContext
+  extends Pick<ContractSourceContext, 'authoringContributions' | 'pslDiagnostics'> {
+  readonly controlMutationDefaults: Pick<ControlMutationDefaults, 'defaultFunctionRegistry'>;
+}
+
+export interface CreateBinderInput {
+  readonly sources: PslSources;
+  readonly symbolTable: SymbolTable;
+  readonly context: BinderContext;
+}
+
+interface BindingInputs {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly contributedTypes: ContributedTypeNamespace;
@@ -199,7 +223,34 @@ function walkEntities(
   }
 }
 
-export function createBinder(options: CreateBinderOptions): BinderResult {
+export function createBinder(input: CreateBinderInput): BinderResult {
+  const { symbolTable, sources, context } = input;
+  const contributions = context.authoringContributions;
+  const describeUnsupportedAttributeFactory = resolveDescribeUnsupportedAttribute(
+    context.pslDiagnostics,
+  );
+  const describeUnresolvedTypeFactory = resolveDescribeUnresolvedType(context.pslDiagnostics);
+
+  return bind({
+    sources,
+    symbolTable,
+    contributedTypes: mergeContributedTypes(contributions.field, contributions.type),
+    attributeSpecs: assembleAttributeSpecs(contributions),
+    pslBlockDescriptors: contributions.pslBlockDescriptors,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: context.controlMutationDefaults.defaultFunctionRegistry,
+      dataTypeEntries: contributions.dataTypes,
+    },
+    ...(describeUnsupportedAttributeFactory !== undefined
+      ? { describeUnsupportedAttribute: describeUnsupportedAttributeFactory(sources) }
+      : {}),
+    ...(describeUnresolvedTypeFactory !== undefined
+      ? { describeUnresolvedType: describeUnresolvedTypeFactory(contributions) }
+      : {}),
+  });
+}
+
+function bind(options: BindingInputs): BinderResult {
   const {
     sources,
     symbolTable,

@@ -32,6 +32,7 @@ import {
 } from '../src/symbol-table';
 import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
+import { binderContext } from './support';
 
 function scalar(nativeType: string): AuthoringTypeConstructorDescriptor {
   return { kind: 'typeConstructor', output: { codecId: 'fixture/scalar@1', nativeType } };
@@ -84,11 +85,6 @@ const FIELD_SPECS = {
 };
 
 const ATTRIBUTE_SPECS = { model: MODEL_SPECS, field: FIELD_SPECS };
-
-const NO_CONTROL_DEFAULTS = {
-  defaultFunctionRegistry: new Map(),
-  dataTypeEntries: {},
-};
 
 function attributeNodes(
   owner: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
@@ -143,9 +139,10 @@ function bind(...texts: string[]) {
     ...createBinder({
       sources,
       symbolTable,
-      contributedTypes: TYPE_CONSTRUCTORS,
-      attributeSpecs: ATTRIBUTE_SPECS,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: ATTRIBUTE_SPECS,
+      }),
     }),
   };
 }
@@ -304,10 +301,11 @@ function bindWithUnsupportedDescriber(
     ...createBinder({
       sources,
       symbolTable,
-      contributedTypes: TYPE_CONSTRUCTORS,
-      attributeSpecs: ATTRIBUTE_SPECS,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
-      describeUnsupportedAttribute,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: ATTRIBUTE_SPECS,
+        describeUnsupportedAttribute,
+      }),
     }),
   };
 }
@@ -322,10 +320,11 @@ function bindWithUnresolvedTypeDescriber(
     ...createBinder({
       sources,
       symbolTable,
-      contributedTypes: TYPE_CONSTRUCTORS,
-      attributeSpecs: ATTRIBUTE_SPECS,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
-      describeUnresolvedType,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: ATTRIBUTE_SPECS,
+        describeUnresolvedType,
+      }),
     }),
   };
 }
@@ -1289,9 +1288,10 @@ describe('attribute-spec registry shape', () => {
     const { binder, diagnostics } = createBinder({
       sources,
       symbolTable,
-      contributedTypes: TYPE_CONSTRUCTORS,
-      attributeSpecs: registry,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: registry,
+      }),
     });
     const user = symbolTable.topLevel.models['User']!;
     const post = symbolTable.topLevel.models['Post']!;
@@ -1455,9 +1455,10 @@ describe('the binder calls the real spec factories', () => {
     const { binder, diagnostics } = createBinder({
       sources,
       symbolTable,
-      contributedTypes: TYPE_CONSTRUCTORS,
-      attributeSpecs: registry,
-      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      context: binderContext({
+        contributedTypes: TYPE_CONSTRUCTORS,
+        attributeSpecs: registry,
+      }),
     });
     const user = symbolTable.topLevel.models['User']!;
 

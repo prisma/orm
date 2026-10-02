@@ -5,7 +5,7 @@ import { collectScalarTypeConstructors } from '@internal/framework-components/au
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import {
   buildSymbolTable,
-  createProjectBinder,
+  createBinder,
   isPrismaNextSchema,
   mapPslDiagnostics,
 } from '@internal/psl-parser';
@@ -182,7 +182,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
         documents,
         sources,
       });
-      const { binder, diagnostics: binderDiagnostics } = createProjectBinder({
+      const { binder, diagnostics: binderDiagnostics } = createBinder({
         symbolTable,
         sources,
         context,

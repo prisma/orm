@@ -9,11 +9,7 @@ import type {
   ResolvedEntityReference,
   SymbolTable,
 } from '@internal/psl-parser';
-import {
-  buildSymbolTable,
-  createProjectBinder,
-  createPslDiagnosticCollector,
-} from '@internal/psl-parser';
+import { buildSymbolTable, createBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
@@ -48,7 +44,7 @@ function createBinderFor(symbolTable: SymbolTable, sources: PslSources) {
     resolvedInputs: [],
     capabilities: {},
   };
-  return createProjectBinder({ symbolTable, sources, context }).binder;
+  return createBinder({ symbolTable, sources, context }).binder;
 }
 
 function listMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>) {

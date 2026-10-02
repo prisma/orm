@@ -9,7 +9,7 @@ import {
 } from '@internal/framework-components/control';
 import {
   buildSymbolTable,
-  createProjectBinder,
+  createBinder,
   type DescribeUnsupportedAttribute,
   diagnosticSource,
   fieldAttribute,
@@ -232,6 +232,42 @@ describe('ProjectArtifacts binder', () => {
     expect(failed.project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
       'PSL_UNRESOLVED_REFERENCE',
       'UNKNOWN_PRESET',
+    ]);
+  });
+
+  it('resolves a field preset without an interpreter', () => {
+    const { project, set } = projectWithSnapshots(undefined, false, {
+      ...controlStack,
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'fixture',
+          authoring: {
+            type: controlStack.authoringContributions.type,
+            field: {
+              temporal: {
+                createdAt: {
+                  kind: 'fieldPreset',
+                  output: { codecId: 'timestamp', nativeType: 'timestamp' },
+                },
+              },
+            },
+          },
+        },
+      ]),
+    });
+    set(schemaUri, `${directive}model User {\n  id Int\n  createdAt temporal.createdAt()\n}\n`);
+    expect(project.diagnostics(schemaUri)).toEqual([]);
+  });
+
+  it('describes unsupported attributes with the family describer without an interpreter', () => {
+    const schema = `${directive}model User {\n  id Int\n  @@bogus\n}\n`;
+    const { project, set } = projectWithSnapshots(undefined, false, {
+      ...controlStack,
+      pslDiagnostics: { describeUnsupportedAttribute: describeUnsupportedTestAttribute },
+    });
+    set(schemaUri, schema);
+    expect(project.diagnostics(schemaUri).map(({ code }) => code)).toEqual([
+      'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
     ]);
   });
 });
@@ -667,7 +703,7 @@ describe('ProjectArtifacts diagnostics', () => {
 });
 
 describe('ProjectArtifacts binder', () => {
-  it('reports the same single unsupported-attribute diagnostic as createProjectBinder produces directly', () => {
+  it('reports the same single unsupported-attribute diagnostic as createBinder produces directly', () => {
     const schema = `${directive}model User {\n  id Int\n  @@bogus\n}\n`;
     const { interpretation } = interpretationDouble(
       () => ok({} as never),
@@ -678,7 +714,7 @@ describe('ProjectArtifacts binder', () => {
 
     const { document, sources } = parse(schema, schemaUri);
     const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-    const { diagnostics: expected } = createProjectBinder({
+    const { diagnostics: expected } = createBinder({
       symbolTable,
       sources,
       context: interpretContextWithUnsupportedAttribute,
@@ -688,7 +724,7 @@ describe('ProjectArtifacts binder', () => {
     expect(project.diagnostics(schemaUri)).toEqual(mapParseDiagnostics(expected));
   });
 
-  it('reports the same single unknown-type diagnostic as createProjectBinder produces directly', () => {
+  it('reports the same single unknown-type diagnostic as createBinder produces directly', () => {
     const schema = `${directive}model User {\n  id Int @id\n  role Role\n}\n`;
     const { interpretation } = interpretationDouble(() => ok({} as never));
     const { project, set } = projectWithSnapshots(interpretation);
@@ -696,7 +732,7 @@ describe('ProjectArtifacts binder', () => {
 
     const { document, sources } = parse(schema, schemaUri);
     const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-    const { diagnostics: expected } = createProjectBinder({
+    const { diagnostics: expected } = createBinder({
       symbolTable,
       sources,
       context: interpretContext,

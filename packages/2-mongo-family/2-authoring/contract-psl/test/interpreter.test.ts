@@ -19,7 +19,7 @@ import {
 } from '@internal/mongo-contract';
 import {
   buildSymbolTable,
-  createProjectBinder,
+  createBinder,
   jsonValue,
   mapBlock,
   mapPslDiagnostics,
@@ -279,7 +279,7 @@ model Item {
       documents: input.documents,
       sources: input.sources,
     });
-    const { binder, diagnostics: binderDiagnostics } = createProjectBinder({
+    const { binder, diagnostics: binderDiagnostics } = createBinder({
       symbolTable,
       sources: input.sources,
       context,

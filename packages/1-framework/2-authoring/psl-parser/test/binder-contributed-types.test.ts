@@ -1,12 +1,10 @@
-import type { ContractSourceContext } from '@internal/config/config-types';
 import type {
   AuthoringFieldPresetDescriptor,
   AuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { typeReferenceNode } from '../src/binder';
+import { type BinderContext, createBinder, typeReferenceNode } from '../src/binder';
 import { parse } from '../src/parse';
-import { createProjectBinder } from '../src/project-binder';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 
@@ -32,25 +30,26 @@ const varchar: AuthoringTypeConstructorDescriptor = {
   output: { codecId: 'fixture/varchar@1', nativeType: 'varchar' },
 };
 
-function context(): ContractSourceContext {
+function context(): BinderContext {
   return {
     authoringContributions: {
       type: { String: text, db: { VarChar: varchar } },
       field: { temporal: { createdAt }, db: { uuid } },
+      entityTypes: {},
       attributeSpecs: { model: {}, field: {} },
       modelAttributes: {},
       pslBlockDescriptors: {},
       dataTypes: {},
     },
     controlMutationDefaults: { defaultFunctionRegistry: new Map() },
-  } as unknown as ContractSourceContext;
+  };
 }
 
 function bindProject(text: string) {
   const { document, sources } = parse(text, 'schema.prisma');
   const pslSources = new PslSources([[document.syntax, sources.sourceFileFor(document.syntax)]]);
   const { symbolTable } = buildSymbolTable({ documents: [document], sources: pslSources });
-  const { binder, diagnostics } = createProjectBinder({
+  const { binder, diagnostics } = createBinder({
     symbolTable,
     sources: pslSources,
     context: context(),
@@ -63,7 +62,7 @@ function bindProject(text: string) {
   return { resolve, diagnostics };
 }
 
-describe('createProjectBinder — contributed types', () => {
+describe('createBinder — contributed types', () => {
   it('binds a field-preset name to the preset descriptor', () => {
     const { resolve, diagnostics } = bindProject(
       'model Post {\n  created temporal.createdAt()\n  bare temporal.createdAt\n}',

@@ -58,10 +58,13 @@ function blockResolutionBinder(
   return createBinder({
     sources,
     symbolTable,
-    contributedTypes: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    pslBlockDescriptors: assembled.pslBlockDescriptors,
+    context: {
+      authoringContributions: {
+        ...assembleAuthoringContributions([]),
+        pslBlockDescriptors: assembled.pslBlockDescriptors,
+      },
+      controlMutationDefaults: { defaultFunctionRegistry: new Map() },
+    },
   }).binder;
 }
 

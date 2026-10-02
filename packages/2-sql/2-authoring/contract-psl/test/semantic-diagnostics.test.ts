@@ -1,4 +1,4 @@
-import { buildSymbolTable, createProjectBinder } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { expect, it, vi } from 'vitest';
 import { lowerDefaultForField } from '../src/psl-column-resolution';
@@ -32,7 +32,7 @@ it('pushes owned default diagnostics with filename and range rather than a provi
     model,
     symbolTable,
     sources,
-    binder: createProjectBinder({ symbolTable, sources, context }).binder,
+    binder: createBinder({ symbolTable, sources, context }).binder,
     columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
     isListColumn: false,
     valueObjectDefault: undefined,

@@ -4,6 +4,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { classifyPslCompletionContext } from '../src/completion-context';
 import { localFieldNames, referencedFieldNames } from '../src/completion-symbols';
+import { binderContextFromStack } from '../src/lsp-control-stack';
 
 function fields(
   sourceWithCursor: string,
@@ -25,20 +26,25 @@ function fields(
   if (context.kind !== 'fieldAttributeValue' && context.kind !== 'modelAttributeValue') {
     throw new Error(`Unexpected context: ${context.kind}`);
   }
+  const emptyContext = binderContextFromStack({ scalarTypes: [], pslBlockDescriptors: {} });
   const { binder } = createBinder({
     sources,
     symbolTable,
-    contributedTypes: {
-      ...Object.fromEntries(
-        scalarTypes.map((name) => [
-          name,
-          { kind: 'typeConstructor', output: { codecId: 'scalar' } },
-        ]),
-      ),
-      ...typeConstructors,
+    context: {
+      ...emptyContext,
+      authoringContributions: {
+        ...emptyContext.authoringContributions,
+        type: {
+          ...Object.fromEntries(
+            scalarTypes.map((name) => [
+              name,
+              { kind: 'typeConstructor', output: { codecId: 'scalar' } },
+            ]),
+          ),
+          ...typeConstructors,
+        },
+      },
     },
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
   });
   return {
     local: localFieldNames(context, binder),

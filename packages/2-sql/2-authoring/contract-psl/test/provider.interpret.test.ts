@@ -4,7 +4,7 @@ import type { ContractSourceContext } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
 import {
   buildSymbolTable,
-  createProjectBinder,
+  createBinder,
   createPslDiagnosticCollector,
   mapPslDiagnostics,
 } from '@internal/psl-parser';
@@ -37,7 +37,7 @@ function buildInterpretInput(
 ): PslInterpretInput & { readonly binderDiagnostics: ReturnType<typeof mapPslDiagnostics> } {
   const { document, sources } = parse(schema, filename);
   const { symbolTable } = buildSymbolTable({ documents: [document], sources });
-  const { binder, diagnostics } = createProjectBinder({ symbolTable, sources, context });
+  const { binder, diagnostics } = createBinder({ symbolTable, sources, context });
   return {
     documents: [document],
     sources,
@@ -414,7 +414,7 @@ it('attributes multi-document semantic failures to the owning file, not the entr
     documents: [entry.document, owned.document],
     sources,
   });
-  const { binder } = createProjectBinder({ symbolTable, sources, context });
+  const { binder } = createBinder({ symbolTable, sources, context });
   const result = interpretCapableSource('provider.prisma').interpret(
     { documents: [entry.document], sources, symbolTable, binder },
     context,

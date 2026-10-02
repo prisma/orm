@@ -98,9 +98,10 @@ export type {
 export type {
   AttributeSymbol,
   Binder,
+  BinderContext,
   BinderResult,
   BoundSpec,
-  CreateBinderOptions,
+  CreateBinderInput,
   DescribeUnresolvedType,
   DescribeUnsupportedAttribute,
   PslSymbol,
@@ -159,7 +160,6 @@ export type {
 export { entityReference, matchesSelector } from '../entity-reference';
 export { findBlockDescriptor } from '../extension-block';
 export { NAME_THE_PSL_SOURCE_LOSES } from '../name-the-psl-source-loses';
-export { createProjectBinder } from '../project-binder';
 export {
   keywordPslSpan,
   nodePslSpan,

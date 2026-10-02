@@ -19,7 +19,7 @@ import {
 import { bindPslSchema } from '../src/test';
 
 /**
- * Builds the `ContractSourceContext` `createProjectBinder` needs, from the
+ * Builds the `ContractSourceContext` `createBinder` needs, from the
  * same options `interpretMongoContract` callers already pass. Falls back to
  * the family's own built-ins (`mongoAttributeSpecs`,
  * `describeUnsupportedMongoAttribute`) for whatever a test doesn't override,
@@ -41,7 +41,7 @@ function contextForInterpretOptions(
   const authoring = options.authoringContributions;
   // The family binder used to fold the caller's `scalarTypeCodecIds`
   // into the binder's type constructors alongside `authoringContributions.type`.
-  // createProjectBinder validates each scalar's output template, which needs
+  // createBinder validates each scalar's output template, which needs
   // a nativeType — discarded again immediately after, so any non-empty
   // placeholder (the codecId itself) is fine.
   const scalarsFromCodecIds: Record<string, AuthoringTypeConstructorDescriptor> = {};

@@ -3,7 +3,7 @@ import type {
   AuthoringFieldNamespace,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
-import { buildSymbolTable, createProjectBinder } from '@internal/psl-parser';
+import { buildSymbolTable, createBinder } from '@internal/psl-parser';
 import { parse, SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import {
@@ -100,7 +100,7 @@ function collectResolutions(
   return resolutions;
 }
 
-describe('createProjectBinder', () => {
+describe('createBinder', () => {
   it('produces the expected diagnostics and resolution for every node', () => {
     const { document, sources } = parse(SCHEMA, 'schema.prisma');
     const { symbolTable } = buildSymbolTable({ documents: [document], sources });
@@ -132,7 +132,7 @@ describe('createProjectBinder', () => {
       capabilities: {},
     };
 
-    const { binder, diagnostics } = createProjectBinder({ symbolTable, sources, context });
+    const { binder, diagnostics } = createBinder({ symbolTable, sources, context });
 
     expect(diagnostics).toEqual([
       {

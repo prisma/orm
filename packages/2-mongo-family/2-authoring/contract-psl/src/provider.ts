@@ -4,7 +4,7 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import {
   buildSymbolTable,
-  createProjectBinder,
+  createBinder,
   isPrismaNextSchema,
   mapPslDiagnostics,
 } from '@internal/psl-parser';
@@ -125,7 +125,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         documents,
         sources,
       });
-      const { binder, diagnostics: binderDiagnostics } = createProjectBinder({
+      const { binder, diagnostics: binderDiagnostics } = createBinder({
         symbolTable,
         sources,
         context,

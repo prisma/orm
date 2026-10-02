@@ -1,6 +1,6 @@
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { AuthoringFieldNamespace } from '@internal/framework-components/authoring';
-import { createProjectBinder } from '@internal/psl-parser';
+import { createBinder } from '@internal/psl-parser';
 import { SyntaxNode } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { describeUnsupportedSqlAttribute } from '../src/psl-field-resolution';
@@ -110,7 +110,7 @@ function collectResolutions(
   return resolutions;
 }
 
-describe('createProjectBinder', () => {
+describe('createBinder', () => {
   it('produces the expected diagnostics and resolution for every node', () => {
     const { documents, symbolTable, sources } = buildSymbolTableInput(SCHEMA);
     const controlMutationDefaultsBase = createBuiltinLikeControlMutationDefaults();
@@ -135,7 +135,7 @@ describe('createProjectBinder', () => {
       capabilities: { sql: { scalarList: true } },
     };
 
-    const { binder, diagnostics } = createProjectBinder({ symbolTable, sources, context });
+    const { binder, diagnostics } = createBinder({ symbolTable, sources, context });
 
     expect(diagnostics).toEqual([
       {

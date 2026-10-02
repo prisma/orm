@@ -1,5 +1,17 @@
-import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import { type Binder, createBinder } from '../src/binder';
+import type {
+  AuthoringPslBlockDescriptorNamespace,
+  AuthoringTypeNamespace,
+  DataTypeAuthoringEntry,
+} from '@internal/framework-components/authoring';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type { AttributeSpecNamespace } from '../src/attribute-spec/spec-context';
+import {
+  type Binder,
+  type BinderContext,
+  createBinder,
+  type DescribeUnresolvedType,
+  type DescribeUnsupportedAttribute,
+} from '../src/binder';
 import type { PslSources, Range, SourceFile } from '../src/source-file';
 import type { SymbolTable } from '../src/symbol-table';
 import type { GreenElement, GreenNode } from '../src/syntax/green';
@@ -83,6 +95,42 @@ export function highlight(sourceFile: SourceFile, range: Range): string {
   return `\n${rendered.join('\n')}\n`;
 }
 
+export function binderContext(
+  input: {
+    readonly contributedTypes?: AuthoringTypeNamespace;
+    readonly attributeSpecs?: AttributeSpecNamespace;
+    readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
+    readonly defaultFunctionRegistry?: ControlMutationDefaultRegistry;
+    readonly dataTypeEntries?: Readonly<Record<string, DataTypeAuthoringEntry>>;
+    readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute;
+    readonly describeUnresolvedType?: DescribeUnresolvedType;
+  } = {},
+): BinderContext {
+  const { describeUnsupportedAttribute, describeUnresolvedType } = input;
+  return {
+    authoringContributions: {
+      field: {},
+      type: input.contributedTypes ?? {},
+      entityTypes: {},
+      pslBlockDescriptors: input.pslBlockDescriptors ?? {},
+      modelAttributes: {},
+      attributeSpecs: input.attributeSpecs ?? { model: {}, field: {} },
+      dataTypes: input.dataTypeEntries ?? {},
+    },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: input.defaultFunctionRegistry ?? new Map(),
+    },
+    pslDiagnostics: {
+      ...(describeUnsupportedAttribute === undefined
+        ? {}
+        : { describeUnsupportedAttribute: () => describeUnsupportedAttribute }),
+      ...(describeUnresolvedType === undefined
+        ? {}
+        : { describeUnresolvedType: () => describeUnresolvedType }),
+    },
+  };
+}
+
 export function supportBinder(input: {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
@@ -91,11 +139,10 @@ export function supportBinder(input: {
   return createBinder({
     sources: input.sources,
     symbolTable: input.symbolTable,
-    contributedTypes: {},
-    attributeSpecs: { model: {}, field: {} },
-    controlMutationDefaults: { defaultFunctionRegistry: new Map(), dataTypeEntries: {} },
-    ...(input.pslBlockDescriptors === undefined
-      ? {}
-      : { pslBlockDescriptors: input.pslBlockDescriptors }),
+    context: binderContext(
+      input.pslBlockDescriptors === undefined
+        ? {}
+        : { pslBlockDescriptors: input.pslBlockDescriptors },
+    ),
   }).binder;
 }

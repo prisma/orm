@@ -7,7 +7,7 @@ import type {
   ModelSymbol,
   Param,
 } from '@internal/psl-parser';
-import { createProjectBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
+import { createBinder, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { getAttribute } from '../src/psl-attribute-parsing';
 import {
@@ -37,7 +37,7 @@ function project(schema: string, modelName: string, namespaceName?: string) {
       : input.symbolTable.topLevel.namespaces[namespaceName];
   const model = scope?.models[modelName];
   if (model === undefined) throw new Error(`model ${modelName} missing`);
-  const { binder } = createProjectBinder({
+  const { binder } = createBinder({
     symbolTable: input.symbolTable,
     sources: input.sources,
     context: createPostgresTestContext(),
@@ -129,7 +129,7 @@ namespace scoped {
       spec: sqlAttributeSpecs.model.base(),
       model,
       sources: input.sources,
-      binder: createProjectBinder({
+      binder: createBinder({
         symbolTable: input.symbolTable,
         sources: input.sources,
         context: createPostgresTestContext(),

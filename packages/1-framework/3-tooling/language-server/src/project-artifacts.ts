@@ -1,11 +1,9 @@
 import type { ContractSourceDiagnostic, PslParserOptions } from '@internal/config/config-types';
 import {
-  assembleAttributeSpecs,
   type Binder,
   type BinderResult,
   buildSymbolTable,
   createBinder,
-  createProjectBinder,
   isPrismaNextSchema,
   type PslDiagnostic,
   type SymbolTable,
@@ -21,7 +19,7 @@ import {
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
 import { DocumentSnapshot } from './document-snapshot';
-import type { LspControlStack } from './lsp-control-stack';
+import { binderContextFromStack, type LspControlStack } from './lsp-control-stack';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 
 function schemaInputIdentities(inputs: SchemaInputSet): ReadonlySet<string> {
@@ -99,30 +97,10 @@ export class ProjectArtifacts {
   #readBinderResult(): BinderResult {
     if (this.#binderResult !== undefined) return this.#binderResult;
     const symbolTable = (this.#symbolTableResult ?? this.#readSymbolTableResult()).symbolTable;
-    const interpretation = this.#interpretation;
-    if (interpretation !== undefined) {
-      this.#binderResult = createProjectBinder({
-        symbolTable,
-        sources: this.sources,
-        context: interpretation.context,
-      });
-      return this.#binderResult;
-    }
-    const stack = this.#options.controlStack;
     this.#binderResult = createBinder({
-      sources: this.sources,
       symbolTable,
-      contributedTypes: stack.authoringContributions?.type ?? {},
-      attributeSpecs:
-        stack.authoringContributions === undefined
-          ? { model: {}, field: {} }
-          : assembleAttributeSpecs(stack.authoringContributions),
-      pslBlockDescriptors: stack.pslBlockDescriptors,
-      controlMutationDefaults: {
-        defaultFunctionRegistry:
-          stack.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
-        dataTypeEntries: stack.authoringContributions?.dataTypes ?? {},
-      },
+      sources: this.sources,
+      context: this.#interpretation?.context ?? binderContextFromStack(this.#options.controlStack),
     });
     return this.#binderResult;
   }

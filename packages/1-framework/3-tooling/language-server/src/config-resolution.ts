@@ -94,6 +94,7 @@ function lspControlStackFromStack(stack: ControlStack): LspControlStack {
     ...(stack.controlMutationDefaults === undefined
       ? {}
       : { controlMutationDefaults: stack.controlMutationDefaults }),
+    ...ifDefined('pslDiagnostics', stack.family?.pslDiagnostics),
   };
 }
 

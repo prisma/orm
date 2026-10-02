@@ -1,12 +1,7 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
-import {
-  assembleAttributeSpecs,
-  type Binder,
-  createBinder,
-  type SymbolTable,
-} from '@internal/psl-parser';
+import { type Binder, createBinder, type SymbolTable } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
-import type { LspControlStack } from '../../src/lsp-control-stack';
+import { binderContextFromStack, type LspControlStack } from '../../src/lsp-control-stack';
 
 export function testTypeConstructors(names: readonly string[]): AuthoringTypeNamespace {
   return Object.fromEntries(
@@ -23,23 +18,19 @@ export function testBinder(
     readonly symbolTable: SymbolTable;
   },
 ): Binder {
-  const scalarTypes = testTypeConstructors(input.scalarTypes ?? []);
+  const pslBlockDescriptors = input.pslBlockDescriptors ?? {};
+  const context = binderContextFromStack({ ...input, scalarTypes: [], pslBlockDescriptors });
+  const contributions = context.authoringContributions;
   return createBinder({
     sources: input.sources,
     symbolTable: input.symbolTable,
-    contributedTypes: {
-      ...scalarTypes,
-      ...input.authoringContributions?.field,
-      ...input.authoringContributions?.type,
-    },
-    attributeSpecs:
-      input.authoringContributions === undefined
-        ? { model: {}, field: {} }
-        : assembleAttributeSpecs(input.authoringContributions),
-    pslBlockDescriptors: input.pslBlockDescriptors ?? {},
-    controlMutationDefaults: {
-      defaultFunctionRegistry: input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map(),
-      dataTypeEntries: input.authoringContributions?.dataTypes ?? {},
+    context: {
+      ...context,
+      authoringContributions: {
+        ...contributions,
+        type: { ...testTypeConstructors(input.scalarTypes ?? []), ...contributions.type },
+        pslBlockDescriptors,
+      },
     },
   }).binder;
 }
