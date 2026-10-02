@@ -326,7 +326,7 @@ function bind(options: BindingInputs): BinderResult {
     const name = symbol.node.typeAnnotation()?.name();
     const outcome = resolveTypeReference(name, baseScope);
     if (name === undefined || outcome === undefined) continue;
-    references.set(name.syntax, outcome.resolution);
+    recordTypeReference(references, name.syntax, outcome);
   }
   for (const symbol of Object.values(symbolTable.topLevel.blocks)) {
     declarations.set(symbol.node.syntax, symbol);
@@ -369,7 +369,7 @@ function bind(options: BindingInputs): BinderResult {
         (written) => describeUnresolvedType?.({ field, owner: entity, written }),
       );
       if (outcome === undefined) continue;
-      references.set(node, outcome.resolution);
+      recordTypeReference(references, node, outcome);
       if (outcome.message !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
@@ -862,8 +862,25 @@ function report(
 
 interface TypeReferenceOutcome {
   readonly resolution: Resolution;
+  readonly qualifier?: QualifierResolution;
   readonly message?: string;
   readonly name?: string;
+}
+
+interface QualifierResolution {
+  readonly node: SyntaxNode;
+  readonly resolution: Extract<ScopeResolution, { kind: 'namespace' | 'contributedNamespace' }>;
+}
+
+function recordTypeReference(
+  references: WeakMap<SyntaxNode, Resolution>,
+  node: SyntaxNode,
+  outcome: TypeReferenceOutcome,
+): void {
+  references.set(node, outcome.resolution);
+  if (outcome.qualifier !== undefined) {
+    references.set(outcome.qualifier.node, outcome.qualifier.resolution);
+  }
 }
 
 function resolveTypeReference(
@@ -875,14 +892,25 @@ function resolveTypeReference(
   if (reference.space() !== undefined) return { resolution: { kind: 'crossSpace' } };
   const name = reference.identifier()?.name();
   if (name === undefined || name === '') return undefined;
-  const namespaceId = reference.namespace()?.name();
+  const namespace = reference.namespace();
+  const namespaceId = namespace?.name();
+  const qualifierResolution = namespaceId === undefined ? undefined : scope.lookup(namespaceId);
+  const qualifier =
+    namespace !== undefined &&
+    qualifierResolution !== undefined &&
+    isNamespaceLike(qualifierResolution)
+      ? { qualifier: { node: namespace.syntax, resolution: qualifierResolution } }
+      : {};
   const found =
-    namespaceId === undefined ? scope.lookup(name) : qualifiedMember(namespaceId, name, scope);
+    namespaceId === undefined
+      ? scope.lookup(name)
+      : qualifiedMember(namespaceId, qualifierResolution, name);
   if (found === undefined) {
     const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
     const message = describeUnresolved?.(written) ?? `Cannot find type "${written}"`;
     return {
       resolution: { kind: 'unresolved', name: written },
+      ...qualifier,
       message,
       name: written,
     };
@@ -898,11 +926,12 @@ function resolveTypeReference(
     const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
     return {
       resolution: found,
+      ...qualifier,
       message: `"${written}" is a namespace; a type reference must name a model, composite type, enum, or named type`,
       name: written,
     };
   }
-  return { resolution: found };
+  return { resolution: found, ...qualifier };
 }
 
 interface BadQualifier {
@@ -912,10 +941,9 @@ interface BadQualifier {
 
 function qualifiedMember(
   namespaceId: string,
+  qualifier: ScopeResolution | undefined,
   name: string,
-  scope: Scope,
 ): ScopeResolution | BadQualifier | undefined {
-  const qualifier = scope.lookup(namespaceId);
   if (qualifier === undefined) return undefined;
   if (!isNamespaceLike(qualifier)) {
     return {
