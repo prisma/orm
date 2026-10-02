@@ -1,4 +1,4 @@
-import { type Binder, isNamespaceLike, type Resolution } from '@internal/psl-parser';
+import type { Binder, Resolution } from '@internal/psl-parser';
 import {
   ArrayLiteralAst,
   type AttributeArgAst,
@@ -507,8 +507,8 @@ function collectTypeReference(
   }
 
   for (const segment of segments.slice(0, -1)) {
-    const qualifier = source.binder.scopeAt(name.syntax).lookup(segment.text);
-    if (qualifier !== undefined && isNamespaceLike(qualifier)) {
+    const qualifier = source.binder.symbolForNode(segment.identifier.syntax);
+    if (qualifier?.kind === 'namespace' || qualifier?.kind === 'contributedNamespace') {
       tokens.push(rangeForIdentifier(segment.identifier, 'namespace'));
     }
   }
