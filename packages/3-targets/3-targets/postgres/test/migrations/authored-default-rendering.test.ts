@@ -14,7 +14,7 @@ import { PostgresSchema } from '../../src/core/postgres-schema';
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { postgresTypeComponents, postgresTypeLookups } from '../postgres-type-lookups';
 
-function expectedColumn(nativeType: string, codecId: string, expression: string): SqlColumnIR {
+function expectedColumn(dataType: string, codecId: string, expression: string): SqlColumnIR {
   const contract: Contract<SqlStorage> = {
     target: 'postgres',
     targetFamily: 'sql',
@@ -29,7 +29,7 @@ function expectedColumn(nativeType: string, codecId: string, expression: string)
               orders: new StorageTable({
                 columns: {
                   value: {
-                    nativeType,
+                    dataType,
                     codecId,
                     nullable: false,
                     default: { kind: 'function', expression },
@@ -75,13 +75,13 @@ function defaultNodeOf(column: SqlColumnIR): SqlColumnDefaultIR {
 
 describe('a sql`...` default on Postgres renders as authored', () => {
   it.each([
-    ["nextval('orders_seq'::regclass)", 'int4', 'pg/int4@1'],
-    ['CURRENT_TIMESTAMP', 'timestamptz', 'pg/timestamptz-temporal@1'],
-    ["'{}'::jsonb", 'jsonb', 'pg/jsonb@1'],
+    ["nextval('orders_seq'::regclass)", 'int4', 'pg/int4', 'pg/int4@1'],
+    ['CURRENT_TIMESTAMP', 'timestamptz', 'pg/timestamptz', 'pg/timestamptz-temporal@1'],
+    ["'{}'::jsonb", 'jsonb', 'pg/jsonb', 'pg/jsonb@1'],
   ])(
     'writes DEFAULT (%s) on a %s column in CREATE TABLE and SET DEFAULT',
-    (expression, nativeType, codecId) => {
-      const column = expectedColumn(nativeType, codecId, expression);
+    (expression, nativeType, dataType, codecId) => {
+      const column = expectedColumn(dataType, codecId, expression);
 
       const ddl = renderColumnDdl('value', column, postgresTypeLookups);
       const setDefault = buildSetDefaultColumn('value', defaultNodeOf(column), postgresTypeLookups);
@@ -95,7 +95,7 @@ describe('a sql`...` default on Postgres renders as authored', () => {
   );
 
   it('writes SERIAL for a column authored as autoincrement()', () => {
-    const column = expectedColumn('int4', 'pg/int4@1', 'autoincrement()');
+    const column = expectedColumn('pg/int4', 'pg/int4@1', 'autoincrement()');
 
     const ddl = renderColumnDdl('value', column, postgresTypeLookups);
 
@@ -115,7 +115,7 @@ describe("a literal-shaped sql`'{}'::jsonb` body on Postgres", () => {
     expect(resolved).toEqual({ kind: 'literal', value: {} });
     if (resolved.kind !== 'literal') throw new Error('literal expected');
     expect(
-      renderDefaultLiteral(resolved.value, { nativeType: 'jsonb', dataTypeId: 'pg/jsonb' }),
+      renderDefaultLiteral(resolved.value, { baseTypeName: 'jsonb', dataType: 'pg/jsonb' }),
     ).toBe("'{}'::jsonb");
   });
 });

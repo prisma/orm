@@ -105,57 +105,57 @@
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "(now() + interval '1 hour')",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "digest": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "md5(random()::text)",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "escaped": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "E'\\n'",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "expires": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "expression": "(now() + '00:03:00'::interval)",
                     "kind": "function"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "gen_random_uuid()",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "tags": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "expression": "'{}'::text[]",
                     "kind": "function"
                   },
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -171,7 +171,7 @@
         "id": "public"
       }
     },
-    "storageHash": "77dae0dd66764eacc0bca2461727922fbce9c8cb6c39428560033a88e78dcf6f"
+    "storageHash": "e0ed9165d68e1cd0321928cde632fe13ad704debd9b67fc11696b589712a6ff7"
   },
   "capabilities": {
     "postgres": {

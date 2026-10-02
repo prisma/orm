@@ -91,24 +91,24 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "json": {
                   "codecId": "pg/jsonb@1",
-                  "nativeType": "jsonb",
+                  "dataType": "pg/jsonb",
                   "nullable": true
                 },
                 "json_list": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "many": true,
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "json_list2": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "many": true,
-                  "nativeType": "jsonb",
                   "nullable": false
                 }
               },
@@ -127,7 +127,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2e67372f379c2785af7c65a09d4abb5cddad7150a53666ce736fe6d8bc56f671"
+    "storageHash": "eb302390ba7151e9231e2ab40f27533e34e3081da288dfea4ff98aefe482e6e8"
   },
   "capabilities": {
     "postgres": {

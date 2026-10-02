@@ -16,8 +16,8 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const int4 = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
+const int4 = { codecId: 'pg/int4@1' } as const;
+const jsonb = { codecId: 'pg/jsonb@1' } as const;
 const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable: false } as const;
 
 function userWithAddresses(descriptor: ColumnTypeDescriptor): ContractDefinition {
@@ -62,15 +62,15 @@ function userWithAddresses(descriptor: ColumnTypeDescriptor): ContractDefinition
 describe('value-object fields are stored in one column of the descriptor they carry', () => {
   it('stores a single and a list value-object field in a column of that descriptor', () => {
     const contract = buildSqlContractFromDefinition(
-      userWithAddresses({ codecId: 'sqlite/json@1', nativeType: 'text' }),
+      userWithAddresses({ codecId: 'sqlite/json@1' }),
       testTypeLookups.codecLookup,
       testTypeLookups.dataTypeLookup,
     );
 
     expect(unboundTables(contract.storage)['user']?.columns).toEqual({
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      home_address: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: true },
-      addresses: { nativeType: 'text', codecId: 'sqlite/json@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      home_address: { dataType: 'sqlite/text', codecId: 'sqlite/json@1', nullable: true },
+      addresses: { dataType: 'sqlite/text', codecId: 'sqlite/json@1', nullable: false },
     });
   });
 

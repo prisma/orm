@@ -45,6 +45,7 @@ import type { JsonValue } from '@internal/contract/types';
 import { UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
 import type { CodecRef } from '@internal/framework-components/codec';
 import {
+  canonicalFormOf,
   createDataTypeLookup,
   type DataType,
   validateCodecTypeParams,
@@ -342,16 +343,19 @@ function expectedJson(
 }
 
 /**
- * The projected value in the canonical form of the codec's data type, element by element for an
+ * The projected value in the canonical form of the codec's values, element by element for an
  * array case, so that PostgreSQL's text and `encodeJson` compare as values, not as spellings.
  */
 function projectedInCanonicalForm(
   projected: JsonValue,
-  dataTypeId: string,
+  descriptor: AnyPostgresCodecDescriptor,
   conformanceCase: PostgresCodecConformanceCase,
 ): JsonValue {
-  const toCanonicalForm = (postgresDataTypeLookup.get(dataTypeId) ?? conformanceCase.dataType)
-    ?.toCanonicalForm;
+  const toCanonicalForm = canonicalFormOf(descriptor, {
+    get: (id) =>
+      postgresDataTypeLookup.get(id) ??
+      (conformanceCase.dataType?.id === id ? conformanceCase.dataType : undefined),
+  });
   if (toCanonicalForm === undefined) return projected;
   if (conformanceCase.many !== true) return toCanonicalForm(projected);
   if (!Array.isArray(projected)) return projected;
@@ -467,7 +471,7 @@ export async function runPostgresCodecProjection(
 
   let canonical: JsonValue;
   try {
-    canonical = projectedInCanonicalForm(projected, descriptor.dataType, conformanceCase);
+    canonical = projectedInCanonicalForm(projected, descriptor, conformanceCase);
   } catch (error) {
     return {
       ...base,

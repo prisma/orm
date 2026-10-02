@@ -17,7 +17,7 @@ import type {
 } from '@prisma/orm-sqlite/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'379449b0fa50ab981fb8993e856f682d6bef21eb6a39abe6dd6dc1d34ffb4494'>;
+  StorageHashBase<'8d1cd4bad86d1db4e9276393a7cad91523915ac2f435052ec6c36ec1a8f2b655'>;
 export type ExecutionHash =
   ExecutionHashBase<'a6bd95c41e717d2a7dd3d556af8befa35950b61ccf39569e36ab3a357b40457e'>;
 export type ProfileHash =
@@ -297,35 +297,35 @@ type ContractBase = Omit<
             readonly post: {
               columns: {
                 readonly createdAt: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                 };
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly impressionCount: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigint@1';
                   readonly nullable: true;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                 };
                 readonly userId: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly viewCount: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: true;
                   readonly typeRef: 'BigIntNumber';
@@ -360,13 +360,13 @@ type ContractBase = Omit<
             readonly post_tag: {
               columns: {
                 readonly postId: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly tagId: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
@@ -423,13 +423,13 @@ type ContractBase = Omit<
             readonly tag: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly label: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                 };
@@ -442,23 +442,23 @@ type ContractBase = Omit<
             readonly user: {
               columns: {
                 readonly createdAt: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                   readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                 };
                 readonly displayName: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                 };
                 readonly email: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
@@ -477,7 +477,7 @@ type ContractBase = Omit<
       readonly BigIntNumber: {
         readonly kind: 'codec-instance';
         readonly codecId: 'sqlite/bigintnumber@1';
-        readonly nativeType: 'integer';
+        readonly dataType: 'sqlite/integer';
         readonly typeParams: Record<string, never>;
       };
     };

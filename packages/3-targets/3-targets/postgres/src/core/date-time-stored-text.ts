@@ -38,7 +38,7 @@ const END_OF_DAY = /^24:00:00(?:\.0+)?(?![.\d])/;
 const MAX_OFFSET_HOURS = 15;
 
 interface StoredDateTimeText {
-  readonly dataTypeId: string;
+  readonly dataType: string;
   readonly shape: DateTimeShape;
   readonly pattern: RegExp;
   readonly description: string;
@@ -46,14 +46,14 @@ interface StoredDateTimeText {
 }
 
 function storedText(options: {
-  readonly dataTypeId: string;
+  readonly dataType: string;
   readonly shape: DateTimeShape;
   readonly description: string;
   readonly infinity: boolean;
   readonly endOfDay: boolean;
 }): StoredDateTimeText {
   return {
-    dataTypeId: options.dataTypeId,
+    dataType: options.dataType,
     shape: options.shape,
     pattern: new RegExp(`^(?:${options.infinity ? INFINITY : ''}${FORMS[options.shape]})$`),
     description: `${options.description} in ISO 8601 or as PostgreSQL writes it`,
@@ -62,35 +62,35 @@ function storedText(options: {
 }
 
 export const pgDateStoredText = storedText({
-  dataTypeId: pgDate.id,
+  dataType: pgDate.id,
   shape: 'date',
   description: 'a date',
   infinity: true,
   endOfDay: false,
 });
 export const pgTimeStoredText = storedText({
-  dataTypeId: pgTime.id,
+  dataType: pgTime.id,
   shape: 'time',
   description: 'a time of day',
   infinity: false,
   endOfDay: true,
 });
 export const pgTimetzStoredText = storedText({
-  dataTypeId: pgTimetz.id,
+  dataType: pgTimetz.id,
   shape: 'timeWithOffset',
   description: 'a time of day with a UTC offset',
   infinity: false,
   endOfDay: true,
 });
 export const pgTimestampStoredText = storedText({
-  dataTypeId: pgTimestamp.id,
+  dataType: pgTimestamp.id,
   shape: 'dateTime',
   description: 'a date and time of day',
   infinity: true,
   endOfDay: false,
 });
 export const pgTimestamptzStoredText = storedText({
-  dataTypeId: pgTimestamptz.id,
+  dataType: pgTimestamptz.id,
   shape: 'instant',
   description: 'a date and time of day with a UTC offset',
   infinity: true,
@@ -118,7 +118,7 @@ function holdsValue(stored: StoredDateTimeText, text: string): boolean {
   try {
     canonicalDateTime(read, {
       shape: stored.shape,
-      dataTypeId: stored.dataTypeId,
+      ownerId: stored.dataType,
       maxOffsetHours: MAX_OFFSET_HOURS,
     });
     return true;

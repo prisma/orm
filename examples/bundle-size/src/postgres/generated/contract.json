@@ -50,7 +50,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -72,7 +72,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b6889b25d703bad28616269bbf0e53eb9b2b3adad9e57ec8a97ff2d3192ca922"
+    "storageHash": "807e03732ae5434489af644d245976970aabf407d2ee18f380b4d5adb8899514"
   },
   "execution": {
     "executionHash": "e1fd6fb878ecc8f9edcd821737664e5fb50ddf5380a9dca4a48200cd6e2e6d98",

@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'a58ac14bf968332c1d2a26237f9e3e91535eb4a8c4998f2ae5951a447a1ee386'>;
+  StorageHashBase<'762266fff7af1107307f3dcc7a672dc100d70499bc93ba328d2d8041ea8c90a5'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -304,19 +304,19 @@ type ContractBase = Omit<
             readonly testModel: {
               columns: {
                 readonly enum: {
-                  readonly nativeType: 'TestEnum';
+                  readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: true;
                   readonly typeParams: { readonly typeName: 'TestEnum' };
                 };
                 readonly enum2: {
-                  readonly nativeType: 'TestEnum';
+                  readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly typeName: 'TestEnum' };
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };

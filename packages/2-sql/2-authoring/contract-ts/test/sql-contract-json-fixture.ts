@@ -17,7 +17,7 @@ function normalizeModels(
 const defaultTables = {
   User: {
     columns: {
-      id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+      id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],

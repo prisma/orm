@@ -343,126 +343,126 @@
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": true
                 },
                 "bInt_list": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "many": true,
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "bInt_list2": {
                   "codecId": "pg/int8@1",
+                  "dataType": "pg/int8",
                   "many": true,
-                  "nativeType": "int8",
                   "nullable": false
                 },
                 "bool": {
                   "codecId": "pg/bool@1",
-                  "nativeType": "bool",
+                  "dataType": "pg/bool",
                   "nullable": true
                 },
                 "bool_list": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "many": true,
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "bool_list2": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "many": true,
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "bytes": {
                   "codecId": "pg/bytea@1",
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "nullable": true
                 },
                 "bytes_list": {
                   "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
                   "many": true,
-                  "nativeType": "bytea",
                   "nullable": false
                 },
                 "bytes_list2": {
                   "codecId": "pg/bytea@1",
+                  "dataType": "pg/bytea",
                   "many": true,
-                  "nativeType": "bytea",
                   "nullable": false
                 },
                 "dt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "nullable": true
                 },
                 "dt_list": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": true,
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "dt_list2": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "many": true,
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "float": {
                   "codecId": "pg/float8@1",
-                  "nativeType": "float8",
+                  "dataType": "pg/float8",
                   "nullable": true
                 },
                 "float_list": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "many": true,
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "float_list2": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "many": true,
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "int": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": true
                 },
                 "int_list": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": true,
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "int_list2": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": true,
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "string": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "string_list": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "string_list2": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -481,7 +481,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "dd7e98992d0dcff2bb6543085f7a7deccda88c497a467d34b26c67f7636de3e6"
+    "storageHash": "ac51df8b58e095555c44247d0777920465dccd5887ed6aa5c46138b8a7181a20"
   },
   "capabilities": {
     "postgres": {

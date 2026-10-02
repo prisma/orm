@@ -45,7 +45,7 @@ function buildContract(): Contract<SqlStorage> {
             table: {
               app_user: {
                 columns: {
-                  id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+                  id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
                 },
                 uniques: [],
                 indexes: [],

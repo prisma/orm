@@ -48,8 +48,8 @@ function contractWithNonIdentifierNames() {
             table: {
               [SPACED_TABLE]: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  [SPACED_COLUMN]: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+                  [SPACED_COLUMN]: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
                 },
                 uniques: [],
                 indexes: [],
@@ -60,7 +60,7 @@ function contractWithNonIdentifierNames() {
         },
       },
       types: {
-        [SPACED_TYPE]: { kind: 'codec-instance', codecId: 'pg/text@1', nativeType: 'text' },
+        [SPACED_TYPE]: { kind: 'codec-instance', codecId: 'pg/text@1', dataType: 'pg/text' },
       },
     },
   });
@@ -110,7 +110,7 @@ describe('non-identifier physical names', () => {
 
   it('quotes a column name that is not a bare identifier', () => {
     expect(emitDts()).toContain(
-      'readonly "has space": { readonly nativeType: "text"; readonly codecId: "pg/text@1"; readonly nullable: true }',
+      'readonly "has space": { readonly dataType: "pg/text"; readonly codecId: "pg/text@1"; readonly nullable: true }',
     );
   });
 

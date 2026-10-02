@@ -13,7 +13,7 @@ function model(table: string) {
 
 function storageTable() {
   return {
-    columns: { id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
+    columns: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } },
     primaryKey: { columns: ['id'] },
     uniques: [],
     indexes: [],

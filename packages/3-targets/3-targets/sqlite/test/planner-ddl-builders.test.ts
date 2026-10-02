@@ -11,7 +11,7 @@ import { sqliteTestTypes } from './sqlite-test-types';
 
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
-    nativeType: 'text',
+    dataType: 'sqlite/text',
     nullable: true,
     codecId: 'sqlite/text@1',
     ...overrides,
@@ -46,7 +46,6 @@ describe('buildColumnTypeSql', () => {
 
   it('resolves typeRef against storageTypes', () => {
     const column = makeColumn({
-      nativeType: 'unused',
       codecId: 'unused/codec@1',
       typeRef: 'my_type',
     });
@@ -54,7 +53,7 @@ describe('buildColumnTypeSql', () => {
       my_type: {
         kind: 'codec-instance',
         codecId: 'sqlite/text@1',
-        nativeType: 'text',
+        dataType: 'sqlite/text',
         typeParams: {},
       },
     });
@@ -70,6 +69,22 @@ describe('renderDefaultLiteral', () => {
 
   it('renders JSON objects', () => {
     expect(renderDefaultLiteral({ key: 'val' })).toBe('\'{"key":"val"}\'');
+  });
+
+  it.each([
+    ['digit text', '7', '7'],
+    ['negative digit text', '-42', '-42'],
+    ['digit text past the safe range', '9007199254740993', '9007199254740993'],
+  ])('renders an integer column’s %s as an integer', (_name, value, sql) => {
+    expect(
+      renderDefaultLiteral(value, { codecId: 'sqlite/integer@1', dataType: 'sqlite/integer' }),
+    ).toBe(sql);
+  });
+
+  it('renders digit text on a text column as text', () => {
+    expect(renderDefaultLiteral('7', { codecId: 'sqlite/text@1', dataType: 'sqlite/text' })).toBe(
+      "'7'",
+    );
   });
 });
 
@@ -104,7 +119,8 @@ describe('isInlineAutoincrementPrimaryKey', () => {
     const table = makeTable({
       columns: {
         id: makeColumn({
-          nativeType: 'integer',
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
           nullable: false,
           default: { kind: 'function', expression: 'autoincrement()' },
         }),
@@ -117,9 +133,14 @@ describe('isInlineAutoincrementPrimaryKey', () => {
   it('is false when the column is not in the primary key', () => {
     const table = makeTable({
       columns: {
-        id: makeColumn({ nativeType: 'integer', nullable: false }),
+        id: makeColumn({
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
+          nullable: false,
+        }),
         seq: makeColumn({
-          nativeType: 'integer',
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
           nullable: false,
           default: { kind: 'function', expression: 'autoincrement()' },
         }),
@@ -133,11 +154,16 @@ describe('isInlineAutoincrementPrimaryKey', () => {
     const table = makeTable({
       columns: {
         a: makeColumn({
-          nativeType: 'integer',
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
           nullable: false,
           default: { kind: 'function', expression: 'autoincrement()' },
         }),
-        b: makeColumn({ nativeType: 'integer', nullable: false }),
+        b: makeColumn({
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
+          nullable: false,
+        }),
       },
       primaryKey: { columns: ['a', 'b'] },
     });
@@ -147,7 +173,11 @@ describe('isInlineAutoincrementPrimaryKey', () => {
   it('is false when default is not autoincrement()', () => {
     const table = makeTable({
       columns: {
-        id: makeColumn({ nativeType: 'integer', nullable: false }),
+        id: makeColumn({
+          dataType: 'sqlite/integer',
+          codecId: 'sqlite/integer@1',
+          nullable: false,
+        }),
       },
       primaryKey: { columns: ['id'] },
     });

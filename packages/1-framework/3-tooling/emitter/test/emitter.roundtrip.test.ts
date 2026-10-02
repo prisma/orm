@@ -32,7 +32,7 @@ describe('emitter round-trip', () => {
         storage: unboundNamespaceTables({
           user: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -117,9 +117,9 @@ describe('emitter round-trip', () => {
         storage: unboundNamespaceTables({
           user: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              name: { codecId: 'pg/text@1', nativeType: 'text', nullable: true },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+              name: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: true },
             },
             primaryKey: { columns: ['id'] },
             uniques: [{ columns: ['email'], name: 'user_email_key' }],
@@ -128,9 +128,9 @@ describe('emitter round-trip', () => {
           },
           post: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              user_id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+              user_id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -190,9 +190,9 @@ describe('emitter round-trip', () => {
         storage: unboundNamespaceTables({
           user: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              email: { codecId: 'pg/text@1', nativeType: 'text', nullable: true },
-              name: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: true },
+              name: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -253,7 +253,7 @@ describe('emitter round-trip', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],

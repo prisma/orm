@@ -72,7 +72,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -142,7 +142,7 @@ describe('StorageColumnTypes', () => {
               table: {
                 user: {
                   columns: {
-                    email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -210,7 +210,7 @@ describe('StorageColumnTypes', () => {
                 item: {
                   columns: {
                     level: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: 'pg/int4@1',
                       nullable: false,
                       valueSet: {
@@ -278,7 +278,7 @@ describe('StorageColumnTypes', () => {
               table: {
                 tag: {
                   columns: {
-                    name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -327,9 +327,9 @@ describe('StorageColumnTypes', () => {
               table: {
                 audit: {
                   columns: {
-                    id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                    id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                     action: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -420,7 +420,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -493,7 +493,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: true,
                       typeRef: 'Embedding1536',
@@ -510,7 +510,7 @@ describe('StorageColumnTypes', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -564,12 +564,12 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     embedding: {
-                      nativeType: 'vector',
+                      dataType: 'pgvector/vector',
                       codecId: 'pg/vector@1',
                       nullable: false,
                       typeRef: 'Embedding1536',
                     },
-                    title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],
@@ -582,7 +582,7 @@ describe('StorageColumnTypes', () => {
         types: {
           Embedding1536: {
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 1536 },
           },
         },
@@ -644,7 +644,7 @@ describe('StorageColumnTypes', () => {
                 post: {
                   columns: {
                     priority: {
-                      nativeType: 'text',
+                      dataType: 'pg/text',
                       codecId: 'pg/text@1',
                       nullable: false,
                       valueSet: {
@@ -705,7 +705,7 @@ describe('StorageColumnTypes', () => {
         tables: {
           config: {
             columns: {
-              tags: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false },
+              tags: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false },
             },
             primaryKey: { columns: ['tags'] },
             uniques: [],
@@ -763,7 +763,7 @@ describe('StorageColumnTypes', () => {
                 item: {
                   columns: {
                     level: {
-                      nativeType: 'int4',
+                      dataType: 'pg/int4',
                       codecId: NON_IDENTITY_CODEC_ID,
                       nullable: false,
                       valueSet: {
@@ -900,7 +900,7 @@ describe('StorageColumnTypes', () => {
                   authSession: {
                     columns: {
                       aal: {
-                        nativeType: 'aal_level',
+                        dataType: 'pg/enum',
                         codecId: 'pg/enum@1',
                         nullable: false,
                         valueSet: {
@@ -1015,8 +1015,8 @@ describe('StorageColumnTypes', () => {
         tables: {
           post: {
             columns: {
-              tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
-              labels: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+              tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
+              labels: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true, many: true },
             },
             primaryKey: { columns: ['tags'] },
             uniques: [],

@@ -117,6 +117,7 @@
     }
   },
   "execution": {
+    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b",
     "mutations": {
       "defaults": [
         {
@@ -211,15 +212,14 @@
           }
         }
       ]
-    },
-    "executionHash": "3ffb3a7f78cf83a59f574f0ed6019a052f3863f26923834d83bbd88214b7062b"
+    }
   },
   "extensions": {},
   "capabilities": {},
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "005fc4e896f41ec468af4dc3ad9fcbf26ce17867b87b4b5107b6a57895ce0048",
+    "storageHash": "c0b34cb80b2ad58e1f545442aba7aa0159da0c0fba4b9b63fb05940413ca3d6b",
     "namespaces": {
       "public": {
         "id": "public",
@@ -229,47 +229,47 @@
             "Generated": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "uuid4": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "uuid4Again": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "uuid7": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "cuid1": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "cuid2": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "ulid": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "nanoid": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 },
                 "nanoidSized": {
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "codecId": "pg/text@1",
                   "nullable": false
                 }

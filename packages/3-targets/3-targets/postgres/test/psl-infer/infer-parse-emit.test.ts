@@ -149,26 +149,26 @@ describe('Postgres PSL inference round trip', () => {
         table: {
           sample: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              uuid_value: { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false },
-              ip_address: { codecId: 'pg/inet@1', nativeType: 'inet', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              uuid_value: { codecId: 'pg/uuid@1', dataType: 'pg/uuid', nullable: false },
+              ip_address: { codecId: 'pg/inet@1', dataType: 'pg/inet', nullable: false },
               amount: {
                 codecId: 'pg/numeric@1',
-                nativeType: 'numeric',
+                dataType: 'pg/numeric',
                 nullable: false,
                 typeParams: { precision: 10, scale: 2 },
               },
-              bare_amount: { codecId: 'pg/numeric@1', nativeType: 'numeric', nullable: false },
-              json_value: { codecId: 'pg/json@1', nativeType: 'json', nullable: false },
-              jsonb_value: { codecId: 'pg/jsonb@1', nativeType: 'jsonb', nullable: false },
+              bare_amount: { codecId: 'pg/numeric@1', dataType: 'pg/numeric', nullable: false },
+              json_value: { codecId: 'pg/json@1', dataType: 'pg/json', nullable: false },
+              jsonb_value: { codecId: 'pg/jsonb@1', dataType: 'pg/jsonb', nullable: false },
               occurred_at: {
                 codecId: 'pg/timestamptz-temporal@1',
-                nativeType: 'timestamptz',
+                dataType: 'pg/timestamptz',
                 nullable: false,
               },
               label: {
                 codecId: 'sql/varchar@1',
-                nativeType: 'character varying',
+                dataType: 'pg/varchar',
                 nullable: false,
                 typeParams: { length: 191 },
               },

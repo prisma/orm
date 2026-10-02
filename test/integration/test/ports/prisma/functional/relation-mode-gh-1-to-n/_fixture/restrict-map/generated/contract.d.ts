@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'efea9e51411c2e214e7e7e5f319b3759421a1a013cbe392f5924dcc9743493d8'>;
+  StorageHashBase<'b94758c8992b6fac3ddf33adf0cf0979857caacd6194d6e8f1d51d660a4677f1'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -347,12 +347,12 @@ type ContractBase = Omit<
             readonly PostOneToMany_AtAtMap: {
               columns: {
                 readonly authorId_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly id_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -385,12 +385,12 @@ type ContractBase = Omit<
             readonly PostOptionalOneToMany_AtAtMap: {
               columns: {
                 readonly authorId_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -423,12 +423,12 @@ type ContractBase = Omit<
             readonly UserOneToMany_AtAtMap: {
               columns: {
                 readonly enabledAtMap: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: true;
                 };
                 readonly id_AtMap: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };

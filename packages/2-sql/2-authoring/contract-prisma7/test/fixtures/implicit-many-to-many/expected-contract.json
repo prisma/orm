@@ -382,7 +382,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "769a0511aee797b5c6dbdd4ecb5d9a5c1d4dc84b78ccb21342274bc5cde9c316",
+    "storageHash": "ba7e8c2fac85d0c5e471e6635d3caf889062a1d2f7e3aa929e5dd89fb3748056",
     "namespaces": {
       "public": {
         "id": "public",
@@ -392,7 +392,7 @@
             "User": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }
@@ -407,7 +407,7 @@
             "Post": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }
@@ -422,7 +422,7 @@
             "Tag": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }
@@ -437,12 +437,12 @@
             "_Favorites": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }
@@ -492,12 +492,12 @@
             "_Follows": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }
@@ -547,12 +547,12 @@
             "_PostToTag": {
               "columns": {
                 "A": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "B": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }

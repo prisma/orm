@@ -57,12 +57,12 @@
               "columns": {
                 "bigint": {
                   "codecId": "pg/int8@1",
-                  "nativeType": "int8",
+                  "dataType": "pg/int8",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -87,7 +87,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d51f87f943fca86e9189c26629f5aeb62b7e02d4f99b6e63ef2e199943c8b167"
+    "storageHash": "8182a8915bc14b0fb116b18a544d233eaf62ed4dfb09b8a26fd37cdbb6b41cac"
   },
   "capabilities": {
     "postgres": {

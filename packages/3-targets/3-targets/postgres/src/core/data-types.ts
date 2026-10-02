@@ -313,20 +313,20 @@ function postgresDateTime(
 export const pgDateCanonical = postgresDateTime(
   {
     shape: 'date',
-    dataTypeId: 'pg/date',
+    ownerId: 'pg/date',
     range: { earliest: '-004713-11-24', latest: '+275760-09-13' },
   },
   true,
 );
-export const pgTimeCanonical = postgresDateTime({ shape: 'time', dataTypeId: 'pg/time' }, false);
+export const pgTimeCanonical = postgresDateTime({ shape: 'time', ownerId: 'pg/time' }, false);
 export const pgTimetzCanonical = postgresDateTime(
-  { shape: 'timeWithOffset', dataTypeId: 'pg/timetz', maxOffsetHours: 15 },
+  { shape: 'timeWithOffset', ownerId: 'pg/timetz', maxOffsetHours: 15 },
   false,
 );
 export const pgTimestampCanonical = postgresDateTime(
   {
     shape: 'dateTime',
-    dataTypeId: 'pg/timestamp',
+    ownerId: 'pg/timestamp',
     range: { earliest: '-004713-11-24T00:00:00', latest: '+275760-09-13T23:59:59.999999' },
   },
   true,
@@ -334,7 +334,7 @@ export const pgTimestampCanonical = postgresDateTime(
 export const pgTimestamptzCanonical = postgresDateTime(
   {
     shape: 'instant',
-    dataTypeId: 'pg/timestamptz',
+    ownerId: 'pg/timestamptz',
     range: { earliest: '-004713-11-24T00:00:00Z', latest: '+275760-09-13T00:00:00Z' },
   },
   true,

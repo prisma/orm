@@ -185,7 +185,6 @@ model Post {
     expect(documentScopedTypes(result.value)).toMatchObject({
       Tag: {
         codecId: 'custom/enum@1',
-        nativeType: 'enum',
         typeParams: { name: 'Tag', values: ['hello, world', 'a,b,c', 'plain'] },
       },
     });
@@ -246,12 +245,10 @@ model Document {
     expect(documentScopedTypes(result.value)).toMatchObject({
       ShortName: {
         codecId: 'custom/varchar@1',
-        nativeType: 'character varying',
         typeParams: { length: 35 },
       },
       Embedding1536: {
         codecId: 'custom/vector@1',
-        nativeType: 'vector',
         typeParams: { length: 1536 },
       },
     });
@@ -314,12 +311,12 @@ model Document {
                 columns: {
                   shortName: {
                     codecId: 'custom/varchar@1',
-                    nativeType: 'character varying',
+                    dataType: 'custom/varchar',
                     nullable: false,
                   },
                   embedding: {
                     codecId: 'custom/vector@1',
-                    nativeType: 'vector',
+                    dataType: 'custom/vector',
                     nullable: true,
                   },
                 },
@@ -380,7 +377,6 @@ model Document {
     expect(documentScopedTypes(result.value)).toMatchObject({
       ShortName: {
         codecId: 'custom/varchar@1',
-        nativeType: 'character varying',
         typeParams: {
           length: 35,
           label: 'short',

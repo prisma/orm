@@ -6,8 +6,8 @@ import {
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { postgresTypeLookups } from '../../postgres-type-lookups';
 
-const idDescriptor = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const textDescriptor = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const idDescriptor = { codecId: 'pg/int4@1' } as const;
+const textDescriptor = { codecId: 'pg/text@1' } as const;
 
 // The TS author path merges capabilities from the target pack; a full CLI emit
 // derives them from the codec/operation pipeline. For this author the runtime

@@ -22,7 +22,6 @@ const minimalModelArgs = {
       columnName: 'id',
       descriptor: {
         codecId: 'pg/int4@1',
-        nativeType: 'int4',
       },
       nullable: false,
     },

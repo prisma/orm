@@ -13,7 +13,7 @@ type CreateInputStorage = {
           user: {
             columns: {
               id: {
-                nativeType: 'int4';
+                dataType: 'pg/int4';
                 codecId: 'pg/int4@1';
                 nullable: false;
                 default: {
@@ -21,11 +21,11 @@ type CreateInputStorage = {
                   expression: "nextval('user_id_seq'::regclass)";
                 };
               };
-              email: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: true };
-              slug: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
+              email: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              name: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: true };
+              slug: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
               created_at: {
-                nativeType: 'timestamptz';
+                dataType: 'pg/text';
                 codecId: 'pg/text@1';
                 nullable: false;
                 default: {

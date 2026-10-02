@@ -138,51 +138,52 @@
               "columns": {
                 "a": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-01T00:00:00Z"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "b": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-01T00:00:00.000Z"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "c": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-01T01:00:00+01:00"
                   },
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "clock": {
                   "codecId": "pg/time-temporal@1",
+                  "dataType": "pg/time",
                   "default": {
                     "kind": "literal",
                     "value": "12:34"
                   },
-                  "nativeType": "time",
                   "nullable": false
                 },
                 "day": {
                   "codecId": "pg/date-temporal@1",
+                  "dataType": "pg/date",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-01"
                   },
-                  "nativeType": "date",
                   "nullable": false
                 },
                 "history": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "dataType": "pg/timestamptz",
                   "default": {
                     "kind": "literal",
                     "value": [
@@ -191,21 +192,20 @@
                     ]
                   },
                   "many": true,
-                  "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "localAt": {
                   "codecId": "pg/timestamp-temporal@1",
+                  "dataType": "pg/timestamp",
                   "default": {
                     "kind": "literal",
                     "value": "2024-01-01 12:34:56.500"
                   },
-                  "nativeType": "timestamp",
                   "nullable": false,
                   "typeParams": {
                     "precision": 3
@@ -213,11 +213,11 @@
                 },
                 "zoned": {
                   "codecId": "pg/timetz@1",
+                  "dataType": "pg/timetz",
                   "default": {
                     "kind": "literal",
                     "value": "12:34:56+02"
                   },
-                  "nativeType": "timetz",
                   "nullable": false
                 }
               },
@@ -236,7 +236,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "0f28546e6ad3f33dc5a0d89abe4880dfe29558d040ba7b4dfeeae63d860266b1"
+    "storageHash": "81ed21cc52e796fbfb3a59c695a5f9864c8bd9b72168404f6fc3cae5e22c6510"
   },
   "capabilities": {
     "postgres": {

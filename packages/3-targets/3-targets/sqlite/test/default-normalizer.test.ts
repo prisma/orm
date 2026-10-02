@@ -32,6 +32,21 @@ describe('sqliteResolveDefault', () => {
   });
 });
 
+describe('parseSqliteDefault on an integer column', () => {
+  it.each([
+    ['a bare integer', '7', '7'],
+    ['a quoted integer', "'7'", '7'],
+    ['an integer past the safe range', '9007199254740993', '9007199254740993'],
+    ['a negative integer in parentheses', '(-42)', '-42'],
+  ])('reads %s as digit text', (_name, raw, digits) => {
+    expect(parseSqliteDefault(raw, 'integer')).toEqual({ kind: 'literal', value: digits });
+  });
+
+  it('reads a number with a fraction as a number', () => {
+    expect(parseSqliteDefault('1.5', 'integer')).toEqual({ kind: 'literal', value: 1.5 });
+  });
+});
+
 describe('parseSqliteDefault', () => {
   it.each([
     ['9e999', 'Infinity'],

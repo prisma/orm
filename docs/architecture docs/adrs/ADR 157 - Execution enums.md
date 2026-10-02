@@ -162,7 +162,7 @@ The important part is *where this logic lives*: it should be implemented once (e
     "tables": {
       "user": {
         "columns": {
-          "status": { "codecId": "pg/text@1", "nativeType": "text", "nullable": false }
+          "status": { "codecId": "pg/text@1", "dataType": "pg/text", "nullable": false }
         },
         "checks": [{ "kind": "inSet", "column": "status", "setRef": "UserStatus" }],
         "uniques": [],
@@ -174,7 +174,7 @@ The important part is *where this logic lives*: it should be implemented once (e
 }
 ```
 
-Note: this example uses Postgres codec IDs for concreteness. The same shape applies on other targets, with target-appropriate `codecId` / `nativeType`.
+Note: this example uses Postgres codec IDs for concreteness. The same shape applies on other targets, with target-appropriate `codecId` / `dataType`.
 
 #### Control plane implications
 
@@ -196,7 +196,7 @@ Note: this example uses Postgres codec IDs for concreteness. The same shape appl
     "types": {
       "Role": {
         "codecId": "pg/enum@1",
-        "nativeType": "role",
+        "dataType": "pg/enum",
         "typeParams": { "values": ["USER", "ADMIN"] }
       }
     },
@@ -205,7 +205,7 @@ Note: this example uses Postgres codec IDs for concreteness. The same shape appl
         "columns": {
           "role": {
             "codecId": "pg/enum@1",
-            "nativeType": "role",
+            "dataType": "pg/enum",
             "typeRef": "Role",
             "nullable": false
           }

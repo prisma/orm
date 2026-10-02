@@ -14,8 +14,7 @@ import type {
   CodecLookupWithDescriptors,
   DataTypeLookup,
 } from '@internal/framework-components/codec';
-import { unquotedSqlBaseNameOfCodec } from '@internal/sql-contract/data-type';
-import { type StorageTypeInstance, toStorageTypeInstance } from '@internal/sql-contract/types';
+import { type AuthoredStorageType, CODEC_INSTANCE_KIND } from '@internal/sql-contract/types';
 import { contractError } from './contract-errors';
 
 /** The codecs and data types of the packs a contract is authored with. */
@@ -55,7 +54,7 @@ export function createTypeHelpersFromNamespace(
 
     if (isAuthoringTypeConstructorDescriptor(value)) {
       const helperPath = currentPath.join('.');
-      helpers[key] = (...args: readonly unknown[]): StorageTypeInstance => {
+      helpers[key] = (...args: readonly unknown[]): AuthoredStorageType => {
         validateAuthoringHelperArguments(helperPath, value.args, args);
         const output = instantiateAuthoringTypeConstructor(value, args);
         validateAuthoringTypeParams(
@@ -64,11 +63,11 @@ export function createTypeHelpersFromNamespace(
           output.typeParams,
           lookups.codecLookup.descriptorFor(output.codecId)?.paramsSchema,
         );
-        return toStorageTypeInstance({
+        return {
+          kind: CODEC_INSTANCE_KIND,
           codecId: output.codecId,
-          nativeType: unquotedSqlBaseNameOfCodec(output.codecId, output.typeParams, lookups),
           typeParams: output.typeParams ?? {},
-        });
+        };
       };
       continue;
     }

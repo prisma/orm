@@ -37,38 +37,50 @@ import {
 
 interface DefaultCase {
   readonly column: string;
-  readonly nativeType: string;
+  readonly baseTypeName: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly many: boolean;
   readonly literal: ColumnDefaultLiteralInputValue;
 }
 
 const cases: readonly DefaultCase[] = [
-  { column: 'byte', nativeType: 'bytea', codecId: 'pg/bytea@1', many: false, literal: 'aGVsbG8=' },
+  {
+    column: 'byte',
+    baseTypeName: 'bytea',
+    dataType: 'pg/bytea',
+    codecId: 'pg/bytea@1',
+    many: false,
+    literal: 'aGVsbG8=',
+  },
   {
     column: 'bytes',
-    nativeType: 'bytea',
+    baseTypeName: 'bytea',
+    dataType: 'pg/bytea',
     codecId: 'pg/bytea@1',
     many: true,
     literal: ['aGVsbG8='],
   },
   {
     column: 'documents',
-    nativeType: 'jsonb',
+    baseTypeName: 'jsonb',
+    dataType: 'pg/jsonb',
     codecId: 'pg/jsonb@1',
     many: true,
     literal: [{ a: 1 }, 'x'],
   },
   {
     column: 'span',
-    nativeType: 'interval',
+    baseTypeName: 'interval',
+    dataType: 'pg/interval',
     codecId: 'pg/interval@1',
     many: false,
     literal: 'P1DT2H',
   },
   {
     column: 'spans',
-    nativeType: 'interval',
+    baseTypeName: 'interval',
+    dataType: 'pg/interval',
     codecId: 'pg/interval@1',
     many: true,
     literal: ['P1DT2H', 'PT-0.5S'],
@@ -83,7 +95,7 @@ function createTable(): PostgresCreateTable {
     columns: [
       col('id', 'int4', { notNull: true, primaryKey: true }),
       ...cases.map((defaultCase) =>
-        col(defaultCase.column, `${defaultCase.nativeType}${defaultCase.many ? '[]' : ''}`, {
+        col(defaultCase.column, `${defaultCase.baseTypeName}${defaultCase.many ? '[]' : ''}`, {
           default: lit(defaultCase.literal),
           codecRef: { codecId: defaultCase.codecId, ...(defaultCase.many ? { many: true } : {}) },
         }),
@@ -97,7 +109,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
     cases.map((defaultCase): [string, StorageColumnInput] => [
       defaultCase.column,
       {
-        nativeType: defaultCase.nativeType,
+        dataType: defaultCase.dataType,
         codecId: defaultCase.codecId,
         nullable: true,
         ...(defaultCase.many ? { many: true, noCheck: ['elementNotNull'] } : {}),
@@ -119,7 +131,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
             table: {
               [table]: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   ...columns,
                 },
                 primaryKey: { columns: ['id'] },

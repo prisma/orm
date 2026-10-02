@@ -34,7 +34,7 @@ import {
  * then falls back to the built-in map, keyed by the data type the column's codec represents.
  */
 export function resolveIdentityValue(
-  column: StorageColumn,
+  column: Pick<StorageColumn, 'codecId' | 'typeParams' | 'typeRef' | 'many'>,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,
   types: SqlTypeLookups,
   storageTypes: Record<string, StorageTypeInstance> = {},

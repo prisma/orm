@@ -88,15 +88,15 @@ describe('dbgenerated("<sql>")', () => {
 describe('dbgenerated() with no expression', () => {
   it('describes a required column with no default and reports nothing', async () => {
     const { columns } = await loadFixtureTable('dbgenerated-without-expression', 'T');
-    expect(columns['a']).toEqual({ nativeType: 'text', codecId: 'pg/text@1', nullable: false });
+    expect(columns['a']).toEqual({ dataType: 'pg/text', codecId: 'pg/text@1', nullable: false });
   });
 
   it('describes an optional or list column with no default, as Prisma 7 creates it', async () => {
     const { columns } = await loadFixtureTable('dbgenerated-without-expression-optional', 'T');
     expect({ a: columns['a'], list: columns['list'] }).toEqual({
-      a: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+      a: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
       list: {
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: true,
         many: true,

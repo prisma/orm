@@ -244,7 +244,7 @@ test('Mongo option types reject unsupported authoring shapes', () => {
 
 const F11Role = enumType(
   'F11Role',
-  { codecId: 'mongo/string@1', nativeType: 'string' },
+  { codecId: 'mongo/string@1' },
   member('User', 'user'),
   member('Admin', 'admin'),
 );

@@ -115,12 +115,12 @@
               "columns": {
                 "authorId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": true
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -163,7 +163,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -182,7 +182,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "bda2ae2d4dc133307f8864dae1725f3a2a8a93ef7737046ff806037199d04d76"
+    "storageHash": "b5d116e3eb93d54240404f76b0c53d05e955decc8b33ee27cad13185744ddb5a"
   },
   "execution": {
     "executionHash": "d8f8d2a4e40d2ef6e2756511552840af3ca0deb53997b4b22b615cab9bc18877",

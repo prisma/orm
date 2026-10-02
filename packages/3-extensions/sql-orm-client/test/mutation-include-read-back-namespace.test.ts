@@ -11,10 +11,21 @@ import { describe, expect, it } from 'vitest';
 import { reloadMutationRowsByIdentities } from '../src/collection-dispatch';
 import { buildTestContextFromContract, createMockRuntime, type MockRuntime } from './helpers';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'pg/int4@1': 'pg/int4',
+  'pg/text@1': 'pg/text',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 function storageTable(columnCodecs: Record<string, string>) {
-  const cols: Record<string, { codecId: string; nativeType: string; nullable: boolean }> = {};
+  const cols: Record<string, { codecId: string; dataType: string; nullable: boolean }> = {};
   for (const [column, codecId] of Object.entries(columnCodecs)) {
-    cols[column] = { codecId, nativeType: codecId, nullable: false };
+    cols[column] = { codecId, dataType: dataTypeOf(codecId), nullable: false };
   }
   return {
     columns: cols,

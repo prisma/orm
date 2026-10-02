@@ -15,7 +15,7 @@ const SPAN: PslSpan = {
   end: { offset: 0, line: 1, column: 1 },
 };
 
-const storage = { codecId: 'test/date@1', nativeType: 'date' } as const;
+const storage = { codecId: 'test/date@1' } as const;
 const temporal = {
   ...temporalAuthoringPresets(storage),
   timestamp: temporalCodecPreset(storage),

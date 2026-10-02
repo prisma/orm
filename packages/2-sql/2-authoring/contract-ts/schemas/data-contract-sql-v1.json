@@ -411,8 +411,9 @@
                               "codecId": {
                                 "type": "string"
                               },
-                              "nativeType": {
-                                "type": "string"
+                              "dataType": {
+                                "type": "string",
+                                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\/[a-z0-9]+(?:-[a-z0-9]+)*$"
                               },
                               "nullable": {
                                 "type": "boolean"
@@ -506,7 +507,7 @@
                                 "required": ["entityKind", "entityName", "namespaceId", "plane"]
                               }
                             },
-                            "required": ["codecId", "nativeType", "nullable"],
+                            "required": ["codecId", "dataType", "nullable"],
                             "additionalProperties": false
                           }
                         },
@@ -732,18 +733,19 @@
               "codecId": {
                 "type": "string"
               },
+              "dataType": {
+                "type": "string",
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\/[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
               "kind": {
                 "const": "codec-instance"
-              },
-              "nativeType": {
-                "type": "string"
               },
               "typeParams": {
                 "type": "object",
                 "additionalProperties": {}
               }
             },
-            "required": ["codecId", "kind", "nativeType"]
+            "required": ["codecId", "dataType", "kind"]
           }
         }
       },

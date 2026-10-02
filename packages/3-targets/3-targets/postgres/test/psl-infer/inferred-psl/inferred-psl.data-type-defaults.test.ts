@@ -203,22 +203,22 @@ describe('printPsl writes each default as the literal the column data type takes
   });
 });
 
-describe('the data type of each inferred type name, from the stack', () => {
-  const { dataTypeOf } = inferredColumnDefaults(inferBuildContext);
+describe('the codec of each inferred type name, from the stack', () => {
+  const { codecOf } = inferredColumnDefaults(inferBuildContext);
 
   it('names one for every PSL type name the type map prints', () => {
     expect(INFERRED_PSL_TYPE_NAMES.size).toBeGreaterThan(0);
     expect(
-      [...INFERRED_PSL_TYPE_NAMES].filter((name) => dataTypeOf({ name }, false) === undefined),
+      [...INFERRED_PSL_TYPE_NAMES].filter((name) => codecOf({ name }, false) === undefined),
     ).toEqual([]);
   });
 
   it('reads an enum column through the text codec, whose members are text', () => {
-    expect(dataTypeOf({ name: 'SomeEnum' }, true)).toBe('pg/text');
+    expect(codecOf({ name: 'SomeEnum' }, true)?.codecId).toBe('pg/text@1');
   });
 
   it('names nothing for a type no type constructor has', () => {
-    expect(dataTypeOf({ name: 'Unsupported' }, false)).toBeUndefined();
+    expect(codecOf({ name: 'Unsupported' }, false)).toBeUndefined();
   });
 });
 

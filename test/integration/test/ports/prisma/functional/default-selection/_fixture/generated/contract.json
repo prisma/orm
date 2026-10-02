@@ -207,7 +207,7 @@
               "columns": {
                 "enum": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -218,8 +218,8 @@
                 },
                 "enumList": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -230,23 +230,23 @@
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "list": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "otherId": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "value": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -286,7 +286,7 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -314,7 +314,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "019ff2a2b0f56316f82278233a7578b1223735e43620cdd1a6d8b2f1cf37f602"
+    "storageHash": "8d78cb15de5934f0425ba04a6b39ff66701233bf53d0cb9b514b7bf866df8e15"
   },
   "capabilities": {
     "postgres": {

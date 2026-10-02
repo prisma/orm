@@ -30,10 +30,9 @@ const productSchema = type({
 });
 
 describe('arktypeJsonColumn(schema)', () => {
-  it('returns a ColumnSpec with codecId, nativeType, typeParams', () => {
+  it('returns a ColumnSpec with codecId, typeParams', () => {
     const col = arktypeJsonColumn(productSchema);
     expect(col.codecId).toBe(ARKTYPE_JSON_CODEC_ID);
-    expect(col.nativeType).toBe('jsonb');
     expect(col.typeParams.expression).toBe(productSchema.expression);
     expect(col.typeParams.jsonIr).toEqual(productSchema.json);
   });

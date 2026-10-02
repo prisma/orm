@@ -12,10 +12,21 @@ import { describe, expect, it } from 'vitest';
 import { SqliteControlAdapter } from '../../src/core/control-adapter';
 import { sqliteComponents, textCodecDescriptor } from './fixtures/sqlite-components';
 
+const DATA_TYPE_OF_CODEC: Readonly<Record<string, string>> = {
+  'cs/string@1': 'cs/string',
+  'sqlite/text@1': 'sqlite/text',
+};
+
+function dataTypeOf(codecId: string): string {
+  const dataType = DATA_TYPE_OF_CODEC[codecId];
+  if (dataType === undefined) throw new Error(`no data type listed for codec ${codecId}`);
+  return dataType;
+}
+
 const HOOKED_CODEC = 'cs/string@1';
 
 function col(overrides: Partial<StorageColumn> & { codecId: string }): StorageColumn {
-  return { nativeType: 'text', nullable: false, ...overrides };
+  return { dataType: dataTypeOf(overrides.codecId), nullable: false, ...overrides };
 }
 
 function table(columns: Record<string, StorageColumn>): StorageTable {

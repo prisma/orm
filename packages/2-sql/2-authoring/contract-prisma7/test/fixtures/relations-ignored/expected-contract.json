@@ -101,7 +101,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "8723ad4b4e1f24de9141afd8266a4e579d3d6ee162e1267329eb52bd0fddb680",
+    "storageHash": "760170224b259e222e2bf5499df750abf705e3ed8846b37bd8da7ac59bbd75ff",
     "namespaces": {
       "public": {
         "id": "public",
@@ -111,7 +111,7 @@
             "User": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }
@@ -126,12 +126,12 @@
             "Post": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "authorId": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 }

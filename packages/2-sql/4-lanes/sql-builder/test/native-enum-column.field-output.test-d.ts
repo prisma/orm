@@ -63,7 +63,7 @@ type NativeEnumStorage = {
           readonly AuthSession: {
             columns: {
               readonly aal: {
-                nativeType: 'aal_level';
+                dataType: 'pg/enum';
                 codecId: 'pg/enum@1';
                 nullable: false;
                 valueSet: {
@@ -74,7 +74,7 @@ type NativeEnumStorage = {
                 };
               };
               readonly factorType: {
-                nativeType: 'factor_type';
+                dataType: 'pg/enum';
                 codecId: 'pg/enum@1';
                 nullable: true;
                 valueSet: {

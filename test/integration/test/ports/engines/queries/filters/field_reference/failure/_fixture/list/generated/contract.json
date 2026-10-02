@@ -164,23 +164,23 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "str": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "str_list": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "testId": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -230,18 +230,18 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "str": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "str_list": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -260,7 +260,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d74a90f74ac49c30bc305c83666241c2328c0bcee396f67682d348778381641e"
+    "storageHash": "6f74d8bfedcb7de39fab25bb1e2b858620651da614a45d7accf2eb7d037f83f1"
   },
   "capabilities": {
     "postgres": {

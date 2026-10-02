@@ -6,9 +6,9 @@ import {
 } from '@internal/framework-components/codec';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
 import type {
+  AuthoredStorageType,
   SqlNamespaceBase,
   SqlNamespaceInput,
-  StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import type {
   ComposedAuthoringHelpers,
@@ -26,7 +26,7 @@ import type { RlsEntityHandle } from './rls';
 type SqlFamily = typeof sqlFamilyPack;
 type PostgresPack = typeof postgresPack;
 
-type TypesConstraint = Record<string, StorageTypeInstance>;
+type TypesConstraint = Record<string, AuthoredStorageType>;
 type ModelsConstraint = Record<string, ModelLike>;
 type EnumsConstraint = Record<string, EnumTypeHandle>;
 

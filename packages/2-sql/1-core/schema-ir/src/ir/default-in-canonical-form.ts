@@ -8,14 +8,14 @@ import { isStructuredError } from '@internal/utils/structured-error';
 
 export interface DefaultInCanonicalForm {
   readonly value: ColumnDefaultLiteralInputValue;
-  /** The data type's message for the value, or the first list element, it refuses. */
+  /** The canonical form's message for the value, or the first list element, it refuses. */
   readonly refusal: string | undefined;
 }
 
 /**
- * A literal default in the canonical form of the column's data type (ADR 254), element by element
- * for a list column. A `Date` is read as its ISO text first. A value the type refuses is kept as it
- * is, with the type's message.
+ * A literal default in the canonical form of the column's values (ADR 254), element by element for
+ * a list column. A `Date` is read as its ISO text first. A value the form refuses is kept as it is,
+ * with the form's message.
  */
 export function defaultInCanonicalForm(
   value: ColumnDefaultLiteralInputValue,
@@ -52,8 +52,8 @@ function inCanonicalForm(
 }
 
 /**
- * The refusal of a contract's literal default that its column's data type does not hold, which a
- * contract emitted by an earlier version can carry, with what to do about it.
+ * The refusal of a contract's literal default that the canonical form of its column's values does
+ * not take, which a contract emitted by an earlier version can carry, with what to do about it.
  */
 export function contractDefaultRefusal(
   columnDefault: ColumnDefault | undefined,

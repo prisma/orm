@@ -1,3 +1,4 @@
+import { DATA_TYPE_ID_PATTERN } from '@internal/framework-components/codec';
 import { type Type, type } from 'arktype';
 import type { ForeignKeyInput, ReferentialAction } from './foreign-key';
 import type { ForeignKeyReferenceInput } from './foreign-key-reference';
@@ -36,7 +37,7 @@ const StorageValueSetRefSchema = type({
 
 const StorageColumnSchema = type({
   '+': 'reject',
-  nativeType: 'string',
+  dataType: DATA_TYPE_ID_PATTERN,
   codecId: 'string',
   nullable: 'boolean',
   'many?': 'boolean',

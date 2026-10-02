@@ -47,13 +47,13 @@ function emit(schema: string) {
 interface StorageTypeShape {
   readonly kind: string;
   readonly codecId: string;
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly typeParams: Record<string, unknown>;
 }
 
 interface ColumnShape {
   readonly codecId: string;
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly typeParams?: Record<string, unknown>;
   readonly typeRef?: string;
 }
@@ -95,15 +95,15 @@ interface ParityCase {
   readonly bare: string;
   readonly alias: string;
   readonly expected: {
+    readonly dataType: string;
     readonly codecId: string;
-    readonly nativeType: string;
     readonly typeParams: Record<string, unknown>;
   };
 }
 
-const varcharOut = { codecId: 'sql/varchar@1', nativeType: 'character varying' } as const;
-const charOut = { codecId: 'sql/char@1', nativeType: 'character' } as const;
-const numericOut = { codecId: 'pg/numeric@1', nativeType: 'numeric' } as const;
+const varcharOut = { dataType: 'pg/varchar', codecId: 'sql/varchar@1' } as const;
+const charOut = { dataType: 'pg/char', codecId: 'sql/char@1' } as const;
+const numericOut = { dataType: 'pg/numeric', codecId: 'pg/numeric@1' } as const;
 
 const parityCases: readonly ParityCase[] = [
   ...[undefined, 0, 3, 6].map((precision): ParityCase => {
@@ -114,8 +114,8 @@ const parityCases: readonly ParityCase[] = [
       bare: spelling,
       alias: spelling,
       expected: {
+        dataType: 'pg/timestamptz',
         codecId: 'pg/timestamptz-date@1',
-        nativeType: 'timestamptz',
         typeParams: precision === undefined ? {} : { precision },
       },
     };
@@ -173,8 +173,8 @@ const parityCases: readonly ParityCase[] = [
     bare: 'Timestamp(3)',
     alias: 'Timestamp(3)',
     expected: {
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
-      nativeType: 'timestamp',
       typeParams: { precision: 3 },
     },
   },
@@ -182,15 +182,15 @@ const parityCases: readonly ParityCase[] = [
     title: 'Timestamp — bare',
     bare: 'Timestamp',
     alias: 'Timestamp',
-    expected: { codecId: 'pg/timestamp-temporal@1', nativeType: 'timestamp', typeParams: {} },
+    expected: { dataType: 'pg/timestamp', codecId: 'pg/timestamp-temporal@1', typeParams: {} },
   },
   {
     title: 'Timestamptz(6)',
     bare: 'Timestamptz(6)',
     alias: 'Timestamptz(6)',
     expected: {
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
-      nativeType: 'timestamptz',
       typeParams: { precision: 6 },
     },
   },
@@ -198,19 +198,19 @@ const parityCases: readonly ParityCase[] = [
     title: 'Timestamptz — bare',
     bare: 'Timestamptz',
     alias: 'Timestamptz',
-    expected: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz', typeParams: {} },
+    expected: { dataType: 'pg/timestamptz', codecId: 'pg/timestamptz-temporal@1', typeParams: {} },
   },
   {
     title: 'Time(3)',
     bare: 'Time(3)',
     alias: 'Time(3)',
-    expected: { codecId: 'pg/time-temporal@1', nativeType: 'time', typeParams: { precision: 3 } },
+    expected: { dataType: 'pg/time', codecId: 'pg/time-temporal@1', typeParams: { precision: 3 } },
   },
   {
     title: 'Time — bare',
     bare: 'Time',
     alias: 'Time',
-    expected: { codecId: 'pg/time-temporal@1', nativeType: 'time', typeParams: {} },
+    expected: { dataType: 'pg/time', codecId: 'pg/time-temporal@1', typeParams: {} },
   },
   // The representation-explicit spellings, which must carry precision exactly as their unsuffixed
   // counterparts do — the choice between them is about what a read hands back, not about fidelity.
@@ -219,8 +219,8 @@ const parityCases: readonly ParityCase[] = [
     bare: 'TimestampString(3)',
     alias: 'TimestampString(3)',
     expected: {
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-string@1',
-      nativeType: 'timestamp',
       typeParams: { precision: 3 },
     },
   },
@@ -228,15 +228,15 @@ const parityCases: readonly ParityCase[] = [
     title: 'TimestampString — bare',
     bare: 'TimestampString',
     alias: 'TimestampString',
-    expected: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp', typeParams: {} },
+    expected: { dataType: 'pg/timestamp', codecId: 'pg/timestamp-string@1', typeParams: {} },
   },
   {
     title: 'TimestamptzString(6)',
     bare: 'TimestamptzString(6)',
     alias: 'TimestamptzString(6)',
     expected: {
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-string@1',
-      nativeType: 'timestamptz',
       typeParams: { precision: 6 },
     },
   },
@@ -244,73 +244,73 @@ const parityCases: readonly ParityCase[] = [
     title: 'TimestamptzString — bare',
     bare: 'TimestamptzString',
     alias: 'TimestamptzString',
-    expected: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz', typeParams: {} },
+    expected: { dataType: 'pg/timestamptz', codecId: 'pg/timestamptz-string@1', typeParams: {} },
   },
   {
     title: 'TimeString(3)',
     bare: 'TimeString(3)',
     alias: 'TimeString(3)',
-    expected: { codecId: 'pg/time-string@1', nativeType: 'time', typeParams: { precision: 3 } },
+    expected: { dataType: 'pg/time', codecId: 'pg/time-string@1', typeParams: { precision: 3 } },
   },
   {
     title: 'TimeString — bare',
     bare: 'TimeString',
     alias: 'TimeString',
-    expected: { codecId: 'pg/time-string@1', nativeType: 'time', typeParams: {} },
+    expected: { dataType: 'pg/time', codecId: 'pg/time-string@1', typeParams: {} },
   },
   {
     title: 'DateString',
     bare: 'DateString',
     alias: 'DateString',
-    expected: { codecId: 'pg/date-string@1', nativeType: 'date', typeParams: {} },
+    expected: { dataType: 'pg/date', codecId: 'pg/date-string@1', typeParams: {} },
   },
   {
     title: 'Timetz(2)',
     bare: 'Timetz(2)',
     alias: 'Timetz(2)',
-    expected: { codecId: 'pg/timetz@1', nativeType: 'timetz', typeParams: { precision: 2 } },
+    expected: { dataType: 'pg/timetz', codecId: 'pg/timetz@1', typeParams: { precision: 2 } },
   },
   {
     title: 'Timetz — bare',
     bare: 'Timetz',
     alias: 'Timetz',
-    expected: { codecId: 'pg/timetz@1', nativeType: 'timetz', typeParams: {} },
+    expected: { dataType: 'pg/timetz', codecId: 'pg/timetz@1', typeParams: {} },
   },
   {
     title: 'Uuid() — called',
     bare: 'Uuid()',
     alias: 'Uuid',
-    expected: { codecId: 'pg/uuid@1', nativeType: 'uuid', typeParams: {} },
+    expected: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', typeParams: {} },
   },
   {
     title: 'Uuid — bare',
     bare: 'Uuid',
     alias: 'Uuid',
-    expected: { codecId: 'pg/uuid@1', nativeType: 'uuid', typeParams: {} },
+    expected: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', typeParams: {} },
   },
   {
     title: 'Inet — bare',
     bare: 'Inet',
     alias: 'Inet',
-    expected: { codecId: 'pg/inet@1', nativeType: 'inet', typeParams: {} },
+    expected: { dataType: 'pg/inet', codecId: 'pg/inet@1', typeParams: {} },
   },
   {
     title: 'SmallInt — bare',
     bare: 'SmallInt',
     alias: 'SmallInt',
-    expected: { codecId: 'pg/int2@1', nativeType: 'int2', typeParams: {} },
+    expected: { dataType: 'pg/int2', codecId: 'pg/int2@1', typeParams: {} },
   },
   {
     title: 'Real — bare',
     bare: 'Real',
     alias: 'Real',
-    expected: { codecId: 'pg/float4@1', nativeType: 'float4', typeParams: {} },
+    expected: { dataType: 'pg/float4', codecId: 'pg/float4@1', typeParams: {} },
   },
   {
     title: 'Date — bare',
     bare: 'Date',
     alias: 'Date',
-    expected: { codecId: 'pg/date-temporal@1', nativeType: 'date', typeParams: {} },
+    expected: { dataType: 'pg/date', codecId: 'pg/date-temporal@1', typeParams: {} },
   },
 ];
 
@@ -332,18 +332,17 @@ describe('native types as bare scalar types — parity with the live bare-type p
     expect(direct).toBeDefined();
     if (!direct || !aliasType) return;
     expect({
+      dataType: direct.dataType,
       codecId: direct.codecId,
-      nativeType: direct.nativeType,
       typeParams: direct.typeParams ?? {},
     }).toEqual({
+      dataType: aliasType.dataType,
       codecId: aliasType.codecId,
-      nativeType: aliasType.nativeType,
       typeParams: aliasType.typeParams,
     });
 
     expect(columns?.['viaNamed']).toMatchObject({
       codecId: expected.codecId,
-      nativeType: expected.nativeType,
       typeRef: 'Named',
     });
   });
@@ -365,7 +364,6 @@ describe('native types as bare scalar types — parity with the live bare-type p
       storageOf(shorthand.value).namespaces['public']?.entries.table['sample']?.columns['at'],
     ).toMatchObject({
       codecId: 'pg/timestamptz-date@1',
-      nativeType: 'timestamptz',
     });
   });
 
@@ -387,7 +385,6 @@ describe('native types as bare scalar types — parity with the live bare-type p
     ];
     expect(column).toMatchObject({
       codecId: 'pg/timestamptz-date@1',
-      nativeType: 'timestamptz',
     });
     expect(column).not.toHaveProperty('default');
   });

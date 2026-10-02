@@ -81,19 +81,19 @@
               "columns": {
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "scores": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "many": true,
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "tags": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "many": true,
-                  "nativeType": "text",
                   "nullable": false
                 }
               },
@@ -112,7 +112,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "563f9e0b2a9d656e14bd2909f2f5864b160744a27b6922a2a3f10bf6df7abec8"
+    "storageHash": "3b8bfd82840147a8a0ba8c922c32e2bc34e266db67aa411da8ec5f2b53fae2ab"
   },
   "capabilities": {
     "postgres": {

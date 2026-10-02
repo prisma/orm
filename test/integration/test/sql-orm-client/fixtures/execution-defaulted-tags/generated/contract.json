@@ -185,7 +185,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -193,7 +193,7 @@
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -216,7 +216,7 @@
               "columns": {
                 "created_at": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -224,7 +224,7 @@
                 },
                 "tag_id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -232,7 +232,7 @@
                 },
                 "user_id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -250,17 +250,17 @@
               "columns": {
                 "email": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -285,7 +285,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "9602bd606b8ac453bcfe47ef2f669eb348b13d0008b62ba6e310d07b74005e32"
+    "storageHash": "ace579ab0a8a8837a8b2c1e4aa66ad12e6c12532affebca0a4f6a70564884384"
   },
   "execution": {
     "executionHash": "974e87156d7521d511cfa3ec79bbda396e2affbd040a9d10443a7421b43fe9cc",

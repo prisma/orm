@@ -81,7 +81,11 @@ import {
   interpretFieldAttribute,
   sqlAttributeSpecs,
 } from './sql-attribute-specs';
-import { type ValueObjectTypes, valueObjectDefaultMismatches } from './value-object-default';
+import {
+  type ValueObjectTypes,
+  valueObjectDefaultDocument,
+  valueObjectDefaultMismatches,
+} from './value-object-default';
 
 export type ColumnDescriptor = {
   readonly codecId: string;
@@ -742,18 +746,26 @@ export function lowerDefaultForField(input: {
       return {};
     }
     if (input.valueObjectDefault !== undefined) {
+      const { document, stored } = valueObjectDefaultDocument({
+        stored: lowered.value,
+        elementwise: readsListElements(written) && !input.isListColumn,
+        codecId: input.columnDescriptor.codecId,
+        codecLookup: input.codecLookup,
+      });
       const mismatches = valueObjectDefaultMismatches({
         fieldPath: `${input.modelName}.${input.fieldName}`,
-        value: lowered.value,
+        value: document,
         list: input.field.list,
         nullable: input.field.optional,
         ...input.valueObjectDefault,
         codecLookup: input.codecLookup,
+        dataTypeLookup: input.dataTypeSupport.lookup,
       });
       for (const { code, message } of mismatches) {
         input.diagnostics.push({ code, message, ...source.at() });
       }
       if (mismatches.length > 0) return {};
+      return { defaultValue: { kind: 'literal' as const, value: stored, canonical: true } };
     }
     return { defaultValue: { kind: 'literal' as const, value: lowered.value, canonical: true } };
   };

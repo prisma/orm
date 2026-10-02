@@ -283,7 +283,7 @@ $ prisma-next migrate     # ✗ MIGRATION.EXTENSION_DESCRIPTOR_NOT_FOUND
 
 ## IR vocabulary boundary (preserved)
 
-The contract IR continues to admit only what a column or field can name as `nativeType`:
+The contract IR continues to admit only what a column or field can name as its type:
 
 - **In IR:** tables (with columns, primary keys, foreign keys, indexes, uniques), enums, composite types, domains.
 - **Not in IR:** schemas, functions, operators, casts, operator classes/families.

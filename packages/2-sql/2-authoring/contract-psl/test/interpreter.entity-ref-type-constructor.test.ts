@@ -251,7 +251,7 @@ namespace docs {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // `nativeType` / `typeParams.typeName` stay bare here: schema-qualification
+    // `typeParams.typeName` stays bare here: schema-qualification
     // (e.g. `auth.aal_level`) is a Postgres-target concern applied when the
     // target builds the namespace (`postgresCreateNamespace`), not something
     // the generic interpreter or its `TestSqlNamespace` double perform. Real
@@ -266,7 +266,7 @@ namespace docs {
                 columns: {
                   aal: {
                     codecId: 'test/native-enum@1',
-                    nativeType: 'AalLevel',
+                    dataType: 'pg/enum',
                     typeParams: { typeName: 'AalLevel' },
                     nullable: false,
                     valueSet: {
@@ -337,7 +337,7 @@ namespace docs {
             table: {
               Thing: {
                 columns: {
-                  ref: { codecId: 'test/plain-ref@1', nativeType: 'fixture' },
+                  ref: { codecId: 'test/plain-ref@1' },
                 },
               },
             },

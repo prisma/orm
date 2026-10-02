@@ -105,7 +105,7 @@ function createTestContract(
     Record<
       string,
       {
-        nativeType: string;
+        dataType: string;
         codecId: string;
         nullable: boolean;
         typeParams?: Record<string, unknown>;
@@ -155,7 +155,7 @@ describe('ContractCodecRegistry', () => {
     const contract = createTestContract({
       Doc: {
         embedding: {
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           codecId: 'pg/vector@1',
           nullable: false,
           typeParams: { length: 768 },
@@ -178,7 +178,7 @@ describe('ContractCodecRegistry', () => {
       {
         Doc: {
           embedding: {
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             codecId: 'pg/vector@1',
             nullable: false,
             typeRef: 'Vector1536',
@@ -186,7 +186,7 @@ describe('ContractCodecRegistry', () => {
         },
         Page: {
           embedding: {
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             codecId: 'pg/vector@1',
             nullable: false,
             typeRef: 'Vector1536',
@@ -197,7 +197,7 @@ describe('ContractCodecRegistry', () => {
         Vector1536: {
           kind: 'codec-instance',
           codecId: 'pg/vector@1',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           typeParams: { length: 1536 },
         },
       },
@@ -220,8 +220,8 @@ describe('ContractCodecRegistry', () => {
   it('forColumn returns the shared codec for non-parameterized columns', () => {
     const contract = createTestContract({
       User: {
-        primary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: false },
-        secondary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: true },
+        primary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: false },
+        secondary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: true },
       },
     });
 
@@ -242,7 +242,7 @@ describe('ContractCodecRegistry', () => {
   it('forColumn returns undefined for an unknown column', () => {
     const contract = createTestContract({
       User: {
-        primary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: false },
+        primary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: false },
       },
     });
 
@@ -262,7 +262,7 @@ describe('CodecDescriptorRegistry', () => {
     const contract = createTestContract({
       Doc: {
         embedding: {
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           codecId: 'pg/vector@1',
           nullable: false,
           typeParams: { length: 768 },
@@ -282,7 +282,7 @@ describe('CodecDescriptorRegistry', () => {
 
   it('descriptorFor returns the synthesized descriptor for a non-parameterized codec id', () => {
     const contract = createTestContract({
-      User: { primary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: false } },
+      User: { primary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: false } },
     });
 
     const context = createTestContext(contract, createStubAdapter(), {
@@ -299,14 +299,14 @@ describe('CodecDescriptorRegistry', () => {
     const contract = createTestContract({
       Doc: {
         embedding: {
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           codecId: 'pg/vector@1',
           nullable: false,
           typeParams: { length: 384 },
         },
       },
       User: {
-        primary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: false },
+        primary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: false },
       },
     });
 
@@ -324,7 +324,7 @@ describe('CodecDescriptorRegistry', () => {
 
   it('descriptorFor returns undefined for an unknown codec id', () => {
     const contract = createTestContract({
-      User: { primary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: false } },
+      User: { primary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: false } },
     });
 
     const context = createTestContext(contract, createStubAdapter(), {
@@ -336,7 +336,7 @@ describe('CodecDescriptorRegistry', () => {
 
   it('values() iterates every registered descriptor', () => {
     const contract = createTestContract({
-      User: { primary: { nativeType: 'scalar', codecId: 'test/scalar@1', nullable: false } },
+      User: { primary: { dataType: 'test/scalar', codecId: 'test/scalar@1', nullable: false } },
     });
 
     const context = createTestContext(contract, createStubAdapter(), {

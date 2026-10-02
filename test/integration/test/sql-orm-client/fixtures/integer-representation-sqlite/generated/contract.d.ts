@@ -17,7 +17,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'17398e6d66de2a0c1a138453eac935af0f965aa197c409a946436619f204a21a'>;
+  StorageHashBase<'28d0397503caeb837ce9b4e066368eb18074e3aa6ca3455388983c4164565eb6'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -225,12 +225,12 @@ type ContractBase = Omit<
             readonly int_repr_meters: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                 };
                 readonly peak: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: false;
                 };
@@ -243,17 +243,17 @@ type ContractBase = Omit<
             readonly int_repr_samples: {
               columns: {
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                 };
                 readonly meter_id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                 };
                 readonly reading: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: false;
                 };

@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 import { mongoCodecLookup, mongoDataTypeLookup } from './derive-json-schema-helpers';
 
-const mongoDate = { codecId: 'mongo/date@1', nativeType: 'date' } as const;
+const mongoDate = { codecId: 'mongo/date@1' } as const;
 
 const authoringContributions: AuthoringContributions = {
   field: {

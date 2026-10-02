@@ -57,12 +57,12 @@
               "columns": {
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 },
                 "json": {
                   "codecId": "pg/json@1",
-                  "nativeType": "json",
+                  "dataType": "pg/json",
                   "nullable": false
                 }
               },
@@ -81,7 +81,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "c70bd8930c375d443f8971c1fc6e78261fde3d64bfec53060850fa5f9732991d"
+    "storageHash": "917906842a921f09e861cd404b97ba81014fbfcdf7313d95af7b911fe0b14195"
   },
   "capabilities": {
     "postgres": {

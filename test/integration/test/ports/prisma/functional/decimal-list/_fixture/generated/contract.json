@@ -69,14 +69,14 @@
               "columns": {
                 "decimals": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "many": true,
-                  "nativeType": "numeric",
                   "nullable": false,
                   "typeRef": "D"
                 },
                 "id": {
                   "codecId": "pg/text@1",
-                  "nativeType": "text",
+                  "dataType": "pg/text",
                   "nullable": false
                 }
               },
@@ -95,12 +95,12 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b19e28967332f25efa131fe414093daebeece9ea3d36b1ceb0e456dfff804ae0",
+    "storageHash": "5192ecf1355a3eb9efd4360e97245d430671b32e586302cf36c781e2bd6d8216",
     "types": {
       "D": {
         "codecId": "pg/numeric@1",
+        "dataType": "pg/numeric",
         "kind": "codec-instance",
-        "nativeType": "numeric",
         "typeParams": {
           "precision": 65,
           "scale": 30

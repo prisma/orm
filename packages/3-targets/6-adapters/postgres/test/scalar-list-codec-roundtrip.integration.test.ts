@@ -78,58 +78,58 @@ function buildListContract(): Contract<SqlStorage> {
             table: {
               ListTest: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   dates: {
-                    nativeType: 'timestamptz',
+                    dataType: 'pg/timestamptz',
                     codecId: 'pg/timestamptz-temporal@1',
                     nullable: true,
                     many: true,
                   },
                   bytes: {
-                    nativeType: 'bytea',
+                    dataType: 'pg/bytea',
                     codecId: 'pg/bytea@1',
                     nullable: true,
                     many: true,
                   },
                   decimals: {
-                    nativeType: 'numeric',
+                    dataType: 'pg/numeric',
                     codecId: 'pg/numeric@1',
                     typeParams: { precision: 30, scale: 10 },
                     nullable: true,
                     many: true,
                   },
                   bigints: {
-                    nativeType: 'int8',
+                    dataType: 'pg/int8',
                     codecId: 'pg/int8@1',
                     nullable: true,
                     many: true,
                   },
                   bools: {
-                    nativeType: 'bool',
+                    dataType: 'pg/bool',
                     codecId: 'pg/bool@1',
                     nullable: true,
                     many: true,
                   },
                   shorts: {
-                    nativeType: 'int2',
+                    dataType: 'pg/int2',
                     codecId: 'pg/int2@1',
                     nullable: true,
                     many: true,
                   },
                   ints: {
-                    nativeType: 'int4',
+                    dataType: 'pg/int4',
                     codecId: 'pg/int4@1',
                     nullable: true,
                     many: true,
                   },
                   singles: {
-                    nativeType: 'float4',
+                    dataType: 'pg/float4',
                     codecId: 'pg/float4@1',
                     nullable: true,
                     many: true,
                   },
                   doubles: {
-                    nativeType: 'float8',
+                    dataType: 'pg/float8',
                     codecId: 'pg/float8@1',
                     nullable: true,
                     many: true,

@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'87aa20f2dcef84b910b4b7424d488f4a1d5e2b96a3d9ad4a54934857ec6c1246'>;
+  StorageHashBase<'983e9c76a3d431ab6d3342f0c4f3208973ac20d26f16d99b4634be04ff070797'>;
 export type ExecutionHash =
   ExecutionHashBase<'d5be646e59bb09298fecb9012b2343864907fd9cebb3b76b84916bf58b1d7bbe'>;
 export type ProfileHash =
@@ -310,22 +310,22 @@ type ContractBase = Omit<
             readonly testData: {
               columns: {
                 readonly date: {
-                  readonly nativeType: 'date';
+                  readonly dataType: 'pg/date';
                   readonly codecId: 'pg/date-temporal@1';
                   readonly nullable: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly timestamp: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                 };
                 readonly timestamptz: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                 };

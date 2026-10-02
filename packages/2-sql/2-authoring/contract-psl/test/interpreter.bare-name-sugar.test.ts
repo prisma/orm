@@ -90,7 +90,6 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
     });
   });
 
@@ -114,7 +113,6 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
       typeParams: { length: 191 },
     });
   });
@@ -144,7 +142,7 @@ model Doc {
     expect(types?.['Slug']).toEqual({
       kind: 'codec-instance',
       codecId: 'sql/varchar@1',
-      nativeType: 'character varying',
+      dataType: 'pg/varchar',
       typeParams: { length: 191 },
     });
   });

@@ -22,7 +22,7 @@ describe('StorageColumn many', () => {
   describe('contract.json round-trip', () => {
     it('round-trips a many:true column through serialize → parse → deep-equal', () => {
       const postTable = table({
-        tags: col('text', 'pg/text@1', false, { many: true }),
+        tags: col('pg/text', 'pg/text@1', false, { many: true }),
       });
 
       const s = createContract<SqlStorage>({
@@ -39,7 +39,7 @@ describe('StorageColumn many', () => {
 
       expect(tagsColumn).toBeDefined();
       expect(tagsColumn).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: true,
@@ -48,7 +48,7 @@ describe('StorageColumn many', () => {
 
     it('scalar column (no many key) stays byte-identical — no many:false emitted', () => {
       const postTable = table({
-        title: col('text', 'pg/text@1'),
+        title: col('pg/text', 'pg/text@1'),
       });
 
       const s = createContract<SqlStorage>({
@@ -66,7 +66,7 @@ describe('StorageColumn many', () => {
       expect(titleColumn).toBeDefined();
       expect(titleColumn).not.toHaveProperty('many');
       expect(titleColumn).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
       });
@@ -75,9 +75,9 @@ describe('StorageColumn many', () => {
 
   describe('col() factory', () => {
     it('creates a many:true column when many option is set', () => {
-      const column = col('text', 'pg/text@1', false, { many: true });
+      const column = col('pg/text', 'pg/text@1', false, { many: true });
       expect(column).toEqual({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: true,
@@ -85,7 +85,7 @@ describe('StorageColumn many', () => {
     });
 
     it('omits many from scalar column (no many:false)', () => {
-      const column = col('text', 'pg/text@1');
+      const column = col('pg/text', 'pg/text@1');
       expect(column).not.toHaveProperty('many');
     });
   });
@@ -93,7 +93,7 @@ describe('StorageColumn many', () => {
   describe('StorageColumn IR', () => {
     it('accepts many:true in constructor and sets the flag', () => {
       const column = new StorageColumn({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
         many: true,
@@ -103,7 +103,7 @@ describe('StorageColumn many', () => {
 
     it('leaves many undefined for scalar columns', () => {
       const column = new StorageColumn({
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
       });
@@ -123,7 +123,12 @@ describe('StorageColumn many', () => {
               table: {
                 post: {
                   columns: {
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+                    tags: {
+                      dataType: 'pg/text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: true,
+                    },
                   },
                   uniques: [],
                   indexes: [],
@@ -148,7 +153,7 @@ describe('StorageColumn many', () => {
               table: {
                 post: {
                   columns: {
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: 42 },
+                    tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: 42 },
                   },
                   uniques: [],
                   indexes: [],

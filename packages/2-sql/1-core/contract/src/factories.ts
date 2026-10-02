@@ -15,13 +15,13 @@ import {
 } from './types';
 
 export function col(
-  nativeType: string,
+  dataType: string,
   codecId: string,
   nullable = false,
   opts?: { readonly many?: boolean },
 ): StorageColumn {
   return new StorageColumn({
-    nativeType,
+    dataType,
     codecId,
     nullable,
     ...(opts?.many !== undefined && { many: opts.many }),

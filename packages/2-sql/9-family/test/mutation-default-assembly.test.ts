@@ -149,8 +149,7 @@ describe('assembleAuthoringContributions', () => {
           "polluted": {
             "kind": "fieldPreset",
             "output": {
-              "codecId": "conflict/text@1",
-              "nativeType": "text"
+              "codecId": "conflict/text@1"
             }
           }
         }

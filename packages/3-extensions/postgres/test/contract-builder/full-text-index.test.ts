@@ -52,8 +52,8 @@ function indexesOfPublicMessage(
   return table?.['message']?.indexes ?? [];
 }
 
-const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const textColumn = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const intColumn = { codecId: 'pg/int4@1' } as const;
+const textColumn = { codecId: 'pg/text@1' } as const;
 
 const PSL = `
 model Message {
@@ -84,8 +84,8 @@ function pslIndexes() {
     dataTypeLookup: postgresDataTypeLookup,
     codecLookup: postgresCodecLookup,
     scalarColumnDescriptors: new Map([
-      ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-      ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+      ['Int', { codecId: 'pg/int4@1' }],
+      ['String', { codecId: 'pg/text@1' }],
     ]),
     authoringContributions: assembled,
     composedExtensionContracts: new Map(),

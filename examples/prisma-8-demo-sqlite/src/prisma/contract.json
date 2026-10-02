@@ -330,16 +330,16 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/text",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -347,17 +347,17 @@
                 },
                 "impressionCount": {
                   "codecId": "sqlite/bigint@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": true
                 },
                 "title": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "userId": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -365,7 +365,7 @@
                 },
                 "viewCount": {
                   "codecId": "sqlite/bigintnumber@1",
-                  "nativeType": "integer",
+                  "dataType": "sqlite/integer",
                   "nullable": true,
                   "typeRef": "BigIntNumber"
                 }
@@ -410,7 +410,7 @@
               "columns": {
                 "postId": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -418,7 +418,7 @@
                 },
                 "tagId": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -492,7 +492,7 @@
               "columns": {
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -500,7 +500,7 @@
                 },
                 "label": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 }
               },
@@ -517,26 +517,26 @@
               "columns": {
                 "createdAt": {
                   "codecId": "sqlite/datetime@1",
+                  "dataType": "sqlite/text",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "displayName": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "email": {
                   "codecId": "sqlite/text@1",
-                  "nativeType": "text",
+                  "dataType": "sqlite/text",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "sql/char@1",
-                  "nativeType": "character",
+                  "dataType": "sqlite/character",
                   "nullable": false,
                   "typeParams": {
                     "length": 36
@@ -557,12 +557,12 @@
         "id": "__unbound__"
       }
     },
-    "storageHash": "379449b0fa50ab981fb8993e856f682d6bef21eb6a39abe6dd6dc1d34ffb4494",
+    "storageHash": "8d1cd4bad86d1db4e9276393a7cad91523915ac2f435052ec6c36ec1a8f2b655",
     "types": {
       "BigIntNumber": {
         "codecId": "sqlite/bigintnumber@1",
-        "kind": "codec-instance",
-        "nativeType": "integer"
+        "dataType": "sqlite/integer",
+        "kind": "codec-instance"
       }
     }
   },

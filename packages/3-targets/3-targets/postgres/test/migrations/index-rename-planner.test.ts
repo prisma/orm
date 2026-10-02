@@ -60,9 +60,9 @@ function buildContract(looseIndexes: readonly LooseIndexInput[]): Contract<SqlSt
       table: {
         [TABLE_NAME]: new StorageTable({
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-            value: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+            email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+            value: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           foreignKeys: [],

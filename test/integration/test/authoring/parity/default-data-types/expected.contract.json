@@ -155,43 +155,44 @@
               "columns": {
                 "active": {
                   "codecId": "pg/bool@1",
+                  "dataType": "pg/bool",
                   "default": {
                     "kind": "literal",
                     "value": true
                   },
-                  "nativeType": "bool",
                   "nullable": false
                 },
                 "count": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "kind": "literal",
                     "value": 100000
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "docs": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "default": {
                     "kind": "literal",
                     "value": [{}, []]
                   },
                   "many": true,
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "expression": "autoincrement()",
                     "kind": "function"
                   },
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "meta": {
                   "codecId": "pg/jsonb@1",
+                  "dataType": "pg/jsonb",
                   "default": {
                     "kind": "literal",
                     "value": {
@@ -199,25 +200,24 @@
                       "seats": 1
                     }
                   },
-                  "nativeType": "jsonb",
                   "nullable": false
                 },
                 "name": {
                   "codecId": "pg/text@1",
+                  "dataType": "pg/text",
                   "default": {
                     "kind": "literal",
                     "value": "anonymous"
                   },
-                  "nativeType": "text",
                   "nullable": false
                 },
                 "price": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "default": {
                     "kind": "literal",
                     "value": "1.50"
                   },
-                  "nativeType": "numeric",
                   "nullable": false,
                   "typeParams": {
                     "precision": 10,
@@ -226,30 +226,30 @@
                 },
                 "ratio": {
                   "codecId": "pg/float8@1",
+                  "dataType": "pg/float8",
                   "default": {
                     "kind": "literal",
                     "value": 1.5
                   },
-                  "nativeType": "float8",
                   "nullable": false
                 },
                 "scores": {
                   "codecId": "pg/int4@1",
+                  "dataType": "pg/int4",
                   "default": {
                     "kind": "literal",
                     "value": [1, 2]
                   },
                   "many": true,
-                  "nativeType": "int4",
                   "nullable": false
                 },
                 "small": {
                   "codecId": "pg/int2@1",
+                  "dataType": "pg/int2",
                   "default": {
                     "kind": "literal",
                     "value": 100
                   },
-                  "nativeType": "int2",
                   "nullable": false
                 }
               },
@@ -265,7 +265,7 @@
         "id": "public"
       }
     },
-    "storageHash": "c91c217ab456dda315f745cf463fbb656b2af3bc48d42ea9ee3aba401f74c34e"
+    "storageHash": "d4883ddf6c93e279ab89b227d688957ff2928d947fa1784348606a5fdb2109fd"
   },
   "capabilities": {
     "postgres": {

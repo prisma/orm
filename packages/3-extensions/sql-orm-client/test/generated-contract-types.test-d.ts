@@ -77,11 +77,11 @@ type GeneratedLikeStorage = {
         table: {
           user: {
             columns: {
-              id: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              email: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              active: { nativeType: 'bool'; codecId: 'pg/bool@1'; nullable: false };
-              metadata: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
+              id: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              name: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              email: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              active: { dataType: 'pg/bool'; codecId: 'pg/bool@1'; nullable: false };
+              metadata: { dataType: 'pg/jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
             };
             primaryKey: { columns: ['id'] };
             uniques: [];
@@ -90,9 +90,9 @@ type GeneratedLikeStorage = {
           };
           post: {
             columns: {
-              id: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              userId: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              title: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
+              id: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              userId: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              title: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
             };
             primaryKey: { columns: ['id'] };
             uniques: [];
@@ -489,10 +489,10 @@ type VOContractBase = Omit<
           table: {
             users: {
               columns: {
-                id: { nativeType: 'int4'; codecId: 'pg/int4@1'; nullable: false };
-                name: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-                home_address: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: true };
-                work_address: { nativeType: 'jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
+                id: { dataType: 'pg/int4'; codecId: 'pg/int4@1'; nullable: false };
+                name: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+                home_address: { dataType: 'pg/jsonb'; codecId: 'pg/jsonb@1'; nullable: true };
+                work_address: { dataType: 'pg/jsonb'; codecId: 'pg/jsonb@1'; nullable: false };
               };
               primaryKey: { columns: ['id'] };
               uniques: [];

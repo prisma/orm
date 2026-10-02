@@ -15,19 +15,18 @@ import { codecDescriptors } from '../src/core/codecs';
 import { sqliteTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import { sqliteTargetDescriptorMetaRuntime } from '../src/core/descriptor-meta-runtime';
 
-const written = (text: string): readonly SqlTypeText[] => [{ text, written: true }];
+const writtenAndCatalog = (text: string): readonly SqlTypeText[] => [
+  { text, written: true, catalog: true },
+];
 
-/** Design section 2.6, SQLite target in slice 1: every text is written only, so nothing claims. */
+/** Design section 9.1: the six types SQLite stores, each written and printed by one text. */
 const EXPECTED: Readonly<Record<string, readonly SqlTypeText[]>> = {
-  'sqlite/text': written('text'),
-  'sqlite/json': written('text'),
-  'sqlite/datetime': written('text'),
-  'sqlite/integer': written('integer'),
-  'sqlite/bigint': written('integer'),
-  'sqlite/real': written('real'),
-  'sqlite/blob': written('blob'),
-  'sqlite/character': written('character'),
-  'sqlite/character-varying': written('character varying'),
+  'sqlite/text': writtenAndCatalog('text'),
+  'sqlite/integer': writtenAndCatalog('integer'),
+  'sqlite/real': writtenAndCatalog('real'),
+  'sqlite/blob': writtenAndCatalog('blob'),
+  'sqlite/character': writtenAndCatalog('character'),
+  'sqlite/character-varying': writtenAndCatalog('character varying'),
 };
 
 const registered: readonly DataType[] = sqliteTargetDescriptorMeta.dataTypes;
@@ -41,12 +40,12 @@ function sqlTypeOf(id: string): SqlDataType {
 }
 
 describe('the SQLite data type declarations', () => {
-  it('registers exactly the data types design 2.6 declares', () => {
+  it('registers exactly the data types design 9.1 declares', () => {
     expect(registered.map((type) => type.id).sort()).toEqual(Object.keys(EXPECTED).sort());
   });
 
   it.each(registered.map((type) => [type.id] as const))(
-    '%s is declared as design 2.6 says',
+    '%s is declared as design 9.1 says',
     (id) => {
       expect(EXPECTED).toHaveProperty([id]);
       const { sql } = sqlTypeOf(id);
@@ -61,14 +60,15 @@ describe('the SQLite data type declarations', () => {
     expect(sqliteTargetDescriptorMetaRuntime.dataTypes).toBe(registered);
   });
 
-  it.each(Object.keys(EXPECTED))('claims no reported type with %s', (id) => {
-    const [text] = EXPECTED[id] ?? [];
-    const reported = {
-      text: text?.text ?? '',
-      kind: undefined,
-      schema: undefined,
-      name: undefined,
-    };
+  it.each(
+    Object.entries(EXPECTED).map(([id, [text]]) => [id, text?.text.toUpperCase() ?? ''] as const),
+  )('%s claims the reported type %s', (id, text) => {
+    const reported = { text, kind: undefined, schema: undefined, name: undefined };
+    expect(resolveReportedSqlType(reported, registered)).toEqual({ dataType: id, typeParams: {} });
+  });
+
+  it('leaves a character type reported with its length unclaimed', () => {
+    const reported = { text: 'CHARACTER(36)', kind: undefined, schema: undefined, name: undefined };
     expect(resolveReportedSqlType(reported, registered)).toBeUndefined();
   });
 });
@@ -76,10 +76,7 @@ describe('the SQLite data type declarations', () => {
 describe('writing a SQLite column type', () => {
   it.each([
     ['sqlite/text', {}, 'text'],
-    ['sqlite/json', {}, 'text'],
-    ['sqlite/datetime', {}, 'text'],
     ['sqlite/integer', {}, 'integer'],
-    ['sqlite/bigint', {}, 'integer'],
     ['sqlite/real', {}, 'real'],
     ['sqlite/blob', {}, 'blob'],
     ['sqlite/character', {}, 'character'],

@@ -13,8 +13,8 @@ describe('SqlContractSerializer structure validation', () => {
       tables: {
         User: {
           columns: {
-            id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-            email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+            id: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+            email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -75,7 +75,7 @@ describe('SqlContractSerializer structure validation', () => {
         tables: {
           User: {
             columns: {
-              id: { nativeType: 123 as unknown as string, codecId: 'pg/text@1', nullable: false },
+              id: { dataType: 123 as unknown as string, codecId: 'pg/text@1', nullable: false },
             },
           },
         },
@@ -83,7 +83,7 @@ describe('SqlContractSerializer structure validation', () => {
       // biome-ignore lint/suspicious/noExplicitAny: testing invalid input
     } as any;
     expect(() => validateSqlContractFully<Contract<SqlStorage>>(invalid)).toThrow(
-      /nativeType.*must be.*string|Column.*validation failed/,
+      /dataType must be/,
     );
   });
 
@@ -96,7 +96,7 @@ describe('SqlContractSerializer structure validation', () => {
           User: {
             columns: {
               id: {
-                nativeType: 'text',
+                dataType: 'pg/text',
                 codecId: 'pg/text@1',
                 nullable: 'yes' as unknown as boolean,
               },

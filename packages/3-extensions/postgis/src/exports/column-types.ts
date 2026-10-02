@@ -11,7 +11,6 @@ import { POSTGIS_GEOMETRY_CODEC_ID } from '../core/constants';
 
 export const geometryColumn = {
   codecId: POSTGIS_GEOMETRY_CODEC_ID,
-  nativeType: 'geometry',
 } as const satisfies ColumnTypeDescriptor;
 
 /**
@@ -19,7 +18,7 @@ export const geometryColumn = {
  *
  * @example
  *   .column('location', { type: geometry({ srid: 4326 }), nullable: false })
- *   // Produces: nativeType: 'geometry', typeParams: { srid: 4326 }
+ *   // Produces: codecId: 'pg/geometry@1', typeParams: { srid: 4326 }
  */
 export function geometry<S extends number>(options: {
   readonly srid: S;
@@ -29,7 +28,6 @@ export function geometry<S extends number>(options: {
   const { srid } = options;
   return {
     codecId: POSTGIS_GEOMETRY_CODEC_ID,
-    nativeType: 'geometry',
     typeParams: { srid },
   } as const;
 }

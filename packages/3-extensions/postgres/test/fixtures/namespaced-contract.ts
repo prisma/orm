@@ -42,12 +42,12 @@ type Storage = {
           readonly users: {
             columns: {
               readonly id: {
-                readonly nativeType: 'int4';
+                readonly dataType: 'pg/int4';
                 readonly codecId: 'pg/int4@1';
                 readonly nullable: false;
               };
               readonly name: {
-                readonly nativeType: 'text';
+                readonly dataType: 'pg/text';
                 readonly codecId: 'pg/text@1';
                 readonly nullable: false;
               };

@@ -17,7 +17,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'57d51972b0caaf8bcc95b6f6bd8d04564a375bfe7cc86e0493717d96b0bad3bf'>;
+  StorageHashBase<'6515756055b17590a23a99f06ae0ac6cf3b2dc642eeea25f10c3ad4a4d085607'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'260b8608d1aacaf1f690779a6cff39a12947c599597c5ba464ca75b9e775df53'>;
@@ -266,38 +266,38 @@ type ContractBase = Omit<
             readonly scalar: {
               columns: {
                 readonly bigint: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigint@1';
                   readonly nullable: false;
                 };
                 readonly bigintNumber: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/bigintnumber@1';
                   readonly nullable: false;
                 };
                 readonly blob: {
-                  readonly nativeType: 'blob';
+                  readonly dataType: 'sqlite/blob';
                   readonly codecId: 'sqlite/blob@1';
                   readonly nullable: false;
                 };
                 readonly char: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                 };
                 readonly charLength: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'sqlite/character';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 36 };
                 };
                 readonly datetime: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/datetime@1';
                   readonly nullable: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                   readonly default: {
@@ -306,48 +306,48 @@ type ContractBase = Omit<
                   };
                 };
                 readonly integer: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sqlite/integer@1';
                   readonly nullable: false;
                 };
                 readonly json: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/json@1';
                   readonly nullable: false;
                 };
                 readonly real: {
-                  readonly nativeType: 'real';
+                  readonly dataType: 'sqlite/real';
                   readonly codecId: 'sqlite/real@1';
                   readonly nullable: false;
                 };
                 readonly shortText: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'sqlite/character-varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeRef: 'ShortText';
                 };
                 readonly sqlFloat: {
-                  readonly nativeType: 'real';
+                  readonly dataType: 'sqlite/real';
                   readonly codecId: 'sql/float@1';
                   readonly nullable: false;
                 };
                 readonly sqlInt: {
-                  readonly nativeType: 'integer';
+                  readonly dataType: 'sqlite/integer';
                   readonly codecId: 'sql/int@1';
                   readonly nullable: false;
                 };
                 readonly text: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'sqlite/text';
                   readonly codecId: 'sqlite/text@1';
                   readonly nullable: false;
                 };
                 readonly varchar: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'sqlite/character-varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                 };
                 readonly varcharLength: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'sqlite/character-varying';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 255 };
@@ -366,7 +366,7 @@ type ContractBase = Omit<
       readonly ShortText: {
         readonly kind: 'codec-instance';
         readonly codecId: 'sql/varchar@1';
-        readonly nativeType: 'character varying';
+        readonly dataType: 'sqlite/character-varying';
         readonly typeParams: { readonly length: 255 };
       };
     };

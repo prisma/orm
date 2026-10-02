@@ -221,7 +221,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('emits 2-step execute (add with temp default, drop default) for NOT NULL text column', async () => {
     const addCol = await planAddColumn('name', {
-      nativeType: 'text',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: false,
     });
@@ -244,7 +244,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('emits 2-step execute for NOT NULL int4 column', async () => {
     const addCol = await planAddColumn('age', {
-      nativeType: 'int4',
+      dataType: 'pg/int4',
       codecId: 'pg/int4@1',
       nullable: false,
     });
@@ -257,7 +257,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('uses length-aware temporary defaults for fixed-length bit columns', async () => {
     const addCol = await planAddColumn('flags', {
-      nativeType: 'bit',
+      dataType: 'pg/bit',
       codecId: 'pg/bit@1',
       nullable: false,
       typeParams: { length: 4 },
@@ -271,7 +271,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('uses empty-array temporary defaults for NOT NULL array columns', async () => {
     const addCol = await planAddColumn('tags', {
-      nativeType: 'text[]',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       many: true,
       nullable: false,
@@ -287,7 +287,7 @@ describe('NOT NULL column without default uses temporary default', () => {
     const addCol = await planAddColumn(
       'searchDocument',
       {
-        nativeType: 'tsvector',
+        dataType: 'test/tsvector',
         codecId: 'pg/tsvector@1',
         nullable: false,
       },
@@ -304,7 +304,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('uses a json-typed identity literal for NOT NULL json columns', async () => {
     const addCol = await planAddColumn('metadata', {
-      nativeType: 'json',
+      dataType: 'pg/json',
       codecId: 'pg/json@1',
       nullable: false,
     });
@@ -317,7 +317,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('uses explicit UTC-offset temporary defaults for NOT NULL timetz columns', async () => {
     const addCol = await planAddColumn('opensAt', {
-      nativeType: 'timetz',
+      dataType: 'pg/timetz',
       codecId: 'pg/timetz@1',
       nullable: false,
     });
@@ -332,7 +332,7 @@ describe('NOT NULL column without default uses temporary default', () => {
     const addCol = await planAddColumn(
       'embedding',
       {
-        nativeType: 'vector',
+        dataType: 'pgvector/vector',
         codecId: 'pg/vector@1',
         nullable: false,
         typeParams: { length: 3 },
@@ -353,7 +353,7 @@ describe('NOT NULL column without default uses temporary default', () => {
     const addCol = await planAddColumn(
       'embedding',
       {
-        nativeType: 'vector',
+        dataType: 'pgvector/vector',
         codecId: 'pg/vector@1',
         nullable: false,
         typeRef: 'Embedding3',
@@ -364,7 +364,7 @@ describe('NOT NULL column without default uses temporary default', () => {
           Embedding3: {
             kind: 'codec-instance',
             codecId: 'pg/vector@1',
-            nativeType: 'vector',
+            dataType: 'pgvector/vector',
             typeParams: { length: 3 },
           },
         },
@@ -384,7 +384,7 @@ describe('NOT NULL column without default uses temporary default', () => {
     const addCol = await planAddColumn(
       'name',
       {
-        nativeType: 'text',
+        dataType: 'pg/text',
         codecId: 'pg/text@1',
         nullable: false,
       },
@@ -409,8 +409,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const operationsPromise = planUserTableOperations(
       {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          slug: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['slug'] },
         uniques: [],
@@ -442,8 +442,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const operationsPromise = planUserTableOperations(
       {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          slug: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          slug: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [{ columns: ['slug'] }],
@@ -468,8 +468,8 @@ describe('NOT NULL column without default uses temporary default', () => {
     const operationsPromise = planUserTableOperations(
       {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          orgId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          orgId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -494,7 +494,7 @@ describe('NOT NULL column without default uses temporary default', () => {
         extraContractTables: {
           org: {
             columns: {
-              id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+              id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -531,7 +531,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('skips temporary default for nullable columns', async () => {
     const addCol = await planAddColumn('bio', {
-      nativeType: 'text',
+      dataType: 'pg/text',
       codecId: 'pg/text@1',
       nullable: true,
     });
@@ -543,7 +543,7 @@ describe('NOT NULL column without default uses temporary default', () => {
 
   it('skips temporary default for NOT NULL columns with explicit default', async () => {
     const addCol = await planAddColumn('active', {
-      nativeType: 'bool',
+      dataType: 'pg/bool',
       codecId: 'pg/bool@1',
       nullable: false,
       default: { kind: 'literal', value: true },
@@ -602,8 +602,8 @@ function createTestContract(
   const defaultTables = {
     user: {
       columns: {
-        id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-        email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+        email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['id'] },
       uniques: [{ columns: ['email'] }],
@@ -612,9 +612,9 @@ function createTestContract(
     },
     post: {
       columns: {
-        id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-        userId: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-        title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+        userId: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+        title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       primaryKey: { columns: ['id'] },
       uniques: [],
@@ -701,7 +701,7 @@ function buildUserTableSchema(): PostgresTableSchemaNode {
 function planAddColumn(
   columnName: string,
   columnDef: {
-    nativeType: string;
+    dataType: string;
     codecId: string;
     nullable: boolean;
     many?: boolean;
@@ -717,7 +717,7 @@ function planAddColumn(
   const operationsPromise = planUserTableOperations(
     {
       columns: {
-        id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+        id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         [columnName]: columnDef,
       },
       primaryKey: { columns: ['id'] },

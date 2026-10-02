@@ -127,7 +127,7 @@ describe('getAuthoringFieldPreset', () => {
 
 describe('fieldPresetSpellings', () => {
   it('lists every preset under the namespace with its arguments, nested namespaces included', () => {
-    const stamp = temporalCodecPreset({ codecId: 'test/date@1', nativeType: 'date' });
+    const stamp = temporalCodecPreset({ codecId: 'test/date@1' });
     const nested = { field: { ext: { stamp, clock: { created: temporal.createdAt } } } };
     expect(fieldPresetSpellings(nested, 'ext')).toEqual([
       'ext.stamp(onCreate, onUpdate)',

@@ -1,4 +1,6 @@
+import { sqlDataType } from '@internal/sql-contract/data-type';
 import { blindCast } from '@internal/utils/casts';
+import { type as arktype } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import { buildPostgresPslContract } from '../../src/core/psl-print/psl-contract';
 import { testBuildContext } from './build-context';
@@ -121,7 +123,7 @@ describe('columns and fields', () => {
   it('refuses a model field whose type is a union of types', () => {
     expect(
       printingWidget({
-        columns: { payload: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: { payload: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false } },
         fields: {
           payload: {
             nullable: false,
@@ -141,7 +143,7 @@ describe('columns and fields', () => {
   it('refuses a model field that is a dictionary', () => {
     expect(
       printingWidget({
-        columns: { counts: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+        columns: { counts: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false } },
         fields: {
           counts: { nullable: false, dict: true, type: { kind: 'scalar', codecId: 'pg/jsonb@1' } },
         },
@@ -172,13 +174,24 @@ describe('columns and fields', () => {
           },
         },
       },
+      dataTypes: [
+        sqlDataType('postgis/geometry', {
+          params: arktype({ 'shape?': 'string' }),
+          texts: [{ text: 'geometry', written: true, catalog: true }],
+        }),
+      ],
     });
 
     function withShape(typeParams: Record<string, unknown>) {
       return printingWidget(
         {
           columns: {
-            area: { nativeType: 'geometry', codecId: 'pg/geometry@1', nullable: false, typeParams },
+            area: {
+              dataType: 'postgis/geometry',
+              codecId: 'pg/geometry@1',
+              nullable: false,
+              typeParams,
+            },
           },
           fields: {
             area: {
@@ -192,7 +205,11 @@ describe('columns and fields', () => {
     }
 
     it('refuses a column whose codec no PSL type in the stack produces, naming the column', () => {
-      const vector = { nativeType: 'vector', codecId: 'pg/vector@1', typeParams: { length: 3 } };
+      const vector = {
+        dataType: 'pgvector/vector',
+        codecId: 'pg/vector@1',
+        typeParams: { length: 3 },
+      };
       expect(
         printingWidget({
           columns: { v: { ...vector, nullable: false } },
@@ -206,7 +223,7 @@ describe('columns and fields', () => {
       ).toThrow(
         refusal({
           coordinate: '"public"."Widget"."v"',
-          nativeType: 'vector',
+          dataType: 'pgvector/vector',
           codecId: 'pg/vector@1',
         }),
       );
@@ -226,7 +243,7 @@ describe('columns and fields', () => {
       expect(withShape({})).toThrow(
         refusal({
           coordinate: '"public"."Widget"."area"',
-          nativeType: 'geometry',
+          dataType: 'postgis/geometry',
           codecId: 'pg/geometry@1',
         }),
       );

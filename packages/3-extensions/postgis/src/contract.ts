@@ -58,7 +58,6 @@ export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
     [POSTGIS_NATIVE_TYPE]: {
       kind: 'codec-instance',
       codecId: POSTGIS_GEOMETRY_CODEC_ID,
-      nativeType: POSTGIS_NATIVE_TYPE,
       typeParams: {},
     },
   },

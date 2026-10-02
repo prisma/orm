@@ -66,7 +66,7 @@ describe('emitter', () => {
 
   it('refuses a same-space to-one relation that does not state whether it is nullable', async () => {
     const int = { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false };
-    const column = { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false };
+    const column = { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false };
     const ir = createTestContract({
       models: {
         Post: {
@@ -140,8 +140,8 @@ describe('emitter', () => {
         storage: unboundNamespaceTables({
           user: {
             columns: {
-              id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-              email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+              id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+              email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -193,7 +193,7 @@ describe('emitter', () => {
       },
       storage: unboundNamespaceTables({
         user: {
-          columns: { id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
+          columns: { id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false } },
           primaryKey: { columns: ['id'] },
           uniques: [],
           indexes: [],
@@ -215,7 +215,7 @@ describe('emitter', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
           },
           uniques: [],
           indexes: [],
@@ -239,8 +239,8 @@ describe('emitter', () => {
       storage: unboundNamespaceTables({
         data: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-            value: { codecId: 'unknown/type@1', nativeType: 'custom', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+            value: { codecId: 'unknown/type@1', dataType: 'unknown/type', nullable: false },
           },
           uniques: [],
           indexes: [],
@@ -264,7 +264,7 @@ describe('emitter', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
           },
           uniques: [],
           indexes: [],
@@ -288,7 +288,7 @@ describe('emitter', () => {
       storage: unboundNamespaceTables({
         user: {
           columns: {
-            id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+            id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
           },
           uniques: [],
           indexes: [],
@@ -355,7 +355,7 @@ describe('emitter', () => {
           columns: {
             id: {
               codecId: 'pg/int4@1',
-              nativeType: 'int4',
+              dataType: 'pg/int4',
               nullable: false,
               sourceId: 'schema.prisma',
             },

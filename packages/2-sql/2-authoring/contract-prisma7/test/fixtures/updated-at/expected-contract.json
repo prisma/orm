@@ -63,6 +63,7 @@
     }
   },
   "execution": {
+    "executionHash": "7ea47c826991cbe057b6cff26e955215ef09285af0c134b7f255f0f697291abb",
     "mutations": {
       "defaults": [
         {
@@ -96,15 +97,14 @@
           }
         }
       ]
-    },
-    "executionHash": "7ea47c826991cbe057b6cff26e955215ef09285af0c134b7f255f0f697291abb"
+    }
   },
   "extensions": {},
   "capabilities": {},
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "3fb4c16e2064060f36331fbce1e9906a62e9d0cc9b23883a751ea5f1cba3f809",
+    "storageHash": "e972600cf59959c2cd1c6e25497eb21f05bba16c14ea0149057fb84e7bcfb6b6",
     "namespaces": {
       "public": {
         "id": "public",
@@ -114,12 +114,12 @@
             "Timestamps": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "updatedAt": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -127,7 +127,7 @@
                   }
                 },
                 "updatedAtTz": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false,
                   "typeParams": {

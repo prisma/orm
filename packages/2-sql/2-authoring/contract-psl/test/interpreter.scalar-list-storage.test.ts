@@ -34,7 +34,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const text = { nativeType: 'text', codecId: 'pg/text@1', many: true };
+    const text = { dataType: 'pg/text', codecId: 'pg/text@1', many: true };
     expect({
       fields: result.value.domain.namespaces['public']?.models['User']?.fields,
       columns: (result.value.storage as SqlStorage).namespaces['public']?.entries.table?.['User']
@@ -46,7 +46,7 @@ describe('interpretPslDocumentToSqlContract scalar list storage', () => {
         aliases: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: true },
       },
       columns: {
-        id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+        id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
         tags: { ...text, nullable: false },
         aliases: { ...text, nullable: true },
       },

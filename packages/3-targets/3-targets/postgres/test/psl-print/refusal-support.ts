@@ -12,8 +12,8 @@ import { testBuildContext } from './build-context';
 export type Overrides = NonNullable<Parameters<typeof createSqlContract>[0]>;
 
 export const PUBLIC = asNamespaceId('public');
-export const INT_COLUMN = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
-export const TEXT_COLUMN = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+export const INT_COLUMN = { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false } as const;
+export const TEXT_COLUMN = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as const;
 export const INT_FIELD: ContractField = {
   nullable: false,
   type: { kind: 'scalar', codecId: 'pg/int4@1' },

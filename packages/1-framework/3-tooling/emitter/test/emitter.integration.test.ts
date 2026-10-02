@@ -51,8 +51,8 @@ describe('emitter integration', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -133,7 +133,7 @@ describe('emitter integration', () => {
           tables: {
             user: {
               columns: {
-                id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
               },
               primaryKey: { columns: ['id'] },
               uniques: [],
@@ -195,8 +195,8 @@ describe('emitter integration', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -299,8 +299,8 @@ describe('emitter integration', () => {
                 table: {
                   post: {
                     columns: {
-                      priority: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                      title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      priority: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                      title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['title'] },
                     uniques: [],

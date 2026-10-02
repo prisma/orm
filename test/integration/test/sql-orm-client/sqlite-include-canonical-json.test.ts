@@ -25,9 +25,9 @@ import { rejectionShape } from './error-shape';
 /**
  * SQLite's side of the cut, through a real ORM include.
  *
- * The include nests the child row set through a derived table, which is where
- * SQLite drops the JSON subtype — so this is the shape that exercises the retag,
- * rather than a flat projection over a base table.
+ * The include nests the child row set through a derived table, so every value
+ * crosses into JSON there: a JSON column as its stored text, which its codec
+ * reads back as the document, rather than a flat projection over a base table.
  */
 
 /** Past 2^53, where a JSON number stops carrying an int64. */
@@ -36,7 +36,7 @@ const WIDE_BIGINT = 9007199254740993n;
 const WIDE_BLOB = Uint8Array.from({ length: 80 }, (_, index) => (index * 7) % 256);
 /**
  * A document, and a text value whose characters happen to look like one. The
- * pair separates retagging by codec identity from retagging by content: only
+ * pair separates decoding by codec identity from decoding by content: only
  * the first is a `sqlite/json@1` column, so only the first may come back as a
  * parsed object.
  */
@@ -170,12 +170,11 @@ describe('integration/sqlite include canonical JSON', () => {
     ]);
   });
 
-  // A document and a text value spelled the same way must not converge. The
-  // retag reaches the document column because that column's codec is
-  // `sqlite/json@1`, not because its stored characters look like JSON — so a
-  // `sqlite/text@1` column holding those same characters stays a string. Were
-  // the retag driven by content instead, both would parse and the two columns
-  // would become indistinguishable.
+  // A document and a text value written the same way must not converge. The
+  // document column is parsed because that column's codec is `sqlite/json@1`,
+  // not because its stored characters look like JSON — so a `sqlite/text@1`
+  // column holding those same characters stays a string. Were parsing driven by
+  // content instead, the two columns would become indistinguishable.
   it('keeps a document apart from a string that merely contains JSON', async () => {
     seed(2, { document: JSON.stringify(DOCUMENT), label: STRING_CONTAINING_JSON });
 

@@ -50,7 +50,7 @@ stamped ${field}
 }`;
 
   const pgTimestampPrecision3 = {
-    nativeType: 'timestamp',
+    dataType: 'pg/timestamp',
     codecId: 'pg/timestamp-temporal@1',
     nullable: false,
     typeParams: { precision: 3 },
@@ -75,7 +75,7 @@ stamped ${field}
   it('timestamp() omits the typeParams key entirely and has no execution defaults', () => {
     const { column, defaults } = columnAndDefaults(model('temporal.timestamp()'));
     expect(column).toEqual({
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       nullable: false,
     });
@@ -88,7 +88,7 @@ stamped ${field}
       model('temporal.timestamptz(onCreate: now, onUpdate: now)'),
     );
     expect(column).toEqual({
-      nativeType: 'timestamptz',
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
     });
@@ -98,7 +98,7 @@ stamped ${field}
   it('timestamptz(onUpdate: now) yields the onUpdate phase only', () => {
     const { column, defaults } = columnAndDefaults(model('temporal.timestamptz(onUpdate: now)'));
     expect(column).toEqual({
-      nativeType: 'timestamptz',
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       nullable: false,
     });
@@ -157,7 +157,7 @@ stamped ${field}
     if (!result.ok) return;
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(unboundTables(storage)['T']?.columns['stamped']).toEqual({
-      nativeType: 'text',
+      dataType: 'sqlite/text',
       codecId: 'sqlite/datetime@1',
       nullable: false,
     });

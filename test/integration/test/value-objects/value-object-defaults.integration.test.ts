@@ -67,7 +67,7 @@ async function sqliteDiagnosticsOf(pslSchema: string) {
 }
 
 describe('value-object defaults on the SQLite stack', () => {
-  it('encodes a literal default on a value object and on a list of value objects through the sqlite/json@1 codec of their one column', async () => {
+  it('stores a literal default on a value object and on a list of value objects as the JSON text the sqlite/json@1 codec of their one column writes', async () => {
     const columns = await sqliteUserColumns(`type Address {
   street String
 }
@@ -79,18 +79,18 @@ model User {
 }`);
 
     expect(columns).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
       home: {
-        nativeType: 'text',
+        dataType: 'sqlite/text',
         codecId: 'sqlite/json@1',
         nullable: false,
-        default: { kind: 'literal', value: { street: 'x' } },
+        default: { kind: 'literal', value: '{"street":"x"}' },
       },
       homes: {
-        nativeType: 'text',
+        dataType: 'sqlite/text',
         codecId: 'sqlite/json@1',
         nullable: false,
-        default: { kind: 'literal', value: [{ street: 'y' }] },
+        default: { kind: 'literal', value: '[{"street":"y"}]' },
       },
     });
   });
@@ -108,17 +108,17 @@ model User {
 }`);
 
     const jsonWithDefault = (value: unknown) => ({
-      nativeType: 'text',
+      dataType: 'sqlite/text',
       codecId: 'sqlite/json@1',
       nullable: false,
       default: { kind: 'literal', value },
     });
     expect(columns).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
-      emptyA: jsonWithDefault([]),
-      emptyB: jsonWithDefault([]),
-      filledA: jsonWithDefault([{ street: 'x' }]),
-      filledB: jsonWithDefault([{ street: 'x' }]),
+      id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
+      emptyA: jsonWithDefault('[]'),
+      emptyB: jsonWithDefault('[]'),
+      filledA: jsonWithDefault('[{"street":"x"}]'),
+      filledB: jsonWithDefault('[{"street":"x"}]'),
     });
   });
 
@@ -175,7 +175,7 @@ model User {
     ]);
   });
 
-  it('reads each member value the way its codec does: a decimal string for Decimal and BigInt, and any JSON value for Json', async () => {
+  it('reads each member value the way its codec does: a decimal string for Decimal and BigInt, and the JSON text of any document for Json', async () => {
     const schema = (value: string) => `type Amounts {
   price   Decimal
   big     BigInt
@@ -187,13 +187,13 @@ model User {
   a  Amounts @default(json\`${value}\`)
 }`;
     const accepted = await Promise.all(
-      ['"x"', '1', 'true', '{}', '[1]', 'null'].map(
+      ['"\\"x\\""', '"1"', '"true"', '"{}"', '"[1]"', '"null"'].map(
         async (payload) =>
           (await sqliteDiagnosticsOf(schema(`{"price": "1.5", "big": "1", "payload": ${payload}}`)))
             .diagnostics,
       ),
     );
-    const refusedSchema = schema('{"price": 1.5, "big": 1, "payload": {}}');
+    const refusedSchema = schema('{"price": 1.5, "big": 1, "payload": "{}"}');
     const refused = await sqliteDiagnosticsOf(refusedSchema);
     const invalidLiteral = (message: string) => ({
       code: 'PSL_INVALID_DEFAULT_LITERAL',
@@ -212,7 +212,7 @@ model User {
     });
   });
 
-  it('takes JSON null as the default of an optional value object', async () => {
+  it('takes JSON null as the default of an optional value object, stored as its JSON text', async () => {
     expect(
       await sqliteUserColumns(`type Address {
   street String
@@ -223,12 +223,12 @@ model User {
   home Address? @default(json\`null\`)
 }`),
     ).toEqual({
-      id: { nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false },
+      id: { dataType: 'sqlite/integer', codecId: 'sqlite/integer@1', nullable: false },
       home: {
-        nativeType: 'text',
+        dataType: 'sqlite/text',
         codecId: 'sqlite/json@1',
         nullable: true,
-        default: { kind: 'literal', value: null },
+        default: { kind: 'literal', value: 'null' },
       },
     });
   });

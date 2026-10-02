@@ -89,8 +89,8 @@ describe('checkConstraintInputFromSerialized', () => {
 describe('StorageTable with optional checks', () => {
   const baseTable = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     uniques: [],
     indexes: [],
@@ -145,7 +145,7 @@ describe('StorageTableSchema validates checks', () => {
             table: {
               user: {
                 columns: {
-                  role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                  role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                 },
                 uniques: [],
                 indexes: [],

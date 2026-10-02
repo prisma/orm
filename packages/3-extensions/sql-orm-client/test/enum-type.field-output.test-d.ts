@@ -57,8 +57,8 @@ type EnumStorage = {
         table: {
           User: {
             columns: {
-              role: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              status: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: true };
+              role: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              status: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: true };
             };
             primaryKey: { columns: ['role'] };
             uniques: [];

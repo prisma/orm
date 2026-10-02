@@ -32,7 +32,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'3c7936fce6f8d5b9b90f9388a2269a5704aa5563c968ff44ed5b46341f3e146d'>;
+  StorageHashBase<'14978f68162fe79e2b9e630eb32985179d58a7f6ab133c6eadcd4b80e7d64b54'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -759,31 +759,31 @@ type ContractBase = Omit<
             readonly alias: {
               columns: {
                 readonly code: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeRef: 'Code';
                 };
                 readonly embedding: {
-                  readonly nativeType: 'vector';
+                  readonly dataType: 'pgvector/vector';
                   readonly codecId: 'pg/vector@1';
                   readonly nullable: false;
                   readonly typeRef: 'Embedding';
                 };
                 readonly id: {
-                  readonly nativeType: 'uuid';
+                  readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
                   readonly typeRef: 'Id';
                 };
                 readonly money: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly typeRef: 'Money';
                 };
                 readonly shortText: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeRef: 'ShortText';
@@ -797,122 +797,122 @@ type ContractBase = Omit<
             readonly list: {
               columns: {
                 readonly bit: {
-                  readonly nativeType: 'bit';
+                  readonly dataType: 'pg/bit';
                   readonly codecId: 'pg/bit@1';
                   readonly nullable: false;
                 };
                 readonly bitLength: {
-                  readonly nativeType: 'bit';
+                  readonly dataType: 'pg/bit';
                   readonly codecId: 'pg/bit@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 8 };
                 };
                 readonly char: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                 };
                 readonly charLength: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 5 };
                 };
                 readonly geometrySrid: {
-                  readonly nativeType: 'geometry';
+                  readonly dataType: 'postgis/geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly srid: 4326 };
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly int4: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly interval: {
-                  readonly nativeType: 'interval';
+                  readonly dataType: 'pg/interval';
                   readonly codecId: 'pg/interval@1';
                   readonly nullable: false;
                 };
                 readonly jsonb: {
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                 };
                 readonly mood: {
-                  readonly nativeType: 'Mood';
+                  readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly typeName: 'Mood' };
                 };
                 readonly numeric: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                 };
                 readonly numericPrecision: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 10 };
                 };
                 readonly numericPrecisionScale: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 10; readonly scale: 2 };
                 };
                 readonly text: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly timePrecision: {
-                  readonly nativeType: 'time';
+                  readonly dataType: 'pg/time';
                   readonly codecId: 'pg/time-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly timestamptz: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                 };
                 readonly timestamptzPrecision: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly uuid: {
-                  readonly nativeType: 'uuid';
+                  readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
                 };
                 readonly varbitLength: {
-                  readonly nativeType: 'bit varying';
+                  readonly dataType: 'pg/varbit';
                   readonly codecId: 'pg/varbit@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 16 };
                 };
                 readonly varchar: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                 };
                 readonly varcharLength: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 255 };
                 };
                 readonly vector: {
-                  readonly nativeType: 'vector';
+                  readonly dataType: 'pgvector/vector';
                   readonly codecId: 'pg/vector@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 3 };
@@ -926,12 +926,12 @@ type ContractBase = Omit<
             readonly other_codec: {
               columns: {
                 readonly dateString: {
-                  readonly nativeType: 'date';
+                  readonly dataType: 'pg/date';
                   readonly codecId: 'pg/date-string@1';
                   readonly nullable: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'int8';
+                  readonly dataType: 'pg/int8';
                   readonly codecId: 'pg/int8@1';
                   readonly nullable: false;
                   readonly default: {
@@ -940,33 +940,33 @@ type ContractBase = Omit<
                   };
                 };
                 readonly int8Number: {
-                  readonly nativeType: 'int8';
+                  readonly dataType: 'pg/int8';
                   readonly codecId: 'pg/int8number@1';
                   readonly nullable: false;
                 };
                 readonly pgChar: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'pg/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 5 };
                 };
                 readonly pgFloat: {
-                  readonly nativeType: 'float8';
+                  readonly dataType: 'pg/float8';
                   readonly codecId: 'pg/float@1';
                   readonly nullable: false;
                 };
                 readonly pgInt: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int@1';
                   readonly nullable: false;
                 };
                 readonly pgVarchar: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'pg/varchar@1';
                   readonly nullable: false;
                 };
                 readonly small: {
-                  readonly nativeType: 'int2';
+                  readonly dataType: 'pg/int2';
                   readonly codecId: 'pg/int2@1';
                   readonly nullable: false;
                   readonly default: {
@@ -975,43 +975,43 @@ type ContractBase = Omit<
                   };
                 };
                 readonly sqlFloat: {
-                  readonly nativeType: 'float8';
+                  readonly dataType: 'pg/float8';
                   readonly codecId: 'sql/float@1';
                   readonly nullable: false;
                 };
                 readonly sqlInt: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'sql/int@1';
                   readonly nullable: false;
                 };
                 readonly sqlText: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'sql/text@1';
                   readonly nullable: false;
                 };
                 readonly timeString: {
-                  readonly nativeType: 'time';
+                  readonly dataType: 'pg/time';
                   readonly codecId: 'pg/time-string@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly timestampString: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-string@1';
                   readonly nullable: false;
                 };
                 readonly timestamptzDate: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-date@1';
                   readonly nullable: false;
                 };
                 readonly timestamptzString: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-string@1';
                   readonly nullable: false;
                 };
                 readonly unboundedInt: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/unboundedint@1';
                   readonly nullable: false;
                 };
@@ -1024,65 +1024,65 @@ type ContractBase = Omit<
             readonly scalar: {
               columns: {
                 readonly bit: {
-                  readonly nativeType: 'bit';
+                  readonly dataType: 'pg/bit';
                   readonly codecId: 'pg/bit@1';
                   readonly nullable: false;
                 };
                 readonly bitLength: {
-                  readonly nativeType: 'bit';
+                  readonly dataType: 'pg/bit';
                   readonly codecId: 'pg/bit@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 8 };
                 };
                 readonly bool: {
-                  readonly nativeType: 'bool';
+                  readonly dataType: 'pg/bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                 };
                 readonly bytea: {
-                  readonly nativeType: 'bytea';
+                  readonly dataType: 'pg/bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
                 };
                 readonly char: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                 };
                 readonly charLength: {
-                  readonly nativeType: 'character';
+                  readonly dataType: 'pg/char';
                   readonly codecId: 'sql/char@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 5 };
                 };
                 readonly date: {
-                  readonly nativeType: 'date';
+                  readonly dataType: 'pg/date';
                   readonly codecId: 'pg/date-temporal@1';
                   readonly nullable: false;
                 };
                 readonly float4: {
-                  readonly nativeType: 'float4';
+                  readonly dataType: 'pg/float4';
                   readonly codecId: 'pg/float4@1';
                   readonly nullable: false;
                 };
                 readonly float8: {
-                  readonly nativeType: 'float8';
+                  readonly dataType: 'pg/float8';
                   readonly codecId: 'pg/float8@1';
                   readonly nullable: false;
                 };
                 readonly geometry: {
-                  readonly nativeType: 'geometry';
+                  readonly dataType: 'postgis/geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                 };
                 readonly geometrySrid: {
-                  readonly nativeType: 'geometry';
+                  readonly dataType: 'postgis/geometry';
                   readonly codecId: 'pg/geometry@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly srid: 4326 };
                 };
                 readonly id: {
-                  readonly nativeType: 'int4';
+                  readonly dataType: 'pg/int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                   readonly default: {
@@ -1091,147 +1091,147 @@ type ContractBase = Omit<
                   };
                 };
                 readonly inet: {
-                  readonly nativeType: 'inet';
+                  readonly dataType: 'pg/inet';
                   readonly codecId: 'pg/inet@1';
                   readonly nullable: false;
                 };
                 readonly int2: {
-                  readonly nativeType: 'int2';
+                  readonly dataType: 'pg/int2';
                   readonly codecId: 'pg/int2@1';
                   readonly nullable: false;
                 };
                 readonly int8: {
-                  readonly nativeType: 'int8';
+                  readonly dataType: 'pg/int8';
                   readonly codecId: 'pg/int8@1';
                   readonly nullable: false;
                 };
                 readonly interval: {
-                  readonly nativeType: 'interval';
+                  readonly dataType: 'pg/interval';
                   readonly codecId: 'pg/interval@1';
                   readonly nullable: false;
                 };
                 readonly intervalPrecision: {
-                  readonly nativeType: 'interval';
+                  readonly dataType: 'pg/interval';
                   readonly codecId: 'pg/interval@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly json: {
-                  readonly nativeType: 'json';
+                  readonly dataType: 'pg/json';
                   readonly codecId: 'pg/json@1';
                   readonly nullable: false;
                 };
                 readonly jsonb: {
-                  readonly nativeType: 'jsonb';
+                  readonly dataType: 'pg/jsonb';
                   readonly codecId: 'pg/jsonb@1';
                   readonly nullable: false;
                 };
                 readonly mood: {
-                  readonly nativeType: 'Mood';
+                  readonly dataType: 'pg/enum';
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly typeName: 'Mood' };
                 };
                 readonly numeric: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                 };
                 readonly numericPrecision: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 10 };
                 };
                 readonly numericPrecisionScale: {
-                  readonly nativeType: 'numeric';
+                  readonly dataType: 'pg/numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 10; readonly scale: 2 };
                 };
                 readonly text: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly time: {
-                  readonly nativeType: 'time';
+                  readonly dataType: 'pg/time';
                   readonly codecId: 'pg/time-temporal@1';
                   readonly nullable: false;
                 };
                 readonly timePrecision: {
-                  readonly nativeType: 'time';
+                  readonly dataType: 'pg/time';
                   readonly codecId: 'pg/time-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly timestamp: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                 };
                 readonly timestampPrecision: {
-                  readonly nativeType: 'timestamp';
+                  readonly dataType: 'pg/timestamp';
                   readonly codecId: 'pg/timestamp-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly timestamptz: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                 };
                 readonly timestamptzPrecision: {
-                  readonly nativeType: 'timestamptz';
+                  readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly timetz: {
-                  readonly nativeType: 'timetz';
+                  readonly dataType: 'pg/timetz';
                   readonly codecId: 'pg/timetz@1';
                   readonly nullable: false;
                 };
                 readonly timetzPrecision: {
-                  readonly nativeType: 'timetz';
+                  readonly dataType: 'pg/timetz';
                   readonly codecId: 'pg/timetz@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly precision: 3 };
                 };
                 readonly tsquery: {
-                  readonly nativeType: 'tsquery';
+                  readonly dataType: 'pg/tsquery';
                   readonly codecId: 'pg/tsquery@1';
                   readonly nullable: false;
                 };
                 readonly uuid: {
-                  readonly nativeType: 'uuid';
+                  readonly dataType: 'pg/uuid';
                   readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
                 };
                 readonly varbit: {
-                  readonly nativeType: 'bit varying';
+                  readonly dataType: 'pg/varbit';
                   readonly codecId: 'pg/varbit@1';
                   readonly nullable: false;
                 };
                 readonly varbitLength: {
-                  readonly nativeType: 'bit varying';
+                  readonly dataType: 'pg/varbit';
                   readonly codecId: 'pg/varbit@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 16 };
                 };
                 readonly varchar: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                 };
                 readonly varcharLength: {
-                  readonly nativeType: 'character varying';
+                  readonly dataType: 'pg/varchar';
                   readonly codecId: 'sql/varchar@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 255 };
                 };
                 readonly vector: {
-                  readonly nativeType: 'vector';
+                  readonly dataType: 'pgvector/vector';
                   readonly codecId: 'pg/vector@1';
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 3 };
@@ -1256,31 +1256,31 @@ type ContractBase = Omit<
       readonly Code: {
         readonly kind: 'codec-instance';
         readonly codecId: 'sql/char@1';
-        readonly nativeType: 'character';
+        readonly dataType: 'pg/char';
         readonly typeParams: Record<string, never>;
       };
       readonly Embedding: {
         readonly kind: 'codec-instance';
         readonly codecId: 'pg/vector@1';
-        readonly nativeType: 'vector';
+        readonly dataType: 'pgvector/vector';
         readonly typeParams: { readonly length: 3 };
       };
       readonly Id: {
         readonly kind: 'codec-instance';
         readonly codecId: 'pg/uuid@1';
-        readonly nativeType: 'uuid';
+        readonly dataType: 'pg/uuid';
         readonly typeParams: Record<string, never>;
       };
       readonly Money: {
         readonly kind: 'codec-instance';
         readonly codecId: 'pg/numeric@1';
-        readonly nativeType: 'numeric';
+        readonly dataType: 'pg/numeric';
         readonly typeParams: { readonly precision: 10; readonly scale: 2 };
       };
       readonly ShortText: {
         readonly kind: 'codec-instance';
         readonly codecId: 'sql/varchar@1';
-        readonly nativeType: 'character varying';
+        readonly dataType: 'pg/varchar';
         readonly typeParams: { readonly length: 255 };
       };
     };
@@ -1978,14 +1978,6 @@ type ContractBase = Omit<
             readonly package: '@internal/extension-pgvector/operation-types';
           };
         };
-        readonly storage: readonly [
-          {
-            readonly familyId: 'sql';
-            readonly nativeType: 'vector';
-            readonly targetId: 'postgres';
-            readonly typeId: 'pg/vector@1';
-          },
-        ];
       };
       readonly version: '0.0.1';
     };
@@ -2017,14 +2009,6 @@ type ContractBase = Omit<
             readonly package: '@internal/extension-postgis/operation-types';
           };
         };
-        readonly storage: readonly [
-          {
-            readonly familyId: 'sql';
-            readonly nativeType: 'geometry';
-            readonly targetId: 'postgres';
-            readonly typeId: 'pg/geometry@1';
-          },
-        ];
       };
       readonly version: '0.0.1';
     };

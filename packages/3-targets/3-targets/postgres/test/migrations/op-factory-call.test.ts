@@ -265,7 +265,7 @@ describe('AddNotNullColumnDirectCall', () => {
 describe('AddNotNullColumnWithTempDefaultCall', () => {
   it('lowers a typed AlterTable DDL node for the ADD COLUMN execute step', async () => {
     const { lowerer, received } = recordingCheckLowerer();
-    const storageColumn = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
+    const storageColumn = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as const;
     const call = new AddNotNullColumnWithTempDefaultCall({
       schemaName: 'public',
       tableName: 'user',
@@ -293,7 +293,7 @@ describe('AddNotNullColumnWithTempDefaultCall', () => {
       schemaName: 'public',
       tableName: 'user',
       columnName: 'name',
-      column: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      column: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       types: postgresTypeLookups,
       storageTypes: {},
       temporaryDefault: "''",

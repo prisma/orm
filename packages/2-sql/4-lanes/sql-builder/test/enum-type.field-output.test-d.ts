@@ -72,8 +72,8 @@ type EnumStorage = {
         readonly table: {
           readonly User: {
             columns: {
-              readonly role: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: false };
-              readonly status: { nativeType: 'text'; codecId: 'pg/text@1'; nullable: true };
+              readonly role: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: false };
+              readonly status: { dataType: 'pg/text'; codecId: 'pg/text@1'; nullable: true };
             };
             primaryKey: { columns: ['role'] };
             uniques: readonly [];

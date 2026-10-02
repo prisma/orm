@@ -63,7 +63,6 @@ export const contract = defineContract({ codecLookup, dataTypeLookup }, () => ({
     [PGVECTOR_NATIVE_TYPE]: {
       kind: 'codec-instance',
       codecId: VECTOR_CODEC_ID,
-      nativeType: PGVECTOR_NATIVE_TYPE,
       typeParams: {},
     },
   },

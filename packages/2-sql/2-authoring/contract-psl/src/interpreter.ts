@@ -80,11 +80,11 @@ import {
 } from '@internal/sql-contract/entity-handle-lowering-hook';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import {
+  type AuthoredStorageType,
   resolvedTypeParams,
   type SqlModelStorage,
   type SqlNamespaceBase,
   type SqlNamespaceInput,
-  type StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
 import {
@@ -109,7 +109,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
-import type { DataTypeSupport } from './data-type-default';
+import { type DataTypeSupport, readWrittenNumberForCodec } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import {
   getAttribute,
@@ -1504,7 +1504,7 @@ interface BuildValueObjectNodesInput {
   readonly enumHandles: ReadonlyMap<string, EnumTypeHandle>;
   readonly namedTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   /** The named types; a member typed by one takes its parameters inline. */
-  readonly namedTypes: Record<string, StorageTypeInstance>;
+  readonly namedTypes: Record<string, AuthoredStorageType>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions: ReadonlySet<string>;
   readonly familyId: string;
@@ -2259,6 +2259,17 @@ export function interpretPslDocumentToSqlContract(
           );
         },
       },
+      readWrittenNumber: ({ text, codecId, subject }) => {
+        if (input.codecLookup?.descriptorFor(codecId) === undefined) return undefined;
+        const reading = readWrittenNumberForCodec({
+          text,
+          codecId,
+          codecLookup: input.codecLookup,
+          support: dataTypeSupport,
+          subject,
+        });
+        return reading.ok ? reading : { ok: false, message: reading.message };
+      },
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
     },
     diagnostics,
@@ -2432,7 +2443,6 @@ export function interpretPslDocumentToSqlContract(
     targetId: input.target.targetId,
     authoringContributions: input.authoringContributions,
     codecLookup: input.codecLookup,
-    dataTypeLookup: input.dataTypeLookup,
     diagnostics,
   });
 

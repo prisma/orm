@@ -53,7 +53,7 @@ describe('cross-reference shape round-trip', () => {
               table: {
                 user: {
                   columns: {
-                    kind: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+                    kind: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
                   },
                   uniques: [],
                   indexes: [],

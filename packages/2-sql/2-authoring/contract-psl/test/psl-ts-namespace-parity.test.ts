@@ -28,7 +28,7 @@ const supabaseExtensionPackRef = {
   version: '0.0.1',
 };
 
-const int4Column = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
+const int4Column = { codecId: 'pg/int4@1' } as const;
 
 describe('PSL ↔ TS namespace parity', () => {
   it('produces structurally equivalent Contract IR from PSL and TS builder for a 2-namespace schema with a cross-namespace FK', () => {
@@ -202,7 +202,7 @@ namespace public {
       'User',
       {
         namespace: 'auth',
-        fields: { id: field.column({ codecId: 'pg/text@1', nativeType: 'text' }).id() },
+        fields: { id: field.column({ codecId: 'pg/text@1' }).id() },
         table: 'users',
       },
       'supabase' as const,
@@ -210,8 +210,8 @@ namespace public {
 
     const Profile = model('Profile', {
       fields: {
-        id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
-        userId: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }),
+        id: field.column({ codecId: 'pg/int4@1' }).id(),
+        userId: field.column({ codecId: 'pg/int4@1' }),
       },
       relations: { user: rel.belongsTo(User, { from: 'userId', to: 'id' }) },
     }).sql(({ cols, constraints }) => ({

@@ -40,11 +40,11 @@ describe('data contract JSON schema', () => {
         tables: {
           User: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              tags: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: true },
+              id: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+              tags: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false, many: true },
               status: {
                 codecId: 'pg/text@1',
-                nativeType: 'text',
+                dataType: 'pg/text',
                 nullable: false,
                 control: 'managed',
                 valueSet: {
@@ -82,7 +82,7 @@ describe('data contract JSON schema', () => {
             columns: {
               id: {
                 codecId: 'pg/text@1',
-                nativeType: 'text',
+                dataType: 'pg/text',
                 nullable: false,
                 noSuchColumnField: true,
               },

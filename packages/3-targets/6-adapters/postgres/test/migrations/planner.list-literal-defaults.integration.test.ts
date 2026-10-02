@@ -40,13 +40,13 @@ interface ListDefaultCase {
 const listDefaults: readonly ListDefaultCase[] = [
   {
     column: 'bigInts',
-    type: { nativeType: 'int8', codecId: 'pg/int8@1' },
+    type: { dataType: 'pg/int8', codecId: 'pg/int8@1' },
     default: { kind: 'literal', value: ['1', '-2', '9007199254740993'] },
   },
   {
     column: 'decimals',
     type: {
-      nativeType: 'numeric',
+      dataType: 'pg/numeric',
       codecId: 'pg/numeric@1',
       typeParams: { precision: 65, scale: 30 },
     },
@@ -54,13 +54,13 @@ const listDefaults: readonly ListDefaultCase[] = [
   },
   {
     column: 'unscaledDecimals',
-    type: { nativeType: 'numeric', codecId: 'pg/numeric@1' },
+    type: { dataType: 'pg/numeric', codecId: 'pg/numeric@1' },
     default: { kind: 'literal', value: ['1.50', '-0.5'] },
   },
   {
     column: 'timestamps',
     type: {
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       typeParams: { precision: 3 },
     },
@@ -69,7 +69,7 @@ const listDefaults: readonly ListDefaultCase[] = [
   {
     column: 'instants',
     type: {
-      nativeType: 'timestamptz',
+      dataType: 'pg/timestamptz',
       codecId: 'pg/timestamptz-temporal@1',
       typeParams: { precision: 3 },
     },
@@ -77,38 +77,38 @@ const listDefaults: readonly ListDefaultCase[] = [
   },
   {
     column: 'dates',
-    type: { nativeType: 'date', codecId: 'pg/date-temporal@1' },
+    type: { dataType: 'pg/date', codecId: 'pg/date-temporal@1' },
     default: { kind: 'literal', value: ['2024-01-01'] },
   },
   {
     column: 'ints',
-    type: { nativeType: 'int4', codecId: 'pg/int4@1' },
+    type: { dataType: 'pg/int4', codecId: 'pg/int4@1' },
     default: { kind: 'literal', value: [-1, 2] },
   },
   {
     column: 'floats',
-    type: { nativeType: 'float8', codecId: 'pg/float8@1' },
+    type: { dataType: 'pg/float8', codecId: 'pg/float8@1' },
     default: { kind: 'literal', value: [1.5, -2] },
   },
   {
     column: 'texts',
-    type: { nativeType: 'text', codecId: 'pg/text@1' },
+    type: { dataType: 'pg/text', codecId: 'pg/text@1' },
     default: { kind: 'literal', value: ['a,b', "it's", '-1'] },
   },
   {
     column: 'emptyVarchars',
-    type: { nativeType: 'character varying', codecId: 'sql/varchar@1', typeParams: { length: 32 } },
+    type: { dataType: 'pg/varchar', codecId: 'sql/varchar@1', typeParams: { length: 32 } },
     default: { kind: 'literal', value: [] },
   },
   {
     column: 'castBigInts',
-    type: { nativeType: 'int8', codecId: 'pg/int8@1' },
+    type: { dataType: 'pg/int8', codecId: 'pg/int8@1' },
     default: { kind: 'function', expression: 'ARRAY[(1)::bigint, (2)::bigint]' },
   },
   {
     column: 'castTimestamps',
     type: {
-      nativeType: 'timestamp',
+      dataType: 'pg/timestamp',
       codecId: 'pg/timestamp-temporal@1',
       typeParams: { precision: 3 },
     },
@@ -116,7 +116,7 @@ const listDefaults: readonly ListDefaultCase[] = [
   },
   {
     column: 'castBytes',
-    type: { nativeType: 'bytea', codecId: 'pg/bytea@1' },
+    type: { dataType: 'pg/bytea', codecId: 'pg/bytea@1' },
     default: { kind: 'function', expression: "ARRAY['\\x68656c6c6f']::BYTEA[]" },
   },
 ];
@@ -151,17 +151,17 @@ function enumListColumns(
 ): Record<string, StorageColumnInput> {
   return Object.fromEntries(
     enumLists.map((enumList): [string, StorageColumnInput] => {
-      const nativeType =
+      const typeName =
         schema === publicSchema ? enumList.typeName : `${schema}.${enumList.typeName}`;
       return [
         enumList.column,
         {
-          nativeType,
+          dataType: 'pg/enum',
           codecId: 'pg/enum@1',
           nullable: true,
           many: true,
           noCheck: ['elementNotNull'],
-          typeParams: { typeName: nativeType },
+          typeParams: { typeName },
           valueSet: {
             plane: 'storage',
             entityKind: 'valueSet',
@@ -199,7 +199,7 @@ function auditNamespace(withDefaults: boolean) {
       table: {
         AuditLog: {
           columns: {
-            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
             ...enumListColumns(auditSchema, [auditEnumList], withDefaults),
           },
           primaryKey: { columns: ['id'] },
@@ -252,7 +252,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
             table: {
               Lists: {
                 columns: {
-                  id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+                  id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
                   ...columns,
                   ...enumListColumns(publicSchema, publicEnumLists, withDefaults),
                 },

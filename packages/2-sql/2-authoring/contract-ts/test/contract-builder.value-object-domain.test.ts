@@ -15,18 +15,17 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const int4 = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
-const text = { codecId: 'pg/text@1', nativeType: 'text' } as const;
+const int4 = { codecId: 'pg/int4@1' } as const;
+const text = { codecId: 'pg/text@1' } as const;
 const numeric = {
   codecId: 'pg/numeric@1',
-  nativeType: 'numeric',
   typeParams: { precision: 65, scale: 30 },
 } as const;
 const idField = { fieldName: 'id', columnName: 'id', descriptor: int4, nullable: false } as const;
 
 describe('value-object members and value-object fields in the domain', () => {
   it('types a model field by its value object, optional and list', () => {
-    const jsonb = { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } as const;
+    const jsonb = { codecId: 'pg/jsonb@1' } as const;
     const contract = buildSqlContractFromDefinition(
       {
         warnings: undefined,
@@ -114,7 +113,7 @@ describe('value-object members and value-object fields in the domain', () => {
                 fieldName: 'shipping',
                 columnName: 'shipping',
                 valueObjectName: 'Shipping',
-                descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
+                descriptor: { codecId: 'pg/jsonb@1' },
                 nullable: false,
               },
             ],

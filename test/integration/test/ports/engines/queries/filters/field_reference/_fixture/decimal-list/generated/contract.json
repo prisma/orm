@@ -91,24 +91,24 @@
               "columns": {
                 "dec": {
                   "codecId": "pg/numeric@1",
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "nullable": true
                 },
                 "dec_list": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "many": true,
-                  "nativeType": "numeric",
                   "nullable": false
                 },
                 "dec_list2": {
                   "codecId": "pg/numeric@1",
+                  "dataType": "pg/numeric",
                   "many": true,
-                  "nativeType": "numeric",
                   "nullable": false
                 },
                 "id": {
                   "codecId": "pg/int4@1",
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "nullable": false
                 }
               },
@@ -127,7 +127,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "73c30fcc03cdcd1d33f75c15e2da6f6d1ead317b822e4afb948b174e953b8263"
+    "storageHash": "0b8bda0acf51feab498605c08dddd5ba8f479fa63e2281da3a8465ff68bbc32f"
   },
   "capabilities": {
     "postgres": {

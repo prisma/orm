@@ -1,5 +1,6 @@
-import type { DataType } from '@internal/framework-components/codec';
+import { canonicalFormOf, type DataType } from '@internal/framework-components/codec';
 import { SqlColumnDefaultIR, SqlColumnIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
 import { describe, expect, it } from 'vitest';
 import {
   pgDate,
@@ -22,6 +23,7 @@ function column(
   value: string | readonly string[],
 ): SqlColumnIR {
   const many = Array.isArray(value);
+  const codec = types.codecLookup.descriptorFor(codecId);
   return new SqlColumnIR({
     name: 'v',
     nativeType,
@@ -32,6 +34,7 @@ function column(
     codecRef: { codecId, ...(many ? { many: true } : {}) },
     codecBaseNativeType: nativeType,
     dataType,
+    ...ifDefined('toCanonicalForm', codec && canonicalFormOf(codec, types.dataTypeLookup)),
   });
 }
 

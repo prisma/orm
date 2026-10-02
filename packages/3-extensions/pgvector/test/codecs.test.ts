@@ -173,10 +173,9 @@ describe('pgvector codecs', () => {
   });
 
   describe('pgVectorColumn helper', () => {
-    it('produces a ColumnSpec with the codec id, vector nativeType, and length typeParams', () => {
+    it('produces a ColumnSpec with the codec id and length typeParams', () => {
       const spec = pgVectorColumn(1536);
       expect(spec.codecId).toBe(VECTOR_CODEC_ID);
-      expect(spec.nativeType).toBe('vector');
       expect(spec.typeParams).toEqual({ length: 1536 });
     });
 

@@ -14,6 +14,10 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   targetId: 'postgres',
   version: '0.0.1',
   defaultNamespaceId: 'public',
+  authoring: {
+    type: { Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1' } } },
+    valueObjectStorageType: 'Jsonb',
+  },
 };
 
 const refusingJsonb: CodecLookupWithDescriptors = withDescriptors({
@@ -67,13 +71,13 @@ function buildWithDefault(
             {
               fieldName: 'id',
               columnName: 'id',
-              descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
+              descriptor: { codecId: 'pg/int4@1' },
               nullable: false,
             },
             {
               fieldName: 'count',
               columnName: 'count',
-              descriptor: { codecId: field.codecId, nativeType: 'int8' },
+              descriptor: { codecId: field.codecId },
               nullable: false,
               default: { kind: 'literal', value: field.value },
               ...(field.many === true ? { many: true } : {}),
@@ -174,14 +178,14 @@ describe('a literal default the codec refuses', () => {
                 {
                   fieldName: 'id',
                   columnName: 'id',
-                  descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
+                  descriptor: { codecId: 'pg/int4@1' },
                   nullable: false,
                 },
                 {
                   fieldName: 'total',
                   columnName: 'total',
                   valueObjectName: 'Money',
-                  descriptor: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
+                  descriptor: { codecId: 'pg/jsonb@1' },
                   nullable: false,
                   default: { kind: 'literal', value: 'twelve' },
                 },

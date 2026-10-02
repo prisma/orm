@@ -41,7 +41,7 @@ const types = {
   codecLookup: testTypeLookups.codecLookup,
 };
 
-const intColumn: StorageColumn = { codecId: 'pg/int4@1', nativeType: 'integer', nullable: false };
+const intColumn: StorageColumn = { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false };
 
 describe('contract-to-schema-ir structured error codes', () => {
   it('raises CONTRACT.TYPE_UNKNOWN for a column typeRef missing from storage.types', () => {

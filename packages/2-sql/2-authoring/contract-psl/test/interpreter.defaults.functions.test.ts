@@ -72,15 +72,12 @@ describe('interpretPslDocumentToSqlContract default function lowering', () => {
                   // position alone decides the column type (pg: text).
                   idUuidV4: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                   idNanoidDefault: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                   idNanoidSized: {
                     codecId: 'pg/text@1',
-                    nativeType: 'text',
                   },
                   dbExpr: {
                     default: {
@@ -143,11 +140,9 @@ model UuidNative {
     const uuidNativeTable = storage.namespaces['public']?.entries.table?.['UuidNative'];
     expect(uuidNativeTable?.columns['idV4']).toMatchObject({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     });
     expect(uuidNativeTable?.columns['idV7']).toMatchObject({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     });
   });
 
@@ -187,7 +182,6 @@ model Profile {
     const profileTable = storage.namespaces['public']?.entries.table?.['Profile'];
     expect(profileTable?.columns['id']).toMatchObject({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
     });
   });
 

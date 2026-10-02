@@ -48,8 +48,8 @@ const postgresTargetPack = {
 };
 
 const orderFields = {
-  id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
-  total: field.column({ codecId: 'pg/numeric@1', nativeType: 'numeric' }),
+  id: field.column({ codecId: 'pg/int4@1' }).id(),
+  total: field.column({ codecId: 'pg/numeric@1' }),
 };
 
 function orderTableOf(storage: SqlStorage) {

@@ -38,7 +38,12 @@ function liveSchema(rawDefault: string): SqlSchemaIR {
 function contractWithDefault(columnDefault: ColumnDefault): Contract<SqlStorage> {
   const event: StorageTable = {
     columns: {
-      at: { nativeType: 'text', nullable: false, codecId: 'sqlite/text@1', default: columnDefault },
+      at: {
+        dataType: 'sqlite/text',
+        nullable: false,
+        codecId: 'sqlite/text@1',
+        default: columnDefault,
+      },
     },
     foreignKeys: [],
     uniques: [],

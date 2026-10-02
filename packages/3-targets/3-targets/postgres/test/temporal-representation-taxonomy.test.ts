@@ -188,9 +188,8 @@ describe('the nine representation-explicit temporal codecs', () => {
       const spec = row.precisionBearing
         ? rep.column({ precision: 6 } as never)
         : rep.column(...([] as never[]));
-      expect({ codecId: spec.codecId, nativeType: spec.nativeType }).toEqual({
+      expect({ codecId: spec.codecId }).toEqual({
         codecId: rep.codecId,
-        nativeType: row.nativeType,
       });
       expect(spec.typeParams).toEqual(row.precisionBearing ? { precision: 6 } : undefined);
     });

@@ -39,8 +39,8 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
     const contract = createContract({
       user: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -104,8 +104,8 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
     const contract = createContract({
       user: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          email: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
+          email: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],
@@ -168,7 +168,7 @@ describe('PostgresMigrationPlanner - reconciliation planning', () => {
     const contract = createContract({
       user: {
         columns: {
-          id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
+          id: { dataType: 'pg/uuid', codecId: 'pg/uuid@1', nullable: false },
         },
         primaryKey: { columns: ['id'] },
         uniques: [],

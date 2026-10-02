@@ -59,7 +59,7 @@ type NativeEnumStorage = {
         table: {
           AuthSession: {
             columns: {
-              aal: { nativeType: 'aal_level'; codecId: 'pg/enum@1'; nullable: false };
+              aal: { dataType: 'pg/enum'; codecId: 'pg/enum@1'; nullable: false };
             };
             primaryKey: { columns: ['aal'] };
             uniques: [];

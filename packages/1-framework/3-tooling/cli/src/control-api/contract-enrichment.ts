@@ -27,6 +27,16 @@ function sortDeepTyped<T>(value: T): T {
   return sortDeep(value) as T;
 }
 
+/**
+ * The keys of a pack's `types` metadata that a contract carries. Any other key stays out of the contract, such as the `storage` list that a pack built for an earlier framework still declares.
+ */
+const CONTRACT_TYPES_KEYS: ReadonlySet<string> = new Set([
+  'aggregateDescriptors',
+  'codecTypes',
+  'operationTypes',
+  'queryOperationTypes',
+]);
+
 function extractExtensionPackMeta(
   component: TargetBoundComponentDescriptor<string, string>,
 ): Record<string, unknown> {
@@ -42,15 +52,18 @@ function extractExtensionPackMeta(
     base['capabilities'] = capabilities;
   }
   if (types) {
+    const carried = Object.fromEntries(
+      Object.entries(types).filter(([key]) => CONTRACT_TYPES_KEYS.has(key)),
+    );
     if (types.codecTypes) {
       const {
         controlPlaneHooks: _,
         codecDescriptors: _cd,
         ...cleanedCodecTypes
       } = types.codecTypes;
-      base['types'] = { ...types, codecTypes: cleanedCodecTypes };
+      base['types'] = { ...carried, codecTypes: cleanedCodecTypes };
     } else {
-      base['types'] = types;
+      base['types'] = carried;
     }
   }
   return base;

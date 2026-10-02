@@ -44,7 +44,7 @@ describe('value-object members are written as the type their domain type reads b
     const document = buildPostgresPslContract(
       deserialize(
         widgetContract({
-          columns: { price: { nativeType: 'jsonb', codecId: 'pg/jsonb@1', nullable: false } },
+          columns: { price: { dataType: 'pg/jsonb', codecId: 'pg/jsonb@1', nullable: false } },
           fields: { price: { nullable: false, type: { kind: 'valueObject', name: 'Price' } } },
           domain: {
             valueObjects: {

@@ -122,11 +122,11 @@ describe('contract.d.ts imports resolution', () => {
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                       createdAt: {
                         codecId: 'pg/timestamptz-temporal@1',
-                        nativeType: 'timestamptz',
+                        dataType: 'pg/timestamptz',
                         nullable: false,
                       },
                     },
@@ -137,9 +137,9 @@ describe('contract.d.ts imports resolution', () => {
                   },
                   post: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      title: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-                      userId: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      title: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
+                      userId: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],
@@ -281,8 +281,8 @@ type UserIdColumn = UserColumns['id'];
                 table: {
                   user: {
                     columns: {
-                      id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
-                      email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
+                      id: { codecId: 'pg/int4@1', dataType: 'pg/int4', nullable: false },
+                      email: { codecId: 'pg/text@1', dataType: 'pg/text', nullable: false },
                     },
                     primaryKey: { columns: ['id'] },
                     uniques: [],

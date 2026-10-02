@@ -18,7 +18,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'aede3a2efea99253a03bdaa4679ec79f5000d06f8a853ed6f0c08f2f891aa479'>;
+  StorageHashBase<'bb21ee4b97bee31d345f97c93948290f156f803bf7055c1ec469824d855343d3'>;
 export type ExecutionHash =
   ExecutionHashBase<'fcf5b5610bfe1a583de72d24a6198e26e343a1dac89ecc6baac2dc706cee79f5'>;
 export type ProfileHash =
@@ -341,12 +341,12 @@ type ContractBase = Omit<
             readonly some_table_user: {
               columns: {
                 readonly email: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
@@ -372,17 +372,17 @@ type ContractBase = Omit<
             readonly some_table_post: {
               columns: {
                 readonly authorId: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly id: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
+                  readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };

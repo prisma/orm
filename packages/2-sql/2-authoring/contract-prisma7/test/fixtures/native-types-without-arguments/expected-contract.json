@@ -114,7 +114,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "0f0a95699c5f38eb60ba7230c8daff078f203e8b6d9f6d38923207018edce524",
+    "storageHash": "918e346455766bc35d789845b12cbf62afe25df2ff7f0d2e98846db918ba8d47",
     "namespaces": {
       "public": {
         "id": "public",
@@ -124,12 +124,12 @@
             "NativeTypes": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "char": {
-                  "nativeType": "character",
+                  "dataType": "pg/char",
                   "codecId": "sql/char@1",
                   "nullable": false,
                   "typeParams": {
@@ -137,32 +137,32 @@
                   }
                 },
                 "varChar": {
-                  "nativeType": "character varying",
+                  "dataType": "pg/varchar",
                   "codecId": "sql/varchar@1",
                   "nullable": false
                 },
                 "decimal": {
-                  "nativeType": "numeric",
+                  "dataType": "pg/numeric",
                   "codecId": "pg/numeric@1",
                   "nullable": false
                 },
                 "timestamp": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false
                 },
                 "timestamptz": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false
                 },
                 "time": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-temporal@1",
                   "nullable": false
                 },
                 "timetz": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": false
                 }

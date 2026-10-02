@@ -14,7 +14,7 @@ import { sqliteComponents } from './fixtures/sqlite-components';
 
 function makeColumn(overrides: Partial<StorageColumn> = {}): StorageColumn {
   return {
-    nativeType: 'text',
+    dataType: 'sqlite/text',
     nullable: true,
     codecId: 'sqlite/text@1',
     ...overrides,
@@ -64,8 +64,12 @@ describe('SQLite migration planner', () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
-          name: makeColumn({ nativeType: 'text', nullable: false }),
+          id: makeColumn({
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          }),
+          name: makeColumn({ nullable: false }),
         },
         primaryKey: { columns: ['id'] },
       }),
@@ -95,9 +99,13 @@ describe('SQLite migration planner', () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
-          name: makeColumn({ nativeType: 'text', nullable: false }),
-          bio: makeColumn({ nativeType: 'text', nullable: true }),
+          id: makeColumn({
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          }),
+          name: makeColumn({ nullable: false }),
+          bio: makeColumn({ nullable: true }),
         },
         primaryKey: { columns: ['id'] },
       }),
@@ -141,8 +149,12 @@ describe('SQLite migration planner', () => {
     const contract = makeContract({
       users: makeTable({
         columns: {
-          id: makeColumn({ nativeType: 'integer', codecId: 'sqlite/integer@1', nullable: false }),
-          email: makeColumn({ nativeType: 'text', nullable: false }),
+          id: makeColumn({
+            dataType: 'sqlite/integer',
+            codecId: 'sqlite/integer@1',
+            nullable: false,
+          }),
+          email: makeColumn({ nullable: false }),
         },
         primaryKey: { columns: ['id'] },
         indexes: [index('idx_users_email', ['email'])],

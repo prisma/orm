@@ -123,7 +123,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e9e8943dccdeb6d3d102d35a84b8fdf0aefdeebd6e81c6f34b45aea056f4132c",
+    "storageHash": "4cf207f5917fc7526ac0925f985a97cafeffd15b9c8595146a9a0e6b54f481ef",
     "namespaces": {
       "audit": {
         "id": "audit",
@@ -133,12 +133,12 @@
             "audit_log": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "action": {
-                  "nativeType": "audit.AuditAction",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": false,
                   "typeParams": {
@@ -183,12 +183,12 @@
             "User": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "role": {
-                  "nativeType": "user_role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": false,
                   "typeParams": {
@@ -202,7 +202,7 @@
                   }
                 },
                 "roleOpt": {
-                  "nativeType": "user_role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": true,
                   "typeParams": {
@@ -216,7 +216,7 @@
                   }
                 },
                 "roleList": {
-                  "nativeType": "user_role",
+                  "dataType": "pg/enum",
                   "codecId": "pg/enum@1",
                   "nullable": true,
                   "many": true,

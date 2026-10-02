@@ -11,10 +11,10 @@ import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-compon
 import type { StorageType } from '@internal/framework-components/ir';
 import type { IndexTypeRegistration } from '@internal/sql-contract/index-types';
 import type {
+  AuthoredStorageType,
   ContractWithTypeMaps,
   Index,
   ReferentialAction,
-  StorageTypeInstance,
   TypeMaps,
 } from '@internal/sql-contract/types';
 import type { UnionToIntersection } from './authoring-type-utils';
@@ -302,12 +302,6 @@ type DescriptorCodecId<Descriptor> = Descriptor extends {
   ? CodecId
   : string;
 
-type DescriptorNativeType<Descriptor> = Descriptor extends {
-  readonly nativeType: infer NativeType extends string;
-}
-  ? NativeType
-  : string;
-
 type DescriptorTypeParams<Descriptor> = Descriptor extends {
   readonly typeParams: infer TypeParams extends Record<string, unknown>;
 }
@@ -342,14 +336,14 @@ type ResolveNamedStorageType<Definition, TypeRef> =
   ResolveNamedStorageTypeKey<Definition, TypeRef> extends infer TypeName extends string
     ? TypeName extends keyof DefinitionTypes<Definition>
       ? DefinitionTypes<Definition>[TypeName]
-      : StorageTypeInstance
-    : StorageTypeInstance;
+      : AuthoredStorageType
+    : AuthoredStorageType;
 
 // An enum-typed field carries its `EnumTypeHandle` (an object with a `codecId`
-// and `nativeType`, but no `kind`) as the field's `typeRef`. It is neither a
-// string nor a registered `StorageType`, so the named-type lookup cannot reach
-// it; `EnumFieldHandle` short-circuits the resolvers to read codec + native type
-// straight off the handle, with no column type-ref (the enum name is carried
+// but no `kind`) as the field's `typeRef`. It is neither a string nor a
+// registered `StorageType`, so the named-type lookup cannot reach it;
+// `EnumFieldHandle` short-circuits the resolvers to read the codec straight
+// off the handle, with no column type-ref (the enum name is carried
 // elsewhere). The `[...] extends [never]` guard excludes plain column fields,
 // whose `typeRef` is `never`.
 type EnumFieldHandle<FieldState> = [FieldTypeRefOf<FieldState>] extends [never]
@@ -361,7 +355,7 @@ type EnumFieldHandle<FieldState> = [FieldTypeRefOf<FieldState>] extends [never]
 type EnumHandleDescriptor<Handle> = Handle extends {
   readonly codecId: infer CodecId extends string;
 }
-  ? { readonly codecId: CodecId; readonly nativeType: DescriptorNativeType<Handle> }
+  ? { readonly codecId: CodecId }
   : never;
 
 type ResolveFieldDescriptor<Definition, FieldState> = [EnumFieldHandle<FieldState>] extends [never]
@@ -476,12 +470,11 @@ type ModelIdName<Definition, ModelName extends ModelNames<Definition>> = [
 type StorageColumn<
   CodecId extends string,
   Nullable extends boolean,
-  NativeType extends string,
   TypeRef extends string | undefined = undefined,
   TypeParams extends Record<string, unknown> | undefined = undefined,
   Many extends boolean = false,
 > = {
-  readonly nativeType: NativeType;
+  readonly dataType: string;
   readonly codecId: CodecId;
   readonly nullable: Nullable;
   readonly default?: ColumnDefault;
@@ -502,9 +495,6 @@ type ModelStorageColumn<
           ResolveFieldDescriptor<Definition, ModelFieldState<Definition, ModelName, FieldName>>
         >,
         FieldNullableOf<ModelFieldState<Definition, ModelName, FieldName>>,
-        DescriptorNativeType<
-          ResolveFieldDescriptor<Definition, ModelFieldState<Definition, ModelName, FieldName>>
-        >,
         ResolveFieldColumnTypeRef<Definition, ModelFieldState<Definition, ModelName, FieldName>>,
         ResolveFieldColumnTypeParams<Definition, ModelFieldState<Definition, ModelName, FieldName>>,
         FieldManyOf<ModelFieldState<Definition, ModelName, FieldName>>
@@ -626,9 +616,9 @@ type BuiltEnumAccessors<Definition> = {
 };
 
 type BuiltDocumentScopedTypes<Definition> = {
-  readonly [K in keyof DefinitionTypes<Definition> as DefinitionTypes<Definition>[K] extends StorageTypeInstance
+  readonly [K in keyof DefinitionTypes<Definition> as DefinitionTypes<Definition>[K] extends AuthoredStorageType
     ? K
-    : never]: DefinitionTypes<Definition>[K];
+    : never]: DefinitionTypes<Definition>[K] & { readonly dataType: string };
 };
 
 type BuiltDomain<Definition> =

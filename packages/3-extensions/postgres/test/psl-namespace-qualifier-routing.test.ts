@@ -26,9 +26,7 @@ const postgresTargetPackRef: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const postgresScalarTypeDescriptors = new Map([
-  ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-] as const);
+const postgresScalarTypeDescriptors = new Map([['Int', { codecId: 'pg/int4@1' }]] as const);
 
 function symbolTableInput(schema: string) {
   const { document, sources } = parse(schema, 'psl-namespace-qualifier-routing.test.psl');

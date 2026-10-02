@@ -62,7 +62,7 @@ id Uuid @id @default(uuid())
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['F']?.columns['id']).toEqual({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
+      dataType: 'pg/uuid',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -88,7 +88,7 @@ id TUuid @id @default(uuid())
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['E']?.columns['id']).toEqual({
       codecId: 'pg/uuid@1',
-      nativeType: 'uuid',
+      dataType: 'pg/uuid',
       nullable: false,
       typeRef: 'TUuid',
     });
@@ -105,7 +105,7 @@ id Char(30) @id @default(cuid(2))
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['M']?.columns['id']).toEqual({
       codecId: 'sql/char@1',
-      nativeType: 'character',
+      dataType: 'pg/char',
       nullable: false,
       typeParams: { length: 30 },
     });
@@ -128,7 +128,7 @@ id String @id @default(uuid())
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['L']?.columns['id']).toEqual({
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
@@ -150,7 +150,7 @@ id String() @id @default(uuid())
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['P']?.columns['id']).toEqual({
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
   });
@@ -169,17 +169,17 @@ ref String @default(cuid(2))
     const columns = storage.namespaces['public']?.entries.table?.['N']?.columns;
     expect(columns?.['id']).toEqual({
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(columns?.['sized']).toEqual({
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(columns?.['ref']).toEqual({
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual(
@@ -207,7 +207,7 @@ id TId @id @default(uuid())
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
     expect(storage.namespaces['public']?.entries.table?.['T']?.columns['id']).toEqual({
       codecId: 'pg/text@1',
-      nativeType: 'text',
+      dataType: 'pg/text',
       nullable: false,
       typeRef: 'TId',
     });

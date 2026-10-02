@@ -43,6 +43,7 @@ import {
   postgresAuthoringPslBlockDescriptors,
 } from '../../../src/core/authoring';
 import { createPostgresBuiltinCodecLookup } from '../../../src/core/codec-registry';
+import { postgresDataTypeEntries } from '../../../src/core/data-type-entries';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { createPostgresTypeMap } from '../../../src/core/psl-build/postgres-type-map';
@@ -66,6 +67,7 @@ const assembled = assembleAuthoringContributions([
     authoring: {
       entityTypes: postgresAuthoringEntityTypes,
       type: authoringTypes,
+      dataTypes: postgresDataTypeEntries(),
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     },
   },

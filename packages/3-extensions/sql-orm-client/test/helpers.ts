@@ -352,13 +352,13 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.tasks = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      title: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      type: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-      severity: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
-      project_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
-      parent_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
-      assignee_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      title: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      type: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+      severity: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true },
+      project_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
+      parent_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
+      assignee_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -368,8 +368,8 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.projects_tbl = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -379,9 +379,9 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.features = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      priority: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      assignee_id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: true },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      priority: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      assignee_id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: true },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -391,8 +391,8 @@ export function buildMixedPolyContract(): TestContract {
 
   raw.storage.namespaces.public.entries.table.assignees = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -481,29 +481,29 @@ export function buildStiPolyContract(): TestContract {
   if (!usersStorageTable) throw new Error('users table not found in any storage namespace');
   usersStorageTable.columns['kind'] = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: false,
   };
   usersStorageTable.columns['role'] = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: true,
   };
   usersStorageTable.columns['plan'] = {
     codecId: 'pg/text@1',
-    nativeType: 'text',
+    dataType: 'pg/text',
     nullable: true,
   };
   usersStorageTable.columns['account_id'] = {
     codecId: 'pg/int4@1',
-    nativeType: 'int4',
+    dataType: 'pg/int4',
     nullable: true,
   };
 
   raw.storage.namespaces.public.entries.table.accounts = {
     columns: {
-      id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-      name: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      id: { dataType: 'pg/int4', codecId: 'pg/int4@1', nullable: false },
+      name: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     },
     primaryKey: { columns: ['id'] },
     uniques: [],
@@ -515,7 +515,6 @@ export function buildStiPolyContract(): TestContract {
 }
 
 type RawColumn = {
-  nativeType: string;
   codecId: string;
   nullable: boolean;
   // A string default is treated as a SQL expression (`defaultSql`); any other
@@ -523,11 +522,11 @@ type RawColumn = {
   default?: string | ColumnDefaultLiteralInputValue;
 };
 
-// extraColumns carry a raw codecId/nativeType pair; a ColumnTypeDescriptor is
-// exactly that pair, so the DSL accepts it directly without any contract-shaped
+// extraColumns carry a raw codecId; a ColumnTypeDescriptor is
+// exactly that codecId, so the DSL accepts it directly without any contract-shaped
 // literal.
 function extraColumnDescriptor(col: RawColumn): ColumnTypeDescriptor {
-  return { codecId: col.codecId, nativeType: col.nativeType };
+  return { codecId: col.codecId };
 }
 
 /**

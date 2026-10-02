@@ -16,7 +16,7 @@ The framework imports live at `@internal/framework-components/codec`:
 - `CodecDescriptorImpl<P>` — abstract descriptor base class; `CodecDescriptorTemplateImpl<P>` is the same shape for a codec whose data type the adapting target names.
 - `dataType(id, spec)` — declares a data type with its casts; `DataType`, `DataTypeId`, `Cast`. A SQL data type is declared with `sqlDataType(id, spec)` from `@internal/sql-contract/data-type` instead, which adds how the type is written — see [Declaring a data type](#declaring-a-data-type).
 - `ColumnHelperFor<D>` / `ColumnHelperForStrict<D>` — `satisfies` shapes for per-codec helpers.
-- `column(codecFactory, codecId, typeParams, nativeType)` — column-spec packager. `nativeType` is ignored: the contract names the column's database type from the data type the codec represents.
+- `column(codecFactory, codecId, typeParams)` — column-spec packager. The contract takes the column's data type from the codec.
 - `Codec<...>`, `CodecDescriptor<P>`, `AnyCodecDescriptor` — consumer-facing interfaces (consumers depend on these; target-neutral authors extend the `*Impl` classes, while target-bound SQL authors use target-owned bases).
 
 `decodeJson` follows one rule, stated on [`Codec.decodeJson`](../../packages/1-framework/1-core/framework-components/src/shared/codec.ts): it reads a value in a stored JSON form of the codec's type and throws on anything else, and callers use it as the check that a value is valid. The readers in `@internal/framework-components/codec` (`decodeJsonString`, `decodeJsonMatching`, `decodeJsonBoolean`, `decodeJsonInteger`, `decodeJsonIntegerText`, `decodeJsonFloat`) implement it for the common forms and refuse through `refuseJsonValue`, which raises `RUNTIME.DECODE_FAILED` with `meta.codecId` and `meta.received`. A codec built with type parameters checks them there too, as `pg/vector@1` checks its length, and a target adds its column's rule to a family codec it adapts, as PostgreSQL's `sql/varchar@1` checks the column's length.
@@ -428,6 +428,8 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
 
 Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the value they produce in memory, a `bigint` and a `number`, and both read and write the digit text that type stores. `encodeJson` produces the canonical form, and `decodeJson` takes a stored form of the type and nothing else, as [`Codec.decodeJson`](../../packages/1-framework/1-core/framework-components/src/shared/codec.ts) states. A codec has no method for PSL and never sees PSL text.
 
+A data type that stores several codecs' values in one form declares no canonical form for them: `sqlite/text` holds strings, JSON documents and datetimes. A codec whose values have several written forms then declares the function on its descriptor, as `toCanonicalForm`: `sqlite/datetime@1` turns `2024-01-01 01:00:00+01:00` into `2024-01-01T00:00:00Z` and refuses text with no UTC offset, and `sqlite/json@1` turns the JSON text of a document into that text with sorted keys and no added whitespace. `canonicalFormOf(codec, dataTypes)` from `@internal/framework-components/codec` gives a column's canonical form: the codec's when it declares one, else its data type's. A contract source, `db verify` and the migration planner all take it from there, so an extension codec's form is used wherever a built-in one is.
+
 An extension's codec does the same. `arktype/json@1` stores a `jsonb` column and validates the document against a schema on the way out, so it names `pg/jsonb` and the extension registers no data type at all. Register a new one only for a database type no pack describes yet, as pgvector does for `vector`. Reusing the target's type is what lets a written `` json`{}` `` reach an arktype column: the tag yields `pg/json`, `pg/jsonb` casts from it unchanged, and the codec validates the document.
 
 ### Declaring a data type
@@ -617,6 +619,16 @@ A value is written either with a tag — a qualified name followed by a string i
 },
 ```
 
+A tag whose value is a type that another syntax already reads sits under `tagEntryKey(tag)` and names that type in `type`. SQLite stores a JSON document as text, so its `json` tag yields `sqlite/text`, whose own entry reads a plain string:
+
+```ts
+[tagEntryKey('json')]: {
+  written: { kind: 'tag', tag: 'json', type: sqliteText.id, parse: (text) => canonicalizeJson(parseJsonBody(text)) },
+  print: (value) => String(value),
+  documentation: 'Reads the body as a JSON document and stores its JSON text as the default value.',
+},
+```
+
 A number is the one plain form that yields several types, so its arm carries a classifier in place of `parse`: `classify` picks the type from the digits and returns the canonical form with it, and `types` lists every data type the classifier can return. Assembly reads `types` to know those types can be written, so leaving one out turns a cast from it into an assembly error.
 
 ```ts
@@ -632,7 +644,7 @@ A number is the one plain form that yields several types, so its arm carries a c
 },
 ```
 
-Reading a written default is then: the entry parses or classifies the text into a value of a known type; if that type is not the column's, the column's type is looked up for a cast from it, and having none is `PSL_VALUE_TYPE_INCOMPATIBLE`; text the entry or a cast refuses is `PSL_INVALID_LITERAL`; the canonical form, cast or not, is handed to the codec instance built with the column's parameters, and a refusal there is `PSL_INVALID_DEFAULT_LITERAL` with the codec's own message. A column whose data type has no authoring entry and no cast into it takes only a `` sql`...` `` default.
+Reading a written default is then: the entry parses or classifies the text into a value of a known type; if that type is not the column's, the column's type is looked up for a cast from it, and having none is `PSL_VALUE_TYPE_INCOMPATIBLE`; the value, cast or not, is handed to the codec instance built with the column's parameters, and a refusal there is `PSL_INVALID_DEFAULT_LITERAL` with the codec's own message; the value is then stored in the column's canonical form. Text the entry, a cast or the column's canonical form refuses is `PSL_INVALID_LITERAL`. A column whose data type has no authoring entry and no cast into it takes only a `` sql`...` `` default.
 
 A data type need not be a column's type. `sql/expression` has an authoring entry that is a tag, declares no casts, and has no codec, so its values are admitted only where a position asks for that type. The SQL family defines and registers it. A family registers only a type whose definition must not differ between targets and that nothing casts from.
 
@@ -645,15 +657,18 @@ The control stack assembles every pack's data types, codec descriptors and autho
 1. **A codec names a type nobody registers.** `CONTRACT.DATA_TYPE_UNREGISTERED`.
 2. **An authoring entry, a type in a number entry's `types`, or a type some cast takes values of, is not registered.** Also `CONTRACT.DATA_TYPE_UNREGISTERED`.
 3. **Two entries claim one tag or one plain form.** `CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE`. Two packs registering one type id is `CONTRACT.DATA_TYPE_DUPLICATE`, and two entries under one key is `CONTRACT.DATA_TYPE_ENTRY_DUPLICATE`.
-4. **A type some cast takes values of cannot be written.** `CONTRACT.DATA_TYPE_NOT_WRITABLE`: a cast from a type no contract source can write is never exercised. A type counts as writable when it has an authoring entry of its own, or when a number entry's `types` names it.
+4. **A type some cast takes values of cannot be written.** `CONTRACT.DATA_TYPE_NOT_WRITABLE`: a cast from a type no contract source can write is never exercised. A type counts as writable when it has an authoring entry of its own, when a tag entry's `type` names it, or when a number entry's `types` names it.
+5. **An entry sits under the wrong key.** `CONTRACT.DATA_TYPE_ENTRY_KEY_INVALID`: a tag entry that names its `type` sits under `tagEntryKey(tag)`, and only there.
 
 Type constructors, field presets and SQL declarations are checked at assembly too. Each failure is an `InternalError` naming the contributor and the id:
 
-5. **A type constructor or field preset names a codec no component registers.**
-6. **A type constructor maps an argument onto a parameter** that neither the codec's data type's `params` nor the codec's own parameters declare.
-7. **Two type constructors of one data type are both marked `inferred`.**
-8. **Two SQL data types claim the same reported type**: a claiming text of one matches a claiming text of the other, or both claim the same kind.
-9. **A codec in a SQL stack represents a data type that is not a SQL data type** (declared with plain `dataType` rather than `sqlDataType`). The error names the codec, its data type and the data type's contributor.
+6. **A type constructor or field preset names a codec no component registers.**
+7. **A type constructor maps an argument onto a parameter** that neither the codec's data type's `params` nor the codec's own parameters declare.
+8. **Two type constructors of one data type are both marked `inferred`.**
+9. **Two SQL data types claim the same reported type**: a claiming text of one matches a claiming text of the other, or both claim the same kind.
+10. **A codec in a SQL stack represents a data type that is not a SQL data type** (declared with plain `dataType` rather than `sqlDataType`). The error names the codec, its data type and the data type's contributor.
+
+The SQL family runs items 9 and 10 when it creates its control instance, together with its check that no type casts from `sql/expression`, so the CLI reports them and the language server does not.
 
 The reverse of the fourth is not required: a type may be reachable only through casts. These checks span packs, which is why they run at assembly — `pgvector/vector` taking `pg/numeric` values is valid only when the Postgres target that owns `pg/numeric` is in the stack. Within a pack, refer to a type by its constant rather than by string, so a misspelt id fails to compile.
 

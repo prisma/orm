@@ -83,8 +83,8 @@ function authoredContract(schema: string): Contract<SqlStorage> {
     dataTypeLookup: postgresDataTypeLookup,
     codecLookup: postgresCodecLookup,
     scalarColumnDescriptors: new Map([
-      ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
-      ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
+      ['Int', { codecId: 'pg/int4@1' }],
+      ['String', { codecId: 'pg/text@1' }],
     ]),
     authoringContributions: assembled,
     composedExtensionContracts: new Map(),

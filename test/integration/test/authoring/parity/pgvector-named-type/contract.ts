@@ -5,7 +5,7 @@ import { autoincrement, defineContract, field, model } from '@internal/postgres/
 const embedding1536Type = {
   kind: 'codec-instance',
   codecId: 'pg/vector@1',
-  nativeType: 'vector',
+  dataType: 'pgvector/vector',
   typeParams: { length: 1536 },
 } as const;
 

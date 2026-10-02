@@ -99,7 +99,6 @@ describe('authoring helper runtime', () => {
       readonly pgvector: {
         readonly Vector: (length: number) => {
           readonly codecId: string;
-          readonly nativeType: string;
           readonly typeParams: { readonly length: number };
         };
       };
@@ -108,7 +107,6 @@ describe('authoring helper runtime', () => {
     expect(helpers.pgvector.Vector(1536)).toEqual({
       kind: 'codec-instance',
       codecId: 'pg/vector@1',
-      nativeType: 'vector',
       typeParams: { length: 1536 },
     });
   });
@@ -356,7 +354,6 @@ describe('createComposedAuthoringHelpers', () => {
       expect(helpers.VarChar(255)).toEqual({
         kind: 'codec-instance',
         codecId: 't/varchar@1',
-        nativeType: 'character varying',
         typeParams: { length: 255 },
       });
     });

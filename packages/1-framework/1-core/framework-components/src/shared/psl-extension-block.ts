@@ -168,6 +168,8 @@ export interface ParsedPslExtensionBlock<Values = Readonly<Record<string, unknow
   readonly name: string;
   readonly values: Values;
   readonly parameterSpans: Readonly<Record<string, PslSpan>>;
+  /** The source text of each entry whose value is a number literal, by key, so a reader can keep digits a JavaScript number loses. */
+  readonly numberTexts?: Readonly<Record<string, string>>;
   readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
   readonly span: PslSpan;
 }

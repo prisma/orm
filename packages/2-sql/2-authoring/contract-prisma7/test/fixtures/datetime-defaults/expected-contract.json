@@ -237,7 +237,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "e1a092e0c7b1877fa542abd990916fa565d8ee511575b6b6b785169144c5e1b6",
+    "storageHash": "69c1b293a0923c6bdc54c3f068fa4c69a2241b316fd853a59873b8d76dbb1448",
     "namespaces": {
       "public": {
         "id": "public",
@@ -247,12 +247,12 @@
             "Scalars": {
               "columns": {
                 "id": {
-                  "nativeType": "int4",
+                  "dataType": "pg/int4",
                   "codecId": "pg/int4@1",
                   "nullable": false
                 },
                 "tsZ": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -264,7 +264,7 @@
                   }
                 },
                 "tsMs": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -276,7 +276,7 @@
                   }
                 },
                 "tsPlus": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -288,7 +288,7 @@
                   }
                 },
                 "tsMinus": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -300,7 +300,7 @@
                   }
                 },
                 "tsMicro": {
-                  "nativeType": "timestamp",
+                  "dataType": "pg/timestamp",
                   "codecId": "pg/timestamp-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -312,7 +312,7 @@
                   }
                 },
                 "tzZ": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -324,7 +324,7 @@
                   }
                 },
                 "tzPlus": {
-                  "nativeType": "timestamptz",
+                  "dataType": "pg/timestamptz",
                   "codecId": "pg/timestamptz-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -336,7 +336,7 @@
                   }
                 },
                 "dZ": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-temporal@1",
                   "nullable": false,
                   "default": {
@@ -345,7 +345,7 @@
                   }
                 },
                 "dMidnight": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-temporal@1",
                   "nullable": false,
                   "default": {
@@ -354,7 +354,7 @@
                   }
                 },
                 "dMinus": {
-                  "nativeType": "date",
+                  "dataType": "pg/date",
                   "codecId": "pg/date-temporal@1",
                   "nullable": false,
                   "default": {
@@ -363,7 +363,7 @@
                   }
                 },
                 "tZ": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -375,7 +375,7 @@
                   }
                 },
                 "tMs": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -387,7 +387,7 @@
                   }
                 },
                 "tPlus": {
-                  "nativeType": "time",
+                  "dataType": "pg/time",
                   "codecId": "pg/time-temporal@1",
                   "nullable": false,
                   "typeParams": {
@@ -399,7 +399,7 @@
                   }
                 },
                 "ttzZ": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": false,
                   "typeParams": {
@@ -411,7 +411,7 @@
                   }
                 },
                 "ttzPlus": {
-                  "nativeType": "timetz",
+                  "dataType": "pg/timetz",
                   "codecId": "pg/timetz@1",
                   "nullable": false,
                   "typeParams": {
@@ -423,7 +423,7 @@
                   }
                 },
                 "bytes": {
-                  "nativeType": "bytea",
+                  "dataType": "pg/bytea",
                   "codecId": "pg/bytea@1",
                   "nullable": false,
                   "default": {

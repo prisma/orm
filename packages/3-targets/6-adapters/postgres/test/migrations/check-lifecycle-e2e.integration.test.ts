@@ -84,7 +84,7 @@ const authoringTargetPack = {
 } as const;
 
 type ColumnSpec = {
-  readonly nativeType: string;
+  readonly dataType: string;
   readonly codecId: string;
   readonly nullable: boolean;
   readonly many?: true;
@@ -201,7 +201,7 @@ function twoNamespaceContractOf(
   };
 }
 
-const idColumn: ColumnSpec = { nativeType: 'text', codecId: 'pg/text@1', nullable: false };
+const idColumn: ColumnSpec = { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false };
 
 function declaredCheckNames(contract: Contract<SqlStorage>): readonly string[] {
   const table = contract.storage.namespaces[UNBOUND_NAMESPACE_ID]?.entries.table?.['Item'];
@@ -383,7 +383,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const after = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true, many: true },
       },
       tagsChecks,
     );
@@ -411,7 +411,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const before = contractOf(
       {
         id: idColumn,
-        attrs: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
+        attrs: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: true, many: true },
       },
       attrsChecks,
     );
@@ -438,7 +438,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       tagsChecks,
     );
@@ -481,8 +481,8 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       checks,
     );
@@ -511,7 +511,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       memberValues: ['user', 'admin'],
     });
     const contract = contractOf(
-      { id: idColumn, role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } },
+      { id: idColumn, role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } },
       checks,
     );
 
@@ -554,7 +554,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        roles: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        roles: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       checks,
     );
@@ -607,7 +607,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
       {
         id: idColumn,
         roles: {
-          nativeType: 'character varying',
+          dataType: 'pg/varchar',
           codecId: 'pg/varchar@1',
           nullable: false,
           many: true,
@@ -648,7 +648,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        [columnName]: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+        [columnName]: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
       },
       checks,
     );
@@ -676,7 +676,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     });
     const columns = {
       id: idColumn,
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false },
     } as const;
     const v1 = contractOf(columns, before);
     await migrate(v1);
@@ -724,7 +724,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const contract = contractOf(
       {
         id: idColumn,
-        role: { nativeType: 'character varying', codecId: 'pg/varchar@1', nullable: false },
+        role: { dataType: 'pg/varchar', codecId: 'pg/varchar@1', nullable: false },
       },
       checks,
     );
@@ -750,7 +750,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
   }, async () => {
     const columns = {
       id: idColumn,
-      role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as ColumnSpec,
+      role: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false } as ColumnSpec,
     };
     const twoMembers = checksForColumn('Item', 'role', {
       many: false,
@@ -805,7 +805,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const enforced = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       tagsChecks,
     );
@@ -817,7 +817,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const optedOut = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       [],
     );
@@ -839,7 +839,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const optedOut = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       [],
     );
@@ -851,7 +851,7 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     const enforced = contractOf(
       {
         id: idColumn,
-        tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+        tags: { dataType: 'pg/text', codecId: 'pg/text@1', nullable: false, many: true },
       },
       tagsChecks,
     );

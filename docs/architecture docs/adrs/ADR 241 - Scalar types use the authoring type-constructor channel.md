@@ -46,6 +46,26 @@ model User {
 
 `String`, `Uuid`, and bare `VarChar` are zero-argument instantiations. `VarChar(191)` uses the same contribution with one argument, producing structured `typeParams`. A constructor names only the codec; the database type, its name and the bounds of its parameters come from the data type the codec represents ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)), so the `length` argument carries no `minimum` of its own.
 
+The contract stores the alias as a `storage.types` entry with the codec, the data type the codec represents and the parameters, and the column names the entry:
+
+```json
+"Slug": {
+  "codecId": "sql/varchar@1",
+  "dataType": "pg/varchar",
+  "kind": "codec-instance",
+  "typeParams": { "length": 191 }
+}
+```
+
+```json
+"slug": {
+  "codecId": "sql/varchar@1",
+  "dataType": "pg/varchar",
+  "nullable": false,
+  "typeRef": "Slug"
+}
+```
+
 ## Context
 
 The authoring stack previously carried two ways to contribute storage types. Base scalar names came from a dedicated `scalarTypeDescriptors` map, while parameterized and extension-owned types came from `AuthoringContributions.type`. PostgreSQL native types also had a family-owned `@db.*` interpretation path that translated named-type attributes into storage descriptors. These channels described the same decision—selecting a codec, native type, and optional parameters—but assembled, validated, completed, and resolved it differently.
@@ -79,7 +99,7 @@ Deriving scalar names from constructors keeps tooling aligned with interpretatio
 - Targets define native storage names and codec bindings, and their adapters contribute them. Family interpreters remain generic across targets.
 - `ControlStack.scalarTypes` remains a derived convenience view for consumers that need names, while `collectScalarTypeConstructors` provides the derived name-to-storage-output map.
 - TypeScript and PSL authoring helpers can be generated from the same descriptor namespace.
-- The contract representation does not change: storage entries still contain codec ids, base native types, and structured type parameters.
+- This decision does not change the contract representation: storage entries contain codec ids, data type ids and structured type parameters ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)).
 - Existing `@db.X(args)` source must be rewritten mechanically to `X(args)` in type position; no compatibility channel remains.
 
 ## Alternatives considered

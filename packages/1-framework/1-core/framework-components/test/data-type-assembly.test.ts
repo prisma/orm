@@ -16,6 +16,7 @@ import {
   dataType,
   dataTypeId,
 } from '../src/shared/data-type';
+import { authoringEntryType, tagEntryKey } from '../src/shared/framework-authoring';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
 const int2 = dataType('demo/int2', {});
@@ -93,6 +94,13 @@ const tagEntry = (tag: string) =>
     written: { kind: 'tag', tag, parse: (text_: string) => text_ },
     print: String,
     documentation: `A ${tag} body.`,
+  }) as const;
+
+const typedTagEntry = (tag: string, valueType: DataTypeId) =>
+  ({
+    written: { kind: 'tag', tag, type: valueType, parse: (text_: string) => text_ },
+    print: String,
+    documentation: `A ${tag} body read as ${valueType}.`,
   }) as const;
 
 const codec = (codecId: string, type: DataType) => ({ codecId, dataType: type.id });
@@ -230,6 +238,45 @@ describe('enforceDataTypeInvariants', () => {
     ).not.toThrow();
   });
 
+  it('passes an entry under a tag key that names the registered type its body is', () => {
+    expect(() =>
+      invariants({
+        declaredTypes: [{ type: int8, contributedBy: 'demo' }],
+        authoringEntries: [
+          {
+            key: tagEntryKey('wide'),
+            entry: typedTagEntry('wide', int2.id),
+            contributedBy: 'demo',
+          },
+        ],
+      }),
+    ).not.toThrow();
+  });
+
+  it('refuses an entry under a tag key that names a data type nobody registered', () => {
+    expect(() =>
+      invariants({
+        authoringEntries: [
+          {
+            key: tagEntryKey('gone'),
+            entry: typedTagEntry('gone', dataTypeId('demo/gone')),
+            contributedBy: 'x-pack',
+          },
+        ],
+      }),
+    ).toThrow(/x-pack.*demo\/gone|demo\/gone.*x-pack/s);
+  });
+
+  it.each([
+    ['names no data type', tagEntryKey('json'), tagEntry('json')],
+    ['sits under another tag’s key', tagEntryKey('other'), typedTagEntry('json', text.id)],
+    ['sits under a data type id', text.id, typedTagEntry('json', text.id)],
+  ])('refuses a typed tag entry that %s', (_name, key, entry) => {
+    expect(() =>
+      invariants({ authoringEntries: [{ key, entry, contributedBy: 'x-pack' }] }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.DATA_TYPE_ENTRY_KEY_INVALID' }));
+  });
+
   it('raises a structured error', () => {
     try {
       invariants({
@@ -358,5 +405,21 @@ describe('createControlStack', () => {
       { type: int2, contributedBy: 'tgt' },
       { type: uuid, contributedBy: 'ext' },
     ]);
+  });
+});
+
+describe('tagEntryKey', () => {
+  it('is never a data type id', () => {
+    expect(() => dataTypeId(tagEntryKey('json'))).toThrow();
+  });
+});
+
+describe('authoringEntryType', () => {
+  it('is the key of an entry under a data type id', () => {
+    expect(authoringEntryType(text.id, tagEntry('text'))).toBe(text.id);
+  });
+
+  it('is the named type of an entry under a tag key', () => {
+    expect(authoringEntryType(tagEntryKey('json'), typedTagEntry('json', text.id))).toBe(text.id);
   });
 });

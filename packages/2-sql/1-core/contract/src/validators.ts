@@ -2,16 +2,17 @@ import { ContractValidationError } from '@internal/contract/contract-validation-
 import {
   type Contract,
   ContractExecutionSectionSchema,
-  type ContractField,
   type ContractModel,
   CrossReferenceSchema,
 } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
+import { DATA_TYPE_ID_PATTERN } from '@internal/framework-components/codec';
 import {
   type AnyEntityKindDescriptor,
   isPlainRecord,
   type Namespace,
 } from '@internal/framework-components/ir';
+import { canonicalizeJson } from '@internal/framework-components/utils';
 import { computeCheckContentHash, computeIndexContentHash } from '@internal/sql-schema-ir/naming';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -64,7 +65,7 @@ const StorageTypeInstanceSchema = type
   .type({
     kind: "'codec-instance'",
     codecId: 'string',
-    nativeType: 'string',
+    dataType: DATA_TYPE_ID_PATTERN,
     'typeParams?': 'Record<string, unknown>',
   });
 
@@ -169,6 +170,59 @@ export function createSqlStorageSchema(
 }
 
 const StorageSchema = createSqlStorageSchema(DEFAULT_SQL_KINDS);
+
+/** The refusal of a value-object column when the stack declares no value-object storage type. */
+export function valueObjectStorageTypeMissingMessage(columnPath: string): string {
+  return `${columnPath}: a value-object column needs the stack's value-object storage type, and the stack declares none`;
+}
+
+const LISTED_STORED_TYPE_NAMES = 5;
+
+function fieldOf(value: unknown, key: string): unknown {
+  return isPlainRecord(value) ? value[key] : undefined;
+}
+
+function entriesOf(value: unknown): readonly (readonly [string, unknown])[] {
+  return isPlainRecord(value) ? Object.entries(value) : [];
+}
+
+function storedTypeNamePaths(storage: unknown): readonly string[] {
+  const columns = entriesOf(fieldOf(storage, 'namespaces')).flatMap(([namespaceId, namespace]) =>
+    entriesOf(fieldOf(fieldOf(namespace, 'entries'), 'table')).flatMap(([tableName, table]) =>
+      entriesOf(fieldOf(table, 'columns')).map(([columnName, column]) => ({
+        path: `storage.namespaces.${namespaceId}.entries.table.${tableName}.columns.${columnName}`,
+        entry: column,
+      })),
+    ),
+  );
+  const types = entriesOf(fieldOf(storage, 'types')).map(([typeName, entry]) => ({
+    path: `storage.types.${typeName}`,
+    entry,
+  }));
+  return [...columns, ...types]
+    .filter(({ entry }) => isPlainRecord(entry) && Object.hasOwn(entry, 'nativeType'))
+    .map(({ path }) => path);
+}
+
+/**
+ * Contracts emitted before a column named its data type stored the database type name in `nativeType` on columns and `storage.types` entries. The first five such keys are reported with their paths and the rest are counted, so an old contract is refused with a short message that says what changed.
+ */
+function storedTypeNameProblems(storage: unknown): readonly string[] {
+  const paths = storedTypeNamePaths(storage);
+  const listed = paths
+    .slice(0, LISTED_STORED_TYPE_NAMES)
+    .map(
+      (path) =>
+        `${path}.nativeType: contracts no longer store a column's database type name; the column names its data type in "dataType"`,
+    );
+  const unlisted = paths.length - listed.length;
+  return unlisted > 0
+    ? [
+        ...listed,
+        `and ${unlisted} more ${unlisted === 1 ? 'path' : 'paths'} (${paths.length} in all)`,
+      ]
+    : listed;
+}
 
 type NamespacedStorageWalk = {
   readonly namespaces: Readonly<
@@ -459,9 +513,15 @@ const SqlContractSchema = createSqlContractSchema(DEFAULT_SQL_KINDS);
  * @throws Error if the storage structure is invalid
  */
 export function validateStorage(value: unknown): void {
+  const storedTypeNames = storedTypeNameProblems(value);
   const result = StorageSchema(value);
-  if (result instanceof type.errors) {
-    const errors = result.map((p: { message: string }) => p.message);
+  const errors =
+    storedTypeNames.length > 0
+      ? [...storedTypeNames]
+      : result instanceof type.errors
+        ? result.map((p: { message: string }) => p.message)
+        : [];
+  if (errors.length > 0) {
     throw contractError(
       'CONTRACT.VALIDATION_FAILED',
       `Storage validation failed: ${errors.join('; ')}`,
@@ -508,6 +568,14 @@ function validateSqlContractStructure<T extends Contract<SqlStorage>>(
   if (rawValue.targetFamily !== undefined && rawValue.targetFamily !== 'sql') {
     throw new ContractValidationError(
       `Unsupported target family: ${rawValue.targetFamily}`,
+      'structural',
+    );
+  }
+
+  const storedTypeNames = storedTypeNameProblems(fieldOf(value, 'storage'));
+  if (storedTypeNames.length > 0) {
+    throw new ContractValidationError(
+      `Contract structural validation failed: ${storedTypeNames.join('; ')}`,
       'structural',
     );
   }
@@ -669,9 +737,9 @@ export function validateStorageSemantics(storage: SqlStorage): string[] {
 
 /**
  * SQL storage logical-consistency checks: every model.storage.table
- * resolves to a real table, every model.storage.fields[*].column
- * resolves to a real column, and value-object fields land on JSON-native
- * columns. Throws `ContractValidationError` on the first mismatch.
+ * resolves to a real table and every model.storage.fields[*].column
+ * resolves to a real column. Throws `ContractValidationError` on the first
+ * mismatch.
  */
 export function validateModelStorageReferences(contract: Contract<SqlStorage>): void {
   for (const [namespaceId, namespace] of Object.entries(contract.domain.namespaces)) {
@@ -703,22 +771,6 @@ export function validateModelStorageReferences(contract: Contract<SqlStorage>): 
         if (!columnNames.has(field.column)) {
           throw new ContractValidationError(
             `Model "${qualifiedName}" field "${fieldName}" references non-existent column "${field.column}" in table "${storageTable}"`,
-            'storage',
-          );
-        }
-      }
-
-      const JSON_NATIVE_TYPES = new Set(['json', 'jsonb']);
-      for (const [fieldName, domainField] of Object.entries(model.fields ?? {})) {
-        const f = domainField as ContractField;
-        if (f.type?.kind !== 'valueObject') continue;
-        const storageField = model.storage.fields[fieldName];
-        if (!storageField) continue;
-        const column = table.columns[storageField.column];
-        if (!column) continue;
-        if (!JSON_NATIVE_TYPES.has(column.nativeType)) {
-          throw new ContractValidationError(
-            `Model "${qualifiedName}" field "${fieldName}" is a value object but storage column "${storageField.column}" has nativeType "${column.nativeType}" (expected json or jsonb)`,
             'storage',
           );
         }
@@ -940,28 +992,26 @@ function lookupStorageColumn(
 }
 
 /**
- * Two storage columns share a type when their `nativeType` and `typeParams`
- * match. The contract is canonicalized, so `typeParams` key order is stable and
- * a JSON comparison is exact. `codecId` and `nullable` are intentionally not
- * compared: they do not change the database-level type that governs a join.
+ * Two storage columns share a type when their `dataType` and `typeParams` match. `codecId` and
+ * `nullable` are not compared: they do not change the database type that governs a join.
  */
 function sameStorageType(a: StorageColumn, b: StorageColumn): boolean {
   return (
-    a.nativeType === b.nativeType &&
-    JSON.stringify(a.typeParams ?? null) === JSON.stringify(b.typeParams ?? null)
+    a.dataType === b.dataType &&
+    canonicalizeJson(a.typeParams ?? {}) === canonicalizeJson(b.typeParams ?? {})
   );
 }
 
 function describeColumnType(column: StorageColumn): string {
   return column.typeParams === undefined
-    ? column.nativeType
-    : `${column.nativeType} ${JSON.stringify(column.typeParams)}`;
+    ? column.dataType
+    : `${column.dataType} ${canonicalizeJson(column.typeParams)}`;
 }
 
 /**
  * Validates one side of an N:M join: the junction columns and the model
  * columns they pair against positionally must be equal in number, exist in
- * their tables, and share the same storage type (`nativeType` + `typeParams`).
+ * their tables, and share the same storage type (`dataType` + `typeParams`).
  * The junction's storage foreign keys already guarantee this for user-declared
  * FK constraints, but `through` is a logical descriptor never tied to them by
  * the rest of validation — and the TS builder accepts explicit join columns
