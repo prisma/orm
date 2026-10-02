@@ -27,3 +27,15 @@
 - `slices/hover/spec.md` § At a glance, § Chosen design and § Scope;
 - `plan.md` slice 1;
 - `projects/lsp-go-to-definition/spec.md` § At a glance. Its slice 2 is in flight on branch `go-to-definition-provider` and implements `null` today; that slice adapts to this.
+
+## 3. A `oneOf` of fixed identifiers prefers the exact match (2026-10-02, orchestrator decision during hover-arguments D1)
+
+**Trigger:** the implementer found a problem with fixed identifiers in a `oneOf`. In the binder, a fixed `identifier(...)` rule always counts as matched, even when its text differs: a mismatched identifier works as a no-op fallback, and `block-binder.test.ts` relies on that. So in `oneOf(identifier('NoAction'), identifier('Restrict'), identifier('Cascade'), …)` (SQL `referentialActionArgument`), the first alternative always wins, and `Cascade` would never get a `constant` resolution. That is the project spec's headline example.
+
+**Decision:** before the existing first-match scan, `oneOf` returns the trial of an alternative that is a fixed identifier whose name equals the written identifier, if there is one. Every other case keeps today's behaviour, including mismatched identifiers as no-op fallbacks. In the old order that alternative's trial would have been a reference-free, diagnostic-free no-op, so choosing it changes nothing except adding the `constant` record.
+
+**Rejected:**
+- Accepting the limitation. `Cascade`, `SetNull` and every non-first referential action would show no hover.
+- Making mismatched fixed identifiers fail to match. That changes the no-op fallback that block value specs rely on.
+
+**Affected artefacts:** `slices/hover-arguments/spec.md` § Recording rules.
